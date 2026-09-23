@@ -1,0 +1,12 @@
+[package]
+name = "rim_client"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "rim"
+path = "src/main.rs"
+
+[dependencies]
+rim_sim = { path = "../rim_sim" }
+macroquad = "0.4"

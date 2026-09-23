@@ -1,0 +1,49 @@
+[[need]]
+id = "food"
+label = "food"
+color = "#d9a441"
+satisfier = "food"
+days_to_empty = 2.0
+seek_below = 0.35
+empty_damage_per_day = 30
+
+[[need]]
+id = "rest"
+label = "rest"
+color = "#6a8fd6"
+satisfier = "rest"
+days_to_empty = 1.2
+seek_below = 0.25
+
+[[designation]]
+id = "chop"
+label = "Chop"
+color = "#6fbf4a"
+
+[[designation]]
+id = "mine"
+label = "Mine"
+color = "#b0a89e"
+
+[[designation]]
+id = "harvest"
+label = "Harvest"
+color = "#d64a6a"
+
+[[designation]]
+id = "hunt"
+label = "Hunt"
+color = "#e05030"
+targets = "creature"
+
+# The one and only start: a lone naked warrior with nothing.
+[[start]]
+id = "warrior"
+creature = "human"
+title = "the warrior"
+founder_damage_bonus = 5
+
+[[names]]
+id = "core"
+names = ["Kael", "Brynja", "Oddur", "Sigrun", "Tarn", "Idris", "Maren", "Ulf", "Asha", "Corin", "Hekla", "Joren",
+         "Liv", "Ragna", "Soren", "Tove", "Yrsa", "Bram", "Eira", "Gunnar", "Hallr", "Ines", "Kari", "Nyx"]

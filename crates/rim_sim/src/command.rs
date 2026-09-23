@@ -1,0 +1,136 @@
+//! Player input. Every UI action becomes a `Command` applied at a tick
+//! boundary; this is what makes replays and lockstep multiplayer possible.
+
+use crate::ai;
+use crate::defs::{DefId, Targets};
+use crate::world::*;
+use crate::IVec;
+use hecs::Entity;
+
+#[derive(Clone, Debug)]
+pub enum Command {
+    /// Mark things (or creatures) in a rectangle with a designation.
+    Designate {
+        designation: DefId,
+        a: IVec,
+        b: IVec,
+    },
+    /// Place blueprints of a buildable thing over a rectangle.
+    Build {
+        thing: DefId,
+        a: IVec,
+        b: IVec,
+    },
+    /// Remove designations and blueprints in a rectangle.
+    Cancel {
+        a: IVec,
+        b: IVec,
+    },
+    Draft {
+        pawn: Entity,
+        on: bool,
+    },
+    Move {
+        pawn: Entity,
+        to: IVec,
+    },
+    Attack {
+        pawn: Entity,
+        target: Entity,
+    },
+}
+
+fn cells(w: &World, a: IVec, b: IVec) -> impl Iterator<Item = IVec> {
+    let (x0, x1) = (a.x.min(b.x).max(0), a.x.max(b.x).min(w.map.w - 1));
+    let (y0, y1) = (a.y.min(b.y).max(0), a.y.max(b.y).min(w.map.h - 1));
+    (y0..=y1).flat_map(move |y| (x0..=x1).map(move |x| IVec::new(x, y)))
+}
+
+fn in_rect(p: IVec, a: IVec, b: IVec) -> bool {
+    (a.x.min(b.x)..=a.x.max(b.x)).contains(&p.x) && (a.y.min(b.y)..=a.y.max(b.y)).contains(&p.y)
+}
+
+pub fn apply(w: &mut World, c: Command) {
+    let defs = w.defs.clone();
+    match c {
+        Command::Designate { designation, a, b } => match defs.designations[designation as usize].targets {
+            Targets::Thing => {
+                for p in cells(w, a, b).collect::<Vec<_>>() {
+                    let Some(f) = w.map.fixture_at(p) else { continue };
+                    let Some(t) = w.thing(f) else { continue };
+                    if defs.thing(t.def).harvest.as_ref().is_some_and(|h| h.desig_r == designation) {
+                        let _ = w.ecs.insert_one(f, Designated(designation));
+                    }
+                }
+            }
+            Targets::Creature => {
+                for e in w.pawns.clone() {
+                    let ok = w.ecs.get::<&Pawn>(e).is_ok_and(|p| {
+                        p.faction == Faction::Wild && !defs.creature(p.def).butcher_r.is_empty() && in_rect(p.pos, a, b)
+                    });
+                    if ok {
+                        let _ = w.ecs.insert_one(e, Designated(designation));
+                    }
+                }
+            }
+        },
+        Command::Build { thing, a, b } => {
+            if defs.thing(thing).build.is_none() {
+                return;
+            }
+            for p in cells(w, a, b).collect::<Vec<_>>() {
+                if w.map.passable(p) {
+                    w.spawn_fixture(thing, p, true);
+                }
+            }
+        }
+        Command::Cancel { a, b } => {
+            for p in cells(w, a, b).collect::<Vec<_>>() {
+                let Some(f) = w.map.fixture_at(p) else { continue };
+                let _ = w.ecs.remove_one::<Designated>(f);
+                let refund = w.ecs.get::<&Blueprint>(f).ok().map(|bp| bp.delivered.clone());
+                if let Some(delivered) = refund {
+                    let t = w.thing(f).unwrap();
+                    let cost = defs.thing(t.def).build.as_ref().unwrap().cost_r.clone();
+                    w.despawn_thing(f);
+                    for (c, n) in cost.iter().zip(delivered) {
+                        if n > 0 {
+                            w.place_item(c.0, p, n);
+                        }
+                    }
+                }
+            }
+            for e in w.pawns.clone() {
+                if w.pawn_pos(e).is_some_and(|p| in_rect(p, a, b)) {
+                    let _ = w.ecs.remove_one::<Designated>(e);
+                }
+            }
+        }
+        Command::Draft { pawn, on } => {
+            if !is_colonist(w, pawn) {
+                return;
+            }
+            ai::interrupt(w, pawn);
+            if let Ok(mut p) = w.ecs.get::<&mut Pawn>(pawn) {
+                p.drafted = on;
+            }
+        }
+        Command::Move { pawn, to } => {
+            if is_drafted(w, pawn) && w.map.passable(to) {
+                ai::set_job(w, pawn, Job::MoveTo { to });
+            }
+        }
+        Command::Attack { pawn, target } => {
+            if is_drafted(w, pawn) && w.pawn_alive(target) {
+                ai::set_job(w, pawn, Job::Attack { target, until: u64::MAX });
+            }
+        }
+    }
+}
+
+fn is_colonist(w: &World, e: Entity) -> bool {
+    w.ecs.get::<&Pawn>(e).is_ok_and(|p| p.active && !p.dead && p.faction == Faction::Player)
+}
+fn is_drafted(w: &World, e: Entity) -> bool {
+    w.ecs.get::<&Pawn>(e).is_ok_and(|p| p.drafted && !p.dead && p.faction == Faction::Player)
+}

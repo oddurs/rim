@@ -1,0 +1,56 @@
+# speed = ticks to cross one open cell (60 ticks = 1 second at 1x).
+
+[[creature]]
+id = "human"
+label = "human"
+color = "#e0b894"
+size = 0.36
+speed = 13
+max_hp = 100
+melee_damage = 9
+melee_cooldown = 90
+intelligent = true
+market_value = 250
+needs = ["food", "rest"]
+
+[[creature]]
+id = "deer"
+label = "deer"
+color = "#a0784a"
+size = 0.4
+speed = 11
+max_hp = 60
+melee_damage = 6
+melee_cooldown = 90
+flees = true
+market_value = 80
+butcher = [{ thing = "raw_meat", count = 35 }]
+spawn = { terrain = ["grass", "rich_soil"], groups = 4, group = [2, 4] }
+
+[[creature]]
+id = "hare"
+label = "hare"
+color = "#b8a88a"
+size = 0.22
+speed = 12
+max_hp = 20
+melee_damage = 2
+melee_cooldown = 60
+flees = true
+market_value = 20
+butcher = [{ thing = "raw_meat", count = 8 }]
+spawn = { terrain = ["grass", "dirt"], groups = 5, group = [1, 2] }
+
+[[creature]]
+id = "wolf"
+label = "wolf"
+color = "#6e6e70"
+size = 0.34
+speed = 10
+max_hp = 70
+melee_damage = 10
+melee_cooldown = 80
+aggressive = true
+market_value = 60
+butcher = [{ thing = "raw_meat", count = 20 }]
+spawn = { terrain = ["grass", "dirt", "rich_soil"], groups = 1, group = [1, 2] }

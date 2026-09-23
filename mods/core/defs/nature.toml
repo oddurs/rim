@@ -1,0 +1,34 @@
+# Plants and rocks. Natural things never count toward colony wealth.
+
+[[thing]]
+id = "tree_oak"
+label = "oak tree"
+color = "#2c5a26"
+category = "plant"
+shape = "tree"
+natural = true
+path_cost = 60
+harvest = { designation = "chop", work = 280, yields = [{ thing = "wood", count = 20 }] }
+spawn = { terrain = ["grass", "rich_soil"], density = 0.06, spread = true }
+
+[[thing]]
+id = "berry_bush"
+label = "berry bush"
+color = "#3f7a35"
+category = "plant"
+shape = "bush"
+natural = true
+harvest = { designation = "harvest", work = 180, destroy = false, regrow_days = 2.0, yields = [{ thing = "berries", count = 8 }] }
+spawn = { terrain = ["grass", "rich_soil"], density = 0.008, spread = true }
+
+[[thing]]
+id = "granite"
+label = "granite"
+color = "#7d776f"
+category = "rock"
+shape = "rock"
+natural = true
+blocks = true
+hp = 500
+harvest = { designation = "mine", work = 500, yields = [{ thing = "stone", count = 10 }] }
+spawn = { terrain = ["rock_floor"], density = 1.0 }

@@ -1,0 +1,276 @@
+# cairn.toml — roadmap and issues for rim.
+#
+# rim is a plugin-first colony sim: a small deterministic engine, and a game
+# built entirely out of plugins (starting with `core`). The schema mirrors
+# that: every item says which *layer* it lives in, whether it touches the
+# *plugin API*, and which design *pillar* (see DESIGN.md) it serves.
+#
+#   cairn roadmap            milestone roadmap with progress
+#   cairn next               what is ready to work on
+#   cairn list --view api    everything that changes the modding contract
+#   cairn config             show the resolved schema
+#
+# ORDER IS BEHAVIOUR: status order is board/list order; enum value order is
+# sort order. Do not alphabetise this file.
+
+format = 3
+
+[project]
+name = "rim"
+description = "A plugin-first 2D colony sim: one naked warrior, a world that notices you, and an engine built to be modded."
+dir = "cairn/items"
+id_width = 4
+default_type = "feature"
+default_status = "backlog"
+
+# ─── Item types ──────────────────────────────────────────────────────────────
+
+[[type]]
+name = "feature"
+icon = "+"
+color = "cyan"
+description = "Something a player or a modder can do that they could not before."
+template = """
+## Why
+
+## What
+
+## Acceptance criteria
+
+- [ ]
+"""
+
+[[type]]
+name = "bug"
+icon = "!"
+color = "red"
+description = "The simulation, the client or a mod does the wrong thing."
+template = """
+## What happens
+
+## What should happen
+
+## Reproduction
+
+Seed:
+Mods:
+Tick:
+
+1.
+"""
+
+[[type]]
+name = "spike"
+icon = "?"
+color = "magenta"
+description = "A design question to settle. Ends in a decision written into DESIGN.md."
+template = """
+## Question
+
+## Options
+
+## Decision
+
+## Acceptance criteria
+
+- [ ] Decision recorded in DESIGN.md
+"""
+
+[[type]]
+name = "perf"
+icon = "^"
+color = "yellow"
+description = "Make something measurably faster. Needs a before/after number."
+template = """
+## Budget
+
+## Measurement (before)
+
+## Approach
+
+## Acceptance criteria
+
+- [ ] Benchmark shows the budget is met
+"""
+
+[[type]]
+name = "content"
+icon = "#"
+color = "green"
+description = "Defs, scripts and balance in a mod — no engine change."
+
+[[type]]
+name = "chore"
+icon = "~"
+color = "gray"
+
+[[type]]
+name = "docs"
+icon = "*"
+color = "blue"
+
+[[type]]
+name = "milestone"
+description = "A playable step. Each one ends with something you can run."
+groups = "one"
+inverse = "scheduled"
+
+[[type]]
+name = "pillar"
+description = "A design commitment from DESIGN.md that work serves."
+groups = "many"
+inverse = "served_by"
+
+# ─── Statuses ────────────────────────────────────────────────────────────────
+
+[[status]]
+name = "backlog"
+category = "open"
+color = "gray"
+
+[[status]]
+name = "planned"
+category = "open"
+color = "blue"
+
+[[status]]
+name = "doing"
+label = "in progress"
+category = "active"
+color = "yellow"
+
+[[status]]
+name = "review"
+label = "in review"
+category = "active"
+color = "magenta"
+
+[[status]]
+name = "blocked"
+category = "active"
+color = "red"
+
+[[status]]
+name = "done"
+category = "done"
+color = "green"
+
+[[status]]
+name = "dropped"
+category = "dropped"
+color = "gray"
+board = false
+
+# ─── Custom fields ───────────────────────────────────────────────────────────
+
+[[field]]
+name = "priority"
+kind = "enum"
+values = ["p0", "p1", "p2", "p3"]
+default = "p2"
+column = true
+description = "p0 blocks the milestone; p3 is nice to have"
+
+[[field]]
+name = "effort"
+kind = "enum"
+values = ["s", "m", "l", "xl"]
+column = true
+description = "Rough size: s < half a day, m ~ a day or two, l ~ a week, xl needs splitting"
+
+[[field]]
+name = "layer"
+kind = "enum"
+values = ["engine", "core", "plugin", "client", "tooling"]
+column = true
+description = "engine = rim_sim mechanisms; core = the core mod; plugin = first-party plugin; client = renderer/UI"
+
+[[field]]
+name = "area"
+kind = "enum"
+values = ["sim", "ai", "pathing", "map", "modding", "scripting", "storyteller", "combat", "needs", "building", "save", "net", "render", "ui", "audio", "perf", "tests", "docs"]
+description = "Subsystem this touches"
+
+[[field]]
+name = "api"
+kind = "enum"
+values = ["none", "additive", "breaking"]
+default = "none"
+description = "Effect on the plugin API (defs schema, Luau surface, events). Breaking needs an api version bump."
+
+[[field]]
+name = "due"
+kind = "date"
+description = "When a milestone is meant to land"
+
+# ─── Saved views ─────────────────────────────────────────────────────────────
+
+[[view]]
+name = "now"
+description = "What is actually being worked on"
+filter = "category=active"
+sort = "priority,id"
+
+[[view]]
+name = "next"
+description = "Planned work, most urgent first"
+filter = "status=planned"
+sort = "priority,milestone"
+
+[[view]]
+name = "api"
+description = "Everything that changes the modding contract"
+filter = "api!=none,category!=done"
+sort = "api,priority"
+columns = ["id", "type", "title", "api", "milestone"]
+
+[[view]]
+name = "engine"
+description = "Open engine work"
+filter = "layer=engine,category!=done"
+sort = "priority,id"
+
+[[view]]
+name = "plugins"
+description = "Work that should be built as a plugin, not in the engine"
+filter = "layer=plugin,category!=done"
+sort = "milestone,priority"
+
+[[view]]
+name = "perf"
+description = "Performance budget work"
+filter = "type=perf,category!=done"
+sort = "priority,id"
+
+[[view]]
+name = "decisions"
+description = "Open design questions"
+filter = "type=spike,category!=done"
+sort = "priority,id"
+
+[[view]]
+name = "triage"
+description = "Items that still need a milestone or a layer"
+filter = "milestone=,category!=done"
+columns = ["id", "type", "title", "created"]
+
+# ─── Hooks ───────────────────────────────────────────────────────────────────
+
+[hooks]
+after-create = "cairn render -q"
+after-change = "cairn render -q"
+after-remove = "cairn render -q"
+
+# ─── Rendered roadmap ────────────────────────────────────────────────────────
+
+[render]
+target = "ROADMAP.md"
+title = "rim roadmap"
+group_by = "milestone"
+include = "category!=dropped"
+checkbox = true
+show_ids = true
+progress = true
+group_by_status = false
+link_items = false
+header = "cairn/roadmap-intro.md"

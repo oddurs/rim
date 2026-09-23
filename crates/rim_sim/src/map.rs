@@ -1,0 +1,168 @@
+//! The tile grid: terrain, one fixture layer (plants, rocks, buildings,
+//! blueprints) and one item layer (stacks). Plus reachability regions.
+
+use crate::defs::DefId;
+use crate::path::Goal;
+use crate::IVec;
+use hecs::Entity;
+
+pub struct Map {
+    pub w: i32,
+    pub h: i32,
+    pub terrain: Vec<DefId>,
+    pub terrain_cost: Vec<u16>,
+    pub fixture: Vec<Option<Entity>>,
+    pub item: Vec<Option<Entity>>,
+    fix_block: Vec<bool>,
+    fix_cost: Vec<u16>,
+    /// Connected-component id per cell (0 = impassable). Lets us reject
+    /// unreachable targets in O(1) before running A*.
+    region: Vec<u32>,
+    regions_dirty: bool,
+    /// Bumped whenever passability changes; renderers can use it to cache.
+    pub revision: u64,
+}
+
+pub const NEIGHBORS8: [(i32, i32); 8] = [(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, 1), (1, -1), (-1, -1)];
+
+impl Map {
+    pub fn new(w: i32, h: i32) -> Self {
+        let n = (w * h) as usize;
+        Map {
+            w,
+            h,
+            terrain: vec![0; n],
+            terrain_cost: vec![100; n],
+            fixture: vec![None; n],
+            item: vec![None; n],
+            fix_block: vec![false; n],
+            fix_cost: vec![0; n],
+            region: vec![0; n],
+            regions_dirty: true,
+            revision: 0,
+        }
+    }
+
+    #[inline]
+    pub fn inb(&self, p: IVec) -> bool {
+        p.x >= 0 && p.y >= 0 && p.x < self.w && p.y < self.h
+    }
+    #[inline]
+    pub fn idx(&self, p: IVec) -> usize {
+        (p.y * self.w + p.x) as usize
+    }
+    #[inline]
+    pub fn pos(&self, i: usize) -> IVec {
+        IVec::new(i as i32 % self.w, i as i32 / self.w)
+    }
+    #[inline]
+    pub fn passable_i(&self, i: usize) -> bool {
+        self.terrain_cost[i] > 0 && !self.fix_block[i]
+    }
+    #[inline]
+    pub fn passable(&self, p: IVec) -> bool {
+        self.inb(p) && self.passable_i(self.idx(p))
+    }
+    /// Movement cost in percent (100 = open ground).
+    #[inline]
+    pub fn cost(&self, p: IVec) -> u32 {
+        let i = self.idx(p);
+        self.terrain_cost[i] as u32 + self.fix_cost[i] as u32
+    }
+
+    pub fn set_terrain(&mut self, p: IVec, def: DefId, cost: u32) {
+        let i = self.idx(p);
+        self.terrain[i] = def;
+        self.terrain_cost[i] = cost.min(u16::MAX as u32) as u16;
+        self.regions_dirty = true;
+        self.revision += 1;
+    }
+
+    pub fn set_fixture(&mut self, p: IVec, e: Option<Entity>, blocks: bool, cost: u32) {
+        let i = self.idx(p);
+        self.fixture[i] = e;
+        if self.fix_block[i] != blocks {
+            self.regions_dirty = true;
+        }
+        self.fix_block[i] = blocks;
+        self.fix_cost[i] = cost.min(u16::MAX as u32) as u16;
+        self.revision += 1;
+    }
+
+    pub fn fixture_at(&self, p: IVec) -> Option<Entity> {
+        if self.inb(p) {
+            self.fixture[self.idx(p)]
+        } else {
+            None
+        }
+    }
+    pub fn item_at(&self, p: IVec) -> Option<Entity> {
+        if self.inb(p) {
+            self.item[self.idx(p)]
+        } else {
+            None
+        }
+    }
+
+    pub fn ensure_regions(&mut self) {
+        if !self.regions_dirty {
+            return;
+        }
+        self.regions_dirty = false;
+        self.region.iter_mut().for_each(|r| *r = 0);
+        let mut next = 1;
+        let mut stack = Vec::new();
+        for start in 0..self.region.len() {
+            if self.region[start] != 0 || !self.passable_i(start) {
+                continue;
+            }
+            self.region[start] = next;
+            stack.push(start);
+            while let Some(i) = stack.pop() {
+                let p = self.pos(i);
+                // 4-connected is exact: diagonal moves need both orthogonals open.
+                for (dx, dy) in &NEIGHBORS8[..4] {
+                    let q = p.offset(*dx, *dy);
+                    if !self.inb(q) {
+                        continue;
+                    }
+                    let j = self.idx(q);
+                    if self.region[j] == 0 && self.passable_i(j) {
+                        self.region[j] = next;
+                        stack.push(j);
+                    }
+                }
+            }
+            next += 1;
+        }
+    }
+
+    pub fn region_at(&self, p: IVec) -> u32 {
+        if self.inb(p) {
+            self.region[self.idx(p)]
+        } else {
+            0
+        }
+    }
+
+    /// Cheap reachability test. Call `ensure_regions` first.
+    pub fn can_reach(&self, from: IVec, goal: Goal) -> bool {
+        let rf = self.region_at(from);
+        if rf == 0 {
+            return true; // standing somewhere odd (fresh wall): let A* decide
+        }
+        match goal {
+            Goal::Cell(c) => self.region_at(c) == rf,
+            Goal::Touch(c) => (-1..=1).any(|dy| (-1..=1).any(|dx| self.region_at(c.offset(dx, dy)) == rf)),
+        }
+    }
+
+    /// Size of the region containing `p` (used by map gen to pick a start).
+    pub fn region_size(&self, p: IVec) -> usize {
+        let r = self.region_at(p);
+        if r == 0 {
+            return 0;
+        }
+        self.region.iter().filter(|&&x| x == r).count()
+    }
+}
