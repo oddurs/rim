@@ -53,7 +53,7 @@ First playable vertical slice. One warrior, harvest, build, eat, sleep, animals,
 
 ## shelter — Shelter
 
-`###·······` 25% · 2 of 8 done · due 2026-11-01
+`###·······` 22% · 2 of 9 done · due 2026-11-01
 
 Exposure makes shelter matter: warmth, enclosed rooms, day/night, weather. Get four walls up before night two.
 
@@ -63,6 +63,7 @@ Exposure makes shelter matter: warmth, enclosed rooms, day/night, weather. Get f
 - [ ] `0057` Weather incidents: cold snap and storm <sup>content · p2 · m · core</sup>
 - [ ] `0058` Doors that raiders must break through <sup>feature · p1 · m · engine</sup>
 - [ ] `0059` Founder trait: combat bonus and recruitment pull <sup>feature · p2 · s · core</sup>
+- [ ] `0071` Prioritize: right-click to force a job <sup>feature · p1 · l · engine</sup>
 - [x] `0052` Room detection: enclosed regions bounded by walls and doors <sup>feature · p0 · m · engine</sup>
 - [x] `0054` Roofs, or does enclosure count as shelter? <sup>spike · p1 · s · engine</sup>
 
@@ -81,7 +82,7 @@ Save/load that survives mod changes, and replays from seed + command log.
 
 ## colony — Colony
 
-`··········` 0% · 0 of 6 done · due 2026-12-15
+`··········` 0% · 0 of 5 done · due 2026-12-15
 
 Running more than one person: stockpiles, hauling, work priorities, skills, colonist panels.
 
@@ -90,7 +91,6 @@ Running more than one person: stockpiles, hauling, work priorities, skills, colo
 - [ ] `0068` Skills learned by doing <sup>feature · p1 · m · engine</sup>
 - [ ] `0069` Deconstruct designation <sup>feature · p1 · s · engine</sup>
 - [ ] `0070` Colonist inspection panel <sup>feature · p1 · m · client</sup>
-- [ ] `0071` Prioritize: right-click to force a job <sup>feature · p2 · m · client</sup>
 
 ## eras — Eras
 
