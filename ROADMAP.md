@@ -53,7 +53,7 @@ First playable vertical slice. One warrior, harvest, build, eat, sleep, animals,
 
 ## shelter — Shelter
 
-`###·······` 22% · 2 of 9 done · due 2026-11-01
+`###·······` 30% · 3 of 10 done · due 2026-11-01
 
 Exposure makes shelter matter: warmth, enclosed rooms, day/night, weather. Get four walls up before night two.
 
@@ -63,9 +63,10 @@ Exposure makes shelter matter: warmth, enclosed rooms, day/night, weather. Get f
 - [ ] `0057` Weather incidents: cold snap and storm <sup>content · p2 · m · core</sup>
 - [ ] `0058` Doors that raiders must break through <sup>feature · p1 · m · engine</sup>
 - [ ] `0059` Founder trait: combat bonus and recruitment pull <sup>feature · p2 · s · core</sup>
-- [ ] `0071` Prioritize: right-click to force a job <sup>feature · p1 · l · engine</sup>
+- [ ] `0136` Autotest seeds from the clock, so CI rolls dice <sup>bug · p1 · s · tooling</sup>
 - [x] `0052` Room detection: enclosed regions bounded by walls and doors <sup>feature · p0 · m · engine</sup>
 - [x] `0054` Roofs, or does enclosure count as shelter? <sup>spike · p1 · s · engine</sup>
+- [x] `0071` Prioritize: right-click to force a job <sup>feature · p1 · l · engine</sup>
 
 ## persistence — Persistence
 

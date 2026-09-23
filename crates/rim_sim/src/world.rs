@@ -53,6 +53,8 @@ pub enum Job {
     Harvest {
         target: Entity,
         work: u32,
+        /// Work the thing even though nobody designated it: foraging for
+        /// food, or a job the player pointed at directly.
         forced: bool,
     },
     Deliver {

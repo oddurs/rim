@@ -448,7 +448,8 @@ fn find_work(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
     Some(job)
 }
 
-fn nearest_item(w: &World, e: Entity, from: IVec, def: DefId) -> Option<(u32, Entity)> {
+/// Nearest reachable stack of `def` that nobody but `e` has claimed.
+pub fn nearest_item(w: &World, e: Entity, from: IVec, def: DefId) -> Option<(u32, Entity)> {
     let mut best: Option<(u32, Entity)> = None;
     for (te, t) in w.ecs.query::<&Thing>().without::<&Blueprint>().iter() {
         if t.def != def || w.map.item_at(t.pos) != Some(te) {

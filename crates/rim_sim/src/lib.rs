@@ -9,6 +9,7 @@ pub mod defs;
 pub mod map;
 pub mod mapgen;
 pub mod modloader;
+pub mod order;
 pub mod path;
 pub mod profile;
 pub mod rng;

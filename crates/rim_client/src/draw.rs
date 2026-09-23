@@ -4,6 +4,7 @@ use crate::{rgb, App, Tool, TOOLBAR_H, TOPBAR_H};
 use macroquad::prelude::*;
 use rim_sim::defs::{Satisfier, Shape};
 use rim_sim::hecs::Entity;
+use rim_sim::order;
 use rim_sim::rng::hash2_f;
 use rim_sim::world::*;
 use rim_sim::{IVec, TICKS_PER_DAY};
@@ -281,6 +282,23 @@ pub fn world(app: &App) {
         let (sx, sy) = cam.to_screen(tp.x as f32, tp.y as f32);
         draw_rectangle_lines(sx, sy, z, z, 2.0, tool_color(app));
     }
+    order_flash(app);
+}
+
+/// A ring that closes on the cell an order just landed in, so the click
+/// is visibly acknowledged even when the pawn takes a moment to turn around.
+const FLASH_SECS: f64 = 0.45;
+
+fn order_flash(app: &App) {
+    let Some((cell, at)) = app.order_flash else { return };
+    let t = (get_time() - at) / FLASH_SECS;
+    if !(0.0..1.0).contains(&t) {
+        return;
+    }
+    let z = app.cam.zoom;
+    let (cx, cy) = app.cam.to_screen(cell.x as f32 + 0.5, cell.y as f32 + 0.5);
+    let r = z * (1.4 - 0.7 * t as f32);
+    draw_circle_lines(cx, cy, r, 2.0, alpha(PLAYER, 1.0 - t as f32));
 }
 
 fn tool_color(app: &App) -> Color {
@@ -298,6 +316,7 @@ pub fn hud(app: &App) {
         pawn_panel(app, e);
     }
     hover_info(app);
+    order_hint(app);
     if app.show_profiler {
         profiler(app);
     }
@@ -422,7 +441,8 @@ fn pawn_panel(app: &App, e: Entity) {
     draw_rectangle(x, y, 280.0, h, PANEL);
     let title = if p.founder { format!("{} (founder)", p.name) } else { p.name.clone() };
     draw_text(&title, x + 10.0, y + 22.0, 22.0, TEXT);
-    let sub = format!("{} · {} · {}", cd.label, p.faction.name(), if p.drafted { "drafted" } else { p.job.label() });
+    let doing = if p.drafted { "drafted".to_string() } else { order::job_text(w, &p) };
+    let sub = format!("{} · {} · {}", cd.label, p.faction.name(), doing);
     draw_text(&sub, x + 10.0, y + 40.0, 16.0, DIM);
     let mut yy = y + 48.0;
     bar(x + 10.0, yy, 190.0, "health", p.hp as f32 / cd.max_hp as f32, Color::new(0.4, 0.8, 0.4, 1.0));
@@ -441,9 +461,23 @@ fn pawn_panel(app: &App, e: Entity) {
         yy += 18.0;
     }
     if p.faction == Faction::Player {
-        let hint = if p.drafted { "R undraft · right-click move/attack" } else { "R draft" };
+        let hint = if p.drafted { "R undraft · right-click move/attack" } else { "R draft · right-click to order" };
         draw_text(hint, x + 10.0, yy + 14.0, 15.0, DIM);
     }
+}
+
+/// What a right-click here would do, pinned to the cursor. Says it before
+/// the click so the player can aim.
+fn order_hint(app: &App) {
+    let Some(text) = &app.hint else { return };
+    let (mx, my) = mouse_position();
+    let d = measure_text(text, None, 16, 1.0);
+    let (w, h) = (d.width + 14.0, 22.0);
+    let x = (mx + 18.0).min(screen_width() - w - 4.0);
+    let y = (my + 12.0).min(screen_height() - TOOLBAR_H - h - 4.0);
+    draw_rectangle(x, y, w, h, PANEL);
+    draw_rectangle_lines(x, y, w, h, 1.0, alpha(PLAYER, 0.5));
+    draw_text(text, x + 7.0, y + 16.0, 16.0, TEXT);
 }
 
 fn hover_info(app: &App) {
