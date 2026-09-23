@@ -389,6 +389,29 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.shot("profiler").await;
     t.act(Action::ToggleProfiler);
 
+    // ---------------------------------------------------------- 0160 field overlay
+    println!("\n# field overlay (0160)");
+    let n = defs.fields.len();
+    t.check(n >= 2, format!("core defines field layers ({n})"));
+    t.check(t.app.overlay.is_none(), "overlay starts off");
+    let fire = defs.thing_id("campfire").unwrap();
+    let spot = open_square(t.w(), site, 1).expect("room for a fire");
+    let _ = t.app.sim.world.spawn_fixture(fire, spot, false);
+    t.ticks(1);
+    for i in 0..n {
+        t.act(Action::CycleOverlay);
+        t.check(t.app.overlay == Some(i), format!("O shows the '{}' overlay", defs.fields[i].label));
+        t.focus(spot);
+        t.shot(&format!("overlay_{}", defs.fields[i].id)).await;
+    }
+    t.act(Action::CycleOverlay);
+    t.check(t.app.overlay.is_none(), "O again turns the overlay off");
+    let temp = defs.lookup("field", "temperature").unwrap() as usize;
+    let near = t.w().fields.value(&defs, &t.w().map, temp, spot);
+    let outside = t.w().fields.ambient(temp);
+    t.check(near > outside, format!("the campfire warms its cell ({near:.1}° vs {outside:.1}° outside)"));
+    t.check(draw::clock_text(&t.app).contains("°C outside"), "top bar shows the outdoor temperature");
+
     // Night, to see lighting.
     while !(22.0..23.0).contains(&t.w().hour()) {
         t.ticks(100);

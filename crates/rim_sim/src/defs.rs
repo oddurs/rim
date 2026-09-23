@@ -21,6 +21,9 @@ fn dtrue() -> bool {
 fn dsize() -> f32 {
     0.35
 }
+fn d01() -> f64 {
+    0.1
+}
 fn drange01() -> [f64; 2] {
     [0.0, 1.0]
 }
@@ -116,8 +119,27 @@ pub struct ThingDef {
     pub food: Option<FoodDef>,
     pub bed: Option<BedDef>,
     pub spawn: Option<SpawnDef>,
+    /// Field sources: a campfire emits heat and light.
+    #[serde(default)]
+    pub emit: Vec<EmitDef>,
     #[serde(skip)]
     pub rgb: [u8; 3],
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct EmitDef {
+    pub field: String,
+    /// Strength at the source, in the field's units.
+    pub amount: f64,
+    /// Cells of walking distance it reaches, fading linearly to zero.
+    pub radius: u32,
+    /// Room fields: stop pushing the room past this value (a campfire can't
+    /// heat a hut beyond 24°; a cooler with a negative amount stops at its
+    /// cap from above). Unset: no limit.
+    #[serde(default)]
+    pub cap: Option<f64>,
+    #[serde(skip)]
+    pub field_r: DefId,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -235,6 +257,8 @@ pub struct CreatureSpawn {
 pub enum Satisfier {
     Food,
     Rest,
+    /// Driven by a field layer: drains outside `comfort`, recovers inside it.
+    Field,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -248,8 +272,64 @@ pub struct NeedDef {
     pub seek_below: f64,
     #[serde(default)]
     pub empty_damage_per_day: f64,
+    /// For `satisfier = "field"`: which field, and the comfortable range.
+    #[serde(default)]
+    pub field: String,
+    #[serde(default)]
+    pub comfort: [f64; 2],
+    /// For field needs, `days_to_empty` is the rate when 10 units outside
+    /// comfort; this is how fast it refills inside comfort.
+    #[serde(default = "d01")]
+    pub recover_days: f64,
     #[serde(skip)]
     pub rgb: [u8; 3],
+    #[serde(skip)]
+    pub field_r: DefId,
+}
+
+// ---------------------------------------------------------------- fields
+
+/// What a field is inside an enclosed room.
+#[derive(Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum IndoorMode {
+    /// Same as outdoors (noise, danger).
+    #[default]
+    Outdoor,
+    /// Zero: only emitters count (light indoors comes from lamps).
+    None,
+    /// Each room holds its own value, leaking toward outdoors (temperature).
+    Room,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct FieldDef {
+    pub id: String,
+    pub label: String,
+    #[serde(default)]
+    pub unit: String,
+    /// Outdoor value until a script sets it.
+    #[serde(default)]
+    pub ambient: f64,
+    #[serde(default)]
+    pub indoor: IndoorMode,
+    /// Room fields: fraction of the gap to outdoors closed per hour.
+    #[serde(default)]
+    pub leak_per_hour: f64,
+    /// Room fields: how strongly emitters inside push the room's value.
+    #[serde(default)]
+    pub room_gain: f64,
+    /// Overlay colour ramp across `range`.
+    pub range: [f64; 2],
+    pub color_low: String,
+    pub color_high: String,
+    /// Show the outdoor value in the top bar.
+    #[serde(default)]
+    pub hud: bool,
+    #[serde(skip)]
+    pub rgb_low: [u8; 3],
+    #[serde(skip)]
+    pub rgb_high: [u8; 3],
 }
 
 // ---------------------------------------------------------------- designations
@@ -306,12 +386,13 @@ pub struct DefDb {
     pub creatures: Vec<CreatureDef>,
     pub needs: Vec<NeedDef>,
     pub designations: Vec<DesignationDef>,
+    pub fields: Vec<FieldDef>,
     pub start: Option<StartDef>,
     pub names: Vec<String>,
     index: HashMap<(&'static str, String), DefId>,
 }
 
-pub const KINDS: &[&str] = &["terrain", "thing", "creature", "need", "designation", "start", "names"];
+pub const KINDS: &[&str] = &["terrain", "thing", "creature", "need", "designation", "field", "start", "names"];
 
 impl DefDb {
     pub fn lookup(&self, kind: &'static str, id: &str) -> Option<DefId> {
@@ -351,6 +432,9 @@ impl DefDb {
         for (i, d) in self.designations.iter().enumerate() {
             index.insert(("designation", d.id.clone()), i as DefId);
         }
+        for (i, d) in self.fields.iter().enumerate() {
+            index.insert(("field", d.id.clone()), i as DefId);
+        }
         self.index = index;
 
         let idx = &self.index;
@@ -364,8 +448,15 @@ impl DefDb {
         for d in &mut self.terrain {
             d.rgb = parse_color(&d.color).map_err(|e| format!("terrain/{}: {e}", d.id))?;
         }
+        for d in &mut self.fields {
+            d.rgb_low = parse_color(&d.color_low).map_err(|e| format!("field/{}: {e}", d.id))?;
+            d.rgb_high = parse_color(&d.color_high).map_err(|e| format!("field/{}: {e}", d.id))?;
+        }
         for d in &mut self.needs {
             d.rgb = parse_color(&d.color).map_err(|e| format!("need/{}: {e}", d.id))?;
+            if d.satisfier == Satisfier::Field {
+                d.field_r = get("field", &d.field, &format!("need/{}", d.id))?;
+            }
         }
         for d in &mut self.designations {
             d.rgb = parse_color(&d.color).map_err(|e| format!("designation/{}: {e}", d.id))?;
@@ -382,6 +473,9 @@ impl DefDb {
             }
             if let Some(s) = &mut d.spawn {
                 s.terrain_r = s.terrain.iter().map(|t| get("terrain", t, &ctx)).collect::<Result<_, _>>()?;
+            }
+            for em in &mut d.emit {
+                em.field_r = get("field", &em.field, &ctx)?;
             }
             d.stack_limit = d.stack_limit.max(1);
         }

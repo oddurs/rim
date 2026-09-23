@@ -52,3 +52,7 @@ category = "building"
 shape = "fire"
 market_value = 20
 build = { menu = "furniture", work = 150, cost = [{ thing = "wood", count = 15 }] }
+emit = [
+    { field = "temperature", amount = 12.0, radius = 5, cap = 24.0 },
+    { field = "light", amount = 80.0, radius = 7 },
+]

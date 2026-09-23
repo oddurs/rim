@@ -53,12 +53,10 @@ First playable vertical slice. One warrior, harvest, build, eat, sleep, animals,
 
 ## shelter — Shelter
 
-`###·······` 25% · 3 of 12 done · due 2026-11-01
+`#####·····` 46% · 6 of 13 done · due 2026-11-01
 
 Exposure makes shelter matter: warmth, enclosed rooms, day/night, weather. Get four walls up before night two.
 
-- [ ] `0053` Warmth need and exposure outdoors <sup>feature · p0 · m · engine</sup>
-- [ ] `0055` Campfire gives warmth in a radius <sup>content · p1 · s · core</sup>
 - [ ] `0056` Day/night lighting and weather visuals <sup>feature · p1 · m · client</sup>
 - [ ] `0057` Weather incidents: cold snap and storm <sup>content · p2 · m · core</sup>
 - [ ] `0058` Doors that raiders must break through <sup>feature · p1 · m · engine</sup>
@@ -67,8 +65,11 @@ Exposure makes shelter matter: warmth, enclosed rooms, day/night, weather. Get f
 - [ ] `0156` CI: build and test on Windows <sup>chore · p1 · s · tooling</sup>
 - [ ] `0157` CI: determinism must hold across machines, not just within one run <sup>chore · p1 · s · tooling</sup>
 - [x] `0052` Room detection: enclosed regions bounded by walls and doors <sup>feature · p0 · m · engine</sup>
+- [x] `0053` Warmth need and exposure outdoors <sup>feature · p0 · m · engine</sup>
 - [x] `0054` Roofs, or does enclosure count as shelter? <sup>spike · p1 · s · engine</sup>
+- [x] `0055` Campfire gives warmth in a radius <sup>content · p1 · s · core</sup>
 - [x] `0071` Prioritize: right-click to force a job <sup>feature · p1 · l · engine</sup>
+- [x] `0160` Field layers: data-driven scalar grids (temperature, light, beauty) <sup>feature · p0 · l · engine</sup>
 
 ## persistence — Persistence
 

@@ -19,14 +19,26 @@ pub fn needs(w: &mut World) {
         let mut starving = false;
         let asleep = p.asleep;
         let sleep_rate = p.sleep_rate.max(1) as f64 / 100.0;
+        let pos = p.pos;
         let mut dmg = 0.0;
         for n in &mut p.needs {
             let nd = defs.need(n.0);
-            let delta = if nd.satisfier == Satisfier::Rest && asleep {
+            let delta = match nd.satisfier {
                 // A full night's sleep on the ground restores ~1/3 day of rest.
-                NEED_MAX as f64 * frac / 0.3 * sleep_rate
-            } else {
-                -(NEED_MAX as f64) * frac / nd.days_to_empty
+                Satisfier::Rest if asleep => NEED_MAX as f64 * frac / 0.3 * sleep_rate,
+                Satisfier::Field => {
+                    // Drains in proportion to how far outside comfort the
+                    // cell is (days_to_empty is the rate at 10 units out);
+                    // refills while comfortable.
+                    let v = w.fields.value(&defs, &w.map, nd.field_r as usize, pos);
+                    let off = (nd.comfort[0] - v).max(v - nd.comfort[1]).max(0.0);
+                    if off > 0.0 {
+                        -(NEED_MAX as f64) * frac / nd.days_to_empty * off / 10.0
+                    } else {
+                        NEED_MAX as f64 * frac / nd.recover_days
+                    }
+                }
+                _ => -(NEED_MAX as f64) * frac / nd.days_to_empty,
             };
             n.1 = (n.1 + w.rng.round(delta)).clamp(0, NEED_MAX);
             if n.1 == 0 && nd.empty_damage_per_day > 0.0 {

@@ -239,6 +239,21 @@ pub fn world(app: &App) {
         }
     }
 
+    // Field overlay, under the night tint so it reads like the world does.
+    if let Some(fi) = app.overlay {
+        let fd = &defs.fields[fi];
+        let (lo, hi) = (rgb(fd.rgb_low), rgb(fd.rgb_high));
+        for ty in ty0..=ty1 {
+            for tx in tx0..=tx1 {
+                let v = w.fields.value(defs, &w.map, fi, IVec::new(tx, ty)) as f32;
+                let f = ((v - fd.range[0] as f32) / (fd.range[1] - fd.range[0]) as f32).clamp(0.0, 1.0);
+                let c = Color::new(lo.r + (hi.r - lo.r) * f, lo.g + (hi.g - lo.g) * f, lo.b + (hi.b - lo.b) * f, 0.55);
+                let (sx, sy) = cam.to_screen(tx as f32, ty as f32);
+                draw_rectangle(sx, sy, z + 0.5, z + 0.5, c);
+            }
+        }
+    }
+
     // Night.
     let dark = darkness(w.hour());
     if dark > 0.0 {
@@ -350,7 +365,7 @@ fn top_bar(app: &App) {
         draw_text(&p.name, rect.x + 6.0, rect.y + 16.0, 17.0, if p.drafted { PLAYER } else { TEXT });
     }
 
-    let help = "Space pause  1/2/3 speed  R draft  Tab next  F3 profiler";
+    let help = "Space pause  1/2/3 speed  R draft  Tab next  O overlay  F3 profiler";
     let d = measure_text(help, None, 15, 1.0);
     draw_text(help, screen_width() - d.width - 10.0, 18.0, 15.0, DIM);
 }
@@ -361,7 +376,14 @@ pub fn clock_text(app: &App) -> String {
     let hour = w.hour();
     let clock = format!("{:02}:{:02}", hour as u32, (hour.fract() * 60.0) as u32);
     let speed = if app.paused { "paused".to_string() } else { format!("{}x", app.speed) };
-    format!("Day {}  {}  {}   Wealth {:.0}", w.day() + 1, clock, speed, w.wealth)
+    let mut s = format!("Day {}  {}  {}   Wealth {:.0}", w.day() + 1, clock, speed, w.wealth);
+    for (fi, fd) in w.defs.fields.iter().enumerate().filter(|(_, f)| f.hud) {
+        s.push_str(&format!("   {:.0}{} outside", w.fields.ambient(fi), fd.unit));
+    }
+    if let Some(fi) = app.overlay {
+        s.push_str(&format!("   [overlay: {}]", w.defs.fields[fi].label));
+    }
+    s
 }
 
 pub fn message_color(kind: MsgKind) -> Color {
@@ -375,7 +397,8 @@ pub fn message_color(kind: MsgKind) -> Color {
 
 pub fn colonist_rects(app: &App) -> Vec<(Entity, Rect)> {
     let cols: Vec<Entity> = app.sim.world.colonists().collect();
-    let mut x = 360.0;
+    // Start after the clock, however long mods make it.
+    let mut x = measure_text(&clock_text(app), None, 20, 1.0).width + 30.0;
     cols.into_iter()
         .map(|e| {
             let name = app.sim.world.ecs.get::<&Pawn>(e).map(|p| p.name.clone()).unwrap_or_default();
@@ -498,6 +521,16 @@ fn hover_info(app: &App) {
     };
     let mut lines =
         vec![format!("{} ({}, {})  {}", w.defs.terrain[w.map.terrain[i] as usize].label, tp.x, tp.y, shelter)];
+    let readings: Vec<String> = w
+        .defs
+        .fields
+        .iter()
+        .enumerate()
+        .map(|(fi, fd)| format!("{} {:.0}{}", fd.label, w.fields.value(&w.defs, &w.map, fi, tp), fd.unit))
+        .collect();
+    if !readings.is_empty() {
+        lines.push(readings.join("   "));
+    }
     for e in [w.map.fixture[i], w.map.item[i]].into_iter().flatten() {
         if let Ok(t) = w.ecs.get::<&Thing>(e) {
             let td = w.defs.thing(t.def);

@@ -146,6 +146,7 @@ pub fn load(mods_dir: &Path) -> Result<LoadedMods, String> {
             "creature" => defs.creatures.push(v.try_into().map_err(err)?),
             "need" => defs.needs.push(v.try_into().map_err(err)?),
             "designation" => defs.designations.push(v.try_into().map_err(err)?),
+            "field" => defs.fields.push(v.try_into().map_err(err)?),
             "start" => defs.start = Some(v.try_into().map_err(err)?),
             "names" => {
                 let n: NamesDef = v.try_into().map_err(err)?;

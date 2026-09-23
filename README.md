@@ -41,6 +41,7 @@ cargo run --release -p rim_client -- --autotest                   # drive every 
 | R                    | draft the selected colonist        |
 | Right-click          | drafted: move or attack            |
 | Tab / C              | next colonist / center on selected |
+| O                    | cycle field overlays (temperature, light, ...) |
 | F3                   | profiler, load order, mod warnings |
 
 ## Design and roadmap

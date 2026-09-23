@@ -15,6 +15,20 @@ satisfier = "rest"
 days_to_empty = 1.2
 seek_below = 0.25
 
+# Warmth drains when it's too cold (or hot), faster the further outside
+# comfort; days_to_empty is the rate at 10° outside it.
+[[need]]
+id = "warmth"
+label = "warmth"
+color = "#e07a3a"
+satisfier = "field"
+field = "temperature"
+comfort = [10.0, 32.0]
+days_to_empty = 0.2
+recover_days = 0.1
+seek_below = 0.35
+empty_damage_per_day = 40
+
 [[designation]]
 id = "chop"
 label = "Chop"

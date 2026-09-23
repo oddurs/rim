@@ -188,11 +188,24 @@ fn think_colonist(w: &mut World, e: Entity, p: &mut Pawn) -> Option<Job> {
             Satisfier::Rest if v < seek || (w.is_night() && v < NEED_MAX * 6 / 10) => {
                 return Some(find_bed(w, e, p));
             }
+            Satisfier::Field if v < seek => {
+                if let Some(to) = comfortable_spot(w, p) {
+                    return Some(Job::Comfort { to, need: nid, until: w.tick + 2400 });
+                }
+            }
             _ => {}
         }
     }
     if let Some(j) = find_work(w, e, p) {
         return Some(j);
+    }
+    // Nothing to do: wait somewhere comfortable rather than out in the cold.
+    let chilled = p.needs.iter().any(|&(nid, v)| defs.need(nid).satisfier == Satisfier::Field && v < NEED_MAX * 9 / 10);
+    if chilled {
+        if let Some(to) = comfortable_spot(w, p) {
+            let need = p.needs.iter().find(|n| defs.need(n.0).satisfier == Satisfier::Field).unwrap().0;
+            return Some(Job::Comfort { to, need, until: w.tick + 1200 });
+        }
     }
     wander(w, p, 4)
 }
@@ -372,7 +385,78 @@ fn find_bed(w: &mut World, e: Entity, p: &mut Pawn) -> Job {
     if let Some(b) = bed {
         w.reserve(b, e);
     }
-    Job::Sleep { bed, stage: 0 }
+    // No bed: sleep somewhere comfortable if the ground here isn't.
+    let spot = if bed.is_some() { p.pos } else { comfortable_spot(w, p).unwrap_or(p.pos) };
+    Job::Sleep { bed, spot, stage: 0 }
+}
+
+/// How far a pawn will look for somewhere comfortable, in cells explored.
+const COMFORT_SEARCH: usize = 4000;
+
+/// How much better a spot must be than where the pawn stands (in field units
+/// outside comfort) before it's worth walking to.
+const COMFORT_GAIN: f64 = 2.0;
+
+/// Nearest cell, by walking, where every field need of this pawn is inside
+/// its comfort range; failing that, the least uncomfortable cell within
+/// reach, if it's clearly better than here (an unheated hut beats the night
+/// outside). `None` if the pawn is already comfortable or nothing nearby is
+/// better.
+pub fn comfortable_spot(w: &World, p: &Pawn) -> Option<IVec> {
+    let defs = &w.defs;
+    let needs: Vec<&NeedDef> =
+        p.needs.iter().map(|n| defs.need(n.0)).filter(|nd| nd.satisfier == Satisfier::Field).collect();
+    if needs.is_empty() {
+        return None;
+    }
+    // How far outside comfort a cell is, summed over the pawn's field needs.
+    // Aim one unit inside the range so the pawn isn't standing on the edge.
+    let off = |c: IVec| -> f64 {
+        needs
+            .iter()
+            .map(|nd| {
+                let v = w.fields.value(defs, &w.map, nd.field_r as usize, c);
+                (nd.comfort[0] + 1.0 - v).max(v - (nd.comfort[1] - 1.0)).max(0.0)
+            })
+            .sum()
+    };
+    let here = off(p.pos);
+    if here == 0.0 {
+        return None;
+    }
+    let mut best = (here, p.pos);
+    let mut seen = std::collections::HashSet::new();
+    let mut queue = std::collections::VecDeque::new();
+    seen.insert(p.pos);
+    queue.push_back(p.pos);
+    while let Some(c) = queue.pop_front() {
+        let o = off(c);
+        if o == 0.0 {
+            return Some(c);
+        }
+        if o < best.0 {
+            best = (o, c);
+        }
+        if seen.len() > COMFORT_SEARCH {
+            break;
+        }
+        for (dx, dy) in crate::map::NEIGHBORS8 {
+            let q = c.offset(dx, dy);
+            if !w.map.passable(q) {
+                continue;
+            }
+            // Check the corner before marking the cell seen: a door is only
+            // ever reached straight on, and marking it on a rejected diagonal
+            // would hide every room behind a door.
+            if dx != 0 && dy != 0 && (!w.map.passable(c.offset(dx, 0)) || !w.map.passable(c.offset(0, dy))) {
+                continue;
+            }
+            if seen.insert(q) {
+                queue.push_back(q);
+            }
+        }
+    }
+    (best.0 + COMFORT_GAIN < here).then_some(best.1)
 }
 
 /// Nearest job among: construct, deliver materials, designated harvest, hunt.
@@ -494,7 +578,8 @@ fn run_job(w: &mut World, e: Entity, p: &mut Pawn) {
         Job::Deliver { bp, src, want, stage } => (run_deliver(w, p, bp, src, want, stage), 0),
         Job::Construct { bp } => (run_construct(w, p, bp), 0),
         Job::Eat { src, t } => (run_eat(w, p, src, t), 0),
-        Job::Sleep { bed, stage } => (run_sleep(w, e, p, bed, stage), 0),
+        Job::Sleep { bed, spot, stage } => (run_sleep(w, e, p, bed, spot, stage), 0),
+        Job::Comfort { to, need, until } => (run_comfort(w, p, to, need, until), 0),
         Job::Attack { target, until } => (run_attack(w, e, p, target, until), 0),
     };
     match next {
@@ -624,6 +709,8 @@ pub fn complete_building(w: &mut World, bp: Entity) {
     let td = w.defs.thing(t.def);
     let (blocks, cost, door) = (td.blocks, td.path_cost, td.door);
     w.map.set_fixture(t.pos, Some(bp), blocks, cost, door);
+    let defs = w.defs.clone();
+    w.fields.add_emitters(&defs, &w.map, bp, t.def, t.pos);
     if blocks {
         // Anyone else caught inside gets nudged out.
         for i in 0..w.pawns.len() {
@@ -676,7 +763,23 @@ fn run_eat(w: &mut World, p: &mut Pawn, src: Entity, t: u32) -> Option<Job> {
     }
 }
 
-fn run_sleep(w: &mut World, e: Entity, p: &mut Pawn, bed: Option<Entity>, stage: u8) -> Option<Job> {
+fn run_comfort(w: &mut World, p: &mut Pawn, to: IVec, need: DefId, until: u64) -> Option<Job> {
+    if w.tick > until {
+        return None;
+    }
+    match go_to(w, p, Goal::Cell(to)) {
+        Go::Failed => None,
+        Go::Moving => Some(Job::Comfort { to, need, until }),
+        // Stay until the need has mostly recovered.
+        Go::Arrived => (p.need(need)? < NEED_MAX * 9 / 10).then_some(Job::Comfort { to, need, until }),
+    }
+}
+
+/// Sleepers get up when a field need turns dangerous: freezing in your sleep
+/// is not restful.
+const WAKE_BELOW: i32 = NEED_MAX * 15 / 100;
+
+fn run_sleep(w: &mut World, e: Entity, p: &mut Pawn, bed: Option<Entity>, spot: IVec, stage: u8) -> Option<Job> {
     if p.last_attacker.is_some() {
         return None;
     }
@@ -684,15 +787,15 @@ fn run_sleep(w: &mut World, e: Entity, p: &mut Pawn, bed: Option<Entity>, stage:
     if stage == 0 {
         let (goal, rate) = match bed.and_then(|b| w.thing(b)) {
             Some(b) => (Goal::Cell(b.pos), (defs.thing(b.def).bed.as_ref()?.rest_rate * 100.0) as u32),
-            None => (Goal::Cell(p.pos), 100),
+            None => (Goal::Cell(spot), 100),
         };
         return match go_to(w, p, goal) {
             Go::Failed => None,
-            Go::Moving => Some(Job::Sleep { bed, stage }),
+            Go::Moving => Some(Job::Sleep { bed, spot, stage }),
             Go::Arrived => {
                 p.asleep = true;
                 p.sleep_rate = rate;
-                Some(Job::Sleep { bed, stage: 1 })
+                Some(Job::Sleep { bed, spot, stage: 1 })
             }
         };
     }
@@ -702,10 +805,13 @@ fn run_sleep(w: &mut World, e: Entity, p: &mut Pawn, bed: Option<Entity>, stage:
     if rested {
         return None;
     }
+    if p.needs.iter().any(|n| defs.need(n.0).satisfier == Satisfier::Field && n.1 < WAKE_BELOW) {
+        return None;
+    }
     if w.tick.is_multiple_of(60) && nearest_pawn(w, e, p.pos, 4, |o| o.faction == Faction::Hostile).is_some() {
         return None;
     }
-    Some(Job::Sleep { bed, stage })
+    Some(Job::Sleep { bed, spot, stage })
 }
 
 fn run_attack(w: &mut World, e: Entity, p: &mut Pawn, target: Entity, until: u64) -> Option<Job> {

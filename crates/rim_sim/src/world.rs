@@ -1,6 +1,7 @@
 //! World state: the ECS, the map, the RNG and the clock.
 
 use crate::defs::*;
+use crate::field::Fields;
 use crate::map::Map;
 use crate::path::{Goal, Pathfinder};
 use crate::rng::Rng;
@@ -72,7 +73,15 @@ pub enum Job {
     },
     Sleep {
         bed: Option<Entity>,
+        /// Where to lie down without a bed: somewhere warm if possible.
+        spot: IVec,
         stage: u8,
+    },
+    /// Stand somewhere comfortable until a field need (warmth) recovers.
+    Comfort {
+        to: IVec,
+        need: DefId,
+        until: u64,
     },
     Attack {
         target: Entity,
@@ -101,6 +110,7 @@ impl Job {
             Job::Eat { .. } => "eating",
             Job::Sleep { stage: 1, .. } => "sleeping",
             Job::Sleep { .. } => "going to sleep",
+            Job::Comfort { .. } => "warming up",
             Job::Attack { .. } => "fighting",
             Job::Flee { .. } => "fleeing",
             Job::Leave { .. } => "leaving",
@@ -222,6 +232,8 @@ pub struct World {
     pub seed: u64,
     pub ecs: hecs::World,
     pub map: Map,
+    /// Temperature, light and other field layers over the map.
+    pub fields: Fields,
     pub rng: Rng,
     pub tick: u64,
     /// Pawns in spawn order; iteration order is part of determinism.
@@ -240,10 +252,12 @@ pub struct World {
 
 impl World {
     pub fn new(defs: Arc<DefDb>, w: i32, h: i32, seed: u64) -> Self {
+        let fields = Fields::new(&defs, (w * h) as usize);
         World {
             defs,
             seed,
             ecs: hecs::World::new(),
+            fields,
             map: Map::new(w, h),
             rng: Rng::new(seed),
             tick: 0,
@@ -361,6 +375,9 @@ impl World {
         };
         let (blocks, cost, door) = if blueprint { (false, 0, false) } else { (td.blocks, td.path_cost, td.door) };
         self.map.set_fixture(pos, Some(e), blocks, cost, door);
+        if !blueprint {
+            self.fields.add_emitters(&defs, &self.map, e, def, pos);
+        }
         Some(e)
     }
 
@@ -417,6 +434,7 @@ impl World {
             }
         }
         self.reservations.remove(&e);
+        self.fields.remove_emitters(e);
         let _ = self.ecs.despawn(e);
     }
 
