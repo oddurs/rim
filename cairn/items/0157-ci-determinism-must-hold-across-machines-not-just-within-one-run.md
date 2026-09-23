@@ -1,0 +1,33 @@
+---
+id: 157
+title: 'CI: determinism must hold across machines, not just within one run'
+type: chore
+status: backlog
+milestone: shelter
+depends_on:
+- 156
+created: 2026-09-23
+updated: 2026-09-23
+priority: p1
+api: none
+effort: s
+layer: tooling
+area: tests
+pillar:
+- determinism
+---
+
+## Why
+
+`tests/determinism.rs` compares two runs in the same process, so it can't catch a platform that simulates differently. Co-op and shared replays need macOS, Windows and Linux (x86 and ARM) to reach the same state hash from the same seed and commands (DESIGN.md §7).
+
+## What
+
+Each CI test job runs a fixed scenario (seed, mod set, command script, several in-game days) and uploads its state hash as an artifact. A final job fails if the hashes differ. The hash isn't checked into the repo, so gameplay changes don't need a golden file updated, only agreement between platforms.
+
+## Acceptance criteria
+
+- [ ] Headless runner can print the final state hash for a scenario
+- [ ] Every OS in the matrix, including an ARM runner, uploads its hash
+- [ ] A compare job fails with every platform's hash listed when they differ
+- [ ] The scenario exercises scripts (storyteller, incidents) as well as the engine

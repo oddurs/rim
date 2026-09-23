@@ -267,3 +267,157 @@ mid-range laptop. That means ≤ 2 ms per sim tick at 6× (≈ 360 ticks/sec).
 4. **`rim.mood`:** the first first-party plugin, and the test of the API.
 5. **Stockpiles and hauling, work priorities, skills.**
 6. **WASM tier, mod browser, co-op lockstep.**
+
+---
+
+## 10. Modding as a platform
+
+§6 says how plugins plug in. This section covers who writes them and how the
+work gets to players. The first modders will be developers who already live on
+GitHub, and the platform should feel like publishing a small open-source
+library: `rim new`, write typed code, `rim test` in CI, tag a release, open a
+PR to the index. If that loop is good, content follows.
+
+### Tension: where do mods live?
+
+- **For Steam Workshop:** it's where players already look, and installing takes
+  one click.
+- **Against:** it's closed and tied to one store. You can't fork a mod, send it
+  a pull request, review a diff or run CI on it. A mod that is abandoned there
+  stays abandoned. It also doesn't exist for players who got the game any
+  other way.
+- **Ruling:** **a mod is a git repo**, and a release is a tag. Discovery goes
+  through a **mod index**: a public git repo with one small TOML file per mod
+  (id to repo URL). Adding a mod is a pull request, and the index's CI runs
+  `rim check` and `rim test` on it. Players never need git: the game and the
+  `rim` CLI download release archives over HTTPS. A Workshop mirror can come
+  later as a second front door onto the same index.
+- Every install is recorded in a **modlist lockfile** (exact versions plus
+  content hashes). The same file pins replays, bug reports and co-op sessions.
+  A modpack is just a lockfile someone shared.
+- The index requires an SPDX `license` in `mod.toml`, so modpacks and forks
+  know what they're allowed to do.
+
+### Tension: global ids or namespaced ids?
+
+- **For global ids (`wolf`):** they're short, and mods today can refer to core
+  content without ceremony.
+- **Against:** two mods that both add `iron` will collide, and with a hundred
+  mods they will. Save files key on def ids, so renaming later breaks saves.
+- **Ruling:** every def id is **namespaced by its mod**: `core:wolf`,
+  `wildlife_plus:boar`. Inside a mod, a bare id means that mod's own def; any
+  other mod's def needs the prefix. This is a breaking change, so it lands
+  **before the save format** does, while breaking things is still cheap.
+
+### Tension: how do mods talk to each other?
+
+- **For the shared `rim` table (today):** it's simple. Core exposes
+  `rim.register_incident` just by assigning it.
+- **Against:** any mod can overwrite any function for everyone. That is
+  patch-anything through the back door, which §6 ruled out. Names collide
+  silently, and nothing records who depends on whom.
+- **Ruling:** the `rim` engine table is **read-only**. Mods share code as
+  **modules**: `require("@core/storyteller")` returns what that mod exports.
+  A mod can only require mods listed in its `depends` or `optional`, so the
+  dependency graph is real rather than hoped for. For loose coupling there are
+  **namespaced events**: `rim.emit("wildlife_plus:stampede", data)` and
+  `rim.on("wildlife_plus:stampede", fn)`. The rule of thumb: hard
+  dependencies use `require`, soft ones use events.
+
+### Tension: a fixed schema or one mods can extend?
+
+- **For a fixed set of def kinds:** the engine validates everything and tools
+  know the whole schema.
+- **Against:** mood needs `thought` defs and crafting needs `recipe` defs.
+  Neither is an engine concept, so the rule "if mood can't be a plugin, the
+  API is wrong" fails immediately.
+- **Ruling:** mods can **declare new def kinds** with a field schema. The
+  loader validates, merges and patches them like built-in kinds and exposes
+  them read-only to scripts. To attach data to *another* mod's def, a mod uses
+  a table named after itself (`[creature.core:human.mood]` becomes
+  `def.mood` in scripts). It can't collide with anyone else's data, and its
+  owner is obvious.
+- Content enums in the engine (`Faction`, `Satisfier`) become registries fed
+  by defs. Draw primitives (`Shape`) and broad categories stay in code:
+  those are mechanisms, not content.
+
+### Tension: declarative patches or scripted defs?
+
+- **For letting scripts generate and edit defs:** it's what power users want,
+  e.g. twenty ore variants from one loop.
+- **Against:** conflict detection, compatibility reports and index checks
+  only work if changes are declarative.
+- **Ruling:** stay declarative, and fill the actual gap, which is lists.
+  Patches gain `append`, `remove` and match-by-key for arrays; today setting
+  a list replaces all of it. Load-time def generation is **deferred** until a
+  real mod needs it. If it comes, it must emit defs and patches through the
+  same tracked pipeline.
+
+### Tension: should players set the load order?
+
+- **For manual order:** RimWorld players expect it, and it's an escape hatch
+  when two mods fight.
+- **Against:** it's hidden state. Two players with the same mods get different
+  games, co-op desyncs, and bug reports can't be reproduced. Ordering is a
+  job for the loader, not for players.
+- **Ruling:** **order is derived from manifests only** (§6). When patches
+  conflict, the mod manager shows the conflict and the player picks a winner
+  per field. That choice is written into the modlist lockfile, so it is
+  explicit, shareable and reproducible. Mod authors resolve conflicts
+  properly with `load_after` or a compatibility patch.
+
+### Tension: what can a mod from a random repo do?
+
+- **For native code (DLLs, like RimWorld's C# assemblies):** unlimited power
+  and speed.
+- **Against:** "download code from a stranger's GitHub and run it" is only
+  safe if the sandbox is real. One malicious mod would poison trust in the
+  whole index.
+- **Ruling:** **there is no native tier, ever.** Data and Luau mods can't do
+  I/O. The Luau VM runs in sandbox mode, the engine tables are frozen, and
+  each mod gets hard instruction and memory limits, so a runaway script is
+  stopped and named instead of hanging the game. Installing a data or Luau
+  mod needs no permission prompt. The WASM tier (§6) is the only one that
+  declares capabilities.
+- Scripts share the sim's determinism rules. Library math that can differ
+  across platforms (`math.sin` and friends from the C library) is replaced
+  with deterministic implementations, so co-op and replays hold across
+  machines.
+
+### Tension: a moving API or mods that rot?
+
+- **For breaking freely before 1.0:** the API is young, and freezing it early
+  locks in mistakes.
+- **Against:** every break silently kills mods whose authors have moved on.
+  Mod ecosystems die this way.
+- **Ruling:** break freely, **but never silently**:
+  - The API is declared once in Rust. The `.d.luau` type definitions and the
+    reference docs are generated from that declaration, so they can't drift.
+  - A deprecated call keeps working for one minor version, logs a warning
+    with its replacement, and names the version it will be removed in.
+  - **Mod crater:** engine CI runs every indexed mod's tests against the
+    change. Breaks are found by us, before modders find them.
+
+### Tension: how do modders know their mod works?
+
+- **For "just play it":** it's how most games work.
+- **Against:** the engine is deterministic and headless (§7). Not letting
+  modders test with that wastes our biggest advantage.
+- **Ruling:** **`rim test`** runs `tests/*.luau` against seeded headless
+  worlds: set up a scene, advance ticks, assert. The GitHub Action that
+  `rim new` generates runs it on every push, against the engine versions
+  the mod supports.
+- **Hot reload is deterministic replay.** When a file changes, reload the
+  defs and scripts, rebuild the world from its seed and replay the command
+  log to the current tick. You see what your change *would have done* in
+  this exact game. Snapshots make it faster once saves exist.
+
+### Tension: Luau, or a language more developers know?
+
+- **For TypeScript or JavaScript:** far more developers know it.
+- **Against:** a JavaScript engine is heavy, hard to sandbox deterministically
+  and slow to embed. Luau is built for exactly this job: sandboxed, gradually
+  typed, fast, and with a solid LSP (luau-lsp).
+- **Ruling:** Luau for scripts. People who want other languages get them
+  through the WASM tier, which compiles from Rust, AssemblyScript, Zig and
+  others.

@@ -25,3 +25,4 @@ Desyncs must be caught and fixed.
 
 - [ ] State hash exchanged every N ticks
 - [ ] Resync from a save snapshot
+- [ ] State hash broken down per mod (script state and components), so a desync names the mod that caused it

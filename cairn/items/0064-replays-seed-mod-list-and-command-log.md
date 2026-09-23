@@ -24,3 +24,5 @@ Bug reports become exact reproductions.
 ## Acceptance criteria
 
 - [ ] Replay reaches the same state hash at every checkpoint
+
+Once 0152 lands, the mod list in a replay is the modlist lockfile, so a replay pins exact mod versions and hashes.

@@ -20,3 +20,5 @@ Players should know what a native or WASM mod can touch.
 ## Acceptance criteria
 
 - [ ] Capabilities in mod.toml
+
+Scope from DESIGN.md §10: data and Luau mods need no prompt because they can't do I/O. Capabilities apply only to the WASM tier. There is no native-code tier.
