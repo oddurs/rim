@@ -7,6 +7,7 @@ mod draw;
 use macroquad::prelude::*;
 use rim_sim::defs::{DefId, Targets};
 use rim_sim::hecs::Entity;
+use rim_sim::order;
 use rim_sim::world::{Faction, Pawn};
 use rim_sim::{Command, IVec, Sim};
 use std::path::PathBuf;
@@ -60,6 +61,12 @@ pub struct App {
     pub speed: u32,
     pub show_profiler: bool,
     pub buttons: Vec<Button>,
+    /// What a right-click would do, recomputed only when the cursor moves to
+    /// another tile or the selection changes.
+    pub hint: Option<String>,
+    hint_key: Option<(Entity, IVec, Option<Entity>)>,
+    /// Where the last order landed, and when, for a brief marker.
+    pub order_flash: Option<(IVec, f64)>,
     acc: f64,
     pan_anchor: Option<(f32, f32)>,
 }
@@ -113,6 +120,9 @@ async fn main() {
         paused: false,
         speed: 1,
         show_profiler: false,
+        hint: None,
+        hint_key: None,
+        order_flash: None,
         acc: 0.0,
         pan_anchor: None,
     };
@@ -127,6 +137,7 @@ async fn main() {
     loop {
         input(&mut app);
         step(&mut app);
+        hint(&mut app);
         draw::world(&app);
         draw::hud(&app);
         next_frame().await
@@ -200,6 +211,24 @@ fn step(app: &mut App) {
     if app.selected.is_some_and(|e| !app.sim.world.pawn_alive(e)) {
         app.selected = None;
     }
+}
+
+/// Label the cursor with what a right-click would do. Resolving an order
+/// walks the map, so it happens once per tile rather than once per frame.
+fn hint(app: &mut App) {
+    let (mx, my) = mouse_position();
+    let on_ui = my > screen_height() - TOOLBAR_H || my < TOPBAR_H;
+    let Some(e) = app.selected.filter(|_| app.tool == Tool::Select && !on_ui) else {
+        app.hint = None;
+        app.hint_key = None;
+        return;
+    };
+    let key = (e, app.cam.tile_at(mx, my), pawn_under(app, mx, my));
+    if app.hint_key == Some(key) {
+        return;
+    }
+    app.hint_key = Some(key);
+    app.hint = order::resolve(&app.sim.world, e, key.1, key.2).map(|o| o.label);
 }
 
 pub fn pawn_under(app: &App, sx: f32, sy: f32) -> Option<Entity> {
@@ -416,15 +445,13 @@ pub fn apply(app: &mut App, action: Action) {
                 return;
             }
             let Some(e) = app.selected else { return };
-            if !app.sim.world.ecs.get::<&Pawn>(e).is_ok_and(|p| p.drafted) {
+            let cell = app.cam.tile_at(x, y);
+            let on = pawn_under(app, x, y);
+            if order::resolve(&app.sim.world, e, cell, on).is_none() {
                 return;
             }
-            match pawn_under(app, x, y).filter(|&t| t != e) {
-                Some(t) if app.sim.world.ecs.get::<&Pawn>(t).is_ok_and(|p| p.faction != Faction::Player) => {
-                    app.sim.push(Command::Attack { pawn: e, target: t })
-                }
-                _ => app.sim.push(Command::Move { pawn: e, to: app.cam.tile_at(x, y) }),
-            }
+            app.sim.push(Command::Order { pawn: e, cell, on });
+            app.order_flash = Some((cell, get_time()));
         }
     }
     let (mw, mh) = (app.sim.world.map.w as f32, app.sim.world.map.h as f32);

@@ -3,6 +3,7 @@
 
 use crate::ai;
 use crate::defs::{DefId, Targets};
+use crate::order;
 use crate::world::*;
 use crate::IVec;
 use hecs::Entity;
@@ -30,13 +31,13 @@ pub enum Command {
         pawn: Entity,
         on: bool,
     },
-    Move {
+    /// Right-click: give one pawn the job that fits what it was clicked
+    /// on, ahead of whatever it picked for itself. `on` is the creature
+    /// under the cursor, which wins over the cell it is standing in.
+    Order {
         pawn: Entity,
-        to: IVec,
-    },
-    Attack {
-        pawn: Entity,
-        target: Entity,
+        cell: IVec,
+        on: Option<Entity>,
     },
 }
 
@@ -115,14 +116,21 @@ pub fn apply(w: &mut World, c: Command) {
                 p.drafted = on;
             }
         }
-        Command::Move { pawn, to } => {
-            if is_drafted(w, pawn) && w.map.passable(to) {
-                ai::set_job(w, pawn, Job::MoveTo { to });
+        Command::Order { pawn, cell, on } => {
+            if !is_colonist(w, pawn) {
+                return;
             }
-        }
-        Command::Attack { pawn, target } => {
-            if is_drafted(w, pawn) && w.pawn_alive(target) {
-                ai::set_job(w, pawn, Job::Attack { target, until: u64::MAX });
+            let Some(o) = order::resolve(w, pawn, cell, on) else { return };
+            // The player outranks whoever was already on this work.
+            let held: Vec<Entity> =
+                o.reserve.iter().filter_map(|t| w.reservations.get(t).copied()).filter(|&h| h != pawn).collect();
+            for holder in held {
+                ai::interrupt(w, holder);
+            }
+            // set_job drops the pawn's own claims, so take the new ones after.
+            ai::set_job(w, pawn, o.job);
+            for t in o.reserve {
+                w.reserve(t, pawn);
             }
         }
     }
@@ -130,7 +138,4 @@ pub fn apply(w: &mut World, c: Command) {
 
 fn is_colonist(w: &World, e: Entity) -> bool {
     w.ecs.get::<&Pawn>(e).is_ok_and(|p| p.active && !p.dead && p.faction == Faction::Player)
-}
-fn is_drafted(w: &World, e: Entity) -> bool {
-    w.ecs.get::<&Pawn>(e).is_ok_and(|p| p.drafted && !p.dead && p.faction == Faction::Player)
 }

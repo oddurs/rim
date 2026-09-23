@@ -6,6 +6,8 @@
 use crate::{apply, draw, toolbar_y, Action, App, Tool};
 use macroquad::prelude::*;
 use rim_sim::hecs::Entity;
+use rim_sim::order;
+use rim_sim::path::Goal;
 use rim_sim::world::*;
 use rim_sim::IVec;
 use std::path::PathBuf;
@@ -157,6 +159,49 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.act(Action::Zoom(z0 / t.app.cam.zoom, 0.0, 0.0));
     t.focus(home);
 
+    // ---------------------------------------------------------- 0071 right-click orders
+    println!("\n# right-click orders (0071)");
+    let at = t.pawn_screen(founder);
+    t.click(at);
+    t.check(t.app.selected == Some(founder), "clicking a colonist selects them");
+    t.check(!t.pawn(founder).drafted, "and they start undrafted");
+
+    let oak = defs.thing_id("tree_oak").unwrap();
+    let hp = t.pawn(founder).pos;
+    let tree = {
+        let w = t.w();
+        let mut best: Option<(u32, Entity, IVec)> = None;
+        for (e, th) in w.ecs.query::<&Thing>().without::<&Blueprint>().iter() {
+            let d = th.pos.octile(hp);
+            if th.def == oak && best.is_none_or(|b| d < b.0) && w.map.can_reach(hp, Goal::Touch(th.pos)) {
+                best = Some((d, e, th.pos));
+            }
+        }
+        best.expect("a reachable oak")
+    };
+    t.focus(tree.2);
+    t.frame().await;
+    let hint = order::resolve(t.w(), founder, tree.2, None).map(|o| o.label);
+    t.check(hint.as_deref() == Some("Chop oak tree"), format!("the cursor names the order ({hint:?})"));
+
+    let (tx, ty) = t.screen(tree.2);
+    t.act(Action::RightClick(tx, ty));
+    t.ticks(1);
+    t.check(
+        matches!(t.pawn(founder).job, Job::Harvest { target, .. } if target == tree.1),
+        "right-click sends an undrafted colonist to chop",
+    );
+    t.check(t.app.order_flash.is_some(), "the order is acknowledged on the map");
+    t.shot("order").await;
+    for _ in 0..3000 {
+        t.ticks(1);
+        if t.w().thing(tree.1).is_none() {
+            break;
+        }
+    }
+    t.check(t.w().thing(tree.1).is_none(), "the ordered tree comes down");
+    t.focus(home);
+
     // ---------------------------------------------------------- 0046 designate / build / cancel
     println!("\n# designate, build, cancel (0046)");
     let chop = defs.lookup("designation", "chop").unwrap();
@@ -251,7 +296,7 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.check(t.app.selected.is_none(), "escape clears the selection");
     let at = t.pawn_screen(founder);
     t.click(at);
-    t.check(t.app.selected == Some(founder), "clicking a colonist selects them");
+    t.check(t.app.selected == Some(founder), "clicking a colonist selects them again");
     t.act(Action::ToggleDraft);
     t.ticks(1);
     t.check(t.pawn(founder).drafted, "R drafts the selected colonist");
