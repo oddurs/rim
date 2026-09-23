@@ -51,6 +51,27 @@ First playable vertical slice. One warrior, harvest, build, eat, sleep, animals,
 - [x] `0050` Example plugin wildlife_plus: new creature, a patch and a Luau incident <sup>content · p1 · s · plugin</sup>
 - [x] `0051` Balance the first three days <sup>spike · p1 · s · core</sup>
 
+## interface — Interface
+
+`··········` 0% · 0 of 14 done · due 2026-10-09
+
+A two-week sprint. The whole HUD moves out of Rust into `mods/core/ui/`, written in Luau on a small UI engine, so any mod can extend, replace, wrap or remove any part of the interface. Design: DESIGN.md §11.
+
+- [ ] `0082` UI mod operations: extend, replace, wrap and remove by id <sup>feature · p0 · m · client</sup>
+- [ ] `0162` UI stack: taffy layout, cosmic-text and a second Luau VM on macroquad <sup>spike · p0 · s · client</sup>
+- [ ] `0163` System UI font: discovery, shaping and a glyph atlas <sup>feature · p0 · m · client</sup>
+- [ ] `0164` Theme tokens: ui/theme.toml, mod patches and UI scale <sup>feature · p0 · s · client</sup>
+- [ ] `0165` UI engine: node tree, flexbox layout and batched drawing <sup>feature · p0 · l · client</sup>
+- [ ] `0166` UI layers and input routing <sup>feature · p0 · m · client</sup>
+- [ ] `0167` Client-only UI Luau VM with view and act APIs <sup>feature · p0 · l · client</sup>
+- [ ] `0168` Component kit v1: buttons, bars, tabs, lists, tooltips, menus, toasts, bubbles <sup>feature · p0 · l · core</sup>
+- [ ] `0169` Anchored layer: world-attached labels, bars and bubbles without overlap <sup>feature · p1 · m · client</sup>
+- [ ] `0170` Docking shell: top, bottom, left and right regions <sup>feature · p0 · m · client</sup>
+- [ ] `0171` Port the HUD into mods/core/ui and delete the Rust HUD <sup>feature · p0 · l · core</sup>
+- [ ] `0172` Hot reload of UI scripts and theme <sup>feature · p1 · s · tooling</sup>
+- [ ] `0173` UI devtools (F12): inspect any element <sup>feature · p1 · m · tooling</sup>
+- [ ] `0174` UI modding guide <sup>docs · p2 · s · tooling</sup>
+
 ## shelter — Shelter
 
 `#####·····` 46% · 6 of 13 done · due 2026-11-01
@@ -88,7 +109,7 @@ Save/load that survives mod changes, and replays from seed + command log.
 
 ## colony — Colony
 
-`··········` 0% · 0 of 5 done · due 2026-12-15
+`··········` 0% · 0 of 7 done · due 2026-12-15
 
 Running more than one person: stockpiles, hauling, work priorities, skills, colonist panels.
 
@@ -97,6 +118,8 @@ Running more than one person: stockpiles, hauling, work priorities, skills, colo
 - [ ] `0068` Skills learned by doing <sup>feature · p1 · m · engine</sup>
 - [ ] `0069` Deconstruct designation <sup>feature · p1 · s · engine</sup>
 - [ ] `0070` Colonist inspection panel <sup>feature · p1 · m · client</sup>
+- [ ] `0175` Floating windows and a saved UI layout <sup>feature · p1 · m · client</sup>
+- [ ] `0176` Component kit v2: slider, text input and tables <sup>feature · p1 · m · core</sup>
 
 ## eras — Eras
 
@@ -113,7 +136,7 @@ The run gets a shape: eras, storyteller tiers, defensive strength in the threat 
 
 ## plugin-api — Plugin API
 
-`··········` 0% · 0 of 18 done · due 2027-02-01
+`··········` 0% · 0 of 19 done · due 2027-02-01
 
 The API grows up: stat pipeline, script components, custom jobs, needs and def kinds, modules and custom events, a real sandbox with hard limits, factions as data, rim test, typed API. Everything Mood needs, and everything DESIGN.md §10 says a mod from a stranger's repo must be safe to do.
 
@@ -121,7 +144,6 @@ The API grows up: stat pipeline, script components, custom jobs, needs and def k
 - [ ] `0079` Script-defined components on pawns and things <sup>feature · p0 · m · engine</sup>
 - [ ] `0080` Custom jobs and work givers from Luau <sup>feature · p0 · l · engine</sup>
 - [ ] `0081` Custom needs with script satisfiers <sup>feature · p0 · m · engine</sup>
-- [ ] `0082` UI extension points: panels, overlays, tools <sup>feature · p1 · l · client</sup>
 - [ ] `0083` Per-mod budgets: profiler warnings and hard limits for runaway scripts <sup>feature · p1 · m · engine</sup>
 - [ ] `0085` Luau type definitions for the rim API <sup>docs · p1 · s · tooling</sup>
 - [ ] `0087` Sprites and atlases from mods <sup>feature · p2 · m · client</sup>
@@ -135,6 +157,8 @@ The API grows up: stat pipeline, script components, custom jobs, needs and def k
 - [ ] `0147` Deterministic math in scripts: replace library trig and exp <sup>feature · p1 · s · engine</sup>
 - [ ] `0148` API deprecations warn with the replacement and the removal version <sup>feature · p2 · s · engine</sup>
 - [ ] `0159` Which platforms beyond desktop, and what do they cost? <sup>spike · p2 · s · engine</sup>
+- [ ] `0177` Keybinds file and command palette <sup>feature · p1 · m · client</sup>
+- [ ] `0178` Monochrome icon set with mod-supplied icons <sup>feature · p2 · m · core</sup>
 
 ## mood — Mood
 
