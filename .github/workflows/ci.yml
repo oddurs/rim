@@ -38,18 +38,19 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Install client system libraries
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libx11-dev libxi-dev libgl1-mesa-dev libasound2-dev
+        run: sudo apt-get update && sudo apt-get install -y libx11-dev libxi-dev libgl1-mesa-dev libasound2-dev xvfb libgl1-mesa-dri
       - name: Clippy
         run: cargo clippy --release --workspace --all-targets
       - name: Test (includes the determinism test)
         run: cargo test --release --workspace
       - name: Headless soak, 3 in-game days
         run: cargo run --release -p rim_sim --example headless -- --days 3 --seed 1
+      # macOS runners have no OpenGL; Linux renders in software under Xvfb.
       - name: Client autotest (drives every control, takes screenshots)
-        if: runner.os == 'macOS'
-        run: cargo run --release -p rim_client -- --seed 7 --autotest target/autotest
+        if: runner.os == 'Linux'
+        run: xvfb-run -a -s "-screen 0 1600x960x24" cargo run --release -p rim_client -- --seed 7 --autotest target/autotest
       - name: Upload autotest screenshots
-        if: runner.os == 'macOS' && always()
+        if: runner.os == 'Linux' && always()
         uses: actions/upload-artifact@v4
         with:
           name: autotest-screenshots
