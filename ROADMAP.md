@@ -9,11 +9,10 @@ The design behind these milestones is in [DESIGN.md](DESIGN.md). Every milestone
 
 ## foundations — Foundations
 
-`##########` 92% · 12 of 13 done · due 2026-09-30
+`##########` 100% · 13 of 13 done · due 2026-09-30
 
 The headless engine: defs, mod loading and patching, map, pathing, AI skeleton, commands, Luau host. Ends when the determinism test passes.
 
-- [ ] `0034` CI: build, test, clippy and fmt on every push <sup>chore · p2 · s · tooling</sup>
 - [x] `0022` Cargo workspace: headless sim crate and client crate <sup>chore · p0 · s · tooling</sup>
 - [x] `0023` Typed def schema: terrain, thing, creature, need, designation, start, names <sup>feature · p0 · m · engine</sup>
 - [x] `0024` Mod loader: discovery, API version check, deterministic load order <sup>feature · p0 · m · engine</sup>
@@ -26,6 +25,7 @@ The headless engine: defs, mod loading and patching, map, pathing, AI skeleton, 
 - [x] `0031` Data-driven map generation <sup>feature · p1 · m · engine</sup>
 - [x] `0032` Determinism test: same seed and commands give the same state hash <sup>chore · p0 · s · engine</sup>
 - [x] `0033` Headless runner for soak tests and benchmarks <sup>chore · p1 · s · tooling</sup>
+- [x] `0034` CI: build, test, clippy and fmt on every push <sup>chore · p2 · s · tooling</sup>
 
 ## castaway — Castaway
 
