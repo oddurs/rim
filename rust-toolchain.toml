@@ -1,0 +1,6 @@
+[toolchain]
+# Pinned: the sim is deterministic, and CI lints must not shift underneath us.
+# Bump deliberately, then rerun the determinism test.
+channel = "1.98.1"
+components = ["clippy", "rustfmt"]
+profile = "minimal"

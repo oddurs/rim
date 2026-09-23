@@ -523,7 +523,7 @@ fn run_construct(w: &mut World, p: &mut Pawn, bp: Entity) -> Option<Job> {
             if done {
                 // A pawn standing on a fresh wall steps out first.
                 if w.defs.thing(b.def).blocks && (p.pos == b.pos || p.next == Some(b.pos)) {
-                    return Some(Job::Construct { bp }).filter(|_| step_off(w, p, b.pos));
+                    return step_off(w, p, b.pos).then_some(Job::Construct { bp });
                 }
                 complete_building(w, bp);
                 None
