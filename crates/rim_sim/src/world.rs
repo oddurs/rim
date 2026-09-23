@@ -357,8 +357,8 @@ impl World {
         } else {
             self.ecs.spawn((t,))
         };
-        let (blocks, cost) = if blueprint { (false, 0) } else { (td.blocks, td.path_cost) };
-        self.map.set_fixture(pos, Some(e), blocks, cost);
+        let (blocks, cost, door) = if blueprint { (false, 0, false) } else { (td.blocks, td.path_cost, td.door) };
+        self.map.set_fixture(pos, Some(e), blocks, cost, door);
         Some(e)
     }
 
@@ -411,7 +411,7 @@ impl World {
                 self.map.item[i] = None;
             }
             if self.map.fixture[i] == Some(e) {
-                self.map.set_fixture(t.pos, None, false, 0);
+                self.map.set_fixture(t.pos, None, false, 0, false);
             }
         }
         self.reservations.remove(&e);

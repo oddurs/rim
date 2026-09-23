@@ -15,12 +15,38 @@ pub struct Map {
     pub item: Vec<Option<Entity>>,
     fix_block: Vec<bool>,
     fix_cost: Vec<u16>,
+    fix_door: Vec<bool>,
+    /// Room id per cell (0 = wall, door or impassable).
+    room: Vec<u32>,
+    rooms: Vec<Room>,
+    rooms_dirty: bool,
+    /// How many times rooms have been rebuilt (they only are when walls change).
+    pub room_rebuilds: u64,
     /// Connected-component id per cell (0 = impassable). Lets us reject
     /// unreachable targets in O(1) before running A*.
     region: Vec<u32>,
     regions_dirty: bool,
     /// Bumped whenever passability changes; renderers can use it to cache.
     pub revision: u64,
+}
+
+/// Enclosed areas larger than this count as outdoors: a valley ringed by
+/// mountains is not a house.
+pub const MAX_ROOM_CELLS: u32 = 400;
+
+/// A connected area bounded by walls, doors, rock, water or the map edge.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Room {
+    pub id: u32,
+    pub cells: u32,
+    pub touches_edge: bool,
+}
+
+impl Room {
+    /// Shelter: cut off from the map edge, and small enough to be a building.
+    pub fn enclosed(&self) -> bool {
+        !self.touches_edge && self.cells <= MAX_ROOM_CELLS
+    }
 }
 
 pub const NEIGHBORS8: [(i32, i32); 8] = [(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, 1), (1, -1), (-1, -1)];
@@ -37,6 +63,11 @@ impl Map {
             item: vec![None; n],
             fix_block: vec![false; n],
             fix_cost: vec![0; n],
+            fix_door: vec![false; n],
+            room: vec![0; n],
+            rooms: Vec::new(),
+            rooms_dirty: true,
+            room_rebuilds: 0,
             region: vec![0; n],
             regions_dirty: true,
             revision: 0,
@@ -75,16 +106,22 @@ impl Map {
         self.terrain[i] = def;
         self.terrain_cost[i] = cost.min(u16::MAX as u32) as u16;
         self.regions_dirty = true;
+        self.rooms_dirty = true;
         self.revision += 1;
     }
 
-    pub fn set_fixture(&mut self, p: IVec, e: Option<Entity>, blocks: bool, cost: u32) {
+    pub fn set_fixture(&mut self, p: IVec, e: Option<Entity>, blocks: bool, cost: u32, door: bool) {
         let i = self.idx(p);
         self.fixture[i] = e;
         if self.fix_block[i] != blocks {
             self.regions_dirty = true;
+            self.rooms_dirty = true;
+        }
+        if self.fix_door[i] != door {
+            self.rooms_dirty = true;
         }
         self.fix_block[i] = blocks;
+        self.fix_door[i] = door;
         self.fix_cost[i] = cost.min(u16::MAX as u32) as u16;
         self.revision += 1;
     }
@@ -155,6 +192,65 @@ impl Map {
             Goal::Cell(c) => self.region_at(c) == rf,
             Goal::Touch(c) => (-1..=1).any(|dy| (-1..=1).any(|dx| self.region_at(c.offset(dx, dy)) == rf)),
         }
+    }
+
+    /// Rebuild rooms if a wall, door or terrain changed since the last call.
+    pub fn ensure_rooms(&mut self) {
+        if !self.rooms_dirty {
+            return;
+        }
+        self.rooms_dirty = false;
+        self.room_rebuilds += 1;
+        self.room.iter_mut().for_each(|r| *r = 0);
+        self.rooms.clear();
+        let mut stack = Vec::new();
+        for start in 0..self.room.len() {
+            if self.room[start] != 0 || !self.room_cell(start) {
+                continue;
+            }
+            let id = self.rooms.len() as u32 + 1;
+            let mut room = Room { id, cells: 0, touches_edge: false };
+            self.room[start] = id;
+            stack.push(start);
+            while let Some(i) = stack.pop() {
+                let p = self.pos(i);
+                room.cells += 1;
+                if p.x == 0 || p.y == 0 || p.x == self.w - 1 || p.y == self.h - 1 {
+                    room.touches_edge = true;
+                }
+                for (dx, dy) in &NEIGHBORS8[..4] {
+                    let q = p.offset(*dx, *dy);
+                    if !self.inb(q) {
+                        continue;
+                    }
+                    let j = self.idx(q);
+                    if self.room[j] == 0 && self.room_cell(j) {
+                        self.room[j] = id;
+                        stack.push(j);
+                    }
+                }
+            }
+            self.rooms.push(room);
+        }
+    }
+
+    /// Open floor that belongs to a room: passable and not a doorway.
+    fn room_cell(&self, i: usize) -> bool {
+        self.passable_i(i) && !self.fix_door[i]
+    }
+
+    /// The room at `p`. Call `ensure_rooms` first. Walls and doors have none.
+    pub fn room_at(&self, p: IVec) -> Option<Room> {
+        if !self.inb(p) {
+            return None;
+        }
+        let id = self.room[self.idx(p)];
+        (id > 0).then(|| self.rooms[id as usize - 1])
+    }
+
+    /// Sheltered: inside an enclosed room. Call `ensure_rooms` first.
+    pub fn indoors(&self, p: IVec) -> bool {
+        self.room_at(p).is_some_and(|r| r.enclosed())
     }
 
     /// Size of the region containing `p` (used by map gen to pick a start).

@@ -418,7 +418,13 @@ fn hover_info(app: &App) {
         return;
     }
     let i = w.map.idx(tp);
-    let mut lines = vec![format!("{} ({}, {})", w.defs.terrain[w.map.terrain[i] as usize].label, tp.x, tp.y)];
+    let shelter = match w.map.room_at(tp) {
+        Some(r) if r.enclosed() => format!("indoors, room of {} cells", r.cells),
+        Some(_) => "outdoors".to_string(),
+        None => String::new(),
+    };
+    let mut lines =
+        vec![format!("{} ({}, {})  {}", w.defs.terrain[w.map.terrain[i] as usize].label, tp.x, tp.y, shelter)];
     for e in [w.map.fixture[i], w.map.item[i]].into_iter().flatten() {
         if let Ok(t) = w.ecs.get::<&Thing>(e) {
             let td = w.defs.thing(t.def);

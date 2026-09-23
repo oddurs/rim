@@ -91,6 +91,24 @@ You start as *the warrior*: a strong fighter with nothing on them.
 - Temperature, roofs and seasons can deepen this later as a plugin. The core
   only needs "enclosed or not".
 
+### Tension: roofs, or is enclosure enough?
+
+- **For explicit roofs:** a roof is the obvious thing shelter means, and it
+  allows open-sided sheds, overhangs and caves.
+- **Against:** it's a second thing to build, a second overlay to read, and a
+  new player doesn't know about it on night one. The first-hour goal is "four
+  walls before dark", and walls should be enough.
+- **Ruling:** a **room** is an area bounded by walls, doors, rock or water,
+  cut off from the map edge, and at most `MAX_ROOM_CELLS` (400, i.e. 20×20)
+  in size. Enclosed rooms count as indoors. The size cap is what an automatic
+  roof would do: a valley ringed by mountains is not a house.
+  - Doors are a def flag (`door = true`): passable for pathing, but they bound
+    rooms like a wall does.
+  - Rooms rebuild only when a wall, door or terrain changes, not every tick.
+  - Scripts ask with `rim.indoors(x, y)` and `rim.room_at(x, y)`.
+  - Explicit roofs, if ever wanted, are a plugin that marks cells roofed and
+    hooks the same question.
+
 ---
 
 ## 4b. Fights end in retreat, not death spirals

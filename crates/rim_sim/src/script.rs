@@ -254,6 +254,28 @@ impl ScriptHost {
             let name = w.ecs.get::<&Pawn>(e).map(|p| p.name.clone()).unwrap_or_default();
             Ok((Some(e.to_bits().get()), Some(name)))
         });
+        // Sheltered: inside an enclosed room.
+        api!("indoors", (i32, i32), |w, (x, y)| {
+            w.map.ensure_rooms();
+            Ok(w.map.indoors(IVec::new(x, y)))
+        });
+        // { id, cells, enclosed } for the room at (x, y), or nil on a wall or door.
+        {
+            let ptr = self.world.clone();
+            let f = lua.create_function(move |lua, (x, y): (i32, i32)| {
+                let room = with_world(&ptr, |w| {
+                    w.map.ensure_rooms();
+                    Ok(w.map.room_at(IVec::new(x, y)))
+                })?;
+                let Some(r) = room else { return Ok(Value::Nil) };
+                let t = lua.create_table()?;
+                t.set("id", r.id)?;
+                t.set("cells", r.cells)?;
+                t.set("enclosed", r.enclosed())?;
+                Ok(Value::Table(t))
+            })?;
+            rim.set("room_at", f)?;
+        }
         // Make a pawn give up and walk off the map after `ticks`.
         api!("leave_after", (u64, u64), |w, (id, ticks)| {
             let e = rim_sim_entity(id)?;

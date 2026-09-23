@@ -101,6 +101,9 @@ pub struct ThingDef {
     /// Extra movement cost in percent (doors, trees).
     #[serde(default)]
     pub path_cost: u32,
+    /// Passable, but bounds rooms like a wall does.
+    #[serde(default)]
+    pub door: bool,
     #[serde(default = "d100")]
     pub hp: u32,
     #[serde(default = "d1")]

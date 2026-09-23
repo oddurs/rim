@@ -621,8 +621,8 @@ pub fn complete_building(w: &mut World, bp: Entity) {
     let Some(t) = w.thing(bp) else { return };
     let _ = w.ecs.remove_one::<Blueprint>(bp);
     let td = w.defs.thing(t.def);
-    let (blocks, cost) = (td.blocks, td.path_cost);
-    w.map.set_fixture(t.pos, Some(bp), blocks, cost);
+    let (blocks, cost, door) = (td.blocks, td.path_cost, td.door);
+    w.map.set_fixture(t.pos, Some(bp), blocks, cost, door);
     if blocks {
         // Anyone else caught inside gets nudged out.
         for i in 0..w.pawns.len() {

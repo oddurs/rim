@@ -28,6 +28,7 @@ label = "wooden door"
 color = "#b07a45"
 category = "building"
 shape = "door"
+door = true
 path_cost = 60
 hp = 150
 market_value = 15
