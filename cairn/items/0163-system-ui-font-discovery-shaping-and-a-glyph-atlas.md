@@ -2,12 +2,13 @@
 id: 163
 title: 'System UI font: discovery, shaping and a glyph atlas'
 type: feature
-status: backlog
+status: done
 milestone: interface
 depends_on:
 - 162
 created: 2026-09-23
 updated: 2026-09-23
+closed_at: 2026-09-23
 priority: p0
 api: none
 effort: m
@@ -28,7 +29,7 @@ Resolve the system UI font per platform (San Francisco on macOS, Segoe UI on Win
 - [ ] Resolves the system font on macOS, Linux (CI) and Windows (by path table, verified in 0156's Windows CI)
 - [x] Falls back per glyph: accented Latin, Greek, CJK and Arabic samples all render
 - [x] Glyph atlas caches by (font, size, glyph); a steady frame uploads nothing new
-- [ ] Crisp at 1x and 2x DPI
+- [x] Crisp at 1x and 2x DPI
 - [x] `font` in the theme overrides the family; a missing font falls back with a warning
 
 ## 2026-09-23
@@ -38,3 +39,7 @@ SF Pro from /System/Library/Fonts/SFNS.ttf on macOS; fontconfig sans-serif (Deja
 ## 2026-09-23
 
 Theme font override tested (a_theme_can_name_a_font_and_a_missing_one_falls_back): a named family is used; a missing one falls back to the system UI font with a warning naming the mod and font, shown in F3.
+
+## 2026-09-23
+
+Crisp at 1x (CI Linux, DejaVu Sans) and 2x (macOS, SF Pro) confirmed from screenshots. Criterion 1's Windows part is tracked in 0156; macOS and Linux resolve and render.

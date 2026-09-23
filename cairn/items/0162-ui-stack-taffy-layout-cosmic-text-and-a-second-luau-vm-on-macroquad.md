@@ -2,12 +2,12 @@
 id: 162
 title: 'UI stack: taffy layout, cosmic-text and a second Luau VM on macroquad'
 type: spike
-status: doing
+status: done
 milestone: interface
 assignee: Oddur Sigurdsson
-claimed: 2026-09-23
 created: 2026-09-23
 updated: 2026-09-23
+closed_at: 2026-09-23
 priority: p0
 api: none
 effort: s
@@ -48,9 +48,13 @@ Risk found: shaping a new string costs ~50 µs, and the cache grows with every d
 
 - [x] Prototype builds a 300-node tree from Luau, lays it out and draws it with shaped text
 - [x] Measured per frame: Luau build, layout, text, draw (numbers recorded here)
-- [ ] Text is crisp at 1x and 2x DPI (screenshots attached as notes)
+- [x] Text is crisp at 1x and 2x DPI (screenshots attached as notes)
 - [x] Decision recorded in DESIGN.md §11
 
 ## 2026-09-23
 
 Decision recorded in DESIGN.md §11 ('How it's built'). The prototype became rim_ui itself; it draws in the client with shaped system-font text. Crisp at 2x confirmed on the reference machine's screenshots; 1x is checked on CI's Linux screenshots before ticking.
+
+## 2026-09-23
+
+Crisp at 1x confirmed on CI's Linux screenshots (Xvfb, 1600x960, DejaVu Sans via fontconfig): run 35936043817, artifact autotest-screenshots. 2x confirmed locally (SF Pro, 3200x1920).
