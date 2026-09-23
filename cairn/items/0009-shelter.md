@@ -3,11 +3,11 @@ id: 9
 key: shelter
 title: Shelter
 type: milestone
-status: planned
+status: doing
 depends_on:
 - 8
 created: 2026-09-22
-updated: 2026-09-22
+updated: 2026-09-23
 priority: p2
 api: none
 due: 2026-11-01
