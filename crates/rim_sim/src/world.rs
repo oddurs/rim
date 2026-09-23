@@ -80,6 +80,10 @@ pub enum Job {
         to: IVec,
         until: u64,
     },
+    /// Walk off the map edge and leave the game.
+    Leave {
+        to: IVec,
+    },
 }
 
 impl Job {
@@ -97,6 +101,7 @@ impl Job {
             Job::Sleep { .. } => "going to sleep",
             Job::Attack { .. } => "fighting",
             Job::Flee { .. } => "fleeing",
+            Job::Leave { .. } => "leaving",
         }
     }
 }
@@ -132,6 +137,10 @@ pub struct Pawn {
     /// Rest-recovery multiplier in percent while asleep.
     pub sleep_rate: u32,
     pub dead: bool,
+    /// Walked off the map; removed at the end of the tick.
+    pub left: bool,
+    /// Hostiles give up and head for the map edge at this tick.
+    pub leave_at: Option<u64>,
 }
 
 impl Pawn {
@@ -200,6 +209,7 @@ pub struct Message {
 pub enum GameEvent {
     PawnJoined { id: Entity, name: String, def: DefId },
     PawnDied { id: Entity, name: String, def: DefId, faction: Faction, pos: IVec },
+    PawnLeft { id: Entity, name: String, def: DefId, faction: Faction },
     BuildingComplete { id: Entity, def: DefId, pos: IVec },
     NewDay { day: u64 },
     ColonyLost,

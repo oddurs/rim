@@ -10,12 +10,14 @@ max_hp = 100
 melee_damage = 9
 melee_cooldown = 90
 intelligent = true
+retreat_below = 0.3
 market_value = 250
 needs = ["food", "rest"]
 
 [[creature]]
 id = "deer"
 label = "deer"
+plural = "deer"
 color = "#a0784a"
 size = 0.4
 speed = 11
@@ -51,6 +53,8 @@ max_hp = 70
 melee_damage = 10
 melee_cooldown = 80
 aggressive = true
+retreat_below = 0.25
+plural = "wolves"
 market_value = 60
 butcher = [{ thing = "raw_meat", count = 20 }]
 spawn = { terrain = ["grass", "dirt", "rich_soil"], groups = 1, group = [1, 2] }

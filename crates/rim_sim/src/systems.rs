@@ -53,7 +53,21 @@ pub fn deaths(w: &mut World) {
     let mut i = 0;
     while i < w.pawns.len() {
         let e = w.pawns[i];
-        let dead = w.ecs.get::<&Pawn>(e).map(|p| p.dead).unwrap_or(true);
+        let (dead, left) = w.ecs.get::<&Pawn>(e).map(|p| (p.dead, p.left)).unwrap_or((true, false));
+        if left && !dead {
+            w.pawns.remove(i);
+            let Ok(p) = w.ecs.remove_one::<Pawn>(e) else { continue };
+            let _ = w.ecs.despawn(e);
+            w.release_all(e);
+            w.reservations.remove(&e);
+            let cd = w.defs.creature(p.def);
+            if p.faction == Faction::Hostile {
+                let who = if cd.intelligent { format!("Raider {}", p.name) } else { format!("The {}", cd.label) };
+                w.message(format!("{who} fled."), MsgKind::Info);
+            }
+            w.events.push(GameEvent::PawnLeft { id: e, name: p.name, def: p.def, faction: p.faction });
+            continue;
+        }
         if !dead {
             i += 1;
             continue;

@@ -93,6 +93,50 @@ You start as *the warrior*: a strong fighter with nothing on them.
 
 ---
 
+## 4b. Fights end in retreat, not death spirals
+
+The first balance pass (`examples/balance.rs`: a bot plays the opening on
+many seeds) found that **9 of 20 colonies were wiped out by day 5** and 16
+of 20 lost someone. Food was never the problem: nobody went below 23%. Threats
+were. Two causes:
+
+- **Every fight was to the death.** Raiders are the same human as colonists,
+  so each fight was a coin flip with a corpse at the end.
+- **Retreat only worked for one side.** Once raiders could flee, a duel
+  harness (`examples/duel.rs`) showed 43 colonist deaths against 1 raider
+  death in 100 even 1v1 fights. A wounded raider walks off the map for good;
+  a wounded colonist stays nearby and gets picked as a target again.
+
+- **Options considered:** a longer grace period (only delays the wipe);
+  weaker raiders (hides the problem and makes combat meaningless); a downed
+  state with rescue (right eventually, but it's the Defense milestone).
+- **Ruling:** creatures retreat, and retreat is symmetric.
+  - `retreat_below` on a creature def (humans 0.3, wolves 0.25): below that
+    fraction of max hp, colonists run and heal, while hostiles and hunting
+    predators leave the map.
+  - **Mercy rule:** nobody picks a wounded or retreating creature as a *new*
+    target, and nobody chases one down. Anyone adjacent can still land a blow,
+    so being surrounded stays deadly.
+  - Colonists defend each other within 20 cells, so they don't get picked off
+    one at a time.
+  - Raids end: the storyteller gives raiders `rim.leave_after` 0.6 days.
+  - Raid size is 80 threat points per raider (was 55), about one colonist's
+    worth, so a lone warrior faces one raider and raids grow with wealth.
+- **Result**, 40 seeds to day 5: 1 colony lost, 5 runs with a death, and
+  **28 near-misses** (someone below 35% hp). Close calls are the norm and
+  deaths the exception, which is what we want. Even fights now kill about as
+  many raiders as colonists.
+- **Unchanged:** need rates (food is never critical, so hunger pressure waits
+  for seasons and the Shelter milestone) and the 2-day grace period (first
+  threat lands around day 3, earliest day 2.05).
+- **Revisit** when downed/rescue arrives in Defense: retreat should become the
+  fallback, and being downed the usual outcome of losing a fight.
+
+Re-run `cargo run --release -p rim_sim --example balance -- --seeds 40` after
+any change to combat, creatures or incidents.
+
+---
+
 ## 5. What's in `core` and what isn't
 
 `core` is the smallest complete game. Everything else is a plugin, including

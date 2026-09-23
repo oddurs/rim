@@ -1,6 +1,14 @@
 -- Core incidents. Each is pulled in by the storyteller's gravity.
 
+-- How long a raid lasts before the attackers give up and leave.
+local RAID_DAYS = 0.6
+-- Threat points per attacker. A raider is worth about one colonist in a
+-- fight, so a lone warrior faces one raider and raids grow from there.
+local POINTS_PER_RAIDER = 80
+local POINTS_PER_PREDATOR = 90
+
 -- Spawn `n` creatures at one map edge. Returns how many appeared and a name.
+-- Hostile groups give up after RAID_DAYS.
 local function spawn_group(creature: string, faction: string, n: number)
 	local x, y = rim.edge_cell()
 	if not x then
@@ -12,6 +20,9 @@ local function spawn_group(creature: string, faction: string, n: number)
 		if cx then
 			local id, nm = rim.spawn_pawn(creature, faction, cx, cy)
 			if id then
+				if faction == "hostile" then
+					rim.leave_after(id, math.floor(RAID_DAYS * rim.ticks_per_day))
+				end
 				got += 1
 				name = nm
 			end
@@ -33,8 +44,8 @@ local function pick_creature(pred: (any) -> boolean)
 	return pool[rim.random_int(1, #pool)]
 end
 
-local function plural(n: number, word: string): string
-	return if n == 1 then `1 {word}` else `{n} {word}s`
+local function count(n: number, one: string, many: string): string
+	return if n == 1 then `1 {one}` else `{n} {many}`
 end
 
 rim.register_incident({
@@ -44,11 +55,11 @@ rim.register_incident({
 		return 1 + ctx.wealth / 3000
 	end,
 	execute = function(ctx)
-		local got = spawn_group("human", "hostile", math.max(1, math.floor(ctx.points / 55)))
+		local got = spawn_group("human", "hostile", math.max(1, math.floor(ctx.points / POINTS_PER_RAIDER)))
 		if got == 0 then
 			return false
 		end
-		rim.message(`Raid! {plural(got, "raider")} approaching.`, "threat")
+		rim.message(`Raid! {count(got, "raider", "raiders")} approaching.`, "threat")
 	end,
 })
 
@@ -65,11 +76,11 @@ rim.register_incident({
 			return false
 		end
 		-- Hunting predators come for the colony: they act as hostiles.
-		local got = spawn_group(c.id, "hostile", math.max(1, math.floor(ctx.points / 70)))
+		local got = spawn_group(c.id, "hostile", math.max(1, math.floor(ctx.points / POINTS_PER_PREDATOR)))
 		if got == 0 then
 			return false
 		end
-		rim.message(`A pack of {plural(got, c.label)} is hunting you!`, "threat")
+		rim.message(`A pack of {count(got, c.label, c.plural)} is hunting you!`, "threat")
 	end,
 })
 

@@ -29,11 +29,10 @@ The headless engine: defs, mod loading and patching, map, pathing, AI skeleton, 
 
 ## castaway — Castaway
 
-`#######···` 65% · 11 of 17 done · due 2026-10-15
+`########··` 71% · 12 of 17 done · due 2026-10-15
 
 First playable vertical slice. One warrior, harvest, build, eat, sleep, animals, melee, raids and wanderers from a Luau storyteller. Two mods loaded: core and an example plugin.
 
-- [ ] `0051` Balance the first three days <sup>spike · p1 · s · core</sup>
 - [ ] `0045` Client: camera, terrain, things and pawns with viewport culling <sup>feature · p0 · l · client</sup>
 - [ ] `0046` Client: data-driven toolbar from designation and buildable defs <sup>feature · p0 · m · client</sup>
 - [ ] `0047` Client: selection, draft, move and attack orders <sup>feature · p0 · m · client</sup>
@@ -50,6 +49,7 @@ First playable vertical slice. One warrior, harvest, build, eat, sleep, animals,
 - [x] `0043` Storyteller as a Luau plugin with a shared incident registry <sup>feature · p0 · m · core</sup>
 - [x] `0044` Incidents: raid, wanderer joins, herd, predator pack, windfall <sup>content · p0 · m · core</sup>
 - [x] `0050` Example plugin wildlife_plus: new creature, a patch and a Luau incident <sup>content · p1 · s · plugin</sup>
+- [x] `0051` Balance the first three days <sup>spike · p1 · s · core</sup>
 
 ## shelter — Shelter
 

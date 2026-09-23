@@ -143,6 +143,10 @@ fn advance_movement(w: &mut World, p: &mut Pawn) {
 
 // ================================================================ thinking
 
+/// How far colonists will go to fight a hostile. Raiders pick off anyone who
+/// fights alone, so this is deliberately wider than sight range.
+const DEFEND_RADIUS: i32 = 20;
+
 fn think_colonist(w: &mut World, e: Entity, p: &mut Pawn) -> Option<Job> {
     let defs = w.defs.clone();
     if p.drafted {
@@ -150,14 +154,26 @@ fn think_colonist(w: &mut World, e: Entity, p: &mut Pawn) -> Option<Job> {
         let (t, _) = nearest_pawn(w, e, p.pos, 1, |o| o.faction == Faction::Hostile)?;
         return Some(Job::Attack { target: t, until: w.tick + 600 });
     }
-    if let Some(a) = p.last_attacker.take() {
-        if w.pawn_pos(a).is_some_and(|ap| ap.chebyshev(p.pos) <= 12) {
-            return Some(Job::Attack { target: a, until: w.tick + 900 });
+    if wounded(&defs, p) {
+        // Badly hurt: get away from danger, then eat and sleep to heal.
+        let attacker = p.last_attacker.take().and_then(|a| w.pawn_pos(a));
+        let threat = attacker.or_else(|| nearest_pawn(w, e, p.pos, 10, |o| o.faction == Faction::Hostile).map(|t| t.1));
+        if let Some(tp) = threat {
+            return flee(w, p, tp);
         }
-    }
-    if let Some((t, tp)) = nearest_pawn(w, e, p.pos, 7, |o| o.faction == Faction::Hostile) {
-        if reachable(w, p.pos, Goal::Touch(tp)) {
-            return Some(Job::Attack { target: t, until: w.tick + 900 });
+    } else {
+        if let Some(a) = p.last_attacker.take() {
+            if w.pawn_pos(a).is_some_and(|ap| ap.chebyshev(p.pos) <= 12) {
+                return Some(Job::Attack { target: a, until: w.tick + 900 });
+            }
+        }
+        // Colonists rally: anyone within DEFEND_RADIUS of a hostile joins the fight.
+        if let Some((t, tp)) =
+            nearest_pawn(w, e, p.pos, DEFEND_RADIUS, |o| o.faction == Faction::Hostile && !out_of_fight(&defs, o))
+        {
+            if reachable(w, p.pos, Goal::Touch(tp)) {
+                return Some(Job::Attack { target: t, until: w.tick + 900 });
+            }
         }
     }
     for &(nid, v) in &p.needs {
@@ -182,7 +198,12 @@ fn think_colonist(w: &mut World, e: Entity, p: &mut Pawn) -> Option<Job> {
 }
 
 fn think_hostile(w: &mut World, e: Entity, p: &mut Pawn) -> Option<Job> {
-    if let Some((t, tp)) = nearest_pawn(w, e, p.pos, 1000, |o| o.faction == Faction::Player) {
+    let defs = w.defs.clone();
+    if wounded(&defs, p) || p.leave_at.is_some_and(|t| w.tick >= t) {
+        return leave(w, p);
+    }
+    if let Some((t, tp)) = nearest_pawn(w, e, p.pos, 1000, |o| o.faction == Faction::Player && !out_of_fight(&defs, o))
+    {
         if reachable(w, p.pos, Goal::Touch(tp)) {
             return Some(Job::Attack { target: t, until: w.tick + 3000 });
         }
@@ -195,20 +216,61 @@ fn think_animal(w: &mut World, e: Entity, p: &mut Pawn) -> Option<Job> {
     let cd = defs.creature(p.def);
     if let Some(a) = p.last_attacker.take() {
         if let Some(ap) = w.pawn_pos(a) {
-            if cd.flees {
+            if cd.flees || wounded(&defs, p) {
                 return flee(w, p, ap);
             }
             return Some(Job::Attack { target: a, until: w.tick + 900 });
         }
     }
     if cd.aggressive {
-        if let Some((t, tp)) = nearest_pawn(w, e, p.pos, 8, |o| defs.creature(o.def).intelligent) {
+        if let Some((t, tp)) =
+            nearest_pawn(w, e, p.pos, 8, |o| defs.creature(o.def).intelligent && !out_of_fight(&defs, o))
+        {
             if reachable(w, p.pos, Goal::Touch(tp)) {
                 return Some(Job::Attack { target: t, until: w.tick + 600 });
             }
         }
     }
     wander(w, p, 6)
+}
+
+/// Running from a fight. Nobody picks a retreating creature as a target or
+/// chases one down; retreat has to work the same for both sides.
+fn retreating(p: &Pawn) -> bool {
+    matches!(p.job, Job::Flee { .. } | Job::Leave { .. })
+}
+
+/// Out of the fight: retreating, or hurt badly enough to retreat. Never
+/// chosen as a new target, though anyone adjacent can still land a blow.
+fn out_of_fight(defs: &DefDb, p: &Pawn) -> bool {
+    retreating(p) || wounded(defs, p)
+}
+
+/// Below the creature's `retreat_below` fraction of max hp.
+fn wounded(defs: &DefDb, p: &Pawn) -> bool {
+    let cd = defs.creature(p.def);
+    cd.retreat_below > 0.0 && (p.hp as f64) < cd.max_hp as f64 * cd.retreat_below
+}
+
+/// Head for the nearest reachable map edge.
+fn leave(w: &mut World, p: &mut Pawn) -> Option<Job> {
+    w.map.ensure_regions();
+    let (mw, mh) = (w.map.w, w.map.h);
+    let mut edges =
+        [IVec::new(0, p.pos.y), IVec::new(mw - 1, p.pos.y), IVec::new(p.pos.x, 0), IVec::new(p.pos.x, mh - 1)];
+    edges.sort_by_key(|q| q.octile(p.pos));
+    for q in edges {
+        // Slide along the edge until we find somewhere we can actually reach.
+        for k in 0..mw.max(mh) {
+            for s in [k, -k] {
+                let c = if q.x == 0 || q.x == mw - 1 { q.offset(0, s) } else { q.offset(s, 0) };
+                if w.map.passable(c) && w.map.can_reach(p.pos, Goal::Cell(c)) {
+                    return Some(Job::Leave { to: c });
+                }
+            }
+        }
+    }
+    None
 }
 
 fn reachable(w: &mut World, from: IVec, goal: Goal) -> bool {
@@ -414,6 +476,14 @@ fn run_job(w: &mut World, e: Entity, p: &mut Pawn) {
         j @ Job::MoveTo { to } => match go_to(w, p, Goal::Cell(to)) {
             Go::Moving => (Some(j), 0),
             _ => (None, 0),
+        },
+        j @ Job::Leave { to } => match go_to(w, p, Goal::Cell(to)) {
+            Go::Moving => (Some(j), 0),
+            Go::Arrived => {
+                p.left = true;
+                (None, 0)
+            }
+            Go::Failed => (None, 0),
         },
         j @ Job::Flee { to, until } => match go_to(w, p, Goal::Cell(to)) {
             Go::Moving if w.tick < until => (Some(j), 0),
@@ -638,10 +708,15 @@ fn run_sleep(w: &mut World, e: Entity, p: &mut Pawn, bed: Option<Entity>, stage:
 }
 
 fn run_attack(w: &mut World, e: Entity, p: &mut Pawn, target: Entity, until: u64) -> Option<Job> {
-    if w.tick > until && !p.drafted {
+    let time_to_go = p.leave_at.is_some_and(|t| w.tick >= t);
+    if (w.tick > until || wounded(&w.defs, p) || time_to_go) && !p.drafted {
         return None;
     }
     let tpos = w.pawn_pos(target)?;
+    let target_retreating = w.ecs.get::<&Pawn>(target).is_ok_and(|t| retreating(&t));
+    if target_retreating && p.pos.chebyshev(tpos) > 1 && !p.drafted {
+        return None; // let them go
+    }
     if p.pos.chebyshev(tpos) <= 1 && p.next.is_none() {
         p.path.clear();
         p.path_goal = None;

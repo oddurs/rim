@@ -33,6 +33,10 @@ fn with_world<R>(ptr: &WorldPtr, f: impl FnOnce(&mut World) -> mlua::Result<R>) 
     f(unsafe { &mut *p })
 }
 
+fn rim_sim_entity(id: u64) -> mlua::Result<hecs::Entity> {
+    hecs::Entity::from_bits(id).ok_or_else(|| mlua::Error::runtime(format!("bad entity id {id}")))
+}
+
 struct Hook {
     mod_id: String,
     interval: u64,
@@ -110,6 +114,7 @@ impl ScriptHost {
             t.set("intelligent", cd.intelligent)?;
             t.set("aggressive", cd.aggressive)?;
             t.set("flees", cd.flees)?;
+            t.set("plural", cd.plural.as_str())?;
             t.set("market_value", cd.market_value)?;
             t.set("max_hp", cd.max_hp)?;
             t.set("wild", cd.spawn.is_some())?;
@@ -249,6 +254,15 @@ impl ScriptHost {
             let name = w.ecs.get::<&Pawn>(e).map(|p| p.name.clone()).unwrap_or_default();
             Ok((Some(e.to_bits().get()), Some(name)))
         });
+        // Make a pawn give up and walk off the map after `ticks`.
+        api!("leave_after", (u64, u64), |w, (id, ticks)| {
+            let e = rim_sim_entity(id)?;
+            let t = w.tick + ticks;
+            if let Ok(mut p) = w.ecs.get::<&mut Pawn>(e) {
+                p.leave_at = Some(t);
+            }
+            Ok(())
+        });
         api!("spawn_item", (String, i32, i32, u32), |w, (thing, x, y, count)| {
             let def =
                 w.defs.thing_id(&thing).ok_or_else(|| mlua::Error::runtime(format!("unknown thing '{thing}'")))?;
@@ -327,6 +341,13 @@ impl ScriptHost {
                 t.set("x", pos.x)?;
                 t.set("y", pos.y)?;
                 "pawn_died"
+            }
+            GameEvent::PawnLeft { id, name, def, faction } => {
+                t.set("id", id.to_bits().get())?;
+                t.set("name", name.as_str())?;
+                t.set("creature", defs.creature(*def).id.as_str())?;
+                t.set("faction", faction.name())?;
+                "pawn_left"
             }
             GameEvent::BuildingComplete { id, def, pos } => {
                 t.set("id", id.to_bits().get())?;

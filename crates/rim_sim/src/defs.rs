@@ -194,6 +194,13 @@ pub struct CreatureDef {
     /// Runs from attackers instead of fighting back.
     #[serde(default)]
     pub flees: bool,
+    /// Breaks off fighting below this fraction of max hp: colonists run and
+    /// heal, hostiles leave the map. 0 fights to the death.
+    #[serde(default)]
+    pub retreat_below: f64,
+    /// For messages ("wolves"). Defaults to label + "s".
+    #[serde(default)]
+    pub plural: String,
     #[serde(default)]
     pub market_value: f64,
     #[serde(default)]
@@ -382,6 +389,9 @@ impl DefDb {
             d.needs_r = d.needs.iter().map(|n| get("need", n, &ctx)).collect::<Result<_, _>>()?;
             if let Some(s) = &mut d.spawn {
                 s.terrain_r = s.terrain.iter().map(|t| get("terrain", t, &ctx)).collect::<Result<_, _>>()?;
+            }
+            if d.plural.is_empty() {
+                d.plural = format!("{}s", d.label);
             }
             d.speed = d.speed.max(1);
             d.melee_cooldown = d.melee_cooldown.max(1);
