@@ -108,10 +108,19 @@ pub fn world(app: &App) {
                         draw_circle(cx - z * 0.1, cy - z * 0.1, z * 0.22, shade(c, 1.25));
                     }
                     Shape::Bush => {
-                        draw_circle(cx, cy, z * 0.32, if regrowing { shade(c, 0.75) } else { c });
-                        if !regrowing {
-                            for (dx, dy) in [(-0.12, -0.08), (0.1, -0.1), (0.0, 0.12), (0.14, 0.08)] {
-                                draw_circle(cx + dx * z, cy + dy * z, z * 0.06, Color::from_rgba(200, 40, 70, 255));
+                        if regrowing {
+                            // Picked clean: small, dry and berry-less, so it
+                            // doesn't read as food.
+                            draw_circle(cx, cy, z * 0.24, Color::new(c.r * 0.9 + 0.12, c.g * 0.75, c.b * 0.6, 1.0));
+                        } else {
+                            draw_circle(cx, cy, z * 0.36, c);
+                            for (dx, dy) in [(-0.14, -0.1), (0.13, -0.12), (0.0, 0.14), (0.16, 0.1), (-0.15, 0.1)] {
+                                draw_circle(
+                                    cx + dx * z,
+                                    cy + dy * z,
+                                    (z * 0.085).max(2.0),
+                                    Color::from_rgba(235, 45, 85, 255),
+                                );
                             }
                         }
                     }
@@ -162,6 +171,8 @@ pub fn world(app: &App) {
     }
 
     // Pawns.
+    let mut labels: Vec<(String, f32, f32, f32, Color)> = Vec::new();
+    let hovered = crate::pawn_under(app, mouse_position().0, mouse_position().1);
     for &e in &w.pawns {
         let Ok(p) = w.ecs.get::<&Pawn>(e) else { continue };
         if !p.active {
@@ -206,14 +217,15 @@ pub fn world(app: &App) {
             draw_rectangle(sx - r, sy + r + 3.0, r * 2.0, 3.0, Color::new(0.2, 0.0, 0.0, 0.8));
             draw_rectangle(sx - r, sy + r + 3.0, r * 2.0 * f, 3.0, Color::new(1.0 - f, f, 0.1, 1.0));
         }
+        // Text goes on top of the night overlay, so it's collected for later.
         if p.asleep {
-            draw_text("z", sx + r * 0.6, sy - r * 0.6, 16.0 + (t * 2.0).sin() * 2.0, WHITE);
+            labels.push(("z".into(), sx + r * 0.6, sy - r * 0.6, 18.0 + (t * 2.0).sin() * 2.0, WHITE));
         }
-        if cd.intelligent && z >= 14.0 {
-            let dims = measure_text(&p.name, None, 15, 1.0);
-            let ly = sy + r + 15.0;
-            draw_text(&p.name, sx - dims.width / 2.0 + 1.0, ly + 1.0, 15.0, BLACK);
-            draw_text(&p.name, sx - dims.width / 2.0, ly, 15.0, ring.unwrap_or(WHITE));
+        // Colonists are always named; others when hovered or selected.
+        let named = p.faction == Faction::Player || app.selected == Some(e) || hovered == Some(e);
+        if named && z >= 14.0 {
+            let label = if cd.intelligent { p.name.clone() } else { cd.label.clone() };
+            labels.push((label, sx, sy + r + 15.0, 15.0, ring.unwrap_or(WHITE)));
         }
     }
 
@@ -231,6 +243,11 @@ pub fn world(app: &App) {
     if dark > 0.0 {
         draw_rectangle(0.0, 0.0, screen_width(), screen_height(), Color::new(0.02, 0.03, 0.12, dark));
     }
+    for (text, x, y, size, c) in labels {
+        let x = if text == "z" { x } else { x - measure_text(&text, None, size as u16, 1.0).width / 2.0 };
+        draw_text(&text, x + 1.0, y + 1.0, size, BLACK);
+        draw_text(&text, x, y, size, c);
+    }
 
     // Drag rectangle preview.
     if let Some(a) = app.drag_start {
@@ -241,7 +258,20 @@ pub fn world(app: &App) {
         let (s0x, s0y) = cam.to_screen(ax, ay);
         let (s1x, s1y) = cam.to_screen(bx, by);
         let c = tool_color(app);
-        draw_rectangle(s0x, s0y, s1x - s0x, s1y - s0y, alpha(c, 0.18));
+        let outline = match app.tool {
+            Tool::Build(t) => w.defs.thing(t).blocks,
+            _ => false,
+        };
+        if outline {
+            // Show exactly the cells that will get walls.
+            for (ra, rb) in crate::build_rects(true, a, b) {
+                let (p0x, p0y) = cam.to_screen(ra.x.min(rb.x) as f32, ra.y.min(rb.y) as f32);
+                let (p1x, p1y) = cam.to_screen(ra.x.max(rb.x) as f32 + 1.0, ra.y.max(rb.y) as f32 + 1.0);
+                draw_rectangle(p0x, p0y, p1x - p0x, p1y - p0y, alpha(c, 0.35));
+            }
+        } else {
+            draw_rectangle(s0x, s0y, s1x - s0x, s1y - s0y, alpha(c, 0.18));
+        }
         draw_rectangle_lines(s0x, s0y, s1x - s0x, s1y - s0y, 2.0, c);
         let label = format!("{}x{}", (bx - ax) as i32, (by - ay) as i32);
         draw_text(&label, s1x + 6.0, s1y, 18.0, WHITE);
@@ -283,11 +313,7 @@ pub fn hud(app: &App) {
 fn top_bar(app: &App) {
     let w = &app.sim.world;
     draw_rectangle(0.0, 0.0, screen_width(), TOPBAR_H, PANEL);
-    let hour = w.hour();
-    let clock = format!("{:02}:{:02}", hour as u32, ((hour.fract()) * 60.0) as u32);
-    let speed = if app.paused { "paused".to_string() } else { format!("{}x", app.speed) };
-    let left = format!("Day {}  {}  {}   Wealth {:.0}", w.day() + 1, clock, speed, w.wealth);
-    draw_text(&left, 10.0, 19.0, 20.0, if app.paused { YELLOW } else { TEXT });
+    draw_text(clock_text(app), 10.0, 19.0, 20.0, if app.paused { YELLOW } else { TEXT });
 
     // Colonist bar, centered.
     for (e, rect) in colonist_rects(app) {
@@ -310,7 +336,25 @@ fn top_bar(app: &App) {
     draw_text(help, screen_width() - d.width - 10.0, 18.0, 15.0, DIM);
 }
 
-fn colonist_rects(app: &App) -> Vec<(Entity, Rect)> {
+/// "Day 3  14:05  3x   Wealth 812"
+pub fn clock_text(app: &App) -> String {
+    let w = &app.sim.world;
+    let hour = w.hour();
+    let clock = format!("{:02}:{:02}", hour as u32, (hour.fract() * 60.0) as u32);
+    let speed = if app.paused { "paused".to_string() } else { format!("{}x", app.speed) };
+    format!("Day {}  {}  {}   Wealth {:.0}", w.day() + 1, clock, speed, w.wealth)
+}
+
+pub fn message_color(kind: MsgKind) -> Color {
+    match kind {
+        MsgKind::Info => TEXT,
+        MsgKind::Good => Color::new(0.5, 0.95, 0.5, 1.0),
+        MsgKind::Threat => Color::new(1.0, 0.45, 0.35, 1.0),
+        MsgKind::Bad => Color::new(1.0, 0.7, 0.3, 1.0),
+    }
+}
+
+pub fn colonist_rects(app: &App) -> Vec<(Entity, Rect)> {
     let cols: Vec<Entity> = app.sim.world.colonists().collect();
     let mut x = 360.0;
     cols.into_iter()
@@ -336,12 +380,7 @@ fn messages(app: &App) {
         if age > 1.0 {
             break;
         }
-        let c = match m.kind {
-            MsgKind::Info => TEXT,
-            MsgKind::Good => Color::new(0.5, 0.95, 0.5, 1.0),
-            MsgKind::Threat => Color::new(1.0, 0.45, 0.35, 1.0),
-            MsgKind::Bad => Color::new(1.0, 0.7, 0.3, 1.0),
-        };
+        let c = message_color(m.kind);
         let a = (1.0 - age).clamp(0.35, 1.0);
         let d = measure_text(&m.text, None, 18, 1.0);
         draw_rectangle(8.0, y - 16.0, d.width + 12.0, 22.0, alpha(PANEL, 0.6 * a));

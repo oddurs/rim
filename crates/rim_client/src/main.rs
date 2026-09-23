@@ -1,6 +1,7 @@
 //! rim client: renders the simulation and turns input into Commands.
 //! The client never mutates the world directly.
 
+mod autotest;
 mod draw;
 
 use macroquad::prelude::*;
@@ -60,7 +61,7 @@ pub struct App {
     pub show_profiler: bool,
     pub buttons: Vec<Button>,
     acc: f64,
-    pan_anchor: Option<(f32, f32, f32, f32)>,
+    pan_anchor: Option<(f32, f32)>,
 }
 
 fn conf() -> Conf {
@@ -116,6 +117,12 @@ async fn main() {
         pan_anchor: None,
     };
     app.selected = app.sim.world.colonists().next();
+
+    let args: Vec<String> = std::env::args().collect();
+    if let Some(i) = args.iter().position(|a| a == "--autotest") {
+        let dir = args.get(i + 1).filter(|a| !a.starts_with("--")).map_or("target/autotest".into(), PathBuf::from);
+        autotest::run(app, dir).await;
+    }
 
     loop {
         input(&mut app);
@@ -195,7 +202,7 @@ fn step(app: &mut App) {
     }
 }
 
-fn pawn_under(app: &App, sx: f32, sy: f32) -> Option<Entity> {
+pub fn pawn_under(app: &App, sx: f32, sy: f32) -> Option<Entity> {
     let (wx, wy) = app.cam.to_world(sx, sy);
     let w = &app.sim.world;
     let mut best: Option<(f32, Entity)> = None;
@@ -211,158 +218,233 @@ fn pawn_under(app: &App, sx: f32, sy: f32) -> Option<Entity> {
     best.map(|b| b.1)
 }
 
-fn toolbar_y() -> f32 {
+pub fn toolbar_y() -> f32 {
     screen_height() - TOOLBAR_H + 6.0
+}
+
+/// Everything the player can do, independent of which key or button did it.
+/// Raw input becomes actions in `input`; `--autotest` drives the same actions.
+#[derive(Clone, Copy, Debug)]
+pub enum Action {
+    TogglePause,
+    Speed(u32),
+    ToggleProfiler,
+    Escape,
+    ToggleDraft,
+    NextColonist,
+    CenterSelected,
+    /// Move the camera by this many tiles.
+    Pan(f32, f32),
+    /// Zoom by a factor, keeping the world point under (x, y) fixed.
+    Zoom(f32, f32, f32),
+    /// Left button went down / up at a screen position.
+    LeftDown(f32, f32),
+    LeftUp(f32, f32),
+    RightClick(f32, f32),
 }
 
 fn input(app: &mut App) {
     let (mx, my) = mouse_position();
     let over_ui = my > screen_height() - TOOLBAR_H || my < TOPBAR_H;
+    let mut actions = Vec::new();
 
-    // Keyboard.
-    if is_key_pressed(KeyCode::Space) {
-        app.paused = !app.paused;
-    }
-    for (k, s) in [(KeyCode::Key1, 1), (KeyCode::Key2, 3), (KeyCode::Key3, 6)] {
-        if is_key_pressed(k) {
-            app.speed = s;
-            app.paused = false;
-        }
-    }
-    if is_key_pressed(KeyCode::F3) || is_key_pressed(KeyCode::P) {
-        app.show_profiler = !app.show_profiler;
-    }
-    if is_key_pressed(KeyCode::Escape) {
-        if app.tool != Tool::Select {
-            app.tool = Tool::Select;
-        } else {
-            app.selected = None;
-        }
-        app.drag_start = None;
-    }
-    if is_key_pressed(KeyCode::R) {
-        if let Some(e) = app.selected {
-            let drafted = app.sim.world.ecs.get::<&Pawn>(e).map(|p| (p.faction == Faction::Player, p.drafted)).ok();
-            if let Some((true, d)) = drafted {
-                app.sim.push(Command::Draft { pawn: e, on: !d });
-            }
-        }
-    }
-    if is_key_pressed(KeyCode::Tab) {
-        let cols: Vec<Entity> = app.sim.world.colonists().collect();
-        if !cols.is_empty() {
-            let i = app.selected.and_then(|s| cols.iter().position(|&c| c == s)).map_or(0, |i| (i + 1) % cols.len());
-            app.selected = Some(cols[i]);
-            focus(app, cols[i]);
-        }
-    }
-    if is_key_pressed(KeyCode::C) {
-        if let Some(e) = app.selected {
-            focus(app, e);
+    for (key, a) in [
+        (KeyCode::Space, Action::TogglePause),
+        (KeyCode::Key1, Action::Speed(1)),
+        (KeyCode::Key2, Action::Speed(3)),
+        (KeyCode::Key3, Action::Speed(6)),
+        (KeyCode::F3, Action::ToggleProfiler),
+        (KeyCode::P, Action::ToggleProfiler),
+        (KeyCode::Escape, Action::Escape),
+        (KeyCode::R, Action::ToggleDraft),
+        (KeyCode::Tab, Action::NextColonist),
+        (KeyCode::C, Action::CenterSelected),
+    ] {
+        if is_key_pressed(key) {
+            actions.push(a);
         }
     }
 
-    // Camera.
     let pan = 18.0 * get_frame_time() * 40.0 / app.cam.zoom;
+    let (mut dx, mut dy) = (0.0, 0.0);
     if is_key_down(KeyCode::W) || is_key_down(KeyCode::Up) {
-        app.cam.y -= pan;
+        dy -= pan;
     }
     if is_key_down(KeyCode::S) || is_key_down(KeyCode::Down) {
-        app.cam.y += pan;
+        dy += pan;
     }
     if is_key_down(KeyCode::A) || is_key_down(KeyCode::Left) {
-        app.cam.x -= pan;
+        dx -= pan;
     }
     if is_key_down(KeyCode::D) || is_key_down(KeyCode::Right) {
-        app.cam.x += pan;
+        dx += pan;
+    }
+    if dx != 0.0 || dy != 0.0 {
+        actions.push(Action::Pan(dx, dy));
     }
     let (_, wheel) = mouse_wheel();
     if wheel != 0.0 && !over_ui {
-        let before = app.cam.to_world(mx, my);
-        app.cam.zoom = (app.cam.zoom * if wheel > 0.0 { 1.12 } else { 1.0 / 1.12 }).clamp(4.0, 80.0);
-        let after = app.cam.to_world(mx, my);
-        app.cam.x += before.0 - after.0;
-        app.cam.y += before.1 - after.1;
+        actions.push(Action::Zoom(if wheel > 0.0 { 1.12 } else { 1.0 / 1.12 }, mx, my));
     }
+    // Middle-drag pans: the grabbed world point follows the mouse.
     if is_mouse_button_pressed(MouseButton::Middle) {
-        app.pan_anchor = Some((mx, my, app.cam.x, app.cam.y));
+        app.pan_anchor = Some((mx, my));
     }
-    if let Some((ax, ay, cx, cy)) = app.pan_anchor {
+    if let Some((ax, ay)) = app.pan_anchor {
         if is_mouse_button_down(MouseButton::Middle) {
-            app.cam.x = cx - (mx - ax) / app.cam.zoom;
-            app.cam.y = cy - (my - ay) / app.cam.zoom;
+            actions.push(Action::Pan(-(mx - ax) / app.cam.zoom, -(my - ay) / app.cam.zoom));
+            app.pan_anchor = Some((mx, my));
         } else {
             app.pan_anchor = None;
         }
     }
-    let (mw, mh) = (app.sim.world.map.w as f32, app.sim.world.map.h as f32);
-    app.cam.x = app.cam.x.clamp(0.0, mw);
-    app.cam.y = app.cam.y.clamp(0.0, mh);
 
-    // Toolbar.
-    if is_mouse_button_pressed(MouseButton::Left) && my > screen_height() - TOOLBAR_H {
-        for b in &app.buttons {
-            let r = Rect::new(b.rect.x, toolbar_y(), b.rect.w, b.rect.h);
-            if r.contains(vec2(mx, my)) {
-                app.tool = b.tool;
-            }
-        }
-        return;
-    }
-    // Colonist bar.
-    if is_mouse_button_pressed(MouseButton::Left) && my < TOPBAR_H {
-        if let Some(e) = draw::colonist_bar_hit(app, mx, my) {
-            app.selected = Some(e);
-            focus(app, e);
-        }
-        return;
-    }
-
-    // World.
-    let tile = app.cam.tile_at(mx, my);
-    if is_mouse_button_pressed(MouseButton::Left) && !over_ui {
-        match app.tool {
-            Tool::Select => app.selected = pawn_under(app, mx, my),
-            _ => app.drag_start = Some(tile),
-        }
+    if is_mouse_button_pressed(MouseButton::Left) {
+        actions.push(Action::LeftDown(mx, my));
     }
     if is_mouse_button_released(MouseButton::Left) {
-        if let Some(a) = app.drag_start.take() {
-            let b = tile;
+        actions.push(Action::LeftUp(mx, my));
+    }
+    if is_mouse_button_pressed(MouseButton::Right) {
+        actions.push(Action::RightClick(mx, my));
+    }
+
+    for a in actions {
+        apply(app, a);
+    }
+}
+
+pub fn apply(app: &mut App, action: Action) {
+    let over_ui = |y: f32| y > screen_height() - TOOLBAR_H || y < TOPBAR_H;
+    match action {
+        Action::TogglePause => app.paused = !app.paused,
+        Action::Speed(s) => {
+            app.speed = s;
+            app.paused = false;
+        }
+        Action::ToggleProfiler => app.show_profiler = !app.show_profiler,
+        Action::Escape => {
+            if app.tool != Tool::Select {
+                app.tool = Tool::Select;
+            } else {
+                app.selected = None;
+            }
+            app.drag_start = None;
+        }
+        Action::ToggleDraft => {
+            if let Some(e) = app.selected {
+                let drafted = app.sim.world.ecs.get::<&Pawn>(e).map(|p| (p.faction == Faction::Player, p.drafted)).ok();
+                if let Some((true, d)) = drafted {
+                    app.sim.push(Command::Draft { pawn: e, on: !d });
+                }
+            }
+        }
+        Action::NextColonist => {
+            let cols: Vec<Entity> = app.sim.world.colonists().collect();
+            if !cols.is_empty() {
+                let i =
+                    app.selected.and_then(|s| cols.iter().position(|&c| c == s)).map_or(0, |i| (i + 1) % cols.len());
+                app.selected = Some(cols[i]);
+                focus(app, cols[i]);
+            }
+        }
+        Action::CenterSelected => {
+            if let Some(e) = app.selected {
+                focus(app, e);
+            }
+        }
+        Action::Pan(dx, dy) => {
+            app.cam.x += dx;
+            app.cam.y += dy;
+        }
+        Action::Zoom(f, x, y) => {
+            let before = app.cam.to_world(x, y);
+            app.cam.zoom = (app.cam.zoom * f).clamp(4.0, 80.0);
+            let after = app.cam.to_world(x, y);
+            app.cam.x += before.0 - after.0;
+            app.cam.y += before.1 - after.1;
+        }
+        Action::LeftDown(x, y) => {
+            if y > screen_height() - TOOLBAR_H {
+                for b in &app.buttons {
+                    if Rect::new(b.rect.x, toolbar_y(), b.rect.w, b.rect.h).contains(vec2(x, y)) {
+                        app.tool = b.tool;
+                    }
+                }
+            } else if y < TOPBAR_H {
+                if let Some(e) = draw::colonist_bar_hit(app, x, y) {
+                    app.selected = Some(e);
+                    focus(app, e);
+                }
+            } else {
+                match app.tool {
+                    Tool::Select => app.selected = pawn_under(app, x, y),
+                    _ => app.drag_start = Some(app.cam.tile_at(x, y)),
+                }
+            }
+        }
+        Action::LeftUp(x, y) => {
+            let Some(a) = app.drag_start.take() else { return };
+            let b = app.cam.tile_at(x, y);
+            let defs = app.sim.world.defs.clone();
             match app.tool {
                 Tool::Designate(d) => {
-                    // Creature designations use a generous rect so clicks catch moving targets.
-                    let (a, b) = if app.sim.world.defs.designations[d as usize].targets == Targets::Creature && a == b {
+                    // A click on a creature uses a generous box so moving targets are caught.
+                    let (a, b) = if defs.designations[d as usize].targets == Targets::Creature && a == b {
                         (a.offset(-1, -1), b.offset(1, 1))
                     } else {
                         (a, b)
                     };
                     app.sim.push(Command::Designate { designation: d, a, b });
                 }
-                Tool::Build(t) => app.sim.push(Command::Build { thing: t, a, b }),
+                Tool::Build(t) => {
+                    for (a, b) in build_rects(defs.thing(t).blocks, a, b) {
+                        app.sim.push(Command::Build { thing: t, a, b });
+                    }
+                }
                 Tool::Cancel => app.sim.push(Command::Cancel { a, b }),
                 Tool::Select => {}
             }
         }
-    }
-    if is_mouse_button_pressed(MouseButton::Right) && !over_ui {
-        if app.tool != Tool::Select {
-            app.tool = Tool::Select;
-            app.drag_start = None;
-            return;
-        }
-        let Some(e) = app.selected else { return };
-        let drafted = app.sim.world.ecs.get::<&Pawn>(e).is_ok_and(|p| p.drafted);
-        if !drafted {
-            return;
-        }
-        match pawn_under(app, mx, my).filter(|&t| t != e) {
-            Some(t) if app.sim.world.ecs.get::<&Pawn>(t).is_ok_and(|p| p.faction != Faction::Player) => {
-                app.sim.push(Command::Attack { pawn: e, target: t })
+        Action::RightClick(x, y) => {
+            if over_ui(y) {
+                return;
             }
-            _ => app.sim.push(Command::Move { pawn: e, to: tile }),
+            if app.tool != Tool::Select {
+                app.tool = Tool::Select;
+                app.drag_start = None;
+                return;
+            }
+            let Some(e) = app.selected else { return };
+            if !app.sim.world.ecs.get::<&Pawn>(e).is_ok_and(|p| p.drafted) {
+                return;
+            }
+            match pawn_under(app, x, y).filter(|&t| t != e) {
+                Some(t) if app.sim.world.ecs.get::<&Pawn>(t).is_ok_and(|p| p.faction != Faction::Player) => {
+                    app.sim.push(Command::Attack { pawn: e, target: t })
+                }
+                _ => app.sim.push(Command::Move { pawn: e, to: app.cam.tile_at(x, y) }),
+            }
         }
     }
+    let (mw, mh) = (app.sim.world.map.w as f32, app.sim.world.map.h as f32);
+    app.cam.x = app.cam.x.clamp(0.0, mw);
+    app.cam.y = app.cam.y.clamp(0.0, mh);
+}
+
+/// Walls (anything that blocks) are drawn as a room outline; everything
+/// else fills the dragged rectangle.
+pub fn build_rects(blocks: bool, a: IVec, b: IVec) -> Vec<(IVec, IVec)> {
+    let (x0, x1, y0, y1) = (a.x.min(b.x), a.x.max(b.x), a.y.min(b.y), a.y.max(b.y));
+    if !blocks || x1 - x0 < 2 || y1 - y0 < 2 {
+        return vec![(a, b)];
+    }
+    vec![
+        (IVec::new(x0, y0), IVec::new(x1, y0)),
+        (IVec::new(x0, y1), IVec::new(x1, y1)),
+        (IVec::new(x0, y0 + 1), IVec::new(x0, y1 - 1)),
+        (IVec::new(x1, y0 + 1), IVec::new(x1, y1 - 1)),
+    ]
 }
 
 fn focus(app: &mut App, e: Entity) {

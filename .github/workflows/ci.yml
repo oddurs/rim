@@ -45,6 +45,16 @@ jobs:
         run: cargo test --release --workspace
       - name: Headless soak, 3 in-game days
         run: cargo run --release -p rim_sim --example headless -- --days 3 --seed 1
+      - name: Client autotest (drives every control, takes screenshots)
+        if: runner.os == 'macOS'
+        run: cargo run --release -p rim_client -- --seed 7 --autotest target/autotest
+      - name: Upload autotest screenshots
+        if: runner.os == 'macOS' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: autotest-screenshots
+          path: target/autotest/*.png
+          if-no-files-found: ignore
 
   roadmap:
     name: Roadmap

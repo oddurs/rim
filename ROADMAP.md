@@ -29,15 +29,10 @@ The headless engine: defs, mod loading and patching, map, pathing, AI skeleton, 
 
 ## castaway — Castaway
 
-`########··` 71% · 12 of 17 done · due 2026-10-15
+`##########` 100% · 17 of 17 done · due 2026-10-15
 
 First playable vertical slice. One warrior, harvest, build, eat, sleep, animals, melee, raids and wanderers from a Luau storyteller. Two mods loaded: core and an example plugin.
 
-- [ ] `0045` Client: camera, terrain, things and pawns with viewport culling <sup>feature · p0 · l · client</sup>
-- [ ] `0046` Client: data-driven toolbar from designation and buildable defs <sup>feature · p0 · m · client</sup>
-- [ ] `0047` Client: selection, draft, move and attack orders <sup>feature · p0 · m · client</sup>
-- [ ] `0048` Client: messages, colonist bar, clock and speed controls <sup>feature · p1 · s · client</sup>
-- [ ] `0049` F3 profiler overlay: per-system and per-mod timings <sup>feature · p1 · s · client</sup>
 - [x] `0035` Pawn AI: staggered thinking and job state machines <sup>feature · p0 · l · engine</sup>
 - [x] `0036` Harvest, mine and forage <sup>feature · p0 · m · engine</sup>
 - [x] `0037` Blueprints: deliver materials, then construct <sup>feature · p0 · m · engine</sup>
@@ -48,6 +43,11 @@ First playable vertical slice. One warrior, harvest, build, eat, sleep, animals,
 - [x] `0042` Core creatures: human, deer, hare, wolf <sup>content · p0 · s · core</sup>
 - [x] `0043` Storyteller as a Luau plugin with a shared incident registry <sup>feature · p0 · m · core</sup>
 - [x] `0044` Incidents: raid, wanderer joins, herd, predator pack, windfall <sup>content · p0 · m · core</sup>
+- [x] `0045` Client: camera, terrain, things and pawns with viewport culling <sup>feature · p0 · l · client</sup>
+- [x] `0046` Client: data-driven toolbar from designation and buildable defs <sup>feature · p0 · m · client</sup>
+- [x] `0047` Client: selection, draft, move and attack orders <sup>feature · p0 · m · client</sup>
+- [x] `0048` Client: messages, colonist bar, clock and speed controls <sup>feature · p1 · s · client</sup>
+- [x] `0049` F3 profiler overlay: per-system and per-mod timings <sup>feature · p1 · s · client</sup>
 - [x] `0050` Example plugin wildlife_plus: new creature, a patch and a Luau incident <sup>content · p1 · s · plugin</sup>
 - [x] `0051` Balance the first three days <sup>spike · p1 · s · core</sup>
 

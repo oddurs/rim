@@ -29,6 +29,8 @@ cargo run --release -p rim_client                     # play
 cargo run --release -p rim_client -- --seed 42        # a specific world
 cargo test --release -p rim_sim                       # includes the determinism test
 cargo run --release -p rim_sim --example headless -- --days 5
+cargo run --release -p rim_sim --example balance -- --seeds 40   # bot plays the opening
+cargo run --release -p rim_client -- --autotest                   # drive every control, save screenshots
 ```
 
 | Key                  | Action                             |
