@@ -6,8 +6,9 @@ status: backlog
 milestone: co-op
 depends_on:
 - 32
+- 158
 created: 2026-09-22
-updated: 2026-09-22
+updated: 2026-09-23
 priority: p0
 api: none
 effort: xl

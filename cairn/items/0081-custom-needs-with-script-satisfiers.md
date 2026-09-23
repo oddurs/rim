@@ -22,3 +22,4 @@ Mood, recreation, comfort all need needs the engine does not know about.
 ## Acceptance criteria
 
 - [ ] satisfier = "script" calls a registered function
+- [ ] The `Satisfier` enum becomes a registry: core registers food and rest like any other mod would

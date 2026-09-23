@@ -53,7 +53,7 @@ First playable vertical slice. One warrior, harvest, build, eat, sleep, animals,
 
 ## shelter — Shelter
 
-`###·······` 30% · 3 of 10 done · due 2026-11-01
+`###·······` 25% · 3 of 12 done · due 2026-11-01
 
 Exposure makes shelter matter: warmth, enclosed rooms, day/night, weather. Get four walls up before night two.
 
@@ -64,13 +64,15 @@ Exposure makes shelter matter: warmth, enclosed rooms, day/night, weather. Get f
 - [ ] `0058` Doors that raiders must break through <sup>feature · p1 · m · engine</sup>
 - [ ] `0059` Founder trait: combat bonus and recruitment pull <sup>feature · p2 · s · core</sup>
 - [ ] `0136` Autotest seeds from the clock, so CI rolls dice <sup>bug · p1 · s · tooling</sup>
+- [ ] `0156` CI: build and test on Windows <sup>chore · p1 · s · tooling</sup>
+- [ ] `0157` CI: determinism must hold across machines, not just within one run <sup>chore · p1 · s · tooling</sup>
 - [x] `0052` Room detection: enclosed regions bounded by walls and doors <sup>feature · p0 · m · engine</sup>
 - [x] `0054` Roofs, or does enclosure count as shelter? <sup>spike · p1 · s · engine</sup>
 - [x] `0071` Prioritize: right-click to force a job <sup>feature · p1 · l · engine</sup>
 
 ## persistence — Persistence
 
-`··········` 0% · 0 of 6 done · due 2026-11-20
+`··········` 0% · 0 of 8 done · due 2026-11-20
 
 Save/load that survives mod changes, and replays from seed + command log.
 
@@ -80,6 +82,8 @@ Save/load that survives mod changes, and replays from seed + command log.
 - [ ] `0063` Keep unknown mod data when a mod is removed <sup>feature · p1 · m · engine</sup>
 - [ ] `0064` Replays: seed, mod list and command log <sup>feature · p1 · m · engine</sup>
 - [ ] `0065` Autosave and load menu <sup>feature · p1 · m · client</sup>
+- [ ] `0138` Namespaced def ids: mod:id, bare ids resolve inside their own mod <sup>feature · p0 · m · engine</sup>
+- [ ] `0139` Mod save migrations: a migrate hook when a mod's version changes <sup>feature · p1 · m · engine</sup>
 
 ## colony — Colony
 
@@ -108,20 +112,28 @@ The run gets a shape: eras, storyteller tiers, defensive strength in the threat 
 
 ## plugin-api — Plugin API
 
-`··········` 0% · 0 of 10 done · due 2027-02-01
+`··········` 0% · 0 of 18 done · due 2027-02-01
 
-The API grows up: stat pipeline, script components, custom jobs and needs, UI extension points, per-mod budgets, hot reload, typed API docs.
+The API grows up: stat pipeline, script components, custom jobs, needs and def kinds, modules and custom events, a real sandbox with hard limits, factions as data, rim test, typed API. Everything Mood needs, and everything DESIGN.md §10 says a mod from a stranger's repo must be safe to do.
 
 - [ ] `0078` Stat pipeline: base values plus registered modifiers <sup>feature · p0 · l · engine</sup>
 - [ ] `0079` Script-defined components on pawns and things <sup>feature · p0 · m · engine</sup>
 - [ ] `0080` Custom jobs and work givers from Luau <sup>feature · p0 · l · engine</sup>
 - [ ] `0081` Custom needs with script satisfiers <sup>feature · p0 · m · engine</sup>
 - [ ] `0082` UI extension points: panels, overlays, tools <sup>feature · p1 · l · client</sup>
-- [ ] `0083` Per-mod tick budget with warnings <sup>feature · p1 · m · engine</sup>
-- [ ] `0084` Hot reload of defs and scripts in dev mode <sup>feature · p1 · m · tooling</sup>
-- [ ] `0085` Luau type definitions for the rim API <sup>docs · p2 · s · tooling</sup>
-- [ ] `0086` Modding guide and API reference <sup>docs · p1 · m · tooling</sup>
+- [ ] `0083` Per-mod budgets: profiler warnings and hard limits for runaway scripts <sup>feature · p1 · m · engine</sup>
+- [ ] `0085` Luau type definitions for the rim API <sup>docs · p1 · s · tooling</sup>
 - [ ] `0087` Sprites and atlases from mods <sup>feature · p2 · m · client</sup>
+- [ ] `0140` Luau VM runs without sandbox mode, and the rim table is writable by any mod <sup>bug · p0 · s · engine</sup>
+- [ ] `0141` Mod modules: require("@mod/path") limited to declared dependencies <sup>feature · p0 · m · engine</sup>
+- [ ] `0142` Custom namespaced events: rim.emit and rim.on("mod:event") <sup>feature · p0 · s · engine</sup>
+- [ ] `0143` Mod-defined def kinds with schemas, and namespaced extension fields <sup>feature · p0 · l · engine</sup>
+- [ ] `0144` Patch list operations: append, remove and match by key <sup>feature · p1 · m · engine</sup>
+- [ ] `0145` Factions as defs, not an engine enum <sup>feature · p0 · m · engine</sup>
+- [ ] `0146` rim test: Luau tests against seeded headless worlds <sup>feature · p0 · m · tooling</sup>
+- [ ] `0147` Deterministic math in scripts: replace library trig and exp <sup>feature · p1 · s · engine</sup>
+- [ ] `0148` API deprecations warn with the replacement and the removal version <sup>feature · p2 · s · engine</sup>
+- [ ] `0159` Which platforms beyond desktop, and what do they cost? <sup>spike · p2 · s · engine</sup>
 
 ## mood — Mood
 
@@ -134,6 +146,19 @@ rim.mood — the first first-party plugin. Proves the API: if mood cannot be a p
 - [ ] `0090` Mental breaks: wander, sulk, berserk <sup>feature · p1 · m · plugin</sup>
 - [ ] `0091` What did mood need that plugins could not do? <sup>spike · p0 · s · engine</sup>
 - [ ] `0092` Mood panel via UI extension points <sup>feature · p1 · s · plugin</sup>
+
+## sdk — Modder SDK
+
+`··········` 0% · 0 of 6 done · due 2027-03-01
+
+Making a mod feels like publishing a small open-source library: rim new, typed Luau, rim test in CI, a template repo with a GitHub Action, a compatibility report and a guide. Runs alongside Mood, which is its first customer.
+
+- [ ] `0084` Hot reload of defs and scripts in dev mode <sup>feature · p0 · m · tooling</sup>
+- [ ] `0086` Modding guide, tutorial and generated API reference <sup>docs · p1 · m · tooling</sup>
+- [ ] `0122` rim new: a GitHub-ready mod repo in one command <sup>chore · p0 · m · tooling</sup>
+- [ ] `0123` Compatibility report: what a mod changes <sup>feature · p1 · s · tooling</sup>
+- [ ] `0149` rim: one binary to play, check, test and pack mods <sup>feature · p0 · m · client</sup>
+- [ ] `0150` GitHub Action for mod repos: check and test against supported engine versions <sup>feature · p1 · s · tooling</sup>
 
 ## scale — Scale
 
@@ -150,6 +175,22 @@ Hit the performance budget: benchmark harness, hierarchical pathing, flow fields
 - [ ] `0099` Parallel systems where read and write sets allow <sup>spike · p2 · m · engine</sup>
 - [ ] `0100` Meet the budget: 6x speed at 60 fps <sup>perf · p0 · l · engine</sup>
 
+## platform — Modding platform
+
+`##········` 11% · 1 of 9 done · due 2027-07-01
+
+Mods reach players without a closed store: versioned dependencies, a modlist lockfile, a git-backed mod index, rim add, the in-game mod manager, mod crater, and the WASM tier. See DESIGN.md §10.
+
+- [ ] `0118` WASM plugin tier with the same API surface <sup>feature · p0 · xl · engine</sup>
+- [ ] `0119` Mod manager: browse, enable and resolve conflicts <sup>feature · p0 · m · client</sup>
+- [ ] `0121` Capability declarations and trust prompts <sup>feature · p1 · m · engine</sup>
+- [ ] `0151` Mod dependencies with version ranges, optional deps and incompatibilities <sup>feature · p0 · m · engine</sup>
+- [ ] `0152` Modlist lockfile: exact versions, content hashes and conflict choices <sup>feature · p0 · m · engine</sup>
+- [ ] `0153` Mod index: a git repo of mod entries, checked by CI <sup>feature · p0 · m · tooling</sup>
+- [ ] `0154` Install mods from the index or a git URL: rim add <sup>feature · p0 · m · tooling</sup>
+- [ ] `0155` Mod crater: engine CI runs indexed mods' tests before a change lands <sup>feature · p1 · m · tooling</sup>
+- [x] `0120` Mod packaging and distribution <sup>spike · p1 · m · tooling</sup>
+
 ## defense — Defense
 
 `··········` 0% · 0 of 7 done · due 2027-04-10
@@ -164,6 +205,19 @@ Combat depth: ranged weapons, apparel and armor, equipment, downed and rescue, r
 - [ ] `0106` Turrets and traps <sup>content · p2 · m · plugin</sup>
 - [ ] `0107` Siege and sapper raids <sup>content · p2 · m · core</sup>
 
+## co-op — Co-op
+
+`··········` 0% · 0 of 6 done · due 2027-08-15
+
+Lockstep co-op on top of determinism: command broadcast, desync detection, mod-list handshake.
+
+- [ ] `0124` Lockstep or server-authoritative? <sup>spike · p0 · s · engine</sup>
+- [ ] `0125` Lockstep netcode with command broadcast <sup>feature · p0 · xl · engine</sup>
+- [ ] `0126` Desync detection and resync from snapshot <sup>feature · p0 · l · engine</sup>
+- [ ] `0127` Mod-list handshake <sup>feature · p0 · s · engine</sup>
+- [ ] `0128` Shared control and player cursors <sup>feature · p2 · m · client</sup>
+- [ ] `0158` Audit float math in the sim: fixed-point, or f64 with rules? <sup>spike · p0 · m · engine</sup>
+
 ## crafting — Crafting
 
 `··········` 0% · 0 of 5 done · due 2027-05-01
@@ -175,43 +229,6 @@ Production chains: workbenches and bills, cooking, farming, tailoring, research 
 - [ ] `0110` Farming: growing zones and crops <sup>feature · p0 · l · engine</sup>
 - [ ] `0111` Research as a plugin <sup>feature · p1 · l · plugin</sup>
 - [ ] `0112` Tailoring: make apparel <sup>content · p2 · s · core</sup>
-
-## world — World
-
-`··········` 0% · 0 of 5 done · due 2027-06-01
-
-The world beyond the map: factions, traders drawn by wealth, quests, taming.
-
-- [ ] `0113` Factions with relations <sup>feature · p0 · l · engine</sup>
-- [ ] `0114` Traders: caravans pulled by wealth <sup>feature · p0 · m · core</sup>
-- [ ] `0115` Trade UI and currency <sup>feature · p1 · m · client</sup>
-- [ ] `0116` Quests as Luau event chains <sup>feature · p2 · l · plugin</sup>
-- [ ] `0117` Animal taming and pens <sup>feature · p2 · m · engine</sup>
-
-## platform — Modding platform
-
-`··········` 0% · 0 of 6 done · due 2027-07-01
-
-Modding as a platform: WASM tier, mod manager, packaging and distribution, capability trust, SDK tooling.
-
-- [ ] `0118` WASM plugin tier with the same API surface <sup>feature · p0 · xl · engine</sup>
-- [ ] `0119` Mod manager: enable, order, conflicts <sup>feature · p0 · m · client</sup>
-- [ ] `0120` Mod packaging and distribution <sup>spike · p1 · m · tooling</sup>
-- [ ] `0121` Capability declarations and trust prompts <sup>feature · p1 · m · engine</sup>
-- [ ] `0122` rim new-mod template generator <sup>chore · p2 · s · tooling</sup>
-- [ ] `0123` Compatibility report: what a mod changes <sup>feature · p2 · s · tooling</sup>
-
-## co-op — Co-op
-
-`··········` 0% · 0 of 5 done · due 2027-08-15
-
-Lockstep co-op on top of determinism: command broadcast, desync detection, mod-list handshake.
-
-- [ ] `0124` Lockstep or server-authoritative? <sup>spike · p0 · s · engine</sup>
-- [ ] `0125` Lockstep netcode with command broadcast <sup>feature · p0 · xl · engine</sup>
-- [ ] `0126` Desync detection and resync from snapshot <sup>feature · p0 · l · engine</sup>
-- [ ] `0127` Mod-list handshake <sup>feature · p0 · s · engine</sup>
-- [ ] `0128` Shared control and player cursors <sup>feature · p2 · m · client</sup>
 
 ## 1.0 — 1.0
 
@@ -226,4 +243,16 @@ Ship it: tutorial, settings, audio, art pass, crash reports with replays, frozen
 - [ ] `0133` Crash reports with seed, mods and replay attached <sup>feature · p1 · m · tooling</sup>
 - [ ] `0134` Freeze plugin API 1.0 <sup>chore · p0 · m · engine</sup>
 - [ ] `0135` Packages for macOS, Windows and Linux <sup>chore · p0 · m · tooling</sup>
+
+## world — World
+
+`··········` 0% · 0 of 5 done · due 2027-06-01
+
+The world beyond the map: factions, traders drawn by wealth, quests, taming.
+
+- [ ] `0113` Factions with relations <sup>feature · p0 · l · engine</sup>
+- [ ] `0114` Traders: caravans pulled by wealth <sup>feature · p0 · m · core</sup>
+- [ ] `0115` Trade UI and currency <sup>feature · p1 · m · client</sup>
+- [ ] `0116` Quests as Luau event chains <sup>feature · p2 · l · plugin</sup>
+- [ ] `0117` Animal taming and pens <sup>feature · p2 · m · engine</sup>
 

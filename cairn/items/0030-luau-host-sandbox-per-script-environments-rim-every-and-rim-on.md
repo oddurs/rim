@@ -26,3 +26,5 @@ Behaviour plugins run as sandboxed Luau with deterministic APIs and per-mod timi
 - [x] Each script gets its own globals
 - [x] World API only valid inside callbacks
 - [x] Script errors surface in-game with the mod named
+
+Note (2026-09-23): the VM is not actually in Luau sandbox mode and the rim table is writable. Tracked in 0140.

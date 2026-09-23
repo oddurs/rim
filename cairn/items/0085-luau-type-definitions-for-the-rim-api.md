@@ -5,12 +5,14 @@ type: docs
 status: backlog
 milestone: plugin-api
 created: 2026-09-22
-updated: 2026-09-22
-priority: p2
+updated: 2026-09-23
+priority: p1
 api: additive
 effort: s
 layer: tooling
 area: docs
+pillar:
+- plugin-first
 ---
 
 ## Why
@@ -19,5 +21,6 @@ Typed API makes modding approachable.
 
 ## Acceptance criteria
 
-- [ ] rim.d.luau generated from the host
-- [ ] Works with luau-lsp
+- [ ] The API is declared once in Rust; rim.d.luau and the reference docs are generated from that declaration
+- [ ] Works with luau-lsp, including `require("@mod/...")` aliases
+- [ ] CI fails if the checked-in types drift from the host

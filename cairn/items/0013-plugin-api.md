@@ -13,4 +13,4 @@ api: none
 due: 2027-02-01
 ---
 
-The API grows up: stat pipeline, script components, custom jobs and needs, UI extension points, per-mod budgets, hot reload, typed API docs.
+The API grows up: stat pipeline, script components, custom jobs, needs and def kinds, modules and custom events, a real sandbox with hard limits, factions as data, rim test, typed API. Everything Mood needs, and everything DESIGN.md §10 says a mod from a stranger's repo must be safe to do.
