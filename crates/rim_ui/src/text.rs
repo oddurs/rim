@@ -57,6 +57,9 @@ pub struct FontInfo {
     pub family: String,
     pub source: String,
     pub fallback_faces: usize,
+    /// A family the theme asked for that isn't installed (the system UI font
+    /// was used instead).
+    pub missing: Option<String>,
 }
 
 /// Where a glyph sits in the atlas, and where to draw it relative to the pen.
@@ -177,11 +180,12 @@ impl Text {
         let fallback_faces = db.len();
 
         let mut chosen: Option<(String, String)> = None;
+        let mut missing = None;
         if let Some(want) = family {
             let found = db.faces().find(|f| f.families.iter().any(|(n, _)| n.eq_ignore_ascii_case(want)));
             match found {
                 Some(f) => chosen = Some((f.families[0].0.clone(), format!("family '{want}'"))),
-                None => eprintln!("rim_ui: theme font '{want}' is not installed; using the system UI font"),
+                None => missing = Some(want.to_string()),
             }
         }
         if chosen.is_none() {
@@ -215,7 +219,7 @@ impl Text {
         let fonts = FontSystem::new_with_locale_and_db("en-US".into(), db);
         Ok(Text {
             fonts,
-            info: FontInfo { family: family.clone(), source, fallback_faces },
+            info: FontInfo { family: family.clone(), source, fallback_faces, missing },
             family,
             swash: SwashCache::new(),
             shaped: HashMap::new(),
@@ -230,7 +234,7 @@ impl Text {
     /// as it was, old profiler numbers) are dropped so the cache stays small.
     pub fn begin_frame(&mut self) {
         self.frame += 1;
-        if self.frame % 600 == 0 {
+        if self.frame.is_multiple_of(600) {
             let now = self.frame;
             self.shaped.retain(|_, (_, used)| now - *used < 600);
         }

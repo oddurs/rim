@@ -86,7 +86,7 @@ pub fn paint(
 ) {
     let mut i = 0;
     let mut path = Vec::new();
-    walk(root, rects, &mut i, offset, None, state, text, draw, hits, &mut path);
+    walk(root, rects, &mut i, offset, None, false, state, text, draw, hits, &mut path);
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -96,6 +96,8 @@ fn walk(
     i: &mut usize,
     offset: (f32, f32),
     clip: Option<Rect>,
+    // A disabled ancestor dims everything inside it.
+    inherited_disabled: bool,
     state: &PaintState,
     text: &mut Text,
     draw: &mut Vec<Draw>,
@@ -117,7 +119,8 @@ fn walk(
     } else {
         None
     };
-    let alpha = if n.disabled { state.disabled_alpha } else { 1.0 };
+    let disabled = n.disabled || inherited_disabled;
+    let alpha = if disabled { state.disabled_alpha } else { 1.0 };
 
     let s = &n.style;
     if let Some(bg) = apply(s.bg, patch, |p| p.bg) {
@@ -158,7 +161,7 @@ fn walk(
     }
     for (ci, c) in n.children.iter().enumerate() {
         path.push(ci);
-        walk(c, rects, i, child_offset, child_clip, state, text, draw, hits, path);
+        walk(c, rects, i, child_offset, child_clip, disabled, state, text, draw, hits, path);
         path.pop();
     }
     if s.clip {

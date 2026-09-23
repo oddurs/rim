@@ -46,7 +46,11 @@ Risk found: shaping a new string costs ~50 µs, and the cache grows with every d
 
 ## Acceptance criteria
 
-- [ ] Prototype builds a 300-node tree from Luau, lays it out and draws it with shaped text
+- [x] Prototype builds a 300-node tree from Luau, lays it out and draws it with shaped text
 - [x] Measured per frame: Luau build, layout, text, draw (numbers recorded here)
 - [ ] Text is crisp at 1x and 2x DPI (screenshots attached as notes)
-- [ ] Decision recorded in DESIGN.md §11
+- [x] Decision recorded in DESIGN.md §11
+
+## 2026-09-23
+
+Decision recorded in DESIGN.md §11 ('How it's built'). The prototype became rim_ui itself; it draws in the client with shaped system-font text. Crisp at 2x confirmed on the reference machine's screenshots; 1x is checked on CI's Linux screenshots before ticking.

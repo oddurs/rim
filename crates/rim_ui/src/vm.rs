@@ -427,6 +427,16 @@ impl UiVm {
             }
             Ok(t)
         });
+        // How many living pawns of a faction ("player", "hostile", "wild").
+        view!("count_pawns", String, |_lua, l, faction| {
+            Ok(l.world
+                .pawns
+                .iter()
+                .filter(|&&e| {
+                    l.world.ecs.get::<&Pawn>(e).is_ok_and(|p| p.active && !p.dead && p.faction.name() == faction)
+                })
+                .count())
+        });
         view!("pawn", u64, |lua, l, id| match Entity::from_bits(id) {
             Some(e) => pawn_table(lua, l.world, l.client, e),
             None => Ok(None),
@@ -762,11 +772,17 @@ impl Builder<'_> {
         match v {
             Value::Nil => None,
             Value::Table(t) => {
-                // The component root answers to the component's id.
-                if t.get::<Option<String>>("id").ok().flatten().is_none() {
+                // The component root answers to the component's id, and to
+                // its own id if it set one.
+                let own: Option<String> = t.get("id").ok().flatten();
+                if own.is_none() {
                     let _ = t.raw_set("id", id);
                 }
-                self.convert(&t, key, &who, Some(id))
+                let mut n = self.convert(&t, key, &who, Some(id))?;
+                if own.as_deref().is_some_and(|o| o != id) {
+                    n.aka = Some(Rc::from(id));
+                }
+                Some(n)
             }
             _ => Some(self.fail(&who, key, id, "component must return a node table or nil".into())),
         }

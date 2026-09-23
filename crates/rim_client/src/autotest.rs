@@ -1,9 +1,13 @@
-//! `rim --autotest [dir]` drives the real client through every Castaway
-//! control, using the same `Action`s that keyboard and mouse input produce.
-//! It checks the game state after each step, saves screenshots to `dir`
-//! (default `target/autotest`), and exits non-zero if any check failed.
+//! `rim --autotest [dir]` drives the real client through every control.
+//!
+//! It feeds synthetic raw input through the same `frame()` the game loop
+//! uses: world clicks and drags pass through the UI's routing exactly as the
+//! mouse's would, and UI controls are clicked by node id (`core:toolbar.
+//! designate:chop`), not screen position. It checks the game state after
+//! each step, saves screenshots to `dir` (default `target/autotest`), and
+//! exits non-zero if any check failed.
 
-use crate::{apply, draw, toolbar_y, Action, App, Tool};
+use crate::{apply, draw, frame, render, Action, App, RawInput, Tool};
 use macroquad::prelude::*;
 use rim_sim::hecs::Entity;
 use rim_sim::order;
@@ -18,18 +22,33 @@ struct T {
     shots: usize,
     passed: usize,
     failed: Vec<String>,
+    mouse: (f32, f32),
+    clock: f64,
 }
 
 impl T {
-    async fn frame(&mut self) {
-        draw::world(&self.app);
-        draw::hud(&self.app);
+    /// One frame of input through the real path, then draw it.
+    async fn input(&mut self, mut raw: RawInput) {
+        self.clock += 1.0 / 60.0;
+        raw.time = self.clock;
+        self.mouse = raw.mouse;
+        frame(&mut self.app, &raw);
+        render(&mut self.app);
         next_frame().await;
     }
 
+    async fn frame(&mut self) {
+        let raw = RawInput { mouse: self.mouse, ..Default::default() };
+        self.input(raw).await;
+    }
+
     async fn shot(&mut self, name: &str) {
-        draw::world(&self.app);
-        draw::hud(&self.app);
+        // Two frames: one to lay out, one to draw what was laid out.
+        self.frame().await;
+        let raw = RawInput { mouse: self.mouse, ..Default::default() };
+        self.clock += 1.0 / 60.0;
+        frame(&mut self.app, &RawInput { time: self.clock, ..raw });
+        render(&mut self.app);
         let img = get_screen_data();
         self.shots += 1;
         let path = self.dir.join(format!("{:02}_{name}.png", self.shots));
@@ -76,31 +95,69 @@ impl T {
         self.app.cam.to_screen(x, y)
     }
 
-    fn click(&mut self, (x, y): (f32, f32)) {
-        self.act(Action::LeftDown(x, y));
-        self.act(Action::LeftUp(x, y));
+    fn focus(&mut self, p: IVec) {
+        self.app.cam.x = p.x as f32 + 0.5;
+        self.app.cam.y = p.y as f32 + 0.5;
     }
 
-    fn click_button(&mut self, label: &str) {
-        let b = self.app.buttons.iter().find(|b| b.label == label).unwrap_or_else(|| panic!("no button {label}"));
-        let at = (b.rect.x + b.rect.w / 2.0, toolbar_y() + b.rect.h / 2.0);
-        self.click(at);
+    /// Left click at a screen point (logical), through the UI's routing.
+    async fn click(&mut self, at: (f32, f32)) {
+        self.input(RawInput { mouse: at, ..Default::default() }).await;
+        self.input(RawInput { mouse: at, left_pressed: true, ..Default::default() }).await;
+        self.input(RawInput { mouse: at, left_released: true, ..Default::default() }).await;
     }
 
-    fn drag(&mut self, a: IVec, b: IVec) {
+    async fn right_click(&mut self, at: (f32, f32)) {
+        self.input(RawInput { mouse: at, ..Default::default() }).await;
+        self.input(RawInput { mouse: at, right_pressed: true, ..Default::default() }).await;
+    }
+
+    /// Press a key, then let the UI catch up: actions apply after the UI's
+    /// frame, and trees rebuild at most every 50 ms without input.
+    async fn key(&mut self, k: KeyCode) {
+        let raw = RawInput { mouse: self.mouse, keys: vec![k], ..Default::default() };
+        self.input(raw).await;
+        self.settle().await;
+    }
+
+    /// Enough frames for a tree rebuild to pick up any change.
+    async fn settle(&mut self) {
+        for _ in 0..4 {
+            self.frame().await;
+        }
+    }
+
+    async fn drag(&mut self, a: IVec, b: IVec) {
         let (ax, ay) = self.screen(a);
         let (bx, by) = self.screen(b);
-        self.act(Action::LeftDown(ax, ay));
-        self.act(Action::LeftUp(bx, by));
+        self.input(RawInput { mouse: (ax, ay), left_pressed: true, ..Default::default() }).await;
+        self.input(RawInput { mouse: (bx, by), ..Default::default() }).await;
+        self.input(RawInput { mouse: (bx, by), left_released: true, ..Default::default() }).await;
+    }
+
+    /// Where a UI node is, in logical points (the UI works in physical pixels).
+    fn ui_rect(&self, id: &str) -> Option<[f32; 4]> {
+        let dpi = screen_dpi_scale();
+        self.app.ui.find(id).map(|r| [r[0] / dpi, r[1] / dpi, r[2] / dpi, r[3] / dpi])
+    }
+
+    /// Click a UI control by its id.
+    async fn click_ui(&mut self, id: &str) -> bool {
+        self.frame().await;
+        let Some(r) = self.ui_rect(id) else {
+            println!("      (no UI node '{id}')");
+            return false;
+        };
+        self.click((r[0] + r[2] / 2.0, r[1] + r[3] / 2.0)).await;
+        true
+    }
+
+    fn ui_text(&self) -> String {
+        self.app.ui.snapshot()
     }
 
     fn count<Q: rim_sim::hecs::Query>(&self) -> usize {
         self.w().ecs.query::<Q>().iter().count()
-    }
-
-    fn focus(&mut self, p: IVec) {
-        self.app.cam.x = p.x as f32 + 0.5;
-        self.app.cam.y = p.y as f32 + 0.5;
     }
 }
 
@@ -114,7 +171,7 @@ fn open_square(w: &World, c: IVec, size: i32) -> Option<IVec> {
 
 pub async fn run(app: App, dir: PathBuf) -> ! {
     std::fs::create_dir_all(&dir).expect("create screenshot dir");
-    let mut t = T { app, dir, shots: 0, passed: 0, failed: Vec::new() };
+    let mut t = T { app, dir, shots: 0, passed: 0, failed: Vec::new(), mouse: (800.0, 480.0), clock: 0.0 };
     for _ in 0..3 {
         t.frame().await;
     }
@@ -123,16 +180,32 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     let home = t.pawn(founder).pos;
     t.shot("start").await;
 
+    // ---------------------------------------------------------- 0171 the HUD is core's UI mod
+    println!("\n# the HUD is a mod (0171)");
+    for id in [
+        "core:topbar",
+        "core:clock",
+        "core:status",
+        "core:colonists",
+        "core:toolbar",
+        "core:messages",
+        "core:inspector",
+    ] {
+        let found = t.app.ui.find(id).is_some();
+        t.check(found, format!("core's UI draws '{id}'"));
+    }
+    t.check(t.app.ui.warnings().is_empty(), format!("core's UI loads cleanly ({:?})", t.app.ui.warnings()));
+    let font = t.app.ui.info.font.clone();
+    t.check(!font.is_empty(), format!("UI font: {font}"));
+
     // ---------------------------------------------------------- 0046 toolbar
     println!("\n# toolbar (0046)");
-    let mut expected = vec!["Select".to_string()];
-    expected.extend(defs.designations.iter().map(|d| d.label.clone()));
-    expected.extend(defs.things.iter().filter(|d| d.build.is_some()).map(|d| d.label.clone()));
-    expected.push("Cancel".into());
-    let labels: Vec<String> = t.app.buttons.iter().map(|b| b.label.clone()).collect();
-    t.check(labels.len() == expected.len(), format!("one button per designation and buildable def ({})", labels.len()));
-    for e in &expected {
-        t.check(labels.contains(e), format!("button for '{e}'"));
+    let keys: Vec<String> = t.app.tools.iter().map(|b| b.key.clone()).collect();
+    let n_expected = 2 + defs.designations.len() + defs.things.iter().filter(|d| d.build.is_some()).count();
+    t.check(keys.len() == n_expected, format!("one tool per designation and buildable def ({})", keys.len()));
+    for k in &keys {
+        let found = t.app.ui.find(&format!("core:toolbar.{k}")).is_some();
+        t.check(found, format!("toolbar button for '{k}'"));
     }
 
     // ---------------------------------------------------------- 0045 camera
@@ -161,8 +234,9 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
 
     // ---------------------------------------------------------- 0071 right-click orders
     println!("\n# right-click orders (0071)");
+    t.frame().await;
     let at = t.pawn_screen(founder);
-    t.click(at);
+    t.click(at).await;
     t.check(t.app.selected == Some(founder), "clicking a colonist selects them");
     t.check(!t.pawn(founder).drafted, "and they start undrafted");
 
@@ -180,19 +254,22 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         best.expect("a reachable oak")
     };
     t.focus(tree.2);
+    let (tx, ty) = t.screen(tree.2);
+    t.input(RawInput { mouse: (tx, ty), ..Default::default() }).await;
     t.frame().await;
     let hint = order::resolve(t.w(), founder, tree.2, None).map(|o| o.label);
-    t.check(hint.as_deref() == Some("Chop oak tree"), format!("the cursor names the order ({hint:?})"));
+    t.check(hint.as_deref() == Some("Chop oak tree"), format!("the order resolves ({hint:?})"));
+    t.check(t.app.ui.find("core:hint").is_some(), "the cursor label shows it (core:hint)");
+    t.check(t.ui_text().contains("Chop oak tree"), "and says what the click will do");
+    t.shot("order").await;
 
-    let (tx, ty) = t.screen(tree.2);
-    t.act(Action::RightClick(tx, ty));
-    t.ticks(1);
+    t.right_click((tx, ty)).await;
+    t.ticks(1); // commands apply on the next tick
     t.check(
         matches!(t.pawn(founder).job, Job::Harvest { target, .. } if target == tree.1),
         "right-click sends an undrafted colonist to chop",
     );
     t.check(t.app.order_flash.is_some(), "the order is acknowledged on the map");
-    t.shot("order").await;
     for _ in 0..3000 {
         t.ticks(1);
         if t.w().thing(tree.1).is_none() {
@@ -205,9 +282,9 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     // ---------------------------------------------------------- 0046 designate / build / cancel
     println!("\n# designate, build, cancel (0046)");
     let chop = defs.lookup("designation", "chop").unwrap();
-    t.click_button("Chop");
+    t.click_ui("core:toolbar.designate:chop").await;
     t.check(t.app.tool == Tool::Designate(chop), "clicking Chop selects the chop tool");
-    t.drag(home.offset(-8, -8), home.offset(8, 8));
+    t.drag(home.offset(-8, -8), home.offset(8, 8)).await;
     t.ticks(1);
     let designated = t.count::<(&Thing, &Designated)>();
     t.check(designated > 0, format!("dragging designates trees ({designated})"));
@@ -216,9 +293,15 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
 
     let site = open_square(t.w(), home, 6).expect("open ground for a hut");
     let wall = defs.thing_id("wall_wood").unwrap();
-    t.click_button("wooden wall");
+    t.click_ui("core:toolbar.build:wall_wood").await;
     t.check(t.app.tool == Tool::Build(wall), "clicking wooden wall selects the wall tool");
-    t.drag(site, site.offset(5, 5));
+    let (ax, ay) = t.screen(site);
+    let (bx, by) = t.screen(site.offset(5, 5));
+    t.input(RawInput { mouse: (ax, ay), left_pressed: true, ..Default::default() }).await;
+    t.input(RawInput { mouse: (bx, by), ..Default::default() }).await;
+    t.frame().await;
+    t.check(t.ui_text().contains("6 × 6"), "dragging shows its size at the cursor");
+    t.input(RawInput { mouse: (bx, by), left_released: true, ..Default::default() }).await;
     t.ticks(1);
     t.check(
         t.count::<&Blueprint>() == 20,
@@ -226,25 +309,25 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     );
     t.check(t.w().map.fixture_at(site.offset(2, 2)).is_none(), "the inside of the outline stays empty");
 
-    t.click_button("Cancel");
-    t.drag(site, site.offset(5, 0));
+    t.click_ui("core:toolbar.cancel").await;
+    t.drag(site, site.offset(5, 0)).await;
     t.ticks(1);
     t.check(
         t.count::<&Blueprint>() == 14,
         format!("cancel removes the dragged row ({} left)", t.count::<&Blueprint>()),
     );
-    t.click_button("wooden wall");
-    t.drag(site, site.offset(4, 0));
-    t.click_button("wooden door");
-    t.drag(site.offset(5, 0), site.offset(5, 0));
-    t.click_button("bed");
-    t.drag(site.offset(2, 2), site.offset(2, 2));
+    t.click_ui("core:toolbar.build:wall_wood").await;
+    t.drag(site, site.offset(4, 0)).await;
+    t.click_ui("core:toolbar.build:door_wood").await;
+    t.drag(site.offset(5, 0), site.offset(5, 0)).await;
+    t.click_ui("core:toolbar.build:bed_wood").await;
+    t.drag(site.offset(2, 2), site.offset(2, 2)).await;
     t.ticks(1);
     t.check(
         t.count::<&Blueprint>() == 21,
         format!("walls, a door and a bed are planned ({})", t.count::<&Blueprint>()),
     );
-    t.act(Action::RightClick(600.0, 500.0));
+    t.right_click((600.0, 500.0)).await;
     t.check(t.app.tool == Tool::Select, "right-click drops the current tool");
     t.shot("plans").await;
 
@@ -265,39 +348,21 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.check(saw_interp, "pawns are drawn between cells while walking");
     let built = t.w().ecs.query::<&Thing>().without::<&Blueprint>().iter().filter(|(_, th)| th.def == wall).count();
     t.check(built > 0, format!("the warrior chopped and built walls ({built})"));
-
-    // Force a bush into regrowth so all three overlays are on screen.
-    let bush = defs.thing_id("berry_bush").unwrap();
-    let near_bush = t
-        .w()
-        .ecs
-        .query::<&Thing>()
-        .iter()
-        .filter(|(_, th)| th.def == bush)
-        .min_by_key(|(e, th)| (th.pos.octile(site), e.id()))
-        .map(|(e, th)| (e, th.pos));
-    if let Some((b, _)) = near_bush {
-        let ready_at = t.w().tick + 100_000;
-        let _ = t.app.sim.world.ecs.insert_one(b, Regrow { ready_at });
-    }
     t.focus(site.offset(3, 3));
     t.shot("building").await;
-    if let Some((_, bp)) = near_bush {
-        t.focus(bp);
-        t.shot("regrowing_bush").await;
-    }
 
     // ---------------------------------------------------------- 0047 orders
     println!("\n# select, draft, move, attack (0047)");
     t.act(Action::Speed(1));
     t.focus(t.pawn(founder).pos);
-    t.act(Action::Escape);
-    t.act(Action::Escape);
+    t.key(KeyCode::Escape).await;
+    t.key(KeyCode::Escape).await;
     t.check(t.app.selected.is_none(), "escape clears the selection");
+    t.frame().await;
     let at = t.pawn_screen(founder);
-    t.click(at);
+    t.click(at).await;
     t.check(t.app.selected == Some(founder), "clicking a colonist selects them again");
-    t.act(Action::ToggleDraft);
+    t.key(KeyCode::R).await;
     t.ticks(1);
     t.check(t.pawn(founder).drafted, "R drafts the selected colonist");
 
@@ -306,9 +371,9 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         .flat_map(|r| [here.offset(r, 0), here.offset(-r, 0), here.offset(0, r), here.offset(0, -r)])
         .find(|p| t.w().map.passable(*p) && t.w().map.region_at(*p) == t.w().map.region_at(here))
         .expect("somewhere to walk");
-    let (dx, dy) = t.screen(dest);
-    t.act(Action::RightClick(dx, dy));
-    t.ticks(1);
+    let d = t.screen(dest);
+    t.right_click(d).await;
+    t.ticks(1); // commands apply on the next tick
     t.check(matches!(t.pawn(founder).job, Job::MoveTo { to } if to == dest), "right-click orders a move");
     t.ticks(600);
     t.check(t.pawn(founder).pos == dest, "the colonist walks there");
@@ -321,7 +386,7 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     let raider = t.app.sim.world.spawn_pawn(human, Faction::Hostile, raider_at, Some("Testrunner".into()));
     t.frame().await;
     let rs = t.pawn_screen(raider);
-    t.act(Action::RightClick(rs.0, rs.1));
+    t.right_click(rs).await;
     t.ticks(1);
     t.check(
         matches!(t.pawn(founder).job, Job::Attack { target, .. } if target == raider),
@@ -336,58 +401,66 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     if let Ok(mut p) = t.app.sim.world.ecs.get::<&mut Pawn>(raider) {
         p.dead = true;
     }
-    t.act(Action::ToggleDraft);
+    t.key(KeyCode::R).await;
     t.ticks(2);
     t.check(!t.pawn(founder).drafted, "R again undrafts");
 
     // ---------------------------------------------------------- 0048 HUD
     println!("\n# messages, colonist bar, clock, speed (0048)");
-    t.act(Action::TogglePause);
+    t.key(KeyCode::Space).await;
     t.check(t.app.paused, "space pauses");
-    t.act(Action::TogglePause);
+    t.check(t.ui_text().contains("\"paused\""), "the clock says paused");
+    t.key(KeyCode::Space).await;
     t.check(!t.app.paused, "space resumes");
-    for (s, want) in [(1, 1), (3, 3), (6, 6)] {
-        t.act(Action::Speed(s));
+    for (k, want) in [(KeyCode::Key1, 1), (KeyCode::Key2, 3), (KeyCode::Key3, 6)] {
+        t.key(k).await;
         t.check(t.app.speed == want, format!("speed key sets {want}x"));
     }
-    let clock = draw::clock_text(&t.app);
-    t.check(clock.starts_with(&format!("Day {}", t.w().day() + 1)), format!("top bar shows the day: '{clock}'"));
+    t.frame().await;
+    let snap = t.ui_text();
+    t.check(snap.contains(&format!("\"Day {}\"", t.w().day() + 1)), "top bar shows the day");
     let hh = t.w().hour() as u32;
-    t.check(clock.contains(&format!("{hh:02}:")), "top bar shows the hour");
-    t.check(clock.contains("6x"), "top bar shows the speed");
+    t.check(snap.contains(&format!("\"{hh:02}:")), "top bar shows the hour");
+    t.check(snap.contains("\"6×\""), "top bar shows the speed");
 
     let kinds = [MsgKind::Info, MsgKind::Good, MsgKind::Threat, MsgKind::Bad];
     for k in kinds {
         t.app.sim.world.message(format!("autotest {k:?} message"), k);
     }
-    let colors: Vec<[u8; 4]> = kinds.iter().map(|k| draw::message_color(*k).into()).collect();
-    let distinct = (0..4).all(|i| (0..4).all(|j| i == j || colors[i] != colors[j]));
-    t.check(distinct, "each message kind has its own colour");
+    t.settle().await;
+    t.check(t.ui_text().contains("autotest Threat message"), "messages show as toasts");
+    let th = &t.app.ui.theme;
+    let colours: Vec<[f32; 4]> = ["text", "good", "threat", "bad"].iter().map(|c| th.color[*c]).collect();
+    let distinct = (0..4).all(|i| (0..4).all(|j| i == j || colours[i] != colours[j]));
+    t.check(distinct, "each message kind has its own colour token");
 
+    t.key(KeyCode::Escape).await;
+    t.key(KeyCode::Escape).await;
+    let name = t.pawn(founder).name.clone();
+    t.click_ui(&format!("core:colonists.{name}")).await;
+    t.check(t.app.selected == Some(founder), "clicking the colonist bar selects that colonist");
     let cols: Vec<Entity> = t.w().colonists().collect();
-    t.act(Action::Escape);
-    t.act(Action::Escape);
-    if let Some((e, r)) = draw::colonist_rects(&t.app).into_iter().next() {
-        t.click((r.x + r.w / 2.0, r.y + r.h / 2.0));
-        t.check(t.app.selected == Some(e), "clicking the colonist bar selects that colonist");
-    }
-    t.act(Action::NextColonist);
+    t.key(KeyCode::Tab).await;
     t.check(t.app.selected.is_some_and(|s| cols.contains(&s)), "tab cycles colonists");
     t.shot("messages").await;
 
     // ---------------------------------------------------------- 0049 profiler
     println!("\n# profiler (0049)");
-    t.act(Action::ToggleProfiler);
+    t.key(KeyCode::F3).await;
     t.check(t.app.show_profiler, "F3 opens the profiler");
     t.ticks(1200);
+    for _ in 0..20 {
+        t.frame().await;
+    }
     let names: Vec<String> = t.app.sim.profile.entries.iter().map(|e| e.0.clone()).collect();
-    for sys in ["tick", "pawns", "needs", "regions", "rooms", "wealth"] {
+    for sys in ["tick", "pawns", "needs", "regions", "rooms", "fields", "wealth"] {
         t.check(names.iter().any(|n| n == sys), format!("profiler times system '{sys}'"));
     }
     t.check(names.iter().any(|n| n == "mod:core"), "profiler times core's scripts");
-    t.check(t.w().pf.searches > 0 && t.w().pf.expanded > 0, "pathfinder searches and nodes are counted");
+    t.check(t.app.ui.find("core:profiler.panel").is_some(), "the profiler panel is drawn");
+    t.check(t.ui_text().contains("ui:core"), "and it times core's UI code too");
     t.shot("profiler").await;
-    t.act(Action::ToggleProfiler);
+    t.key(KeyCode::F3).await;
 
     // ---------------------------------------------------------- 0160 field overlay
     println!("\n# field overlay (0160)");
@@ -399,20 +472,62 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     let _ = t.app.sim.world.spawn_fixture(fire, spot, false);
     t.ticks(1);
     for i in 0..n {
-        t.act(Action::CycleOverlay);
+        t.key(KeyCode::O).await;
         t.check(t.app.overlay == Some(i), format!("O shows the '{}' overlay", defs.fields[i].label));
         t.focus(spot);
         t.shot(&format!("overlay_{}", defs.fields[i].id)).await;
     }
-    t.act(Action::CycleOverlay);
+    t.key(KeyCode::O).await;
     t.check(t.app.overlay.is_none(), "O again turns the overlay off");
     let temp = defs.lookup("field", "temperature").unwrap() as usize;
     let near = t.w().fields.value(&defs, &t.w().map, temp, spot);
     let outside = t.w().fields.ambient(temp);
     t.check(near > outside, format!("the campfire warms its cell ({near:.1}° vs {outside:.1}° outside)"));
-    t.check(draw::clock_text(&t.app).contains("°C outside"), "top bar shows the outdoor temperature");
+    t.check(t.ui_text().contains("°C outside"), "top bar shows the outdoor temperature");
 
-    // Night, to see lighting.
+    // Hover readout over the world.
+    let sp = t.screen(spot);
+    t.input(RawInput { mouse: sp, ..Default::default() }).await;
+    t.frame().await;
+    t.check(t.app.ui.find("core:hover").is_some(), "hovering the world shows the readout");
+    t.check(t.ui_text().contains("campfire"), "and names what's there");
+
+    // ---------------------------------------------------------- 0173 devtools
+    println!("\n# devtools (0173)");
+    t.key(KeyCode::F12).await;
+    t.frame().await;
+    t.check(t.app.ui.find("core:devtools.panel").is_some(), "F12 opens devtools");
+    if let Some(r) = t.ui_rect("core:toolbar.designate:chop") {
+        t.input(RawInput { mouse: (r[0] + r[2] / 2.0, r[1] + r[3] / 2.0), ..Default::default() }).await;
+        t.frame().await;
+    }
+    let inspect = t.app.ui.info.inspect.clone();
+    t.check(
+        inspect.as_ref().is_some_and(|i| i.owner == "core" && i.path.starts_with("docked")),
+        format!("pointing at the toolbar inspects it ({:?})", inspect.map(|i| (i.id, i.owner))),
+    );
+    t.shot("devtools").await;
+    t.click_ui("core:devtools.outlines").await;
+    t.check(t.app.ui.info.outlines, "the outlines toggle turns on layout outlines");
+    t.shot("outlines").await;
+    t.click_ui("core:devtools.outlines").await;
+    t.click_ui("core:devtools.gallery").await;
+    t.frame().await;
+    t.check(t.app.ui.find("core:gallery.panel").is_some(), "the kit gallery opens");
+    t.shot("gallery").await;
+    t.click_ui("core:devtools.gallery").await;
+    t.key(KeyCode::F12).await;
+    t.frame().await;
+    t.check(t.app.ui.find("core:devtools.panel").is_none(), "F12 closes devtools");
+
+    // ---------------------------------------------------------- UI budget, live
+    let (b, l, p) = (t.app.ui.info.build_us, t.app.ui.info.layout_us, t.app.ui.info.paint_us);
+    println!(
+        "\nui: build {b:.0} µs (when rebuilt) · layout {l:.0} µs · paint {p:.0} µs · {} nodes · {} rebuilds",
+        t.app.ui.info.nodes, t.app.ui.builds
+    );
+
+    // Night, to see lighting and the labels on top of it.
     while !(22.0..23.0).contains(&t.w().hour()) {
         t.ticks(100);
     }

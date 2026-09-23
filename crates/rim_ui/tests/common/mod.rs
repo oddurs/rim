@@ -61,7 +61,10 @@ pub fn centre(r: [f32; 4]) -> (f32, f32) {
 }
 
 /// A mods directory with core plus extra mods written by the test.
-pub fn scratch_mods(name: &str, extra: &[(&str, &str, &[(&str, &str)])]) -> PathBuf {
+/// (mod id, extra mod.toml lines, files to write as (path, contents)).
+pub type ExtraMod<'a> = (&'a str, &'a str, &'a [(&'a str, &'a str)]);
+
+pub fn scratch_mods(name: &str, extra: &[ExtraMod]) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("rim-ui-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     copy_dir(&mods().join("core"), &dir.join("core"));

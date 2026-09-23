@@ -20,7 +20,12 @@ plugins, including the base game (`mods/core`):
 | Native | WASM (planned)                        |                                          |
 
 `mods/wildlife_plus` is a small example plugin that uses both working tiers:
-it adds a creature, patches a core def, and registers a storyteller incident.
+it adds a creature, patches a core def, registers a storyteller incident, and
+adds a readout to the top bar.
+
+The interface is a mod too. The whole HUD lives in `mods/core/ui/`, written in
+Luau on a small UI engine (`crates/rim_ui`), and any mod can extend, replace,
+wrap or remove any part of it. See [Modding the interface](docs/modding/ui.md).
 
 ## Run
 
@@ -43,6 +48,7 @@ cargo run --release -p rim_client -- --autotest                   # drive every 
 | Tab / C              | next colonist / center on selected |
 | O                    | cycle field overlays (temperature, light, ...) |
 | F3                   | profiler, load order, mod warnings |
+| F12                  | UI devtools: inspect any element, outlines, kit gallery |
 
 ## Design and roadmap
 

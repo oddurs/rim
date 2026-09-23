@@ -95,15 +95,26 @@ pub fn layout(root: &Node, avail: (f32, f32), origin: (f32, f32), text: &mut Tex
             root_id,
             Size { width: AvailableSpace::Definite(avail.0), height: AvailableSpace::Definite(avail.1) },
             |input, _id, ctx, _style| {
-                let Some(Some(m)) = ctx else { return taffy::LayoutOutput::from_outer_size(Size::ZERO) };
-                let width = match (input.known_dimensions.width, input.available_space.width) {
+                let known = input.known_dimensions;
+                // Childless boxes (spacers) have no content of their own, but
+                // once flex has sized them the answer must be that size.
+                let Some(Some(m)) = ctx else {
+                    return taffy::LayoutOutput::from_outer_size(Size {
+                        width: known.width.unwrap_or(0.0),
+                        height: known.height.unwrap_or(0.0),
+                    });
+                };
+                let width = match (known.width, input.available_space.width) {
                     (Some(w), _) => Some(w),
                     (None, AvailableSpace::Definite(w)) if m.wrap => Some(w),
                     _ => None,
                 };
                 let s = text.shape(&m.text, m.size, m.weight, if m.wrap { width } else { None });
                 let w = if m.wrap { width.unwrap_or(s.width).min(s.width.max(1.0)) } else { s.width };
-                taffy::LayoutOutput::from_outer_size(Size { width: w, height: s.height })
+                taffy::LayoutOutput::from_outer_size(Size {
+                    width: known.width.unwrap_or(w),
+                    height: known.height.unwrap_or(s.height),
+                })
             },
         )
         .unwrap();
@@ -131,10 +142,19 @@ pub fn natural_size(root: &Node, max: (f32, f32), text: &mut Text) -> (f32, f32)
             root_id,
             Size { width: AvailableSpace::MaxContent, height: AvailableSpace::MaxContent },
             |input, _id, ctx, _style| {
-                let Some(Some(m)) = ctx else { return taffy::LayoutOutput::from_outer_size(Size::ZERO) };
-                let width = input.known_dimensions.width.or(if m.wrap { Some(max.0) } else { None });
+                let known = input.known_dimensions;
+                let Some(Some(m)) = ctx else {
+                    return taffy::LayoutOutput::from_outer_size(Size {
+                        width: known.width.unwrap_or(0.0),
+                        height: known.height.unwrap_or(0.0),
+                    });
+                };
+                let width = known.width.or(if m.wrap { Some(max.0) } else { None });
                 let s = text.shape(&m.text, m.size, m.weight, width);
-                taffy::LayoutOutput::from_outer_size(Size { width: s.width, height: s.height })
+                taffy::LayoutOutput::from_outer_size(Size {
+                    width: known.width.unwrap_or(s.width),
+                    height: known.height.unwrap_or(s.height),
+                })
             },
         )
         .unwrap();

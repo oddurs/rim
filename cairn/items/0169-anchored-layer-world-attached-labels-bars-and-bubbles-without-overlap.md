@@ -2,12 +2,13 @@
 id: 169
 title: 'Anchored layer: world-attached labels, bars and bubbles without overlap'
 type: feature
-status: planned
+status: done
 milestone: interface
 depends_on:
 - 168
 created: 2026-09-23
 updated: 2026-09-23
+closed_at: 2026-09-23
 priority: p1
 api: none
 effort: m
@@ -27,8 +28,12 @@ Anchored nodes attach to an entity or a cell and follow the camera. A placement 
 
 ## Acceptance criteria
 
-- [ ] Two adjacent pawns' names never overlap (test with a crowd of 10)
-- [ ] Priority order: selected, colonists, hostiles, others
-- [ ] Offscreen anchors cost nothing
-- [ ] A bubble component with lifetime and tail; core shows one when a colonist joins
-- [ ] 50 anchored labels under 0.2 ms per frame
+- [x] Two adjacent pawns' names never overlap (test with a crowd of 10)
+- [x] Priority order: selected, colonists, hostiles, others
+- [x] Offscreen anchors cost nothing
+- [x] A bubble component with lifetime and tail; core shows one when a colonist joins
+- [x] 50 anchored labels under 0.2 ms per frame
+
+## 2026-09-23
+
+mods/core/ui/labels.luau. Placement tries 12 slots away from the anchor by priority (selected, colonists, hostiles, others) and drops a label rather than overlap (test: 10 colonists on two cells). Offscreen anchors are skipped. Bubbles with a tail say hello when a colonist joins. Anchored layouts are cached by content. Verified by `cargo test -p rim_ui` (15 engine tests, headless) and `rim --autotest` (92/92, screenshots reviewed).

@@ -2,12 +2,13 @@
 id: 173
 title: 'UI devtools (F12): inspect any element'
 type: feature
-status: planned
+status: done
 milestone: interface
 depends_on:
 - 171
 created: 2026-09-23
 updated: 2026-09-23
+closed_at: 2026-09-23
 priority: p1
 api: none
 effort: m
@@ -27,7 +28,11 @@ F12 toggles an inspector: hover highlights the node under the cursor and shows i
 
 ## Acceptance criteria
 
-- [ ] Hovering any element shows id, owning mod and layout box
-- [ ] Tree view of the whole UI, collapsible
-- [ ] Layout-bounds outline toggle
-- [ ] Devtools are themselves a core UI component (dogfood)
+- [x] Hovering any element shows id, owning mod and layout box
+- [x] Tree view of the whole UI, collapsible
+- [x] Layout-bounds outline toggle
+- [x] Devtools are themselves a core UI component (dogfood)
+
+## 2026-09-23
+
+mods/core/ui/devtools.luau: inspect (id, owner, kind, box, path), layout outlines, the whole tree with owners, kit gallery. Screenshots reviewed. Verified by `cargo test -p rim_ui` (15 engine tests, headless) and `rim --autotest` (92/92, screenshots reviewed).

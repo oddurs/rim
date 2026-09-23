@@ -27,12 +27,12 @@ ui.define("core:labels", function(view)
 				kind = "anchored",
 				entity = p.id,
 				priority = priority,
-				offset = p.radius / 1 + 4,
+				offset = p.radius + 4,
 				kit.label(p.name, { size = "small", color = COLOR[p.faction] or "text", weight = if p.selected then "strong" else nil }),
 			})
 		end
 		if p.asleep then
-			table.insert(out, { kind = "anchored", entity = p.id, priority = -1, offset = -(p.radius + 2), kit.label("z", { size = "small", color = "muted" }) })
+			table.insert(out, { kind = "anchored", entity = p.id, priority = -1, offset = -(p.radius + 2), kit.label("z", { weight = "strong" }) })
 		end
 		if recent[p.id] then
 			table.insert(out, {

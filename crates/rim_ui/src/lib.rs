@@ -74,6 +74,9 @@ struct LayerOut {
     all: Vec<(Rect, usize, Vec<usize>)>,
 }
 
+/// A laid-out tree: its layout hash, the space it had, and its rects.
+type CachedLayout = (u64, (f32, f32), Vec<Rect>);
+
 /// Layers bottom to top.
 const LAYERS: &[&str] = &["anchored", "docked", "windows", "cursor", "modal", "tooltip"];
 const TOOLTIP_DELAY: f64 = 0.45;
@@ -113,7 +116,7 @@ pub struct Ui {
     pressed: Option<u64>,
     focused: Option<u64>,
     scroll: HashMap<u64, f32>,
-    cache: HashMap<String, (u64, (f32, f32), Vec<Rect>)>,
+    cache: HashMap<String, CachedLayout>,
     pub info: EngineInfo,
     pub devtools: bool,
     ids: HashMap<String, Rect>,
@@ -158,8 +161,15 @@ impl Ui {
     /// `dpi` is the display's pixel ratio; `user_scale` the player's UI scale.
     pub fn new(mods: Vec<ModDir>, dpi: f32, user_scale: f32) -> Result<Ui, String> {
         let dirs: Vec<(String, &std::path::Path)> = mods.iter().map(|m| (m.id.clone(), m.dir.as_path())).collect();
-        let theme = Theme::load(&dirs, total_scale(dpi, user_scale));
+        let mut theme = Theme::load(&dirs, total_scale(dpi, user_scale));
         let text = Text::new(if theme.font.is_empty() { None } else { Some(theme.font.as_str()) })?;
+        if let Some(want) = &text.info.missing {
+            let by = theme.set_by.get("font.family").cloned().unwrap_or_default();
+            theme.warnings.push(format!(
+                "{by}/ui/theme.toml: font '{want}' is not installed; using the system UI font ({})",
+                text.info.family
+            ));
+        }
         let vm = UiVm::load(&mods);
         let info = EngineInfo { font: format!("{} ({})", text.info.family, text.info.source), ..Default::default() };
         let reload_stamp = stamp(&mods);
@@ -346,8 +356,10 @@ impl Ui {
             }
         }
 
-        // Keyboard focus: Tab cycles focusable elements, Enter activates.
-        if input.tab {
+        // Keyboard focus: once a UI control has focus (it was clicked or
+        // tabbed to), Tab cycles focusable elements and Enter activates. Tab
+        // with nothing focused belongs to the game (next colonist).
+        if input.tab && self.focused.is_some() {
             let focusables: Vec<(u64, &'static str, Vec<usize>)> = self
                 .layers
                 .iter()
@@ -536,6 +548,9 @@ impl Ui {
                     if let Some(id) = &n.id {
                         ids.insert(id.to_string(), r);
                     }
+                    if let Some(aka) = &n.aka {
+                        ids.insert(aka.to_string(), r);
+                    }
                     lo.all.push((r, 0, p.to_vec()));
                 });
                 if self.devtools && self.info.outlines && layer != "tooltip" {
@@ -596,6 +611,11 @@ impl Ui {
         out.actions = actions;
         out.draw = draw;
         out
+    }
+
+    /// Give the keyboard back to the game (Escape).
+    pub fn blur(&mut self) {
+        self.focused = None;
     }
 
     /// Devtools: toggle layout-box outlines.
@@ -823,6 +843,7 @@ fn plain(key: u64, style: Style, children: Vec<Node>) -> Node {
     Node {
         kind: Kind::Box,
         id: None,
+        aka: None,
         owner: Rc::from("rim"),
         key: key.wrapping_mul(0x9E37_79B9_7F4A_7C15),
         style,

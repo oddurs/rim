@@ -11,20 +11,27 @@ use rim_ui::Input;
 fn shell_docks_regions_to_the_edges() {
     let sim = sim_at(&mods());
     let mut ui = ui_for(&sim);
-    let cv = client(&sim);
+    let mut cv = client(&sim);
+    cv.hover_cell = sim.world.colony_center();
     frame(&mut ui, &sim, &cv, Default::default());
     let top = ui.find("core:topbar").expect("top bar laid out");
     let bottom = ui.find("core:toolbar.buttons").expect("toolbar laid out");
     assert_eq!(top[1], 0.0, "top bar sits at the top");
     assert!((top[2] - 1600.0).abs() < 1.0, "top bar spans the width: {top:?}");
     assert!((bottom[1] + bottom[3] - 960.0).abs() < 1.0, "toolbar sits at the bottom: {bottom:?}");
+    // Docked panels sit against their edges, not merely somewhere inside.
+    let near = |a: f32, b: f32| (a - b).abs() <= 12.0;
     let inspector = ui.find("core:inspector").unwrap();
-    assert!(
-        inspector[0] < 20.0 && inspector[1] + inspector[3] < bottom[1],
-        "inspector docks bottom-left above the toolbar"
-    );
+    assert!(inspector[0] < 12.0, "inspector docks left: {inspector:?}");
+    assert!(near(inspector[1] + inspector[3], bottom[1]), "inspector sits on the toolbar: {inspector:?} vs {bottom:?}");
     let messages = ui.find("core:messages").unwrap();
-    assert!(messages[1] >= top[1] + top[3], "messages start below the top bar");
+    assert!(near(messages[1], top[1] + top[3]), "messages start just under the top bar: {messages:?}");
+    let hover = ui.find("core:hover").unwrap();
+    assert!(near(hover[0] + hover[2], 1600.0), "hover readout docks right: {hover:?}");
+    assert!(near(hover[1] + hover[3], bottom[1]), "hover readout sits on the toolbar: {hover:?}");
+    // Grown boxes take their share: the top bar's spacer pushes the help text right.
+    let right = ui.find("core:topbar.right").unwrap();
+    assert!(right[0] > 600.0, "the top bar's spacer should grow: {right:?}");
 }
 
 #[test]
@@ -308,10 +315,20 @@ fn tab_moves_focus_and_enter_clicks() {
     let mut ui = ui_for(&sim);
     let cv = client(&sim);
     frame(&mut ui, &sim, &cv, Default::default());
+    // Tab with nothing focused is the game's (next colonist).
     let out = frame(&mut ui, &sim, &cv, Input { tab: true, ..Default::default() });
-    assert!(out.captured_keys, "tab should move focus into the UI");
+    assert!(!out.captured_keys, "tab with no UI focus should go to the game");
+    // Click a toolbar button: it takes focus; Tab moves on; Enter activates.
+    let select = ui.find("core:toolbar.select").unwrap();
+    let mut cv2 = cv.clone();
+    click(&mut ui, &sim, &mut cv2, centre(select));
+    let out = frame(&mut ui, &sim, &cv, Input { tab: true, ..Default::default() });
+    assert!(out.captured_keys, "tab should move focus between UI controls");
     let out = frame(&mut ui, &sim, &cv, Input { enter: true, ..Default::default() });
     assert!(!out.actions.is_empty(), "enter should activate the focused button");
+    ui.blur();
+    let out = frame(&mut ui, &sim, &cv, Input { tab: true, ..Default::default() });
+    assert!(!out.captured_keys, "after blur, tab goes back to the game");
 }
 
 #[test]
@@ -398,4 +415,79 @@ fn whole_ui_fits_the_frame_budget_with_30_colonists() {
     assert!((20..=45).contains(&built), "expected ~20 Hz rebuilds (40 in 2 s), got {built}");
     assert!(m_all < 1.0, "median frame {m_all:.3} ms (budget 1 ms)");
     assert!(m_build < 2.0, "median rebuild frame {m_build:.3} ms");
+}
+
+#[test]
+fn wildlife_plus_extends_the_top_bar() {
+    // The shipped example plugin changes core's HUD through ui.extend.
+    let sim = sim_at(&mods());
+    let mut ui = ui_for(&sim);
+    let cv = client(&sim);
+    frame(&mut ui, &sim, &cv, Default::default());
+    let wild = sim
+        .world
+        .pawns
+        .iter()
+        .filter(|&&e| {
+            sim.world.ecs.get::<&rim_sim::world::Pawn>(e).is_ok_and(|p| p.faction == rim_sim::world::Faction::Wild)
+        })
+        .count();
+    assert!(ui.snapshot().contains(&format!("\"wildlife {wild}\"")), "{}", ui.snapshot());
+    let counter = ui.find("wildlife_plus:counter").expect("counter laid out");
+    let top = ui.find("core:topbar").unwrap();
+    assert!(counter[1] >= top[1] && counter[1] + counter[3] <= top[1] + top[3], "the counter sits in the top bar");
+    let top_tree = &ui.last_trees.iter().find(|(id, _)| id == "core:topbar").unwrap().1;
+    fn owner_of(n: &rim_ui::node::Node, id: &str) -> Option<String> {
+        if n.id.as_deref() == Some(id) {
+            return Some(n.owner.to_string());
+        }
+        n.children.iter().find_map(|c| owner_of(c, id))
+    }
+    assert_eq!(owner_of(top_tree, "wildlife_plus:counter").as_deref(), Some("wildlife_plus"));
+}
+
+/// Every Luau sample in the UI modding guide loads and builds cleanly, so
+/// the guide can't drift from what the engine accepts.
+#[test]
+fn guide_samples_run() {
+    let guide = std::fs::read_to_string(mods().join("../docs/modding/ui.md")).unwrap();
+    let blocks: Vec<&str> = guide.split("```lua\n").skip(1).map(|b| b.split("```").next().unwrap()).collect();
+    assert!(blocks.len() >= 4, "found {} samples", blocks.len());
+    for (i, block) in blocks.iter().enumerate() {
+        let file = format!("ui/sample{i}.luau");
+        let dir = scratch_mods(&format!("guide{i}"), &[("my_mod", "", &[(file.as_str(), block)])]);
+        let sim = sim_at(&dir);
+        let mut ui = ui_for(&sim);
+        let mut cv = client(&sim);
+        cv.hover_cell = sim.world.colony_center();
+        frame(&mut ui, &sim, &cv, Default::default());
+        let problems: Vec<String> = ui.warnings();
+        assert!(problems.is_empty(), "guide sample {i} failed:\n{block}\n{problems:#?}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+#[test]
+fn a_theme_can_name_a_font_and_a_missing_one_falls_back() {
+    // Ask for whatever family the system UI font resolved to: it exists here.
+    let sim = sim_at(&mods());
+    let system = ui_for(&sim).text.info.family.clone();
+    let dir =
+        scratch_mods("font", &[("typeface", "", &[("ui/theme.toml", &format!("[font]\nfamily = \"{system}\"\n"))])]);
+    let ui = ui_for(&sim_at(&dir));
+    assert_eq!(ui.text.info.family, system);
+    assert!(ui.text.info.source.starts_with("family"), "the theme's family should be used: {}", ui.text.info.source);
+    assert!(ui.warnings().is_empty(), "{:#?}", ui.warnings());
+    let _ = std::fs::remove_dir_all(&dir);
+
+    let dir =
+        scratch_mods("nofont", &[("typeface", "", &[("ui/theme.toml", "[font]\nfamily = \"No Such Font 9000\"\n")])]);
+    let ui = ui_for(&sim_at(&dir));
+    assert_eq!(ui.text.info.family, system, "falls back to the system UI font");
+    assert!(
+        ui.warnings().iter().any(|w| w.contains("typeface") && w.contains("No Such Font 9000")),
+        "{:#?}",
+        ui.warnings()
+    );
+    let _ = std::fs::remove_dir_all(&dir);
 }

@@ -90,6 +90,9 @@ pub struct Node {
     pub kind: Kind,
     /// Namespaced id (`core:clock`), if the component gave one.
     pub id: Option<Rc<str>>,
+    /// The component id, when a component's root carries its own id: the
+    /// node answers to both.
+    pub aka: Option<Rc<str>>,
     /// The mod whose code built this node.
     pub owner: Rc<str>,
     /// Stable key for hover, press, focus and scroll state.
@@ -310,6 +313,7 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
     let mut n = Node {
         kind: Kind::Box,
         id: None,
+        aka: None,
         owner: ctx.owner.clone(),
         key,
         style: Style::default(),
@@ -469,6 +473,7 @@ pub fn error_node(theme: &Theme, owner: Rc<str>, key: u64, what: &str, err: &str
     let text = Node {
         kind: Kind::Text,
         id: None,
+        aka: None,
         owner: owner.clone(),
         key: mix(key, 99),
         style: Style::default(),
@@ -496,6 +501,7 @@ pub fn error_node(theme: &Theme, owner: Rc<str>, key: u64, what: &str, err: &str
     Node {
         kind: Kind::Box,
         id: None,
+        aka: None,
         owner,
         key,
         style: Style {
