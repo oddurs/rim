@@ -398,7 +398,7 @@ pub fn message_color(kind: MsgKind) -> Color {
 pub fn colonist_rects(app: &App) -> Vec<(Entity, Rect)> {
     let cols: Vec<Entity> = app.sim.world.colonists().collect();
     // Start after the clock, however long mods make it.
-    let mut x = measure_text(&clock_text(app), None, 20, 1.0).width + 30.0;
+    let mut x = measure_text(clock_text(app), None, 20, 1.0).width + 30.0;
     cols.into_iter()
         .map(|e| {
             let name = app.sim.world.ecs.get::<&Pawn>(e).map(|p| p.name.clone()).unwrap_or_default();
