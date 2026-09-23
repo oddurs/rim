@@ -29,12 +29,11 @@ The headless engine: defs, mod loading and patching, map, pathing, AI skeleton, 
 
 ## castaway — Castaway
 
-`######····` 59% · 10 of 17 done · due 2026-10-15
+`#######···` 65% · 11 of 17 done · due 2026-10-15
 
 First playable vertical slice. One warrior, harvest, build, eat, sleep, animals, melee, raids and wanderers from a Luau storyteller. Two mods loaded: core and an example plugin.
 
 - [ ] `0051` Balance the first three days <sup>spike · p1 · s · core</sup>
-- [ ] `0040` Wild animals: wander, flee, retaliate, predators <sup>feature · p1 · m · engine</sup>
 - [ ] `0045` Client: camera, terrain, things and pawns with viewport culling <sup>feature · p0 · l · client</sup>
 - [ ] `0046` Client: data-driven toolbar from designation and buildable defs <sup>feature · p0 · m · client</sup>
 - [ ] `0047` Client: selection, draft, move and attack orders <sup>feature · p0 · m · client</sup>
@@ -45,6 +44,7 @@ First playable vertical slice. One warrior, harvest, build, eat, sleep, animals,
 - [x] `0037` Blueprints: deliver materials, then construct <sup>feature · p0 · m · engine</sup>
 - [x] `0038` Needs: food and rest, starvation and healing <sup>feature · p0 · m · engine</sup>
 - [x] `0039` Melee combat, death and butchering <sup>feature · p0 · m · engine</sup>
+- [x] `0040` Wild animals: wander, flee, retaliate, predators <sup>feature · p1 · m · engine</sup>
 - [x] `0041` Core content: terrain, plants, rocks, items, walls, door, bed, campfire <sup>content · p0 · m · core</sup>
 - [x] `0042` Core creatures: human, deer, hare, wolf <sup>content · p0 · s · core</sup>
 - [x] `0043` Storyteller as a Luau plugin with a shared incident registry <sup>feature · p0 · m · core</sup>
