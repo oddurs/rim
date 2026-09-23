@@ -1,0 +1,143 @@
+//! Layout: a node tree in, one rectangle per node (pre-order) out.
+//!
+//! Flexbox via taffy; text leaves are measured through the shaping cache.
+//! The caller caches results by the tree's layout hash and the available
+//! size, so an unchanged frame skips layout entirely.
+
+use crate::node::{Align, Kind, Len, Node};
+use crate::text::Text;
+use taffy::prelude::*;
+use taffy::{Overflow, Point};
+
+/// x, y, w, h in physical pixels.
+pub type Rect = [f32; 4];
+
+fn dim(l: Len) -> Dimension {
+    match l {
+        Len::Auto => Dimension::auto(),
+        Len::Px(v) => Dimension::length(v),
+        Len::Frac(f) => Dimension::percent(f),
+    }
+}
+
+fn lpa(v: Option<f32>) -> LengthPercentageAuto {
+    v.map_or(LengthPercentageAuto::auto(), LengthPercentageAuto::length)
+}
+
+fn align_items(a: Align) -> AlignItems {
+    match a {
+        Align::Start => AlignItems::FLEX_START,
+        Align::Center => AlignItems::CENTER,
+        Align::End => AlignItems::FLEX_END,
+        Align::Stretch | Align::Between => AlignItems::STRETCH,
+    }
+}
+
+fn justify(a: Align) -> JustifyContent {
+    match a {
+        Align::Start => JustifyContent::FLEX_START,
+        Align::Center => JustifyContent::CENTER,
+        Align::End => JustifyContent::FLEX_END,
+        Align::Stretch | Align::Between => JustifyContent::SPACE_BETWEEN,
+    }
+}
+
+/// What a text leaf needs to be measured.
+struct Measure {
+    text: String,
+    size: f32,
+    weight: u16,
+    wrap: bool,
+}
+
+fn build(taffy: &mut TaffyTree<Option<Measure>>, n: &Node) -> NodeId {
+    let s = &n.style;
+    let style = Style {
+        flex_direction: if s.row { FlexDirection::Row } else { FlexDirection::Column },
+        gap: Size { width: LengthPercentage::length(s.gap), height: LengthPercentage::length(s.gap) },
+        padding: taffy::Rect {
+            top: LengthPercentage::length(s.pad[0]),
+            right: LengthPercentage::length(s.pad[1]),
+            bottom: LengthPercentage::length(s.pad[2]),
+            left: LengthPercentage::length(s.pad[3]),
+        },
+        size: Size { width: dim(s.w), height: dim(s.h) },
+        min_size: Size { width: lpa(s.min_w), height: lpa(s.min_h) },
+        max_size: Size { width: lpa(s.max_w), height: lpa(s.max_h) },
+        flex_grow: s.grow,
+        // Text never shrinks below its content; boxes may.
+        flex_shrink: if n.kind == Kind::Text { 0.0 } else { 1.0 },
+        align_items: s.align.map(align_items),
+        justify_content: s.justify.map(justify),
+        overflow: if n.kind == Kind::Scroll {
+            Point { x: Overflow::Visible, y: Overflow::Scroll }
+        } else {
+            Point { x: Overflow::Visible, y: Overflow::Visible }
+        },
+        scrollbar_width: 0.0,
+        ..Default::default()
+    };
+    if let Some(t) = &n.text {
+        let m = Measure { text: t.text.clone(), size: t.size, weight: t.weight, wrap: t.wrap };
+        return taffy.new_leaf_with_context(style, Some(m)).unwrap();
+    }
+    let kids: Vec<NodeId> = n.children.iter().map(|c| build(taffy, c)).collect();
+    taffy.new_with_children(style, &kids).unwrap()
+}
+
+/// Lay out `root` within `avail` (width, height) with its top-left at `origin`.
+/// Returns one rectangle per node, in pre-order.
+pub fn layout(root: &Node, avail: (f32, f32), origin: (f32, f32), text: &mut Text) -> Vec<Rect> {
+    let mut taffy: TaffyTree<Option<Measure>> = TaffyTree::new();
+    let root_id = build(&mut taffy, root);
+    taffy
+        .compute_layout_with_measure(
+            root_id,
+            Size { width: AvailableSpace::Definite(avail.0), height: AvailableSpace::Definite(avail.1) },
+            |input, _id, ctx, _style| {
+                let Some(Some(m)) = ctx else { return taffy::LayoutOutput::from_outer_size(Size::ZERO) };
+                let width = match (input.known_dimensions.width, input.available_space.width) {
+                    (Some(w), _) => Some(w),
+                    (None, AvailableSpace::Definite(w)) if m.wrap => Some(w),
+                    _ => None,
+                };
+                let s = text.shape(&m.text, m.size, m.weight, if m.wrap { width } else { None });
+                let w = if m.wrap { width.unwrap_or(s.width).min(s.width.max(1.0)) } else { s.width };
+                taffy::LayoutOutput::from_outer_size(Size { width: w, height: s.height })
+            },
+        )
+        .unwrap();
+    let mut out = Vec::new();
+    collect(&taffy, root_id, origin, &mut out);
+    out
+}
+
+fn collect(taffy: &TaffyTree<Option<Measure>>, id: NodeId, origin: (f32, f32), out: &mut Vec<Rect>) {
+    let l = taffy.layout(id).unwrap();
+    let (x, y) = (origin.0 + l.location.x, origin.1 + l.location.y);
+    out.push([x, y, l.size.width, l.size.height]);
+    for c in taffy.children(id).unwrap() {
+        collect(taffy, c, (x, y), out);
+    }
+}
+
+/// Measure a tree's natural size without constraints (anchored labels,
+/// tooltips, cursor labels).
+pub fn natural_size(root: &Node, max: (f32, f32), text: &mut Text) -> (f32, f32) {
+    let mut taffy: TaffyTree<Option<Measure>> = TaffyTree::new();
+    let root_id = build(&mut taffy, root);
+    taffy
+        .compute_layout_with_measure(
+            root_id,
+            Size { width: AvailableSpace::MaxContent, height: AvailableSpace::MaxContent },
+            |input, _id, ctx, _style| {
+                let Some(Some(m)) = ctx else { return taffy::LayoutOutput::from_outer_size(Size::ZERO) };
+                let width = input.known_dimensions.width.or(if m.wrap { Some(max.0) } else { None });
+                let s = text.shape(&m.text, m.size, m.weight, width);
+                taffy::LayoutOutput::from_outer_size(Size { width: s.width, height: s.height })
+            },
+        )
+        .unwrap();
+    let l = taffy.layout(root_id).unwrap();
+    (l.size.width.min(max.0), l.size.height.min(max.1))
+}

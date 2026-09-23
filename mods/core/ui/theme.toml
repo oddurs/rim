@@ -1,0 +1,50 @@
+# Core theme: every visual value the UI uses. Plain and minimal:
+# translucent dark surfaces over the world, 1 px hairlines, one accent.
+# Any mod can override a token in its own ui/theme.toml.
+# Sizes are logical pixels; the engine multiplies by DPI and UI scale.
+
+[font]
+family = ""        # empty: the operating system's UI font
+
+[space]            # a 4 px grid
+xxs = 1
+xs = 2
+s = 4
+m = 8
+l = 12
+xl = 16
+xxl = 24
+
+[text]
+small = 11
+body = 13
+heading = 15
+title = 20
+
+[weight]
+regular = 400
+strong = 600
+
+[shape]
+radius = 4
+border = 1
+
+[color]
+surface = "#121417d9"
+surface_raised = "#1c1f24f2"
+surface_hover = "#272b31f2"
+surface_press = "#30353cf2"
+line = "#ffffff1c"
+line_strong = "#ffffff38"
+text = "#e7e7e4"
+muted = "#91969c"
+faint = "#62676d"
+accent = "#5ab4ff"
+accent_soft = "#5ab4ff2e"
+good = "#72d282"
+threat = "#ff6b5a"
+bad = "#ffb35a"
+player = "#5ab4ff"
+hostile = "#ff6b5a"
+track = "#ffffff14"
+backdrop = "#00000073"

@@ -58,7 +58,6 @@ First playable vertical slice. One warrior, harvest, build, eat, sleep, animals,
 A two-week sprint. The whole HUD moves out of Rust into `mods/core/ui/`, written in Luau on a small UI engine, so any mod can extend, replace, wrap or remove any part of the interface. Design: DESIGN.md §11.
 
 - [ ] `0082` UI mod operations: extend, replace, wrap and remove by id <sup>feature · p0 · m · client</sup>
-- [ ] `0162` UI stack: taffy layout, cosmic-text and a second Luau VM on macroquad <sup>spike · p0 · s · client</sup>
 - [ ] `0163` System UI font: discovery, shaping and a glyph atlas <sup>feature · p0 · m · client</sup>
 - [ ] `0164` Theme tokens: ui/theme.toml, mod patches and UI scale <sup>feature · p0 · s · client</sup>
 - [ ] `0165` UI engine: node tree, flexbox layout and batched drawing <sup>feature · p0 · l · client</sup>
@@ -71,6 +70,7 @@ A two-week sprint. The whole HUD moves out of Rust into `mods/core/ui/`, written
 - [ ] `0172` Hot reload of UI scripts and theme <sup>feature · p1 · s · tooling</sup>
 - [ ] `0173` UI devtools (F12): inspect any element <sup>feature · p1 · m · tooling</sup>
 - [ ] `0174` UI modding guide <sup>docs · p2 · s · tooling</sup>
+- [ ] `0162` UI stack: taffy layout, cosmic-text and a second Luau VM on macroquad <sup>spike · p0 · s · client</sup>
 
 ## shelter — Shelter
 

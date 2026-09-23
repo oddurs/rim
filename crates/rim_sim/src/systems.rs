@@ -77,6 +77,7 @@ pub fn deaths(w: &mut World) {
                 let who = if cd.intelligent { format!("Raider {}", p.name) } else { format!("The {}", cd.label) };
                 w.message(format!("{who} fled."), MsgKind::Info);
             }
+            w.note_event("left", e, &p.name);
             w.events.push(GameEvent::PawnLeft { id: e, name: p.name, def: p.def, faction: p.faction });
             continue;
         }
@@ -102,6 +103,7 @@ pub fn deaths(w: &mut World) {
             Faction::Hostile if cd.intelligent => w.message(format!("Raider {} was killed.", p.name), MsgKind::Info),
             _ => {}
         }
+        w.note_event("died", e, &p.name);
         w.events.push(GameEvent::PawnDied { id: e, name: p.name, def: p.def, faction: p.faction, pos: p.pos });
     }
     if !w.colony_lost && w.tick > 0 && w.colonists().next().is_none() {

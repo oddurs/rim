@@ -1,0 +1,17 @@
+[package]
+name = "rim_ui"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/oddurs/rim"
+
+# The UI engine: Luau component trees in, a draw list and a glyph atlas out.
+# No renderer dependency, so layout, text, input and the VM test headless.
+
+[dependencies]
+rim_sim = { path = "../rim_sim" }
+taffy = "0.14"
+cosmic-text = "0.19"
+mlua = { version = "0.10", features = ["luau"] }
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
