@@ -49,3 +49,7 @@ Tick: n/a
 ## 2026-09-24
 
 Filed from the Building sprint (0215). Same class as 0136: CI rolls dice on something unrelated to the change under test. Two CI cycles on PR #20 were spent proving the branch was not slower (it is 5% faster locally).
+
+## Proposed status: backlog -> dropped (Oddur Sigurdsson, 2026-09-24)
+
+Superseded by #23 (3d06bcd): the test now multiplies its budgets by a CI slack factor, which is the first of the three fixes this item listed. A slow enough runner can still trip it, so the criteria are not strictly met -- dropping is a judgement, hence a proposal rather than a close.
