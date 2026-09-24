@@ -182,7 +182,7 @@ The run gets a shape: eras, storyteller tiers, defensive strength in the threat 
 
 ## plugin-api — Plugin API
 
-`##········` 18% · 4 of 22 done · due 2027-02-01
+`###·······` 23% · 5 of 22 done · due 2027-02-01
 
 The API grows up: stat pipeline, script components, custom jobs, needs and def kinds, modules and custom events, a real sandbox with hard limits, factions as data, rim test, typed API. Everything Mood needs, and everything DESIGN.md §10 says a mod from a stranger's repo must be safe to do.
 
@@ -201,13 +201,13 @@ The API grows up: stat pipeline, script components, custom jobs, needs and def k
 - [ ] `eb2c9422` Which platforms beyond desktop, and what do they cost? <sup>spike · p2 · s · engine</sup>
 - [ ] `ebb814ad` Sky bodies: a cycle input and coloured sky terms <sup>feature · p2 · m · engine</sup>
 - [ ] `ed876ad7` Monochrome icon set with mod-supplied icons <sup>feature · p2 · m · core</sup>
-- [ ] `f6e18475` Mod modules: require("@mod/path") limited to declared dependencies <sup>feature · p0 · m · engine</sup>
 - [ ] `fdafcb10` Custom jobs and work givers from Luau <sup>feature · p0 · l · engine</sup>
 - [ ] `fecf1c87` Custom needs with script satisfiers <sup>feature · p0 · m · engine</sup>
 - [x] `1c626720` Custom namespaced events: rim.emit and rim.on("mod:event") <sup>feature · p0 · s · engine</sup>
 - [x] `3eb7e697` Luau VM runs without sandbox mode, and the rim table is writable by any mod <sup>bug · p0 · s · engine</sup>
 - [x] `6191b800` Luau type definitions for the rim API <sup>docs · p2 · m · tooling</sup>
 - [x] `ded7881a` Deterministic math in scripts: replace library trig and exp <sup>feature · p1 · s · engine</sup>
+- [x] `f6e18475` Mod modules: require("@mod/path") limited to declared dependencies <sup>feature · p0 · m · engine</sup>
 
 ## mood — Mood
 
