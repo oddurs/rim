@@ -61,6 +61,7 @@ cargo dist                                                        # a shipping b
 
 ## Modding and engineering docs
 
+- [Patching defs](docs/modding/patches.md): change another mod's data, including lists, without owning it.
 - [Scripting rules](docs/modding/scripting.md): the Luau sandbox, limits and determinism.
 - [Script API reference](docs/modding/api-scripts.md): every `rim` function, generated from the engine, and editor setup.
 - [Modding the interface](docs/modding/ui.md) and [climate and weather](docs/modding/weather.md).
