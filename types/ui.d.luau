@@ -16,6 +16,7 @@ type Node = {
     handle: ("move" | "resize" | "close")?,
     src: string?, tint: boolean?,
     value: string?, placeholder: string?, on_change: ((text: string) -> ())?, on_submit: ((text: string) -> ())?,
+    on_key: ((key: string) -> ())?,
     on_drag: ((fx: number, fy: number) -> ())?,
     [number]: any,
 }
@@ -80,7 +81,7 @@ declare ui: {
     grid: (props: GridProps) -> Node,
     -- A picture from a mod's ui/img: { src = "mod:name", tint = true }. Its own size unless w/h say otherwise; tint draws it in the text colour. A name@2x.png beside name.png is used on dense displays.
     image: (node: Node) -> Node,
-    -- A line of text the player edits: { id = ..., value = ..., placeholder = ..., on_change = fn(text), on_submit = fn(text) }. The engine keeps the buffer by id across rebuilds and reloads; click to focus, Escape to leave.
+    -- A line of text the player edits: { id = ..., value = ..., placeholder = ..., on_change = fn(text), on_submit = fn(text), on_key = fn("up" | "down") }. The engine keeps the buffer by id across rebuilds and reloads; click to focus, Escape to leave.
     input: (node: Node) -> Node,
     -- Whether a window is open.
     is_open: (id: string) -> boolean,
@@ -100,6 +101,8 @@ declare ui: {
     run: (id: string) -> (),
     -- A column that scrolls.
     scroll: (node: Node?) -> Node,
+    -- Replace what a text input holds, caret at the end (the buffer is otherwise the player's).
+    set_input: (id: string, text: string) -> (),
     -- Keep a value across rebuilds.
     set_state: (key: string, value: any) -> (),
     -- An extension point other mods fill with ui.extend.

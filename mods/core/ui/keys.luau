@@ -44,6 +44,9 @@ ui.bind("core:palette", { key = "ctrl+k", label = t("core:keys.palette", "Comman
 	local opening = not ui.is_open("core:palette")
 	ui.toggle("core:palette")
 	if opening then
+		ui.set_input("core:palette.query", "")
+		ui.set_state("core:palette.query", "")
+		ui.set_state("core:palette.sel", 1)
 		ui.focus("core:palette.query")
 	end
 end)
@@ -67,8 +70,12 @@ end
 
 ui.window("core:palette", { title = t("core:palette.title", "Commands"), w = 440, h = 360 }, function(view)
 	local query = ui.state("core:palette.query", "")
+	local found = matches(query)
+	-- The arrows move a selection; Enter runs it. It stays in range as
+	-- the query narrows.
+	local sel = math.clamp(ui.state("core:palette.sel", 1), 1, math.max(1, #found))
 	local rows = {}
-	for _, b in matches(query) do
+	for i, b in found do
 		table.insert(
 			rows,
 			kit.row({
@@ -78,6 +85,7 @@ ui.window("core:palette", { title = t("core:palette.title", "Commands"), w = 440
 				gap = "m",
 				align = "center",
 				radius = "radius",
+				bg = if i == sel then "surface_hover" else nil,
 				hover = { bg = "surface_hover" },
 				on_click = function()
 					run(b.id)
@@ -99,11 +107,17 @@ ui.window("core:palette", { title = t("core:palette.title", "Commands"), w = 440
 			w = 400,
 			on_change = function(text)
 				ui.set_state("core:palette.query", text)
+				ui.set_state("core:palette.sel", 1)
+			end,
+			on_key = function(key)
+				local n = #matches(ui.state("core:palette.query", ""))
+				local at = ui.state("core:palette.sel", 1)
+				ui.set_state("core:palette.sel", math.clamp(at + (if key == "down" then 1 else -1), 1, math.max(1, n)))
 			end,
 			on_submit = function(text)
-				local first = matches(text)[1]
-				if first then
-					run(first.id)
+				local pick = matches(text)[math.clamp(ui.state("core:palette.sel", 1), 1, math.huge)]
+				if pick then
+					run(pick.id)
 				end
 			end,
 		}),

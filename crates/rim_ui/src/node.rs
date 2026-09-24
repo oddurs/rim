@@ -54,6 +54,9 @@ pub struct InputData {
     pub placeholder: bool,
     pub on_change: Option<Function>,
     pub on_submit: Option<Function>,
+    /// Keys the buffer has no use for ("up", "down"), for whatever the
+    /// input steers.
+    pub on_key: Option<Function>,
 }
 
 /// One cell of a grid, as the component's `cell(r, c)` described it.
@@ -488,7 +491,7 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
     let mut tint = false;
     let mut value = String::new();
     let mut placeholder = String::new();
-    let (mut on_change, mut on_submit) = (None, None);
+    let (mut on_change, mut on_submit, mut on_key) = (None, None, None);
     let mut n = Node {
         kind: Kind::Box,
         id: None,
@@ -615,6 +618,7 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
             "placeholder" => placeholder = string("placeholder", &v)?,
             "on_change" => on_change = Some(function("on_change", v)?),
             "on_submit" => on_submit = Some(function("on_submit", v)?),
+            "on_key" => on_key = Some(function("on_key", v)?),
             "on_drag" => n.on_drag = Some(function("on_drag", v)?),
             "handle" => {
                 n.handle = Some(match string("handle", &v)?.as_str() {
@@ -670,7 +674,7 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
             },
             wrap: false,
         });
-        n.input = Some(InputData { value, placeholder: empty, on_change, on_submit });
+        n.input = Some(InputData { value, placeholder: empty, on_change, on_submit, on_key });
         n.focusable = true;
     }
     if kind == Kind::Text {

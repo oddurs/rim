@@ -30,7 +30,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `ui.focus` | `(id: string) -> ()` | Give a node (a text input) the keyboard once it is laid out. |
 | `ui.grid` | `(props: GridProps) -> Node` | Rows by cols of cells the engine paints as one node. cell(r, c) describes each cell at build; on_press(r, c) returns the value a drag paints and on_paint(r, c, value) runs once per cell the drag enters. |
 | `ui.image` | `(node: Node) -> Node` | A picture from a mod's ui/img: { src = "mod:name", tint = true }. Its own size unless w/h say otherwise; tint draws it in the text colour. A name@2x.png beside name.png is used on dense displays. |
-| `ui.input` | `(node: Node) -> Node` | A line of text the player edits: { id = ..., value = ..., placeholder = ..., on_change = fn(text), on_submit = fn(text) }. The engine keeps the buffer by id across rebuilds and reloads; click to focus, Escape to leave. |
+| `ui.input` | `(node: Node) -> Node` | A line of text the player edits: { id = ..., value = ..., placeholder = ..., on_change = fn(text), on_submit = fn(text), on_key = fn("up" \| "down") }. The engine keeps the buffer by id across rebuilds and reloads; click to focus, Escape to leave. |
 | `ui.is_open` | `(id: string) -> boolean` | Whether a window is open. |
 | `ui.list` | `(props: ListProps) -> Node` | A scroll area that builds only the rows on screen. Needs an id, count, row_h and row(i); spacers stand in for the rows above and below. |
 | `ui.mount` | `(layer: Layer, id: string, opts: { order: number?, align: string?, refresh: ("frame" \| "fast" \| "slow")? }?) -> ()` | Show a component on a screen layer. refresh says how often it is rebuilt when nothing forces it: every frame, twenty times a second (the default) or four. |
@@ -40,6 +40,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `ui.row` | `(node: Node?) -> Node` | A row: children left to right. |
 | `ui.run` | `(id: string) -> ()` | Run a bound action, as its key would. |
 | `ui.scroll` | `(node: Node?) -> Node` | A column that scrolls. |
+| `ui.set_input` | `(id: string, text: string) -> ()` | Replace what a text input holds, caret at the end (the buffer is otherwise the player's). |
 | `ui.set_state` | `(key: string, value: any) -> ()` | Keep a value across rebuilds. |
 | `ui.slot` | `(id: string) -> Node` | An extension point other mods fill with ui.extend. |
 | `ui.spacer` | `(node: Node?) -> Node` | Empty space that grows. |

@@ -195,6 +195,8 @@ struct Registry {
     key_overrides: HashMap<String, String>,
     /// A handler asked for a node to take keyboard focus.
     focus_req: Option<String>,
+    /// A handler set an input's text; the engine replaces its buffer.
+    input_sets: Vec<(String, String)>,
 }
 
 /// A loaded mod: id, directory, and which mods it may `require`.
@@ -552,6 +554,15 @@ impl UiVm {
                     Some(f) => f.call::<()>(()),
                     None => Err(rt(format!("ui.run: no action '{id}'"))),
                 }
+            })?,
+        )?;
+        // ui.set_input(id, text): replace what an input holds, caret at the end.
+        let r = self.reg.clone();
+        ui.set(
+            "set_input",
+            lua.create_function(move |_, (id, text): (String, String)| {
+                r.borrow_mut().input_sets.push((id, text));
+                Ok(())
             })?,
         )?;
         // ui.focus(id): give a node (a text input) the keyboard.
@@ -1140,6 +1151,10 @@ impl UiVm {
         let mut v: Vec<(String, String)> = reg.key_overrides.iter().map(|(a, b)| (a.clone(), b.clone())).collect();
         v.sort();
         v
+    }
+
+    pub fn take_input_sets(&mut self) -> Vec<(String, String)> {
+        std::mem::take(&mut self.reg.borrow_mut().input_sets)
     }
 
     pub fn take_focus_req(&mut self) -> Option<String> {

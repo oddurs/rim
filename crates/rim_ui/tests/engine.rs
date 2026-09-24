@@ -820,6 +820,96 @@ fn a_mods_bound_action_fires_from_its_key_and_from_the_palette() {
 }
 
 #[test]
+fn the_palette_moves_its_selection_with_the_arrows_and_starts_clean() {
+    use rim_ui::Key;
+    let dir = scratch_mods("palettesel", &[("probe", "", &[("ui/bind.luau", BIND_MOD)])]);
+    let sim = sim_at(&dir);
+    let mut ui = ui_for(&sim);
+    let cv = client(&sim);
+    frame(&mut ui, &sim, &cv, Default::default());
+    let mut t = 1.0;
+    press(&mut ui, &sim, &cv, &mut t, "ctrl+k");
+    // The second row is core:speed1; Down once selects it, Enter runs it.
+    t += 0.1;
+    let out = frame(&mut ui, &sim, &cv, Input { keys: vec![Key::Down], time: t, ..Default::default() });
+    assert!(out.captured_keys);
+    t += 0.1;
+    frame(&mut ui, &sim, &cv, Input { time: t, ..Default::default() });
+    assert_eq!(ui.edit_state("core:palette.query").map(|e| e.text.as_str()), Some(""), "the arrow typed nothing");
+    t += 0.1;
+    let out = frame(&mut ui, &sim, &cv, Input { enter: true, time: t, ..Default::default() });
+    t += 0.1;
+    frame(&mut ui, &sim, &cv, Input { time: t, ..Default::default() });
+    assert!(out.actions.iter().any(|a| matches!(a, UiAction::Speed(1))), "ran the selected row: {:?}", out.actions);
+    assert!(!ui.is_open("core:palette"));
+    // Reopened, the query is empty and the selection at the top, whatever was typed before.
+    press(&mut ui, &sim, &cv, &mut t, "ctrl+k");
+    for c in "pau".chars() {
+        t += 0.1;
+        frame(&mut ui, &sim, &cv, Input { keys: vec![Key::Char(c)], time: t, ..Default::default() });
+    }
+    assert_eq!(ui.edit_state("core:palette.query").map(|e| e.text.as_str()), Some("pau"));
+    ui.close_window("core:palette");
+    t += 0.1;
+    frame(&mut ui, &sim, &cv, Input { time: t, ..Default::default() });
+    assert!(!ui.is_open("core:palette"));
+    press(&mut ui, &sim, &cv, &mut t, "ctrl+k");
+    assert!(ui.is_open("core:palette"));
+    assert_eq!(ui.edit_state("core:palette.query").map(|e| e.text.as_str()), Some(""), "starts clean");
+    assert!(ui.find("core:palette.core:speed1").is_some(), "unfiltered again");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_text_leaf_measures_and_draws_inside_its_padding() {
+    let dir = scratch_mods(
+        "textpad",
+        &[(
+            "probe",
+            "",
+            &[(
+                "ui/pad.luau",
+                r#"
+ui.define("probe:pad", function(view)
+    return ui.row({ gap = 0, pad = 0, align = "start",
+        ui.text({ "plain", id = "probe:plain" }),
+        ui.text({ "padded", id = "probe:padded", pad = 6, bg = "surface" }),
+        ui.input({ id = "probe:in", value = "typed", pad = 6, padx = 10 }),
+    })
+end)
+ui.mount("windows", "probe:pad")
+"#,
+            )],
+        )],
+    );
+    let sim = sim_at(&dir);
+    let mut ui = ui_for(&sim);
+    let cv = client(&sim);
+    let out = frame(&mut ui, &sim, &cv, Default::default());
+    let plain = ui.find("probe:plain").unwrap();
+    let padded = ui.find("probe:padded").unwrap();
+    let input = ui.find("probe:in").unwrap();
+    assert_eq!(padded[3], plain[3] + 12.0, "padding is part of the box's height");
+    assert_eq!(input[3], plain[3] + 12.0);
+    assert!(input[2] > plain[2] + 20.0, "and its width");
+    // The glyphs of the padded text start inside the padding.
+    let first_glyph_x = out
+        .draw
+        .iter()
+        .filter_map(|d| match d {
+            Draw::Glyphs { quads, .. } => quads.first().map(|q| q.dst),
+            _ => None,
+        })
+        .filter(|q| {
+            q[1] >= padded[1] && q[1] < padded[1] + padded[3] && q[0] >= padded[0] && q[0] < padded[0] + padded[2]
+        })
+        .map(|q| q[0])
+        .fold(f32::MAX, f32::min);
+    assert!(first_glyph_x >= padded[0] + 6.0, "text starts after the left padding: {first_glyph_x} vs {}", padded[0]);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn two_mods_binding_one_key_is_reported() {
     let dir = scratch_mods(
         "bindconflict",

@@ -66,6 +66,8 @@ pub enum Key {
     Delete,
     Left,
     Right,
+    Up,
+    Down,
     Home,
     End,
     Escape,
@@ -386,12 +388,12 @@ impl Ui {
     }
 
     /// The focused node, if it is a text input: its id and handlers.
-    fn focused_input(&self) -> Option<(String, Option<mlua::Function>, Option<mlua::Function>)> {
+    fn focused_input(&self) -> Option<(String, node::InputData)> {
         let f = self.focused?;
         let (layer, h) = self.hit_by_key(f)?;
         let n = self.node_at(layer, h.path[0], &h.path[1..])?;
         let input = n.input.as_ref()?;
-        Some((n.id.as_deref()?.to_string(), input.on_change.clone(), input.on_submit.clone()))
+        Some((n.id.as_deref()?.to_string(), input.clone()))
     }
 
     /// Open windows in stacking order, bottom first.
@@ -779,7 +781,7 @@ impl Ui {
         // A focused text input takes every key: characters edit the buffer,
         // Enter submits, Escape gives the keyboard back.
         let mut enter = input.enter;
-        if let Some((id, on_change, on_submit)) = self.focused_input() {
+        if let Some((id, inp)) = self.focused_input() {
             out.captured_keys = true;
             let mut changed = false;
             let e = self.edits.entry(id.clone()).or_default();
@@ -795,17 +797,25 @@ impl Ui {
                     Key::Right => e.right(input.shift),
                     Key::Home => e.home(input.shift),
                     Key::End => e.end(input.shift),
+                    // Not the buffer's: the input's on_key hears them (a
+                    // list under a query moves its selection).
+                    Key::Up | Key::Down => {
+                        if let Some(f) = &inp.on_key {
+                            let name = if *k == Key::Up { "up" } else { "down" };
+                            handlers.push(Call::Text { f: f.clone(), text: name.to_string() });
+                        }
+                    }
                     Key::Escape => self.focused = None,
                 }
             }
             let text = e.text.clone();
             if changed {
-                if let Some(f) = on_change {
+                if let Some(f) = inp.on_change {
                     handlers.push(Call::Text { f, text: text.clone() });
                 }
             }
             if enter {
-                if let Some(f) = on_submit {
+                if let Some(f) = inp.on_submit {
                     handlers.push(Call::Text { f, text });
                 }
                 enter = false;
@@ -906,6 +916,9 @@ impl Ui {
         self.screen = client.screen;
         if let Some(id) = self.vm.take_focus_req() {
             self.focus_pending = Some(id);
+        }
+        for (id, text) in self.vm.take_input_sets() {
+            self.edits.insert(id, edit::EditState::at_end(&text));
         }
         let ops = self.vm.take_window_ops();
         let windows_changed = !ops.is_empty();

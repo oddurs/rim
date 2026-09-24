@@ -7,7 +7,7 @@
 use crate::node::{Align, Kind, Len, Node};
 use crate::text::Text;
 use taffy::prelude::*;
-use taffy::style::ExpandedDimension;
+use taffy::style::{ExpandedDimension, ExpandedLengthPercentage};
 use taffy::{Overflow, Point};
 
 /// x, y, w, h in physical pixels.
@@ -123,17 +123,26 @@ fn measure(
             height: known.height.unwrap_or_else(|| fixed(style.size.height)),
         });
     };
+    // A text leaf's padding is part of its box: the text sits inside it
+    // (paint offsets by the same amount), so an input has room around its
+    // line and a padded label measures as a padded label.
+    let pad = |lp: LengthPercentage| match lp.expand() {
+        ExpandedLengthPercentage::Length(v) => v,
+        _ => 0.0,
+    };
+    let (px, py) =
+        (pad(style.padding.left) + pad(style.padding.right), pad(style.padding.top) + pad(style.padding.bottom));
     let width = match (known.width, input.available_space.width) {
-        (Some(w), _) => Some(w),
-        (None, AvailableSpace::Definite(w)) if m.wrap && fit => Some(w),
-        _ if m.wrap => wrap_at,
+        (Some(w), _) => Some(w - px),
+        (None, AvailableSpace::Definite(w)) if m.wrap && fit => Some(w - px),
+        _ if m.wrap => wrap_at.map(|w| w - px),
         _ => None,
     };
     let s = text.shape(&m.text, m.size, m.weight, if m.wrap { width } else { None });
     let w = if m.wrap && fit { width.unwrap_or(s.width).min(s.width.max(1.0)) } else { s.width };
     taffy::LayoutOutput::from_outer_size(Size {
-        width: known.width.unwrap_or(w),
-        height: known.height.unwrap_or(s.height),
+        width: known.width.unwrap_or(w + px),
+        height: known.height.unwrap_or(s.height + py),
     })
 }
 
