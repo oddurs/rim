@@ -108,6 +108,24 @@ Exposure makes shelter matter: warmth, enclosed rooms, day/night, weather. Get f
 - [x] `0071` Prioritize: right-click to force a job <sup>feature · p1 · l · engine</sup>
 - [x] `0160` Field layers: data-driven scalar grids (temperature, light, beauty) <sup>feature · p0 · l · engine</sup>
 
+## building — Building
+
+`··········` 0% · 0 of 11 done · due 2026-11-15
+
+A one-week sprint inside Colony. Building stops being a fixed list of defs
+
+- [ ] `0069` Deconstruct designation <sup>feature · p1 · s · engine</sup>
+- [ ] `0211` Do room properties come from the boundary? <sup>spike · p0 · s · engine</sup>
+- [ ] `0212` Stuff: one buildable, many materials <sup>feature · p0 · m · engine</sup>
+- [ ] `0213` Material factors on built things <sup>feature · p0 · m · engine</sup>
+- [ ] `0214` Core collapses to one wall, one door, one bed <sup>content · p1 · s · core</sup>
+- [ ] `0215` Pick the material before you place it <sup>feature · p1 · s · plugin</sup>
+- [ ] `0216` Rooms made of something: leak and daylight from the boundary <sup>feature · p0 · l · engine</sup>
+- [ ] `0217` Windows: light in, heat out <sup>content · p1 · s · core</sup>
+- [ ] `0218` Interaction spots: furniture a pawn uses <sup>feature · p1 · m · engine</sup>
+- [ ] `0219` Furniture: table, chair, stove <sup>content · p2 · s · core</sup>
+- [ ] `0220` Walls that look joined, in the colour of what they are made of <sup>feature · p1 · m · client</sup>
+
 ## persistence — Persistence
 
 `··········` 0% · 0 of 8 done · due 2026-11-20
@@ -125,14 +143,13 @@ Save/load that survives mod changes, and replays from seed + command log.
 
 ## colony — Colony
 
-`··········` 0% · 0 of 11 done · due 2026-12-15
+`··········` 0% · 0 of 10 done · due 2026-12-15
 
 Running more than one person: stockpiles, hauling, work priorities, skills, colonist panels.
 
 - [ ] `0066` Stockpile zones and hauling <sup>feature · p0 · l · engine</sup>
 - [ ] `0067` Work priorities per colonist <sup>feature · p0 · l · engine</sup>
 - [ ] `0068` Skills learned by doing <sup>feature · p1 · m · engine</sup>
-- [ ] `0069` Deconstruct designation <sup>feature · p1 · s · engine</sup>
 - [ ] `0070` Colonist inspection panel <sup>feature · p1 · m · client</sup>
 - [ ] `0175` Floating windows and a saved UI layout <sup>feature · p1 · m · client</sup>
 - [ ] `0176` Component kit v2: slider, text input and tables <sup>feature · p1 · m · core</sup>
