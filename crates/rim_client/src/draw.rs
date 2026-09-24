@@ -80,7 +80,13 @@ fn disc(x: f32, y: f32, r: f32, c: Color) {
     }
 }
 
-pub fn world(app: &App) {
+/// Stack counts to label, in screen points: (top-left x, y, count). The
+/// client draws them with the UI's own text so they share its atlas and
+/// batch (macroquad's `draw_text` broke the world's batch twice per label).
+pub type Counts = Vec<(f32, f32, u32)>;
+
+pub fn world(app: &App) -> Counts {
+    let mut counts = Counts::new();
     let w = &app.sim.world;
     let defs = &w.defs;
     let cam = &app.cam;
@@ -224,7 +230,7 @@ pub fn world(app: &App) {
                         draw_rectangle(sx + z * 0.2, sy + z * 0.2, z * 0.6, z * 0.6, c);
                         draw_rectangle_lines(sx + z * 0.2, sy + z * 0.2, z * 0.6, z * 0.6, 1.0, shade(c, 0.6));
                         if z >= 22.0 && th.count > 1 {
-                            draw_text(th.count.to_string(), sx + z * 0.22, sy + z * 0.95, 14.0, WHITE);
+                            counts.push((sx + z * 0.22, sy + z * 0.95 - 12.0, th.count));
                         }
                     }
                 }
@@ -308,6 +314,7 @@ pub fn world(app: &App) {
             }
         }
     }
+    counts
 }
 
 /// Tool previews and markers, drawn after lighting so they stay readable.
