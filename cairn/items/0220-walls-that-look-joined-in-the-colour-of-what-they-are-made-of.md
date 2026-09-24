@@ -2,12 +2,14 @@
 id: 220
 title: Walls that look joined, in the colour of what they are made of
 type: feature
-status: backlog
+status: doing
 milestone: building
+assignee: Oddur Sigurdsson
+claimed: 2026-09-24
 depends_on:
 - 214
 created: 2026-09-23
-updated: 2026-09-23
+updated: 2026-09-24
 priority: p1
 api: none
 effort: m
