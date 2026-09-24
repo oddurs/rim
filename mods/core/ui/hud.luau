@@ -97,7 +97,42 @@ ui.define("core:toolbar", function(view)
 			})
 		)
 	end
-	return row({ id = "core:toolbar.buttons", pad = "s", gap = "xs", bg = "surface", radius = 0, align = "center" }, items)
+	local buttons = row({ id = "core:toolbar.buttons", pad = "s", gap = "xs", bg = "surface", radius = 0, align = "center" }, items)
+
+	-- The material row: only when the active tool builds out of something.
+	-- What you have none of is shown greyed, not hidden, so the row keeps
+	-- its shape and a missing material is a fact rather than a mystery.
+	local stuff = view.stuff()
+	if #stuff == 0 then
+		return buttons
+	end
+	local picks = {}
+	local chosen = nil
+	for _, m in stuff do
+		if m.active then
+			chosen = m
+		end
+		local none = m.have == 0
+		table.insert(
+			picks,
+			button({
+				id = "core:stuff." .. m.id,
+				label = if none then m.label .. " · none" else `{m.label} ×{m.have}`,
+				active = m.active,
+				swatch = m.color,
+				color = if none then "faint" else nil,
+				tooltip = `hp {m.hp} · {m.work} work`,
+				on_click = function()
+					act.stuff(m.id)
+				end,
+			})
+		)
+	end
+	if chosen then
+		table.insert(picks, label(`hp {chosen.hp} · {chosen.work} work`, { size = "small", color = "muted" }))
+	end
+	local materials = row({ id = "core:stuff", pad = "s", gap = "xs", bg = "surface", radius = 0, align = "center" }, picks)
+	return col({}, { materials, buttons })
 end)
 ui.mount("bottom", "core:toolbar")
 

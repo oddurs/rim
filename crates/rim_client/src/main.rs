@@ -64,6 +64,9 @@ pub struct App {
     pub cam: Cam,
     pub tool: Tool,
     pub tools: Vec<ToolDef>,
+    /// The material last picked for each buildable, so nobody picks wood
+    /// forty times. Falls back to whatever the colony has most of.
+    pub stuff_for: Vec<(DefId, DefId)>,
     pub selected: Option<Entity>,
     pub drag_start: Option<IVec>,
     pub paused: bool,
@@ -197,6 +200,7 @@ async fn main() {
         show_devtools: false,
         overlay: None,
         hint: None,
+        stuff_for: Vec::new(),
         hint_key: None,
         order_flash: None,
         mouse_over_ui: false,
@@ -446,6 +450,7 @@ pub fn client_view(app: &mut App, mouse: (f32, f32), time: f64) -> ClientView {
                 active: t.tool == app.tool,
             })
             .collect(),
+        stuff: stuff_view(app),
         hint: drag.or_else(|| app.hint.clone()),
         hover_cell,
         hover_pawn,
@@ -549,6 +554,15 @@ fn apply_ui(app: &mut App, a: UiAction) {
             if let Some(t) = app.tools.iter().find(|t| t.key == key) {
                 app.tool = t.tool;
                 app.drag_start = None;
+            }
+        }
+        UiAction::Stuff(id) => {
+            if let (Tool::Build(t), Some(m)) = (app.tool, app.sim.world.defs.thing_id(&id)) {
+                let sc = app.sim.world.defs.thing(t).build.as_ref().and_then(|b| b.stuff.as_ref());
+                if sc.is_some_and(|sc| app.sim.world.defs.is_material_for(m, &sc.category)) {
+                    app.stuff_for.retain(|(b, _)| *b != t);
+                    app.stuff_for.push((t, m));
+                }
             }
         }
         UiAction::Speed(s) => apply(app, Action::Speed(s)),
@@ -717,7 +731,7 @@ pub fn apply(app: &mut App, action: Action) {
                     app.sim.push(Command::Designate { designation: d, a, b });
                 }
                 Tool::Build(t) => {
-                    let stuff = default_material(&app.sim.world, t);
+                    let stuff = chosen_material(app, t);
                     for (a, b) in build_rects(defs.thing(t).blocks, a, b) {
                         app.sim.push(Command::Build { stuff, thing: t, a, b });
                     }
@@ -749,22 +763,57 @@ pub fn apply(app: &mut App, action: Action) {
 
 /// Walls (anything that blocks) are drawn as a room outline; everything
 /// else fills the dragged rectangle.
-/// The material to build `thing` from until the player can choose (0215):
-/// whichever the colony has most of, falling back to the first the def
+/// How much of an item the colony has lying around, blueprints aside.
+fn stock(w: &rim_sim::world::World, d: DefId) -> u32 {
+    w.ecs
+        .query::<&rim_sim::world::Thing>()
+        .without::<&rim_sim::world::Blueprint>()
+        .iter()
+        .filter(|t| t.def == d)
+        .map(|t| t.count)
+        .sum::<u32>()
+}
+
+/// The material `thing` will be built from: what the player last picked
+/// for it, else whatever the colony has most of, else the first the def
 /// would accept so a blueprint can still be placed and waited on.
-fn default_material(w: &rim_sim::world::World, thing: DefId) -> Option<DefId> {
+fn chosen_material(app: &App, thing: DefId) -> Option<DefId> {
+    let w = &app.sim.world;
     let sc = w.defs.thing(thing).build.as_ref()?.stuff.as_ref()?;
     let options = w.defs.materials(&sc.category);
-    let stock = |d: DefId| {
-        w.ecs
-            .query::<&rim_sim::world::Thing>()
-            .without::<&rim_sim::world::Blueprint>()
-            .iter()
-            .filter(|t| t.def == d)
-            .map(|t| t.count)
-            .sum::<u32>()
-    };
-    options.iter().copied().max_by_key(|&d| stock(d)).or_else(|| options.first().copied())
+    if let Some((_, m)) = app.stuff_for.iter().find(|(b, _)| *b == thing) {
+        if options.contains(m) {
+            return Some(*m);
+        }
+    }
+    options.iter().copied().max_by_key(|&d| stock(w, d)).or_else(|| options.first().copied())
+}
+
+/// The material row for the active build tool: every material its def
+/// accepts, with stock and what the result would be, or nothing at all.
+fn stuff_view(app: &App) -> Vec<rim_ui::view::StuffView> {
+    let Tool::Build(t) = app.tool else { return Vec::new() };
+    let w = &app.sim.world;
+    let td = w.defs.thing(t);
+    let Some(b) = td.build.as_ref() else { return Vec::new() };
+    let Some(sc) = b.stuff.as_ref() else { return Vec::new() };
+    let active = chosen_material(app, t);
+    w.defs
+        .materials(&sc.category)
+        .into_iter()
+        .map(|m| {
+            let md = w.defs.thing(m);
+            rim_ui::view::StuffView {
+                id: md.id.clone(),
+                label: md.label.clone(),
+                color: md.rgb,
+                have: stock(w, m),
+                active: active == Some(m),
+                hp: (td.hp as f64 * w.defs.factor(Some(m), "hp")).round() as u32,
+                work: (b.work as f64 * w.defs.factor(Some(m), "work")).round() as u32,
+            }
+        })
+        .collect()
 }
 
 pub fn build_rects(blocks: bool, a: IVec, b: IVec) -> Vec<(IVec, IVec)> {

@@ -2,12 +2,14 @@
 id: 215
 title: Pick the material before you place it
 type: feature
-status: backlog
+status: doing
 milestone: building
+assignee: Oddur Sigurdsson
+claimed: 2026-09-24
 depends_on:
 - 212
 created: 2026-09-23
-updated: 2026-09-23
+updated: 2026-09-24
 priority: p1
 api: none
 effort: s

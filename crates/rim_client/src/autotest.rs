@@ -422,6 +422,51 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     );
     t.shot("walls").await;
 
+    // ---------------------------------------------------------- 0215 materials
+    println!("\n# pick the material before you place it (0215)");
+    t.key(KeyCode::Escape).await;
+    t.frame().await;
+    t.check(t.ui_rect("core:stuff").is_none(), "no material row while nothing is being built");
+    t.click_ui("core:toolbar.build:wall").await;
+    t.frame().await;
+    t.check(t.ui_rect("core:stuff").is_some(), "the wall tool brings up the material row");
+    t.check(t.ui_rect("core:toolbar.buttons").is_some(), "and the toolbar is still there under it");
+    t.check(t.ui_rect("core:stuff.wood").is_some(), "the wall tool offers wood");
+    t.check(t.ui_rect("core:stuff.stone").is_some(), "and stone, whether or not there is any");
+    let have_stone: u32 = t
+        .w()
+        .ecs
+        .query::<&Thing>()
+        .without::<&Blueprint>()
+        .iter()
+        .filter(|th| th.def == stone)
+        .map(|th| th.count)
+        .sum();
+    t.check(
+        have_stone > 0 || t.ui_text().contains("stone blocks · none"),
+        format!("a material you have none of says so ({have_stone} stone on the map)"),
+    );
+    let clicked = t.click_ui("core:stuff.stone").await;
+    t.frame().await;
+    t.check(clicked && t.app.stuff_for.contains(&(wall, stone)), "clicking stone picks it for the wall");
+    let spot = (2..30i32)
+        .flat_map(|r| (-r..=r).flat_map(move |dy| (-r..=r).map(move |dx| home.offset(dx, dy))))
+        .find(|&p| t.w().map.passable(p) && t.w().map.fixture_at(p).is_none() && t.w().map.item_at(p).is_none())
+        .expect("a free cell");
+    t.drag(spot, spot).await;
+    t.ticks(1);
+    let made = t.w().map.fixture_at(spot).and_then(|e| t.w().ecs.get::<&rim_sim::world::MadeOf>(e).ok().map(|m| m.0));
+    t.check(made == Some(stone), format!("the blueprint is made of the chosen material ({made:?})"));
+    t.shot("materials").await;
+    t.click_ui("core:toolbar.cancel").await;
+    t.drag(spot, spot).await;
+    t.ticks(1);
+    t.click_ui("core:toolbar.build:wall").await;
+    t.frame().await;
+    t.check(t.app.stuff_for.contains(&(wall, stone)), "the choice is remembered for the wall");
+    t.click_ui("core:stuff.wood").await;
+    t.key(KeyCode::Escape).await;
+
     // ---------------------------------------------------------- 0047 orders
     println!("\n# select, draft, move, attack (0047)");
     t.act(Action::Speed(1));
