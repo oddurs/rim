@@ -766,26 +766,59 @@ simulation for tests and CI.
 
 ### Tension: a snapshot, or the seed and the command log?
 
-- **For seed + commands:** determinism (§7) makes it tiny and exact, and it's
-  what replays and bug reports already are.
-- **Against:** loading ten in-game years would mean simulating them, and a
-  save must still load after a mod update, which changes what a replay does.
-- **Ruling:** a save is a **snapshot** of the world. A **replay** (seed, mod
-  lockfile, command log) is a separate file for bug reports and hot reload
-  (0084), and a snapshot makes replays start fast.
+- **For a snapshot:** loading ten in-game years must not mean simulating
+  them, and a save must still load after a mod update, which changes what
+  a replay of the old commands would do.
+- **For seed + commands:** determinism (§7) makes it tiny and exact. It's
+  what replays, bug reports, hot reload and co-op already are, and a log
+  appended as you play loses nothing when the game crashes.
+- **Ruling:** both, in one file. **The log is the save; snapshots are a
+  cache.** A game is a pure function of a root state, the code that runs
+  it, and the commands it's given. The save records the root and appends
+  every command as it happens, so there's no moment when the game is
+  "unsaved". Snapshots memoise the function so loading is fast, and any of
+  them can be deleted and rebuilt.
+- **When the code changes, an epoch starts.** An engine update, a mod
+  update, or a mod added or removed changes the function, so the old log no
+  longer replays. On load the newest snapshot is migrated once and becomes
+  the root of a new epoch with an empty log. The first epoch's root is the
+  seed.
+
+```
+save   = [epoch, …]
+epoch  = { lock, engine version, root: seed | snapshot, log: [(tick, command)] }
+cache  = snapshots by (epoch, tick), their sections stored by hash
+```
+
+Everything else is an operation on that: load is the newest snapshot plus
+the log after it; a replay or a crash report is one epoch; co-op join and
+resync send a snapshot and the log after it; rewinding truncates the log; a
+save edited by hand is a new epoch whose root is the edited snapshot, the
+same operation as a mod update. Migration happens only at an epoch
+boundary, so it's the only place the format has to be read by a different
+version of the code.
 
 ### What a snapshot holds
 
 - **A header:** save format version, engine and API version, seed, tick,
   and the mod lockfile: every mod's id and version, in load order (0152).
-- **World sections, by name:** the RNG, map grids, field stock grids,
-  ambient pushes, script data, messages, colony flags.
-- **Entities as named components.** Each entity is a map from component name
-  to value: `engine:pawn` and `engine:thing` for the engine's, `mood:thoughts`
-  for a mod's. Def references are qualified ids (`core:wall`, 0138), never
-  `DefId` indices, which change whenever the mod list does. A string table
-  keeps the repeated ids small. hecs entity ids aren't stable either, so a
-  save numbers entities itself and remaps references between them on load.
+- **Sections, by owner and name:** `engine:rng`, `engine:map`,
+  `engine:field/temperature`, `core:data`, `weather:data`. The engine owns
+  the `engine:` sections and versions them with the save format; each mod
+  owns its own and versions them with the mod.
+- **Components, one section each.** `engine:pawn`, `engine:thing`,
+  `mood:thoughts`: a section holds every entity's value of that component,
+  keyed by entity id. Grouping by component, not by entity, is what lets
+  a removed mod's data be parked whole, lets a migration see exactly one
+  mod's data, and lets an unchanged section be shared between snapshots.
+- **Stable entity ids.** Each entity has a `Uid`, from a counter the world
+  owns and saves. Commands, the log and the save refer to `Uid`s; hecs
+  handles are only an in-memory lookup and never reach a file. Where the
+  sim picks between equals (the nearest food, the weakest door), it breaks
+  the tie by `Uid`, never by the order hecs happens to iterate in.
+- **Def references are qualified ids** (`core:wall`, 0138), never `DefId`
+  indices, which change whenever the mod list does. A string table keeps
+  the repeated ids small.
 - **Nothing derived.** Paths, reachability regions, rooms, the wealth cache
   and def indices are rebuilt on load. If it can be computed, it isn't saved.
 
@@ -793,28 +826,51 @@ simulation for tests and CI.
 
 The Luau VM isn't saved. On load, scripts run again and register their hooks
 in the same order. Anything a mod needs to remember lives in **script data**
-(`rim.set_data`), which is saved and in the state hash. A value kept in a
-Luau local is a cache: it's lost on load, and invisible to the desync check.
-So the storyteller's memory, which lives in locals today, moves to script
-data (0062).
+(`rim.set_data`), which is saved and in the state hash. The engine puts
+each key in the calling mod's namespace, so script data is one section per
+mod and no mod can write another's. A value kept in a Luau local is a
+cache: it's lost on load, and invisible to the desync check.
 
 ### Encoding
 
 - **Self-describing:** serde into a self-describing binary (CBOR or
-  MessagePack; measured when the format is built, 0061), compressed with
-  zstd. Self-describing because two jobs need to read data without its type:
+  MessagePack; measured when the format is built, 0061), each section
+  compressed with zstd. Self-describing because two jobs need to read data
+  without its type:
   - components of a removed mod ride along untouched until it comes back
     (0063);
   - migrations work on plain data (0139).
+- **Content-addressed:** a section's hash, over its canonical bytes, is its
+  identity. The same hash checks the file, shares unchanged sections
+  between snapshots (the terrain rarely changes, so it's stored once), and
+  names the mod whose state diverged in a desync.
+- **Append-only:** the file only grows: epochs, log chunks and snapshot
+  sections, each with a checksum. A crash can only cut the tail, which
+  costs the last few commands. Compaction rewrites it without old snapshots.
 - **Versioned twice:** the format has a version, and so does each mod. A mod
   whose recorded version differs from the installed one gets its migrate
-  hook, with its components and data.
+  hook, with its sections, when the next epoch begins.
+
+### Readable on request
+
+`rim save unpack` writes a save as a directory, one text file per section,
+and `rim save pack` turns it back into a save losslessly. `rim save diff`
+compares two saves section by section and names the first entity that
+differs. The game only ever reads the binary; the text form is for people,
+bug reports and `rim test` fixtures.
 
 ### The guarantee, tested
 
-Save, load and carry on must give the same state hash, tick for tick, as the
-game that never saved. CI runs that on the crosscheck scenario on every
-platform. A save that doesn't round-trip is a desync that hasn't happened yet.
+- Save, load and save again gives the same bytes.
+- Save at a tick, load, and carry on: every later snapshot equals the one
+  from the game that never saved. The test loads entities in reverse order,
+  so any hidden dependence on iteration order fails here, not in co-op.
+- Load replays the log after the snapshot and checks the state hash at
+  every checkpoint. If they disagree, the snapshot wins and the mismatch is
+  reported: a determinism bug costs the tail, never the colony.
+
+CI runs these on the crosscheck scenario on every platform. A save that
+doesn't round-trip is a desync that hasn't happened yet.
 
 ---
 
@@ -847,8 +903,8 @@ mid-range laptop. That means ≤ 2 ms per sim tick at 6× (≈ 360 ticks/sec).
 2. **Shelter:** warmth, enclosed rooms, eras.
    **Weather** (a sprint inside it): seasons, weather and a forecast as the
    first-party plugin `mods/weather`, lighting and weather visuals (§4c).
-3. **Save/load:** string-keyed component serialisation; unknown mod data is
-   preserved.
+3. **Save/load:** the log is the save and snapshots are a cache (§7a);
+   unknown mod data is preserved.
 4. **`rim.mood`:** the first first-party plugin, and the test of the API.
 5. **Stockpiles and hauling, work priorities (§4d), skills.**
 6. **WASM tier, mod browser, co-op lockstep.**
@@ -998,9 +1054,10 @@ PR to the index. If that loop is good, content follows.
   `rim new` generates runs it on every push, against the engine versions
   the mod supports.
 - **Hot reload is deterministic replay.** When a file changes, reload the
-  defs and scripts, rebuild the world from its seed and replay the command
-  log to the current tick. You see what your change *would have done* in
-  this exact game. Snapshots make it faster once saves exist.
+  defs and scripts, rebuild the world from its epoch's root (the seed, or
+  the snapshot a save was loaded from) and replay the log to the current
+  tick. You see what your change *would have done* in this exact game.
+  Later snapshots can't shorten this: the change applies from the root.
 
 ### Tension: Luau, or a language more developers know?
 

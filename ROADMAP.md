@@ -146,16 +146,19 @@ A one-week sprint inside Colony. Building stops being a fixed list of defs
 
 ## persistence — Persistence
 
-`###·······` 25% · 2 of 8 done · due 2026-11-20
+`##········` 18% · 2 of 11 done · due 2026-11-20
 
-Save/load that survives mod changes, and replays from seed + command log.
+The log is the save and snapshots are a cache (DESIGN.md §7a): a colony is always saved, loads fast, survives mod changes, and replays exactly.
 
-- [ ] `01e86e7b` Autosave and load menu <sup>feature · p1 · m · client</sup>
-- [ ] `38722b6e` Replays: seed, mod list and command log <sup>feature · p1 · m · engine</sup>
-- [ ] `65f0b723` Per-mod script state: rim.state persisted with the save <sup>feature · p0 · m · engine</sup>
-- [ ] `b4ad855e` Keep unknown mod data when a mod is removed <sup>feature · p1 · m · engine</sup>
-- [ ] `c5d185be` Serialize world, pawns, things and jobs <sup>feature · p0 · l · engine</sup>
+- [ ] `01e86e7b` Always saved: autosnapshots off the sim thread, and a load menu <sup>feature · p1 · m · client</sup>
+- [ ] `38722b6e` Replays: run an epoch from its root, checked at every checkpoint <sup>feature · p1 · m · engine</sup>
+- [ ] `47dbb393` rim save unpack, pack and diff <sup>feature · p1 · m · tooling</sup>
+- [ ] `65f0b723` Script data belongs to its mod: set_data namespaced by the engine <sup>feature · p0 · m · engine</sup>
+- [ ] `b04a908e` Stable entity ids: a Uid on every entity, and ties broken by it <sup>feature · p0 · m · engine</sup>
+- [ ] `b4ad855e` Keep a removed mod's data, and give it back when the mod returns <sup>feature · p1 · m · engine</sup>
+- [ ] `c5d185be` Snapshot: the world as named sections, loaded back exactly <sup>feature · p0 · l · engine</sup>
 - [ ] `ca786a8e` Mod save migrations: a migrate hook when a mod's version changes <sup>feature · p1 · m · engine</sup>
+- [ ] `d0524477` Save file: epochs, an append-only command log and a snapshot cache <sup>feature · p0 · l · engine</sup>
 - [x] `70edf863` Save format: component-keyed, versioned, mod-aware <sup>spike · p0 · s · engine</sup>
 - [x] `be8174f0` Namespaced def ids: mod:id, bare ids resolve inside their own mod <sup>feature · p0 · m · engine</sup>
 

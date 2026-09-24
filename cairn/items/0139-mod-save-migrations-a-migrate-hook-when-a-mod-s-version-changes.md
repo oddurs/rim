@@ -5,6 +5,7 @@ type: feature
 status: backlog
 milestone: persistence
 depends_on:
+- d0524477-919e-4bd6-952e-95ff0d6bb58d
 - 65f0b723-5310-4dc6-a0f6-ba1223edb25b
 created: 2026-09-23
 updated: 2026-09-23
@@ -24,7 +25,11 @@ Mods on GitHub ship updates. A save made with `mood 0.3` must load with `mood 0.
 
 ## What
 
-The save records each mod's version. On load, if a mod's version differs, its `migrate(from_version, state)` export runs before any hook, over its own `rim.state` and entity components.
+The save's lockfile records each mod's version. When a new epoch begins
+because a mod's version changed (DESIGN.md §7a), its `migrate(from_version,
+sections)` export runs before any hook, over its own script data and
+component sections, on a staging copy. The epoch commits only if every
+migration succeeds.
 
 ## Acceptance criteria
 

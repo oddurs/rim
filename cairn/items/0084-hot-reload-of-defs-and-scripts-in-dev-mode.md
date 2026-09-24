@@ -7,7 +7,7 @@ milestone: sdk
 depends_on:
 - 38722b6e-b300-4282-93d7-b1399a6f60eb
 created: 2026-09-22
-updated: 2026-09-23
+updated: 2026-09-24
 priority: p0
 api: none
 effort: m
@@ -31,3 +31,7 @@ Hot reload is deterministic replay (DESIGN.md §10): when a file changes, reload
 - [ ] World is rebuilt by replaying the command log to the current tick
 - [ ] Load errors show in-game and keep the last good version running
 - [ ] Under a second for a 10-minute session on the target map
+
+## 2026-09-24
+
+DESIGN.md §7a/§10: hot reload replays from the current epoch's root (the seed, or the snapshot the save was loaded from). Later snapshots can't shorten it, since the changed code applies from the root.

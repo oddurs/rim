@@ -1,11 +1,9 @@
 ---
 id: 65f0b723-5310-4dc6-a0f6-ba1223edb25b
-title: 'Per-mod script state: rim.state persisted with the save'
+title: 'Script data belongs to its mod: set_data namespaced by the engine'
 type: feature
 status: backlog
 milestone: persistence
-depends_on:
-- c5d185be-9bb8-491d-b73d-94f75e4018f0
 created: 2026-09-22
 updated: 2026-09-24
 priority: p0
@@ -19,11 +17,23 @@ pillar:
 
 ## Why
 
-The storyteller's memory (last incident, tension) must survive a reload.
+A mod's saved state is its script data (DESIGN.md §7a), and a migration or a
+parked section must be exactly one mod's. Today the `your_mod:key` namespace
+is only a convention, so one mod can write another's data.
+
+## What
+
+The engine qualifies keys with the calling mod: a bare key is the caller's,
+a qualified key is allowed only in the caller's own namespace. Reading
+another mod's data stays allowed (the UI reads `weather:forecast`). No
+separate `rim.state` table: script data already is it.
 
 ## Acceptance criteria
 
-- [ ] Each mod gets a serializable state table
+- [ ] `rim.set_data("x", v)` from mod `m` writes `m:x`
+- [ ] Writing into another mod's namespace is an error naming both mods
+- [ ] Script data can be read back grouped by mod, one group per section
+- [ ] Docs (api-scripts.md, scripting.md) say so
 
 ## 2026-09-24
 
