@@ -18,5 +18,6 @@ rim.register_incident({
 			end
 		end
 		rim.message(`Enraged boars are stampeding toward the colony!`, "threat")
+		return true
 	end,
 })

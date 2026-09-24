@@ -100,7 +100,30 @@ pub const STEP_BUDGET: u64 = 100_000_000;
 /// about it (µs). A whole tick at 6x has 2 ms (DESIGN.md §8).
 pub const MOD_BUDGET_US: f64 = 500.0;
 
+/// One member of the engine's `rim` table, declared where it's registered:
+/// the single source for the Luau type definitions (`types/rim.d.luau`) and
+/// the API reference (`docs/modding/api.md`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ApiDoc {
+    pub name: &'static str,
+    /// A Luau type: `(x: number) -> number`, or a value's type.
+    pub sig: &'static str,
+    pub doc: &'static str,
+}
+
+/// Types the `rim` declarations refer to.
+pub const RIM_TYPES: &str = r#"type Faction = "player" | "hostile" | "wild"
+type MessageKind = "info" | "good" | "threat" | "bad"
+type CreatureInfo = { id: string, label: string, intelligent: boolean, aggressive: boolean, flees: boolean, plural: string, market_value: number, max_hp: number, wild: boolean }
+type ThingInfo = { id: string, label: string, market_value: number, food: boolean, item: boolean }
+type Date = { year: number, season: string, season_index: number, day: number, day_of_year: number, year_days: number, year_fraction: number }
+type Room = { id: number, cells: number, enclosed: boolean }
+type Part = { label: string, value: number }
+"#;
+
 pub struct ScriptHost {
+    /// The engine's `rim` members, as declared at registration.
+    api_docs: RefCell<Vec<ApiDoc>>,
     /// Load-time advice for mod authors (determinism hazards).
     pub warnings: Vec<String>,
     lua: Lua,
@@ -237,6 +260,7 @@ impl ScriptHost {
             });
         }
         let mut host = ScriptHost {
+            api_docs: RefCell::new(Vec::new()),
             warnings: Vec::new(),
             lua,
             world: Rc::new(WorldPtr(Cell::new(std::ptr::null_mut()))),
@@ -285,6 +309,59 @@ impl ScriptHost {
         }
         api.set_readonly(true);
         Ok(())
+    }
+
+    fn declare(&self, name: &'static str, sig: &'static str, doc: &'static str) {
+        self.api_docs.borrow_mut().push(ApiDoc { name, sig, doc });
+    }
+
+    /// The engine's `rim` members, by name.
+    pub fn api(&self) -> Vec<ApiDoc> {
+        let mut v = self.api_docs.borrow().clone();
+        v.sort_by_key(|d| d.name);
+        v
+    }
+
+    /// Every name the engine put in `rim` (declared or not: tests compare).
+    pub fn engine_names(&self) -> Vec<String> {
+        let r = self.reg.borrow();
+        let mut v: Vec<String> = r.owners.iter().filter(|(_, o)| *o == "the engine").map(|(k, _)| k.clone()).collect();
+        v.sort();
+        v
+    }
+
+    /// Luau type definitions for sim scripts (luau-lsp `definitionFiles`).
+    /// Plugins' additions to `rim` are typed `any`.
+    pub fn luau_definitions(&self) -> String {
+        let mut out = String::from("-- Generated from crates/rim_sim/src/script.rs: don't edit. Regenerate with\n-- RIM_UPDATE_TYPES=1 cargo test -p rim_sim --test api_types\n\n");
+        out.push_str(RIM_TYPES);
+        out.push_str("\ndeclare rim: {\n");
+        for d in self.api() {
+            out.push_str(&format!("    -- {}\n    {}: {},\n", d.doc, d.name, d.sig));
+        }
+        out.push_str("    -- Plugins' APIs (rim.weather, rim.register_incident, ...).\n    [string]: any,\n}\n");
+        out
+    }
+
+    /// The reference for sim scripts' `rim` table, as Markdown.
+    pub fn api_reference(&self) -> String {
+        let mut out = String::from(
+            "# Script API reference: `rim`\n\n\
+             Generated from `crates/rim_sim/src/script.rs`, where each function is\n\
+             registered: don't edit. Regenerate with\n\
+             `RIM_UPDATE_TYPES=1 cargo test -p rim_sim --test api_types`. Types for\n\
+             editors are in [`types/rim.d.luau`](../../types/rim.d.luau); the rules\n\
+             are in [Scripting rules](scripting.md).\n\n\
+             | Name | Type | What it does |\n|---|---|---|\n",
+        );
+        for d in self.api() {
+            let sig = d.sig.replace('|', "\\|");
+            out.push_str(&format!("| `rim.{}` | `{sig}` | {} |\n", d.name, d.doc));
+        }
+        out.push_str("\nTypes used above:\n\n```lua\n");
+        out.push_str(RIM_TYPES);
+        out.push_str("```\n");
+        out
     }
 
     /// A script's own global environment: its globals land here, and reads
@@ -357,7 +434,9 @@ impl ScriptHost {
 
         let rim = lua.create_table()?;
         rim.set("api_version", format!("{}.{}", crate::API_VERSION.0, crate::API_VERSION.1))?;
+        self.declare("api_version", "string", "The engine's plugin API version, \"MAJOR.MINOR\".");
         rim.set("ticks_per_day", TICKS_PER_DAY)?;
+        self.declare("ticks_per_day", "number", "Ticks in a game day.");
 
         // ---- static data: defs are known at load time
         let creatures = lua.create_table()?;
@@ -375,6 +454,7 @@ impl ScriptHost {
             creatures.push(t)?;
         }
         rim.set("creature_defs", creatures)?;
+        self.declare("creature_defs", "{CreatureInfo}", "Every creature def.");
         let things = lua.create_table()?;
         for td in &defs.things {
             let t = lua.create_table()?;
@@ -386,6 +466,7 @@ impl ScriptHost {
             things.push(t)?;
         }
         rim.set("thing_defs", things)?;
+        self.declare("thing_defs", "{ThingInfo}", "Every thing def.");
 
         // ---- registration
         let reg = self.reg.clone();
@@ -401,6 +482,11 @@ impl ScriptHost {
                 Ok(())
             })?,
         )?;
+        self.declare(
+            "every",
+            "(interval: number, fn: () -> ()) -> ()",
+            "Run fn every `interval` ticks (hooks are staggered). Register at load time.",
+        );
         let reg = self.reg.clone();
         rim.set(
             "on",
@@ -411,6 +497,11 @@ impl ScriptHost {
                 Ok(())
             })?,
         )?;
+        self.declare(
+            "on",
+            "(event: string, fn: (event: {[string]: any}) -> ()) -> ()",
+            "Handle an engine event (`pawn_died`, `season_changed`, ...) or a mod event (`weather:changed`).",
+        );
         let reg = self.reg.clone();
         rim.set(
             "log",
@@ -419,28 +510,52 @@ impl ScriptHost {
                 Ok(())
             })?,
         )?;
+        self.declare("log", "(message: string) -> ()", "Print a line to the console, tagged with your mod.");
 
         // ---- world API (only valid inside callbacks)
         macro_rules! api {
-            ($name:literal, $ty:ty, |$w:ident, $args:pat_param| $body:expr) => {{
+            ($name:literal, $sig:literal, $doc:literal, $ty:ty, |$w:ident, $args:pat_param| $body:expr) => {{
                 let ptr = self.world.clone();
                 rim.set($name, lua.create_function(move |_, $args: $ty| with_world(&ptr, |$w| $body))?)?;
+                self.declare($name, $sig, $doc);
             }};
         }
 
-        api!("tick", (), |w, _a| Ok(w.tick));
-        api!("day", (), |w, _a| Ok(w.day()));
-        api!("hour", (), |w, _a| Ok(w.hour()));
-        api!("wealth", (), |w, _a| Ok(w.wealth));
-        api!("map_size", (), |w, _a| Ok((w.map.w, w.map.h)));
-        api!("random", (), |w, _a| Ok(w.rng.float()));
-        api!("random_int", (i32, i32), |w, (a, b)| Ok(w.rng.range(a, b)));
-        api!("colonists", (), |w, _a| Ok(w.colonists().count()));
-        api!("colony_center", (), |w, _a| Ok(match w.colony_center() {
-            Some(c) => (Some(c.x), Some(c.y)),
-            None => (None, None),
-        }));
-        api!("count_pawns", String, |w, faction| {
+        api!("tick", "() -> number", "The current tick. A day is `rim.ticks_per_day` ticks.", (), |w, _a| Ok(w.tick));
+        api!("day", "() -> number", "Days since the game began, from 0.", (), |w, _a| Ok(w.day()));
+        api!("hour", "() -> number", "Hour of the day, 0 to 24 (tick 0 is 06:00).", (), |w, _a| Ok(w.hour()));
+        api!("wealth", "() -> number", "The colony's wealth (recomputed every few hundred ticks).", (), |w, _a| Ok(
+            w.wealth
+        ));
+        api!("map_size", "() -> (number, number)", "Map width and height in cells.", (), |w, _a| Ok((
+            w.map.w, w.map.h
+        )));
+        api!(
+            "random",
+            "() -> number",
+            "A number in [0, 1) from the world's random numbers: the same on every machine.",
+            (),
+            |w, _a| Ok(w.rng.float())
+        );
+        api!(
+            "random_int",
+            "(lo: number, hi: number) -> number",
+            "A whole number from lo to hi inclusive, from the world's random numbers.",
+            (i32, i32),
+            |w, (a, b)| Ok(w.rng.range(a, b))
+        );
+        api!("colonists", "() -> number", "How many colonists are alive.", (), |w, _a| Ok(w.colonists().count()));
+        api!(
+            "colony_center",
+            "() -> (number?, number?)",
+            "The colonists' average cell, or nil if there are none.",
+            (),
+            |w, _a| Ok(match w.colony_center() {
+                Some(c) => (Some(c.x), Some(c.y)),
+                None => (None, None),
+            })
+        );
+        api!("count_pawns", "(faction: Faction) -> number", "Living pawns of a faction.", String, |w, faction| {
             let f =
                 Faction::parse(&faction).ok_or_else(|| mlua::Error::runtime(format!("unknown faction '{faction}'")))?;
             Ok(w.pawns
@@ -449,97 +564,140 @@ impl ScriptHost {
                 .count())
         });
         // Rough melee output of the colony: what raids are weighed against.
-        api!("colony_strength", (), |w, _a| {
-            let defs = w.defs.clone();
-            let mut s = 0.0;
-            for e in w.colonists() {
-                if let Ok(p) = w.ecs.get::<&Pawn>(e) {
-                    let cd = defs.creature(p.def);
-                    s += (p.hp as f64 / cd.max_hp as f64) * cd.melee_damage as f64 * 60.0 / cd.melee_cooldown as f64;
+        api!(
+            "colony_strength",
+            "() -> number",
+            "Rough melee output of the colony, which raids are weighed against.",
+            (),
+            |w, _a| {
+                let defs = w.defs.clone();
+                let mut s = 0.0;
+                for e in w.colonists() {
+                    if let Ok(p) = w.ecs.get::<&Pawn>(e) {
+                        let cd = defs.creature(p.def);
+                        s +=
+                            (p.hp as f64 / cd.max_hp as f64) * cd.melee_damage as f64 * 60.0 / cd.melee_cooldown as f64;
+                    }
                 }
+                Ok(s)
             }
-            Ok(s)
-        });
-        api!("message", (String, Option<String>), |w, (text, kind)| {
-            w.message(text, MsgKind::parse(kind.as_deref().unwrap_or("info")));
-            Ok(())
-        });
+        );
+        api!(
+            "message",
+            "(text: string, kind: MessageKind?) -> ()",
+            "Post a message to the feed (default kind \"info\").",
+            (String, Option<String>),
+            |w, (text, kind)| {
+                w.message(text, MsgKind::parse(kind.as_deref().unwrap_or("info")));
+                Ok(())
+            }
+        );
         // A random open cell on the map edge that can reach the colony.
-        api!("edge_cell", (), |w, _a| {
-            w.map.ensure_regions();
-            let center = w.colony_center();
-            let (mw, mh) = (w.map.w, w.map.h);
-            for _ in 0..400 {
-                let t = w.rng.below(mw.max(mh) as u32) as i32;
-                let p = match w.rng.below(4) {
-                    0 => IVec::new(t.min(mw - 1), 0),
-                    1 => IVec::new(t.min(mw - 1), mh - 1),
-                    2 => IVec::new(0, t.min(mh - 1)),
-                    _ => IVec::new(mw - 1, t.min(mh - 1)),
-                };
-                if w.map.passable(p) && center.is_none_or(|c| w.map.can_reach(p, Goal::Cell(c))) {
-                    return Ok((Some(p.x), Some(p.y)));
+        api!(
+            "edge_cell",
+            "() -> (number?, number?)",
+            "A random open cell on the map edge that can reach the colony.",
+            (),
+            |w, _a| {
+                w.map.ensure_regions();
+                let center = w.colony_center();
+                let (mw, mh) = (w.map.w, w.map.h);
+                for _ in 0..400 {
+                    let t = w.rng.below(mw.max(mh) as u32) as i32;
+                    let p = match w.rng.below(4) {
+                        0 => IVec::new(t.min(mw - 1), 0),
+                        1 => IVec::new(t.min(mw - 1), mh - 1),
+                        2 => IVec::new(0, t.min(mh - 1)),
+                        _ => IVec::new(mw - 1, t.min(mh - 1)),
+                    };
+                    if w.map.passable(p) && center.is_none_or(|c| w.map.can_reach(p, Goal::Cell(c))) {
+                        return Ok((Some(p.x), Some(p.y)));
+                    }
                 }
+                Ok((None, None))
             }
-            Ok((None, None))
-        });
+        );
         // A random open cell within `r` of (x, y).
-        api!("near_cell", (i32, i32, i32), |w, (x, y, r)| {
-            for _ in 0..100 {
-                let p = IVec::new(x + w.rng.range(-r, r), y + w.rng.range(-r, r));
-                if w.map.passable(p) {
-                    return Ok((Some(p.x), Some(p.y)));
+        api!(
+            "near_cell",
+            "(x: number, y: number, r: number) -> (number?, number?)",
+            "A random open cell within r of (x, y).",
+            (i32, i32, i32),
+            |w, (x, y, r)| {
+                for _ in 0..100 {
+                    let p = IVec::new(x + w.rng.range(-r, r), y + w.rng.range(-r, r));
+                    if w.map.passable(p) {
+                        return Ok((Some(p.x), Some(p.y)));
+                    }
                 }
+                Ok((None, None))
             }
-            Ok((None, None))
-        });
-        api!("spawn_pawn", (String, String, i32, i32, Option<String>), |w, (creature, faction, x, y, name)| {
-            let def = w
-                .defs
-                .creature_id(&creature)
-                .ok_or_else(|| mlua::Error::runtime(format!("unknown creature '{creature}'")))?;
-            let f =
-                Faction::parse(&faction).ok_or_else(|| mlua::Error::runtime(format!("unknown faction '{faction}'")))?;
-            let p = IVec::new(x, y);
-            if !w.map.passable(p) {
-                return Ok((None, None));
+        );
+        api!(
+            "spawn_pawn",
+            "(creature: string, faction: Faction, x: number, y: number, name: string?) -> (number?, string?)",
+            "Spawn a creature; returns its id and name, or nil if the cell is blocked.",
+            (String, String, i32, i32, Option<String>),
+            |w, (creature, faction, x, y, name)| {
+                let def = w
+                    .defs
+                    .creature_id(&creature)
+                    .ok_or_else(|| mlua::Error::runtime(format!("unknown creature '{creature}'")))?;
+                let f = Faction::parse(&faction)
+                    .ok_or_else(|| mlua::Error::runtime(format!("unknown faction '{faction}'")))?;
+                let p = IVec::new(x, y);
+                if !w.map.passable(p) {
+                    return Ok((None, None));
+                }
+                let e = w.spawn_pawn(def, f, p, name);
+                let name = w.ecs.get::<&Pawn>(e).map(|p| p.name.clone()).unwrap_or_default();
+                Ok((Some(e.to_bits().get()), Some(name)))
             }
-            let e = w.spawn_pawn(def, f, p, name);
-            let name = w.ecs.get::<&Pawn>(e).map(|p| p.name.clone()).unwrap_or_default();
-            Ok((Some(e.to_bits().get()), Some(name)))
-        });
+        );
         // Field layers: temperature, light, whatever mods declare.
-        api!("field", (String, i32, i32), |w, (id, x, y)| {
-            let f = field_id(w, &id)?;
-            w.map.ensure_rooms();
-            let defs = w.defs.clone();
-            Ok(w.fields.value(&defs, &w.map, f, IVec::new(x, y)))
-        });
-        api!("ambient", String, |w, id| {
+        api!(
+            "field",
+            "(id: string, x: number, y: number) -> number",
+            "A field's value at a cell (temperature, light, ...).",
+            (String, i32, i32),
+            |w, (id, x, y)| {
+                let f = field_id(w, &id)?;
+                w.map.ensure_rooms();
+                let defs = w.defs.clone();
+                Ok(w.fields.value(&defs, &w.map, f, IVec::new(x, y)))
+            }
+        );
+        api!("ambient", "(id: string) -> number", "A field's outdoor value.", String, |w, id| {
             let f = field_id(w, &id)?;
             Ok(w.fields.ambient(f))
         });
         // Pin a field's outdoor value (tests, tools); nil unpins. Mods that
         // want to change the weather push a named contribution instead.
-        api!("set_ambient", (String, Option<f64>), |w, (id, v)| {
+        api!("set_ambient", "(id: string, value: number?) -> ()", "Pin a field's outdoor value, overriding its terms and pushes; nil unpins. For tests and tools: mods push instead.", (String, Option<f64>), |w, (id, v)| {
             let f = field_id(w, &id)?;
             w.fields.set_ambient(f, v);
             Ok(())
         });
         // A named contribution to a field's outdoor value, easing in over
         // `ease_hours` and expiring after `hours` (nil: until cleared).
-        api!("push_ambient", (String, String, f64, Option<f64>, Option<f64>), |w, (id, key, v, hours, ease)| {
+        api!("push_ambient", "(field: string, key: string, value: number, hours: number?, ease_hours: number?) -> ()", "Add a named contribution to a field's outdoor value, easing in over ease_hours and expiring after hours (nil: until cleared).", (String, String, f64, Option<f64>, Option<f64>), |w, (id, key, v, hours, ease)| {
             let f = field_id(w, &id)?;
             let tick = w.tick;
             w.fields.push_ambient(f, &key, v, tick, hours, ease.unwrap_or(0.0));
             Ok(())
         });
-        api!("clear_ambient", (String, String, Option<f64>), |w, (id, key, ease)| {
-            let f = field_id(w, &id)?;
-            let tick = w.tick;
-            w.fields.clear_ambient(f, &key, tick, ease.unwrap_or(0.0));
-            Ok(())
-        });
+        api!(
+            "clear_ambient",
+            "(field: string, key: string, ease_hours: number?) -> ()",
+            "Ease a named contribution out and remove it.",
+            (String, String, Option<f64>),
+            |w, (id, key, ease)| {
+                let f = field_id(w, &id)?;
+                let tick = w.tick;
+                w.fields.clear_ambient(f, &key, tick, ease.unwrap_or(0.0));
+                Ok(())
+            }
+        );
         // Each part of a field's outdoor value: { {label, value}, ... }.
         {
             let ptr = self.world.clone();
@@ -558,11 +716,16 @@ impl ScriptHost {
                 Ok(out)
             })?;
             rim.set("explain", f)?;
+            self.declare(
+                "explain",
+                "(field: string) -> {Part}",
+                "Each part of a field's outdoor value: its terms, then pushes.",
+            );
         }
 
         // ---- the calendar
-        api!("year", (), |w, _a| Ok(w.year() + 1));
-        api!("season", (), |w, _a| Ok(w.season().to_string()));
+        api!("year", "() -> number", "The year, from 1.", (), |w, _a| Ok(w.year() + 1));
+        api!("season", "() -> string", "The current season's name.", (), |w, _a| Ok(w.season().to_string()));
         {
             let ptr = self.world.clone();
             let f = lua.create_function(move |lua, ()| {
@@ -580,9 +743,11 @@ impl ScriptHost {
                 Ok(t)
             })?;
             rim.set("date", f)?;
+            self.declare("date", "() -> Date", "The calendar date.");
         }
         let seasons = lua.create_sequence_from(defs.calendar.seasons.iter().map(|s| s.as_str()))?;
         rim.set("seasons", seasons)?;
+        self.declare("seasons", "{string}", "The calendar's season names, in order.");
 
         // ---- script data and events
         // Plain data kept in the world: hashed, saved, readable by the UI.
@@ -599,6 +764,11 @@ impl ScriptHost {
                 })
             })?;
             rim.set("set_data", f)?;
+            self.declare(
+                "set_data",
+                "(key: string, value: any) -> ()",
+                "Keep plain data in the world (hashed, saved, readable by the UI as view.data). Use \"your_mod:key\".",
+            );
             let ptr = self.world.clone();
             let f = lua.create_function(move |lua, key: String| {
                 let d = with_world(&ptr, |w| Ok(w.data.get(&key).cloned()))?;
@@ -608,6 +778,7 @@ impl ScriptHost {
                 }
             })?;
             rim.set("get_data", f)?;
+            self.declare("get_data", "(key: string) -> any", "A copy of stored script data, or nil.");
             // Send an event to `rim.on(name, fn)` handlers in any mod. Mod
             // events are namespaced by the sender: "weather:changed".
             let ptr = self.world.clone();
@@ -629,12 +800,23 @@ impl ScriptHost {
                 })
             })?;
             rim.set("emit", f)?;
+            self.declare(
+                "emit",
+                "(name: string, data: {[string]: any}?) -> ()",
+                "Send an event to rim.on handlers in any mod. Only under your own name: \"your_mod:event\".",
+            );
         }
         // Sheltered: inside an enclosed room.
-        api!("indoors", (i32, i32), |w, (x, y)| {
-            w.map.ensure_rooms();
-            Ok(w.map.indoors(IVec::new(x, y)))
-        });
+        api!(
+            "indoors",
+            "(x: number, y: number) -> boolean",
+            "Whether a cell is inside an enclosed room.",
+            (i32, i32),
+            |w, (x, y)| {
+                w.map.ensure_rooms();
+                Ok(w.map.indoors(IVec::new(x, y)))
+            }
+        );
         // { id, cells, enclosed } for the room at (x, y), or nil on a wall or door.
         {
             let ptr = self.world.clone();
@@ -651,25 +833,44 @@ impl ScriptHost {
                 Ok(Value::Table(t))
             })?;
             rim.set("room_at", f)?;
+            self.declare("room_at", "(x: number, y: number) -> Room?", "The room at a cell, or nil on a wall or door.");
         }
         // A thing's stat by name: the def's base times its material's factor.
         // Names the engine never heard of come back as the bare factor, so a
         // mod reads its own numbers off anything built of its material.
-        api!("stat", (u64, String), |w, (id, name)| Ok(w.stat(rim_sim_entity(id)?, &name)));
+        api!(
+            "stat",
+            "(id: number, name: string) -> number?",
+            "A thing's stat by name: its def's base times its material's factor.",
+            (u64, String),
+            |w, (id, name)| Ok(w.stat(rim_sim_entity(id)?, &name))
+        );
         // Make a pawn give up and walk off the map after `ticks`.
-        api!("leave_after", (u64, u64), |w, (id, ticks)| {
-            let e = rim_sim_entity(id)?;
-            let t = w.tick + ticks;
-            if let Ok(mut p) = w.ecs.get::<&mut Pawn>(e) {
-                p.leave_at = Some(t);
+        api!(
+            "leave_after",
+            "(id: number, ticks: number) -> ()",
+            "Make a pawn give up and walk off the map after `ticks`.",
+            (u64, u64),
+            |w, (id, ticks)| {
+                let e = rim_sim_entity(id)?;
+                let t = w.tick + ticks;
+                if let Ok(mut p) = w.ecs.get::<&mut Pawn>(e) {
+                    p.leave_at = Some(t);
+                }
+                Ok(())
             }
-            Ok(())
-        });
-        api!("spawn_item", (String, i32, i32, u32), |w, (thing, x, y, count)| {
-            let def =
-                w.defs.thing_id(&thing).ok_or_else(|| mlua::Error::runtime(format!("unknown thing '{thing}'")))?;
-            Ok(w.place_item(def, IVec::new(x, y), count))
-        });
+        );
+        api!(
+            "spawn_item",
+            "(thing: string, x: number, y: number, count: number) -> number",
+            "Drop items near a cell, merging into stacks; returns how many didn't fit.",
+            (String, i32, i32, u32),
+            |w, (thing, x, y, count)| {
+                let def =
+                    w.defs.thing_id(&thing).ok_or_else(|| mlua::Error::runtime(format!("unknown thing '{thing}'")))?;
+                Ok(w.place_item(def, IVec::new(x, y), count))
+            }
+        );
 
         // Mods see `rim` through a proxy. Reads go to the API table; a write
         // may add a new key while mods load, and never replace one, so no mod

@@ -1,0 +1,8 @@
+{
+  "languageMode": "nonstrict",
+  "aliases": {
+    "core": "./mods/core",
+    "weather": "./mods/weather",
+    "wildlife_plus": "./mods/wildlife_plus"
+  }
+}
