@@ -719,8 +719,8 @@ fn default_material(w: &rim_sim::world::World, thing: DefId) -> Option<DefId> {
             .query::<&rim_sim::world::Thing>()
             .without::<&rim_sim::world::Blueprint>()
             .iter()
-            .filter(|(_, t)| t.def == d)
-            .map(|(_, t)| t.count)
+            .filter(|t| t.def == d)
+            .map(|t| t.count)
             .sum::<u32>()
     };
     options.iter().copied().max_by_key(|&d| stock(d)).or_else(|| options.first().copied())

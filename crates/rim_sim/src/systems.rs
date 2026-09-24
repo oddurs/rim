@@ -115,7 +115,8 @@ pub fn deaths(w: &mut World) {
 
 pub fn regrow(w: &mut World) {
     let tick = w.tick;
-    let ready: Vec<_> = w.ecs.query::<&Regrow>().iter().filter(|(_, r)| r.ready_at <= tick).map(|(e, _)| e).collect();
+    let ready: Vec<_> =
+        w.ecs.query::<(hecs::Entity, &Regrow)>().iter().filter(|(_, r)| r.ready_at <= tick).map(|(e, _)| e).collect();
     for e in ready {
         let _ = w.ecs.remove_one::<Regrow>(e);
     }
@@ -125,7 +126,7 @@ pub fn regrow(w: &mut World) {
 pub fn wealth(w: &mut World) {
     let defs = w.defs.clone();
     let mut total = 0.0;
-    for (_, (t, made_of)) in w.ecs.query::<(&Thing, Option<&MadeOf>)>().without::<&Blueprint>().iter() {
+    for (t, made_of) in w.ecs.query::<(&Thing, Option<&MadeOf>)>().without::<&Blueprint>().iter() {
         let td = defs.thing(t.def);
         if !td.natural {
             total += td.market_value * defs.factor(made_of.map(|m| m.0), "value") * t.count as f64;
