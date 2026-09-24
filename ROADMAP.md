@@ -74,21 +74,21 @@ A two-week sprint. The whole HUD moves out of Rust into `mods/core/ui/`, written
 
 ## weather — Weather
 
-`··········` 0% · 0 of 11 done · due 2026-10-01
+`##########` 100% · 11 of 11 done · due 2026-10-01
 
 A one-week sprint inside Shelter. The world gets seasons and weather you can see coming: firelit nights, rain that rolls in on the forecast, and a first winter that needs a heated hut. The engine gains a few general mechanisms (terms over curves, a calendar, named contributions to outdoor values, script data); the weather itself is a first-party plugin, `mods/weather`, built only on the public API. Design: DESIGN.md §4c.
 
-- [ ] `0056` Lighting from the light field: lightmap, glow and sky tint <sup>feature · p0 · m · client</sup>
-- [ ] `0057` Weather incidents: cold snap, heat wave and storm <sup>content · p1 · s · plugin</sup>
-- [ ] `0184` The weather plugin: seasons, weather types and a forecast <sup>feature · p0 · m · plugin</sup>
-- [ ] `0194` Rain, snow, fog and lightning from the weather channels <sup>feature · p1 · m · client</sup>
-- [ ] `0195` Season, weather and forecast in the HUD <sup>feature · p1 · s · client</sup>
-- [ ] `0197` Weather modding guide <sup>docs · p1 · s · tooling</sup>
-- [ ] `0198` Balance a year, and prove core stands alone <sup>chore · p0 · m · core</sup>
-- [ ] `0181` Terms and curves: a fixed-point evaluator for outdoor values <sup>feature · p0 · s · engine</sup>
-- [ ] `0182` Calendar, seasons and script events <sup>feature · p0 · s · engine</sup>
-- [ ] `0183` Ambient terms: outdoor channels computed from data, with named pushes <sup>feature · p0 · m · engine</sup>
-- [ ] `0207` Script data: saved state scripts own, readable by the UI <sup>feature · p0 · s · engine</sup>
+- [x] `0056` Lighting from the light field: lightmap, glow and sky tint <sup>feature · p0 · m · client</sup>
+- [x] `0057` Weather incidents: cold snap, heat wave and storm <sup>content · p1 · s · plugin</sup>
+- [x] `0181` Terms and curves: a fixed-point evaluator for outdoor values <sup>feature · p0 · s · engine</sup>
+- [x] `0182` Calendar, seasons and script events <sup>feature · p0 · s · engine</sup>
+- [x] `0183` Ambient terms: outdoor channels computed from data, with named pushes <sup>feature · p0 · m · engine</sup>
+- [x] `0184` The weather plugin: seasons, weather types and a forecast <sup>feature · p0 · m · plugin</sup>
+- [x] `0194` Rain, snow, fog and lightning from the weather channels <sup>feature · p1 · m · client</sup>
+- [x] `0195` Season, weather and forecast in the HUD <sup>feature · p1 · s · client</sup>
+- [x] `0197` Weather modding guide <sup>docs · p1 · s · tooling</sup>
+- [x] `0198` Balance a year, and prove core stands alone <sup>chore · p0 · m · core</sup>
+- [x] `0207` Script data: saved state scripts own, readable by the UI <sup>feature · p0 · s · engine</sup>
 
 ## shelter — Shelter
 

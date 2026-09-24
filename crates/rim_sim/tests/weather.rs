@@ -25,11 +25,14 @@ fn queue(s: &Sim) -> Vec<(String, i64, i64)> {
 
 #[test]
 fn the_forecast_is_what_happens() {
+    // A year in release (CI); a few days in debug.
+    let days = if cfg!(debug_assertions) { 4 } else { 60 };
     for seed in [1, 2, 3] {
         let mut s = Sim::new(&mods(), seed).expect("mods load");
         let mut before: Vec<(String, i64, i64)> = Vec::new();
         let mut changes = 0;
-        for _ in 0..TICKS_PER_DAY * 4 {
+        let mut forced = 0;
+        for _ in 0..TICKS_PER_DAY * days {
             s.step();
             let now = queue(&s);
             if before.is_empty() {
@@ -38,13 +41,21 @@ fn the_forecast_is_what_happens() {
             }
             if now[0] != before[0] {
                 changes += 1;
-                // Everything that was forecast moved up one place, unchanged.
-                assert_eq!(now[..3], before[1..], "seed {seed}: the forecast was wrong at tick {}", s.world.tick);
-                assert!(now[0].1 <= s.world.tick as i64, "it started on time");
+                let ids = |q: &[(String, i64, i64)]| q.iter().map(|e| e.0.clone()).collect::<Vec<_>>();
+                if now[0].1 == s.world.tick as i64 - 1 && ids(&now[1..3]) == ids(&before[1..3]) {
+                    // Forced by an incident: the current weather was replaced
+                    // and what was forecast after it still comes, later.
+                    forced += 1;
+                } else {
+                    // Everything that was forecast moved up one place, unchanged.
+                    assert_eq!(now[..3], before[1..], "seed {seed}: the forecast was wrong at tick {}", s.world.tick);
+                    assert!(now[0].1 <= s.world.tick as i64, "it started on time");
+                }
             }
             before = now;
         }
-        assert!(changes >= 4, "seed {seed}: the weather changed {changes} times in 4 days");
+        assert!(changes >= days, "seed {seed}: the weather changed {changes} times in {days} days");
+        assert!(forced * 5 < changes, "seed {seed}: {forced} of {changes} changes were forced");
     }
 }
 
@@ -175,4 +186,34 @@ fn a_year_of_weather_is_deterministic() {
     assert_eq!(year, 1, "a full year went by");
     assert!(!q.is_empty());
     assert_eq!(a, run().0);
+}
+
+#[test]
+fn weather_incidents_show_in_the_breakdown_and_forecast() {
+    let script = r#"
+        local step = 0
+        rim.every(10, function()
+            step += 1
+            if step == 3 then
+                rim.weather.incident("cold_snap")
+                rim.weather.incident("heat_wave")
+            elseif step == 4 then
+                rim.weather.incident("storm")
+            end
+        end)
+    "#;
+    let dir = test_mods("incidents", &["core", "weather"], &[("trigger", &[("scripts/t.luau", script)])]);
+    let mut s = Sim::new(&dir, 6).expect("loads");
+    for _ in 0..60 {
+        s.step();
+    }
+    let t = s.world.defs.lookup("field", "temperature").unwrap() as usize;
+    let labels: Vec<String> = s.world.fields.explain_ambient(&s.world.defs, t).into_iter().map(|p| p.0).collect();
+    assert!(labels.contains(&"cold_snap".to_string()), "{labels:?}");
+    assert!(labels.contains(&"heat_wave".to_string()), "{labels:?}");
+    assert_eq!(queue(&s)[0].0, "storm", "the storm is in the forecast as the current weather");
+    let texts: Vec<&str> = s.world.messages.iter().map(|m| m.text.as_str()).collect();
+    assert!(texts.iter().any(|m| m.contains("cold snap")), "{texts:?}");
+    assert!(texts.iter().any(|m| m.contains("storm")), "{texts:?}");
+    let _ = fs::remove_dir_all(dir);
 }

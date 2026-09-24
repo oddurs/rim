@@ -2,7 +2,7 @@
 id: 184
 title: 'The weather plugin: seasons, weather types and a forecast'
 type: feature
-status: planned
+status: done
 milestone: weather
 depends_on:
 - 182
@@ -10,6 +10,7 @@ depends_on:
 - 207
 created: 2026-09-23
 updated: 2026-09-23
+closed_at: 2026-09-23
 priority: p0
 api: none
 effort: m
@@ -35,8 +36,12 @@ Weather is depth, not skeleton, so it is a first-party plugin built only on the 
 
 ## Acceptance criteria
 
-- [ ] The forecast is what happens unless forced (test over a year, several seeds)
-- [ ] Type frequencies over many years match their weights within 5%
-- [ ] Channels ease between types with no jumps
-- [ ] Removing the plugin leaves the core game unchanged
-- [ ] Two runs of a year hash identically
+- [x] The forecast is what happens unless forced (test over a year, several seeds)
+- [x] Type frequencies over many years match their weights within 5%
+- [x] Channels ease between types with no jumps
+- [x] Removing the plugin leaves the core game unchanged
+- [x] Two runs of a year hash identically
+
+## 2026-09-23
+
+mods/weather: seasons by patching core's temperature terms (mean over the year, daily swing narrower in winter, damped to 80% under cloud); five types (clear, overcast, rain/snow, storm/blizzard, fog) registered in Luau; a queue of four picked with the world RNG; channels pushed as 'weather' with each type's blend hours. Forecast truth: 3 seeds x a full year, every change is the forecast moving up, except incident-forced ones (checked separately, under a fifth of changes). Frequencies: 20,000 picks match weight shares within 5% (tested via rim.weather.pick, the same function the queue uses, rather than 40 simulated years). Channels never move more than 5% of their range per 20 ticks. Core alone: no pushes, no script data, cloud/rain/wind/fog 0. A year hashes identically twice. The hook caches when the weather ends: 0.2 µs a call. Weather types move to data with 0208. Tests: crates/rim_sim/tests/climate.rs, weather.rs, weather_guide.rs (release, as CI runs them).

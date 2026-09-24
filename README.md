@@ -23,6 +23,11 @@ plugins, including the base game (`mods/core`):
 it adds a creature, patches a core def, registers a storyteller incident, and
 adds a readout to the top bar.
 
+Seasons and weather are a first-party plugin too: `mods/weather` bends core's
+temperature around the calendar, runs a forecast of rain, storms, fog and snow,
+and adds cold snaps and heat waves, using only the public API. Remove it and
+core's mild climate remains. See [Modding climate and weather](docs/modding/weather.md).
+
 The interface is a mod too. The whole HUD lives in `mods/core/ui/`, written in
 Luau on a small UI engine (`crates/rim_ui`), and any mod can extend, replace,
 wrap or remove any part of it. See [Modding the interface](docs/modding/ui.md).
@@ -35,6 +40,8 @@ cargo run --release -p rim_client -- --seed 42        # a specific world
 cargo test --release -p rim_sim                       # includes the determinism test
 cargo run --release -p rim_sim --example headless -- --days 5
 cargo run --release -p rim_sim --example balance -- --seeds 40   # bot plays the opening
+cargo run --release -p rim_sim --example year -- --seed 7        # a year of weather, day by day
+cargo run --release -p rim_sim --example headless -- --days 3 --core   # core alone, no plugins
 cargo run --release -p rim_client -- --autotest                   # drive every control, save screenshots
 ```
 

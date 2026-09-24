@@ -16,7 +16,22 @@ local function calm(ctx): boolean
 	return not active("cold_snap") and not active("heat_wave")
 end
 
-rim.register_incident({
+-- Each incident's effect, by id, so tools and tests can set one off:
+-- rim.weather.incident("cold_snap").
+local effects = {}
+
+local function register(def)
+	effects[def.id] = def.execute
+	rim.register_incident(def)
+end
+
+function rim.weather.incident(id: string)
+	local f = effects[id]
+	assert(f, `unknown weather incident '{id}'`)
+	f({})
+end
+
+register({
 	id = "cold_snap",
 	kind = "neutral",
 	min_day = 5,
@@ -34,7 +49,7 @@ rim.register_incident({
 	end,
 })
 
-rim.register_incident({
+register({
 	id = "heat_wave",
 	kind = "neutral",
 	min_day = 3,
@@ -50,7 +65,7 @@ rim.register_incident({
 	end,
 })
 
-rim.register_incident({
+register({
 	id = "storm",
 	kind = "neutral",
 	min_day = 3,

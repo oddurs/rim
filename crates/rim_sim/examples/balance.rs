@@ -6,7 +6,7 @@
 //! The bot: designate trees and berry bushes near the start, then build a
 //! 5x5 wooden hut (walls, a door, a bed inside). Colonists defend themselves.
 //!
-//! Flags: `--nohut`, `--fire` (a campfire in the hut), `--core` (core alone,
+//! Flags: `--nohut`, `--fire` (a campfire in the hut), `--cold-snap DAY`, `--core` (core alone,
 //! no weather plugin), `--start-day N` (start on day N of the year, by adding
 //! a patch mod to a copy of the mods folder), `--show SEED` (print that run's
 //! messages). Runs over more than one season also report each season. Seeds
@@ -117,7 +117,15 @@ fn play(mods: &Path, seed: u64, days: u64) -> Report {
         ..Default::default()
     };
     let mut seen = 0;
+    // --cold-snap DAY [--snap-drop C]: a cold snap on that day (C°C, default 8, for
+    // two days), pushed directly so every run gets one.
+    let snap = std::env::args().any(|a| a == "--cold-snap").then(|| arg("--cold-snap", 5) * TICKS_PER_DAY);
     for _ in 0..days * TICKS_PER_DAY {
+        if snap == Some(s.world.tick) {
+            let t = defs.lookup("field", "temperature").unwrap() as usize;
+            let now = s.world.tick;
+            s.world.fields.push_ambient(t, "cold_snap", -(arg("--snap-drop", 8) as f64), now, Some(48.0), 3.0);
+        }
         s.step();
         let w = &s.world;
         let day = w.tick as f64 / TICKS_PER_DAY as f64;

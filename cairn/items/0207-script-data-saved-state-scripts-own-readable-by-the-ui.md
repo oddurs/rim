@@ -2,10 +2,11 @@
 id: 207
 title: 'Script data: saved state scripts own, readable by the UI'
 type: feature
-status: doing
+status: done
 milestone: weather
 created: 2026-09-23
 updated: 2026-09-23
+closed_at: 2026-09-23
 priority: p0
 api: additive
 effort: s
@@ -29,7 +30,11 @@ A plugin's state lives in Luau locals today: the storyteller's timers, and now t
 
 ## Acceptance criteria
 
-- [ ] Scripts can store and read back nested tables
-- [ ] Stored data changes the state hash
-- [ ] The UI reads it through `view.data`
-- [ ] Non-data values are rejected with a clear error
+- [x] Scripts can store and read back nested tables
+- [x] Stored data changes the state hash
+- [x] The UI reads it through `view.data`
+- [x] Non-data values are rejected with a clear error
+
+## 2026-09-23
+
+crates/rim_sim/src/data.rs: Data (bool, int, num, string, sorted table) with a stable hash; rim.set_data/get_data, view.data in the UI VM. Functions are refused with 'only plain data can be stored, not a function'. World.data is in state_hash. The weather forecast lives here as weather:forecast. Tests: crates/rim_sim/tests/climate.rs, weather.rs, weather_guide.rs (release, as CI runs them).

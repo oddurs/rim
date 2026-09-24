@@ -623,6 +623,15 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     set(&mut t, [8.0, 9.0, 16.0, 20.0, 100.0, 0.0]);
     t.ticks(40);
     t.frame().await;
+    for _ in 0..3 {
+        t.frame().await;
+    }
+    println!(
+        "storm visuals: {:.0} µs for {} particles, lighting {:.0} µs (CPU)",
+        t.app.sky.cost_us,
+        t.app.sky.particles(),
+        t.app.sky.light_us
+    );
     t.app.sky.strike();
     t.shot("storm").await;
     for id in pins {

@@ -3,11 +3,12 @@ id: 179
 key: weather
 title: Weather
 type: milestone
-status: planned
+status: done
 depends_on:
 - 161
 created: 2026-09-23
 updated: 2026-09-23
+closed_at: 2026-09-23
 priority: p1
 api: none
 due: 2026-10-01
@@ -50,3 +51,7 @@ Play a year with `weather` installed: a firelit first night, spring rain arrivin
 ## 2026-09-23
 
 Filed 208 (custom def kinds, Plugin API) as a follow-up; weather types register through Luau until then.
+
+## 2026-09-23
+
+Sprint closed 2026-09-24, ahead of its 2026-10-01 date. Definition of done: 20_climate.luau is gone and core's day and night are data; the client's darkness curve is gone (it reads the light field); seasons, weather, the forecast and incidents live in mods/weather on the public API, and the engine never names a weather type; core alone plays in CI; the first week with weather matches §4a within noise; a year hashes identically and the forecast is never wrong except where forced. Every item is closed. Merged daylight/light split from a parallel session (c3bff5e). Follow-ups: 0208 custom def kinds (weather types to data), 0209 sky bodies, 0196 weather devtools, the per-cell items in Crafting.

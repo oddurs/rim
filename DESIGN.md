@@ -363,7 +363,10 @@ a script event to `rim.on` handlers in any mod (`weather_changed`).
 ### Seeing the weather
 
 - **Light:** the renderer lights the world from the sim's `light` field
-  instead of its own curve: daylight, dark rooms, firelight. Indoors gets a
+  instead of its own curve: daylight, dark rooms, firelight. Brightness is
+  the square root of light (an overcast day at half the light still reads as
+  day), and firelight is the brighter of sky and fire rather than added, so a
+  campfire glows at night and hardly shows at noon. Indoors gets a
   share of daylight, as if through windows. It's drawn as a multiplied
   lightmap, so campfires glow and storms darken the map. The sky tint is a
   colour curve over the day in data, keyed by label so sky mods can add to it.
@@ -375,10 +378,59 @@ a script event to `rim.on` handlers in any mod (`weather_changed`).
 ### Cost and determinism
 
 - The engine evaluates terms for a handful of fields every 20 ticks: O(fields),
-  well under 0.01 ms. The plugin runs a Luau hook every 20 ticks and does real
-  work only when the weather changes.
+  well under 0.01 ms. The plugin runs a Luau hook every 20 ticks that returns
+  at once until the current weather ends (0.2 µs a call; 30-80 µs before it
+  cached that). With weather, a tick costs the same as core alone: mean
+  0.004-0.005 ms over 5 days (seed 4).
+- On screen: 50 µs of CPU for 1,500 raindrops, 3 µs for the lighting pass
+  (the lightmap only rebuilds when emitters or rooms change).
 - Fixed-point terms, the world RNG only for picking weather, and pushes and
   script data in the state hash: a year of weather hashes the same on every run.
+
+### Tuning seasons (balance harness)
+
+The bot builds a 5x5 hut with a bed; `--fire` adds a campfire inside. "Froze"
+is the founder's hours at zero warmth after night one.
+
+**The first week must play as §4a.** The first pass made it milder: cloudy
+nights stayed warm (cloud damped the daily swing to 45%) and the first night
+was sometimes overcast. So the first day is always clear (the first night is
+the shelter test core is tuned around), cloud damps the swing only to 80%,
+and rain and storms are colder. 5 days:
+
+| Founder froze after night one | Core alone | With weather |
+|---|---|---|
+| No shelter | 40/40 runs, 12.9 h | 80/80, 10.4 h |
+| Hut with a bed | 30/80, 3.1 h | 26/80, 2.0 h |
+| Hut, bed and campfire | 7/40, 1.6 h | 23/80, 1.7 h |
+
+Runs with a death: 10/80 either way (an early 40-seed run showed 8 against 2;
+at 80 seeds it was noise).
+
+**Winter needs a fire.** Starting on day 38 (late autumn) and playing 20 days
+into midwinter, 40 seeds:
+
+| | Colonies alive after winter | Founder alive |
+|---|---|---|
+| Hut with a bed | 0/40 | 0/40 |
+| Hut, bed and campfire | 24/40 | 20/40 |
+
+The deaths in heated runs are mostly wanderers the bot's single hut can't
+hold, and raids. Over a whole year the bot, which never builds more than one
+hut, loses most colonies with or without weather (core alone: 23/40), so
+year-long survival is a question for a better bot, not for the climate.
+**A cold snap asks for a fire.** Cold snaps start on day 5: -8°C for two days
+outside winter, -12°C in winter, with a warning to light a fire. An unheated
+hut leaks toward the outdoor temperature, so a hut alone doesn't carry you
+through one; a campfire does. 80 seeds, 8 days, snap on day 5:
+
+| | Colonies lost | Runs with a death |
+|---|---|---|
+| Hut, no snap | 9/80 | 29/80 |
+| Hut, snap (-8°C) | 16/80 | 47/80 |
+| Hut, snap at -5°C (tried) | 14/80 | 38/80 |
+| Hut and campfire, no snap | 2/80 | 18/80 |
+| Hut and campfire, snap (-8°C) | 1/80 | 24/80 |
 
 ---
 

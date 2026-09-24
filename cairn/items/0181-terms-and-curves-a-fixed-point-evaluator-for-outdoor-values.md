@@ -2,12 +2,13 @@
 id: 181
 title: 'Terms and curves: a fixed-point evaluator for outdoor values'
 type: feature
-status: doing
+status: done
 milestone: weather
 depends_on:
 - 180
 created: 2026-09-23
 updated: 2026-09-23
+closed_at: 2026-09-23
 priority: p0
 api: additive
 effort: s
@@ -32,7 +33,11 @@ Outdoor values (temperature, light) are computed by a Luau script today, and the
 
 ## Acceptance criteria
 
-- [ ] Terms parse with errors naming the def and term label
-- [ ] Integer evaluation matches an f64 reference within 0.01 (property test)
-- [ ] `explain` contributions sum to the value
-- [ ] A patch changes one term by label
+- [x] Terms parse with errors naming the def and term label
+- [x] Integer evaluation matches an f64 reference within 0.01 (property test)
+- [x] `explain` contributions sum to the value
+- [x] A patch changes one term by label
+
+## 2026-09-23
+
+crates/rim_sim/src/terms.rs. Terms are tables keyed by label (`[field.ambient.day]`), so the loader's deep merge patches one term and reports conflicts per term; `scale = 0` switches one off. Inputs: input=year|hour, ambient, noise (hash-based value noise, no RNG draws), constants; curves up to 16 points, clamped. Q = 1e4 fixed point with i64 intermediates. Property test: worst error vs an f64 reference < 0.01 over 2000 random curves. Load errors name the def and term ('field/temperature, term 'day': unknown input 'moon''). Tests: crates/rim_sim/tests/climate.rs, weather.rs, weather_guide.rs (release, as CI runs them).
