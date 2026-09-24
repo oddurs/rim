@@ -42,26 +42,7 @@ out.
 
 ## Measurement (before)
 
-`rim --bench-render --seed 1`, 300 frames per view, ms per frame. World is
-CPU for every pass but the UI; submit is macroquad handing the batches to
-GL; gpu is glFinish (Linux only).
-
-GitHub ubuntu-latest, Xvfb + llvmpipe (software GL), 1600×960 at 1x:
-
-| view | world | p99 | things | pawns | weather | ui | submit | gpu | calls | indices |
-|---|---|---|---|---|---|---|---|---|---|---|
-| whole map (z 4) | 6.03 | 7.12 | 5.84 | 0.19 | 0.00 | 0.14 | 24.8 | 37.6 | 29 | 630k |
-| mid (z 12) | 2.29 | 3.78 | 2.18 | 0.11 | 0.00 | 0.12 | 8.1 | 71.6 | 12 | 227k |
-| close (z 28) | 0.75 | 1.07 | 0.66 | 0.09 | 0.00 | 0.42 | 4.2 | 69.9 | 7 | 94k |
-| storm (z 4) | 6.30 | 6.59 | 5.79 | 0.18 | 0.33 | 0.11 | 34.5 | 57.2 | 30 | 649k |
-
-Apple M-series, 1600×960 points at 2x: whole map 3.14 world (3.07
-things), mid 2.11, close 0.77, storm 3.47; submit ~0.4.
-
-Things are the frame: 97% of the world's CPU fully zoomed out, and over
-budget on the CI runner. The CI gate runs at 2x slack until the chunked
-meshes land; that item tightens it.
-
+Pending the CI run after review fixes (owned buildings, 1920×1080).
 
 ## Acceptance criteria
 

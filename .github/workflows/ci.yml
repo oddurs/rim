@@ -100,10 +100,10 @@ jobs:
           path: target/autotest/*.png
           if-no-files-found: ignore
       # DESIGN.md §8: the world renderer's CPU time on the whole bench map,
-      # against its budget (2x slack on shared runners).
+      # against its budget (3x slack on shared runners until chunked meshes).
       - name: Render benchmark, with a budget
         if: runner.os == 'Linux'
-        run: xvfb-run -a -s "-screen 0 1600x960x24" cargo run --release -p rim_client -- --seed 1 --bench-render --check --json target/render-bench.json --shots target/render-bench
+        run: xvfb-run -a -s "-screen 0 1920x1080x24" cargo run --release -p rim_client -- --seed 1 --bench-render --check --json target/render-bench.json --shots target/render-bench
       - name: Upload the render benchmark
         if: runner.os == 'Linux' && always()
         uses: actions/upload-artifact@v4

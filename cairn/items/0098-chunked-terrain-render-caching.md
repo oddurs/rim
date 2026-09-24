@@ -56,4 +56,4 @@ Graphics milestone: no longer waits on the ground shader (da558444, still in Sca
 
 ## 2026-09-24
 
-When this lands, drop the render bench's CI slack from 2x toward 1x (bench.rs, --check): the gate only holds the 4 ms budget once things are cached.
+When this lands, drop the render bench's CI slack from 3x toward 1x (bench.rs, --check): the gate only holds the 4 ms budget once things are cached.
