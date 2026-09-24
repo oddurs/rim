@@ -762,6 +762,60 @@ This buys us replays, reproducible bug reports ("seed + mod list + command
 log"), desync-checkable **co-op lockstep multiplayer** later, and a headless
 simulation for tests and CI.
 
+## 7a. Saves
+
+### Tension: a snapshot, or the seed and the command log?
+
+- **For seed + commands:** determinism (§7) makes it tiny and exact, and it's
+  what replays and bug reports already are.
+- **Against:** loading ten in-game years would mean simulating them, and a
+  save must still load after a mod update, which changes what a replay does.
+- **Ruling:** a save is a **snapshot** of the world. A **replay** (seed, mod
+  lockfile, command log) is a separate file for bug reports and hot reload
+  (0084), and a snapshot makes replays start fast.
+
+### What a snapshot holds
+
+- **A header:** save format version, engine and API version, seed, tick,
+  and the mod lockfile: every mod's id and version, in load order (0152).
+- **World sections, by name:** the RNG, map grids, field stock grids,
+  ambient pushes, script data, messages, colony flags.
+- **Entities as named components.** Each entity is a map from component name
+  to value: `engine:pawn` and `engine:thing` for the engine's, `mood:thoughts`
+  for a mod's. Def references are qualified ids (`core:wall`, 0138), never
+  `DefId` indices, which change whenever the mod list does. A string table
+  keeps the repeated ids small. hecs entity ids aren't stable either, so a
+  save numbers entities itself and remaps references between them on load.
+- **Nothing derived.** Paths, reachability regions, rooms, the wealth cache
+  and def indices are rebuilt on load. If it can be computed, it isn't saved.
+
+### Script state
+
+The Luau VM isn't saved. On load, scripts run again and register their hooks
+in the same order. Anything a mod needs to remember lives in **script data**
+(`rim.set_data`), which is saved and in the state hash. A value kept in a
+Luau local is a cache: it's lost on load, and invisible to the desync check.
+So the storyteller's memory, which lives in locals today, moves to script
+data (0062).
+
+### Encoding
+
+- **Self-describing:** serde into a self-describing binary (CBOR or
+  MessagePack; measured when the format is built, 0061), compressed with
+  zstd. Self-describing because two jobs need to read data without its type:
+  - components of a removed mod ride along untouched until it comes back
+    (0063);
+  - migrations work on plain data (0139).
+- **Versioned twice:** the format has a version, and so does each mod. A mod
+  whose recorded version differs from the installed one gets its migrate
+  hook, with its components and data.
+
+### The guarantee, tested
+
+Save, load and carry on must give the same state hash, tick for tick, as the
+game that never saved. CI runs that on the crosscheck scenario on every
+platform. A save that doesn't round-trip is a desync that hasn't happened yet.
+
 ---
 
 ## 8. Performance budget
