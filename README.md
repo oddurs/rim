@@ -44,6 +44,7 @@ cargo run --release -p rim_sim --example year -- --seed 7        # a year of wea
 cargo run --release -p rim_sim --example headless -- --days 3 --core   # core alone, no plugins
 cargo run --release -p rim_client -- --autotest                   # drive every control, save screenshots (seed 7)
 cargo run --release -p rim_client -- test                         # the mods' own Luau tests, headless
+cargo run --release -p rim_client -- check --strict               # each mod loads clean with only its dependencies
 scripts/autotest-sweep.sh 1 44                                    # the autotest over many maps
 cargo dist                                                        # a shipping build (LTO); cargo prof for profiling
 ```

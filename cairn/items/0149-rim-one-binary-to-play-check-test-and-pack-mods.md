@@ -40,3 +40,7 @@ One binary. `rim` with no arguments starts the game; everything else is a subcom
 ## 2026-09-24
 
 rim test [path] landed with 0146 (#38?), dispatched before the window opens; check and pack can follow the same pattern in crates/rim_client/src/cli.rs.
+
+## 2026-09-24
+
+rim check [path] [--hours H] [--strict] landed: it loads each mod with only its dependency closure on a 96-cell map, plays 6 in-game hours, and reports load errors, load warnings (patch conflicts, no-match patches, pow lint) and script errors; exit 1 on an error, or on a warning with --strict. CI runs it on every OS with no display. Criterion 2 stays open for deprecations: they'll surface as load warnings once 63d2f10a adds them. check and test now both run headless in CI (criterion 6 still needs pack).

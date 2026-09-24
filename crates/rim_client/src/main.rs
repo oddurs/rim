@@ -158,8 +158,10 @@ fn main() {
     // Subcommands that need no window run before one opens, so they work
     // on headless CI machines.
     let args: Vec<String> = std::env::args().collect();
-    if args.get(1).map(String::as_str) == Some("test") {
-        std::process::exit(cli::test(&args[2..]));
+    match args.get(1).map(String::as_str) {
+        Some("test") => std::process::exit(cli::test(&args[2..])),
+        Some("check") => std::process::exit(cli::check(&args[2..])),
+        _ => {}
     }
     macroquad::Window::from_config(conf(), game());
 }

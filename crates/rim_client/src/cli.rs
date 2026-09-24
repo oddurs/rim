@@ -1,4 +1,4 @@
-//! Commands that run without a window: `rim test`.
+//! Commands that run without a window: `rim test`, `rim check`.
 
 use rim_sim::modtest;
 use std::path::PathBuf;
@@ -66,4 +66,72 @@ pub fn test(args: &[String]) -> i32 {
         }
     }
     i32::from(!failed.is_empty())
+}
+
+const CHECK_USAGE: &str = "usage: rim check [MOD_DIR ...] [--hours H] [--strict]
+
+Loads each mod with its dependencies, runs a few in-game hours, and reports
+load errors, warnings (patch conflicts, skipped patches, determinism hazards)
+and script errors. With no MOD_DIR, checks every mod in ./mods. Exits 1 on
+an error, or on a warning with --strict.";
+
+/// `rim check`: returns the process exit code.
+pub fn check(args: &[String]) -> i32 {
+    let mut dirs: Vec<PathBuf> = Vec::new();
+    let (mut hours, mut strict) = (6.0, false);
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        match a.as_str() {
+            "--hours" => hours = it.next().and_then(|h| h.parse().ok()).unwrap_or(hours),
+            "--strict" => strict = true,
+            "-h" | "--help" => {
+                println!("{CHECK_USAGE}");
+                return 0;
+            }
+            s if s.starts_with('-') => {
+                eprintln!("rim check: unknown option {s}\n\n{CHECK_USAGE}");
+                return 2;
+            }
+            s => dirs.push(PathBuf::from(s)),
+        }
+    }
+    if dirs.is_empty() {
+        let mut found: Vec<PathBuf> = std::fs::read_dir("mods")
+            .map(|rd| rd.flatten().map(|e| e.path()).filter(|p| p.join("mod.toml").is_file()).collect())
+            .unwrap_or_default();
+        found.sort();
+        dirs = found;
+    }
+    if dirs.is_empty() {
+        eprintln!("rim check: no mods in ./mods\n\n{CHECK_USAGE}");
+        return 2;
+    }
+    let mut failed = false;
+    for dir in &dirs {
+        match modtest::check_mod(dir, hours) {
+            Err(e) => {
+                println!("FAIL {}\n  {e}", dir.display());
+                failed = true;
+            }
+            Ok(r) => {
+                let bad = !r.errors.is_empty() || (strict && !r.warnings.is_empty());
+                let mark = if bad { "FAIL" } else { "ok  " };
+                println!(
+                    "{mark} {} (with {}): {} warnings, {} script errors",
+                    r.mod_id,
+                    r.mods.join(", "),
+                    r.warnings.len(),
+                    r.errors.len()
+                );
+                for w in &r.warnings {
+                    println!("  warning: {w}");
+                }
+                for e in &r.errors {
+                    println!("  error: {}", e.lines().next().unwrap_or_default());
+                }
+                failed |= bad;
+            }
+        }
+    }
+    i32::from(failed)
 }

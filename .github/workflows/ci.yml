@@ -60,6 +60,8 @@ jobs:
       # open a window.
       - name: Mod tests (rim test)
         run: cargo run --release -p rim_client -- test --junit target/rim-test.xml
+      - name: Mods load clean (rim check --strict)
+        run: cargo run --release -p rim_client -- check --strict
       - name: Upload the mod test report
         if: always()
         uses: actions/upload-artifact@v4

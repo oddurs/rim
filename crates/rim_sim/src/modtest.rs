@@ -265,6 +265,45 @@ fn closure(all: &[ModManifest], id: &str) -> BTreeSet<String> {
     out
 }
 
+/// What `rim check` found in a mod.
+#[derive(Debug, Default)]
+pub struct CheckReport {
+    pub mod_id: String,
+    /// The mods it loaded with: itself and everything it depends on.
+    pub mods: Vec<String>,
+    /// Load warnings: patch conflicts, skipped patches, determinism hazards.
+    pub warnings: Vec<String>,
+    /// Script errors from its first in-game hours.
+    pub errors: Vec<String>,
+}
+
+/// `rim check`: load the mod at `mod_dir` with its dependencies on a small
+/// map and run a few in-game hours, collecting load warnings and script
+/// errors. A load failure is the `Err`.
+pub fn check_mod(mod_dir: &Path, hours: f64) -> Result<CheckReport, String> {
+    let mod_dir = mod_dir.canonicalize().map_err(|e| format!("{}: {e}", mod_dir.display()))?;
+    let mods_dir = mod_dir.parent().ok_or("a mod folder has a parent")?.to_path_buf();
+    let all = discover(&mods_dir)?;
+    let me = all
+        .iter()
+        .find(|m| m.dir.canonicalize().ok().as_deref() == Some(mod_dir.as_path()))
+        .ok_or_else(|| format!("{}: no mod.toml", mod_dir.display()))?;
+    let mods = closure(&all, &me.id);
+    let mut sim = Sim::build(&mods_dir, 1, &|id| mods.contains(id), 96)?;
+    sim.scripts.echo_errors = false;
+    let ticks = (hours * TICKS_PER_DAY as f64 / 24.0) as u64;
+    for _ in 0..ticks {
+        sim.step();
+    }
+    let mut errors: Vec<String> = Vec::new();
+    for m in sim.world.messages.iter().filter(|m| m.text.contains("script error")) {
+        if !errors.contains(&m.text) {
+            errors.push(m.text.clone());
+        }
+    }
+    Ok(CheckReport { mod_id: me.id.clone(), mods: mods.into_iter().collect(), warnings: sim.warnings.clone(), errors })
+}
+
 /// Run every `tests/*.luau` in the mod at `mod_dir`. Worlds load mods from
 /// the folder it sits in. `filter` keeps only tests whose name contains it.
 pub fn run_mod(mod_dir: &Path, filter: Option<&str>) -> Result<Vec<TestResult>, String> {
