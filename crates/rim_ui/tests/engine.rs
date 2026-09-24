@@ -454,7 +454,7 @@ fn hot_reload_swaps_the_ui_and_keeps_the_last_good_one_on_error() {
     let hud = dir.join("core/ui/hud.luau");
     let src = std::fs::read_to_string(&hud).unwrap();
     std::thread::sleep(std::time::Duration::from_millis(20));
-    std::fs::write(&hud, src.replace("\"Wealth \"", "\"Riches \"")).unwrap();
+    std::fs::write(&hud, src.replace("\"Wealth %d\"", "\"Riches %d\"")).unwrap();
     assert!(ui.check_reload(10.0), "a changed UI script should reload");
     frame(&mut ui, &sim, &cv, Default::default());
     assert!(ui.snapshot().contains("Riches"), "the new script should be running");
@@ -652,4 +652,119 @@ fn the_material_row_renders_beside_the_toolbar() {
         frame(&mut ui, &sim, &cv, Input { time: k as f64, ..Default::default() });
     }
     assert!(ui.find("core:stuff").is_none(), "no row with nothing to choose for");
+}
+
+/// Every user-visible string in core's UI goes through `ui.t`, so a language
+/// file can back it later without a hunt. The static scan is the criterion;
+/// the runtime set is what a frame actually asked for.
+#[test]
+fn strings_go_through_one_door() {
+    let dir = mods().join("core").join("ui");
+    // Every `t("<key>", ...)` call, by hand: a regex crate is not worth it.
+    let mut keys = Vec::new();
+    for f in ["hud.luau", "devtools.luau", "labels.luau"] {
+        let src = std::fs::read_to_string(dir.join(f)).unwrap();
+        let mut rest = src.as_str();
+        while let Some(i) = rest.find("t(\"") {
+            // `slot("core:x")` and `mount("top", ...)` also end in `t("`:
+            // a real call has nothing identifier-like before the `t`.
+            let boundary = rest[..i].chars().next_back().is_none_or(|c| !(c.is_alphanumeric() || c == '_' || c == '.'));
+            let after = &rest[i + 3..];
+            if !boundary {
+                rest = after;
+                continue;
+            }
+            let Some(end) = after.find('"') else { break };
+            let key = &after[..end];
+            let ok = key.contains(':')
+                && key.contains('.')
+                && key.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || matches!(c, '_' | ':' | '.'));
+            assert!(ok, "{f}: key {key:?} is not <mod>:<part>.<name>");
+            keys.push(key.to_string());
+            rest = &after[end..];
+        }
+    }
+    assert!(keys.len() >= 40, "core wraps its strings: {} keys", keys.len());
+    let mut uniq = keys.clone();
+    uniq.sort();
+    uniq.dedup();
+    // A key may be reused on purpose (the stuff stats appear twice); every
+    // key names its mod and its part.
+    assert!(uniq.iter().all(|k| k.starts_with("core:") && k.contains('.')), "namespaced, dotted: {uniq:?}");
+    let sim = sim_at(&mods());
+    let mut ui = ui_for(&sim);
+    let cv = client(&sim);
+    frame(&mut ui, &sim, &cv, Default::default());
+    let used = ui.vm.string_keys();
+    assert!(!used.is_empty(), "a frame asks for strings");
+    for k in &used {
+        assert!(uniq.contains(k), "runtime asked for {k}, which the scripts do not declare");
+    }
+}
+
+/// The door is real: a mod's `ui/lang.toml` overrides a string by key and
+/// the frame shows the override, and two mods setting one key is reported.
+#[test]
+fn a_language_file_overrides_a_string() {
+    let dir = scratch_mods(
+        "lang",
+        &[
+            ("deutsch", "", &[("ui/lang.toml", "\"core:topbar.help\" = \"Leertaste Pause\"\n")]),
+            ("dansk", "", &[("ui/lang.toml", "\"core:topbar.help\" = \"Mellemrum pause\"\n")]),
+        ],
+    );
+    let sim = sim_at(&dir);
+    let mut ui = ui_for(&sim);
+    let cv = client(&sim);
+    frame(&mut ui, &sim, &cv, Default::default());
+    let snap = ui.snapshot();
+    // Which of the two wins is the loader's ordering, not this test's business.
+    let german = snap.contains("Leertaste Pause");
+    let danish = snap.contains("Mellemrum pause");
+    assert!(german != danish, "exactly one mod's string shows: german={german} danish={danish}\n{snap}");
+    assert!(!snap.contains("Space pause"), "the default is gone:\n{snap}");
+    assert!(
+        ui.warnings().iter().any(|w| w.contains("UI conflict: string 'core:topbar.help'")),
+        "two mods setting one key is reported: {:?}",
+        ui.warnings()
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// No bare user-visible literal in core's UI scripts: anything a player
+/// reads is `t(...)`. Ids, tokens and format arguments are not strings a
+/// player reads, and the kit takes its text from callers.
+#[test]
+fn no_bare_literals_in_core_ui() {
+    let dir = mods().join("core").join("ui");
+    // A quoted literal starting with a letter right after one of these is
+    // something a player reads.
+    const HEADS: &[&str] = &[
+        "label(\"",
+        "label = \"",
+        "text = \"",
+        "tooltip = \"",
+        "heading(\"",
+        "bubble({ text = \"",
+        "toast({ text = \"",
+    ];
+    let bare = |line: &str| {
+        HEADS.iter().any(|h| {
+            line.match_indices(h)
+                .any(|(i, _)| line[i + h.len()..].chars().next().is_some_and(|c| c.is_ascii_alphabetic()))
+        })
+    };
+    let mut hits = Vec::new();
+    for f in ["hud.luau", "devtools.luau", "labels.luau"] {
+        let src = std::fs::read_to_string(dir.join(f)).unwrap();
+        for (n, line) in src.lines().enumerate() {
+            if line.trim_start().starts_with("--") {
+                continue;
+            }
+            if bare(line) {
+                hits.push(format!("{f}:{}: {}", n + 1, line.trim()));
+            }
+        }
+    }
+    assert!(hits.is_empty(), "bare strings a player would read:\n{}", hits.join("\n"));
 }

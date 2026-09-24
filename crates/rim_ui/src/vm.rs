@@ -97,6 +97,12 @@ struct Registry {
     removes: HashMap<String, Vec<Rc<str>>>,
     actions: Vec<UiAction>,
     state: HashMap<String, Value>,
+    /// `ui.t` overrides from each mod's `ui/lang.toml`, in load order.
+    strings: HashMap<String, String>,
+    /// Which mod set each string, for conflict reports.
+    strings_by: HashMap<String, String>,
+    /// Every key `ui.t` has been asked for, so a test can list them.
+    used_strings: HashSet<String>,
 }
 
 /// A loaded mod: id, directory, and which mods it may `require`.
@@ -200,6 +206,32 @@ impl UiVm {
         // each script writes its own globals into a private environment.
         if let Err(e) = vm.lua.sandbox(true) {
             vm.warnings.push(format!("UI sandbox failed: {e}"));
+        }
+        // Strings first, so a script's first `ui.t` already sees them.
+        for m in mods {
+            let path = m.dir.join("ui").join("lang.toml");
+            let Ok(src) = std::fs::read_to_string(&path) else { continue };
+            let table: toml::Table = match src.parse() {
+                Ok(t) => t,
+                Err(e) => {
+                    vm.warnings.push(format!("{}/ui/lang.toml: {}", m.id, e.message()));
+                    continue;
+                }
+            };
+            let mut reg = vm.reg.borrow_mut();
+            for (k, v) in table {
+                let Some(text) = v.as_str() else {
+                    vm.warnings.push(format!("{}/ui/lang.toml: '{k}' must be a string", m.id));
+                    continue;
+                };
+                if let Some(by) = reg.strings_by.get(&k) {
+                    if *by != m.id {
+                        vm.warnings.push(format!("UI conflict: string '{k}' set by '{by}' and '{}'", m.id));
+                    }
+                }
+                reg.strings.insert(k.clone(), text.to_string());
+                reg.strings_by.insert(k, m.id.clone());
+            }
         }
         for m in mods {
             let dir = m.dir.join("ui");
@@ -386,6 +418,17 @@ impl UiVm {
             "state",
             lua.create_function(move |_, (key, default): (String, Value)| {
                 Ok(r.borrow().state.get(&key).cloned().unwrap_or(default))
+            })?,
+        )?;
+        // ui.t(key, default): the one door every user-visible string goes
+        // through. A language file backs it; until one does, the default.
+        let r = self.reg.clone();
+        ui.set(
+            "t",
+            lua.create_function(move |_, (key, default): (String, Option<String>)| {
+                let mut reg = r.borrow_mut();
+                reg.used_strings.insert(key.clone());
+                Ok(reg.strings.get(&key).cloned().or(default).unwrap_or(key))
             })?,
         )?;
         let r = self.reg.clone();
@@ -852,6 +895,13 @@ impl UiVm {
                 self.errors.push(e);
             }
         }
+    }
+
+    /// Every key `ui.t` has been asked for so far, sorted.
+    pub fn string_keys(&self) -> Vec<String> {
+        let mut v: Vec<String> = self.reg.borrow().used_strings.iter().cloned().collect();
+        v.sort();
+        v
     }
 
     pub fn take_actions(&mut self) -> Vec<UiAction> {

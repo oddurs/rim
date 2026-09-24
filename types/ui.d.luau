@@ -70,6 +70,8 @@ declare ui: {
     spacer: (node: Node?) -> Node,
     -- A value kept with ui.set_state, or default.
     state: (key: string, default: any) -> any,
+    -- A user-visible string by key: a mod's ui/lang.toml can replace it; until one does, the default.
+    t: (key: string, default: string?) -> string,
     -- Text: { "words", size = ..., color = ... }.
     text: (node: Node | string) -> Node,
     -- Decorate a node: get its tree, return a new one.
