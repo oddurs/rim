@@ -136,7 +136,13 @@ Press **F12** and then **Kit gallery** to see every component in every state.
 
 `act.select(id)`, `act.focus(id)`, `act.tool(key)`, `act.speed(n)`,
 `act.toggle_pause()`, `act.draft(id, on)`, `act.cycle_overlay()`,
-`act.set_overlay(index)`, `act.toggle_profiler()`, `act.toggle_devtools()`.
+`act.set_overlay(index)`, `act.toggle_profiler()`, `act.toggle_devtools()`,
+`act.send(name, table)`, `act.advance(hours)`.
+
+`act.send(name, table)` sends an event to your mod's own sim scripts
+(`"my_mod:do_thing"`, heard with `rim.on` there). It travels as a player
+command, so it replays and stays in lockstep; a mod can only send under its
+own name. `act.advance(hours)` runs the game forward (devtools).
 
 Actions are queued and applied by the client, exactly like a key press.
 Toolbar keys look like `"designate:chop"` and `"build:wall"`.

@@ -268,3 +268,8 @@ channels gets the visuals:
   base game alone.
 - In game, the weather readout in the top bar opens the forecast and the
   temperature's breakdown; `O` cycles overlays for fields that vary over the map.
+- **F12** shows a Weather devtools panel: force any weather type for 12 hours,
+  skip ahead an hour, six hours, a day or a season, and see the next 72 hours
+  of cloud, rain, wind and fog from the forecast queue. Forcing is a command
+  (`act.send("weather:force", ...)`, handled by the plugin's sim script with
+  `rim.on`), the same way any mod's UI can ask its own scripts to act.

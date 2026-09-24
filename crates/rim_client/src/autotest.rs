@@ -724,6 +724,26 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.frame().await;
     t.check(t.app.ui.find("weather:forecast.panel").is_none(), "clicking again closes it");
 
+    // Weather devtools: force a type through a command, skip ahead.
+    t.key(KeyCode::F12).await;
+    t.frame().await;
+    t.check(t.app.ui.find("weather:devtools.panel").is_some(), "F12 shows the weather devtools");
+    t.click_ui("weather:devtools.force.storm").await;
+    t.ticks(2);
+    let head = match t.w().data.get("weather:forecast") {
+        Some(Data::Table(q)) => q.values().next().and_then(|e| e.get("id").cloned()),
+        _ => None,
+    };
+    t.check(head == Some(Data::Str("storm".into())), format!("forcing a storm from devtools works ({head:?})"));
+    let before = t.w().tick;
+    t.click_ui("weather:devtools.advance.24").await;
+    let skipped = t.w().tick - before;
+    t.check(skipped >= rim_sim::TICKS_PER_DAY, format!("+1 day runs the sim a day forward ({skipped} ticks)"));
+    t.frame().await;
+    t.shot("weather_devtools").await;
+    t.key(KeyCode::F12).await;
+    t.frame().await;
+
     // Pin the channels to see each kind of weather over the hut.
     let field = |t: &T, id: &str| t.w().defs.lookup("field", id).unwrap() as usize;
     let pins = ["precipitation", "temperature", "wind", "wind_dir", "cloud", "fog"];

@@ -590,6 +590,14 @@ fn apply_ui(app: &mut App, a: UiAction) {
         UiAction::ToggleProfiler => apply(app, Action::ToggleProfiler),
         UiAction::ToggleDevtools => apply(app, Action::ToggleDevtools),
         UiAction::ToggleOutlines => app.ui.toggle_outlines(),
+        UiAction::Send(name, data) => app.sim.push(Command::ModEvent { name, data }),
+        UiAction::Advance(hours) => {
+            // Devtools only: step the sim now, as fast as it goes.
+            let ticks = (hours * rim_sim::TICKS_PER_DAY as f64 / 24.0) as u64;
+            for _ in 0..ticks {
+                app.sim.step();
+            }
+        }
     }
 }
 

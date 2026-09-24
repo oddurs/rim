@@ -84,6 +84,11 @@ pub enum UiAction {
     ToggleDevtools,
     /// Devtools: outline every layout box (handled by the engine).
     ToggleOutlines,
+    /// A mod's UI sends an event to its own sim scripts ("weather:force"),
+    /// through a Command so it replays and stays in lockstep.
+    Send(String, Option<rim_sim::data::Data>),
+    /// Devtools: run the simulation forward this many game hours now.
+    Advance(f64),
 }
 
 /// Screen position of a pawn (physical pixels), interpolated between cells

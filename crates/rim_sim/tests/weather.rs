@@ -220,3 +220,24 @@ fn weather_incidents_show_in_the_breakdown_and_forecast() {
     assert!(texts.iter().any(|m| m.contains("storm")), "{texts:?}");
     let _ = fs::remove_dir_all(dir);
 }
+
+#[test]
+fn the_weather_can_be_forced_by_a_command() {
+    // What the devtools panel sends: a command, delivered to the weather
+    // plugin's sim script as the event weather:force.
+    let mut s = Sim::new(&mods(), 3).expect("mods load");
+    for _ in 0..40 {
+        s.step();
+    }
+    let mut data = std::collections::BTreeMap::new();
+    data.insert(Key::Str("id".into()), Data::Str("fog".into()));
+    data.insert(Key::Str("hours".into()), Data::Int(5));
+    s.push(rim_sim::Command::ModEvent { name: "weather:force".into(), data: Some(Data::Table(data)) });
+    s.step();
+    s.step();
+    let q = queue(&s);
+    assert_eq!(q[0].0, "fog", "{q:?}");
+    assert!((q[0].2 - q[0].1 - (5 * TICKS_PER_DAY / 24) as i64).abs() <= 1, "five hours: {q:?}");
+    let Some(Data::Table(types)) = s.world.data.get("weather:types") else { panic!("types are published") };
+    assert!(types.values().any(|v| v == &Data::Str("storm".into())));
+}
