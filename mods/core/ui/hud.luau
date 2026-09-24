@@ -5,6 +5,7 @@
 
 local kit = require("@core/ui/kit")
 local row, col, label, button = kit.row, kit.col, kit.label, kit.button
+local t = ui.t
 
 local function pct(v: number): string
 	return tostring(math.floor(v * 100 + 0.5)) .. "%"
@@ -16,13 +17,13 @@ end
 local function date(view): string
 	local d = view.date()
 	local s = string.upper(string.sub(d.season, 1, 1)) .. string.sub(d.season, 2) .. " " .. d.day
-	return if d.year > 1 then s .. ", year " .. d.year else s
+	return if d.year > 1 then string.format(t("core:clock.date_year", "%s, year %d"), s, d.year) else s
 end
 
 ui.define("core:clock", function(view)
-	local speed = if view.paused() then "paused" else view.speed() .. "×"
+	local speed = if view.paused() then t("core:clock.paused", "paused") else string.format(t("core:clock.speed", "%d×"), view.speed())
 	return row({ gap = "m", align = "center" }, {
-		label("Day " .. view.day(), { weight = "strong" }),
+		label(string.format(t("core:clock.day", "Day %d"), view.day()), { weight = "strong" }),
 		label(date(view), { id = "core:clock.date", color = "muted" }),
 		label(view.clock(), { weight = "strong" }),
 		label(speed, { color = if view.paused() then "bad" else "muted" }),
@@ -30,15 +31,15 @@ ui.define("core:clock", function(view)
 end)
 
 ui.define("core:status", function(view)
-	local parts = { label("Wealth " .. math.floor(view.wealth()), { color = "muted" }) }
+	local parts = { label(string.format(t("core:status.wealth", "Wealth %d"), math.floor(view.wealth())), { color = "muted" }) }
 	for _, f in view.fields() do
 		if f.hud then
-			table.insert(parts, label(string.format("%.0f%s outside", f.ambient, f.unit), { color = "muted" }))
+			table.insert(parts, label(string.format(t("core:status.outside", "%.0f%s outside"), f.ambient, f.unit), { color = "muted" }))
 		end
 	end
 	local overlay = view.overlay()
 	if overlay then
-		table.insert(parts, label("overlay: " .. overlay, { color = "accent" }))
+		table.insert(parts, label(string.format(t("core:status.overlay", "overlay: %s"), overlay), { color = "accent" }))
 	end
 	return row({ gap = "l", align = "center" }, parts)
 end)
@@ -55,7 +56,7 @@ ui.define("core:colonists", function(view)
 				active = p.selected,
 				swatch = health,
 				color = if p.drafted then "player" else nil,
-				tooltip = p.label .. " · " .. p.job .. " · health " .. pct(p.health),
+				tooltip = string.format(t("core:colonists.tooltip", "%s · %s · health %s"), p.label, p.job, pct(p.health)),
 				on_click = function()
 					act.select(p.id)
 					act.focus(p.id)
@@ -74,7 +75,7 @@ ui.define("core:topbar", function(view)
 		{ kind = "spacer" },
 		-- Extension point: mods add readouts here.
 		row({ id = "core:topbar.right", gap = "l", align = "center" }),
-		label("Space pause · 1/2/3 speed · R draft · O overlay · F3 profiler · F12 devtools", { size = "small", color = "faint" }),
+		label(t("core:topbar.help", "Space pause · 1/2/3 speed · R draft · O overlay · F3 profiler · F12 devtools"), { size = "small", color = "faint" }),
 	})
 end)
 ui.mount("top", "core:topbar")
@@ -117,11 +118,11 @@ ui.define("core:toolbar", function(view)
 			picks,
 			button({
 				id = "core:stuff." .. m.id,
-				label = if none then m.label .. " · none" else `{m.label} ×{m.have}`,
+				label = if none then string.format(t("core:stuff.none", "%s · none"), m.label) else string.format(t("core:stuff.have", "%s ×%d"), m.label, m.have),
 				active = m.active,
 				swatch = m.color,
 				color = if none then "faint" else nil,
-				tooltip = `hp {m.hp} · {m.work} work`,
+				tooltip = string.format(t("core:stuff.stats", "hp %d · %d work"), m.hp, m.work),
 				on_click = function()
 					act.stuff(m.id)
 				end,
@@ -129,7 +130,7 @@ ui.define("core:toolbar", function(view)
 		)
 	end
 	if chosen then
-		table.insert(picks, label(`hp {chosen.hp} · {chosen.work} work`, { size = "small", color = "muted" }))
+		table.insert(picks, label(string.format(t("core:stuff.stats", "hp %d · %d work"), chosen.hp, chosen.work), { size = "small", color = "muted" }))
 	end
 	local materials = row({ id = "core:stuff", pad = "s", gap = "xs", bg = "surface", radius = 0, align = "center" }, picks)
 	return col({}, { materials, buttons })
@@ -161,19 +162,19 @@ ui.define("core:inspector", function(view)
 	if not p then
 		return nil
 	end
-	local title = if p.founder then p.name .. " (founder)" else p.name
-	local doing = if p.drafted then "drafted" else p.job
-	local bars = { kit.bar({ label = "health", value = p.health, color = "good" }) }
+	local title = if p.founder then string.format(t("core:inspector.founder", "%s (founder)"), p.name) else p.name
+	local doing = if p.drafted then t("core:inspector.drafted", "drafted") else p.job
+	local bars = { kit.bar({ label = t("core:inspector.health", "health"), value = p.health, color = "good" }) }
 	for _, n in p.needs do
 		table.insert(bars, kit.bar({ id = "core:inspector.need." .. n.id, label = n.label, value = n.value, color = if n.low then "bad" else n.color }))
 	end
 	local hint = if p.player
-		then (if p.drafted then "R undraft · right-click move/attack" else "R draft · right-click to order")
+		then (if p.drafted then t("core:inspector.hint_drafted", "R undraft · right-click move/attack") else t("core:inspector.hint", "R draft · right-click to order"))
 		else nil
 	return kit.panel({ w = 280, gap = "s" }, {
 		col({ gap = "xxs" }, {
 			label(title, { size = "heading", weight = "strong" }),
-			label(p.label .. " · " .. p.faction .. " · " .. doing, { size = "small", color = "muted" }),
+			label(string.format(t("core:inspector.sub", "%s · %s · %s"), p.label, p.faction, doing), { size = "small", color = "muted" }),
 		}),
 		col({ id = "core:inspector.bars", gap = "xs" }, bars),
 		-- Extension point: mods add sections (mood, skills...).
@@ -191,7 +192,7 @@ ui.define("core:hover", function(view)
 		return nil
 	end
 	local lines = {
-		label(string.format("%s (%d, %d)  %s", h.terrain, h.x, h.y, h.shelter), { size = "small", color = "muted" }),
+		label(string.format(t("core:hover.cell", "%s (%d, %d)  %s"), h.terrain, h.x, h.y, h.shelter), { size = "small", color = "muted" }),
 	}
 	if #h.readings > 0 then
 		table.insert(lines, label(table.concat(h.readings, "   "), { size = "small" }))
@@ -220,7 +221,7 @@ ui.define("core:profiler", function(view)
 	if not view.show_profiler() then
 		return nil
 	end
-	local rows = { kit.heading("Profiler", "µs per call, smoothed") }
+	local rows = { kit.heading(t("core:profiler.title", "Profiler"), t("core:profiler.note", "µs per call, smoothed")) }
 	local entries = view.profile()
 	table.sort(entries, function(a, b)
 		if a.mod ~= b.mod then
@@ -243,17 +244,17 @@ ui.define("core:profiler", function(view)
 		table.insert(rows, label(s, { size = "small", color = "muted" }))
 	end
 	local u = view.ui_stats()
-	table.insert(rows, label(string.format("ui: build %.0f · layout %.0f · paint %.0f µs · %d nodes", u.build_us, u.layout_us, u.paint_us, u.nodes), { size = "small", color = "muted" }))
-	table.insert(rows, label("font: " .. u.font, { size = "small", color = "faint" }))
+	table.insert(rows, label(string.format(t("core:profiler.ui", "ui: build %.0f · layout %.0f · paint %.0f µs · %d nodes"), u.build_us, u.layout_us, u.paint_us, u.nodes), { size = "small", color = "muted" }))
+	table.insert(rows, label(string.format(t("core:profiler.font", "font: %s"), u.font), { size = "small", color = "faint" }))
 	table.insert(rows, kit.divider())
-	table.insert(rows, label("Mods (load order)", { weight = "strong" }))
+	table.insert(rows, label(t("core:profiler.mods", "Mods (load order)"), { weight = "strong" }))
 	for _, m in view.mods() do
-		table.insert(rows, label(string.format("%s %s (%s)", m.id, m.version, m.name), { size = "small" }))
+		table.insert(rows, label(string.format(t("core:profiler.mod", "%s %s (%s)"), m.id, m.version, m.name), { size = "small" }))
 	end
 	local warnings = view.warnings()
 	if #warnings > 0 then
 		table.insert(rows, kit.divider())
-		table.insert(rows, label("Warnings", { weight = "strong", color = "bad" }))
+		table.insert(rows, label(t("core:profiler.warnings", "Warnings"), { weight = "strong", color = "bad" }))
 		for _, w in warnings do
 			table.insert(rows, label(w, { size = "small", color = "bad", wrap = true }))
 		end
@@ -269,8 +270,8 @@ ui.define("core:lost", function(view)
 		return nil
 	end
 	return kit.panel({ pad = "xl", gap = "s", align = "center", bg = "surface_raised" }, {
-		label("The colony is lost", { size = "title", weight = "strong", color = "threat" }),
-		label("It lasted " .. view.day() .. " days.", { color = "muted" }),
+		label(t("core:lost.title", "The colony is lost"), { size = "title", weight = "strong", color = "threat" }),
+		label(string.format(t("core:lost.days", "It lasted %d days."), view.day()), { color = "muted" }),
 	})
 end)
 ui.mount("modal", "core:lost")

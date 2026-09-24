@@ -102,6 +102,11 @@ pub const UI_API: &[UiDoc] = &[
     d!("ui.slot", "(id: string) -> Node", "An extension point other mods fill with ui.extend."),
     d!("ui.spacer", "(node: Node?) -> Node", "Empty space that grows."),
     d!("ui.state", "(key: string, default: any) -> any", "A value kept with ui.set_state, or default."),
+    d!(
+        "ui.t",
+        "(key: string, default: string?) -> string",
+        "A user-visible string by key: a mod's ui/lang.toml can replace it; until one does, the default."
+    ),
     d!("ui.text", "(node: Node | string) -> Node", "Text: { \"words\", size = ..., color = ... }."),
     d!(
         "ui.wrap",

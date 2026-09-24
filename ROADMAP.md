@@ -147,7 +147,7 @@ Save/load that survives mod changes, and replays from seed + command log.
 
 ## colony — Colony
 
-`#·········` 5% · 1 of 19 done · due 2026-12-15
+`##········` 11% · 2 of 19 done · due 2026-12-15
 
 Running more than one person: stockpiles, hauling, work priorities, skills, colonist panels.
 
@@ -158,7 +158,6 @@ Running more than one person: stockpiles, hauling, work priorities, skills, colo
 - [ ] `1e977052` Floating windows and a saved UI layout <sup>feature · p0 · m · engine</sup>
 - [ ] `29c323f5` Skills learned by doing <sup>feature · p1 · m · engine</sup>
 - [ ] `4ad6b386` Colonist inspection panel <sup>feature · p1 · m · client</sup>
-- [ ] `69494df0` Strings through one door <sup>chore · p2 · s · core</sup>
 - [ ] `8376a04f` Drafty rooms: room leak from terms <sup>feature · p3 · s · engine</sup>
 - [ ] `8cf4db07` Multi-cell things occupy every cell of their footprint <sup>feature · p3 · m · engine</sup>
 - [ ] `9bd9e8ab` Fire: burning, spread by wind, put out by rain <sup>feature · p1 · l · engine</sup>
@@ -170,6 +169,7 @@ Running more than one person: stockpiles, hauling, work priorities, skills, colo
 - [ ] `fa0de3f5` Wind shelter: the lee of walls, rock and trees <sup>feature · p1 · m · engine</sup>
 - [ ] `fcb28d0c` Refresh tiers: a node says how often it may change <sup>feature · p1 · m · engine</sup>
 - [x] `3ab05834` Floors: built ground that remembers what it is made of <sup>feature · p1 · m · engine</sup>
+- [x] `69494df0` Strings through one door <sup>chore · p2 · s · core</sup>
 
 ## eras — Eras
 

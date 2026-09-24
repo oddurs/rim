@@ -34,6 +34,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `ui.slot` | `(id: string) -> Node` | An extension point other mods fill with ui.extend. |
 | `ui.spacer` | `(node: Node?) -> Node` | Empty space that grows. |
 | `ui.state` | `(key: string, default: any) -> any` | A value kept with ui.set_state, or default. |
+| `ui.t` | `(key: string, default: string?) -> string` | A user-visible string by key: a mod's ui/lang.toml can replace it; until one does, the default. |
 | `ui.text` | `(node: Node \| string) -> Node` | Text: { "words", size = ..., color = ... }. |
 | `ui.wrap` | `(id: string, wrap: (inner: Node, view: any) -> Node?) -> ()` | Decorate a node: get its tree, return a new one. |
 | `view.ambient` | `(field: string) -> number?` | A field's outdoor value, or nil for an unknown field. |

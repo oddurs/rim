@@ -4,6 +4,7 @@
 -- ones apart by priority, so names never pile on top of each other.
 
 local kit = require("@core/ui/kit")
+local t = ui.t
 
 local BUBBLE_TICKS = 900 -- how long a "hello" stays up, in game ticks
 
@@ -32,7 +33,7 @@ ui.define("core:labels", function(view)
 			})
 		end
 		if p.asleep then
-			table.insert(out, { kind = "anchored", entity = p.id, priority = -1, offset = -(p.radius + 2), kit.label("z", { weight = "strong" }) })
+			table.insert(out, { kind = "anchored", entity = p.id, priority = -1, offset = -(p.radius + 2), kit.label(t("core:labels.sleep", "z"), { weight = "strong" }) })
 		end
 		if recent[p.id] then
 			table.insert(out, {
@@ -40,7 +41,7 @@ ui.define("core:labels", function(view)
 				entity = p.id,
 				priority = 4,
 				offset = -(p.radius + 4),
-				kit.bubble({ text = "Hello! I'm " .. recent[p.id] .. "." }),
+				kit.bubble({ text = string.format(t("core:labels.hello", "Hello! I'm %s."), recent[p.id]) }),
 			})
 		end
 	end
