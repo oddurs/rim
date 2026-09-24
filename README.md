@@ -43,6 +43,7 @@ cargo run --release -p rim_sim --example balance -- --seeds 40   # bot plays the
 cargo run --release -p rim_sim --example year -- --seed 7        # a year of weather, day by day
 cargo run --release -p rim_sim --example headless -- --days 3 --core   # core alone, no plugins
 cargo run --release -p rim_client -- --autotest                   # drive every control, save screenshots
+cargo dist                                                        # a shipping build (LTO); cargo prof for profiling
 ```
 
 | Key                  | Action                             |
@@ -56,6 +57,12 @@ cargo run --release -p rim_client -- --autotest                   # drive every 
 | O                    | cycle field overlays (temperature, light, ...) |
 | F3                   | profiler, load order, mod warnings |
 | F12                  | UI devtools: inspect any element, outlines, kit gallery |
+
+## Modding and engineering docs
+
+- [Scripting rules](docs/modding/scripting.md): the Luau sandbox, limits and determinism.
+- [Modding the interface](docs/modding/ui.md) and [climate and weather](docs/modding/weather.md).
+- [Dependencies and configuration](docs/engineering/dependencies.md): how each library is set up, and what was measured.
 
 ## Design and roadmap
 

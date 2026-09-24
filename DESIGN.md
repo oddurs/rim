@@ -577,6 +577,17 @@ Then it merges defs, applies patches and runs scripts in that order.
 - Integer or fixed-point simulation math, a seeded RNG owned by the world, and
   ordered iteration.
 - Rendering interpolates. It never feeds back into the simulation.
+- **Floating point is the same everywhere or not used.** Rust never fuses
+  multiply-adds or enables fast-math, but clang does fuse them in C++ on
+  arm64, so Luau is built with `-ffp-contract=off` and CI checks the binary.
+  Library transcendentals (`sin`, `exp`, `pow`...) differ between platforms
+  and stay out of simulation state, in Rust and in scripts.
+- **Scripts are sandboxed for it:** only deterministic libraries, no memory
+  or clock queries, the world RNG instead of `math.random`, and a runaway
+  script is stopped after a *counted* number of steps, never a timeout, so
+  every peer stops it at the same point. Rules for modders:
+  [docs/modding/scripting.md](docs/modding/scripting.md); configuration:
+  [docs/engineering/dependencies.md](docs/engineering/dependencies.md).
 
 This buys us replays, reproducible bug reports ("seed + mod list + command
 log"), desync-checkable **co-op lockstep multiplayer** later, and a headless
