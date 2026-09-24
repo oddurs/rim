@@ -119,6 +119,9 @@ pub struct ThingDef {
     pub build: Option<BuildDef>,
     pub food: Option<FoodDef>,
     pub bed: Option<BedDef>,
+    /// Present on items that things can be built out of.
+    #[serde(default)]
+    pub stuff: Option<StuffDef>,
     pub spawn: Option<SpawnDef>,
     /// Field sources: a campfire emits heat and light.
     #[serde(default)]
@@ -164,13 +167,40 @@ pub struct HarvestDef {
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct BuildDef {
+    /// A fixed recipe. Empty when the thing is built out of `stuff`.
+    #[serde(default)]
     pub cost: Vec<ItemCount>,
+    /// Built out of whatever matches: the def says how much, the player
+    /// says of what. A wall is 25 of something structural, not 25 wood.
+    #[serde(default)]
+    pub stuff: Option<StuffCost>,
     pub work: u32,
     /// Toolbar group.
     #[serde(default)]
     pub menu: String,
     #[serde(skip)]
     pub cost_r: Vec<(DefId, u32)>,
+}
+
+/// How much material a buildable takes, and what kind will do.
+#[derive(Deserialize, Clone, Debug)]
+pub struct StuffCost {
+    /// Matched against an item's `stuff.categories`.
+    pub category: String,
+    pub count: u32,
+}
+
+/// An item that things can be built out of.
+#[derive(Deserialize, Clone, Debug, Default)]
+pub struct StuffDef {
+    /// What this material will do for: "structural", "fine", whatever a
+    /// mod invents. The engine never reads the strings, only matches them.
+    #[serde(default)]
+    pub categories: Vec<String>,
+    /// Named multipliers on the stats of anything built from it. The engine
+    /// carries them and never interprets them (0213).
+    #[serde(default)]
+    pub factors: HashMap<String, f64>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -518,6 +548,24 @@ pub struct DefDb {
     index: HashMap<(&'static str, String), DefId>,
 }
 
+impl DefDb {
+    /// Items that can be built into something wanting `category`, in def
+    /// order. Iterating defs keeps it deterministic; a map would not.
+    pub fn materials(&self, category: &str) -> Vec<DefId> {
+        self.things
+            .iter()
+            .enumerate()
+            .filter(|(_, t)| t.stuff.as_ref().is_some_and(|s| s.categories.iter().any(|c| c == category)))
+            .map(|(i, _)| i as DefId)
+            .collect()
+    }
+
+    /// Does `item` satisfy a buildable asking for `category`?
+    pub fn is_material_for(&self, item: DefId, category: &str) -> bool {
+        self.thing(item).stuff.as_ref().is_some_and(|s| s.categories.iter().any(|c| c == category))
+    }
+}
+
 pub const KINDS: &[&str] =
     &["terrain", "thing", "creature", "need", "designation", "field", "calendar", "sky", "start", "names"];
 
@@ -620,6 +668,11 @@ impl DefDb {
             }
             if let Some(b) = &mut d.build {
                 b.cost_r = counts(&b.cost, &ctx)?;
+                match (b.cost.is_empty(), b.stuff.is_some()) {
+                    (true, false) => return Err(format!("{ctx}: build needs either `cost` or `stuff`")),
+                    (false, true) => return Err(format!("{ctx}: build has both `cost` and `stuff`; pick one")),
+                    _ => {}
+                }
             }
             if let Some(s) = &mut d.spawn {
                 s.terrain_r = s.terrain.iter().map(|t| get("terrain", t, &ctx)).collect::<Result<_, _>>()?;

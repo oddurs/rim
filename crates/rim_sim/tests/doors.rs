@@ -46,7 +46,7 @@ fn hut(s: &mut Sim, at: IVec) -> Entity {
             if p == door_at {
                 door = Some(build(s, "door_wood", p));
             } else {
-                build(s, "wall_wood", p);
+                build(s, "wall", p);
             }
         }
     }

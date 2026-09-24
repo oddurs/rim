@@ -14,7 +14,7 @@ fn sim() -> Sim {
 /// This is the worst case the spike cares about: many small rooms, so the
 /// boundary is a large fraction of the cells.
 fn build_huts(s: &mut Sim, origin: IVec, across: i32) -> usize {
-    let wall = s.world.defs.thing_id("wall_wood").unwrap();
+    let wall = s.world.defs.thing_id("wall").unwrap();
     let mut rooms = 0;
     for hy in 0..across {
         for hx in 0..across {
@@ -95,7 +95,7 @@ fn boundary_cost() {
         // Rebuild cost as it stands: force dirty by toggling one wall.
         // Alternate placing and removing a wall so rooms are genuinely
         // dirty on every iteration.
-        let wall = s2.world.defs.thing_id("wall_wood").unwrap();
+        let wall = s2.world.defs.thing_id("wall").unwrap();
         let probe = origin.offset(1, 1);
         let mut rebuild = f64::MAX;
         for k in 0..6 {

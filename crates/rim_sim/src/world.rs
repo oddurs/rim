@@ -187,9 +187,18 @@ pub struct Thing {
 /// Present on a fixture that is still under construction.
 #[derive(Clone, Debug)]
 pub struct Blueprint {
+    /// What this one costs, resolved when it was placed. A fixed recipe and
+    /// a material choice both land here, so nothing downstream has to know
+    /// which it was.
+    pub cost: Vec<(DefId, u32)>,
     pub delivered: Vec<u32>,
     pub work_left: u32,
 }
+
+/// What a built thing is made of. Survives construction, so a finished
+/// wall still knows it is stone.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MadeOf(pub DefId);
 
 /// Which faction built this fixture. Doors read it: a door opens for its
 /// owner and stands in everyone else's way.
@@ -473,18 +482,34 @@ impl World {
 
     /// Place a plant/rock/building (or its blueprint) on the fixture layer.
     pub fn spawn_fixture(&mut self, def: DefId, pos: IVec, blueprint: bool) -> Option<Entity> {
+        self.spawn_fixture_of(def, pos, blueprint, None)
+    }
+
+    /// `stuff` is the material chosen for a buildable that takes one. It is
+    /// ignored for anything with a fixed recipe.
+    pub fn spawn_fixture_of(&mut self, def: DefId, pos: IVec, blueprint: bool, stuff: Option<DefId>) -> Option<Entity> {
         if !self.map.inb(pos) || self.map.fixture_at(pos).is_some() {
             return None;
         }
         let defs = self.defs.clone();
         let td = defs.thing(def);
         let t = Thing { def, pos, count: 1, hp: td.hp as i32 };
+        let made_of = stuff.filter(|_| td.build.as_ref().is_some_and(|b| b.stuff.is_some()));
         let e = if blueprint {
             let b = td.build.as_ref()?;
-            self.ecs.spawn((t, Blueprint { delivered: vec![0; b.cost_r.len()], work_left: b.work.max(1) }))
+            let cost = match (&b.stuff, made_of) {
+                (Some(sc), Some(m)) => vec![(m, sc.count)],
+                (Some(_), None) => return None, // needs a material and was given none
+                (None, _) => b.cost_r.clone(),
+            };
+            let bp = Blueprint { delivered: vec![0; cost.len()], cost, work_left: b.work.max(1) };
+            self.ecs.spawn((t, bp))
         } else {
             self.ecs.spawn((t,))
         };
+        if let Some(m) = made_of {
+            let _ = self.ecs.insert_one(e, MadeOf(m));
+        }
         let (blocks, cost, door) = if blueprint { (false, 0, false) } else { (td.blocks, td.path_cost, td.door) };
         self.map.set_fixture(pos, Some(e), blocks, cost, door);
         if !blueprint {

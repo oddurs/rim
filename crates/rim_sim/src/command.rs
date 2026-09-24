@@ -16,9 +16,12 @@ pub enum Command {
         a: IVec,
         b: IVec,
     },
-    /// Place blueprints of a buildable thing over a rectangle.
+    /// Place blueprints of a buildable thing over a rectangle. `stuff` is
+    /// the material chosen for it, and rides the command so a replay builds
+    /// the same wall out of the same thing.
     Build {
         thing: DefId,
+        stuff: Option<DefId>,
         a: IVec,
         b: IVec,
     },
@@ -75,13 +78,18 @@ pub fn apply(w: &mut World, c: Command) {
                 }
             }
         },
-        Command::Build { thing, a, b } => {
-            if defs.thing(thing).build.is_none() {
-                return;
+        Command::Build { thing, stuff, a, b } => {
+            let Some(bd) = defs.thing(thing).build.as_ref() else { return };
+            // A buildable that takes a material needs one, of the right kind.
+            if let Some(sc) = &bd.stuff {
+                match stuff {
+                    Some(m) if defs.is_material_for(m, &sc.category) => {}
+                    _ => return,
+                }
             }
             for p in cells(w, a, b).collect::<Vec<_>>() {
                 if w.map.passable(p) {
-                    w.spawn_fixture(thing, p, true);
+                    w.spawn_fixture_of(thing, p, true, stuff);
                 }
             }
         }
@@ -89,10 +97,10 @@ pub fn apply(w: &mut World, c: Command) {
             for p in cells(w, a, b).collect::<Vec<_>>() {
                 let Some(f) = w.map.fixture_at(p) else { continue };
                 let _ = w.ecs.remove_one::<Designated>(f);
-                let refund = w.ecs.get::<&Blueprint>(f).ok().map(|bp| bp.delivered.clone());
-                if let Some(delivered) = refund {
-                    let t = w.thing(f).unwrap();
-                    let cost = defs.thing(t.def).build.as_ref().unwrap().cost_r.clone();
+                // Refund what was actually delivered, of whatever it was
+                // made of -- not what the def says it costs.
+                let refund = w.ecs.get::<&Blueprint>(f).ok().map(|bp| (bp.cost.clone(), bp.delivered.clone()));
+                if let Some((cost, delivered)) = refund {
                     w.despawn_thing(f);
                     for (c, n) in cost.iter().zip(delivered) {
                         if n > 0 {

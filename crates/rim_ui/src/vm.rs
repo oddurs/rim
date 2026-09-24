@@ -988,8 +988,8 @@ fn hover_table(lua: &Lua, w: &World, client: &ClientView) -> mlua::Result<Value>
         let td = w.defs.thing(th.def);
         let mut s = td.label.clone();
         if let Ok(bp) = w.ecs.get::<&Blueprint>(e) {
-            let cost = &td.build.as_ref().unwrap().cost_r;
-            let parts: Vec<String> = cost
+            let parts: Vec<String> = bp
+                .cost
                 .iter()
                 .zip(&bp.delivered)
                 .map(|(c, d)| format!("{}/{} {}", d, c.1, w.defs.thing(c.0).label))

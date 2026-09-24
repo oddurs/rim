@@ -68,8 +68,7 @@ pub fn world(app: &App) {
                 let (cx, cy) = (sx + z / 2.0, sy + z / 2.0);
                 let bp = w.ecs.get::<&Blueprint>(e).ok();
                 if let Some(bp) = &bp {
-                    let cost = &td.build.as_ref().unwrap().cost_r;
-                    let need: u32 = cost.iter().map(|c| c.1).sum();
+                    let need: u32 = bp.cost.iter().map(|c| c.1).sum();
                     let have: u32 = bp.delivered.iter().sum();
                     let ghost = Color::new(0.45, 0.7, 1.0, 0.35);
                     draw_rectangle(sx + 1.0, sy + 1.0, z - 2.0, z - 2.0, ghost);

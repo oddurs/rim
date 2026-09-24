@@ -11,7 +11,8 @@ fn sim(seed: u64) -> Sim {
 fn warrior_chops_and_builds() {
     let mut s = sim(3);
     let d = &s.world.defs;
-    let (chop, wall) = (d.lookup("designation", "chop").unwrap(), d.thing_id("wall_wood").unwrap());
+    let (chop, wall) = (d.lookup("designation", "chop").unwrap(), d.thing_id("wall").unwrap());
+    let wood = d.thing_id("wood").unwrap();
     let c = s.world.colony_center().unwrap();
     s.push(Command::Designate { designation: chop, a: c.offset(-15, -15), b: c.offset(15, 15) });
     // Find a free row of four open cells near the start.
@@ -21,7 +22,7 @@ fn warrior_chops_and_builds() {
         .flat_map(|r| (-r..=r).flat_map(move |dy| (-r..=r).map(move |dx| c.offset(dx, dy))))
         .find(|&p| (0..4).all(|i| free(p.offset(i, 0))))
         .expect("no open ground near start");
-    s.push(Command::Build { thing: wall, a: row, b: row.offset(3, 0) });
+    s.push(Command::Build { stuff: Some(wood), thing: wall, a: row, b: row.offset(3, 0) });
     let placed = 4;
     for _ in 0..TICKS_PER_DAY * 2 {
         s.step();
