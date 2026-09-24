@@ -76,7 +76,7 @@ pub fn world(app: &App) {
                     let frac = if have < need {
                         have as f32 / need.max(1) as f32 * 0.5
                     } else {
-                        0.5 + 0.5 * (1.0 - bp.work_left as f32 / td.build.as_ref().unwrap().work.max(1) as f32)
+                        0.5 + 0.5 * (1.0 - bp.work_left as f32 / bp.work.max(1) as f32)
                     };
                     draw_rectangle(sx + 2.0, sy + z - 4.0, (z - 4.0) * frac, 2.5, Color::new(0.6, 0.9, 1.0, 0.9));
                     continue;

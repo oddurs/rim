@@ -125,10 +125,10 @@ pub fn regrow(w: &mut World) {
 pub fn wealth(w: &mut World) {
     let defs = w.defs.clone();
     let mut total = 0.0;
-    for (_, t) in w.ecs.query::<&Thing>().without::<&Blueprint>().iter() {
+    for (_, (t, made_of)) in w.ecs.query::<(&Thing, Option<&MadeOf>)>().without::<&Blueprint>().iter() {
         let td = defs.thing(t.def);
         if !td.natural {
-            total += td.market_value * t.count as f64;
+            total += td.market_value * defs.factor(made_of.map(|m| m.0), "value") * t.count as f64;
         }
     }
     for e in w.colonists() {

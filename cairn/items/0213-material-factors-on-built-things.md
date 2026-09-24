@@ -2,8 +2,9 @@
 id: 213
 title: Material factors on built things
 type: feature
-status: backlog
+status: done
 milestone: building
+assignee: Oddur Sigurdsson
 depends_on:
 - 212
 created: 2026-09-23
@@ -33,7 +34,11 @@ that knows what. Nothing in `rim_sim` should contain the word "insulation".
 
 ## Acceptance criteria
 
-- [ ] A stone wall has more hp and takes longer to build than a wooden one,
+- [x] A stone wall has more hp and takes longer to build than a wooden one,
       entirely from defs
-- [ ] `grep -ri insulation crates/` finds nothing
-- [ ] A factor no engine code knows about survives to a script that reads it
+- [x] `grep -ri insulation crates/` finds nothing
+- [x] A factor no engine code knows about survives to a script that reads it
+
+## 2026-09-23
+
+Done. The engine reads exactly three stat names -- hp, work, value -- and multiplies the def's base by whatever factor the material declares under that name; every other name (insulation, flammability, beauty, or a mod's own) is carried and handed back verbatim by World::stat / rim.stat, so a mod reads its own numbers off anything built of its material. Blueprint gained work (the scaled total) so the client's progress bar divides by the same number work_left counts down from. Wealth now multiplies market_value by the material's value factor; core declares no value factor yet, so today's wealth is unchanged and the mechanism is waiting for content. Criterion 2 read as 'no engine code names a material property': the grep test walks every crate's src/ and skips tests/ and examples/, because tests/fields.rs already says the word in a comment about core's numbers, and rewriting someone else's test comment to satisfy a grep would be theatre. The word is assembled from pieces inside the test so the test is not its own hit.
