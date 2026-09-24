@@ -1082,7 +1082,7 @@ fn hover_table(lua: &Lua, w: &World, client: &ClientView) -> mlua::Result<Value>
     }
     t.set("readings", readings)?;
     let things = lua.create_table()?;
-    for e in [w.map.fixture[i], w.map.item[i]].into_iter().flatten() {
+    for e in [w.map.fixture[i], w.map.item[i], w.map.floor[i]].into_iter().flatten() {
         let Ok(th) = w.ecs.get::<&Thing>(e) else { continue };
         let td = w.defs.thing(th.def);
         let mut s = td.label.clone();

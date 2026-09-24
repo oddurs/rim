@@ -505,11 +505,16 @@ impl World {
     /// `stuff` is the material chosen for a buildable that takes one. It is
     /// ignored for anything with a fixed recipe.
     pub fn spawn_fixture_of(&mut self, def: DefId, pos: IVec, blueprint: bool, stuff: Option<DefId>) -> Option<Entity> {
-        if !self.map.inb(pos) || self.map.fixture_at(pos).is_some() {
+        if !self.map.inb(pos) {
             return None;
         }
         let defs = self.defs.clone();
         let td = defs.thing(def);
+        // A floor wants its own layer free; anything else, the fixture layer.
+        let is_floor = td.category == Category::Floor;
+        if (is_floor && self.map.floor_at(pos).is_some()) || (!is_floor && self.map.fixture_at(pos).is_some()) {
+            return None;
+        }
         let made_of = stuff.filter(|_| td.build.as_ref().is_some_and(|b| b.stuff.is_some()));
         // The material scales what the def says. Nothing here knows which
         // names exist; it asks for two and multiplies by whatever comes back.
@@ -531,8 +536,12 @@ impl World {
         if let Some(m) = made_of {
             let _ = self.ecs.insert_one(e, MadeOf(m));
         }
-        let (blocks, cost, door) = if blueprint { (false, 0, false) } else { (td.blocks, td.path_cost, td.door) };
-        self.map.set_fixture(pos, Some(e), blocks, cost, door);
+        if is_floor {
+            self.map.set_floor(pos, Some(e), if blueprint { 0 } else { td.path_cost });
+        } else {
+            let (blocks, cost, door) = if blueprint { (false, 0, false) } else { (td.blocks, td.path_cost, td.door) };
+            self.map.set_fixture(pos, Some(e), blocks, cost, door);
+        }
         if !blueprint {
             self.fields.add_emitters(&defs, &self.map, e, def, pos);
         }
@@ -590,6 +599,9 @@ impl World {
             if self.map.fixture[i] == Some(e) {
                 self.map.set_fixture(t.pos, None, false, 0, false);
                 self.map.set_owner(t.pos, None);
+            }
+            if self.map.floor[i] == Some(e) {
+                self.map.set_floor(t.pos, None, 0);
             }
         }
         self.reservations.remove(&e);

@@ -39,7 +39,8 @@ fn open_cells(s: &Sim, n: usize) -> Vec<IVec> {
 }
 
 fn blueprint_at(s: &Sim, p: IVec) -> Option<(Entity, Blueprint, Option<MadeOf>)> {
-    let e = s.world.map.fixture_at(p)?;
+    // A floor's blueprint lives in the floor layer, not the fixture layer.
+    let e = s.world.map.fixture_at(p).or_else(|| s.world.map.floor_at(p))?;
     let bp = (*s.world.ecs.get::<&Blueprint>(e).ok()?).clone();
     let m = s.world.ecs.get::<&MadeOf>(e).ok().map(|m| *m);
     Some((e, bp, m))

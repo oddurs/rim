@@ -78,6 +78,9 @@ pub enum Category {
     Rock,
     Building,
     Item,
+    /// Built ground: lives under fixtures and items, and its `path_cost`
+    /// replaces the terrain's while it is there.
+    Floor,
 }
 
 #[derive(Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -92,6 +95,7 @@ pub enum Shape {
     Door,
     Window,
     Bed,
+    Floor,
     Table,
     Chair,
     Stove,

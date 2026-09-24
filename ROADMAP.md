@@ -146,7 +146,7 @@ Save/load that survives mod changes, and replays from seed + command log.
 
 ## colony — Colony
 
-`··········` 0% · 0 of 14 done · due 2026-12-15
+`#·········` 7% · 1 of 15 done · due 2026-12-15
 
 Running more than one person: stockpiles, hauling, work priorities, skills, colonist panels.
 
@@ -164,6 +164,7 @@ Running more than one person: stockpiles, hauling, work priorities, skills, colo
 - [ ] `f1924f03` Why a colonist is doing that, and who will take a job <sup>feature · p1 · m · client</sup>
 - [ ] `f1b96df4` The Work Board: a painted priority grid with live demand <sup>feature · p0 · l · core</sup>
 - [ ] `fa0de3f5` Wind shelter: the lee of walls, rock and trees <sup>feature · p1 · m · engine</sup>
+- [x] `3ab05834` Floors: built ground that remembers what it is made of <sup>feature · p1 · m · engine</sup>
 
 ## eras — Eras
 

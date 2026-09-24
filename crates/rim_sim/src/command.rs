@@ -77,12 +77,13 @@ pub fn apply(w: &mut World, c: Command) {
             }
             Targets::Built => {
                 for p in cells(w, a, b).collect::<Vec<_>>() {
-                    let Some(f) = w.map.fixture_at(p) else { continue };
-                    let ours = w.ecs.get::<&Owner>(f).is_ok_and(|o| o.0 == Faction::Player);
-                    let built = w.thing(f).is_some_and(|t| defs.thing(t.def).build.is_some());
-                    // A blueprint is cancelled, not deconstructed.
-                    if ours && built && w.ecs.get::<&Blueprint>(f).is_err() {
-                        let _ = w.ecs.insert_one(f, Designated(designation));
+                    for f in [w.map.fixture_at(p), w.map.floor_at(p)].into_iter().flatten() {
+                        let ours = w.ecs.get::<&Owner>(f).is_ok_and(|o| o.0 == Faction::Player);
+                        let built = w.thing(f).is_some_and(|t| defs.thing(t.def).build.is_some());
+                        // A blueprint is cancelled, not deconstructed.
+                        if ours && built && w.ecs.get::<&Blueprint>(f).is_err() {
+                            let _ = w.ecs.insert_one(f, Designated(designation));
+                        }
                     }
                 }
             }
@@ -113,13 +114,15 @@ pub fn apply(w: &mut World, c: Command) {
             }
         }
         Command::Cancel { a, b } => {
-            for p in cells(w, a, b).collect::<Vec<_>>() {
-                let Some(f) = w.map.fixture_at(p) else { continue };
+            let targets: Vec<Entity> =
+                cells(w, a, b).flat_map(|p| [w.map.fixture_at(p), w.map.floor_at(p)]).flatten().collect();
+            for f in targets {
                 let _ = w.ecs.remove_one::<Designated>(f);
                 // Refund what was actually delivered, of whatever it was
                 // made of -- not what the def says it costs.
                 let refund = w.ecs.get::<&Blueprint>(f).ok().map(|bp| (bp.cost.clone(), bp.delivered.clone()));
                 if let Some((cost, delivered)) = refund {
+                    let p = w.thing(f).map(|t| t.pos).unwrap_or(a);
                     w.despawn_thing(f);
                     for (c, n) in cost.iter().zip(delivered) {
                         if n > 0 {
