@@ -157,7 +157,7 @@ The run gets a shape: eras, storyteller tiers, defensive strength in the threat 
 
 ## plugin-api — Plugin API
 
-`··········` 0% · 0 of 20 done · due 2027-02-01
+`··········` 0% · 0 of 21 done · due 2027-02-01
 
 The API grows up: stat pipeline, script components, custom jobs, needs and def kinds, modules and custom events, a real sandbox with hard limits, factions as data, rim test, typed API. Everything Mood needs, and everything DESIGN.md §10 says a mod from a stranger's repo must be safe to do.
 
@@ -181,6 +181,7 @@ The API grows up: stat pipeline, script components, custom jobs, needs and def k
 - [ ] `0177` Keybinds file and command palette <sup>feature · p1 · m · client</sup>
 - [ ] `0178` Monochrome icon set with mod-supplied icons <sup>feature · p2 · m · core</sup>
 - [ ] `0208` Custom def kinds: plugins declare their own data <sup>feature · p1 · m · engine</sup>
+- [ ] `0209` Sky bodies: a cycle input and coloured sky terms <sup>feature · p2 · m · engine</sup>
 
 ## mood — Mood
 

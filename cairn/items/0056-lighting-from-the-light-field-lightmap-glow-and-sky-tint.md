@@ -26,8 +26,8 @@ Night should feel dangerous, and a fire should be a place. Today the client dark
 
 - The renderer lights the world from the `light` field: a lightmap texture of stamped light plus an indoor mask, with the ambient passed as a uniform, so the texture changes only when emitters or rooms change.
 - A multiply pass over the whole world (terrain, things and pawns), after the ground pass.
-- Light's ambient comes from daylight terms over the hour and year (sunrise and sunset move with the season), dimmed by cloud and storms.
-- Sky tint over the day as a colour curve in data (dawn warm, dusk violet, night blue), and the regime can shift it.
+- Light's ambient is core's `daylight` terms over the hour and year (sunrise and sunset move with the season) through a `cloud` curve, so storms darken it under any sky a mod defines.
+- Sky tint over the day as a colour curve in data (dawn warm, dusk violet, night blue), and the regime can shift it. Key it by label (`[sky_tint.dawn]`) so coloured sky terms (0209) add to it rather than change its shape.
 - `darkness()` in draw.rs is deleted.
 
 ## Acceptance criteria
@@ -36,3 +36,7 @@ Night should feel dangerous, and a fire should be a place. Today the client dark
 - [ ] Campfires glow at night and enclosed rooms are dark without light (screenshots reviewed)
 - [ ] Sky tint and storm darkening come from data
 - [ ] Lighting costs at most 0.3 ms per frame at 4K, recorded here
+
+## 2026-09-23
+
+Sky tint keyed by label so 0209 (coloured sky terms, e.g. a green moon) is additive, not a reshape.
