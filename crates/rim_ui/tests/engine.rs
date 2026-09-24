@@ -565,3 +565,48 @@ fn a_theme_can_name_a_font_and_a_missing_one_falls_back() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// The material row (0215): with a stuff buildable selected, the toolbar
+/// grows a row of materials, what you have none of says so, and the rest
+/// of the toolbar is still there. Headless, so it runs on every platform.
+#[test]
+fn the_material_row_renders_beside_the_toolbar() {
+    let sim = sim_at(&mods());
+    let mut ui = ui_for(&sim);
+    let mut cv = client(&sim);
+    for t in &mut cv.tools {
+        t.active = t.key == "build:wall";
+    }
+    let mat = |id: &str, label: &str, have: u32, active: bool| rim_ui::view::StuffView {
+        id: id.into(),
+        label: label.into(),
+        color: [200, 180, 160],
+        have,
+        active,
+        hp: if active { 140 } else { 320 },
+        work: if active { 144 } else { 324 },
+    };
+    cv.stuff = vec![mat("wood", "wood", 12, true), mat("stone", "stone blocks", 0, false)];
+    frame(&mut ui, &sim, &cv, Default::default());
+    let snap = ui.snapshot();
+    assert!(ui.find("core:toolbar.buttons").is_some(), "the toolbar must still build:\n{snap}");
+    assert!(ui.find("core:stuff").is_some(), "the material row is there:\n{snap}");
+    assert!(
+        ui.find("core:stuff.wood").is_some() && ui.find("core:stuff.stone").is_some(),
+        "one button per material:\n{snap}"
+    );
+    assert!(snap.contains("wood ×12"), "stock is shown:\n{snap}");
+    assert!(snap.contains("stone blocks · none"), "none is a fact, not a gap:\n{snap}");
+    assert!(snap.contains("hp 140"), "the active material's stats are shown:\n{snap}");
+
+    // Nothing selected: no row. The tree rebuilds on a clock, so time has
+    // to move for the change to show.
+    for t in &mut cv.tools {
+        t.active = false;
+    }
+    cv.stuff.clear();
+    for k in 1..=3 {
+        frame(&mut ui, &sim, &cv, Input { time: k as f64, ..Default::default() });
+    }
+    assert!(ui.find("core:stuff").is_none(), "no row with nothing to choose for");
+}

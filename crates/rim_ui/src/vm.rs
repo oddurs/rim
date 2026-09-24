@@ -405,6 +405,7 @@ impl UiVm {
             None => return Err(rt("bad entity id")),
         });
         act!("tool", String, |key| UiAction::Tool(key));
+        act!("stuff", String, |id| UiAction::Stuff(id));
         act!("speed", u32, |s| UiAction::Speed(s));
         act!("toggle_pause", (), |_a| UiAction::TogglePause);
         act!("draft", (u64, bool), |(id, on)| match Entity::from_bits(id) {
@@ -604,6 +605,23 @@ impl UiVm {
                 row.set("label", tool.label.as_str())?;
                 row.set("color", format!("#{:02x}{:02x}{:02x}", tool.color[0], tool.color[1], tool.color[2]))?;
                 row.set("active", tool.active)?;
+                t.push(row)?;
+            }
+            Ok(t)
+        });
+        // Materials the active build tool could use: what you have, what
+        // you would get. Empty unless a stuff buildable is selected.
+        view!("stuff", (), |lua, l, _a| {
+            let t = lua.create_table()?;
+            for m in &l.client.stuff {
+                let row = lua.create_table()?;
+                row.set("id", m.id.as_str())?;
+                row.set("label", m.label.as_str())?;
+                row.set("color", format!("#{:02x}{:02x}{:02x}", m.color[0], m.color[1], m.color[2]))?;
+                row.set("have", m.have)?;
+                row.set("active", m.active)?;
+                row.set("hp", m.hp)?;
+                row.set("work", m.work)?;
                 t.push(row)?;
             }
             Ok(t)

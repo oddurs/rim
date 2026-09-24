@@ -92,7 +92,7 @@ A one-week sprint inside Shelter. The world gets seasons and weather you can see
 
 ## shelter — Shelter
 
-`#######···` 64% · 7 of 11 done · due 2026-11-01
+`######····` 58% · 7 of 12 done · due 2026-11-01
 
 Exposure makes shelter matter: warmth, enclosed rooms, day/night, weather. Get four walls up before night two.
 
@@ -100,6 +100,7 @@ Exposure makes shelter matter: warmth, enclosed rooms, day/night, weather. Get f
 - [ ] `0136` Autotest seeds from the clock, so CI rolls dice <sup>bug · p1 · s · tooling</sup>
 - [ ] `0156` CI: build and test on Windows <sup>chore · p1 · s · tooling</sup>
 - [ ] `0157` CI: determinism must hold across machines, not just within one run <sup>chore · p1 · s · tooling</sup>
+- [ ] `0221` UI frame-budget test asserts wall-clock time on shared CI runners <sup>bug · p2 · s · tooling</sup>
 - [x] `0052` Room detection: enclosed regions bounded by walls and doors <sup>feature · p0 · m · engine</sup>
 - [x] `0053` Warmth need and exposure outdoors <sup>feature · p0 · m · engine</sup>
 - [x] `0054` Roofs, or does enclosure count as shelter? <sup>spike · p1 · s · engine</sup>
@@ -110,16 +111,16 @@ Exposure makes shelter matter: warmth, enclosed rooms, day/night, weather. Get f
 
 ## building — Building
 
-`##########` 91% · 10 of 11 done · due 2026-11-15
+`##########` 100% · 11 of 11 done · due 2026-11-15
 
 A one-week sprint inside Colony. Building stops being a fixed list of defs
 
-- [ ] `0215` Pick the material before you place it <sup>feature · p1 · s · plugin</sup>
 - [x] `0069` Deconstruct designation <sup>feature · p1 · s · engine</sup>
 - [x] `0211` Do room properties come from the boundary? <sup>spike · p0 · s · engine</sup>
 - [x] `0212` Stuff: one buildable, many materials <sup>feature · p0 · m · engine</sup>
 - [x] `0213` Material factors on built things <sup>feature · p0 · m · engine</sup>
 - [x] `0214` Core collapses to one wall, one door, one bed <sup>content · p1 · s · core</sup>
+- [x] `0215` Pick the material before you place it <sup>feature · p1 · s · plugin</sup>
 - [x] `0216` Rooms made of something: leak and daylight from the boundary <sup>feature · p0 · l · engine</sup>
 - [x] `0217` Windows: light in, heat out <sup>content · p1 · s · core</sup>
 - [x] `0218` Interaction spots: furniture a pawn uses <sup>feature · p1 · m · engine</sup>

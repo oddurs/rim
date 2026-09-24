@@ -15,6 +15,21 @@ pub struct ToolView {
     pub active: bool,
 }
 
+/// One material the active build tool could use.
+#[derive(Clone, Debug, Default)]
+pub struct StuffView {
+    /// The material's thing id; `act.stuff(id)` picks it.
+    pub id: String,
+    pub label: String,
+    pub color: [u8; 3],
+    /// How much of it the colony has lying around.
+    pub have: u32,
+    pub active: bool,
+    /// What the buildable would come out as, made of this.
+    pub hp: u32,
+    pub work: u32,
+}
+
 /// Client state the UI can read, rebuilt by the client every frame.
 #[derive(Clone, Debug, Default)]
 pub struct ClientView {
@@ -33,6 +48,8 @@ pub struct ClientView {
     pub show_profiler: bool,
     pub show_devtools: bool,
     pub tools: Vec<ToolView>,
+    /// Materials for the active build tool, or empty when it takes none.
+    pub stuff: Vec<StuffView>,
     /// What a right-click would do here, if anything.
     pub hint: Option<String>,
     /// The world cell under the mouse, when it isn't over the UI.
@@ -56,6 +73,8 @@ pub enum UiAction {
     Focus(Entity),
     /// Pick a toolbar tool by key.
     Tool(String),
+    /// Pick the material for the active build tool, by thing id.
+    Stuff(String),
     Speed(u32),
     TogglePause,
     Draft(Entity, bool),
