@@ -65,7 +65,12 @@ To use the kit from your own mod, list `core` in `depends` in your
 | `windows` | Panels in the middle of the screen | |
 | `modal` | One centred panel above everything | |
 
-Panels in a region stack by `order` and never overlap. The world stays visible
+Panels in a region stack by `order` and never overlap. `refresh` says how
+often a mounted component is rebuilt when no input or game change forces
+it: `"fast"` (the default, twenty times a second), `"slow"` (four times, for
+a top bar or a clock) or `"frame"` (every frame, for a live readout or an
+animation). Give a live readout a fixed `w` and its neighbours keep their
+layout while it changes; only a change of size lays the panel out again. The world stays visible
 behind translucent panels, and clicks on empty screen go to the world.
 
 ## Nodes

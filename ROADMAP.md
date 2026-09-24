@@ -147,7 +147,7 @@ Save/load that survives mod changes, and replays from seed + command log.
 
 ## colony — Colony
 
-`###·······` 21% · 4 of 19 done · due 2026-12-15
+`###·······` 26% · 5 of 19 done · due 2026-12-15
 
 Running more than one person: stockpiles, hauling, work priorities, skills, colonist panels.
 
@@ -165,11 +165,11 @@ Running more than one person: stockpiles, hauling, work priorities, skills, colo
 - [ ] `f1924f03` Why a colonist is doing that, and who will take a job <sup>feature · p1 · m · client</sup>
 - [ ] `f1b96df4` The Work Board: a painted priority grid with live demand <sup>feature · p0 · l · core</sup>
 - [ ] `fa0de3f5` Wind shelter: the lee of walls, rock and trees <sup>feature · p1 · m · engine</sup>
-- [ ] `fcb28d0c` Refresh tiers: a node says how often it may change <sup>feature · p1 · m · engine</sup>
 - [x] `1e977052` Floating windows and a saved UI layout <sup>feature · p0 · m · engine</sup>
 - [x] `3ab05834` Floors: built ground that remembers what it is made of <sup>feature · p1 · m · engine</sup>
 - [x] `69494df0` Strings through one door <sup>chore · p2 · s · core</sup>
 - [x] `c3c4d136` Grid node and virtual list <sup>feature · p0 · m · engine</sup>
+- [x] `fcb28d0c` Refresh tiers: a node says how often it may change <sup>feature · p1 · m · engine</sup>
 
 ## eras — Eras
 

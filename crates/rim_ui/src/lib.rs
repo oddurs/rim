@@ -169,6 +169,8 @@ const ANCHOR_SLOTS: usize = 12;
 /// hover and press restyle at paint time and anchored labels are placed
 /// every frame, so between rebuilds nothing visible goes stale.
 const REBUILD_EVERY: f64 = 1.0 / 20.0;
+/// How often a `refresh = "slow"` mount rebuilds.
+const SLOW_EVERY: f64 = 0.25;
 
 /// The client state trees depend on (not the mouse: hover is paint-time).
 fn client_hash(c: &ClientView) -> u64 {
@@ -222,6 +224,8 @@ pub struct Ui {
     /// Natural size and relative rects of small trees (labels, tooltips).
     small: HashMap<u64, ((f32, f32), Vec<Rect>)>,
     built: Vec<(vm::Mount, Node)>,
+    /// When each mount was last rebuilt, by `Mount::key`.
+    built_at_by: HashMap<String, f64>,
     built_at: f64,
     built_for: u64,
     /// Tree rebuilds so far (tests and the profiler).
@@ -307,6 +311,7 @@ impl Ui {
             shown_at: f64::MIN,
             small: HashMap::new(),
             built: Vec::new(),
+            built_at_by: HashMap::new(),
             built_at: f64::MIN,
             built_for: 0,
             builds: 0,
@@ -868,15 +873,37 @@ impl Ui {
             || !input.keys.is_empty()
             || input.tab
             || input.enter;
-        let stale = input.time - self.built_at >= REBUILD_EVERY || input.time < self.built_at;
         let t0 = Instant::now();
-        let rebuilt = handled
+        // Everything rebuilds on input or a client change; otherwise each
+        // mount rebuilds at its own cadence, and the windows with the
+        // default one.
+        let force = handled
             || windows_changed
             || input_happened
-            || stale
             || ch != self.built_for
             || self.built.is_empty()
             || self.devtools;
+        let now = input.time;
+        let stale = |built_at: f64, every: f64| now - built_at >= every || now < built_at;
+        let fast_due = force || stale(self.built_at, REBUILD_EVERY);
+        let mounts = self.vm.mounts();
+        let due: Vec<vm::Mount> = mounts
+            .iter()
+            .filter(|m| {
+                force
+                    || match m.refresh {
+                        vm::Refresh::Frame => true,
+                        vm::Refresh::Fast => {
+                            stale(self.built_at_by.get(&m.key()).copied().unwrap_or(f64::MIN), REBUILD_EVERY)
+                        }
+                        vm::Refresh::Slow => {
+                            stale(self.built_at_by.get(&m.key()).copied().unwrap_or(f64::MIN), SLOW_EVERY)
+                        }
+                    }
+            })
+            .cloned()
+            .collect();
+        let rebuilt = !due.is_empty() || fast_due;
         if rebuilt {
             let lists = vm::ListEnv {
                 scroll: &self.scroll,
@@ -885,15 +912,49 @@ impl Ui {
                 images: &self.images,
                 edits: &self.edits,
             };
-            self.built = self.vm.build(world, client, &self.shown, &self.theme, &lists);
-            let open: Vec<(String, (f32, f32))> =
-                self.windows.iter().filter(|w| w.open).map(|w| (w.id.clone(), (w.w, w.h))).collect();
-            self.built_wins = self.vm.build_windows(&open, world, client, &self.shown, &self.theme, &lists);
-            self.built_at = input.time;
+            let fresh = self.vm.build(due.clone(), world, client, &self.shown, &self.theme, &lists);
+            let mut fresh: HashMap<String, Node> = fresh.into_iter().map(|(m, n)| (m.key(), n)).collect();
+            let mut prev: HashMap<String, Node> = self.built.drain(..).map(|(m, n)| (m.key(), n)).collect();
+            for m in &due {
+                self.built_at_by.insert(m.key(), now);
+            }
+            self.built = mounts
+                .into_iter()
+                .filter_map(|m| {
+                    let key = m.key();
+                    let n = if due.iter().any(|d| d.key() == key) { fresh.remove(&key) } else { prev.remove(&key) }?;
+                    Some((m, n))
+                })
+                .collect();
+            if fast_due {
+                let open: Vec<(String, (f32, f32))> =
+                    self.windows.iter().filter(|w| w.open).map(|w| (w.id.clone(), (w.w, w.h))).collect();
+                self.built_wins = self.vm.build_windows(&open, world, client, &self.shown, &self.theme, &lists);
+                self.built_at = now;
+            }
             self.built_for = ch;
             self.builds += 1;
-            self.last_trees = self.built.iter().map(|(m, n)| (m.id.clone(), n.clone())).collect();
-            self.last_trees.extend(self.built_wins.iter().map(|(id, n)| (id.clone(), n.clone())));
+            // Snapshots of what was rebuilt; the rest are as they were.
+            for (m, n) in &self.built {
+                if !due.iter().any(|d| d.key() == m.key()) {
+                    continue;
+                }
+                match self.last_trees.iter_mut().find(|(id, _)| *id == m.id) {
+                    Some(slot) => slot.1 = n.clone(),
+                    None => self.last_trees.push((m.id.clone(), n.clone())),
+                }
+            }
+            if fast_due {
+                let open: Vec<&str> = self.built_wins.iter().map(|(id, _)| id.as_str()).collect();
+                self.last_trees
+                    .retain(|(id, _)| self.built.iter().any(|(m, _)| m.id == *id) || open.contains(&id.as_str()));
+                for (id, n) in &self.built_wins {
+                    match self.last_trees.iter_mut().find(|(i, _)| i == id) {
+                        Some(slot) => slot.1 = n.clone(),
+                        None => self.last_trees.push((id.clone(), n.clone())),
+                    }
+                }
+            }
         }
         let build_us = t0.elapsed().as_secs_f64() * 1e6;
         let built = std::mem::take(&mut self.built);
@@ -1119,7 +1180,7 @@ impl Ui {
     /// cached by content: the same label next frame costs a hash.
     fn place_small(&mut self, n: &Node, max: (f32, f32), at: impl FnOnce((f32, f32)) -> (f32, f32)) -> Vec<Rect> {
         let mut h = std::collections::hash_map::DefaultHasher::new();
-        n.layout_hash(&mut h);
+        n.layout_hash(&mut h, &mut self.text);
         h.write_u32(max.0.to_bits());
         h.write_u32(max.1.to_bits());
         let key = h.finish();
@@ -1145,7 +1206,7 @@ impl Ui {
         count: &mut u64,
     ) -> Vec<Rect> {
         let mut h = std::collections::hash_map::DefaultHasher::new();
-        root.layout_hash(&mut h);
+        root.layout_hash(&mut h, &mut self.text);
         let hash = h.finish();
         if let Some((ch, ca, rects)) = self.cache.get(name) {
             if *ch == hash && *ca == avail {

@@ -222,8 +222,11 @@ impl Node {
             || self.input.is_some()
     }
 
-    /// Hash of everything that affects layout, for the layout cache.
-    pub fn layout_hash<H: Hasher>(&self, h: &mut H) {
+    /// Hash of everything that affects layout, for the layout cache. Text
+    /// goes in by its measured size, not its content, so a readout that
+    /// changes from one number to another of the same width keeps the
+    /// layout around it; a fixed-size text leaf does not even measure.
+    pub fn layout_hash<H: Hasher>(&self, h: &mut H, text: &mut crate::text::Text) {
         (self.kind as u8).hash(h);
         let s = &self.style;
         s.row.hash(h);
@@ -243,11 +246,26 @@ impl Node {
         s.align.hash(h);
         s.justify.hash(h);
         if let Some(t) = &self.text {
-            (&t.text, t.size.to_bits(), t.weight, t.wrap).hash(h);
+            (t.size.to_bits(), t.weight, t.wrap).hash(h);
+            let fixed_w = matches!(s.w, Len::Px(_));
+            let fixed_h = matches!(s.h, Len::Px(_));
+            if t.wrap {
+                // Wrapped height depends on the width it gets: the content
+                // is the only safe key.
+                t.text.hash(h);
+            } else if !(fixed_w && fixed_h) {
+                let m = text.shape(&t.text, t.size, t.weight, None);
+                if !fixed_w {
+                    m.width.to_bits().hash(h);
+                }
+                if !fixed_h {
+                    m.height.to_bits().hash(h);
+                }
+            }
         }
         self.children.len().hash(h);
         for c in &self.children {
-            c.layout_hash(h);
+            c.layout_hash(h, text);
         }
     }
 

@@ -79,6 +79,26 @@ pub struct Mount {
     /// Within a region: "start" (top/left) or "end" (bottom/right).
     pub align: String,
     pub owner: Rc<str>,
+    pub refresh: Refresh,
+}
+
+impl Mount {
+    /// One mount's identity: a component may be mounted on more than one layer.
+    pub fn key(&self) -> String {
+        format!("{}@{}", self.layer, self.id)
+    }
+}
+
+/// How often a mounted component is rebuilt when nothing else forces it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum Refresh {
+    /// Every frame: a live readout, an animation.
+    Frame,
+    /// Twenty times a second: the default.
+    #[default]
+    Fast,
+    /// Four times a second: a top bar, a clock.
+    Slow,
 }
 
 struct Comp {
@@ -398,9 +418,18 @@ impl UiVm {
                     .as_ref()
                     .and_then(|o| o.get::<Option<String>>("align").ok().flatten())
                     .unwrap_or("start".into());
+                let refresh = match opts.as_ref().and_then(|o| o.get::<Option<String>>("refresh").ok().flatten()) {
+                    None => Refresh::Fast,
+                    Some(s) => match s.as_str() {
+                        "frame" => Refresh::Frame,
+                        "fast" => Refresh::Fast,
+                        "slow" => Refresh::Slow,
+                        other => return Err(rt(format!("unknown refresh '{other}' (frame, fast or slow)"))),
+                    },
+                };
                 let mut reg = r.borrow_mut();
                 let owner: Rc<str> = reg.current.as_str().into();
-                reg.mounts.push(Mount { layer, id, order, align, owner });
+                reg.mounts.push(Mount { layer, id, order, align, owner, refresh });
                 Ok(())
             })?,
         )?;
@@ -1031,16 +1060,17 @@ impl UiVm {
         r
     }
 
-    /// Build every mounted component. Returns (mount, tree) pairs.
+    /// Build the given mounted components. Returns (mount, tree) pairs;
+    /// a mount whose component was removed has none.
     pub fn build(
         &mut self,
+        mounts: Vec<Mount>,
         world: &World,
         client: &ClientView,
         engine: &EngineInfo,
         theme: &Theme,
         lists: &ListEnv,
     ) -> Vec<(Mount, Node)> {
-        let mounts = self.mounts();
         let out = self.run_build(world, client, engine, theme, lists, |b| {
             mounts
                 .into_iter()
