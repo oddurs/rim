@@ -4,8 +4,11 @@ use std::time::Instant;
 
 #[derive(Default)]
 pub struct Profile {
-    /// (name, smoothed microseconds per call)
+    /// (name, smoothed microseconds per call), for the live profiler.
     pub entries: Vec<(String, f64)>,
+    /// (name, total microseconds, calls) since the last `reset_totals`, for
+    /// benchmarks that need exact means.
+    pub totals: Vec<(String, f64, u64)>,
 }
 
 impl Profile {
@@ -15,6 +18,16 @@ impl Profile {
         } else {
             self.entries.push((name.to_string(), micros));
         }
+        if let Some(t) = self.totals.iter_mut().find(|t| t.0 == name) {
+            t.1 += micros;
+            t.2 += 1;
+        } else {
+            self.totals.push((name.to_string(), micros, 1));
+        }
+    }
+
+    pub fn reset_totals(&mut self) {
+        self.totals.clear();
     }
 
     pub fn time<R>(&mut self, name: &str, f: impl FnOnce() -> R) -> R {
