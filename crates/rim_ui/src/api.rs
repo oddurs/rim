@@ -130,8 +130,8 @@ pub const UI_API: &[UiDoc] = &[
     ),
     d!(
         "ui.mount",
-        "(layer: Layer, id: string, opts: { order: number?, align: string? }?) -> ()",
-        "Show a component on a screen layer."
+        "(layer: Layer, id: string, opts: { order: number?, align: string?, refresh: (\"frame\" | \"fast\" | \"slow\")? }?) -> ()",
+        "Show a component on a screen layer. refresh says how often it is rebuilt when nothing forces it: every frame, twenty times a second (the default) or four."
     ),
     d!("ui.open", "(id: string) -> ()", "Open a window (and bring it to the front)."),
     d!("ui.remove", "(id: string) -> ()", "Hide a node by id."),

@@ -937,7 +937,87 @@ fn hot_reload_swaps_the_ui_and_keeps_the_last_good_one_on_error() {
 
 #[test]
 fn whole_ui_fits_the_frame_budget_with_30_colonists() {
-    frame_budget(&mods());
+    frame_budget(&mods(), 20..=45);
+}
+
+/// A live panel rebuilt every frame beside the shell: still under budget,
+/// and the shell's layout is not the price of it.
+#[test]
+fn whole_ui_fits_the_frame_budget_with_a_live_panel() {
+    let dir = scratch_mods("livebudget", &[("live", "", &[("ui/live.luau", LIVE)])]);
+    frame_budget(&dir, 100..=125);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A probe mod with a readout rebuilt every frame, at a fixed width.
+const LIVE: &str = r#"
+ui.define("live:clock", function(view)
+    return ui.text({ string.format("%.3f", view.time()), w = 80, id = "live:clock" })
+end)
+ui.mount("top", "live:clock", { order = 95, refresh = "frame" })
+ui.define("live:wide", function(view)
+    return ui.row({ ui.text({ string.rep("x", math.floor(view.time())), id = "live:wide" }) })
+end)
+"#;
+
+#[test]
+fn a_frame_tier_panel_changes_every_frame_while_the_shell_layout_is_reused() {
+    let dir = scratch_mods("livetier", &[("live", "", &[("ui/live.luau", LIVE)])]);
+    let sim = sim_at(&dir);
+    let mut ui = ui_for(&sim);
+    let mut cv = client(&sim);
+    for i in 0..3 {
+        cv.time = 10.0 + i as f64 / 60.0;
+        frame(&mut ui, &sim, &cv, Input { time: cv.time, ..Default::default() });
+    }
+    let layouts = ui.info.layouts;
+    let builds = ui.builds;
+    for i in 3..33 {
+        cv.time = 10.0 + i as f64 / 60.0;
+        frame(&mut ui, &sim, &cv, Input { time: cv.time, ..Default::default() });
+        let want = format!("\"{:.3}\"", cv.time);
+        assert!(ui.snapshot().contains(&want), "frame {i}: the readout shows {want}\n{}", ui.snapshot());
+    }
+    assert_eq!(ui.builds - builds, 30, "the live panel rebuilt every frame");
+    assert_eq!(ui.info.layouts, layouts, "the shell's layout was reused throughout");
+    // The other panels kept their cadence: the clock's text is the same
+    // object it was (no rebuild of the top bar every frame is observable
+    // only by cost; the layout count above is the proof).
+    assert!(ui.warnings().is_empty(), "{:?}", ui.warnings());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_size_change_still_relays_out() {
+    let dir = scratch_mods(
+        "livesize",
+        &[(
+            "live",
+            "",
+            &[(
+                "ui/live.luau",
+                &format!("{LIVE}\nui.mount(\"top\", \"live:wide\", {{ order = 96, refresh = \"frame\" }})\n"),
+            )],
+        )],
+    );
+    let sim = sim_at(&dir);
+    let mut ui = ui_for(&sim);
+    let mut cv = client(&sim);
+    cv.time = 10.0;
+    frame(&mut ui, &sim, &cv, Input { time: cv.time, ..Default::default() });
+    frame(&mut ui, &sim, &cv, Input { time: cv.time, ..Default::default() });
+    let layouts = ui.info.layouts;
+    let w0 = ui.find("live:wide").unwrap()[2];
+    // Same width, other content: no relayout.
+    cv.time = 10.5;
+    frame(&mut ui, &sim, &cv, Input { time: cv.time, ..Default::default() });
+    assert_eq!(ui.info.layouts, layouts, "same size, no relayout");
+    // One more x: wider, so the bar is laid out again.
+    cv.time = 11.0;
+    frame(&mut ui, &sim, &cv, Input { time: cv.time, ..Default::default() });
+    assert!(ui.info.layouts > layouts, "a wider readout relays out");
+    assert!(ui.find("live:wide").unwrap()[2] > w0);
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 /// The same budget with a 30x12 grid on screen: a board's worth of cells
@@ -945,7 +1025,7 @@ fn whole_ui_fits_the_frame_budget_with_30_colonists() {
 #[test]
 fn whole_ui_fits_the_frame_budget_with_a_grid_mounted() {
     let dir = scratch_mods("gridbudget", &[("board", "", &[("ui/board.luau", BOARD)])]);
-    frame_budget(&dir);
+    frame_budget(&dir, 20..=45);
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -958,7 +1038,7 @@ end)
 ui.mount("windows", "board:grid")
 "#;
 
-fn frame_budget(dir: &std::path::Path) {
+fn frame_budget(dir: &std::path::Path, builds_expected: std::ops::RangeInclusive<u64>) {
     let mut sim = sim_at(dir);
     let human = sim.world.defs.creature_id("human").unwrap();
     let c = sim.world.colony_center().unwrap();
@@ -999,14 +1079,16 @@ fn frame_budget(dir: &std::path::Path) {
         v[v.len() / 2]
     };
     let mut all: Vec<f64> = plain.iter().chain(&rebuilds).copied().collect();
-    let (m_all, m_plain, m_build) = (median(&mut all), median(&mut plain), median(&mut rebuilds));
+    // A live panel rebuilds every frame, so there may be no paint-only frame.
+    let m_plain = if plain.is_empty() { f64::NAN } else { median(&mut plain) };
+    let (m_all, m_build) = (median(&mut all), median(&mut rebuilds));
     let built = ui.builds - builds_before;
     println!(
         "whole UI, {} nodes: median frame {m_all:.3} ms (paint-only {m_plain:.3} ms, rebuild {m_build:.3} ms); {built} rebuilds in {n} frames",
         ui.info.nodes
     );
     println!("  luau time by mod: {:?}", ui.vm.mod_time);
-    assert!((20..=45).contains(&built), "expected ~20 Hz rebuilds (40 in 2 s), got {built}");
+    assert!(builds_expected.contains(&built), "expected {builds_expected:?} rebuilds in 2 s, got {built}");
     // Shared CI runners are 2-3x slower than a laptop and noisy with it: the
     // same binary measured 0.9 ms locally and 2.0-2.4 ms on CI. The budgets
     // are for a player's machine, so CI gets slack that still catches a real

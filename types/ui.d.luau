@@ -81,8 +81,8 @@ declare ui: {
     is_open: (id: string) -> boolean,
     -- A scroll area that builds only the rows on screen. Needs an id, count, row_h and row(i); spacers stand in for the rows above and below.
     list: (props: ListProps) -> Node,
-    -- Show a component on a screen layer.
-    mount: (layer: Layer, id: string, opts: { order: number?, align: string? }?) -> (),
+    -- Show a component on a screen layer. refresh says how often it is rebuilt when nothing forces it: every frame, twenty times a second (the default) or four.
+    mount: (layer: Layer, id: string, opts: { order: number?, align: string?, refresh: ("frame" | "fast" | "slow")? }?) -> (),
     -- Open a window (and bring it to the front).
     open: (id: string) -> (),
     -- Hide a node by id.
