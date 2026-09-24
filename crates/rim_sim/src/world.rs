@@ -192,6 +192,9 @@ pub struct Blueprint {
     /// which it was.
     pub cost: Vec<(DefId, u32)>,
     pub delivered: Vec<u32>,
+    /// Total work, already scaled by the material, so a progress bar has a
+    /// denominator that matches what `work_left` counts down from.
+    pub work: u32,
     pub work_left: u32,
 }
 
@@ -493,8 +496,11 @@ impl World {
         }
         let defs = self.defs.clone();
         let td = defs.thing(def);
-        let t = Thing { def, pos, count: 1, hp: td.hp as i32 };
         let made_of = stuff.filter(|_| td.build.as_ref().is_some_and(|b| b.stuff.is_some()));
+        // The material scales what the def says. Nothing here knows which
+        // names exist; it asks for two and multiplies by whatever comes back.
+        let hp = (td.hp as f64 * defs.factor(made_of, "hp")).round().max(1.0) as i32;
+        let t = Thing { def, pos, count: 1, hp };
         let e = if blueprint {
             let b = td.build.as_ref()?;
             let cost = match (&b.stuff, made_of) {
@@ -502,7 +508,8 @@ impl World {
                 (Some(_), None) => return None, // needs a material and was given none
                 (None, _) => b.cost_r.clone(),
             };
-            let bp = Blueprint { delivered: vec![0; cost.len()], cost, work_left: b.work.max(1) };
+            let work = (b.work as f64 * defs.factor(made_of, "work")).round().max(1.0) as u32;
+            let bp = Blueprint { delivered: vec![0; cost.len()], cost, work, work_left: work };
             self.ecs.spawn((t, bp))
         } else {
             self.ecs.spawn((t,))
@@ -594,6 +601,30 @@ impl World {
 
     pub fn thing(&self, e: Entity) -> Option<Thing> {
         self.ecs.get::<&Thing>(e).ok().map(|t| (*t).clone())
+    }
+
+    // ------------------------------------------------------------ stats
+
+    /// A thing's stat: the def's base times its material's factor of the
+    /// same name. The engine has a base for three names -- `hp`, `work`
+    /// and `value` -- and for anything else the factor stands alone, so a
+    /// script gets back exactly the number a material declared. None when
+    /// neither side has anything to say.
+    pub fn stat(&self, e: Entity, name: &str) -> Option<f64> {
+        let t = self.ecs.get::<&Thing>(e).ok()?;
+        let td = self.defs.thing(t.def);
+        let made_of = self.ecs.get::<&MadeOf>(e).ok().map(|m| m.0);
+        let base = match name {
+            "hp" => Some(td.hp as f64),
+            "work" => td.build.as_ref().map(|b| b.work as f64),
+            "value" => Some(td.market_value),
+            _ => None,
+        };
+        let factor = self.defs.factor_declared(made_of, name);
+        match (base, factor) {
+            (None, None) => None,
+            (b, f) => Some(b.unwrap_or(1.0) * f.unwrap_or(1.0)),
+        }
     }
 
     // ------------------------------------------------------------ reservations

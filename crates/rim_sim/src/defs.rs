@@ -560,6 +560,18 @@ impl DefDb {
             .collect()
     }
 
+    /// A material's multiplier for `name`, or None if it said nothing. The
+    /// names mean nothing here: "hp" and "work" happen to be read by the
+    /// engine, "sparkle" is read by whoever declared it.
+    pub fn factor_declared(&self, made_of: Option<DefId>, name: &str) -> Option<f64> {
+        self.thing(made_of?).stuff.as_ref()?.factors.get(name).copied()
+    }
+
+    /// `factor_declared`, with 1.0 for a material that says nothing.
+    pub fn factor(&self, made_of: Option<DefId>, name: &str) -> f64 {
+        self.factor_declared(made_of, name).unwrap_or(1.0)
+    }
+
     /// Does `item` satisfy a buildable asking for `category`?
     pub fn is_material_for(&self, item: DefId, category: &str) -> bool {
         self.thing(item).stuff.as_ref().is_some_and(|s| s.categories.iter().any(|c| c == category))

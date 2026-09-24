@@ -1001,6 +1001,14 @@ fn hover_table(lua: &Lua, w: &World, client: &ClientView) -> mlua::Result<Value>
         if w.ecs.get::<&Regrow>(e).is_ok() {
             s.push_str(" (regrowing)");
         }
+        if let Ok(m) = w.ecs.get::<&rim_sim::world::MadeOf>(e) {
+            s = format!("{s} · {}", w.defs.thing(m.0).label);
+        }
+        if td.category == rim_sim::defs::Category::Building && w.ecs.get::<&Blueprint>(e).is_err() {
+            if let Some(max) = w.stat(e, "hp") {
+                s = format!("{s} · hp {}/{}", th.hp, max.round() as i64);
+            }
+        }
         things.push(s)?;
     }
     t.set("things", things)?;

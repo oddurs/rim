@@ -394,6 +394,10 @@ impl ScriptHost {
             })?;
             rim.set("room_at", f)?;
         }
+        // A thing's stat by name: the def's base times its material's factor.
+        // Names the engine never heard of come back as the bare factor, so a
+        // mod reads its own numbers off anything built of its material.
+        api!("stat", (u64, String), |w, (id, name)| Ok(w.stat(rim_sim_entity(id)?, &name)));
         // Make a pawn give up and walk off the map after `ticks`.
         api!("leave_after", (u64, u64), |w, (id, ticks)| {
             let e = rim_sim_entity(id)?;
