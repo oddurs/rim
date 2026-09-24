@@ -64,7 +64,7 @@ pub fn from_lua(v: &mlua::Value, path: &str, depth: u32) -> Result<Option<Data>,
     Ok(Some(match v {
         Value::Nil => return Ok(None),
         Value::Boolean(b) => Data::Bool(*b),
-        Value::Integer(i) => Data::Int(*i as i64),
+        Value::Integer(i) => Data::Int(*i),
         Value::Number(n) => {
             if n.fract() == 0.0 && n.abs() < 9.0e15 {
                 Data::Int(*n as i64)
@@ -78,7 +78,7 @@ pub fn from_lua(v: &mlua::Value, path: &str, depth: u32) -> Result<Option<Data>,
             for pair in t.clone().pairs::<Value, Value>() {
                 let (k, v) = pair.map_err(|e| format!("{path}: {e}"))?;
                 let key = match &k {
-                    Value::Integer(i) => Key::Int(*i as i64),
+                    Value::Integer(i) => Key::Int(*i),
                     Value::Number(n) if n.fract() == 0.0 => Key::Int(*n as i64),
                     Value::String(s) => Key::Str(s.to_string_lossy().to_string()),
                     other => {

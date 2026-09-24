@@ -221,6 +221,34 @@ ui.mount("top", "oops:typo", { order = 6 })
 }
 
 #[test]
+fn an_endless_loop_in_a_component_is_stopped() {
+    let dir = scratch_mods(
+        "endless",
+        &[(
+            "spin",
+            "",
+            &[(
+                "ui/spin.luau",
+                r#"
+ui.define("spin:forever", function(view) while true do end end)
+ui.mount("top", "spin:forever", { order = 5 })
+"#,
+            )],
+        )],
+    );
+    let sim = sim_at(&dir);
+    let mut ui = ui_for(&sim);
+    let cv = client(&sim);
+    let t = std::time::Instant::now();
+    frame(&mut ui, &sim, &cv, Default::default());
+    assert!(t.elapsed() < std::time::Duration::from_secs(5), "the frame came back");
+    let snap = ui.snapshot();
+    assert!(snap.contains("endless loop"), "the component shows why it stopped:\n{snap}");
+    assert!(ui.find("core:toolbar.buttons").is_some(), "the rest of the UI still builds");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn theme_tokens_can_be_overridden_and_conflicts_are_reported() {
     let dir = scratch_mods(
         "tokens",

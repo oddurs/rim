@@ -15,7 +15,8 @@ use crate::path::Goal;
 use crate::profile::Profile;
 use crate::world::*;
 use crate::{IVec, TICKS_PER_DAY};
-use mlua::{Function, IntoLuaMulti, Lua, Table, Value};
+use mlua::chunk::Compiler;
+use mlua::{Function, IntoLuaMulti, Lua, LuaOptions, StdLib, Table, Value, VmState};
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::time::Instant;
@@ -61,22 +62,68 @@ struct Registry {
     handlers: Vec<Handler>,
 }
 
+/// Most memory the sim VM may hold. Hitting it fails the allocating script
+/// with an error, like any other script error, instead of taking the game down.
+pub const MEMORY_LIMIT: usize = 256 << 20;
+
+/// Most interrupts (loop back-edges and calls) one hook or handler call may
+/// run before it's stopped as a runaway. Counted, not timed: a wall-clock
+/// limit would stop peers at different points and desync them. Generous: the
+/// weather plugin's heaviest call uses a few thousand.
+pub const STEP_BUDGET: u64 = 100_000_000;
+
 pub struct ScriptHost {
     lua: Lua,
     world: Rc<WorldPtr>,
     reg: Rc<RefCell<Registry>>,
+    /// Interrupts left for the current call (see `STEP_BUDGET`).
+    steps: Rc<Cell<u64>>,
 }
+
+/// Only libraries whose results are the same on every machine and that can't
+/// reach outside the game: no os, io, debug or coroutine.
+fn sim_libs() -> StdLib {
+    StdLib::MATH | StdLib::STRING | StdLib::TABLE | StdLib::BIT | StdLib::UTF8 | StdLib::BUFFER
+}
+
+/// Globals removed from the sim VM. `collectgarbage` and `gcinfo` report
+/// memory, which differs between machines; `loadstring` compiles code at run
+/// time; `getfenv`/`setfenv` reach other mods' environments and turn off
+/// Luau's fast paths; `math.random` is replaced by `rim.random` (the world RNG).
+const REMOVED: &[&str] = &["collectgarbage", "gcinfo", "loadstring", "getfenv", "setfenv", "newproxy", "os"];
 
 impl ScriptHost {
     pub fn load(scripts: &[ScriptSource], defs: &crate::defs::DefDb) -> Result<Self, String> {
+        let lua = Lua::new_with(sim_libs(), LuaOptions::default()).map_err(|e| format!("script VM: {e}"))?;
+        // Level 2 inlines small local functions and unrolls constant loops;
+        // debug level 1 keeps line numbers in errors.
+        lua.set_compiler(Compiler::new().set_optimization_level(2).set_debug_level(1));
+        lua.set_memory_limit(MEMORY_LIMIT).map_err(|e| format!("script VM: {e}"))?;
+        let steps = Rc::new(Cell::new(STEP_BUDGET));
+        {
+            let steps = steps.clone();
+            lua.set_interrupt(move |_| {
+                let left = steps.get();
+                if left == 0 {
+                    return Err(mlua::Error::runtime(format!(
+                        "stopped: ran more than {STEP_BUDGET} steps in one call (an endless loop?)"
+                    )));
+                }
+                steps.set(left - 1);
+                Ok(VmState::Continue)
+            });
+        }
         let host = ScriptHost {
-            lua: Lua::new(),
+            lua,
             world: Rc::new(WorldPtr(Cell::new(std::ptr::null_mut()))),
             reg: Rc::new(RefCell::new(Registry::default())),
+            steps,
         };
         host.install(defs).map_err(|e| format!("script API setup failed: {e}"))?;
+        host.lock_down().map_err(|e| format!("script API setup failed: {e}"))?;
         for s in scripts {
             host.reg.borrow_mut().current_mod = s.mod_id.clone();
+            host.steps.set(STEP_BUDGET);
             let name = format!("{}/scripts/{}", s.mod_id, s.name);
             let env = host.env().map_err(|e| e.to_string())?;
             host.lua
@@ -89,18 +136,44 @@ impl ScriptHost {
         Ok(host)
     }
 
+    /// A script's own global environment: its globals land here, and reads
+    /// fall through to the shared globals.
+    ///
+    /// Marked safe so Luau takes its fast paths (cached imports like
+    /// `math.floor`, builtin fastcalls, fast `pairs`); without it every global
+    /// access is a full lookup. The price: a chain like `rim.weather.register`
+    /// is resolved when the script loads, so replacing a function in `rim`
+    /// later isn't seen by scripts loaded before. Plugins add to `rim`; they
+    /// don't monkey-patch it.
     fn env(&self) -> mlua::Result<Table> {
         let env = self.lua.create_table()?;
         let mt = self.lua.create_table()?;
         mt.set("__index", self.lua.globals())?;
-        env.set_metatable(Some(mt));
+        env.set_metatable(Some(mt))?;
+        env.set_safeenv(true);
         Ok(env)
+    }
+
+    /// Make the standard libraries and the global table read-only, so no mod
+    /// can break another's `math` or `string`. `rim` itself stays writable:
+    /// that's how plugins offer APIs to each other.
+    fn lock_down(&self) -> mlua::Result<()> {
+        let g = self.lua.globals();
+        for lib in ["math", "string", "table", "bit32", "utf8", "buffer"] {
+            if let Ok(Value::Table(t)) = g.get::<Value>(lib) {
+                t.set_readonly(true);
+            }
+        }
+        g.set_readonly(true);
+        Ok(())
     }
 
     fn install(&self, defs: &crate::defs::DefDb) -> mlua::Result<()> {
         let lua = &self.lua;
         let g = lua.globals();
-        g.set("os", Value::Nil)?;
+        for name in REMOVED {
+            g.set(*name, Value::Nil)?;
+        }
         let math: Table = g.get("math")?;
         math.set("random", Value::Nil)?;
         math.set("randomseed", Value::Nil)?;
@@ -419,6 +492,7 @@ impl ScriptHost {
 
     fn call(&self, w: &mut World, prof: &mut Profile, mod_id: &str, f: &Function, args: impl IntoLuaMulti) {
         self.world.0.set(w as *mut World);
+        self.steps.set(STEP_BUDGET);
         let t = Instant::now();
         let r = f.call::<()>(args);
         self.world.0.set(std::ptr::null_mut());

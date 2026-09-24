@@ -9,4 +9,4 @@ repository = "https://github.com/oddurs/rim"
 hecs = "0.10"
 serde = { version = "1", features = ["derive"] }
 toml = "0.8"
-mlua = { version = "0.10", features = ["luau"] }
+mlua = { version = "0.12", features = ["luau"] }

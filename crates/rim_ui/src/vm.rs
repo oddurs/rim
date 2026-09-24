@@ -111,6 +111,8 @@ pub struct UiVm {
     lua: Lua,
     reg: Rc<RefCell<Registry>>,
     lent: Rc<Lent>,
+    /// When the running call must stop (see `CALL_DEADLINE`); None outside calls.
+    deadline: Rc<Cell<Option<Instant>>>,
     /// Load problems and operation conflicts, reported once.
     pub warnings: Vec<String>,
     /// Component errors seen at run time (deduplicated).
@@ -121,6 +123,11 @@ pub struct UiVm {
     unknown_checked: bool,
 }
 
+/// Longest a single component build or handler may run. UI code is client
+/// only, so a wall-clock limit is fine here (the sim VM counts steps
+/// instead). Generous: a frame's whole budget is a few milliseconds.
+pub const CALL_DEADLINE: std::time::Duration = std::time::Duration::from_millis(250);
+
 fn rt(e: impl std::fmt::Display) -> mlua::Error {
     mlua::Error::runtime(e.to_string())
 }
@@ -128,6 +135,33 @@ fn rt(e: impl std::fmt::Display) -> mlua::Error {
 impl UiVm {
     pub fn load(mods: &[ModDir]) -> UiVm {
         let lua = Lua::new();
+        // Level 2 inlines small local functions and unrolls constant loops;
+        // debug level 1 keeps line numbers in error boxes.
+        lua.set_compiler(mlua::chunk::Compiler::new().set_optimization_level(2).set_debug_level(1));
+        // No memory limit here, unlike the sim VM: measured, it made UI
+        // rebuilds 45% slower (0.84 -> 1.25 ms), and a runaway UI mod only
+        // hurts this player's client. The deadline below stops endless loops.
+        let deadline: Rc<Cell<Option<Instant>>> = Rc::default();
+        {
+            let deadline = deadline.clone();
+            let ticks = Cell::new(0u32);
+            lua.set_interrupt(move |_| {
+                // Checking the clock is cheap but not free: every 1024 steps.
+                let n = ticks.get().wrapping_add(1);
+                ticks.set(n);
+                if n.is_multiple_of(1024) {
+                    if let Some(d) = deadline.get() {
+                        if Instant::now() > d {
+                            return Err(mlua::Error::runtime(format!(
+                                "stopped: ran longer than {} ms (an endless loop?)",
+                                CALL_DEADLINE.as_millis()
+                            )));
+                        }
+                    }
+                }
+                Ok(mlua::VmState::Continue)
+            });
+        }
         let reg = Rc::new(RefCell::new(Registry::default()));
         let lent = Rc::new(Lent {
             world: Cell::new(std::ptr::null()),
@@ -138,6 +172,7 @@ impl UiVm {
             lua,
             reg,
             lent,
+            deadline,
             warnings: Vec::new(),
             errors: Vec::new(),
             mod_time: HashMap::new(),
@@ -214,7 +249,11 @@ impl UiVm {
             let env = lua.create_table()?;
             let mt = lua.create_table()?;
             mt.set("__index", lua.globals())?;
-            env.set_metatable(Some(mt));
+            env.set_metatable(Some(mt))?;
+            // Globals are read-only (sandboxed), so the module's environment
+            // is safe: Luau caches imports like `kit.label` and takes its
+            // fastcall and fast-iteration paths.
+            env.set_safeenv(true);
             let result =
                 lua.load(&src).set_name(format!("@{mod_id}/ui/{file}.luau")).set_environment(env).eval::<Value>();
             reg.borrow_mut().current = prev;
@@ -733,7 +772,9 @@ impl UiVm {
 
     /// Run a click handler, then collect whatever actions it queued.
     pub fn call_handler(&mut self, f: &Function, world: &World, client: &ClientView, engine: &EngineInfo) {
+        self.deadline.set(Some(Instant::now() + CALL_DEADLINE));
         let r = self.lend(world, client, engine, || f.call::<()>(()));
+        self.deadline.set(None);
         if let Err(e) = r {
             let e = format!("handler: {}", first_line(&e.to_string()));
             if !self.errors.contains(&e) {
@@ -767,7 +808,9 @@ struct Builder<'a> {
 impl Builder<'_> {
     fn call(&mut self, owner: &Rc<str>, f: &Function, args: impl mlua::IntoLuaMulti) -> Result<Value, String> {
         let t = Instant::now();
+        self.vm.deadline.set(Some(t + CALL_DEADLINE));
         let r = f.call::<Value>(args).map_err(|e| first_line(&e.to_string()));
+        self.vm.deadline.set(None);
         *self.times.entry(owner.clone()).or_default() += t.elapsed().as_secs_f64() * 1e6;
         r
     }
