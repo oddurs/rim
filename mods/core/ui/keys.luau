@@ -80,8 +80,8 @@ ui.window("core:palette", { title = t("core:palette.title", "Commands"), w = 440
 			rows,
 			kit.row({
 				id = "core:palette." .. b.id,
-				pad = "xs",
-				padx = "s",
+				pad = "s",
+				padx = "m",
 				gap = "m",
 				align = "center",
 				radius = "radius",
@@ -104,7 +104,7 @@ ui.window("core:palette", { title = t("core:palette.title", "Commands"), w = 440
 		kit.input({
 			id = "core:palette.query",
 			placeholder = t("core:palette.hint", "Type a command"),
-			w = 400,
+			w = "fill",
 			on_change = function(text)
 				ui.set_state("core:palette.query", text)
 				ui.set_state("core:palette.sel", 1)

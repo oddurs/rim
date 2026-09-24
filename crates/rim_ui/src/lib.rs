@@ -1378,7 +1378,7 @@ impl Ui {
         gather(tree, &mut items);
         items.sort_by_key(|n| std::cmp::Reverse(n.priority));
         let (sw, sh) = client.screen;
-        let gap = 2.0 * self.theme.scale;
+        let gap = 6.0 * self.theme.scale;
         let mut taken: Vec<Rect> = Vec::new();
         let mut out = Vec::new();
         // Only the top few by priority get placed: a crowd of two hundred

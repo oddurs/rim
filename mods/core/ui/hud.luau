@@ -76,7 +76,7 @@ ui.define("core:colonists", function(view)
 end)
 
 ui.define("core:topbar", function(view)
-	return row({ padx = "m", pady = "xs", gap = "xl", align = "center", bg = "surface", radius = 0 }, {
+	return row({ padx = "l", pady = "s", gap = "xl", align = "center", bg = "surface", radius = 0 }, {
 		ui.slot("core:clock"),
 		ui.slot("core:status"),
 		ui.slot("core:colonists"),
@@ -106,7 +106,7 @@ ui.define("core:toolbar", function(view)
 			})
 		)
 	end
-	local buttons = row({ id = "core:toolbar.buttons", pad = "s", gap = "xs", bg = "surface", radius = 0, align = "center" }, items)
+	local buttons = row({ id = "core:toolbar.buttons", padx = "l", pady = "s", gap = "s", bg = "surface", radius = 0, align = "center" }, items)
 
 	-- The material row: only when the active tool builds out of something.
 	-- What you have none of is shown greyed, not hidden, so the row keeps
@@ -140,7 +140,7 @@ ui.define("core:toolbar", function(view)
 	if chosen then
 		table.insert(picks, label(string.format(t("core:stuff.stats", "hp %d · %d work"), chosen.hp, chosen.work), { size = "small", color = "muted" }))
 	end
-	local materials = row({ id = "core:stuff", pad = "s", gap = "xs", bg = "surface", radius = 0, align = "center" }, picks)
+	local materials = row({ id = "core:stuff", padx = "l", pady = "s", gap = "s", bg = "surface", radius = 0, align = "center" }, picks)
 	return col({}, { materials, buttons })
 end)
 ui.mount("bottom", "core:toolbar")
@@ -179,7 +179,7 @@ ui.define("core:inspector", function(view)
 	local hint = if p.player
 		then (if p.drafted then t("core:inspector.hint_drafted", "R undraft · right-click move/attack") else t("core:inspector.hint", "R draft · right-click to order"))
 		else nil
-	return kit.panel({ w = 280, gap = "s" }, {
+	return kit.panel({ w = 300, gap = "m" }, {
 		col({ gap = "xxs" }, {
 			label(title, { size = "heading", weight = "strong" }),
 			label(string.format(t("core:inspector.sub", "%s · %s · %s"), p.label, p.faction, doing), { size = "small", color = "muted" }),
@@ -219,7 +219,7 @@ ui.define("core:hint", function(view)
 	if not text then
 		return nil
 	end
-	return kit.panel({ pad = "xs", padx = "m", bg = "surface_raised", border = "accent" }, { label(text) })
+	return kit.panel({ pad = "s", padx = "l", bg = "surface_raised", border = "accent" }, { label(text) })
 end)
 ui.mount("cursor", "core:hint")
 

@@ -45,7 +45,7 @@ function kit.panel(props, children)
 	local p = props or {}
 	p.bg = p.bg or "surface"
 	p.border = p.border or "line"
-	p.pad = p.pad or "m"
+	p.pad = p.pad or "l"
 	p.gap = p.gap or "s"
 	return node(p.dir == "row" and "row" or "col", p, children)
 end
@@ -61,7 +61,7 @@ function kit.button(props)
 	return node("row", {
 		id = props.id,
 		padx = props.padx or "m",
-		pady = props.pady or "xs",
+		pady = props.pady or "s",
 		gap = "s",
 		align = "center",
 		bg = if active then "accent_soft" else "surface_raised",
@@ -202,7 +202,7 @@ function kit.table(props)
 			node("row", {
 				id = props.id .. ".head." .. k,
 				w = c.w,
-				pad = "xs",
+				pad = "s",
 				gap = "xs",
 				align = "center",
 				hover = sortable and { bg = "surface_hover" } or nil,
@@ -233,7 +233,7 @@ function kit.table(props)
 			if type(v) ~= "table" then
 				v = kit.label(tostring(v or ""), { size = "small" })
 			end
-			table.insert(out, node("row", { w = c.w, pad = "xs" }, { v }))
+			table.insert(out, node("row", { w = c.w, pad = "s" }, { v }))
 		end
 		return out
 	end
@@ -256,11 +256,13 @@ function kit.window(win)
 		h = win.h,
 		gap = 0,
 		pad = 0,
-		bg = "surface",
+		-- Windows sit over the world and other panels: more opaque than a
+		-- docked bar, with a title bar a step lighter still.
+		bg = "surface_raised",
 		border = "line_strong",
 		clip = true,
 	}, {
-		node("row", { id = win.id .. ".title", handle = "move", align = "center", gap = "s", pad = "s", padx = "m", bg = "surface_raised", radius = 0 }, {
+		node("row", { id = win.id .. ".title", handle = "move", align = "center", gap = "s", pad = "s", padx = "l", bg = "surface_hover", radius = 0 }, {
 			kit.label(win.title, { weight = "strong" }),
 			{ kind = "spacer" },
 			node("row", {
@@ -273,7 +275,7 @@ function kit.window(win)
 				press = { bg = "surface_press" },
 			}, { kit.label(ui.t("core:window.close", "×"), { color = "muted" }) }),
 		}),
-		{ kind = "scroll", grow = 1, pad = "m", gap = "s", ui.slot(win.comp) },
+		{ kind = "scroll", grow = 1, pad = "l", gap = "s", ui.slot(win.comp) },
 		win.resizable and node("row", { justify = "end", pad = 0 }, {
 			node("row", { id = win.id .. ".resize", handle = "resize", w = 14, h = 14, bg = "line", radius = 0 }),
 		}),
@@ -307,8 +309,8 @@ function kit.input(props)
 		on_submit = props.on_submit,
 		on_key = props.on_key,
 		w = props.w or 200,
-		pad = "xs",
-		padx = "s",
+		pad = "s",
+		padx = "m",
 		bg = "surface_raised",
 		border = "line",
 		focus = { border = "accent" },
@@ -350,7 +352,7 @@ function kit.menu(props)
 			rows,
 			node("row", {
 				padx = "m",
-				pady = "xs",
+				pady = "s",
 				hover = { bg = "surface_hover" },
 				press = { bg = "surface_press" },
 				on_click = item.on_click,
@@ -366,7 +368,7 @@ local TOAST_COLOR = { info = "text", good = "good", threat = "threat", bad = "ba
 -- A message toast. props: text, kind ("info"/"good"/"threat"/"bad"), age (0..1).
 function kit.toast(props)
 	local old = (props.age or 0) > 0.5
-	return node("row", { padx = "m", pady = "xs", bg = "surface", radius = "radius", maxw = 520 }, {
+	return node("row", { padx = "l", pady = "s", bg = "surface", radius = "radius", maxw = 520 }, {
 		kit.label(props.text, { color = if old then "muted" else TOAST_COLOR[props.kind] or "text", wrap = true }),
 	})
 end

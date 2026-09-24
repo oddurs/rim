@@ -16,10 +16,10 @@ xl = 16
 xxl = 24
 
 [text]
-small = 11
+small = 12
 body = 13
 heading = 15
-title = 20
+title = 18
 
 [weight]
 regular = 400
@@ -34,11 +34,11 @@ surface = "#121417d9"
 surface_raised = "#1c1f24f2"
 surface_hover = "#272b31f2"
 surface_press = "#30353cf2"
-line = "#ffffff1c"
-line_strong = "#ffffff38"
+line = "#ffffff22"
+line_strong = "#ffffff40"
 text = "#e7e7e4"
-muted = "#91969c"
-faint = "#62676d"
+muted = "#a3a8ae"
+faint = "#7b8188"
 accent = "#5ab4ff"
 accent_soft = "#5ab4ff2e"
 good = "#72d282"

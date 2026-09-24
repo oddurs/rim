@@ -53,7 +53,7 @@ First playable vertical slice. One warrior, harvest, build, eat, sleep, animals,
 
 ## interface — Interface
 
-`##########` 100% · 15 of 15 done · due 2026-10-09
+`##########` 100% · 16 of 16 done · due 2026-10-09
 
 A two-week sprint. The whole HUD moves out of Rust into `mods/core/ui/`, written in Luau on a small UI engine, so any mod can extend, replace, wrap or remove any part of the interface. Design: DESIGN.md §11.
 
@@ -72,6 +72,7 @@ A two-week sprint. The whole HUD moves out of Rust into `mods/core/ui/`, written
 - [x] `b144ca3c` Component kit v1: buttons, bars, tabs, lists, tooltips, menus, toasts, bubbles <sup>feature · p0 · l · core</sup>
 - [x] `c96a6a8f` Hot reload of UI scripts and theme <sup>feature · p1 · s · tooling</sup>
 - [x] `c9b1406d` UI mod operations: extend, replace, wrap and remove by id <sup>feature · p0 · m · client</sup>
+- [x] `cc7114a3` Typography and spacing pass: minimal, not ugly <sup>chore · p2</sup>
 
 ## weather — Weather
 
