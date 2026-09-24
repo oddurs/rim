@@ -128,6 +128,12 @@ pub struct Layer {
     pub ambient: i32,
     /// Per-room value for `indoor = "room"` fields, indexed by room id - 1.
     pub rooms: Vec<i32>,
+    /// Per-room multiplier on `leak_per_hour`, from what encloses the room.
+    /// 1.0 for a boundary that says nothing.
+    pub leak_mult: Vec<f64>,
+    /// Per-room fraction of the outdoor value that gets in through the
+    /// boundary, for fields that are otherwise dark indoors.
+    pub pass: Vec<f64>,
 }
 
 pub struct Fields {
@@ -155,7 +161,13 @@ impl Fields {
             layers: defs
                 .fields
                 .iter()
-                .map(|f| Layer { stamped: vec![0; cells], ambient: (f.base * FIXED) as i32, rooms: Vec::new() })
+                .map(|f| Layer {
+                    stamped: vec![0; cells],
+                    ambient: (f.base * FIXED) as i32,
+                    rooms: Vec::new(),
+                    leak_mult: Vec::new(),
+                    pass: Vec::new(),
+                })
                 .collect(),
             atmos: defs.fields.iter().map(|f| Atmos { value: terms::to_q(f.base), ..Default::default() }).collect(),
             last_clock: None,
@@ -168,6 +180,31 @@ impl Fields {
             restamped: 0,
             revision: 0,
         }
+    }
+
+    /// Rooms were rebuilt: every room starts from a boundary that says
+    /// nothing until `set_boundary` fills it in.
+    pub fn reset_boundaries(&mut self, rooms: usize) {
+        for layer in &mut self.layers {
+            layer.leak_mult = vec![1.0; rooms];
+            layer.pass = vec![0.0; rooms];
+        }
+    }
+
+    pub fn set_boundary(&mut self, field: usize, room: u32, leak_mult: f64, pass: f64) {
+        let layer = &mut self.layers[field];
+        let i = room as usize - 1;
+        if i < layer.leak_mult.len() {
+            layer.leak_mult[i] = leak_mult;
+            layer.pass[i] = pass;
+        }
+    }
+
+    /// `(leak multiplier, pass fraction)` for a room, as its boundary set it.
+    pub fn boundary(&self, field: usize, room: u32) -> (f64, f64) {
+        let layer = &self.layers[field];
+        let i = room as usize - 1;
+        (layer.leak_mult.get(i).copied().unwrap_or(1.0), layer.pass.get(i).copied().unwrap_or(0.0))
     }
 
     /// Register the emitters of a thing that now exists at `pos`.
@@ -438,7 +475,8 @@ impl Fields {
                     continue;
                 }
                 let v = *value as f64;
-                let change = (ambient as f64 - v) * fd.leak_per_hour + heat / room.cells as f64;
+                let leak = fd.leak_per_hour * layer.leak_mult.get(r).copied().unwrap_or(1.0);
+                let change = (ambient as f64 - v) * leak + heat / room.cells as f64;
                 *value = (v + change * hours).round() as i32;
             }
         }
@@ -454,7 +492,11 @@ impl Fields {
         let indoors = map.room_at(p).filter(|r| r.enclosed());
         match (defs.fields[field].indoor, indoors) {
             (_, None) | (IndoorMode::Outdoor, _) => layer.ambient + stamped,
-            (IndoorMode::None, Some(_)) => stamped,
+            // Dark inside, except for what the boundary lets through.
+            (IndoorMode::None, Some(r)) => {
+                let pass = layer.pass.get(r.id as usize - 1).copied().unwrap_or(0.0);
+                stamped + (layer.ambient as f64 * pass).round() as i32
+            }
             // The room's value already includes what its emitters put in;
             // adding their local stamp too would count the same fire twice.
             (IndoorMode::Room, Some(r)) => layer.rooms.get(r.id as usize - 1).copied().unwrap_or(layer.ambient),

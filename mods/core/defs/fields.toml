@@ -16,6 +16,10 @@ leak_per_hour = 0.06
 # Heating power: a campfire (12°) warms a 3x3 room about 10° an hour, up to
 # its cap. Bigger rooms warm slower and may need more than one fire.
 room_gain = 7.5
+# What a room is made of scales its leak: each boundary piece's `leak` is
+# divided by its material's `insulation` factor, then averaged around the
+# room. Wood is 1.0, so a wooden hut leaks at exactly the constant above.
+boundary_factor = "insulation"
 range = [-10.0, 35.0]
 color_low = "#3b6fd4"
 color_high = "#e0452b"

@@ -28,6 +28,12 @@ pub struct Map {
     /// Cells whose walls or doors changed since the last `take_changed_cells`.
     changed: Vec<u32>,
     rooms: Vec<Room>,
+    /// Boundary cells per room (walls, doors, rock, water), indexed by
+    /// room id - 1. Collected during the room flood fill, so it is free.
+    room_boundary: Vec<Vec<u32>>,
+    /// Which room last listed each cell as boundary, so a wall touching
+    /// three cells of one room is listed once.
+    bound_seen: Vec<u32>,
     rooms_dirty: bool,
     /// How many times rooms have been rebuilt (they only are when walls change).
     pub room_rebuilds: u64,
@@ -80,6 +86,8 @@ impl Map {
             prev_room: vec![0; n],
             changed: Vec::new(),
             rooms: Vec::new(),
+            room_boundary: Vec::new(),
+            bound_seen: vec![0; n],
             rooms_dirty: true,
             room_rebuilds: 0,
             regions: std::array::from_fn(|_| vec![0; n]),
@@ -272,7 +280,9 @@ impl Map {
         self.room_rebuilds += 1;
         std::mem::swap(&mut self.room, &mut self.prev_room);
         self.room.iter_mut().for_each(|r| *r = 0);
+        self.bound_seen.iter_mut().for_each(|r| *r = 0);
         self.rooms.clear();
+        self.room_boundary.clear();
         let mut stack = Vec::new();
         for start in 0..self.room.len() {
             if self.room[start] != 0 || !self.room_cell(start) {
@@ -280,6 +290,7 @@ impl Map {
             }
             let id = self.rooms.len() as u32 + 1;
             let mut room = Room { id, cells: 0, touches_edge: false };
+            let mut boundary = Vec::new();
             self.room[start] = id;
             stack.push(start);
             while let Some(i) = stack.pop() {
@@ -288,20 +299,34 @@ impl Map {
                 if p.x == 0 || p.y == 0 || p.x == self.w - 1 || p.y == self.h - 1 {
                     room.touches_edge = true;
                 }
-                for (dx, dy) in &NEIGHBORS8[..4] {
+                // The fill is 4-connected; the boundary is everything that
+                // touches the room, corners included, so a ring of wall is
+                // all of its pieces and not just the ones facing inward.
+                for (k, (dx, dy)) in NEIGHBORS8.iter().enumerate() {
                     let q = p.offset(*dx, *dy);
                     if !self.inb(q) {
                         continue;
                     }
                     let j = self.idx(q);
-                    if self.room[j] == 0 && self.room_cell(j) {
+                    if !self.room_cell(j) {
+                        if self.bound_seen[j] != id {
+                            self.bound_seen[j] = id;
+                            boundary.push(j as u32);
+                        }
+                    } else if k < 4 && self.room[j] == 0 {
                         self.room[j] = id;
                         stack.push(j);
                     }
                 }
             }
             self.rooms.push(room);
+            self.room_boundary.push(boundary);
         }
+    }
+
+    /// The cells enclosing room `id`: walls, doors, rock, water.
+    pub fn room_boundary(&self, id: u32) -> &[u32] {
+        self.room_boundary.get(id as usize - 1).map_or(&[], |v| v.as_slice())
     }
 
     /// Heat, light and the like stop at walls, doors and impassable ground.
