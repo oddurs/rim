@@ -195,6 +195,8 @@ rim.every(20, function()
 	end
 	local q = load_queue()
 	if q == nil then
+		-- The types, for the devtools panel (the UI can't see this registry).
+		rim.set_data("weather:types", order)
 		q = { pick(nil, rim.tick()) }
 		q[1].wind_dir = rim.random() * 360
 		fill(q)
@@ -283,3 +285,11 @@ function weather.force(id: string, h: number)
 	apply(e, previous)
 	save(q)
 end
+
+-- Devtools: the weather plugin's own UI asks for a weather type through a
+-- command (act.send), so forcing weather replays and stays in lockstep.
+rim.on("weather:force", function(e)
+	if types[e.id] then
+		weather.force(e.id, e.hours or 12)
+	end
+end)

@@ -128,6 +128,19 @@ pub struct UiVm {
 /// instead). Generous: a frame's whole budget is a few milliseconds.
 pub const CALL_DEADLINE: std::time::Duration = std::time::Duration::from_millis(250);
 
+/// The mod whose UI code is calling: the chunk name of the nearest Luau
+/// frame ("@weather/ui/devtools.luau").
+fn ui_calling_mod(lua: &Lua) -> Option<String> {
+    (1..16).find_map(|level| {
+        lua.inspect_stack(level, |d| {
+            let src = d.source().source?.to_string();
+            let (mod_id, path) = src.strip_prefix('@')?.split_once('/')?;
+            path.starts_with("ui/").then(|| mod_id.to_string())
+        })
+        .flatten()
+    })
+}
+
 fn rt(e: impl std::fmt::Display) -> mlua::Error {
     mlua::Error::runtime(e.to_string())
 }
@@ -417,6 +430,31 @@ impl UiVm {
         act!("toggle_profiler", (), |_a| UiAction::ToggleProfiler);
         act!("toggle_devtools", (), |_a| UiAction::ToggleDevtools);
         act!("toggle_outlines", (), |_a| UiAction::ToggleOutlines);
+        // Devtools: run the sim forward (hours of game time).
+        act!("advance", f64, |h| UiAction::Advance(h.clamp(0.0, 24.0 * 60.0)));
+        // Send an event to this mod's own sim scripts: "<mod>:<name>". The mod
+        // is the one whose UI code calls it (from its chunk name), so a mod
+        // can't speak for another.
+        {
+            let r = self.reg.clone();
+            act.set(
+                "send",
+                lua.create_function(move |lua, (name, data): (String, Option<Table>)| {
+                    let me = ui_calling_mod(lua).unwrap_or_default();
+                    if me.is_empty() || !name.starts_with(&format!("{me}:")) || name.len() <= me.len() + 1 {
+                        return Err(rt(format!(
+                            "mod '{me}' can only send its own events, named \"{me}:<event>\" (got \"{name}\")"
+                        )));
+                    }
+                    let data = match data {
+                        Some(t) => rim_sim::data::from_lua(&Value::Table(t), &name, 0).map_err(rt)?,
+                        None => None,
+                    };
+                    r.borrow_mut().actions.push(UiAction::Send(name, data));
+                    Ok(())
+                })?,
+            )?;
+        }
         g.set("act", act)?;
 
         g.set("view", self.view_api()?)?;

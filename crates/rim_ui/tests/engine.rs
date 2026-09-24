@@ -249,6 +249,43 @@ ui.mount("top", "spin:forever", { order = 5 })
 }
 
 #[test]
+fn a_mods_ui_sends_only_its_own_events() {
+    let dir = scratch_mods(
+        "send",
+        &[(
+            "sender",
+            "",
+            &[(
+                "ui/send.luau",
+                r#"
+ui.define("sender:panel", function(view)
+    return ui.row({ id = "sender:panel", bg = "surface", pad = 8,
+        ui.row({ id = "sender:own", pad = 4, bg = "surface", on_click = function() act.send("sender:ping", { n = 1 }) end,
+            ui.text({ "own" }) }),
+        ui.row({ id = "sender:other", pad = 4, bg = "surface", on_click = function() act.send("weather:force", { id = "storm" }) end,
+            ui.text({ "other" }) }),
+    })
+end)
+ui.mount("windows", "sender:panel")
+"#,
+            )],
+        )],
+    );
+    let sim = sim_at(&dir);
+    let mut ui = ui_for(&sim);
+    let mut cv = client(&sim);
+    frame(&mut ui, &sim, &cv, Default::default());
+    let at = centre(ui.find("sender:own").unwrap());
+    let own = click(&mut ui, &sim, &mut cv, at);
+    assert!(own.iter().any(|a| matches!(a, rim_ui::view::UiAction::Send(n, _) if n == "sender:ping")), "{own:?}");
+    let at = centre(ui.find("sender:other").unwrap());
+    let other = click(&mut ui, &sim, &mut cv, at);
+    assert!(!other.iter().any(|a| matches!(a, rim_ui::view::UiAction::Send(..))), "can't speak for another mod");
+    assert!(ui.warnings().iter().any(|w| w.contains("can only send its own events")), "{:?}", ui.warnings());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn a_scroll_area_stops_exactly_at_its_last_row() {
     let dir = scratch_mods(
         "scroll",

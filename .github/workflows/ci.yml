@@ -61,7 +61,14 @@ jobs:
       - name: Core alone, 3 in-game days
         run: cargo run --release -p rim_sim --example headless -- --days 3 --seed 1 --core
       - name: Climate report, one year
-        run: cargo run --release -p rim_sim --example year -- --seed 1
+        shell: bash
+        run: cargo run --release -p rim_sim --example year -- --seed 1 | tee climate-report-${{ matrix.os }}.txt
+      - name: Upload the climate report
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: climate-report
+          path: climate-report-*.txt
       # macOS runners have no OpenGL; Linux renders in software under Xvfb.
       - name: Client autotest (drives every control, takes screenshots)
         if: runner.os == 'Linux'

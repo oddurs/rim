@@ -42,6 +42,14 @@ pub enum Command {
         cell: IVec,
         on: Option<Entity>,
     },
+    /// A mod's interface asks its own sim scripts to do something: delivered
+    /// as the script event `name` (namespaced by the mod, "weather:force")
+    /// at the tick boundary, like any other input, so it replays and stays
+    /// in lockstep.
+    ModEvent {
+        name: String,
+        data: Option<crate::data::Data>,
+    },
 }
 
 fn cells(w: &World, a: IVec, b: IVec) -> impl Iterator<Item = IVec> {
@@ -135,6 +143,7 @@ pub fn apply(w: &mut World, c: Command) {
                 p.drafted = on;
             }
         }
+        Command::ModEvent { name, data } => w.events.push(GameEvent::Script { name, data }),
         Command::Order { pawn, cell, on } => {
             if !is_colonist(w, pawn) {
                 return;
