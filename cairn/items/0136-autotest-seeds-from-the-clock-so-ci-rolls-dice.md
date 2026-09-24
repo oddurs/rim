@@ -2,10 +2,12 @@
 id: 6a6a4828-3f5d-46ca-8e29-5cd569791f20
 title: Autotest seeds from the clock, so CI rolls dice
 type: bug
-status: backlog
+status: doing
 milestone: shelter
+assignee: Oddur Sigurdsson
+claimed: 2026-09-24
 created: 2026-09-23
-updated: 2026-09-23
+updated: 2026-09-24
 priority: p1
 api: none
 layer: tooling
