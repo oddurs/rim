@@ -99,12 +99,24 @@ pub fn deaths(w: &mut World) {
             w.place_item(d, p.pos, n);
         }
         match p.faction {
+            // The founder's death is a colony event, told as one; the
+            // colony goes on if anyone is left.
+            Faction::Player if p.founder => {
+                w.message(format!("{}, the founder, has fallen. The colony goes on.", p.name), MsgKind::Bad)
+            }
             Faction::Player => w.message(format!("{} has died.", p.name), MsgKind::Bad),
             Faction::Hostile if cd.intelligent => w.message(format!("Raider {} was killed.", p.name), MsgKind::Info),
             _ => {}
         }
-        w.note_event("died", e, &p.name);
-        w.events.push(GameEvent::PawnDied { id: e, name: p.name, def: p.def, faction: p.faction, pos: p.pos });
+        w.note_event(if p.founder { "founder_died" } else { "died" }, e, &p.name);
+        w.events.push(GameEvent::PawnDied {
+            id: e,
+            name: p.name,
+            def: p.def,
+            faction: p.faction,
+            pos: p.pos,
+            founder: p.founder,
+        });
     }
     if !w.colony_lost && w.tick > 0 && w.colonists().next().is_none() {
         w.colony_lost = true;

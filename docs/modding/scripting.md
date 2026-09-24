@@ -110,7 +110,10 @@ global `state` without colliding.
 ## Events
 
 `rim.on(name, fn)` hears engine events (`pawn_died`, `season_changed`, ...)
-and mod events. A mod emits only under its own name:
+and mod events. `pawn_died` carries `id`, `name`, `creature`, `faction`, `x`,
+`y` and `founder`, true when the colony's founder fell: a colony event a
+storyteller mod can answer, not the end of the game. A mod emits only under
+its own name:
 
 ```lua
 rim.emit("my_mod:flood", { x = 10, y = 20 })

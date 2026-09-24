@@ -269,6 +269,8 @@ pub enum GameEvent {
         def: DefId,
         faction: Faction,
         pos: IVec,
+        /// The colony's founder: an event for the colony, not its end.
+        founder: bool,
     },
     PawnLeft {
         id: Entity,
