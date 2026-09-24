@@ -15,6 +15,7 @@ Measured on the reference machine (Apple Silicon, macOS), release builds.
 | hecs | 0.11 | default |
 | toml | 1.1 | default |
 | serde_path_to_error | 0.1 | |
+| libm | 0.2 | no default features (deterministic transcendentals for scripts) |
 | taffy | 0.14 | `std`, `taffy_tree`, `flexbox`, `content_size` |
 | cosmic-text | 0.19 | default (`std`, `swash`, `fontconfig`) + `shape-run-cache` |
 | macroquad | 0.4.16 | default |
@@ -91,11 +92,29 @@ co-op. The UI's is client-only (DESIGN.md §11).
   - One fmadd remains, deliberately: clang expands `math.noise`'s
     `fmod(x, 256.0)` as `x - trunc(x/256)*256`. Multiplying by 256 is exact,
     so fused and unfused give the same answer.
-- **Still platform-dependent:** `sin`, `cos`, `tan`, `exp`, `log`, `pow`/`^`
-  and `atan2` come from each platform's maths library, in Rust and in Luau.
-  The sim uses none of them for state (climate curves are fixed-point terms,
-  DESIGN.md §4c). Scripts must not either (0147 tracks giving them
-  deterministic versions).
+- **Transcendentals in scripts are rim's own.** The platform's `sin`, `exp`,
+  `pow`, … differ in the last bit between systems. Measured on this Mac
+  against musl over 20,000 inputs: `sin` differs in 905, `exp` in 1,968,
+  `pow` in 1,962, `log` in 278.
+  - The sim VM replaces `math.sin`, `cos`, `tan`, `asin`, `acos`, `atan`,
+    `atan2`, `exp`, `log`, `log10`, `pow`, `sinh`, `cosh` and `tanh` with the
+    `libm` crate's versions (a Rust port of musl). Being the same code, they
+    give the same bits everywhere. libm's `arch` feature, enabled through
+    another dependency, only swaps in hardware `sqrt`/`fma`/`rint`, which are
+    correctly rounded, so the bits don't change.
+  - The same functions are disabled as **compiler builtins**. Otherwise, in
+    a safe environment, Luau fast-calls the C implementation directly,
+    ignoring the `math` table, and constant-folds literal calls with the
+    compiling machine's library. The test proves it: without this,
+    `math.tan(0.7)` came out one bit different.
+  - `tests/scripting.rs` holds bit-exact test vectors, two of them inputs
+    where Apple's library disagrees, so macOS CI catches a regression too.
+  - The `^` operator can't be replaced (Luau calls `pow` inline). It is exact
+    for literal exponents 2, 3 and 0.5, and the loader warns, with file and
+    line, about every other use.
+- **Rust's own `f64::sin`, `powf`, … are still platform-dependent.** The sim
+  uses none of them for state (climate curves are fixed-point terms,
+  DESIGN.md §4c); new sim code should use `libm` if it needs them.
 - **Iteration order:** `pairs` over string and number keys is the same on
   every machine running the same Luau version (string hashes are unseeded).
   Tables, functions and userdata as keys hash by address, so their order
