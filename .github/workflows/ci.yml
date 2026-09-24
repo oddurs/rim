@@ -32,7 +32,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
@@ -51,6 +51,9 @@ jobs:
       # Lockstep: the Luau VM must have no fused multiply-adds (see
       # .cargo/config.toml). arm64 is where clang fuses them.
       - name: Luau has no fused multiply-add
+        # objdump isn't on Windows runners, and MSVC doesn't contract a*b+c
+        # into an FMA under its default /fp:precise.
+        if: runner.os != 'Windows'
         run: ./scripts/check-no-fma.sh
       - name: Headless soak, 3 in-game days
         run: cargo run --release -p rim_sim --example headless -- --days 3 --seed 1
@@ -70,6 +73,63 @@ jobs:
           name: autotest-screenshots
           path: target/autotest/*.png
           if-no-files-found: ignore
+
+  # Lockstep needs every platform to reach the same state from the same seed
+  # and commands (DESIGN.md §7). Each runs the same scenario; `agree` fails if
+  # any output differs, and shows them all.
+  crosscheck:
+    name: Crosscheck (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # x86-64 and ARM Linux, ARM macOS, x86-64 Windows.
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.98.1
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: crosscheck
+      - name: Run the scenario
+        shell: bash
+        run: cargo run --release -p rim_sim --example crosscheck > crosscheck-${{ matrix.os }}.txt && cat crosscheck-${{ matrix.os }}.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: crosscheck-${{ matrix.os }}
+          path: crosscheck-${{ matrix.os }}.txt
+
+  agree:
+    name: Every platform reaches the same state
+    needs: crosscheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: crosscheck-*
+          merge-multiple: true
+      - name: Compare
+        shell: bash
+        run: |
+          ls crosscheck-*.txt
+          first=$(ls crosscheck-*.txt | head -n 1)
+          status=0
+          for f in crosscheck-*.txt; do
+            if ! cmp -s "$first" "$f"; then status=1; fi
+          done
+          if [ $status -ne 0 ]; then
+            echo "Platforms disagree. First differing day per platform against $first:"
+            for f in crosscheck-*.txt; do
+              echo "== $f"
+              diff "$first" "$f" | head -n 4 || true
+            done
+            for f in crosscheck-*.txt; do echo "== $f"; cat "$f"; done
+            exit 1
+          fi
+          echo "All $(ls crosscheck-*.txt | wc -l) platforms agree:"
+          tail -n 1 "$first"
 
   roadmap:
     name: Roadmap

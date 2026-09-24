@@ -2,10 +2,12 @@
 id: 48f92e6e-2187-461a-a98b-f20e36ae1325
 title: 'CI: build and test on Windows'
 type: chore
-status: backlog
+status: doing
 milestone: shelter
+assignee: Oddur Sigurdsson
+claimed: 2026-09-24
 created: 2026-09-23
-updated: 2026-09-23
+updated: 2026-09-24
 priority: p1
 api: none
 effort: s
