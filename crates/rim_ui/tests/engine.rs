@@ -871,6 +871,81 @@ fn the_keybinds_file_overrides_a_default_and_survives_a_restart() {
 }
 
 #[test]
+fn a_table_sorts_by_a_clicked_column_and_keeps_its_rows_virtual() {
+    let dir = scratch_mods(
+        "table",
+        &[(
+            "probe",
+            "",
+            &[(
+                "ui/table.luau",
+                r#"
+local kit = require("@core/ui/kit")
+local rows = {}
+for i = 1, 300 do
+    rows[i] = { name = "pawn" .. string.format("%03d", i), age = (i * 37) % 90 }
+end
+ui.define("probe:table", function(view)
+    return kit.table({ id = "probe:t", h = 100, row_h = 20, rows = rows, columns = {
+        { label = "Name", w = 120, key = "name" },
+        { label = "Age", w = 60, key = "age" },
+        { label = "Plain", w = 60, value = function(rec) return rec.age * 2 end, sort = false },
+    } })
+end)
+ui.mount("windows", "probe:table")
+"#,
+            )],
+        )],
+    );
+    let sim = sim_at(&dir);
+    let mut ui = ui_for(&sim);
+    let mut cv = client(&sim);
+    frame(&mut ui, &sim, &cv, Default::default());
+    frame(&mut ui, &sim, &cv, Input { time: 1.0, ..Default::default() });
+    let first_rows = |ui: &rim_ui::Ui| -> Vec<String> {
+        let snap = ui.snapshot();
+        let sec = snap.split("== probe:table").nth(1).unwrap_or("");
+        sec.lines().filter(|l| l.contains("\"pawn")).take(3).map(|l| l.trim().to_string()).collect()
+    };
+    let built = ui.snapshot().matches("\"pawn").count();
+    assert!(built < 40, "{built} of 300 rows built for a 100 px window");
+    assert!(first_rows(&ui)[0].contains("pawn001"), "unsorted: declaration order {:?}", first_rows(&ui));
+    // Click the Age header: ascending; again: descending.
+    let age = ui.find("probe:t.head.2").expect("the header is laid out");
+    click(&mut ui, &sim, &mut cv, centre(age));
+    frame(&mut ui, &sim, &cv, Input { time: 2.0, ..Default::default() });
+    let ages = |ui: &rim_ui::Ui| -> Vec<i32> {
+        let snap = ui.snapshot();
+        let sec = snap.split("== probe:table").nth(1).unwrap_or("");
+        let mut v = Vec::new();
+        let lines: Vec<&str> = sec.lines().collect();
+        for (i, l) in lines.iter().enumerate() {
+            if l.contains("\"pawn") {
+                if let Some(n) = lines.get(i + 2).and_then(|n| n.split('"').nth(1)).and_then(|n| n.parse().ok()) {
+                    v.push(n);
+                }
+            }
+        }
+        v
+    };
+    let asc = ages(&ui);
+    assert!(asc.len() > 3 && asc.windows(2).all(|w| w[0] <= w[1]), "ascending by age: {asc:?}");
+    assert_eq!(asc[0], 0);
+    click(&mut ui, &sim, &mut cv, centre(age));
+    frame(&mut ui, &sim, &cv, Input { time: 3.0, ..Default::default() });
+    let desc = ages(&ui);
+    assert!(desc.windows(2).all(|w| w[0] >= w[1]), "descending by age: {desc:?}");
+    assert_eq!(desc[0], 89);
+    // A column that refuses to sort has no click.
+    let plain = ui.find("probe:t.head.3").unwrap();
+    click(&mut ui, &sim, &mut cv, centre(plain));
+    frame(&mut ui, &sim, &cv, Input { time: 4.0, ..Default::default() });
+    assert_eq!(ages(&ui)[0], 89, "still descending by age");
+    assert!(ui.warnings().is_empty(), "{:?}", ui.warnings());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn a_scroll_area_stops_exactly_at_its_last_row() {
     let dir = scratch_mods(
         "scroll",

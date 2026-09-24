@@ -154,25 +154,82 @@ function kit.grid(props)
 end
 
 -- A virtual table: a header row over a list that builds only the rows on
--- screen. props: id (required: its scroll position is kept by it), columns
--- = { {label, w} }, count, row(i) -> { cell, ... } (strings or nodes),
--- row_h, h (the visible height), on_click(i).
+-- screen. props: id (required: its scroll position and sort are kept by
+-- it), columns = { {label, w, key, value, sort} }, row_h, h (the visible
+-- height), on_click(i, rec). Rows come one of two ways:
+--   rows = { record, ... }   a cell is rec[col.key] or col.value(rec);
+--                            a column with key or value sorts when its
+--                            header is clicked (sort = false to refuse)
+--   count, row(i) -> { cell, ... }   cells by hand, no sorting
+-- A cell is a string, a number or a node.
 function kit.table(props)
 	local cols = props.columns
+	local sort = props.rows and ui.state(props.id .. ".sort", nil)
+	-- The sorted order of the records, when there is one to sort by.
+	local order
+	if props.rows then
+		order = table.create(#props.rows)
+		for i = 1, #props.rows do
+			order[i] = i
+		end
+		local col = sort and cols[sort.col]
+		if col then
+			local value = col.value or function(rec)
+				return rec[col.key]
+			end
+			local desc = sort.dir == "desc"
+			table.sort(order, function(a, b)
+				local va, vb = value(props.rows[a]), value(props.rows[b])
+				if va == vb then
+					return a < b
+				end
+				if type(va) ~= type(vb) then
+					va, vb = tostring(va), tostring(vb)
+				end
+				if desc then
+					return va > vb
+				end
+				return va < vb
+			end)
+		end
+	end
 	local header = {}
-	for _, c in cols do
-		table.insert(header, node("row", { w = c.w, pad = "xs" }, { kit.label(c.label, { size = "small", color = "muted" }) }))
+	for k, c in cols do
+		local sortable = props.rows and c.sort ~= false and (c.key ~= nil or c.value ~= nil)
+		local mark = sort and sort.col == k and (if sort.dir == "desc" then ui.t("core:table.desc", "▼") else ui.t("core:table.asc", "▲")) or nil
+		table.insert(
+			header,
+			node("row", {
+				id = props.id .. ".head." .. k,
+				w = c.w,
+				pad = "xs",
+				gap = "xs",
+				align = "center",
+				hover = sortable and { bg = "surface_hover" } or nil,
+				on_click = sortable and function()
+					local dir = if sort and sort.col == k and sort.dir == "asc" then "desc" else "asc"
+					ui.set_state(props.id .. ".sort", { col = k, dir = dir })
+				end or nil,
+			}, {
+				kit.label(c.label, { size = "small", color = "muted" }),
+				mark and kit.label(mark, { size = "small", color = "accent" }),
+			})
+		)
 	end
 	local function row(i)
-		local cells = props.row(i)
+		local rec = order and props.rows[order[i]]
+		local cells = props.row and props.row(i) or {}
 		local out = { kind = "row", align = "center", hover = { bg = "surface_raised" } }
 		if props.on_click then
 			out.on_click = function()
-				props.on_click(i)
+				props.on_click(i, rec)
 			end
 		end
 		for k, c in cols do
 			local v = cells[k]
+			if v == nil and rec then
+				v = if c.value then c.value(rec) else rec[c.key]
+			end
 			if type(v) ~= "table" then
 				v = kit.label(tostring(v or ""), { size = "small" })
 			end
@@ -180,9 +237,10 @@ function kit.table(props)
 		end
 		return out
 	end
+	local count = if props.rows then #props.rows else props.count
 	return node("col", { id = props.id .. ".table", gap = 0 }, {
 		node("row", { bg = "surface_raised" }, header),
-		{ kind = "list", id = props.id, count = props.count, row = row, row_h = props.row_h or "l", h = props.h },
+		{ kind = "list", id = props.id, count = count, row = row, row_h = props.row_h or "l", h = props.h },
 	})
 end
 
