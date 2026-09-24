@@ -2,8 +2,9 @@
 id: 211
 title: Do room properties come from the boundary?
 type: spike
-status: backlog
+status: done
 milestone: building
+assignee: Oddur Sigurdsson
 created: 2026-09-23
 updated: 2026-09-23
 priority: p0
@@ -46,5 +47,9 @@ it is the first boundary piece whose material matters.
 
 ## Acceptance criteria
 
-- [ ] Cost of a boundary walk measured on a map with many small rooms
-- [ ] Decision recorded in DESIGN.md
+- [x] Cost of a boundary walk measured on a map with many small rooms
+- [x] Decision recorded in DESIGN.md
+
+## 2026-09-23
+
+Decided: room properties come from the boundary. Measured on a 200x200 map in release, best of 6: a pass over wall cells adding each wall's contribution to every distinct adjacent room costs 0.078-0.093 ms, against a room rebuild of 0.190-0.224 ms -- about +40%. Flat from 16 to 400 huts, because the pass scales with map area rather than room count, and it runs only when rooms rebuild (walls changed), never per tick. So 0216 goes ahead as planned and windows are a real def rather than a flag. Follow-up for 0097: the pass scans all cells; narrowing it to the changed set is the same work as incremental regions. Benchmark kept as tests/boundary_spike.rs so the number can be re-measured.
