@@ -640,6 +640,7 @@ name = "rim_sim"
 version = "0.1.0"
 dependencies = [
  "hecs",
+ "libm",
  "mlua",
  "serde",
  "serde_path_to_error",

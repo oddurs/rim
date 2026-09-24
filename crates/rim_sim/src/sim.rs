@@ -30,6 +30,7 @@ impl Sim {
     pub fn with_mods(mods_dir: &Path, seed: u64, enabled: &dyn Fn(&str) -> bool) -> Result<Sim, String> {
         let loaded = modloader::load_only(mods_dir, enabled)?;
         let scripts = ScriptHost::load(&loaded.scripts, &loaded.defs)?;
+        let warnings: Vec<String> = loaded.warnings.iter().chain(&scripts.warnings).cloned().collect();
         let defs = Arc::new(loaded.defs);
         let mut world = World::new(defs.clone(), MAP_SIZE, MAP_SIZE, seed);
         let start = mapgen::generate(&mut world);
@@ -62,14 +63,7 @@ impl Sim {
         let clock = world.clock();
         world.fields.update_ambient(&defs, clock);
 
-        Ok(Sim {
-            world,
-            scripts,
-            mods: loaded.mods,
-            warnings: loaded.warnings,
-            profile: Profile::default(),
-            queue: Vec::new(),
-        })
+        Ok(Sim { world, scripts, mods: loaded.mods, warnings, profile: Profile::default(), queue: Vec::new() })
     }
 
     /// Queue a player command; it applies at the start of the next tick.

@@ -55,14 +55,23 @@ have a `local function update()` or a global `state` without colliding.
 ## Staying deterministic
 
 - **Randomness:** only `rim.random` and `rim.random_int`.
-- **Maths:** `+ - * /`, `%`, `//`, `math.floor`, `math.ceil`, `math.abs`,
-  `math.min`, `math.max`, `math.sqrt` and `math.clamp` give identical results
-  everywhere. `math.sin`, `math.cos`, `math.tan`, `math.exp`, `math.log`,
-  `math.pow`, `^` and `math.atan2` come from each platform's maths library and
-  can differ in the last bit. Don't let them affect the simulation.
-  - For smooth curves over time, use a field's terms (`input = "hour"`,
-    `input = "year"`, `noise`), which the engine evaluates in fixed point
-    ([weather guide](weather.md)).
+- **Maths:** every `math` function gives identical results on every machine.
+  - `+ - * /`, `%`, `//`, `floor`, `ceil`, `abs`, `min`, `max`, `sqrt` and
+    `clamp` are exact IEEE operations.
+  - `math.sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `atan2`, `exp`, `log`,
+    `log10`, `pow`, `sinh`, `cosh` and `tanh` are rim's own (the `libm`
+    crate, a port of musl), not the platform's. Their accuracy is under
+    1 ulp. `math.log(x, base)` is exact for bases 2 and 10; other bases
+    compute `log(x) / log(base)`, which can be 1 ulp off (`math.log(81, 3)`
+    is 4.000000000000001).
+  - **The `^` operator** is the exception. It calls the platform's `pow`
+    except for the exponents `2`, `3` and `0.5` written as literals, which
+    Luau computes exactly. Use `math.pow(x, y)` for anything else. The game
+    warns about each `^` that could desync, with its file and line (F3 shows
+    load warnings).
+  - For smooth curves over time, a field's terms (`input = "hour"`,
+    `input = "year"`, `noise`) are often simpler, and the engine evaluates
+    them in fixed point ([weather guide](weather.md)).
 - **Iteration order:** `pairs` over a table with string or number keys visits
   them in the same order on every machine. Over tables keyed by tables or
   functions it doesn't, so sort first if the order matters.

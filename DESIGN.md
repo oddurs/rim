@@ -657,7 +657,9 @@ Then it merges defs, applies patches and runs scripts in that order.
   multiply-adds or enables fast-math, but clang does fuse them in C++ on
   arm64, so Luau is built with `-ffp-contract=off` and CI checks the binary.
   Library transcendentals (`sin`, `exp`, `pow`...) differ between platforms
-  and stay out of simulation state, in Rust and in scripts.
+  in the last bit, so scripts get rim's own (the `libm` crate, bit-identical
+  everywhere, checked by test vectors in CI), and Rust sim code avoids the
+  platform's.
 - **Scripts are sandboxed for it:** only deterministic libraries, no memory
   or clock queries, the world RNG instead of `math.random`, and a runaway
   script is stopped after a *counted* number of steps, never a timeout, so

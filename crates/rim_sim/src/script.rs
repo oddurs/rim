@@ -73,6 +73,8 @@ pub const MEMORY_LIMIT: usize = 256 << 20;
 pub const STEP_BUDGET: u64 = 100_000_000;
 
 pub struct ScriptHost {
+    /// Load-time advice for mod authors (determinism hazards).
+    pub warnings: Vec<String>,
     lua: Lua,
     world: Rc<WorldPtr>,
     reg: Rc<RefCell<Registry>>,
@@ -92,12 +94,100 @@ fn sim_libs() -> StdLib {
 /// Luau's fast paths; `math.random` is replaced by `rim.random` (the world RNG).
 const REMOVED: &[&str] = &["collectgarbage", "gcinfo", "loadstring", "getfenv", "setfenv", "newproxy", "os"];
 
+/// `math` functions whose C library versions differ between platforms in the
+/// last bit. The sim VM replaces them with the `libm` crate's (a Rust port of
+/// musl's): the same code, so the same bits, on every machine. They're also
+/// disabled as compiler builtins, or Luau would constant-fold them with the
+/// compiling machine's library and fast-call the C versions directly.
+const LIBM: &[&str] =
+    &["sin", "cos", "tan", "asin", "acos", "atan", "atan2", "exp", "log", "log10", "pow", "sinh", "cosh", "tanh"];
+
+/// Lines where a script uses `^` with an exponent Luau hands to the
+/// platform's `pow` (anything but a literal 2, 3 or 0.5, which it computes
+/// exactly). Strings and comments are skipped.
+pub fn pow_operator_lines(src: &str) -> Vec<usize> {
+    let b = src.as_bytes();
+    let mut out = Vec::new();
+    let (mut i, mut line) = (0, 1);
+    // `[[`, `[=[`... long brackets: returns the closing `]==]` if one opens here.
+    let long_close = |i: usize| -> Option<Vec<u8>> {
+        if b.get(i) != Some(&b'[') {
+            return None;
+        }
+        let mut j = i + 1;
+        while b.get(j) == Some(&b'=') {
+            j += 1;
+        }
+        (b.get(j) == Some(&b'[')).then(|| {
+            let mut c = vec![b']'];
+            c.extend(std::iter::repeat_n(b'=', j - i - 1));
+            c.push(b']');
+            c
+        })
+    };
+    while i < b.len() {
+        match b[i] {
+            b'\n' => line += 1,
+            b'-' if b.get(i + 1) == Some(&b'-') => {
+                i += 2;
+                if let Some(close) = long_close(i) {
+                    while i < b.len() && !b[i..].starts_with(&close) {
+                        line += (b[i] == b'\n') as usize;
+                        i += 1;
+                    }
+                    i += close.len();
+                } else {
+                    while i < b.len() && b[i] != b'\n' {
+                        i += 1;
+                    }
+                }
+                continue;
+            }
+            b'[' if long_close(i).is_some() => {
+                let close = long_close(i).unwrap();
+                while i < b.len() && !b[i..].starts_with(&close) {
+                    line += (b[i] == b'\n') as usize;
+                    i += 1;
+                }
+                i += close.len();
+                continue;
+            }
+            q @ (b'"' | b'\'' | b'`') => {
+                i += 1;
+                while i < b.len() && b[i] != q {
+                    if b[i] == b'\\' {
+                        i += 1;
+                    }
+                    line += (b.get(i) == Some(&b'\n')) as usize;
+                    i += 1;
+                }
+            }
+            b'^' => {
+                let rest = src[i + 1..].trim_start_matches([' ', '\t']);
+                let lit: String =
+                    rest.chars().take_while(|c| c.is_ascii_alphanumeric() || *c == '.' || *c == '_').collect();
+                if !matches!(lit.as_str(), "2" | "3" | "0.5" | "2.0" | "3.0") && !out.contains(&line) {
+                    out.push(line);
+                }
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    out
+}
+
 impl ScriptHost {
     pub fn load(scripts: &[ScriptSource], defs: &crate::defs::DefDb) -> Result<Self, String> {
         let lua = Lua::new_with(sim_libs(), LuaOptions::default()).map_err(|e| format!("script VM: {e}"))?;
         // Level 2 inlines small local functions and unrolls constant loops;
         // debug level 1 keeps line numbers in errors.
-        lua.set_compiler(Compiler::new().set_optimization_level(2).set_debug_level(1));
+        lua.set_compiler(
+            Compiler::new()
+                .set_optimization_level(2)
+                .set_debug_level(1)
+                .set_disabled_builtins(LIBM.iter().map(|f| format!("math.{f}"))),
+        );
         lua.set_memory_limit(MEMORY_LIMIT).map_err(|e| format!("script VM: {e}"))?;
         let steps = Rc::new(Cell::new(STEP_BUDGET));
         {
@@ -113,7 +203,8 @@ impl ScriptHost {
                 Ok(VmState::Continue)
             });
         }
-        let host = ScriptHost {
+        let mut host = ScriptHost {
+            warnings: Vec::new(),
             lua,
             world: Rc::new(WorldPtr(Cell::new(std::ptr::null_mut()))),
             reg: Rc::new(RefCell::new(Registry::default())),
@@ -122,6 +213,13 @@ impl ScriptHost {
         host.install(defs).map_err(|e| format!("script API setup failed: {e}"))?;
         host.lock_down().map_err(|e| format!("script API setup failed: {e}"))?;
         for s in scripts {
+            for line in pow_operator_lines(&s.source) {
+                host.warnings.push(format!(
+                    "{}/scripts/{}:{line}: `^` uses the platform's pow, which can differ between machines and desync \
+                     co-op; use math.pow (deterministic), or x*x",
+                    s.mod_id, s.name
+                ));
+            }
             host.reg.borrow_mut().current_mod = s.mod_id.clone();
             host.steps.set(STEP_BUDGET);
             let name = format!("{}/scripts/{}", s.mod_id, s.name);
@@ -175,6 +273,32 @@ impl ScriptHost {
             g.set(*name, Value::Nil)?;
         }
         let math: Table = g.get("math")?;
+        // Deterministic replacements for the C library's transcendentals.
+        macro_rules! libm1 {
+            ($($name:literal => $f:path),*) => {$(
+                math.set($name, lua.create_function(|_, x: f64| Ok($f(x)))?)?;
+            )*};
+        }
+        libm1!(
+            "sin" => libm::sin, "cos" => libm::cos, "tan" => libm::tan,
+            "asin" => libm::asin, "acos" => libm::acos, "atan" => libm::atan,
+            "exp" => libm::exp, "log10" => libm::log10,
+            "sinh" => libm::sinh, "cosh" => libm::cosh, "tanh" => libm::tanh
+        );
+        math.set("atan2", lua.create_function(|_, (y, x): (f64, f64)| Ok(libm::atan2(y, x)))?)?;
+        math.set("pow", lua.create_function(|_, (x, y): (f64, f64)| Ok(libm::pow(x, y)))?)?;
+        // Luau's math.log takes an optional base.
+        math.set(
+            "log",
+            lua.create_function(|_, (x, base): (f64, Option<f64>)| {
+                Ok(match base {
+                    None => libm::log(x),
+                    Some(2.0) => libm::log2(x),
+                    Some(10.0) => libm::log10(x),
+                    Some(b) => libm::log(x) / libm::log(b),
+                })
+            })?,
+        )?;
         math.set("random", Value::Nil)?;
         math.set("randomseed", Value::Nil)?;
 

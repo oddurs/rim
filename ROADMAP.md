@@ -92,7 +92,7 @@ A one-week sprint inside Shelter. The world gets seasons and weather you can see
 
 ## shelter — Shelter
 
-`######····` 58% · 7 of 12 done · due 2026-11-01
+`#######···` 64% · 9 of 14 done · due 2026-11-01
 
 Exposure makes shelter matter: warmth, enclosed rooms, day/night, weather. Get four walls up before night two.
 
@@ -106,6 +106,8 @@ Exposure makes shelter matter: warmth, enclosed rooms, day/night, weather. Get f
 - [x] `6adcd8f6` Field layers: data-driven scalar grids (temperature, light, beauty) <sup>feature · p0 · l · engine</sup>
 - [x] `8733f34a` Warmth need and exposure outdoors <sup>feature · p0 · m · engine</sup>
 - [x] `dade762a` Roofs, or does enclosure count as shelter? <sup>spike · p1 · s · engine</sup>
+- [x] `dc5eb655` UI and stack counts drawn in one batch <sup>perf · p2 · s · client</sup>
+- [x] `ee231dac` Dependency configuration: Luau sandbox and determinism, upgrades, text and rendering <sup>chore · p1 · m · tooling</sup>
 - [x] `f31e7677` Campfire gives warmth in a radius <sup>content · p1 · s · core</sup>
 - [x] `f51af7ba` Room detection: enclosed regions bounded by walls and doors <sup>feature · p0 · m · engine</sup>
 
@@ -179,7 +181,7 @@ The run gets a shape: eras, storyteller tiers, defensive strength in the threat 
 
 ## plugin-api — Plugin API
 
-`··········` 0% · 0 of 21 done · due 2027-02-01
+`#·········` 5% · 1 of 21 done · due 2027-02-01
 
 The API grows up: stat pipeline, script components, custom jobs, needs and def kinds, modules and custom events, a real sandbox with hard limits, factions as data, rim test, typed API. Everything Mood needs, and everything DESIGN.md §10 says a mod from a stranger's repo must be safe to do.
 
@@ -196,7 +198,6 @@ The API grows up: stat pipeline, script components, custom jobs, needs and def k
 - [ ] `b0da41ef` Custom def kinds: plugins declare their own data <sup>feature · p1 · m · engine</sup>
 - [ ] `b3df9f85` Mod-defined def kinds with schemas, and namespaced extension fields <sup>feature · p0 · l · engine</sup>
 - [ ] `c65db254` Per-mod budgets: profiler warnings and hard limits for runaway scripts <sup>feature · p1 · m · engine</sup>
-- [ ] `ded7881a` Deterministic math in scripts: replace library trig and exp <sup>feature · p1 · s · engine</sup>
 - [ ] `e2ce89c3` Sprites and atlases from mods <sup>feature · p2 · m · client</sup>
 - [ ] `eb2c9422` Which platforms beyond desktop, and what do they cost? <sup>spike · p2 · s · engine</sup>
 - [ ] `ebb814ad` Sky bodies: a cycle input and coloured sky terms <sup>feature · p2 · m · engine</sup>
@@ -204,6 +205,7 @@ The API grows up: stat pipeline, script components, custom jobs, needs and def k
 - [ ] `f6e18475` Mod modules: require("@mod/path") limited to declared dependencies <sup>feature · p0 · m · engine</sup>
 - [ ] `fdafcb10` Custom jobs and work givers from Luau <sup>feature · p0 · l · engine</sup>
 - [ ] `fecf1c87` Custom needs with script satisfiers <sup>feature · p0 · m · engine</sup>
+- [x] `ded7881a` Deterministic math in scripts: replace library trig and exp <sup>feature · p1 · s · engine</sup>
 
 ## mood — Mood
 

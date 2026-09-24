@@ -46,6 +46,14 @@ impl Data {
         }
     }
 
+    /// A list entry (Luau's 1-based index).
+    pub fn get_index(&self, i: i64) -> Option<&Data> {
+        match self {
+            Data::Table(t) => t.get(&Key::Int(i)),
+            _ => None,
+        }
+    }
+
     pub fn num(&self) -> Option<f64> {
         match self {
             Data::Int(i) => Some(*i as f64),
