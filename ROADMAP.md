@@ -182,12 +182,11 @@ The run gets a shape: eras, storyteller tiers, defensive strength in the threat 
 
 ## plugin-api — Plugin API
 
-`###·······` 27% · 6 of 22 done · due 2027-02-01
+`####······` 32% · 7 of 22 done · due 2027-02-01
 
 The API grows up: stat pipeline, script components, custom jobs, needs and def kinds, modules and custom events, a real sandbox with hard limits, factions as data, rim test, typed API. Everything Mood needs, and everything DESIGN.md §10 says a mod from a stranger's repo must be safe to do.
 
 - [ ] `14df87a8` Keybinds file and command palette <sup>feature · p1 · m · client</sup>
-- [ ] `51a9c5c6` Patch list operations: append, remove and match by key <sup>feature · p1 · m · engine</sup>
 - [ ] `63d2f10a` API deprecations warn with the replacement and the removal version <sup>feature · p2 · s · engine</sup>
 - [ ] `7f8ce379` Script-defined components on pawns and things <sup>feature · p0 · m · engine</sup>
 - [ ] `978be4f3` Factions as defs, not an engine enum <sup>feature · p0 · m · engine</sup>
@@ -205,6 +204,7 @@ The API grows up: stat pipeline, script components, custom jobs, needs and def k
 - [x] `11b23c33` Luau types for the UI globals (ui, act, view) <sup>feature · p2 · s · tooling</sup>
 - [x] `1c626720` Custom namespaced events: rim.emit and rim.on("mod:event") <sup>feature · p0 · s · engine</sup>
 - [x] `3eb7e697` Luau VM runs without sandbox mode, and the rim table is writable by any mod <sup>bug · p0 · s · engine</sup>
+- [x] `51a9c5c6` Patch list operations: append, remove and match by key <sup>feature · p1 · m · engine</sup>
 - [x] `6191b800` Luau type definitions for the rim API <sup>docs · p2 · m · tooling</sup>
 - [x] `ded7881a` Deterministic math in scripts: replace library trig and exp <sup>feature · p1 · s · engine</sup>
 - [x] `f6e18475` Mod modules: require("@mod/path") limited to declared dependencies <sup>feature · p0 · m · engine</sup>
