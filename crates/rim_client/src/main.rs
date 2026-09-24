@@ -116,6 +116,9 @@ async fn fail(e: String) {
 
 #[macroquad::main(conf)]
 async fn main() {
+    // Find the system fonts on another thread while mods load and the map
+    // generates (from the disk cache: a few ms; a first run scans them all).
+    rim_ui::fontcache::preload();
     let args: Vec<String> = std::env::args().collect();
     let seed = args
         .windows(2)

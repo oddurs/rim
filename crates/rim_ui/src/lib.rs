@@ -12,6 +12,7 @@
 //!    avoidance, the cursor label, modals, tooltips),
 //! 4. lays out (cached by tree hash) and paints.
 
+pub mod fontcache;
 pub mod layout;
 pub mod node;
 pub mod paint;
@@ -221,6 +222,9 @@ impl Ui {
             self.dpi = dpi;
             self.theme.scale = total_scale(dpi, self.user_scale);
             self.cache.clear();
+            // Whole-pixel glyph advances read crisper at 1x; at 2x subpixel
+            // positions are smoother.
+            self.text.set_hinting(dpi < 1.5);
         }
     }
 
