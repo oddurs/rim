@@ -24,29 +24,56 @@ How it's configured, and why: [docs/engineering/dependencies.md](../engineering/
 
 ## Sharing an API with other mods
 
-`rim` is the one table you can add to:
+`rim` is how mods offer APIs to each other. While mods load, a mod may add
+new names to it:
 
 ```lua
 rim.my_mod = {}
 function rim.my_mod.register(def) ... end
 ```
 
-Other mods that depend on yours call `rim.my_mod.register`. Add to `rim`;
-don't replace another mod's functions. Scripts resolve chains like
-`rim.weather.register` when they load (that's what makes them fast), so a
-replacement made later isn't seen by scripts that loaded before it. The
-standard libraries and the global table are read-only: `math.floor = ...`
-is an error.
+Other mods that depend on yours call `rim.my_mod.register`. The rules are
+enforced:
 
-Each script's own globals live in a private environment, so two mods can both
-have a `local function update()` or a global `state` without colliding.
+- **Add, never replace.** Assigning to a name that already exists (an
+  engine function like `rim.spawn_pawn`, or another mod's `rim.weather`) is an
+  error that names both mods, and the mod fails to load.
+- **Only while loading.** Once every script has loaded, `rim` and every table
+  in it are read-only, so no mod can change the engine's API or another
+  mod's while the game runs. Keep changing state in your own locals or in
+  script data (`rim.set_data`), not in your API table.
+- `getmetatable(rim)` gives nothing away.
+
+The standard libraries and the global table are read-only too:
+`math.floor = ...` is an error. Each script's own globals live in a private
+environment, so two mods can both have a `local function update()` or a
+global `state` without colliding.
+
+## Events
+
+`rim.on(name, fn)` hears engine events (`pawn_died`, `season_changed`, ...)
+and mod events. A mod emits only under its own name:
+
+```lua
+rim.emit("my_mod:flood", { x = 10, y = 20 })
+```
+
+Emitting `"other_mod:..."` or a bare engine name is an error. The namespace is
+the mod whose code calls `rim.emit`: when your hook calls
+`rim.weather.force`, it's the weather plugin that emits `weather:changed`.
+Handlers run in load order, then registration order, and payloads are plain
+data.
 
 ## Limits
 
 - **An endless loop is stopped.** A single hook or handler call may run 100
-  million steps (loop iterations and calls); past that it stops with an error
-  in the message feed, and the hook runs again next time. The limit is
-  counted, not timed, so it stops at the same point on every machine.
+  million steps (loop iterations and calls). Past that it stops with an error
+  in the message feed, and that hook or handler is switched off for the rest
+  of the game. The limit is counted, not timed, so it stops at the same point
+  on every machine.
+- **Slow mods are named.** If a mod's script calls average more than 0.5 ms,
+  the profiler's warnings (F3) name it. This is only a warning: wall-clock
+  time never changes the game.
 - **Memory:** the VM may hold 256 MB. A script that allocates past it fails
   with an error.
 - A script error never stops the game: it shows in the message feed, names

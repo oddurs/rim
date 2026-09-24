@@ -37,8 +37,14 @@ co-op. The UI's is client-only (DESIGN.md §11).
   - `newproxy` and `os` are removed.
   - `math.random` is removed; scripts use `rim.random` (the world RNG).
 - **Read-only.** The standard libraries and the global table are read-only.
-  `rim` stays writable: that's how plugins offer APIs to each other
-  (`rim.weather`, `rim.register_incident`).
+  Mods see `rim` through a proxy. While mods load, a write may *add* a key
+  (that's how plugins offer APIs, like `rim.weather` and
+  `rim.register_incident`) but never replace one; the error names both mods.
+  After load, `rim` and every table in it are read-only, and `__metatable`
+  hides the proxy's workings.
+- **Events:** `rim.emit` only accepts the calling mod's own namespace. The
+  caller is found from the chunk name of the nearest Luau frame, not from
+  whose hook is running.
 - **Safe environments.** Each script's environment is a Luau *safe env*
   (`Table::set_safeenv`). Without it Luau disables its fast paths: cached
   imports such as `math.floor`, builtin fastcalls, and fast `pairs`/`ipairs`.
@@ -55,7 +61,9 @@ co-op. The UI's is client-only (DESIGN.md §11).
   or handler call; past it the call stops with "an endless loop?". It is
   *counted*, never timed, because a wall-clock limit would stop peers at
   different points and desync them. It costs about 11% on a loop-heavy
-  benchmark.
+  benchmark. A hook or handler that runs past it is switched off for the rest
+  of the game. Separately, a mod whose calls average over 0.5 ms is named in
+  the profiler's warnings; that's wall-clock, so it only ever warns.
 - **Measured** (`examples/luau_bench.rs`, script-shaped work): 22.9 ms before,
   13.1 ms after, of which 1.4 ms is the step budget.
 

@@ -19,6 +19,8 @@ pub struct Sim {
     pub warnings: Vec<String>,
     pub profile: Profile,
     queue: Vec<Command>,
+    /// Mods already warned about for going over their time budget.
+    over_budget: Vec<String>,
 }
 
 impl Sim {
@@ -63,7 +65,15 @@ impl Sim {
         let clock = world.clock();
         world.fields.update_ambient(&defs, clock);
 
-        Ok(Sim { world, scripts, mods: loaded.mods, warnings, profile: Profile::default(), queue: Vec::new() })
+        Ok(Sim {
+            world,
+            scripts,
+            mods: loaded.mods,
+            warnings,
+            profile: Profile::default(),
+            queue: Vec::new(),
+            over_budget: Vec::new(),
+        })
     }
 
     /// Queue a player command; it applies at the start of the next tick.
@@ -109,5 +119,26 @@ impl Sim {
         self.scripts.dispatch_events(w, prof);
         w.tick += 1;
         prof.add("tick", t0.elapsed().as_secs_f64() * 1e6);
+        if w.tick.is_multiple_of(600) {
+            self.check_mod_budgets();
+        }
+    }
+
+    /// Warn (once per mod, in the load warnings the profiler shows) when a
+    /// mod's hooks take longer than `MOD_BUDGET_US` per call on average.
+    /// Wall-clock, so it only ever warns: it must never change the game. The
+    /// hard, deterministic limit is the step budget.
+    fn check_mod_budgets(&mut self) {
+        for (name, us) in &self.profile.entries {
+            let Some(m) = name.strip_prefix("mod:") else { continue };
+            if *us > crate::script::MOD_BUDGET_US && !self.over_budget.iter().any(|w| w == m) {
+                self.over_budget.push(m.to_string());
+                self.warnings.push(format!(
+                    "mod '{m}' is slow: its script calls take {:.2} ms on average (budget {:.2} ms)",
+                    us / 1000.0,
+                    crate::script::MOD_BUDGET_US / 1000.0
+                ));
+            }
+        }
     }
 }
