@@ -31,3 +31,7 @@ Each CI test job runs a fixed scenario (seed, mod set, command script, several i
 - [ ] Every OS in the matrix, including an ARM runner, uploads its hash
 - [ ] A compare job fails with every platform's hash listed when they differ
 - [ ] The scenario exercises scripts (storyteller, incidents) as well as the engine
+
+## 2026-09-23
+
+Include a year with weather (regimes, stock fields, growth) in the cross-machine hash check once 0184 and 0186 land: it's the most arithmetic-heavy system in the sim.

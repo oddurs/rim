@@ -25,3 +25,7 @@ Luau's `math.sin`, `math.cos`, `math.exp`, `math.log` and `math.pow` call the pl
 
 - [ ] Those functions replaced in the sandbox by deterministic implementations with documented accuracy
 - [ ] Test vectors that must match exactly on all CI platforms
+
+## 2026-09-23
+
+Less pressing after the Weather sprint: 20_climate.luau (the one script that needed smooth curves) becomes data in 0183, evaluated in fixed point by the engine. Scripts still need a safe alternative for anything else periodic.
