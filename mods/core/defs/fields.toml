@@ -34,22 +34,38 @@ of = [{ input = "hour", curve = [
   [15, 1.0], [18, 0.6875], [21, 0.0], [24, -0.6875],
 ] }]
 
+# The sky: how bright the sky bodies are, before weather. Core has one sun,
+# as a term a sky mod can patch or join (a second sun, a moon). Weather never
+# touches this field, so a modded sky keeps the cloud dimming in `light`.
+[[field]]
+id = "daylight"
+label = "daylight"
+unit = "%"
+range = [0.0, 100.0]
+color_low = "#0b0d1a"
+color_high = "#fff1a8"
+overlay = false
+
+# Full sun 08:00-18:00, dark 21:00-05:00, smooth ramps between.
+[field.ambient.sun]
+of = [{ input = "hour", curve = [
+  [5, 0.0], [6, 25.9], [7, 74.1], [8, 100.0],
+  [18, 100.0], [19, 74.1], [20, 25.9], [21, 0.0],
+] }]
+
+# Light that reaches the ground: the sky, dimmed by cloud (a storm is a dark
+# afternoon). Indoors is dark unless something lights it.
 [[field]]
 id = "light"
 label = "light"
 unit = "%"
-# Indoors is dark unless something lights it.
 indoor = "none"
 range = [0.0, 100.0]
 color_low = "#0b0d1a"
 color_high = "#fff1a8"
 
-# Full daylight 08:00-18:00, dark 21:00-05:00, smooth ramps between.
-[field.ambient.daylight]
-of = [{ input = "hour", curve = [
-  [5, 0.0], [6, 25.9], [7, 74.1], [8, 100.0],
-  [18, 100.0], [19, 74.1], [20, 25.9], [21, 0.0],
-] }]
+[field.ambient.sky]
+of = [{ ambient = "daylight" }, { ambient = "cloud", curve = [[0, 1.0], [100, 0.55]] }]
 
 # The atmosphere. Core has no weather: these are the shared names that
 # weather plugins set and everything else (the renderer, farming, mood)

@@ -9,6 +9,7 @@
 
 use crate::{apply, draw, frame, render, Action, App, RawInput, Tool};
 use macroquad::prelude::*;
+use rim_sim::data::Data;
 use rim_sim::hecs::Entity;
 use rim_sim::order;
 use rim_sim::path::Goal;
@@ -528,12 +529,106 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         t.app.ui.info.nodes, t.app.ui.builds
     );
 
+    // ---------------------------------------------------------- weather
+    println!("\n# weather (0184, 0194, 0195)");
+    let queue: Vec<String> = match t.w().data.get("weather:forecast") {
+        Some(Data::Table(q)) => q
+            .values()
+            .map(|e| match e.get("id") {
+                Some(Data::Str(s)) => s.clone(),
+                _ => String::new(),
+            })
+            .collect(),
+        _ => Vec::new(),
+    };
+    t.check(queue.len() == 4, format!("the weather plugin keeps a forecast ({queue:?})"));
+    t.check(t.app.ui.find("weather:readout").is_some(), "the top bar shows the weather");
+    t.click_ui("weather:readout").await;
+    t.frame().await;
+    t.check(t.app.ui.find("weather:forecast.panel").is_some(), "clicking it opens the forecast");
+    let rows = (2..=4).filter(|i| t.app.ui.find(&format!("weather:forecast.{i}")).is_some()).count();
+    t.check(rows == queue.len() - 1, format!("the forecast lists what comes next ({rows} rows)"));
+    let text = t.ui_text();
+    t.check(text.contains("mean") && text.contains("day"), "and the temperature's breakdown");
+    t.shot("forecast").await;
+    t.click_ui("weather:readout").await;
+    t.frame().await;
+    t.check(t.app.ui.find("weather:forecast.panel").is_none(), "clicking again closes it");
+
+    // Pin the channels to see each kind of weather over the hut.
+    let field = |t: &T, id: &str| t.w().defs.lookup("field", id).unwrap() as usize;
+    let pins = ["precipitation", "temperature", "wind", "wind_dir", "cloud", "fog"];
+    let set = |t: &mut T, v: [f64; 6]| {
+        for (id, v) in pins.iter().zip(v) {
+            let f = field(t, id);
+            t.app.sim.world.fields.set_ambient(f, Some(v));
+        }
+    };
+    // A closed 5x5 hut, so we can see that nothing falls indoors.
+    let wall = defs.thing_id("wall_wood").unwrap();
+    let hut = open_square(t.w(), site.offset(8, 0), 5).map(|o| {
+        let c = o.offset(2, 2);
+        for dy in -2..=2i32 {
+            for dx in -2..=2i32 {
+                if dx.abs() == 2 || dy.abs() == 2 {
+                    let _ = t.app.sim.world.spawn_fixture(wall, c.offset(dx, dy), false);
+                }
+            }
+        }
+        c
+    });
+    t.ticks(2);
+    t.check(hut.is_some_and(|c| t.w().map.indoors(c)), "a walled hut counts as indoors");
+    t.focus(hut.unwrap_or(site));
+    set(&mut t, [4.0, 12.0, 6.0, 30.0, 95.0, 0.0]);
+    t.ticks(40);
+    for _ in 0..3 {
+        t.frame().await;
+    }
+    t.check(t.app.sky.particles() > 300, format!("rain falls ({} drops)", t.app.sky.particles()));
+    println!(
+        "weather visuals: {:.0} µs for {} particles, lighting {:.0} µs (CPU)",
+        t.app.sky.cost_us,
+        t.app.sky.particles(),
+        t.app.sky.light_us
+    );
+    if hut.is_some() {
+        t.check(t.app.sky.hidden > 0, format!("but not inside the hut ({} hidden)", t.app.sky.hidden));
+    }
+    t.shot("rain").await;
+    set(&mut t, [3.0, -6.0, 4.0, 150.0, 90.0, 0.0]);
+    t.ticks(40);
+    for _ in 0..90 {
+        t.frame().await;
+    }
+    t.shot("snow").await;
+    set(&mut t, [0.0, 6.0, 0.5, 0.0, 60.0, 85.0]);
+    t.ticks(40);
+    t.frame().await;
+    t.check(t.app.sky.particles() < 60, "fog: nothing falls");
+    t.shot("fog").await;
+
     // Night, to see lighting and the labels on top of it.
+    for id in pins {
+        let f = field(&t, id);
+        t.app.sim.world.fields.set_ambient(f, None);
+    }
     while !(22.0..23.0).contains(&t.w().hour()) {
         t.ticks(100);
     }
     t.focus(site.offset(3, 3));
     t.shot("night").await;
+
+    // A storm at night, mid-flash.
+    set(&mut t, [8.0, 9.0, 16.0, 20.0, 100.0, 0.0]);
+    t.ticks(40);
+    t.frame().await;
+    t.app.sky.strike();
+    t.shot("storm").await;
+    for id in pins {
+        let f = field(&t, id);
+        t.app.sim.world.fields.set_ambient(f, None);
+    }
 
     println!("\n{} passed, {} failed; screenshots in {}", t.passed, t.failed.len(), t.dir.display());
     for f in &t.failed {

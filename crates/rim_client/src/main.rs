@@ -7,6 +7,7 @@
 
 mod autotest;
 mod draw;
+mod sky;
 
 use macroquad::prelude::*;
 use rim_sim::defs::{DefId, Targets};
@@ -85,6 +86,8 @@ pub struct App {
     profile: (Vec<(String, f64)>, Vec<String>, f64),
     acc: f64,
     pan_anchor: Option<(f32, f32)>,
+    /// Lighting and weather on screen.
+    pub sky: sky::Sky,
     /// Input subscriber for wheel events (see `Wheel`).
     wheel_sub: usize,
 }
@@ -162,6 +165,7 @@ async fn main() {
         profile: (Vec::new(), Vec::new(), f64::MIN),
         acc: 0.0,
         pan_anchor: None,
+        sky: sky::Sky::default(),
         wheel_sub: macroquad::input::utils::register_input_subscriber(),
     };
     app.selected = app.sim.world.colonists().next();
@@ -486,6 +490,8 @@ pub fn frame(app: &mut App, raw: &RawInput) {
 
 pub fn render(app: &mut App) {
     draw::world(app);
+    sky::draw(app);
+    draw::world_ui(app);
     if app.ui.text.atlas.dirty {
         let a = &app.ui.text.atlas;
         app.atlas.update(&Image { bytes: a.pixels.clone(), width: a.size as u16, height: a.size as u16 });

@@ -401,6 +401,7 @@ impl UiVm {
         }
 
         view!("tick", (), |_lua, l, _a| Ok(l.world.tick));
+        view!("ticks_per_day", (), |_lua, _l, _a| Ok(rim_sim::TICKS_PER_DAY));
         view!("day", (), |_lua, l, _a| Ok(l.world.day() + 1));
         view!("hour", (), |_lua, l, _a| Ok(l.world.hour()));
         view!("clock", (), |_lua, l, _a| {
@@ -976,7 +977,8 @@ fn hover_table(lua: &Lua, w: &World, client: &ClientView) -> mlua::Result<Value>
         },
     )?;
     let readings = lua.create_table()?;
-    for (fi, fd) in w.defs.fields.iter().enumerate() {
+    // Only fields that vary over the map; the weather readout covers the rest.
+    for (fi, fd) in w.defs.fields.iter().enumerate().filter(|(_, fd)| fd.overlay) {
         readings.push(format!("{} {:.0}{}", fd.label, w.fields.value(&w.defs, &w.map, fi, tp), fd.unit))?;
     }
     t.set("readings", readings)?;

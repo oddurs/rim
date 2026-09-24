@@ -1,0 +1,4 @@
+# Colours the weather panel adds to the theme.
+[color]
+weather_cold = "#7fb2ff"
+weather_warm = "#ffab70"

@@ -6,7 +6,7 @@
 //! ```toml
 //! [field.ambient.day]
 //! scale = 9.0
-//! of = [{ input = "hour", curve = [[3, -1.0], [15, 1.0], [27, -1.0]] }]
+//! of = [{ input = "hour", curve = [[3, -1.0], [15, 1.0], [24, -0.5]] }]
 //! ```
 //!
 //! Terms are tables keyed by label (not arrays) so a patch can change one
@@ -242,11 +242,8 @@ fn compile_source(s: &SourceDef, ctx: &str, resolve: &dyn Fn(&str) -> Option<usi
         let period = (s.hours * crate::TICKS_PER_DAY as f64 / 24.0).round().max(1.0) as u64;
         Src::Noise { key: mix(key.bytes().fold(0xC11A_7E00u64, |h, b| mix(h ^ b as u64))), period }
     };
-    let curve = if s.curve.is_empty() {
-        None
-    } else {
-        Some(Curve::compile(&s.curve).map_err(|e| format!("{ctx}: {e}"))?)
-    };
+    let curve =
+        if s.curve.is_empty() { None } else { Some(Curve::compile(&s.curve).map_err(|e| format!("{ctx}: {e}"))?) };
     Ok(Input { src, curve })
 }
 

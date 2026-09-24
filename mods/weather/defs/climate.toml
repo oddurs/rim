@@ -24,16 +24,3 @@ of = [
   { input = "year", curve = [[0.0, 1.0], [0.375, 1.1], [0.875, 0.7], [1.0, 1.0]] },
   { ambient = "cloud", curve = [[0, 1.0], [100, 0.45]] },
 ]
-
-# Daylight dims under cloud; a storm is a dark afternoon.
-[[patch]]
-target = "field/light"
-
-[patch.set.ambient.daylight]
-of = [
-  { input = "hour", curve = [
-    [5, 0.0], [6, 25.9], [7, 74.1], [8, 100.0],
-    [18, 100.0], [19, 74.1], [20, 25.9], [21, 0.0],
-  ] },
-  { ambient = "cloud", curve = [[0, 1.0], [100, 0.55]] },
-]

@@ -3,10 +3,10 @@
 use crate::data::Data;
 use crate::defs::*;
 use crate::field::{Clock, Fields};
-use crate::terms::Q;
 use crate::map::Map;
 use crate::path::{Goal, Pathfinder};
 use crate::rng::Rng;
+use crate::terms::Q;
 use crate::{IVec, TICKS_PER_DAY};
 use hecs::Entity;
 use std::collections::{BTreeMap, HashMap};
@@ -221,15 +221,43 @@ pub struct Message {
 /// Things scripts can listen to with `rim.on(name, fn)`.
 #[derive(Clone, Debug)]
 pub enum GameEvent {
-    PawnJoined { id: Entity, name: String, def: DefId },
-    PawnDied { id: Entity, name: String, def: DefId, faction: Faction, pos: IVec },
-    PawnLeft { id: Entity, name: String, def: DefId, faction: Faction },
-    BuildingComplete { id: Entity, def: DefId, pos: IVec },
-    NewDay { day: u64 },
+    PawnJoined {
+        id: Entity,
+        name: String,
+        def: DefId,
+    },
+    PawnDied {
+        id: Entity,
+        name: String,
+        def: DefId,
+        faction: Faction,
+        pos: IVec,
+    },
+    PawnLeft {
+        id: Entity,
+        name: String,
+        def: DefId,
+        faction: Faction,
+    },
+    BuildingComplete {
+        id: Entity,
+        def: DefId,
+        pos: IVec,
+    },
+    NewDay {
+        day: u64,
+    },
     /// A new season began (`season` is its name from the calendar).
-    SeasonChanged { season: String, index: u32, year: u64 },
+    SeasonChanged {
+        season: String,
+        index: u32,
+        year: u64,
+    },
     /// Sent by a script with `rim.emit(name, data)`.
-    Script { name: String, data: Option<Data> },
+    Script {
+        name: String,
+        data: Option<Data>,
+    },
     ColonyLost,
 }
 

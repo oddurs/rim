@@ -143,6 +143,7 @@ pub fn load_only(mods_dir: &Path, enabled: &dyn Fn(&str) -> bool) -> Result<Load
 
     let mut defs = DefDb::default();
     let mut calendars = 0;
+    let mut skies = 0;
     for e in entries.into_iter().filter(|e| !e.removed) {
         let ctx = format!("{}/{} (from {})", e.kind, e.id, e.origin);
         let v = toml::Value::Table(e.value);
@@ -156,10 +157,20 @@ pub fn load_only(mods_dir: &Path, enabled: &dyn Fn(&str) -> bool) -> Result<Load
             "field" => defs.fields.push(v.try_into().map_err(err)?),
             "calendar" => {
                 if calendars > 0 {
-                    return Err(format!("{ctx}: only one [[calendar]] may exist; patch calendar/{} instead", defs.calendar.id));
+                    return Err(format!(
+                        "{ctx}: only one [[calendar]] may exist; patch calendar/{} instead",
+                        defs.calendar.id
+                    ));
                 }
                 calendars += 1;
                 defs.calendar = v.try_into().map_err(err)?;
+            }
+            "sky" => {
+                if skies > 0 {
+                    return Err(format!("{ctx}: only one [[sky]] may exist; patch sky/{} instead", defs.sky.id));
+                }
+                skies += 1;
+                defs.sky = v.try_into().map_err(err)?;
             }
             "start" => defs.start = Some(v.try_into().map_err(err)?),
             "names" => {

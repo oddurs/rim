@@ -73,9 +73,7 @@ fn frequencies_follow_the_weights() {
     }
     let table = |k: &str| -> Vec<(String, f64)> {
         let Some(Data::Table(t)) = s.world.data.get(k) else { panic!("no {k}") };
-        t.iter()
-            .map(|(k, v)| (if let Key::Str(k) = k { k.clone() } else { String::new() }, v.num().unwrap()))
-            .collect()
+        t.iter().map(|(k, v)| (if let Key::Str(k) = k { k.clone() } else { String::new() }, v.num().unwrap())).collect()
     };
     let (counts, weights) = (table("t:counts"), table("t:weights"));
     let total_w: f64 = weights.iter().map(|w| w.1).sum();

@@ -31,21 +31,6 @@ fn alpha(c: Color, a: f32) -> Color {
     Color::new(c.r, c.g, c.b, a)
 }
 
-/// 0 at midday, up to ~0.55 in deep night.
-fn darkness(hour: f64) -> f32 {
-    let h = hour as f32;
-    let d = if (7.0..19.0).contains(&h) {
-        0.0
-    } else if (19.0..22.0).contains(&h) {
-        (h - 19.0) / 3.0
-    } else if (4.0..7.0).contains(&h) {
-        1.0 - (h - 4.0) / 3.0
-    } else {
-        1.0
-    };
-    d * 0.55
-}
-
 pub fn world(app: &App) {
     let w = &app.sim.world;
     let defs = &w.defs;
@@ -224,7 +209,7 @@ pub fn world(app: &App) {
         }
     }
 
-    // Field overlay, under the night tint so it reads like the world does.
+    // Field overlay, lit like the world so it reads the same way.
     if let Some(fi) = app.overlay {
         let fd = &defs.fields[fi];
         let (lo, hi) = (rgb(fd.rgb_low), rgb(fd.rgb_high));
@@ -238,12 +223,13 @@ pub fn world(app: &App) {
             }
         }
     }
+}
 
-    // Night.
-    let dark = darkness(w.hour());
-    if dark > 0.0 {
-        draw_rectangle(0.0, 0.0, screen_width(), screen_height(), Color::new(0.02, 0.03, 0.12, dark));
-    }
+/// Tool previews and markers, drawn after lighting so they stay readable.
+pub fn world_ui(app: &App) {
+    let w = &app.sim.world;
+    let cam = &app.cam;
+    let z = cam.zoom;
 
     // Drag rectangle preview.
     if let Some(a) = app.drag_start {

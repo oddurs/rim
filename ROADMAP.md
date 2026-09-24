@@ -80,14 +80,14 @@ A one-week sprint inside Shelter. The world gets seasons and weather you can see
 
 - [ ] `0056` Lighting from the light field: lightmap, glow and sky tint <sup>feature · p0 · m · client</sup>
 - [ ] `0057` Weather incidents: cold snap, heat wave and storm <sup>content · p1 · s · plugin</sup>
-- [ ] `0181` Terms and curves: a fixed-point evaluator for outdoor values <sup>feature · p0 · s · engine</sup>
-- [ ] `0182` Calendar, seasons and script events <sup>feature · p0 · s · engine</sup>
-- [ ] `0183` Ambient terms: outdoor channels computed from data, with named pushes <sup>feature · p0 · m · engine</sup>
 - [ ] `0184` The weather plugin: seasons, weather types and a forecast <sup>feature · p0 · m · plugin</sup>
 - [ ] `0194` Rain, snow, fog and lightning from the weather channels <sup>feature · p1 · m · client</sup>
 - [ ] `0195` Season, weather and forecast in the HUD <sup>feature · p1 · s · client</sup>
 - [ ] `0197` Weather modding guide <sup>docs · p1 · s · tooling</sup>
 - [ ] `0198` Balance a year, and prove core stands alone <sup>chore · p0 · m · core</sup>
+- [ ] `0181` Terms and curves: a fixed-point evaluator for outdoor values <sup>feature · p0 · s · engine</sup>
+- [ ] `0182` Calendar, seasons and script events <sup>feature · p0 · s · engine</sup>
+- [ ] `0183` Ambient terms: outdoor channels computed from data, with named pushes <sup>feature · p0 · m · engine</sup>
 - [ ] `0207` Script data: saved state scripts own, readable by the UI <sup>feature · p0 · s · engine</sup>
 
 ## shelter — Shelter

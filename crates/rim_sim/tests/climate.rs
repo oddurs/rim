@@ -121,7 +121,8 @@ fn bad_terms_and_cycles_fail_to_load_with_names() {
     assert!(err.contains("cycle") && err.contains("a -> b -> a"), "{err}");
     let _ = fs::remove_dir_all(dir);
 
-    let bad = "[[patch]]\ntarget = \"field/temperature\"\nset = { ambient = { day = { of = [{ input = \"moon\" }] } } }\n";
+    let bad =
+        "[[patch]]\ntarget = \"field/temperature\"\nset = { ambient = { day = { of = [{ input = \"moon\" }] } } }\n";
     let dir = with_test_mods("badinput", &[("moon", &[("defs/p.toml", bad)])]);
     let err = Sim::new(&dir, 1).err().expect("an unknown input must not load");
     assert!(err.contains("field/temperature, term 'day'") && err.contains("moon"), "{err}");
@@ -163,10 +164,7 @@ fn seasons_announce_themselves_once_each() {
     let Some(Data::Table(seen)) = s.world.data.get("t:seen") else { panic!("no seasons seen") };
     let names: Vec<String> =
         seen.values().map(|v| if let Data::Str(x) = v { x.clone() } else { String::new() }).collect();
-    assert_eq!(
-        names,
-        ["summer 1", "autumn 1", "winter 1", "spring 2", "summer 2", "autumn 2", "winter 2", "spring 3"]
-    );
+    assert_eq!(names, ["summer 1", "autumn 1", "winter 1", "spring 2", "summer 2", "autumn 2", "winter 2", "spring 3"]);
     let _ = fs::remove_dir_all(dir);
 }
 
@@ -206,5 +204,38 @@ fn script_data_and_events_cross_mods() {
     s.world.data.insert("z".into(), Data::Int(1));
     assert_ne!(before, s.world.state_hash());
     assert_ne!(h0, before);
+    let _ = fs::remove_dir_all(dir);
+}
+
+#[test]
+fn a_modded_sky_still_dims_under_cloud() {
+    // Two suns instead of core's one: a dim early sun and a bright late one.
+    let sky = r#"
+[[patch]]
+target = "field/daylight"
+
+[patch.set.ambient.sun]
+scale = 0.0
+
+[patch.set.ambient.red_sun]
+of = [{ input = "hour", curve = [[4, 0.0], [7, 40.0], [13, 40.0], [16, 0.0]] }]
+
+[patch.set.ambient.white_sun]
+of = [{ input = "hour", curve = [[9, 0.0], [12, 90.0], [20, 90.0], [23, 0.0]] }]
+"#;
+    let dir = with_test_mods("suns", &[("suns", &[("defs/sky.toml", sky)])]);
+    let mut s = Sim::new(&dir, 1).expect("loads");
+    let (light, cloud) = (field(&s, "light"), field(&s, "cloud"));
+    let parts = s.world.fields.explain_ambient(&s.world.defs, field(&s, "daylight"));
+    assert!(parts.iter().any(|p| p.0 == "red_sun") && parts.iter().any(|p| p.0 == "white_sun"), "{parts:?}");
+    // 12:00: both suns up.
+    step_to(&mut s, TICKS_PER_DAY / 4 + 1);
+    let clear = s.world.fields.ambient(light);
+    s.world.fields.set_ambient(cloud, Some(100.0));
+    let at = s.world.tick + 40;
+    step_to(&mut s, at);
+    let overcast = s.world.fields.ambient(light);
+    assert!(clear > 100.0, "two suns are brighter than one: {clear}");
+    assert!(overcast < clear * 0.6, "cloud still dims a modded sky: {clear} -> {overcast}");
     let _ = fs::remove_dir_all(dir);
 }

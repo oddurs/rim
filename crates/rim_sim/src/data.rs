@@ -81,7 +81,12 @@ pub fn from_lua(v: &mlua::Value, path: &str, depth: u32) -> Result<Option<Data>,
                     Value::Integer(i) => Key::Int(*i as i64),
                     Value::Number(n) if n.fract() == 0.0 => Key::Int(*n as i64),
                     Value::String(s) => Key::Str(s.to_string_lossy().to_string()),
-                    other => return Err(format!("{path}: table keys must be strings or integers, not {}", other.type_name())),
+                    other => {
+                        return Err(format!(
+                            "{path}: table keys must be strings or integers, not {}",
+                            other.type_name()
+                        ))
+                    }
                 };
                 let sub = match &key {
                     Key::Int(i) => format!("{path}[{i}]"),

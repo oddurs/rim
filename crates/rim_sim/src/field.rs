@@ -145,6 +145,8 @@ pub struct Fields {
     queue: VecDeque<u32>,
     /// Cells re-stamped by the last `update`, for tests and the profiler.
     pub restamped: u64,
+    /// Bumped whenever any emitter's stamp changes, so renderers can cache.
+    pub revision: u64,
 }
 
 impl Fields {
@@ -164,6 +166,7 @@ impl Fields {
             gen: 0,
             queue: VecDeque::new(),
             restamped: 0,
+            revision: 0,
         }
     }
 
@@ -188,6 +191,7 @@ impl Fields {
         let mut i = 0;
         while i < self.emitters.len() {
             if self.emitters[i].entity == entity {
+                self.revision += 1;
                 let e = self.emitters.remove(i);
                 let layer = &mut self.layers[e.field].stamped;
                 for (c, v) in e.cells {
@@ -201,6 +205,7 @@ impl Fields {
 
     /// Flood out from the emitter, adding a falloff by walking distance.
     fn stamp(&mut self, map: &Map, e: &mut Emitter) {
+        self.revision += 1;
         self.gen = self.gen.wrapping_add(1);
         if self.gen == 0 {
             self.dist_gen.iter_mut().for_each(|g| *g = 0);
@@ -277,14 +282,7 @@ impl Fields {
             let a = &mut self.atmos[f];
             for p in a.pushes.iter_mut() {
                 if !p.fading && p.until.is_some_and(|u| tick >= u) {
-                    *p = Push {
-                        from: p.value(tick),
-                        to: 0,
-                        start: tick,
-                        until: None,
-                        fading: true,
-                        ..p.clone()
-                    };
+                    *p = Push { from: p.value(tick), to: 0, start: tick, until: None, fading: true, ..p.clone() };
                 }
             }
             a.pushes.retain(|p| !(p.fading && p.value(tick) == 0 && tick >= p.start + p.ease));
@@ -303,7 +301,15 @@ impl Fields {
     }
 
     /// Add or replace a named contribution to a field's outdoor value.
-    pub fn push_ambient(&mut self, field: usize, key: &str, value: f64, tick: u64, hours: Option<f64>, ease_hours: f64) {
+    pub fn push_ambient(
+        &mut self,
+        field: usize,
+        key: &str,
+        value: f64,
+        tick: u64,
+        hours: Option<f64>,
+        ease_hours: f64,
+    ) {
         let ticks = |h: f64| (h.max(0.0) * TICKS_PER_DAY as f64 / 24.0).round() as u64;
         let a = &mut self.atmos[field];
         let from = a.pushes.iter().find(|p| p.key == key).map_or(0, |p| p.value(tick));
@@ -348,6 +354,15 @@ impl Fields {
         };
         out.extend(a.pushes.iter().map(|p| (p.key.clone(), terms::from_q(p.value(clock.tick)))));
         out
+    }
+
+    /// Evaluate global terms (no per-cell inputs) against the outdoor values
+    /// as last computed. The renderer uses it for sky tints.
+    pub fn eval_global(&self, terms: &terms::Terms) -> f64 {
+        let clock = self.last_clock.unwrap_or(Clock { tick: 0, year: 0, hour: 0, seed: 0 });
+        let vals: Vec<i64> = self.atmos.iter().map(|a| a.value).collect();
+        let env = AmbEnv { year: clock.year, hour: clock.hour, tick: clock.tick, seed: clock.seed, vals: &vals };
+        terms::from_q(terms.eval(&env))
     }
 
     /// Call once per tick after rooms are current.

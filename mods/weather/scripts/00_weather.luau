@@ -125,7 +125,16 @@ local function pick(previous: string?, start: number)
 	for _, ch in CHANNELS do
 		set[ch] = sample(t.set[ch])
 	end
-	return { id = chosen, start = start, ends = start + math.max(len, 1), set = set }
+	-- Labels travel with the entry so the UI (which can't see this registry)
+	-- can show them.
+	return {
+		id = chosen,
+		label = t.label,
+		cold_label = t.cold_label,
+		start = start,
+		ends = start + math.max(len, 1),
+		set = set,
+	}
 end
 
 local function fill(q)
@@ -214,9 +223,7 @@ function weather.forecast()
 	local q = load_queue() or {}
 	local out = {}
 	for _, e in q do
-		local c = table.clone(e)
-		c.label = types[e.id] and types[e.id].label or e.id
-		table.insert(out, c)
+		table.insert(out, table.clone(e))
 	end
 	return out
 end
@@ -249,6 +256,8 @@ function weather.force(id: string, h: number)
 	end
 	local e = {
 		id = id,
+		label = t.label,
+		cold_label = t.cold_label,
 		start = now,
 		ends = now + hours(h),
 		set = set,

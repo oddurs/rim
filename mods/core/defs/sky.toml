@@ -1,0 +1,28 @@
+# How the renderer colours light. The simulation only knows how bright it is
+# (the `light` field); colour is the renderer's business.
+#
+# Tints are keyed by label, so a sky mod adds one (a green moon) with a
+# patch instead of reshaping these. Each is a colour and a strength from 0 to
+# 1, written as terms over the hour, the year and outdoor values.
+
+[[sky]]
+id = "core"
+# The darkest the world gets.
+night = "#4a5478"
+# Firelight.
+firelight = "#ffb060"
+# Daylight through the windows of an enclosed room.
+indoor_share = 0.45
+
+[sky.tint.dawn]
+color = "#ffa066"
+of = [{ input = "hour", curve = [[4.5, 0.0], [6.0, 0.45], [8.0, 0.0]] }]
+
+[sky.tint.dusk]
+color = "#d0709a"
+of = [{ input = "hour", curve = [[17.5, 0.0], [19.5, 0.45], [21.0, 0.0]] }]
+
+# Overcast light is cold and grey.
+[sky.tint.overcast]
+color = "#8a98b0"
+of = [{ ambient = "cloud", curve = [[40, 0.0], [100, 0.4]] }]

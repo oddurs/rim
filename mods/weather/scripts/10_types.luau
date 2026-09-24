@@ -49,6 +49,9 @@ rim.weather.register({
 		return by_season({ spring = 2.2, summer = 1.2, autumn = 2.6, winter = 2 })(ctx)
 	end, { cloudy = 1.8, clear = 0.5, rain = 0.5 }),
 	set = { cloud = { 85, 100 }, precipitation = { 0.8, 4 }, wind = { 3, 9 }, fog = 0, temperature = { -2, -0.5 } },
+	message = function(label)
+		return if label == "snow" then "It's snowing." else nil
+	end,
 })
 
 rim.weather.register({
