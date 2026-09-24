@@ -172,7 +172,9 @@ fn core_alone_has_no_weather() {
         assert_eq!(s.world.fields.ambient(i), 0.0, "{f} is still with core alone");
         assert!(s.world.fields.atmos[i].pushes.is_empty());
     }
-    assert!(s.world.data.is_empty(), "no plugin state");
+    // Core keeps its own script data (the storyteller's memory); nothing else may.
+    let foreign: Vec<_> = s.world.data.keys().filter(|k| !k.starts_with("core:")).collect();
+    assert!(foreign.is_empty(), "no plugin state: {foreign:?}");
 }
 
 /// A whole year, twice: weather, seasons and everything they touch must

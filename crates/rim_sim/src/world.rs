@@ -303,7 +303,13 @@ pub enum GameEvent {
 pub struct World {
     pub defs: Arc<DefDb>,
     pub seed: u64,
+    /// Spawn through [`World::spawn`], never `ecs.spawn`: hecs's own
+    /// allocator would hand out an id the world is about to use.
     pub ecs: hecs::World,
+    /// The id the next entity gets. The world hands out entity ids itself
+    /// and never reuses one, so an id means the same entity in a save, the
+    /// command log and a script, whatever hecs would have allocated.
+    next_entity: u32,
     pub map: Map,
     /// Temperature, light and other field layers over the map.
     pub fields: Fields,
@@ -337,6 +343,7 @@ impl World {
             defs,
             seed,
             ecs: hecs::World::new(),
+            next_entity: 1,
             fields,
             map: Map::new(w, h),
             rng: Rng::new(seed),
@@ -353,6 +360,17 @@ impl World {
             seen_room_rebuilds: u64::MAX,
             data: BTreeMap::new(),
         }
+    }
+
+    // ------------------------------------------------------------ entities
+
+    /// Spawn with the next world-owned id. Every entity comes through here.
+    pub fn spawn(&mut self, components: impl hecs::DynamicBundle) -> Entity {
+        let id = self.next_entity;
+        self.next_entity = id.checked_add(1).expect("entity ids exhausted");
+        let e = Entity::from_bits(1 << 32 | id as u64).expect("generation 1 is valid");
+        self.ecs.spawn_at(e, components);
+        e
     }
 
     // ------------------------------------------------------------ time
@@ -454,7 +472,7 @@ impl World {
             next_think: self.tick + self.rng.below(30) as u64,
             ..Default::default()
         };
-        let e = self.ecs.spawn((p,));
+        let e = self.spawn((p,));
         self.pawns.push(e);
         if faction == Faction::Player {
             self.note_event("joined", e, &name);
@@ -531,9 +549,9 @@ impl World {
             };
             let work = (b.work as f64 * defs.factor(made_of, "work")).round().max(1.0) as u32;
             let bp = Blueprint { delivered: vec![0; cost.len()], cost, work, work_left: work };
-            self.ecs.spawn((t, bp))
+            self.spawn((t, bp))
         } else {
-            self.ecs.spawn((t,))
+            self.spawn((t,))
         };
         if let Some(m) = made_of {
             let _ = self.ecs.insert_one(e, MadeOf(m));
@@ -571,7 +589,7 @@ impl World {
                     match self.map.item[i] {
                         None => {
                             let n = count.min(limit);
-                            let e = self.ecs.spawn((Thing { def, pos: p, count: n, hp: 100 },));
+                            let e = self.spawn((Thing { def, pos: p, count: n, hp: 100 },));
                             self.map.set_item(p, Some(e));
                             count -= n;
                         }
