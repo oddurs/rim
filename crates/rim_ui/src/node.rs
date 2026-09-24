@@ -31,6 +31,9 @@ pub enum Kind {
     Grid,
     /// A picture from a mod's `ui/img`, drawn from the atlas. See `Image`.
     Image,
+    /// A line of text the player edits; the buffer is the engine's, keyed
+    /// by the node's id. See `InputData`.
+    Input,
 }
 
 /// What an image node shows: the picture by name and which variant, and
@@ -40,6 +43,17 @@ pub struct Image {
     pub name: String,
     pub factor: u32,
     pub tint: Option<Rgba>,
+}
+
+/// What a text input node carries besides the text it shows.
+#[derive(Clone)]
+pub struct InputData {
+    /// What the input holds until the player edits it.
+    pub value: String,
+    /// The text shown is the placeholder (nothing typed yet).
+    pub placeholder: bool,
+    pub on_change: Option<Function>,
+    pub on_submit: Option<Function>,
 }
 
 /// One cell of a grid, as the component's `cell(r, c)` described it.
@@ -189,6 +203,10 @@ pub struct Node {
     pub handle: Option<Handle>,
     /// Image nodes: the picture.
     pub image: Option<Image>,
+    /// Input nodes: the buffer's seed and handlers.
+    pub input: Option<InputData>,
+    /// Called while the pointer is held on this node: (fx, fy) across it.
+    pub on_drag: Option<Function>,
     pub children: Vec<Node>,
 }
 
@@ -200,6 +218,8 @@ impl Node {
             || self.focusable
             || self.grid.as_ref().is_some_and(|g| g.on_press.is_some() || g.on_paint.is_some())
             || self.handle.is_some()
+            || self.on_drag.is_some()
+            || self.input.is_some()
     }
 
     /// Hash of everything that affects layout, for the layout cache.
@@ -249,6 +269,7 @@ impl Node {
             (Kind::Anchored, _) => "anchored",
             (Kind::Grid, _) => "grid",
             (Kind::Image, _) => "image",
+            (Kind::Input, _) => "input",
         };
         out.push_str(kind);
         if let Some(i) = &self.image {
@@ -281,6 +302,8 @@ pub struct Ctx<'a> {
     pub theme: &'a Theme,
     pub owner: Rc<str>,
     pub images: &'a crate::image::Images,
+    /// Text inputs' buffers, so an input shows what the player typed.
+    pub edits: &'a std::collections::HashMap<String, crate::edit::EditState>,
 }
 
 /// A node with nothing in it, for engine-built containers.
@@ -307,6 +330,8 @@ pub fn blank(key: u64, owner: Rc<str>) -> Node {
         grid: None,
         handle: None,
         image: None,
+        input: None,
+        on_drag: None,
         children: Vec::new(),
     }
 }
@@ -443,6 +468,9 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
     let (mut on_press, mut on_paint) = (None, None);
     let mut src: Option<String> = None;
     let mut tint = false;
+    let mut value = String::new();
+    let mut placeholder = String::new();
+    let (mut on_change, mut on_submit) = (None, None);
     let mut n = Node {
         kind: Kind::Box,
         id: None,
@@ -465,6 +493,8 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
         grid: None,
         handle: None,
         image: None,
+        input: None,
+        on_drag: None,
         children: Vec::new(),
     };
     for pair in t.pairs::<Value, Value>() {
@@ -472,8 +502,9 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
         let k = match k {
             Value::String(s) => s,
             Value::Integer(1) => {
-                // A text node's content is its first positional value.
-                if !matches!(v, Value::Table(_)) {
+                // A text node's content is its first positional value. A
+                // `false` or nil there is a child left out (`cond and {...}`).
+                if !matches!(v, Value::Table(_) | Value::Boolean(false) | Value::Nil) {
                     text = Some(string("text", &v)?);
                 }
                 continue;
@@ -492,6 +523,7 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
                     "anchored" => (Kind::Anchored, false),
                     "grid" => (Kind::Grid, false),
                     "image" => (Kind::Image, false),
+                    "input" => (Kind::Input, false),
                     other => return Err(format!("unknown node kind '{other}'")),
                 }
             }
@@ -561,6 +593,11 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
             "cell_h" => cell_h = Some(size(theme, "space", "cell_h", &v)?),
             "on_press" => on_press = Some(function("on_press", v)?),
             "on_paint" => on_paint = Some(function("on_paint", v)?),
+            "value" => value = string("value", &v)?,
+            "placeholder" => placeholder = string("placeholder", &v)?,
+            "on_change" => on_change = Some(function("on_change", v)?),
+            "on_submit" => on_submit = Some(function("on_submit", v)?),
+            "on_drag" => n.on_drag = Some(function("on_drag", v)?),
             "handle" => {
                 n.handle = Some(match string("handle", &v)?.as_str() {
                     "move" => Handle::Move,
@@ -585,6 +622,38 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
     }
     if kind == Kind::Scroll {
         style.clip = true;
+    }
+    if kind == Kind::Input {
+        let Some(id) = n.id.as_deref() else { return Err("an input needs an id (its text is kept by it)".into()) };
+        let shown = ctx.edits.get(id).map(|e| e.text.clone()).unwrap_or_else(|| value.clone());
+        let empty = shown.is_empty();
+        // An empty box still needs a line's height: measure a space.
+        let text = if !empty {
+            shown
+        } else if placeholder.is_empty() {
+            " ".to_string()
+        } else {
+            placeholder.clone()
+        };
+        n.text = Some(TextStyle {
+            text,
+            size: match text_size {
+                Some(s) => s,
+                None => theme.size_named("text", "body")?,
+            },
+            weight: match text_weight {
+                Some(w) => w,
+                None => theme.weight_named("regular")?,
+            },
+            color: match (empty, text_color) {
+                (true, _) => theme.color("muted")?,
+                (false, Some(c)) => c,
+                (false, None) => theme.color("text")?,
+            },
+            wrap: false,
+        });
+        n.input = Some(InputData { value, placeholder: empty, on_change, on_submit });
+        n.focusable = true;
     }
     if kind == Kind::Text {
         n.text = Some(TextStyle {
@@ -747,6 +816,8 @@ pub fn error_node(theme: &Theme, owner: Rc<str>, key: u64, what: &str, err: &str
         grid: None,
         handle: None,
         image: None,
+        input: None,
+        on_drag: None,
         children: vec![],
     };
     let pad = 4.0 * theme.scale;
@@ -777,6 +848,8 @@ pub fn error_node(theme: &Theme, owner: Rc<str>, key: u64, what: &str, err: &str
         grid: None,
         handle: None,
         image: None,
+        input: None,
+        on_drag: None,
         children: vec![text],
     }
 }

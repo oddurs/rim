@@ -372,6 +372,8 @@ pub struct RawInput {
     /// Wheel movement in notches (fractional on a trackpad).
     pub wheel: f32,
     pub keys: Vec<KeyCode>,
+    /// Characters typed this frame, for a focused text input.
+    pub chars: Vec<char>,
     pub shift: bool,
     /// Camera pan this frame, in tiles (WASD, middle-drag).
     pub pan: (f32, f32),
@@ -398,10 +400,22 @@ impl RawInput {
             KeyCode::Tab,
             KeyCode::C,
             KeyCode::Enter,
+            KeyCode::Backspace,
+            KeyCode::Delete,
+            KeyCode::Left,
+            KeyCode::Right,
+            KeyCode::Home,
+            KeyCode::End,
         ]
         .into_iter()
         .filter(|k| is_key_pressed(*k))
         .collect();
+        let mut chars = Vec::new();
+        while let Some(c) = get_char_pressed() {
+            if !c.is_control() {
+                chars.push(c);
+            }
+        }
 
         let speed = 18.0 * frame_time() * 40.0 / app.cam.zoom;
         let (mut dx, mut dy) = (0.0, 0.0);
@@ -438,6 +452,7 @@ impl RawInput {
             right_pressed: is_mouse_button_pressed(MouseButton::Right),
             wheel,
             keys,
+            chars,
             shift: is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift),
             pan: (dx, dy),
             time: get_time(),
@@ -524,6 +539,24 @@ pub fn frame(app: &mut App, raw: &RawInput) {
         tab: has(KeyCode::Tab),
         shift: raw.shift,
         enter: has(KeyCode::Enter),
+        keys: {
+            use rim_ui::Key;
+            let mut keys: Vec<Key> = raw.chars.iter().map(|&c| Key::Char(c)).collect();
+            for (code, key) in [
+                (KeyCode::Backspace, Key::Backspace),
+                (KeyCode::Delete, Key::Delete),
+                (KeyCode::Left, Key::Left),
+                (KeyCode::Right, Key::Right),
+                (KeyCode::Home, Key::Home),
+                (KeyCode::End, Key::End),
+                (KeyCode::Escape, Key::Escape),
+            ] {
+                if has(code) {
+                    keys.push(key);
+                }
+            }
+            keys
+        },
         time: raw.time,
     };
     let out = app.ui.frame(&app.sim.world, &cv, &input);
@@ -533,8 +566,9 @@ pub fn frame(app: &mut App, raw: &RawInput) {
         apply_ui(app, a);
     }
 
-    // Keys, unless the UI used them (Tab/Enter while a UI control has focus).
-    for k in &raw.keys {
+    // Keys, unless the UI used them (a focused text input takes them all;
+    // Tab/Enter go to a focused control).
+    for k in raw.keys.iter().filter(|_| !out.captured_keys) {
         let action = match k {
             KeyCode::Space => Action::TogglePause,
             KeyCode::Key1 => Action::Speed(1),
@@ -554,7 +588,7 @@ pub fn frame(app: &mut App, raw: &RawInput) {
         };
         apply(app, action);
     }
-    if raw.pan != (0.0, 0.0) {
+    if raw.pan != (0.0, 0.0) && !out.captured_keys {
         apply(app, Action::Pan(raw.pan.0, raw.pan.1));
     }
     let (mx, my) = raw.mouse;

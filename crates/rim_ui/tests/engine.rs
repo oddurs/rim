@@ -581,6 +581,171 @@ fn tinted_icons_follow_the_text_colour() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A probe mod with a text input and a slider, each reporting into state.
+const INPUT_MOD: &str = r#"
+local kit = require("@core/ui/kit")
+ui.define("probe:form", function(view)
+    return ui.row({ id = "probe:form", gap = "s", align = "center",
+        kit.input({ id = "probe:name", value = "ab", on_change = function(text)
+            ui.set_state("probe:changed", text)
+        end, on_submit = function(text)
+            ui.set_state("probe:submitted", text)
+        end }),
+        ui.text({ "changed=" .. ui.state("probe:changed", "-"), id = "probe:changed" }),
+        ui.text({ "submitted=" .. ui.state("probe:submitted", "-"), id = "probe:submitted" }),
+        kit.slider({ id = "probe:slider", value = ui.state("probe:v", 0), on_change = function(v)
+            ui.set_state("probe:v", v)
+        end }),
+        ui.text({ string.format("v=%.2f", ui.state("probe:v", 0)), id = "probe:v" }),
+    })
+end)
+ui.mount("top", "probe:form", { order = 90 })
+"#;
+
+fn type_keys(
+    ui: &mut rim_ui::Ui,
+    sim: &rim_sim::Sim,
+    cv: &rim_ui::view::ClientView,
+    t: &mut f64,
+    keys: &[rim_ui::Key],
+    shift: bool,
+) -> rim_ui::Output {
+    *t += 0.1;
+    frame(ui, sim, cv, Input { keys: keys.to_vec(), shift, time: *t, ..Default::default() })
+}
+
+#[test]
+fn typing_survives_twenty_rebuilds_without_losing_the_caret() {
+    use rim_ui::Key;
+    let dir = scratch_mods("input20", &[("probe", "", &[("ui/form.luau", INPUT_MOD)])]);
+    let sim = sim_at(&dir);
+    let mut ui = ui_for(&sim);
+    let mut cv = client(&sim);
+    frame(&mut ui, &sim, &cv, Default::default());
+    let name = ui.find("probe:name").expect("the input is laid out");
+    click(&mut ui, &sim, &mut cv, centre(name));
+    assert_eq!(ui.focused_id().as_deref(), Some("probe:name"));
+    let mut t = 1.0;
+    let builds = ui.builds;
+    for c in "cdef".chars() {
+        type_keys(&mut ui, &sim, &cv, &mut t, &[Key::Char(c)], false);
+    }
+    for _ in 0..20 {
+        type_keys(&mut ui, &sim, &cv, &mut t, &[], false);
+    }
+    assert!(ui.builds - builds >= 20, "the tree was rebuilt {} times", ui.builds - builds);
+    let e = ui.edit_state("probe:name").unwrap();
+    assert_eq!((e.text.as_str(), e.caret), ("abcdef", 6), "the buffer and caret are the engine's");
+    assert!(ui.snapshot().contains("input #probe:name \"abcdef\""), "{}", ui.snapshot());
+    assert!(ui.snapshot().contains("changed=abcdef"), "on_change ran: {}", ui.snapshot());
+    assert!(ui.warnings().is_empty(), "{:?}", ui.warnings());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn focus_edit_submit_and_escape() {
+    use rim_ui::Key;
+    let dir = scratch_mods("inputkeys", &[("probe", "", &[("ui/form.luau", INPUT_MOD)])]);
+    let sim = sim_at(&dir);
+    let mut ui = ui_for(&sim);
+    let mut cv = client(&sim);
+    frame(&mut ui, &sim, &cv, Default::default());
+    let mut t = 1.0;
+    // Unfocused: keys are the game's.
+    let out = type_keys(&mut ui, &sim, &cv, &mut t, &[Key::Char('x')], false);
+    assert!(!out.captured_keys && ui.edit_state("probe:name").is_none());
+    // Focus by click: the caret sits at the end of the value.
+    let name = ui.find("probe:name").unwrap();
+    click(&mut ui, &sim, &mut cv, centre(name));
+    assert_eq!(ui.edit_state("probe:name").unwrap().caret, 2);
+    // Edit: home, delete, type in the middle, select with shift, replace.
+    let out = type_keys(&mut ui, &sim, &cv, &mut t, &[Key::Home, Key::Delete, Key::Char('Z')], false);
+    assert!(out.captured_keys, "a focused input takes the keys");
+    assert_eq!(ui.edit_state("probe:name").unwrap().text, "Zb");
+    type_keys(&mut ui, &sim, &cv, &mut t, &[Key::End], false);
+    type_keys(&mut ui, &sim, &cv, &mut t, &[Key::Left], true);
+    assert_eq!(ui.edit_state("probe:name").unwrap().selection(), (1, 2));
+    type_keys(&mut ui, &sim, &cv, &mut t, &[Key::Char('q'), Key::Char('r')], false);
+    assert_eq!(ui.edit_state("probe:name").unwrap().text, "Zqr");
+    type_keys(&mut ui, &sim, &cv, &mut t, &[Key::Backspace], false);
+    assert_eq!(ui.edit_state("probe:name").unwrap().text, "Zq");
+    // A caret and the text are painted inside the box.
+    let out = type_keys(&mut ui, &sim, &cv, &mut t, &[], false);
+    let name = ui.find("probe:name").unwrap();
+    let caret = out.draw.iter().any(|d| match d {
+        Draw::Rect { rect, .. } => {
+            rect[2] <= 2.0 && rect[0] > name[0] && rect[0] < name[0] + name[2] && rect[1] >= name[1]
+        }
+        _ => false,
+    });
+    assert!(caret, "a thin caret rect inside the input");
+    // Submit.
+    t += 0.1;
+    let out = frame(&mut ui, &sim, &cv, Input { enter: true, time: t, ..Default::default() });
+    assert!(out.captured_keys);
+    type_keys(&mut ui, &sim, &cv, &mut t, &[], false);
+    assert!(ui.snapshot().contains("submitted=Zq"), "{}", ui.snapshot());
+    assert_eq!(ui.focused_id().as_deref(), Some("probe:name"), "submit keeps focus");
+    // Escape gives the keyboard back; the buffer stays.
+    type_keys(&mut ui, &sim, &cv, &mut t, &[Key::Escape], false);
+    assert_eq!(ui.focused_id(), None);
+    let out = type_keys(&mut ui, &sim, &cv, &mut t, &[Key::Char('!')], false);
+    assert!(!out.captured_keys);
+    assert_eq!(ui.edit_state("probe:name").unwrap().text, "Zq");
+    // Tab away from a focused input moves focus like any control.
+    click(&mut ui, &sim, &mut cv, centre(name));
+    t += 0.1;
+    let out = frame(&mut ui, &sim, &cv, Input { tab: true, time: t, ..Default::default() });
+    assert!(out.captured_keys && ui.focused_id().as_deref() != Some("probe:name"));
+    assert!(ui.warnings().is_empty(), "{:?}", ui.warnings());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn hot_reload_keeps_the_buffer_of_a_focused_input() {
+    use rim_ui::Key;
+    let dir = scratch_mods("inputreload", &[("probe", "", &[("ui/form.luau", INPUT_MOD)])]);
+    let sim = sim_at(&dir);
+    let mut ui = ui_for(&sim);
+    let mut cv = client(&sim);
+    frame(&mut ui, &sim, &cv, Default::default());
+    let name = ui.find("probe:name").unwrap();
+    click(&mut ui, &sim, &mut cv, centre(name));
+    let mut t = 1.0;
+    type_keys(&mut ui, &sim, &cv, &mut t, &[Key::Char('c')], false);
+    assert!(ui.reload_now(), "the UI reloads");
+    type_keys(&mut ui, &sim, &cv, &mut t, &[], false);
+    assert_eq!(ui.edit_state("probe:name").unwrap().text, "abc");
+    assert!(ui.snapshot().contains("input #probe:name \"abc\""), "{}", ui.snapshot());
+    assert_eq!(ui.focused_id().as_deref(), Some("probe:name"), "still focused after the reload");
+    type_keys(&mut ui, &sim, &cv, &mut t, &[Key::Char('d')], false);
+    assert_eq!(ui.edit_state("probe:name").unwrap().text, "abcd");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_slider_reports_the_drag() {
+    let dir = scratch_mods("slider", &[("probe", "", &[("ui/form.luau", INPUT_MOD)])]);
+    let sim = sim_at(&dir);
+    let mut ui = ui_for(&sim);
+    let cv = client(&sim);
+    frame(&mut ui, &sim, &cv, Default::default());
+    let s = ui.find("probe:slider").unwrap();
+    let at = |f: f32| (s[0] + s[2] * f, s[1] + s[3] / 2.0);
+    frame(&mut ui, &sim, &cv, Input { mouse: at(0.25), left_pressed: true, time: 1.0, ..Default::default() });
+    frame(&mut ui, &sim, &cv, Input { mouse: at(0.25), time: 1.1, ..Default::default() });
+    assert!(ui.snapshot().contains("v=0.25"), "{}", ui.snapshot());
+    frame(&mut ui, &sim, &cv, Input { mouse: at(0.75), time: 1.2, ..Default::default() });
+    frame(&mut ui, &sim, &cv, Input { mouse: at(0.75), left_released: true, time: 1.3, ..Default::default() });
+    frame(&mut ui, &sim, &cv, Input { mouse: at(0.75), time: 1.4, ..Default::default() });
+    assert!(ui.snapshot().contains("v=0.75"), "{}", ui.snapshot());
+    // Released: moving on changes nothing.
+    frame(&mut ui, &sim, &cv, Input { mouse: at(0.1), time: 1.5, ..Default::default() });
+    frame(&mut ui, &sim, &cv, Input { mouse: at(0.1), time: 1.6, ..Default::default() });
+    assert!(ui.snapshot().contains("v=0.75"), "{}", ui.snapshot());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn a_scroll_area_stops_exactly_at_its_last_row() {
     let dir = scratch_mods(

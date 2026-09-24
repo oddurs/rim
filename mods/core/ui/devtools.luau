@@ -73,6 +73,15 @@ ui.window("core:gallery", { title = t("core:gallery.title", "Kit gallery"), w = 
 			kit.image("core:check", { id = "core:gallery.image" }),
 			label(t("core:gallery.icons", "icons follow the text colour; images keep their own"), { size = "small", color = "muted" }),
 		}),
+		row({ gap = "m", align = "center" }, {
+			kit.input({ id = "core:gallery.input", placeholder = t("core:gallery.input", "type here"), on_submit = function(text)
+				ui.set_state("core:gallery.submitted", text)
+			end }),
+			label(ui.state("core:gallery.submitted", t("core:gallery.nothing_submitted", "nothing submitted")), { size = "small", color = "muted" }),
+			kit.slider({ id = "core:gallery.slider", value = ui.state("core:gallery.slider", 0.4), on_change = function(v)
+				ui.set_state("core:gallery.slider", v)
+			end }),
+		}),
 		row({ gap = "xs" }, {
 			kit.toggle({ label = t("core:gallery.toggle_off", "Toggle off"), on = false }),
 			kit.toggle({ label = t("core:gallery.toggle_on", "Toggle on"), on = true }),

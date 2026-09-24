@@ -187,11 +187,10 @@ The run gets a shape: eras, storyteller tiers, defensive strength in the threat 
 
 ## plugin-api — Plugin API
 
-`####······` 36% · 9 of 25 done · due 2027-02-01
+`####······` 40% · 10 of 25 done · due 2027-02-01
 
 The API grows up: stat pipeline, script components, custom jobs, needs and def kinds, modules and custom events, a real sandbox with hard limits, factions as data, rim test, typed API. Everything Mood needs, and everything DESIGN.md §10 says a mod from a stranger's repo must be safe to do.
 
-- [ ] `01e4d9fe` Text input the engine owns <sup>feature · p1 · m · engine</sup>
 - [ ] `14df87a8` Keybinds file and command palette <sup>feature · p1 · m · client</sup>
 - [ ] `63d2f10a` API deprecations warn with the replacement and the removal version <sup>feature · p2 · s · engine</sup>
 - [ ] `7f8ce379` Script-defined components on pawns and things <sup>feature · p0 · m · engine</sup>
@@ -207,6 +206,7 @@ The API grows up: stat pipeline, script components, custom jobs, needs and def k
 - [ ] `ed876ad7` Monochrome icon set with mod-supplied icons <sup>feature · p2 · m · core</sup>
 - [ ] `fdafcb10` Custom jobs and work givers from Luau <sup>feature · p0 · l · engine</sup>
 - [ ] `fecf1c87` Custom needs with script satisfiers <sup>feature · p0 · m · engine</sup>
+- [x] `01e4d9fe` Text input the engine owns <sup>feature · p1 · m · engine</sup>
 - [x] `11b23c33` Luau types for the UI globals (ui, act, view) <sup>feature · p2 · s · tooling</sup>
 - [x] `1c626720` Custom namespaced events: rim.emit and rim.on("mod:event") <sup>feature · p0 · s · engine</sup>
 - [x] `3eb7e697` Luau VM runs without sandbox mode, and the rim table is writable by any mod <sup>bug · p0 · s · engine</sup>

@@ -236,6 +236,53 @@ function kit.image(name: string, opts: { [string]: any }?)
 	return { kind = "image", src = name, w = o.w, h = o.h, tooltip = o.tooltip, id = o.id }
 end
 
+-- A line of text the player edits. The engine keeps the buffer by `id`, so
+-- it survives rebuilds and reloads. props: id (required), value (until the
+-- player types), placeholder, on_change(text), on_submit(text), w, size.
+function kit.input(props)
+	return {
+		kind = "input",
+		id = props.id,
+		value = props.value,
+		placeholder = props.placeholder,
+		on_change = props.on_change,
+		on_submit = props.on_submit,
+		w = props.w or 200,
+		pad = "xs",
+		padx = "s",
+		bg = "surface_raised",
+		border = "line",
+		focus = { border = "accent" },
+		clip = true,
+		size = props.size,
+	}
+end
+
+-- A bar the pointer drags: on_change(v) with v in 0..1 while held. props:
+-- value, on_change, width, color, id.
+function kit.slider(props)
+	local v = math.clamp(props.value or 0, 0, 1)
+	local pct = math.floor(v * 1000 + 0.5) / 10
+	return node("row", {
+		id = props.id,
+		w = props.width or 160,
+		h = 16,
+		align = "center",
+		on_drag = function(fx)
+			props.on_change(fx)
+		end,
+	}, {
+		{
+			kind = "row",
+			grow = 1,
+			h = 6,
+			bg = "track",
+			radius = 3,
+			pct > 0 and { kind = "row", w = pct .. "%", h = "fill", bg = props.color or "accent", radius = 3 },
+		},
+	})
+end
+
 -- A context menu. props: items = { {label, on_click, disabled} }, id.
 function kit.menu(props)
 	local rows = {}

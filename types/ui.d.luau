@@ -15,6 +15,8 @@ type Node = {
     entity: number?, cell: { number }?, priority: number?, offset: number?,
     handle: ("move" | "resize" | "close")?,
     src: string?, tint: boolean?,
+    value: string?, placeholder: string?, on_change: ((text: string) -> ())?, on_submit: ((text: string) -> ())?,
+    on_drag: ((fx: number, fy: number) -> ())?,
     [number]: any,
 }
 type Cell = string | number | { text: string?, bg: string?, color: string? } | nil
@@ -73,6 +75,8 @@ declare ui: {
     grid: (props: GridProps) -> Node,
     -- A picture from a mod's ui/img: { src = "mod:name", tint = true }. Its own size unless w/h say otherwise; tint draws it in the text colour. A name@2x.png beside name.png is used on dense displays.
     image: (node: Node) -> Node,
+    -- A line of text the player edits: { id = ..., value = ..., placeholder = ..., on_change = fn(text), on_submit = fn(text) }. The engine keeps the buffer by id across rebuilds and reloads; click to focus, Escape to leave.
+    input: (node: Node) -> Node,
     -- Whether a window is open.
     is_open: (id: string) -> boolean,
     -- A scroll area that builds only the rows on screen. Needs an id, count, row_h and row(i); spacers stand in for the rows above and below.
