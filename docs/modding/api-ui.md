@@ -49,7 +49,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `ui.wrap` | `(id: string, wrap: (inner: Node, view: any) -> Node?) -> ()` | Decorate a node: get its tree, return a new one. |
 | `view.ambient` | `(field: string) -> number?` | A field's outdoor value, or nil for an unknown field. |
 | `view.clock` | `() -> string` | The time of day, "HH:MM". |
-| `view.colonists` | `() -> { Pawn }` | The colonists. |
+| `view.colonists` | `(max: number?) -> { Pawn }` | The colonists, or the first max of them (a bar that shows a few should not pay for all of them; view.count_pawns("player") has the total). |
 | `view.colony_lost` | `() -> boolean` | Whether every colonist is gone. |
 | `view.count_pawns` | `(faction: string) -> number` | Living pawns of "player", "hostile" or "wild". |
 | `view.data` | `(key: string) -> any` | A copy of data a sim script stored with rim.set_data, or nil. |

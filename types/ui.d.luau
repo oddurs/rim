@@ -151,8 +151,8 @@ declare view: {
     ambient: (field: string) -> number?,
     -- The time of day, "HH:MM".
     clock: () -> string,
-    -- The colonists.
-    colonists: () -> { Pawn },
+    -- The colonists, or the first max of them (a bar that shows a few should not pay for all of them; view.count_pawns("player") has the total).
+    colonists: (max: number?) -> { Pawn },
     -- Whether every colonist is gone.
     colony_lost: () -> boolean,
     -- Living pawns of "player", "hostile" or "wild".

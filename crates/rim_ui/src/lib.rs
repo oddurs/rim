@@ -166,6 +166,9 @@ const LAYERS: &[&str] = &["anchored", "docked", "windows", "cursor", "modal", "t
 const TOOLTIP_DELAY: f64 = 0.45;
 /// How many slots away from its anchor a label may move to avoid overlap.
 const ANCHOR_SLOTS: usize = 12;
+/// How many anchored labels are placed per frame, by priority, inside the
+/// viewport. The rest draw nothing.
+const ANCHOR_CAP: usize = 48;
 /// Trees rebuild on any input or client change, and otherwise at this rate:
 /// hover and press restyle at paint time and anchored labels are placed
 /// every frame, so between rebuilds nothing visible goes stale.
@@ -1298,7 +1301,13 @@ impl Ui {
         let gap = 2.0 * self.theme.scale;
         let mut taken: Vec<Rect> = Vec::new();
         let mut out = Vec::new();
+        // Only the top few by priority get placed: a crowd of two hundred
+        // names is unreadable anyway, and placing them all was the frame.
+        let mut placed = 0usize;
         for n in items {
+            if placed >= ANCHOR_CAP {
+                break;
+            }
             let Some(anchor) = n.anchor else { continue };
             let (ax, ay) = match anchor {
                 Anchor::Entity(bits) => {
@@ -1311,6 +1320,7 @@ impl Ui {
             if ax < -200.0 || ay < -200.0 || ax > sw + 200.0 || ay > sh + 200.0 {
                 continue;
             }
+            placed += 1;
             let mut wrapper = n.clone();
             wrapper.kind = Kind::Box;
             let rel = self.place_small(&wrapper, (sw * 0.3, sh * 0.3), |_| (0.0, 0.0));
