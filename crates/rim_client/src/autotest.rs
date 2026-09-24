@@ -731,13 +731,13 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.key(KeyCode::F12).await;
     t.frame().await;
     t.check(t.app.ui.find("weather:devtools.panel").is_some(), "F12 shows the weather devtools");
-    t.click_ui("weather:devtools.force.storm").await;
+    t.click_ui("weather:devtools.force.weather:storm").await;
     t.ticks(2);
     let head = match t.w().data.get("weather:forecast") {
         Some(Data::Table(q)) => q.values().next().and_then(|e| e.get("id").cloned()),
         _ => None,
     };
-    t.check(head == Some(Data::Str("storm".into())), format!("forcing a storm from devtools works ({head:?})"));
+    t.check(head == Some(Data::Str("weather:storm".into())), format!("forcing a storm from devtools works ({head:?})"));
     let before = t.w().tick;
     t.click_ui("weather:devtools.advance.24").await;
     let skipped = t.w().tick - before;

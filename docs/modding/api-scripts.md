@@ -18,6 +18,7 @@ are in [Scripting rules](scripting.md).
 | `rim.creature_defs` | `{CreatureInfo}` | Every creature def. |
 | `rim.date` | `() -> Date` | The calendar date. |
 | `rim.day` | `() -> number` | Days since the game began, from 0. |
+| `rim.defs` | `(kind: string) -> { {[string]: any} }` | Entries of a def kind a mod declared with [[kind]], in load order: "type" for your own kind, "weather:type" for another mod's. |
 | `rim.edge_cell` | `() -> (number?, number?)` | A random open cell on the map edge that can reach the colony. |
 | `rim.emit` | `(name: string, data: {[string]: any}?) -> ()` | Send an event to rim.on handlers in any mod. Only under your own name: "your_mod:event". |
 | `rim.every` | `(interval: number, fn: () -> ()) -> ()` | Run fn every `interval` ticks (hooks are staggered). Register at load time. |

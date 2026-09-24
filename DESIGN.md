@@ -923,6 +923,10 @@ PR to the index. If that loop is good, content follows.
   a table named after itself (`[creature.core:human.mood]` becomes
   `def.mood` in scripts). It can't collide with anyone else's data, and its
   owner is obvious.
+  Declared kinds landed with 0208: `[[kind]]` with typed fields and
+  defaults, `[[weather.type]]` from other mods, and `rim.defs(kind)` in
+  scripts. The weather plugin's types are the first. Extension tables and
+  references to other kinds come with 0143.
 - Content enums in the engine (`Faction`, `Satisfier`) become registries fed
   by defs. Draw primitives (`Shape`) and broad categories stay in code:
   those are mechanisms, not content.

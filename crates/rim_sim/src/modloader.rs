@@ -11,6 +11,7 @@
 //! Patch conflicts (two mods setting the same field) are reported, not
 //! silently resolved by whoever loaded last.
 
+use crate::data::{Data, Key};
 use crate::defs::*;
 use crate::API_VERSION;
 use serde::Deserialize;
@@ -83,17 +84,65 @@ pub fn load_only(mods_dir: &Path, enabled: &dyn Fn(&str) -> bool) -> Result<Load
     let mut log = PatchLog::default();
     let mut scripts = Vec::new();
 
+    let mut kinds: BTreeMap<String, KindDecl> = BTreeMap::new();
     for m in &order {
         let mut patches: Vec<(String, toml::Table)> = Vec::new();
+        // Parse every file first, so a kind declared in one serves them all.
+        let mut files: Vec<(String, toml::Table)> = Vec::new();
         for file in files_with_ext(&m.dir.join("defs"), "toml") {
             let fname = file.file_name().unwrap().to_string_lossy().to_string();
             let origin = format!("{}/defs/{}", m.id, fname);
             let text = fs::read_to_string(&file).map_err(|e| format!("{origin}: {e}"))?;
             let table: toml::Table = text.parse().map_err(|e| format!("{origin}: {e}"))?;
-            for (kind, val) in table {
+            files.push((origin, table));
+        }
+        for (origin, table) in &mut files {
+            if let Some(v) = table.remove("kind") {
+                declare_kinds(v, origin, &m.id, &mut kinds)?;
+            }
+        }
+        for (origin, table) in files {
+            // (kind, entries): `[[thing]]`, `[[type]]` for this mod's own kind,
+            // or `[[weather.type]]`, which TOML reads as weather = { type = [...] }.
+            let mut groups: Vec<(String, toml::Value)> = Vec::new();
+            for (key, val) in table {
+                match val {
+                    toml::Value::Table(sub) if !KINDS.contains(&key.as_str()) && key != "patch" => {
+                        for (name, v) in sub {
+                            let full = format!("{key}:{name}");
+                            if kinds.contains_key(&full) {
+                                groups.push((full, v));
+                            } else {
+                                warnings.push(format!("{origin}: unknown def kind '{key}.{name}' ignored"));
+                            }
+                        }
+                    }
+                    v => groups.push((key, v)),
+                }
+            }
+            for (key, val) in groups {
                 let arr = match val {
                     toml::Value::Array(a) => a,
-                    _ => return Err(format!("{origin}: '{kind}' must be an array of tables ([[{kind}]])")),
+                    _ => return Err(format!("{origin}: '{key}' must be an array of tables ([[{key}]])")),
+                };
+                let own = format!("{}:{key}", m.id);
+                let kind = if key == "patch" || KINDS.contains(&key.as_str()) || key.contains(':') {
+                    key.clone()
+                } else if kinds.contains_key(&own) {
+                    own
+                } else {
+                    let elsewhere: Vec<String> = kinds
+                        .keys()
+                        .filter(|k| k.split_once(':').is_some_and(|(_, b)| b == key))
+                        .map(|k| format!("[[{}]]", k.replace(':', ".")))
+                        .collect();
+                    let hint = if elsewhere.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" (did you mean {}?)", elsewhere.join(" or "))
+                    };
+                    warnings.push(format!("{origin}: unknown def kind '{key}' ignored{hint}"));
+                    continue;
                 };
                 for v in arr {
                     let toml::Value::Table(t) = v else {
@@ -103,35 +152,31 @@ pub fn load_only(mods_dir: &Path, enabled: &dyn Fn(&str) -> bool) -> Result<Load
                         patches.push((origin.clone(), t));
                         continue;
                     }
-                    if !KINDS.contains(&kind.as_str()) {
-                        warnings.push(format!("{origin}: unknown def kind '{kind}' ignored"));
-                        continue;
-                    }
                     let raw = t
                         .get("id")
                         .and_then(|v| v.as_str())
-                        .ok_or_else(|| format!("{origin}: a [[{kind}]] entry has no id"))?;
+                        .ok_or_else(|| format!("{origin}: a [[{key}]] entry has no id"))?;
                     // Every id is the mod's own: "wall" in core is "core:wall".
                     let id = match raw.split_once(':') {
                         None => format!("{}:{raw}", m.id),
                         Some((owner, _)) if owner == m.id => raw.to_string(),
                         Some((owner, bare)) => {
                             return Err(format!(
-                                "{origin}: [[{kind}]] id '{raw}' is in mod '{owner}'s namespace; a mod defines \
+                                "{origin}: [[{key}]] id '{raw}' is in mod '{owner}'s namespace; a mod defines \
                                  its own ids (id = \"{bare}\"), and changes another mod's with a [[patch]]"
                             ))
                         }
                     };
                     let mut t = t;
                     t.insert("id".into(), toml::Value::String(id.clone()));
-                    let key = (kind.clone(), id.clone());
-                    if let Some(&i) = index.get(&key) {
+                    let entry_key = (kind.clone(), id.clone());
+                    if let Some(&i) = index.get(&entry_key) {
                         return Err(format!(
                             "{origin}: {kind}/{id} is already defined by {} — use a [[patch]] to change it",
                             entries[i].origin
                         ));
                     }
-                    index.insert(key, entries.len());
+                    index.insert(entry_key, entries.len());
                     entries.push(Entry { kind: kind.clone(), id, value: t, origin: origin.clone(), removed: false });
                 }
             }
@@ -144,6 +189,13 @@ pub fn load_only(mods_dir: &Path, enabled: &dyn Fn(&str) -> bool) -> Result<Load
                 .ok_or_else(|| format!("{origin}: patch has no 'target' (\"kind/id\")"))?;
             let Some((kind, id)) = target.split_once('/') else {
                 return Err(format!("{origin}: patch target '{target}' must look like kind/id"));
+            };
+            // A mod kind is named like an id: `type` in its own mod, else `weather:type`.
+            let own_kind = format!("{}:{kind}", m.id);
+            let kind = if !KINDS.contains(&kind) && !kind.contains(':') && kinds.contains_key(&own_kind) {
+                own_kind.as_str()
+            } else {
+                kind
             };
             // A bare id is the patching mod's own, like any reference.
             let full = if id.contains(':') { id.to_string() } else { format!("{}:{id}", m.id) };
@@ -222,8 +274,16 @@ pub fn load_only(mods_dir: &Path, enabled: &dyn Fn(&str) -> bool) -> Result<Load
                 let n: NamesDef = de!(v)?;
                 defs.names.extend(n.names);
             }
-            _ => unreachable!(),
+            mod_kind => {
+                let decl = &kinds[mod_kind];
+                let toml::Value::Table(t) = v else { unreachable!() };
+                let d = check_fields(decl, t, &ctx, &mut warnings)?;
+                defs.mod_defs.entry(mod_kind.to_string()).or_default().push(d);
+            }
         }
+    }
+    for k in kinds.keys() {
+        defs.mod_defs.entry(k.clone()).or_default();
     }
     defs.finalize()?;
     warnings.extend(log.warnings);
@@ -259,6 +319,125 @@ fn deserialize<T: serde::de::DeserializeOwned>(
             .unwrap_or_default();
         format!("{ctx}: at `{path}`{patched}: {msg}")
     })
+}
+
+/// A def kind a mod declared with `[[kind]]`.
+struct KindDecl {
+    /// Field name to its type ("string", "int", "float", "bool", "table",
+    /// "list", "any") and default. None: any fields at all.
+    fields: Option<BTreeMap<String, (String, Option<toml::Value>)>>,
+}
+
+const FIELD_TYPES: &[&str] = &["string", "int", "float", "bool", "table", "list", "any"];
+
+fn declare_kinds(
+    v: toml::Value,
+    origin: &str,
+    mod_id: &str,
+    kinds: &mut BTreeMap<String, KindDecl>,
+) -> Result<(), String> {
+    let toml::Value::Array(arr) = v else {
+        return Err(format!("{origin}: 'kind' must be an array of tables ([[kind]])"));
+    };
+    for k in arr {
+        let toml::Value::Table(k) = k else { return Err(format!("{origin}: [[kind]] entries must be tables")) };
+        if let Some(bad) = k.keys().find(|x| !["id", "fields"].contains(&x.as_str())) {
+            return Err(format!("{origin}: [[kind]] has an unknown key '{bad}' (id, fields)"));
+        }
+        let raw = k.get("id").and_then(|v| v.as_str()).ok_or_else(|| format!("{origin}: a [[kind]] has no id"))?;
+        let bare = match raw.split_once(':') {
+            None => raw,
+            Some((owner, b)) if owner == mod_id => b,
+            Some(_) => return Err(format!("{origin}: [[kind]] '{raw}': a mod declares kinds in its own namespace")),
+        };
+        if KINDS.contains(&bare) || bare == "patch" || bare == "kind" {
+            return Err(format!("{origin}: [[kind]] '{bare}' is a built-in kind's name; pick another"));
+        }
+        let id = format!("{mod_id}:{bare}");
+        let fields = match k.get("fields") {
+            None => None,
+            Some(toml::Value::Table(f)) => {
+                let mut out = BTreeMap::new();
+                for (name, spec) in f {
+                    let (ty, default) = match spec {
+                        toml::Value::String(t) => (t.clone(), None),
+                        toml::Value::Table(t) => (
+                            t.get("type").and_then(|v| v.as_str()).unwrap_or("any").to_string(),
+                            t.get("default").cloned(),
+                        ),
+                        _ => {
+                            return Err(format!(
+                                "{origin}: kind {id}, field '{name}': give a type or {{ type, default }}"
+                            ))
+                        }
+                    };
+                    if !FIELD_TYPES.contains(&ty.as_str()) {
+                        return Err(format!(
+                            "{origin}: kind {id}, field '{name}': unknown type '{ty}' (one of {})",
+                            FIELD_TYPES.join(", ")
+                        ));
+                    }
+                    out.insert(name.clone(), (ty, default));
+                }
+                Some(out)
+            }
+            Some(_) => return Err(format!("{origin}: kind {id}: 'fields' must be a table")),
+        };
+        if kinds.insert(id.clone(), KindDecl { fields }).is_some() {
+            return Err(format!("{origin}: kind {id} is declared twice"));
+        }
+    }
+    Ok(())
+}
+
+fn type_ok(ty: &str, v: &toml::Value) -> bool {
+    matches!(
+        (ty, v),
+        ("any", _)
+            | ("string", toml::Value::String(_))
+            | ("int", toml::Value::Integer(_))
+            | ("float", toml::Value::Float(_) | toml::Value::Integer(_))
+            | ("bool", toml::Value::Boolean(_))
+            | ("table", toml::Value::Table(_))
+            | ("list", toml::Value::Array(_))
+    )
+}
+
+/// A mod kind's entry, checked against its declared fields, as plain data.
+fn check_fields(decl: &KindDecl, mut t: toml::Table, ctx: &str, warnings: &mut Vec<String>) -> Result<Data, String> {
+    if let Some(fields) = &decl.fields {
+        for (name, (ty, default)) in fields {
+            match (t.get(name), default) {
+                (Some(v), _) if !type_ok(ty, v) => {
+                    return Err(format!("{ctx}: `{name}` should be {ty}, not {}", v.type_str()));
+                }
+                (Some(_), _) => {}
+                (None, Some(d)) => {
+                    t.insert(name.clone(), d.clone());
+                }
+                (None, None) => return Err(format!("{ctx}: missing field `{name}` ({ty})")),
+            }
+        }
+        for k in t.keys().filter(|k| *k != "id" && !fields.contains_key(*k)) {
+            warnings.push(format!("{ctx}: `{k}` isn't a field of this kind (ignored by its schema)"));
+        }
+    }
+    Ok(toml_data(&toml::Value::Table(t)))
+}
+
+/// TOML as script data: arrays become 1-based lists.
+fn toml_data(v: &toml::Value) -> Data {
+    match v {
+        toml::Value::String(s) => Data::Str(s.clone()),
+        toml::Value::Integer(i) => Data::Int(*i),
+        toml::Value::Float(f) => Data::Num(*f),
+        toml::Value::Boolean(b) => Data::Bool(*b),
+        toml::Value::Datetime(d) => Data::Str(d.to_string()),
+        toml::Value::Array(a) => {
+            Data::Table(a.iter().enumerate().map(|(i, x)| (Key::Int(i as i64 + 1), toml_data(x))).collect())
+        }
+        toml::Value::Table(t) => Data::Table(t.iter().map(|(k, x)| (Key::Str(k.clone()), toml_data(x))).collect()),
+    }
 }
 
 /// What patches did, for conflict warnings and for naming the mod behind a

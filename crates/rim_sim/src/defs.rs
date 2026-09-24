@@ -615,6 +615,9 @@ pub struct DefDb {
     pub sky: SkyDef,
     pub start: Option<StartDef>,
     pub names: Vec<String>,
+    /// Entries of the kinds mods declare (`[[kind]]`), by qualified kind
+    /// ("weather:type"), in load order: plain data for scripts.
+    pub mod_defs: BTreeMap<String, Vec<crate::data::Data>>,
     /// Qualified ids ("core:wall").
     index: HashMap<(&'static str, String), DefId>,
     /// Bare ids ("wall"), for tools and tests that don't care which mod.

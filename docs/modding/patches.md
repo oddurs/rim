@@ -105,3 +105,39 @@ These aren't conflicts, because both mods' changes survive:
 
 Patching a def that isn't there (say, from an optional mod that isn't
 installed) is a warning, and the patch is skipped.
+
+## Your own def kinds
+
+A plugin can offer data for other mods to extend, not just functions. It
+declares a kind with a schema, and entries of that kind load, patch and
+report conflicts like built-in defs:
+
+<!-- not a sample -->
+```toml
+# mods/magic/defs/spells.toml
+[[kind]]
+id = "spell"                 # magic:spell
+
+[kind.fields]                # optional; without it, any fields go
+label = "string"
+mana = "int"
+school = { type = "string", default = "fire" }
+
+[[spell]]                    # the declaring mod writes the bare name
+id = "spark"
+label = "spark"
+mana = 2
+```
+
+Another mod that depends on `magic` adds entries as `[[magic.spell]]` and
+patches them with `target = "magic:spell/magic:spark"`.
+
+Field types are `string`, `int`, `float` (an int is fine), `bool`,
+`table`, `list` and `any`. A missing field without a default, or one of the
+wrong type, is a load error. A field the schema doesn't list is a warning.
+
+Scripts read the entries with `rim.defs("spell")` (your own kind) or
+`rim.defs("magic:spell")`. Each call returns fresh tables in load order,
+ids qualified and defaults filled in. The weather plugin's `type` kind
+([`mods/weather/defs/types.toml`](../../mods/weather/defs/types.toml)) is a
+worked example.
