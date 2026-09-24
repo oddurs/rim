@@ -66,6 +66,7 @@ fn the_forecast_is_what_happens() {
 fn frequencies_follow_the_weights() {
     // In mid-autumn after overcast weather, draw many picks and compare.
     let script = r#"
+        local weather = require("@weather/scripts/weather")
         local done = false
         rim.every(1, function()
             if done then return end
@@ -73,11 +74,11 @@ fn frequencies_follow_the_weights() {
             local start = rim.tick() + 26 * rim.ticks_per_day
             local counts = {}
             for _ = 1, 20000 do
-                local e = rim.weather.pick("cloudy", start)
+                local e = weather.pick("cloudy", start)
                 counts[e.id] = (counts[e.id] or 0) + 1
             end
             rim.set_data("t:counts", counts)
-            rim.set_data("t:weights", rim.weather.weights("cloudy", start))
+            rim.set_data("t:weights", weather.weights("cloudy", start))
         end)
     "#;
     let dir = test_mods("weights", &["core", "weather"], &[("probe", &[("scripts/probe.luau", script)])]);
@@ -128,6 +129,7 @@ fn channels_ease_between_weathers() {
 #[test]
 fn forcing_the_weather_and_hearing_about_it() {
     let script = r#"
+        local weather = require("@weather/scripts/weather")
         rim.on("weather:changed", function(e)
             local log = rim.get_data("t:log") or {}
             table.insert(log, e.to)
@@ -136,7 +138,7 @@ fn forcing_the_weather_and_hearing_about_it() {
         rim.every(10, function()
             if rim.tick() >= 1000 and not rim.get_data("t:forced") then
                 rim.set_data("t:forced", true)
-                rim.weather.force("storm", 3)
+                weather.force("storm", 3)
             end
         end)
     "#;
@@ -194,14 +196,15 @@ fn a_year_of_weather_is_deterministic() {
 #[test]
 fn weather_incidents_show_in_the_breakdown_and_forecast() {
     let script = r#"
+        local incidents = require("@weather/scripts/incidents")
         local step = 0
         rim.every(10, function()
             step += 1
             if step == 3 then
-                rim.weather.incident("cold_snap")
-                rim.weather.incident("heat_wave")
+                incidents.fire("cold_snap")
+                incidents.fire("heat_wave")
             elseif step == 4 then
-                rim.weather.incident("storm")
+                incidents.fire("storm")
             end
         end)
     "#;

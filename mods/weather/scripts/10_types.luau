@@ -4,6 +4,8 @@
 -- Channel units: cloud and fog in %, precipitation in mm/h, wind in m/s,
 -- temperature as an offset in °C on top of the seasonal curve.
 
+local weather = require("./weather")
+
 -- The first day is clear: the first night is the shelter test core is tuned
 -- around (DESIGN.md §4a), and weather starts after it.
 local function by_season(t)
@@ -29,7 +31,7 @@ local function after(weight, follows)
 	end
 end
 
-rim.weather.register({
+weather.register({
 	id = "clear",
 	label = "clear",
 	hours = { 8, 26 },
@@ -38,7 +40,7 @@ rim.weather.register({
 	set = { cloud = { 0, 20 }, precipitation = 0, wind = { 0.5, 5 }, fog = 0, temperature = { 0, 1.5 } },
 })
 
-rim.weather.register({
+weather.register({
 	id = "cloudy",
 	label = "overcast",
 	hours = { 4, 16 },
@@ -47,7 +49,7 @@ rim.weather.register({
 	set = { cloud = { 65, 95 }, precipitation = 0, wind = { 2, 7 }, fog = 0, temperature = { -1, 0 } },
 })
 
-rim.weather.register({
+weather.register({
 	id = "rain",
 	label = "rain",
 	cold_label = "snow",
@@ -65,7 +67,7 @@ rim.weather.register({
 	end,
 })
 
-rim.weather.register({
+weather.register({
 	id = "storm",
 	label = "storm",
 	cold_label = "blizzard",
@@ -84,7 +86,7 @@ rim.weather.register({
 	message_kind = "threat",
 })
 
-rim.weather.register({
+weather.register({
 	id = "fog",
 	label = "fog",
 	hours = { 2, 6 },

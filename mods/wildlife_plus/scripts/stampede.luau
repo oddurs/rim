@@ -1,6 +1,8 @@
--- Tier 2 — script. Adds an incident through core's storyteller API.
+-- Tier 2 — script. Adds an incident through core's storyteller module.
 
-rim.register_incident({
+local storyteller = require("@core/scripts/storyteller")
+
+storyteller.register_incident({
 	id = "boar_stampede",
 	kind = "threat",
 	min_day = 3,

@@ -16,7 +16,7 @@ plugins, including the base game (`mods/core`):
 | Tier   | What                                  | Example                                  |
 |--------|---------------------------------------|------------------------------------------|
 | Data   | TOML defs and declarative patches     | `mods/core/defs/*.toml`                  |
-| Script | Sandboxed, deterministic Luau         | `mods/core/scripts/00_storyteller.luau`  |
+| Script | Sandboxed, deterministic Luau         | `mods/core/scripts/storyteller.luau`     |
 | Native | WASM (planned)                        |                                          |
 
 `mods/wildlife_plus` is a small example plugin that uses both working tiers:

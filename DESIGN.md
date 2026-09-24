@@ -384,8 +384,9 @@ namespace (`weather:changed`).
   happen unless an incident forces a change. Changes push the channels with
   easing, so rain starts as a drizzle.
 - **Incidents:** cold snap, heat wave and storm, through core's storyteller.
-- They register through Luau (`rim.weather.register{...}`) until plugins can
-  declare their own def kinds (0208), then move to data.
+- They register through Luau (`weather.register{...}`, from the weather
+  module) until plugins can declare their own def kinds (0208), then move to
+  data.
 
 ### Seeing the weather
 
@@ -752,14 +753,15 @@ PR to the index. If that loop is good, content follows.
 
 ### Tension: how do mods talk to each other?
 
-- **For the shared `rim` table (today):** it's simple. Core exposes
+- **For a shared `rim` table (what we had first):** it's simple. Core exposed
   `rim.register_incident` just by assigning it.
 - **Against:** any mod can overwrite any function for everyone. That is
   patch-anything through the back door, which §6 ruled out. Names collide
   silently, and nothing records who depends on whom.
 - **Ruling:** the `rim` engine table is **read-only**. Mods share code as
-  **modules**: `require("@core/storyteller")` returns what that mod exports.
-  A mod can only require mods listed in its `depends` or `optional`, so the
+  **modules**: `require("@core/scripts/storyteller")` returns what that
+  script exports. A mod can only require mods listed in its `depends` or
+  `optional`, so the
   dependency graph is real rather than hoped for. For loose coupling there are
   **namespaced events**: `rim.emit("wildlife_plus:stampede", data)` and
   `rim.on("wildlife_plus:stampede", fn)`. The rule of thumb: hard

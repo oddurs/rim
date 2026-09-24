@@ -90,6 +90,4 @@ declare rim: {
     wealth: () -> number,
     -- The year, from 1.
     year: () -> number,
-    -- Plugins' APIs (rim.weather, rim.register_incident, ...).
-    [string]: any,
 }

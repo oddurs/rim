@@ -1,5 +1,7 @@
 -- Core incidents. Each is pulled in by the storyteller's gravity.
 
+local storyteller = require("./storyteller")
+
 -- How long a raid lasts before the attackers give up and leave.
 local RAID_DAYS = 0.6
 -- Threat points per attacker. A raider is worth about one colonist in a
@@ -48,7 +50,7 @@ local function count(n: number, one: string, many: string): string
 	return if n == 1 then `1 {one}` else `{n} {many}`
 end
 
-rim.register_incident({
+storyteller.register_incident({
 	id = "raid",
 	kind = "threat",
 	weight = function(ctx)
@@ -64,7 +66,7 @@ rim.register_incident({
 	end,
 })
 
-rim.register_incident({
+storyteller.register_incident({
 	id = "predators",
 	kind = "threat",
 	min_day = 1,
@@ -86,7 +88,7 @@ rim.register_incident({
 	end,
 })
 
-rim.register_incident({
+storyteller.register_incident({
 	id = "wanderer",
 	kind = "good",
 	weight = function(ctx)
@@ -111,7 +113,7 @@ rim.register_incident({
 	end,
 })
 
-rim.register_incident({
+storyteller.register_incident({
 	id = "herd",
 	kind = "neutral",
 	weight = 0.8,
@@ -131,7 +133,7 @@ rim.register_incident({
 	end,
 })
 
-rim.register_incident({
+storyteller.register_incident({
 	id = "windfall",
 	kind = "good",
 	weight = 0.5,

@@ -37,11 +37,10 @@ co-op. The UI's is client-only (DESIGN.md §11).
   - `newproxy` and `os` are removed.
   - `math.random` is removed; scripts use `rim.random` (the world RNG).
 - **Read-only.** The standard libraries and the global table are read-only.
-  Mods see `rim` through a proxy. While mods load, a write may *add* a key
-  (that's how plugins offer APIs, like `rim.weather` and
-  `rim.register_incident`) but never replace one; the error names both mods.
-  After load, `rim` and every table in it are read-only, and `__metatable`
-  hides the proxy's workings.
+  Mods see `rim` through a proxy whose every write is an error naming the
+  mod and pointing at `require`, and `__metatable` hides its workings. Mods
+  share code as modules (DESIGN.md §10). A module's exports are made
+  read-only (`Table::set_readonly`) once its mod has loaded.
 - **Events:** `rim.emit` only accepts the calling mod's own namespace. The
   caller is found from the chunk name of the nearest Luau frame, not from
   whose hook is running.
@@ -50,9 +49,9 @@ co-op. The UI's is client-only (DESIGN.md §11).
   imports such as `math.floor`, builtin fastcalls, and fast `pairs`/`ipairs`.
   A script loads into its own environment table, which starts out unsafe, so
   every global access was a full lookup. The trade-off: an import chain like
-  `rim.weather.register` is resolved when the script loads. Replacing a
-  function in `rim` later isn't seen by scripts that loaded before. Plugins add
-  to `rim`; they don't monkey-patch it.
+  `rim.spawn_pawn` is resolved when the script loads. That's sound because
+  every table a chain can reach (the globals, `rim`, loaded exports) is
+  read-only by then.
 - **Compiler.** Optimization level 2 (inlines small local functions, unrolls
   constant loops) and debug level 1 (line numbers in errors).
 - **Memory limit, 256 MB.** Hitting it fails the allocating script with an

@@ -1120,7 +1120,7 @@ pub fn mod_dirs(mods: &[rim_sim::modloader::ModManifest]) -> Vec<ModDir> {
         .map(|m| ModDir {
             id: m.id.clone(),
             dir: m.dir.clone(),
-            deps: m.depends.iter().chain(m.load_after.iter()).cloned().collect(),
+            deps: m.depends.iter().chain(&m.optional).chain(&m.load_after).cloned().collect(),
         })
         .collect()
 }

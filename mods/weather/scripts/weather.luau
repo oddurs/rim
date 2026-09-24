@@ -11,9 +11,10 @@
 -- and the renderer draws whatever those say. Precipitation below freezing
 -- falls as snow, so winter rain *is* snow.
 --
--- Other mods add weather with rim.weather.register (see docs/modding/weather.md):
+-- Other mods add weather through this module (see docs/modding/weather.md):
 --
---   rim.weather.register {
+--   local weather = require("@weather/scripts/weather")
+--   weather.register {
 --     id = "drizzle", label = "drizzle", cold_label = "flurries",
 --     hours = { 3, 8 },            -- how long it lasts
 --     blend = 1.5,                 -- hours to ease in from the previous weather
@@ -35,7 +36,6 @@ local types = {}
 local order = {} -- registration order, so picking is deterministic
 
 local weather = {}
-rim.weather = weather
 
 function weather.register(def)
 	assert(type(def.id) == "string", "weather needs an id")
@@ -293,3 +293,5 @@ rim.on("weather:force", function(e)
 		weather.force(e.id, e.hours or 12)
 	end
 end)
+
+return weather
