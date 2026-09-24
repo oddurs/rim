@@ -1028,13 +1028,25 @@ fn run_breach(w: &mut World, p: &mut Pawn, target: Entity) -> Option<Job> {
     }
 }
 
+/// What a pawn's swing is worth before the roll: its creature's melee
+/// damage, plus the start's founder bonus when this is the founder. The
+/// founder matters most when alone, and this is where it shows.
+pub fn melee_base(defs: &crate::defs::DefDb, p: &Pawn) -> i32 {
+    let bonus = if p.founder { defs.start.as_ref().map_or(0, |s| s.founder_damage_bonus) } else { 0 };
+    defs.creature(p.def).melee_damage + bonus
+}
+
+/// The least and most a swing can do: the base rolled at 70% to 130%.
+pub fn melee_bounds(defs: &crate::defs::DefDb, p: &Pawn) -> (i32, i32) {
+    let base = melee_base(defs, p);
+    ((base * 70 / 100).max(1), (base * 130 / 100).max(1))
+}
+
 /// One melee swing, before it is applied to anything.
 fn swing(w: &mut World, p: &mut Pawn) -> i32 {
     let defs = w.defs.clone();
-    let cd = defs.creature(p.def);
-    let bonus = if p.founder { defs.start.as_ref().map_or(0, |s| s.founder_damage_bonus) } else { 0 };
-    p.cooldown = cd.melee_cooldown;
-    ((cd.melee_damage + bonus) * (70 + w.rng.below(61) as i32) / 100).max(1)
+    p.cooldown = defs.creature(p.def).melee_cooldown;
+    (melee_base(&defs, p) * (70 + w.rng.below(61) as i32) / 100).max(1)
 }
 
 fn mark_hit(w: &mut World, tpos: IVec) {

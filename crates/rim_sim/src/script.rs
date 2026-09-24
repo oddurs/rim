@@ -1171,13 +1171,14 @@ impl ScriptHost {
                 t.set("creature", defs.creature(*def).id.as_str())?;
                 "pawn_joined"
             }
-            GameEvent::PawnDied { id, name, def, faction, pos } => {
+            GameEvent::PawnDied { id, name, def, faction, pos, founder } => {
                 t.set("id", id.to_bits().get())?;
                 t.set("name", name.as_str())?;
                 t.set("creature", defs.creature(*def).id.as_str())?;
                 t.set("faction", faction.name())?;
                 t.set("x", pos.x)?;
                 t.set("y", pos.y)?;
+                t.set("founder", *founder)?;
                 "pawn_died"
             }
             GameEvent::PawnLeft { id, name, def, faction } => {
