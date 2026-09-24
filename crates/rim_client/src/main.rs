@@ -543,7 +543,7 @@ pub fn render(app: &mut App) {
         app.atlas.update(&Image { bytes: a.pixels.clone(), width: a.size as u16, height: a.size as u16 });
         app.ui.text.atlas.dirty = false;
     }
-    draw::ui(&app.last_draw, &app.atlas, screen_dpi_scale());
+    draw::ui(&app.last_draw, &app.atlas, app.ui.text.atlas.white_texel(), screen_dpi_scale());
 }
 
 fn apply_ui(app: &mut App, a: UiAction) {
