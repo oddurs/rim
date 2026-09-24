@@ -127,7 +127,7 @@ fn item(w: &World, from: IVec, i: Entity) -> Option<Order> {
     td.food.as_ref()?;
     w.map.can_reach(from, Goal::Cell(t.pos)).then(|| Order {
         label: format!("Eat {}", td.label),
-        job: Job::Eat { src: i, t: 0 },
+        job: Job::Eat { src: i, t: 0, seat: None, stage: 0 },
         reserve: vec![i],
     })
 }

@@ -81,6 +81,11 @@ pub enum Job {
     Eat {
         src: Entity,
         t: u32,
+        /// A chair at a table, if one was free: the thing and its spot.
+        /// Without one the pawn eats where the food lies.
+        seat: Option<(Entity, IVec)>,
+        /// 0: going to the food. 1: carrying it to the seat.
+        stage: u8,
     },
     Sleep {
         bed: Option<Entity>,

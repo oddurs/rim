@@ -130,6 +130,15 @@ pub struct ThingDef {
     #[serde(default)]
     pub stuff: Option<StuffDef>,
     pub spawn: Option<SpawnDef>,
+    /// Cells a pawn occupies to use this thing. A bed's is the bed; a
+    /// chair's is the chair; a workbench's would be in front. A thing with
+    /// no spots cannot be used, only had.
+    #[serde(default)]
+    pub spots: Vec<SpotDef>,
+    /// Free labels other defs can ask for by name ("table"). The engine
+    /// matches the strings and never reads them.
+    #[serde(default)]
+    pub tags: Vec<String>,
     /// Field sources: a campfire emits heat and light.
     #[serde(default)]
     pub emit: Vec<EmitDef>,
@@ -202,6 +211,19 @@ pub struct StuffCost {
     /// Matched against an item's `stuff.categories`.
     pub category: String,
     pub count: u32,
+}
+
+/// A cell a pawn stands or sits in to use a thing, relative to it.
+#[derive(Deserialize, Clone, Debug, Default)]
+pub struct SpotDef {
+    #[serde(default)]
+    pub dx: i32,
+    #[serde(default)]
+    pub dy: i32,
+    /// Only a spot when a thing carrying this tag stands next to it: a
+    /// chair is a seat at a table and a stool in a field otherwise.
+    #[serde(default)]
+    pub beside: String,
 }
 
 /// One piece of a room's boundary, as a field sees it. The room's numbers

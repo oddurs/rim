@@ -51,6 +51,7 @@ category = "building"
 shape = "bed"
 market_value = 40
 bed = { rest_rate = 1.8 }
+spots = [{ dx = 0, dy = 0 }]
 build = { menu = "furniture", work = 500, stuff = { category = "structural", count = 25 } }
 
 [[thing]]

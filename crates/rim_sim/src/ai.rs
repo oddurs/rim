@@ -399,29 +399,76 @@ fn find_food(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
     }
     let (_, t, is_item) = best?;
     w.reserve(t, e);
-    Some(if is_item { Job::Eat { src: t, t: 0 } } else { Job::Harvest { target: t, work: 0, forced: true } })
+    if !is_item {
+        return Some(Job::Harvest { target: t, work: 0, forced: true });
+    }
+    // Somewhere to sit and eat it, if the colony has such a thing.
+    let food_at = w.thing(t).map_or(p.pos, |f| f.pos);
+    let seat = nearest_spot(w, e, food_at, |td| td.food.is_none() && td.bed.is_none());
+    if let Some((se, _)) = seat {
+        w.reserve(se, e);
+    }
+    Some(Job::Eat { src: t, t: 0, seat, stage: 0 })
+}
+
+/// The cells around `thing` that a pawn may use it from, as its def lays
+/// them out, keeping only those whose `beside` requirement is met.
+fn spots_of(w: &World, thing: Entity) -> Vec<IVec> {
+    let Some(t) = w.thing(thing) else { return Vec::new() };
+    let td = w.defs.thing(t.def);
+    td.spots
+        .iter()
+        .map(|s| (t.pos.offset(s.dx, s.dy), s))
+        .filter(|(cell, s)| s.beside.is_empty() || beside(w, *cell, &s.beside))
+        .map(|(cell, _)| cell)
+        .collect()
+}
+
+/// Is there a thing tagged `tag` in one of the eight cells around `cell`?
+fn beside(w: &World, cell: IVec, tag: &str) -> bool {
+    crate::map::NEIGHBORS8.iter().any(|(dx, dy)| {
+        w.map
+            .fixture_at(cell.offset(*dx, *dy))
+            .and_then(|f| w.thing(f))
+            .is_some_and(|t| w.defs.thing(t.def).tags.iter().any(|g| g == tag))
+    })
+}
+
+/// The nearest free, reachable spot on a thing `pick` accepts, from `from`.
+/// A thing is one reservation: two pawns never share it.
+fn nearest_spot(w: &World, e: Entity, from: IVec, pick: impl Fn(&ThingDef) -> bool) -> Option<(Entity, IVec)> {
+    let mut best: Option<(u32, Entity, IVec)> = None;
+    for (te, t) in w.ecs.query::<&Thing>().without::<&Blueprint>().iter() {
+        let td = w.defs.thing(t.def);
+        if td.spots.is_empty() || !pick(td) || w.reserved_by_other(te, e) {
+            continue;
+        }
+        for cell in spots_of(w, te) {
+            let d = cell.octile(from);
+            if best.is_some_and(|b| b.0 <= d) {
+                continue;
+            }
+            if w.map.passable(cell) && w.map.can_reach(from, Goal::Cell(cell)) {
+                best = Some((d, te, cell));
+            }
+        }
+    }
+    best.map(|b| (b.1, b.2))
 }
 
 fn find_bed(w: &mut World, e: Entity, p: &mut Pawn) -> Job {
     let defs = w.defs.clone();
     w.map.ensure_regions();
-    let mut best: Option<(u32, Entity)> = None;
-    for (te, t) in w.ecs.query::<&Thing>().without::<&Blueprint>().iter() {
-        if defs.thing(t.def).bed.is_none() {
-            continue;
-        }
-        let d = t.pos.octile(p.pos);
-        if best.is_some_and(|b| b.0 <= d) || w.reserved_by_other(te, e) || !w.map.can_reach(p.pos, Goal::Cell(t.pos)) {
-            continue;
-        }
-        best = Some((d, te));
-    }
-    let bed = best.map(|b| b.1);
-    if let Some(b) = bed {
+    let _ = &defs;
+    let found = nearest_spot(w, e, p.pos, |td| td.bed.is_some());
+    if let Some((b, _)) = found {
         w.reserve(b, e);
     }
     // No bed: sleep somewhere comfortable if the ground here isn't.
-    let spot = if bed.is_some() { p.pos } else { comfortable_spot(w, p).unwrap_or(p.pos) };
+    let (bed, spot) = match found {
+        Some((b, cell)) => (Some(b), cell),
+        None => (None, comfortable_spot(w, p).unwrap_or(p.pos)),
+    };
     Job::Sleep { bed, spot, stage: 0 }
 }
 
@@ -615,7 +662,7 @@ fn run_job(w: &mut World, e: Entity, p: &mut Pawn) {
         Job::Deliver { bp, src, want, stage } => (run_deliver(w, p, bp, src, want, stage), 0),
         Job::Construct { bp } => (run_construct(w, p, bp), 0),
         Job::Deconstruct { target, work } => (run_deconstruct(w, p, target, work), 0),
-        Job::Eat { src, t } => (run_eat(w, p, src, t), 0),
+        Job::Eat { src, t, seat, stage } => (run_eat(w, p, src, t, seat, stage), 0),
         Job::Sleep { bed, spot, stage } => (run_sleep(w, e, p, bed, spot, stage), 0),
         Job::Comfort { to, need, until } => (run_comfort(w, p, to, need, until), 0),
         Job::Attack { target, until } => (run_attack(w, e, p, target, until), 0),
@@ -802,31 +849,74 @@ pub fn complete_building(w: &mut World, bp: Entity) {
     w.events.push(GameEvent::BuildingComplete { id: bp, def: t.def, pos: t.pos });
 }
 
-fn run_eat(w: &mut World, p: &mut Pawn, src: Entity, t: u32) -> Option<Job> {
+/// Eat where the food lies, or carry one portion to a seat and eat there.
+fn run_eat(w: &mut World, p: &mut Pawn, src: Entity, t: u32, seat: Option<(Entity, IVec)>, stage: u8) -> Option<Job> {
+    let defs = w.defs.clone();
+    let again = |src, seat| Job::Eat { src, t: 0, seat, stage: 0 };
+    let eat = |p: &mut Pawn, food: DefId| -> bool {
+        let nutrition = (defs.thing(food).food.as_ref().map_or(0.0, |f| f.nutrition) * NEED_MAX as f64) as i32;
+        let mut full = true;
+        for n in &mut p.needs {
+            if defs.need(n.0).satisfier == Satisfier::Food {
+                n.1 = (n.1 + nutrition).min(NEED_MAX);
+                full = n.1 >= NEED_MAX * 9 / 10;
+            }
+        }
+        full
+    };
+
+    // Stage 1: at the seat, or on the way to it, with a portion in hand.
+    if stage == 1 {
+        let (se, cell) = seat?;
+        if w.thing(se).is_none() {
+            // The chair went away: eat standing up, right here.
+            let (food, _) = p.carry.take()?;
+            eat(p, food);
+            return None;
+        }
+        return match go_to(w, p, Goal::Cell(cell)) {
+            Go::Failed => None,
+            Go::Moving => Some(Job::Eat { src, t, seat, stage }),
+            Go::Arrived => {
+                if t < 90 {
+                    return Some(Job::Eat { src, t: t + 1, seat, stage });
+                }
+                let (food, _) = p.carry.take()?;
+                let full = eat(p, food);
+                if full || w.thing(src).is_none() {
+                    None
+                } else {
+                    Some(again(src, seat))
+                }
+            }
+        };
+    }
+
+    // Stage 0: go to the food.
     let s = w.thing(src)?;
     match go_to(w, p, Goal::Cell(s.pos)) {
         Go::Failed => None,
-        Go::Moving => Some(Job::Eat { src, t }),
+        Go::Moving => Some(Job::Eat { src, t, seat, stage }),
         Go::Arrived => {
-            if t < 90 {
-                return Some(Job::Eat { src, t: t + 1 });
+            if let Some(seat) = seat {
+                // Pick one portion up and take it to the seat.
+                if w.take_from_stack(src, 1) == 0 {
+                    return None;
+                }
+                p.carry = Some((s.def, 1));
+                return Some(Job::Eat { src, t: 0, seat: Some(seat), stage: 1 });
             }
-            let defs = w.defs.clone();
-            let nutrition = (defs.thing(s.def).food.as_ref()?.nutrition * NEED_MAX as f64) as i32;
+            if t < 90 {
+                return Some(Job::Eat { src, t: t + 1, seat, stage });
+            }
             if w.take_from_stack(src, 1) == 0 {
                 return None;
             }
-            let mut full = true;
-            for n in &mut p.needs {
-                if defs.need(n.0).satisfier == Satisfier::Food {
-                    n.1 = (n.1 + nutrition).min(NEED_MAX);
-                    full = n.1 >= NEED_MAX * 9 / 10;
-                }
-            }
+            let full = eat(p, s.def);
             if full || w.thing(src).is_none() {
                 None
             } else {
-                Some(Job::Eat { src, t: 0 })
+                Some(again(src, None))
             }
         }
     }
@@ -854,11 +944,12 @@ fn run_sleep(w: &mut World, e: Entity, p: &mut Pawn, bed: Option<Entity>, spot: 
     }
     let defs = w.defs.clone();
     if stage == 0 {
-        let (goal, rate) = match bed.and_then(|b| w.thing(b)) {
-            Some(b) => (Goal::Cell(b.pos), (defs.thing(b.def).bed.as_ref()?.rest_rate * 100.0) as u32),
-            None => (Goal::Cell(spot), 100),
+        let rate = match bed.and_then(|b| w.thing(b)) {
+            Some(b) => (defs.thing(b.def).bed.as_ref()?.rest_rate * 100.0) as u32,
+            None if bed.is_some() => return None, // the bed went away
+            None => 100,
         };
-        return match go_to(w, p, goal) {
+        return match go_to(w, p, Goal::Cell(spot)) {
             Go::Failed => None,
             Go::Moving => Some(Job::Sleep { bed, spot, stage }),
             Go::Arrived => {
