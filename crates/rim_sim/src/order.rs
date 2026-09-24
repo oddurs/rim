@@ -52,6 +52,9 @@ pub fn resolve(w: &World, pawn: Entity, cell: IVec, on: Option<Entity>) -> Optio
         if let Some(o) = w.map.fixture_at(cell).and_then(|f| fixture(w, pawn, from, f)) {
             return Some(o);
         }
+        if let Some(o) = w.map.floor_at(cell).and_then(|f| fixture(w, pawn, from, f)) {
+            return Some(o);
+        }
         if let Some(o) = w.map.item_at(cell).and_then(|i| item(w, from, i)) {
             return Some(o);
         }

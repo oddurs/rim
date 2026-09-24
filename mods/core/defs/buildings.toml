@@ -54,6 +54,19 @@ bed = { rest_rate = 1.8 }
 spots = [{ dx = 0, dy = 0 }]
 build = { menu = "furniture", work = 500, stuff = { category = "structural", count = 25 } }
 
+# Built ground. It lives under everything else and only changes what a
+# step costs: two of anything structural makes a floor faster than grass.
+[[thing]]
+id = "floor"
+label = "floor"
+color = "#a08a6a"
+category = "floor"
+shape = "floor"
+path_cost = 70
+hp = 60
+market_value = 3
+build = { menu = "structure", work = 60, stuff = { category = "structural", count = 2 } }
+
 # Furniture is passable at a cost rather than blocking: a chair has to be
 # stood on to be sat in, and a blocking piece inside a room would count as
 # part of its boundary. Every piece is built of whatever is structural.

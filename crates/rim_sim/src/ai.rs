@@ -821,11 +821,18 @@ pub fn complete_building(w: &mut World, bp: Entity) {
     let Some(t) = w.thing(bp) else { return };
     let _ = w.ecs.remove_one::<Blueprint>(bp);
     let td = w.defs.thing(t.def);
-    let (blocks, cost, door) = (td.blocks, td.path_cost, td.door);
-    w.map.set_fixture(t.pos, Some(bp), blocks, cost, door);
     // The colony built it, so the colony owns it. A door only opens for
     // its owner; everyone else has to come through it the hard way.
     let _ = w.ecs.insert_one(bp, Owner(Faction::Player));
+    if td.category == crate::defs::Category::Floor {
+        w.map.set_floor(t.pos, Some(bp), td.path_cost);
+        let defs = w.defs.clone();
+        w.fields.add_emitters(&defs, &w.map, bp, t.def, t.pos);
+        w.events.push(GameEvent::BuildingComplete { id: bp, def: t.def, pos: t.pos });
+        return;
+    }
+    let (blocks, cost, door) = (td.blocks, td.path_cost, td.door);
+    w.map.set_fixture(t.pos, Some(bp), blocks, cost, door);
     w.map.set_owner(t.pos, Some(Faction::Player));
     let defs = w.defs.clone();
     w.fields.add_emitters(&defs, &w.map, bp, t.def, t.pos);

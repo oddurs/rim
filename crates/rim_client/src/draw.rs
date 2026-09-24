@@ -111,12 +111,18 @@ pub fn world(app: &App) -> Counts {
     }
 
     let t = get_time() as f32;
-    // Items first, then fixtures on top.
-    for layer in 0..2 {
+    // Floors, then items, then fixtures on top.
+    for layer in 0..3 {
         for ty in ty0..=ty1 {
             for tx in tx0..=tx1 {
                 let i = (ty * w.map.w + tx) as usize;
-                let Some(e) = (if layer == 0 { w.map.item[i] } else { w.map.fixture[i] }) else { continue };
+                let Some(e) = (match layer {
+                    0 => w.map.floor[i],
+                    1 => w.map.item[i],
+                    _ => w.map.fixture[i],
+                }) else {
+                    continue;
+                };
                 let Ok(th) = w.ecs.get::<&Thing>(e) else { continue };
                 let td = defs.thing(th.def);
                 // A thing built of something is drawn in that something's
@@ -194,6 +200,12 @@ pub fn world(app: &App) -> Counts {
                             z * 0.22,
                             Color::from_rgba(230, 225, 210, 255),
                         );
+                    }
+                    Shape::Floor => {
+                        // Flat, in the material's colour, with a faint tile seam.
+                        draw_rectangle(sx, sy, z + 0.5, z + 0.5, shade(c, 0.92));
+                        draw_line(sx, sy + z / 2.0, sx + z, sy + z / 2.0, 1.0, shade(c, 0.82));
+                        draw_line(sx + z / 2.0, sy, sx + z / 2.0, sy + z, 1.0, shade(c, 0.82));
                     }
                     Shape::Table => {
                         // A slab on two legs.

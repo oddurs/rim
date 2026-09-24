@@ -14,6 +14,11 @@ pub struct Map {
     pub terrain_cost: Vec<u16>,
     pub fixture: Vec<Option<Entity>>,
     pub item: Vec<Option<Entity>>,
+    /// Built ground, under both. A floor never blocks, bounds or stops a
+    /// field; it only changes what a step costs.
+    pub floor: Vec<Option<Entity>>,
+    /// The floor's move cost, standing in for the terrain's; 0 = no floor.
+    floor_cost: Vec<u16>,
     fix_block: Vec<bool>,
     fix_cost: Vec<u16>,
     fix_door: Vec<bool>,
@@ -78,6 +83,8 @@ impl Map {
             terrain_cost: vec![100; n],
             fixture: vec![None; n],
             item: vec![None; n],
+            floor: vec![None; n],
+            floor_cost: vec![0; n],
             fix_block: vec![false; n],
             fix_cost: vec![0; n],
             fix_door: vec![false; n],
@@ -120,7 +127,8 @@ impl Map {
     #[inline]
     pub fn cost(&self, p: IVec) -> u32 {
         let i = self.idx(p);
-        self.terrain_cost[i] as u32 + self.fix_cost[i] as u32
+        let ground = if self.floor_cost[i] > 0 { self.floor_cost[i] } else { self.terrain_cost[i] };
+        ground as u32 + self.fix_cost[i] as u32
     }
 
     pub fn set_terrain(&mut self, p: IVec, def: DefId, cost: u32) {
@@ -168,6 +176,22 @@ impl Map {
         } else {
             None
         }
+    }
+    pub fn floor_at(&self, p: IVec) -> Option<Entity> {
+        if self.inb(p) {
+            self.floor[self.idx(p)]
+        } else {
+            None
+        }
+    }
+
+    /// Lay or lift a floor. `cost` 0 is a floor that changes nothing yet
+    /// (a blueprint). Passability never changes, so no region rebuild.
+    pub fn set_floor(&mut self, p: IVec, e: Option<Entity>, cost: u32) {
+        let i = self.idx(p);
+        self.floor[i] = e;
+        self.floor_cost[i] = if e.is_some() { cost.min(u16::MAX as u32) as u16 } else { 0 };
+        self.revision += 1;
     }
 
     pub fn ensure_regions(&mut self) {
