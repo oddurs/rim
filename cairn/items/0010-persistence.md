@@ -13,4 +13,4 @@ api: none
 due: 2026-11-20
 ---
 
-Save/load that survives mod changes, and replays from seed + command log.
+The log is the save and snapshots are a cache (DESIGN.md §7a): a colony is always saved, loads fast, survives mod changes, and replays exactly.

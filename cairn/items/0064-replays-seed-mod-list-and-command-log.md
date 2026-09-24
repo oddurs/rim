@@ -1,11 +1,11 @@
 ---
 id: 38722b6e-b300-4282-93d7-b1399a6f60eb
-title: 'Replays: seed, mod list and command log'
+title: 'Replays: run an epoch from its root, checked at every checkpoint'
 type: feature
 status: backlog
 milestone: persistence
 depends_on:
-- c7e9ab80-43d1-4121-8e75-e2dcb9bf3340
+- d0524477-919e-4bd6-952e-95ff0d6bb58d
 created: 2026-09-22
 updated: 2026-09-22
 priority: p1
@@ -19,10 +19,16 @@ pillar:
 
 ## Why
 
-Bug reports become exact reproductions.
+Bug reports become exact reproductions. In the save file a replay is just an
+epoch: its root, its lockfile and its log (DESIGN.md §7a).
+
+## What
+
+A headless runner (`--replay save.rim`) that runs an epoch from its root and
+checks the state hash at every checkpoint the log recorded, reporting the
+first tick that diverges.
 
 ## Acceptance criteria
 
 - [ ] Replay reaches the same state hash at every checkpoint
-
-Once 0152 lands, the mod list in a replay is the modlist lockfile, so a replay pins exact mod versions and hashes.
+- [ ] A divergence names the tick and the sections that differ

@@ -49,3 +49,7 @@ Constraint from DESIGN.md §10: def and component keys are namespaced (`mod:id`,
 ## 2026-09-23
 
 From the Weather sprint (0179): saves must carry the calendar, the regime queue and blend, active ambient pushes, stock field grids (i16/i32 arrays, compress well), plant Growth components, and the wind exposure octant (or recompute it on load). Stock fields are mod-declared, so they save keyed by field id like components.
+
+## 2026-09-24
+
+Amended 2026-09-24 (DESIGN.md §7a): the log is the save and snapshots are a cache, in one file, with an epoch started when the engine or mod list changes. The snapshot contents above stand, with two changes: components are stored one section per component (not per entity), so a mod's data can be parked, migrated and deduplicated whole; and entities keep a world-owned Uid instead of save-local numbers, because the log must name the same entity across a load (b04a908e).
