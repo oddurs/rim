@@ -387,6 +387,11 @@ a version the engine does not provide. It also refuses one naming a `ui.`,
 
 ## Devtools and hot reload
 
+`cargo test -p rim_ui --test shots -- --ignored` writes PNGs of the HUD, the
+palette, devtools, the gallery and the profiler to `target/ui-shots/`, drawn
+by a small software rasteriser from the engine's draw list. It is the way to
+look at a panel from a test, without a window.
+
 - **F12** opens devtools. Point at anything to see its id, which mod made it,
   and its layout box. **Outlines** draws every layout box, the tree lists the
   whole UI with owners, and **Kit gallery** shows every component.

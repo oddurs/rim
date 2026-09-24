@@ -49,7 +49,7 @@ ui.define("core:devtools", function(view)
 			label(r.owner, { size = "small", color = "faint" }),
 		}))
 	end
-	table.insert(rows, { kind = "scroll", h = 320, gap = 0, table.unpack(tree) })
+	table.insert(rows, { kind = "scroll", maxh = 320, gap = 0, table.unpack(tree) })
 	return kit.panel({ id = "core:devtools.panel", w = 400, gap = "s" }, rows)
 end)
 ui.mount("right", "core:devtools", { align = "start", order = -10 })

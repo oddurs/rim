@@ -1,6 +1,8 @@
 //! Shared setup for UI engine tests: a real simulation, core's real UI.
 #![allow(dead_code)]
 
+pub mod raster;
+
 use rim_sim::Sim;
 use rim_ui::view::{ClientView, ToolView};
 use rim_ui::{Input, Output, Ui};
