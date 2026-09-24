@@ -22,6 +22,9 @@ fn dtrue() -> bool {
 fn d1f() -> f64 {
     1.0
 }
+fn d075() -> f64 {
+    0.75
+}
 fn dsize() -> f32 {
     0.35
 }
@@ -183,6 +186,9 @@ pub struct BuildDef {
     #[serde(default)]
     pub stuff: Option<StuffCost>,
     pub work: u32,
+    /// Fraction of the cost that comes back when it is taken down.
+    #[serde(default = "d075")]
+    pub refund: f64,
     /// Toolbar group.
     #[serde(default)]
     pub menu: String,
@@ -520,9 +526,13 @@ fn d_one() -> f64 {
 #[derive(Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum Targets {
+    /// Things with a harvest def that names this designation.
     #[default]
     Thing,
+    /// Wild creatures that can be butchered.
     Creature,
+    /// Things the colony built: walls, doors, furniture.
+    Built,
 }
 
 #[derive(Deserialize, Clone, Debug)]

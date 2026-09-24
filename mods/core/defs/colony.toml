@@ -45,6 +45,12 @@ label = "Harvest"
 color = "#d64a6a"
 
 [[designation]]
+id = "deconstruct"
+label = "Deconstruct"
+color = "#c9a24a"
+targets = "built"
+
+[[designation]]
 id = "hunt"
 label = "Hunt"
 color = "#e05030"

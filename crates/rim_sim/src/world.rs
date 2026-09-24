@@ -73,6 +73,11 @@ pub enum Job {
     Construct {
         bp: Entity,
     },
+    /// Take a built thing down and get some of it back.
+    Deconstruct {
+        target: Entity,
+        work: u32,
+    },
     Eat {
         src: Entity,
         t: u32,
@@ -117,6 +122,7 @@ impl Job {
             Job::Harvest { .. } => "harvesting",
             Job::Deliver { .. } => "hauling materials",
             Job::Construct { .. } => "building",
+            Job::Deconstruct { .. } => "deconstructing",
             Job::Eat { .. } => "eating",
             Job::Sleep { stage: 1, .. } => "sleeping",
             Job::Sleep { .. } => "going to sleep",
@@ -653,6 +659,18 @@ impl World {
                 self.fields.set_boundary(fi, r as u32 + 1, leak_sum / cells.len() as f64, pass_sum.min(1.0));
             }
         }
+    }
+
+    /// What a built thing cost, in what it was made of: the material and
+    /// count for stuff, the recipe otherwise. None for anything not built.
+    pub fn cost_of(&self, e: Entity) -> Option<Vec<(DefId, u32)>> {
+        let t = self.ecs.get::<&Thing>(e).ok()?;
+        let b = self.defs.thing(t.def).build.as_ref()?;
+        Some(match (&b.stuff, self.ecs.get::<&MadeOf>(e).ok().map(|m| m.0)) {
+            (Some(sc), Some(m)) => vec![(m, sc.count)],
+            (Some(_), None) => Vec::new(), // built of nothing we know: nothing to give back
+            (None, _) => b.cost_r.clone(),
+        })
     }
 
     // ------------------------------------------------------------ stats
