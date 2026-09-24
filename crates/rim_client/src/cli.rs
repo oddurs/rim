@@ -72,8 +72,10 @@ const CHECK_USAGE: &str = "usage: rim check [MOD_DIR ...] [--hours H] [--strict]
 
 Loads each mod with its dependencies, runs a few in-game hours, and reports
 load errors, warnings (patch conflicts, skipped patches, determinism hazards)
-and script errors. With no MOD_DIR, checks every mod in ./mods. Exits 1 on
-an error, or on a warning with --strict.";
+and script errors. Its UI scripts are checked against the UI API: a ui_api
+the engine lacks, or a ui., act. or view. member that does not exist, is an
+error naming the file and line. With no MOD_DIR, checks every mod in ./mods.
+Exits 1 on an error, or on a warning with --strict.";
 
 /// `rim check`: returns the process exit code.
 pub fn check(args: &[String]) -> i32 {
@@ -114,20 +116,25 @@ pub fn check(args: &[String]) -> i32 {
                 failed = true;
             }
             Ok(r) => {
-                let bad = !r.errors.is_empty() || (strict && !r.warnings.is_empty());
+                let ui = rim_ui::check::check_mod_ui(dir);
+                let bad = !r.errors.is_empty() || !ui.is_empty() || (strict && !r.warnings.is_empty());
                 let mark = if bad { "FAIL" } else { "ok  " };
                 println!(
-                    "{mark} {} (with {}): {} warnings, {} script errors",
+                    "{mark} {} (with {}): {} warnings, {} script errors, {} UI errors",
                     r.mod_id,
                     r.mods.join(", "),
                     r.warnings.len(),
-                    r.errors.len()
+                    r.errors.len(),
+                    ui.len()
                 );
                 for w in &r.warnings {
                     println!("  warning: {w}");
                 }
                 for e in &r.errors {
                     println!("  error: {}", e.lines().next().unwrap_or_default());
+                }
+                for e in &ui {
+                    println!("  error: {e}");
                 }
                 failed |= bad;
             }
