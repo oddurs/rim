@@ -10,6 +10,11 @@ local BUBBLE_TICKS = 900 -- how long a "hello" stays up, in game ticks
 
 local COLOR = { player = "player", hostile = "hostile", wild = "text" }
 
+-- How many pawns get labels in one frame. A crowd of two hundred names is
+-- unreadable, and building them all was the frame; the engine caps what
+-- it places too, but not building the rest is where the time goes.
+local LABEL_CAP = 48
+
 ui.define("core:labels", function(view)
 	local out = {}
 	local recent = {}
@@ -19,15 +24,30 @@ ui.define("core:labels", function(view)
 			recent[ev.id] = ev.name
 		end
 	end
+	-- Pick who gets a label before building any: the selected and hovered
+	-- first, then colonists, then hostiles; a greeting always shows.
+	local cands = {}
 	for _, p in view.visible_pawns() do
-		-- Colonists are always named; others only when you point at them.
 		local named = p.faction == "player" or p.selected or p.hovered
-		if named then
-			local priority = if p.selected then 3 elseif p.faction == "player" then 2 elseif p.faction == "hostile" then 1 else 0
+		local greeted = recent[p.id] ~= nil
+		if named or greeted or p.asleep then
+			local priority = if greeted then 4 elseif p.selected or p.hovered then 3 elseif p.faction == "player" then 2 elseif p.faction == "hostile" then 1 else 0
+			table.insert(cands, { p = p, named = named, priority = priority })
+		end
+	end
+	table.sort(cands, function(a, b)
+		return a.priority > b.priority
+	end)
+	for i, c in cands do
+		if i > LABEL_CAP then
+			break
+		end
+		local p = c.p
+		if c.named then
 			table.insert(out, {
 				kind = "anchored",
 				entity = p.id,
-				priority = priority,
+				priority = c.priority,
 				offset = p.radius + 4,
 				kit.label(p.name, { size = "small", color = COLOR[p.faction] or "text", weight = if p.selected then "strong" else nil }),
 			})

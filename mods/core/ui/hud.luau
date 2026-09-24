@@ -44,9 +44,13 @@ ui.define("core:status", function(view)
 	return row({ gap = "l", align = "center" }, parts)
 end)
 
+-- The bar shows this many colonists and counts the rest: two hundred
+-- buttons is neither readable nor within the frame budget.
+local COLONIST_BAR_MAX = 24
+
 ui.define("core:colonists", function(view)
 	local items = {}
-	for _, p in view.colonists() do
+	for _, p in view.colonists(COLONIST_BAR_MAX) do
 		local health = if p.health > 0.5 then "good" else "bad"
 		table.insert(
 			items,
@@ -63,6 +67,10 @@ ui.define("core:colonists", function(view)
 				end,
 			})
 		)
+	end
+	local total = view.count_pawns("player")
+	if total > COLONIST_BAR_MAX then
+		table.insert(items, label(string.format(t("core:colonists.more", "+%d"), total - COLONIST_BAR_MAX), { size = "small", color = "muted" }))
 	end
 	return row({ gap = "xs", align = "center" }, items)
 end)

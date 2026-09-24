@@ -676,11 +676,11 @@ impl UiVm {
         view!("hint", (), |_lua, l, _a| Ok(l.client.hint.clone()));
         view!("screen", (), |_lua, l, _a| Ok((l.client.screen.0, l.client.screen.1)));
 
-        view!("colonists", (), |lua, l, _a| {
+        view!("colonists", Option<usize>, |lua, l, max| {
             let t = lua.create_table()?;
-            for e in l.world.colonists() {
+            for e in l.world.colonists().take(max.unwrap_or(usize::MAX)) {
                 if let Some(p) = pawn_table(lua, l.world, l.client, e)? {
-                    t.push(p)?;
+                    t.raw_push(p)?;
                 }
             }
             Ok(t)
@@ -714,17 +714,17 @@ impl UiVm {
                     continue;
                 }
                 let cd = l.world.defs.creature(p.def);
-                let row = lua.create_table()?;
-                row.set("id", e.to_bits().get())?;
-                row.set("name", if cd.intelligent { p.name.as_str() } else { cd.label.as_str() })?;
-                row.set("faction", p.faction.name())?;
-                row.set("intelligent", cd.intelligent)?;
-                row.set("asleep", p.asleep)?;
-                row.set("selected", l.client.selected == Some(e))?;
-                row.set("hovered", l.client.hover_pawn == Some(e))?;
+                let row = lua.create_table_with_capacity(0, 8)?;
+                row.raw_set("id", e.to_bits().get())?;
+                row.raw_set("name", if cd.intelligent { p.name.as_str() } else { cd.label.as_str() })?;
+                row.raw_set("faction", p.faction.name())?;
+                row.raw_set("intelligent", cd.intelligent)?;
+                row.raw_set("asleep", p.asleep)?;
+                row.raw_set("selected", l.client.selected == Some(e))?;
+                row.raw_set("hovered", l.client.hover_pawn == Some(e))?;
                 // Logical pixels, like every size a component writes.
-                row.set("radius", cd.size * l.client.cam.2 / l.client.scale.max(0.1))?;
-                t.push(row)?;
+                row.raw_set("radius", cd.size * l.client.cam.2 / l.client.scale.max(0.1))?;
+                t.raw_push(row)?;
             }
             Ok(t)
         });
@@ -1425,32 +1425,32 @@ fn pawn_table(lua: &Lua, w: &World, client: &ClientView, e: Entity) -> mlua::Res
     }
     let defs = &w.defs;
     let cd = defs.creature(p.def);
-    let t = lua.create_table()?;
-    t.set("id", e.to_bits().get())?;
-    t.set("name", p.name.as_str())?;
-    t.set("label", cd.label.as_str())?;
-    t.set("faction", p.faction.name())?;
-    t.set("player", p.faction == Faction::Player)?;
-    t.set("founder", p.founder)?;
-    t.set("drafted", p.drafted)?;
-    t.set("asleep", p.asleep)?;
-    t.set("hp", p.hp.max(0))?;
-    t.set("max_hp", cd.max_hp)?;
-    t.set("health", (p.hp.max(0) as f64 / cd.max_hp as f64).clamp(0.0, 1.0))?;
-    t.set("job", rim_sim::order::job_text(w, &p))?;
-    t.set("selected", client.selected == Some(e))?;
-    let needs = lua.create_table()?;
+    let t = lua.create_table_with_capacity(0, 14)?;
+    t.raw_set("id", e.to_bits().get())?;
+    t.raw_set("name", p.name.as_str())?;
+    t.raw_set("label", cd.label.as_str())?;
+    t.raw_set("faction", p.faction.name())?;
+    t.raw_set("player", p.faction == Faction::Player)?;
+    t.raw_set("founder", p.founder)?;
+    t.raw_set("drafted", p.drafted)?;
+    t.raw_set("asleep", p.asleep)?;
+    t.raw_set("hp", p.hp.max(0))?;
+    t.raw_set("max_hp", cd.max_hp)?;
+    t.raw_set("health", (p.hp.max(0) as f64 / cd.max_hp as f64).clamp(0.0, 1.0))?;
+    t.raw_set("job", rim_sim::order::job_text(w, &p))?;
+    t.raw_set("selected", client.selected == Some(e))?;
+    let needs = lua.create_table_with_capacity(p.needs.len(), 0)?;
     for &(nid, v) in &p.needs {
         let nd = defs.need(nid);
-        let row = lua.create_table()?;
-        row.set("id", nd.id.as_str())?;
-        row.set("label", nd.label.as_str())?;
-        row.set("value", v as f64 / NEED_MAX as f64)?;
-        row.set("color", format!("#{:02x}{:02x}{:02x}", nd.rgb[0], nd.rgb[1], nd.rgb[2]))?;
-        row.set("low", v < (nd.seek_below * NEED_MAX as f64) as i32 && nd.satisfier != Satisfier::Rest)?;
-        needs.push(row)?;
+        let row = lua.create_table_with_capacity(0, 5)?;
+        row.raw_set("id", nd.id.as_str())?;
+        row.raw_set("label", nd.label.as_str())?;
+        row.raw_set("value", v as f64 / NEED_MAX as f64)?;
+        row.raw_set("color", format!("#{:02x}{:02x}{:02x}", nd.rgb[0], nd.rgb[1], nd.rgb[2]))?;
+        row.raw_set("low", v < (nd.seek_below * NEED_MAX as f64) as i32 && nd.satisfier != Satisfier::Rest)?;
+        needs.raw_push(row)?;
     }
-    t.set("needs", needs)?;
+    t.raw_set("needs", needs)?;
     Ok(Some(t))
 }
 

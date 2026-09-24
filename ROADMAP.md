@@ -247,14 +247,13 @@ Making a mod feels like publishing a small open-source library: rim new, typed L
 
 ## scale — Scale
 
-`#·········` 8% · 1 of 12 done · due 2027-03-15
+`##········` 17% · 2 of 12 done · due 2027-03-15
 
 Hit the performance budget: benchmark harness, hierarchical pathing, flow fields, spatial indices, incremental regions, render caching.
 
 - [ ] `1415721a` Water flow: runoff, puddles and floods <sup>feature · p3 · l · engine</sup>
 - [ ] `277ff6f2` Hierarchical pathfinding <sup>perf · p1 · l · engine</sup>
 - [ ] `66906291` Incremental region updates <sup>perf · p2 · m · engine</sup>
-- [ ] `8ee7a610` Anchored labels capped by priority inside the viewport <sup>perf · p2 · s · engine</sup>
 - [ ] `91de1172` Parallel systems where read and write sets allow <sup>spike · p2 · m · engine</sup>
 - [ ] `96d2dac9` Chunks: one dirty unit for regions, fields and the renderer <sup>perf · p2 · m · engine</sup>
 - [ ] `a353667b` Flow fields for raid groups <sup>perf · p2 · m · engine</sup>
@@ -262,6 +261,7 @@ Hit the performance budget: benchmark harness, hierarchical pathing, flow fields
 - [ ] `dab55ea2` Meet the budget: 6x speed at 60 fps <sup>perf · p0 · l · engine</sup>
 - [ ] `e3c1f87b` Chunked terrain render caching <sup>perf · p1 · m · client</sup>
 - [ ] `fbf3ee1c` Spatial index for things by def <sup>perf · p1 · m · engine</sup>
+- [x] `8ee7a610` Anchored labels capped by priority inside the viewport <sup>perf · p2 · s · engine</sup>
 - [x] `ee7fe7fd` Benchmark harness: target map, 30 colonists, 200 pawns <sup>perf · p0 · m · tooling</sup>
 
 ## platform — Modding platform
