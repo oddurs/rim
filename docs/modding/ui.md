@@ -126,6 +126,10 @@ Press **F12** and then **Kit gallery** to see every component in every state.
 | `view.fields()`, `view.hover()`, `view.overlay()` | Field layers; what's under the cursor; the active overlay |
 | `view.tools()`, `view.hint()` | Toolbar entries; what a right-click would do |
 | `view.profile()`, `view.stats()`, `view.mods()`, `view.warnings()` | Profiler and load information |
+| `view.date()` | `{ year, season, day, day_of_year, year_days }` |
+| `view.ambient(field)`, `view.explain(field)` | A field's outdoor value; each term and push that makes it up |
+| `view.data(key)` | Data a sim script stored with `rim.set_data` (the weather plugin's forecast is `"weather:forecast"`) |
+| `view.ticks_per_day()` | For turning ticks into hours |
 | `view.time()` | Wall-clock seconds, for animation |
 
 ## Doing things: `act`

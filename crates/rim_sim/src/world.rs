@@ -1,13 +1,15 @@
 //! World state: the ECS, the map, the RNG and the clock.
 
+use crate::data::Data;
 use crate::defs::*;
-use crate::field::Fields;
+use crate::field::{Clock, Fields};
 use crate::map::Map;
 use crate::path::{Goal, Pathfinder};
 use crate::rng::Rng;
+use crate::terms::Q;
 use crate::{IVec, TICKS_PER_DAY};
 use hecs::Entity;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
 /// Needs are stored as integers in `0..=NEED_MAX`.
@@ -219,11 +221,43 @@ pub struct Message {
 /// Things scripts can listen to with `rim.on(name, fn)`.
 #[derive(Clone, Debug)]
 pub enum GameEvent {
-    PawnJoined { id: Entity, name: String, def: DefId },
-    PawnDied { id: Entity, name: String, def: DefId, faction: Faction, pos: IVec },
-    PawnLeft { id: Entity, name: String, def: DefId, faction: Faction },
-    BuildingComplete { id: Entity, def: DefId, pos: IVec },
-    NewDay { day: u64 },
+    PawnJoined {
+        id: Entity,
+        name: String,
+        def: DefId,
+    },
+    PawnDied {
+        id: Entity,
+        name: String,
+        def: DefId,
+        faction: Faction,
+        pos: IVec,
+    },
+    PawnLeft {
+        id: Entity,
+        name: String,
+        def: DefId,
+        faction: Faction,
+    },
+    BuildingComplete {
+        id: Entity,
+        def: DefId,
+        pos: IVec,
+    },
+    NewDay {
+        day: u64,
+    },
+    /// A new season began (`season` is its name from the calendar).
+    SeasonChanged {
+        season: String,
+        index: u32,
+        year: u64,
+    },
+    /// Sent by a script with `rim.emit(name, data)`.
+    Script {
+        name: String,
+        data: Option<Data>,
+    },
     ColonyLost,
 }
 
@@ -251,6 +285,8 @@ pub struct World {
     /// "joined", "died", "left". Not part of the simulation state.
     pub recent_events: Vec<(u64, &'static str, Entity, String)>,
     pub colony_lost: bool,
+    /// State that scripts keep in the world (`rim.set_data`), by key.
+    pub data: BTreeMap<String, Data>,
 }
 
 impl World {
@@ -273,6 +309,7 @@ impl World {
             hits: Vec::new(),
             recent_events: Vec::new(),
             colony_lost: false,
+            data: BTreeMap::new(),
         }
     }
 
@@ -285,6 +322,54 @@ impl World {
     pub fn hour(&self) -> f64 {
         ((self.tick + TICKS_PER_DAY / 4) % TICKS_PER_DAY) as f64 / TICKS_PER_DAY as f64 * 24.0
     }
+    /// Ticks since the start of the year the game began in.
+    fn year_ticks(&self) -> u64 {
+        self.defs.calendar.start_day as u64 * TICKS_PER_DAY + self.tick
+    }
+    /// The season at another tick (for noticing that one began).
+    pub fn season_index_at(&self, tick: u64) -> u32 {
+        let c = &self.defs.calendar;
+        let doy = (c.start_day as u64 * TICKS_PER_DAY + tick) % self.year_len() / TICKS_PER_DAY;
+        (doy * c.seasons.len() as u64 / c.year_days as u64) as u32
+    }
+    fn year_len(&self) -> u64 {
+        self.defs.calendar.year_days as u64 * TICKS_PER_DAY
+    }
+    /// Day of the year, 0-based.
+    pub fn day_of_year(&self) -> u32 {
+        ((self.year_ticks() % self.year_len()) / TICKS_PER_DAY) as u32
+    }
+    /// Years since the game began, 0-based.
+    pub fn year(&self) -> u64 {
+        self.year_ticks() / self.year_len()
+    }
+    /// Index of the current season in the calendar.
+    pub fn season_index(&self) -> u32 {
+        self.season_index_at(self.tick)
+    }
+    pub fn season(&self) -> &str {
+        &self.defs.calendar.seasons[self.season_index() as usize]
+    }
+    /// Day within the current season, 1-based.
+    pub fn day_of_season(&self) -> u32 {
+        let c = &self.defs.calendar;
+        let n = c.seasons.len() as u32;
+        let start = (self.season_index() * c.year_days).div_ceil(n);
+        self.day_of_year() - start + 1
+    }
+    /// The clock as terms see it: fraction of the year and hour of day in
+    /// fixed point.
+    pub fn clock(&self) -> Clock {
+        let yl = self.year_len();
+        Clock {
+            tick: self.tick,
+            year: ((self.year_ticks() % yl) as i128 * Q as i128 / yl as i128) as i64,
+            hour: (((self.tick + TICKS_PER_DAY / 4) % TICKS_PER_DAY) as i128 * 24 * Q as i128 / TICKS_PER_DAY as i128)
+                as i64,
+            seed: self.seed,
+        }
+    }
+
     pub fn is_night(&self) -> bool {
         let h = self.hour();
         !(6.0..21.0).contains(&h)
@@ -504,6 +589,16 @@ impl World {
             h = h.wrapping_add(crate::rng::mix(
                 (t.def as u64) << 40 ^ (t.pos.x as u64) << 20 ^ t.pos.y as u64 ^ (t.count as u64) << 56,
             ));
+        }
+        for a in &self.fields.atmos {
+            h = crate::rng::mix(h ^ a.value as u64 ^ a.pin.map_or(0, |p| p as u64 ^ 0x9111));
+            for p in &a.pushes {
+                h = crate::rng::mix(h ^ p.to as u64 ^ p.start << 1 ^ p.until.unwrap_or(7));
+                h = p.key.bytes().fold(h, |h, b| crate::rng::mix(h ^ b as u64));
+            }
+        }
+        for (k, v) in &self.data {
+            h = v.hash(k.bytes().fold(h, |h, b| crate::rng::mix(h ^ b as u64)));
         }
         h
     }

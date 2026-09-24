@@ -5,6 +5,7 @@
 
 pub mod ai;
 pub mod command;
+pub mod data;
 pub mod defs;
 pub mod field;
 pub mod map;
@@ -17,6 +18,7 @@ pub mod rng;
 pub mod script;
 pub mod sim;
 pub mod systems;
+pub mod terms;
 pub mod world;
 
 pub use command::Command;

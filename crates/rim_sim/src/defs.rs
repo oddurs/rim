@@ -4,8 +4,9 @@
 //! Unknown fields are ignored on purpose: a plugin may annotate another
 //! mod's defs with data that only it understands.
 
+use crate::terms::{InputDef, TermDef, Terms, TermsDef};
 use serde::Deserialize;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 pub type DefId = u16;
 
@@ -302,15 +303,30 @@ pub enum IndoorMode {
     Room,
 }
 
+/// A field's outdoor value: a constant, or labelled terms (see `terms`).
+#[derive(Deserialize, Clone, Debug)]
+#[serde(untagged)]
+pub enum AmbientDef {
+    Const(f64),
+    Terms(TermsDef),
+}
+
+impl Default for AmbientDef {
+    fn default() -> Self {
+        AmbientDef::Const(0.0)
+    }
+}
+
 #[derive(Deserialize, Clone, Debug)]
 pub struct FieldDef {
     pub id: String,
     pub label: String,
     #[serde(default)]
     pub unit: String,
-    /// Outdoor value until a script sets it.
+    /// Outdoor value: a constant, or terms over the time of day and year.
+    /// Plugins add named contributions on top (`rim.push_ambient`).
     #[serde(default)]
-    pub ambient: f64,
+    pub ambient: AmbientDef,
     #[serde(default)]
     pub indoor: IndoorMode,
     /// Room fields: fraction of the gap to outdoors closed per hour.
@@ -326,10 +342,116 @@ pub struct FieldDef {
     /// Show the outdoor value in the top bar.
     #[serde(default)]
     pub hud: bool,
+    /// Offer a map overlay (`O`). Off for values that are the same
+    /// everywhere, such as cloud cover.
+    #[serde(default = "dtrue")]
+    pub overlay: bool,
+    /// Compiled `ambient` terms (empty for a constant).
+    #[serde(skip)]
+    pub terms: Terms,
+    /// The constant part of `ambient` (0 when it's terms).
+    #[serde(skip)]
+    pub base: f64,
     #[serde(skip)]
     pub rgb_low: [u8; 3],
     #[serde(skip)]
     pub rgb_high: [u8; 3],
+}
+
+// ---------------------------------------------------------------- calendar
+
+fn d60() -> u32 {
+    60
+}
+
+/// The year: how long it is, what its seasons are called, and where the
+/// game starts in it. Core defines one; a plugin patches it.
+#[derive(Deserialize, Clone, Debug)]
+pub struct CalendarDef {
+    pub id: String,
+    #[serde(default = "d60")]
+    pub year_days: u32,
+    /// Equal parts of the year, in order.
+    #[serde(default)]
+    pub seasons: Vec<String>,
+    /// Day of the year (0-based) that the game starts on.
+    #[serde(default)]
+    pub start_day: u32,
+}
+
+impl Default for CalendarDef {
+    fn default() -> Self {
+        CalendarDef { id: "default".into(), year_days: 60, seasons: vec!["year".into()], start_day: 0 }
+    }
+}
+
+// ---------------------------------------------------------------- sky
+
+fn dnight() -> String {
+    "#4a5478".into()
+}
+fn dfire() -> String {
+    "#ffb060".into()
+}
+fn dshare() -> f64 {
+    0.45
+}
+
+/// How the renderer colours light. The sim ignores it: light is a scalar in
+/// the simulation, and colour is the renderer's business.
+#[derive(Deserialize, Clone, Debug)]
+pub struct SkyDef {
+    pub id: String,
+    /// Colour tints over the day, by label, so a mod can add one (a green
+    /// moon) without reshaping the others. Each is a colour and a strength
+    /// (terms over the hour, year and outdoor values, 0..1).
+    #[serde(default)]
+    pub tint: BTreeMap<String, TintDef>,
+    /// The darkest the world gets: moonlight and starlight.
+    #[serde(default = "dnight")]
+    pub night: String,
+    /// Colour of stamped light (fires).
+    #[serde(default = "dfire")]
+    pub firelight: String,
+    /// Share of daylight that reaches inside enclosed rooms, as if through
+    /// windows (the `light` field itself is 0 indoors).
+    #[serde(default = "dshare")]
+    pub indoor_share: f64,
+    #[serde(skip)]
+    pub rgb_night: [u8; 3],
+    #[serde(skip)]
+    pub rgb_fire: [u8; 3],
+}
+
+impl Default for SkyDef {
+    fn default() -> Self {
+        SkyDef {
+            id: "default".into(),
+            tint: BTreeMap::new(),
+            night: dnight(),
+            firelight: dfire(),
+            indoor_share: dshare(),
+            rgb_night: [74, 84, 120],
+            rgb_fire: [255, 176, 96],
+        }
+    }
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct TintDef {
+    pub color: String,
+    #[serde(default = "d_one")]
+    pub scale: f64,
+    #[serde(default)]
+    pub of: Vec<InputDef>,
+    #[serde(skip)]
+    pub rgb: [u8; 3],
+    #[serde(skip)]
+    pub strength: Terms,
+}
+
+fn d_one() -> f64 {
+    1.0
 }
 
 // ---------------------------------------------------------------- designations
@@ -387,12 +509,17 @@ pub struct DefDb {
     pub needs: Vec<NeedDef>,
     pub designations: Vec<DesignationDef>,
     pub fields: Vec<FieldDef>,
+    /// Fields in the order their ambient terms must be evaluated.
+    pub ambient_order: Vec<usize>,
+    pub calendar: CalendarDef,
+    pub sky: SkyDef,
     pub start: Option<StartDef>,
     pub names: Vec<String>,
     index: HashMap<(&'static str, String), DefId>,
 }
 
-pub const KINDS: &[&str] = &["terrain", "thing", "creature", "need", "designation", "field", "start", "names"];
+pub const KINDS: &[&str] =
+    &["terrain", "thing", "creature", "need", "designation", "field", "calendar", "sky", "start", "names"];
 
 impl DefDb {
     pub fn lookup(&self, kind: &'static str, id: &str) -> Option<DefId> {
@@ -448,9 +575,32 @@ impl DefDb {
         for d in &mut self.terrain {
             d.rgb = parse_color(&d.color).map_err(|e| format!("terrain/{}: {e}", d.id))?;
         }
+        let field_index = |id: &str| idx.get(&("field", id.to_string())).map(|&i| i as usize);
         for d in &mut self.fields {
             d.rgb_low = parse_color(&d.color_low).map_err(|e| format!("field/{}: {e}", d.id))?;
             d.rgb_high = parse_color(&d.color_high).map_err(|e| format!("field/{}: {e}", d.id))?;
+            match &d.ambient {
+                AmbientDef::Const(v) => d.base = *v,
+                AmbientDef::Terms(t) => d.terms = Terms::compile(t, &format!("field/{}", d.id), &field_index)?,
+            }
+        }
+        let reads: Vec<Vec<usize>> = self.fields.iter().map(|f| f.terms.reads()).collect();
+        let names: Vec<&str> = self.fields.iter().map(|f| f.id.as_str()).collect();
+        self.ambient_order = crate::terms::order(&reads, &names)?;
+        let c = &mut self.calendar;
+        c.year_days = c.year_days.max(1);
+        if c.seasons.is_empty() {
+            c.seasons.push("year".into());
+        }
+        c.start_day %= c.year_days;
+        let sky = &mut self.sky;
+        sky.rgb_night = parse_color(&sky.night).map_err(|e| format!("sky/{}: {e}", sky.id))?;
+        sky.rgb_fire = parse_color(&sky.firelight).map_err(|e| format!("sky/{}: {e}", sky.id))?;
+        for (label, t) in &mut sky.tint {
+            let ctx = format!("sky/{}, tint '{label}'", sky.id);
+            t.rgb = parse_color(&t.color).map_err(|e| format!("{ctx}: {e}"))?;
+            let one: TermsDef = [(label.clone(), TermDef { scale: t.scale, of: t.of.clone() })].into_iter().collect();
+            t.strength = Terms::compile(&one, &ctx, &field_index)?;
         }
         for d in &mut self.needs {
             d.rgb = parse_color(&d.color).map_err(|e| format!("need/{}: {e}", d.id))?;

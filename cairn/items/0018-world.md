@@ -7,10 +7,14 @@ status: planned
 depends_on:
 - 17
 created: 2026-09-22
-updated: 2026-09-22
+updated: 2026-09-23
 priority: p2
 api: none
 due: 2027-06-01
 ---
 
 The world beyond the map: factions, traders drawn by wealth, quests, taming.
+
+## 2026-09-23
+
+Biomes are a plugin that patches [climate] and adds weather regimes (DESIGN.md §4c). Filed as a follow-up of the Weather sprint.

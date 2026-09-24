@@ -35,3 +35,7 @@ DESIGN.md §7 says sim math is integer or fixed-point, but needs, wealth, colony
 - [ ] Inventory of every float in sim state and hot paths
 - [ ] Decision recorded in DESIGN.md §7, and the text there matches the code
 - [ ] Follow-up items for the conversion or the lint
+
+## 2026-09-23
+
+Weather (0179) is designed fixed point end to end: terms and curves in integer hundredths (0181), stock fields in i16/i32, noise from integer hashes. Needs (systems::needs) still compute field-driven drain in f64; audit that when the warmth need moves to feels_like (0189).

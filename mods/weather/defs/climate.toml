@@ -1,0 +1,26 @@
+# Seasons. Core's temperature is `mean + day`, the same every day of the
+# year; this bends both around the calendar, by label, so other mods can
+# patch the same terms. See DESIGN.md §4c.
+
+[[patch]]
+target = "field/temperature"
+
+# The year's mean: late spring (where the game starts) is core's 10°C;
+# midsummer 19°C; midwinter -6°C. x is the fraction of the year.
+[patch.set.ambient.mean]
+of = [{ input = "year", curve = [
+  [0.0, 6.0], [0.1333, 10.0], [0.2, 10.5], [0.375, 19.0],
+  [0.625, 9.0], [0.875, -6.0], [1.0, 6.0],
+] }]
+
+# The daily swing: a little wider in summer, narrower in winter, and damped
+# under cloud (cloudy nights stay warmer, cloudy days cooler).
+[patch.set.ambient.day]
+of = [
+  { input = "hour", curve = [
+    [0, -0.6875], [3, -1.0], [6, -0.6875], [9, 0.0], [12, 0.6875],
+    [15, 1.0], [18, 0.6875], [21, 0.0], [24, -0.6875],
+  ] },
+  { input = "year", curve = [[0.0, 1.0], [0.375, 1.1], [0.875, 0.7], [1.0, 1.0]] },
+  { ambient = "cloud", curve = [[0, 1.0], [100, 0.8]] },
+]

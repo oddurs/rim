@@ -1,12 +1,14 @@
 # Field layers: scalar values over the map. The engine stamps emitters
-# (things with `emit`), keeps room values for `indoor = "room"` fields, and
-# scripts set the outdoor `ambient` (see scripts/20_climate.luau).
+# (things with `emit`) and keeps room values for `indoor = "room"` fields.
+#
+# A field's outdoor `ambient` is a constant or a sum of labelled terms
+# (DESIGN.md §4c). Plugins add named contributions on top with
+# `rim.push_ambient`, and can patch any term by its label.
 
 [[field]]
 id = "temperature"
 label = "temperature"
 unit = "°C"
-ambient = 12.0
 indoor = "room"
 # Insulation: a sealed room closes 6% of the gap to outdoors per hour, so a
 # hut holds some of the day's warmth into the night.
@@ -19,13 +21,101 @@ color_low = "#3b6fd4"
 color_high = "#e0452b"
 hud = true
 
+# Core's climate: the same mild day every day of the year. The weather plugin
+# replaces `mean` with a seasonal curve and damps `day` under cloud.
+[field.ambient.mean]
+of = [10.0]
+
+# Warmest at 15:00, coldest at 03:00 (a smoothstep, sampled every 3 hours).
+[field.ambient.day]
+scale = 9.0
+of = [{ input = "hour", curve = [
+  [0, -0.6875], [3, -1.0], [6, -0.6875], [9, 0.0], [12, 0.6875],
+  [15, 1.0], [18, 0.6875], [21, 0.0], [24, -0.6875],
+] }]
+
+# The sky: how bright the sky bodies are, before weather. Core has one sun,
+# as a term a sky mod can patch or join (a second sun, a moon). Weather never
+# touches this field, so a modded sky keeps the cloud dimming in `light`.
+[[field]]
+id = "daylight"
+label = "daylight"
+unit = "%"
+range = [0.0, 100.0]
+color_low = "#0b0d1a"
+color_high = "#fff1a8"
+overlay = false
+
+# Full sun 08:00-18:00, dark 21:00-05:00, smooth ramps between.
+[field.ambient.sun]
+of = [{ input = "hour", curve = [
+  [5, 0.0], [6, 25.9], [7, 74.1], [8, 100.0],
+  [18, 100.0], [19, 74.1], [20, 25.9], [21, 0.0],
+] }]
+
+# Light that reaches the ground: the sky, dimmed by cloud (a storm is a dark
+# afternoon). Indoors is dark unless something lights it.
 [[field]]
 id = "light"
 label = "light"
 unit = "%"
-ambient = 100.0
-# Indoors is dark unless something lights it.
 indoor = "none"
 range = [0.0, 100.0]
 color_low = "#0b0d1a"
 color_high = "#fff1a8"
+
+[field.ambient.sky]
+of = [{ ambient = "daylight" }, { ambient = "cloud", curve = [[0, 1.0], [100, 0.55]] }]
+
+# The atmosphere. Core has no weather: these are the shared names that
+# weather plugins set and everything else (the renderer, farming, mood)
+# reads, so they don't have to depend on one another. See DESIGN.md §5.
+
+[[field]]
+id = "cloud"
+label = "cloud cover"
+unit = "%"
+range = [0.0, 100.0]
+color_low = "#6aa6e0"
+color_high = "#8c8f96"
+overlay = false
+
+[[field]]
+id = "precipitation"
+label = "precipitation"
+unit = "mm/h"
+# Nothing falls in an enclosed room.
+indoor = "none"
+range = [0.0, 10.0]
+color_low = "#1b2230"
+color_high = "#4d8fe0"
+overlay = false
+
+[[field]]
+id = "wind"
+label = "wind"
+unit = "m/s"
+indoor = "none"
+range = [0.0, 25.0]
+color_low = "#1b2230"
+color_high = "#b8d8e8"
+overlay = false
+
+[[field]]
+id = "wind_dir"
+label = "wind direction"
+# Degrees the wind blows toward: 0 = east, 90 = south (screen down).
+unit = "°"
+range = [0.0, 360.0]
+color_low = "#000000"
+color_high = "#ffffff"
+overlay = false
+
+[[field]]
+id = "fog"
+label = "fog"
+unit = "%"
+range = [0.0, 100.0]
+color_low = "#1b2230"
+color_high = "#c8ccd4"
+overlay = false

@@ -56,8 +56,14 @@ struct Entry {
 }
 
 pub fn load(mods_dir: &Path) -> Result<LoadedMods, String> {
+    load_only(mods_dir, &|_| true)
+}
+
+/// Load only the mods `enabled` accepts (by id). Tests use it to run core
+/// alone; a mod list in the launcher will too.
+pub fn load_only(mods_dir: &Path, enabled: &dyn Fn(&str) -> bool) -> Result<LoadedMods, String> {
     let mut warnings = Vec::new();
-    let manifests = discover(mods_dir)?;
+    let manifests: Vec<ModManifest> = discover(mods_dir)?.into_iter().filter(|m| enabled(&m.id)).collect();
     let order = sort(manifests)?;
 
     let mut entries: Vec<Entry> = Vec::new();
@@ -136,6 +142,8 @@ pub fn load(mods_dir: &Path) -> Result<LoadedMods, String> {
     }
 
     let mut defs = DefDb::default();
+    let mut calendars = 0;
+    let mut skies = 0;
     for e in entries.into_iter().filter(|e| !e.removed) {
         let ctx = format!("{}/{} (from {})", e.kind, e.id, e.origin);
         let v = toml::Value::Table(e.value);
@@ -147,6 +155,23 @@ pub fn load(mods_dir: &Path) -> Result<LoadedMods, String> {
             "need" => defs.needs.push(v.try_into().map_err(err)?),
             "designation" => defs.designations.push(v.try_into().map_err(err)?),
             "field" => defs.fields.push(v.try_into().map_err(err)?),
+            "calendar" => {
+                if calendars > 0 {
+                    return Err(format!(
+                        "{ctx}: only one [[calendar]] may exist; patch calendar/{} instead",
+                        defs.calendar.id
+                    ));
+                }
+                calendars += 1;
+                defs.calendar = v.try_into().map_err(err)?;
+            }
+            "sky" => {
+                if skies > 0 {
+                    return Err(format!("{ctx}: only one [[sky]] may exist; patch sky/{} instead", defs.sky.id));
+                }
+                skies += 1;
+                defs.sky = v.try_into().map_err(err)?;
+            }
             "start" => defs.start = Some(v.try_into().map_err(err)?),
             "names" => {
                 let n: NamesDef = v.try_into().map_err(err)?;

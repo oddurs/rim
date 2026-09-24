@@ -88,8 +88,8 @@ You start as *the warrior*: a strong fighter with nothing on them.
   from the map edge) protects them. Sleeping in a bed in an enclosed room
   restores rest fastest. This single mechanic gives the first hour its goal:
   *get four walls up before the second night.*
-- Temperature, roofs and seasons can deepen this later as a plugin. The core
-  only needs "enclosed or not".
+- Temperature, weather and seasons deepen this (§4a, §4c). Roofs, if ever
+  wanted, are a plugin: the core only needs "enclosed or not".
 
 ### Tension: roofs, or is enclosure enough?
 
@@ -120,8 +120,9 @@ a special case for each.
 
 - **Ruling:** a `[[field]]` def declares a layer. Its value at a cell is a
   *base* plus *stamped* emitter contributions.
-  - **Base:** the outdoor `ambient` under open sky, which scripts set (core's
-    `20_climate.luau` drives day and night). Inside an enclosed room it
+  - **Base:** the outdoor `ambient` under open sky: a sum of labelled terms
+    over the time of day and year, plus named contributions from plugins
+    (§4c). Inside an enclosed room it
     depends on `indoor`: the room's own value (`room`, for temperature), zero
     (`none`, for light: indoors is dark unless something lights it), or the
     same as outdoors (`outdoor`).
@@ -151,12 +152,14 @@ a special case for each.
   takes the least-uncomfortable cell in reach if it's clearly better than
   where the pawn stands (an unheated hut beats the night outside). Idle
   colonists wait somewhere comfortable instead of wandering in the cold.
-- **Scripts:** `rim.field(id, x, y)`, `rim.ambient(id)`, `rim.set_ambient(id, v)`.
+- **Scripts:** `rim.field(id, x, y)`, `rim.ambient(id)`, `rim.push_ambient(...)`
+  and `rim.explain(id)` (§4c).
   **Client:** `O` cycles an overlay through every field that exists, so a
   mod's new layer gets a map view for free.
 - **Scripts must not use `math.sin`/`math.cos`** for simulation values. They
   come from each platform's maths library and can differ in the last bit,
-  which would break lockstep. The climate curve uses a smoothstep polynomial.
+  which would break lockstep. Climate curves are data, evaluated by the engine
+  in fixed point (§4c).
 
 ### Tuning warmth (balance harness, 40 seeds, 5 days)
 
@@ -173,8 +176,8 @@ campfire 12° with radius 5, capped at 24° in a room.
 
 The remaining hut cases are runs where the bot's hut wasn't finished by
 day 1. Exposure hurts and shelter fixes it, but a cold night isn't a death
-sentence: deaths stay at the pre-warmth baseline. Harsher winters belong to a
-seasons plugin, which only has to call `rim.set_ambient`.
+sentence: deaths stay at the pre-warmth baseline. The weather plugin (§4c)
+keeps this curve for the first week and brings winter later.
 
 ---
 
@@ -222,6 +225,215 @@ any change to combat, creatures or incidents.
 
 ---
 
+## 4c. Climate and weather
+
+Weather is the world pushing back on a schedule you can see coming. It gives
+shelter a second test (storms, winter), gives farming a calendar, and gives
+the map a mood.
+
+### Tension: how much weather, and where does it live?
+
+- **For a deep simulation now:** wetness, snow cover, wind shelter,
+  feels-like temperature and plant growth all interlock, and farming will
+  want them.
+- **Against:** nothing reads most of them yet. Building machinery before it
+  has a job is how plugin-first projects drown (§6, "costs we accept").
+- **Ruling:** build what a player notices now: seasons, weather you can see
+  coming, firelit nights, a winter that needs a heated hut. Per-cell ground
+  state (wetness, snow cover) and plant growth arrive with farming, their
+  first reader, on the same mechanisms.
+- **And it's a plugin.** The engine gets general mechanisms; `core` gets the
+  shared names; seasons and weather are the first-party plugin
+  `mods/weather`, built only on the public API. Remove it and the game plays
+  as it did before: day and night, one mild climate.
+
+| Layer | Owns |
+|---|---|
+| Engine | Terms and curves, the calendar, named contributions to outdoor values, script data and events |
+| `core` | The calendar, and the atmosphere fields as shared names: `temperature`, `daylight`, `light`, `cloud`, `precipitation`, `wind`, `wind_dir`, `fog`. The sun as data |
+| `mods/weather` | Seasons (by patching core's terms), weather types, the forecast, weather incidents, the weather HUD |
+
+Core declares `precipitation` even though only the weather plugin sets it,
+because two plugins must agree on the name: the renderer draws rain from it,
+and farming will read it without depending on how it got there.
+
+### One primitive: terms
+
+An outdoor value is a **sum of labelled terms**. A term is a scale times a
+product of inputs, each optionally through a piecewise-linear curve:
+
+```toml
+[[field]]
+id = "temperature"
+# ...
+[field.ambient.mean]
+of = [10.0]
+[field.ambient.day]
+scale = 9.0
+of = [{ input = "hour", curve = [[3, -1.0], [9, 0.0], [15, 1.0], [21, 0.0], [27, -1.0]] }]
+```
+
+- **Inputs** (v1): `input = "year"` (0–1), `input = "hour"` (0–24),
+  `ambient = "id"` (another field's outdoor value), `noise = "key"` (smooth
+  deterministic noise with a period of `hours`), and plain numbers. Per-cell
+  inputs (terrain, shelter, the cell's own value) come with stock fields and
+  farming.
+- **Tables keyed by label**, not arrays: a patch can change one term
+  (`set = { ambient = { day = { scale = 11.0 } } }`) and conflicts are
+  reported per term.
+- **Fixed point:** curves compile to integer breakpoints; evaluation is
+  integer interpolation, so lockstep holds. No `sin` or `cos` anywhere.
+- **Explainable:** `rim.explain("temperature")` and the HUD show
+  `−3.2°C = mean −6.0, day +2.1, weather +0.7`.
+
+#### Tension: a term language or a real expression language?
+
+- **For expressions:** more power, familiar infix maths.
+- **Against:** a parser, precedence bugs, a tree-walking evaluator where the
+  per-cell loop will eventually run, and structure the tooling can't show.
+  Curves already cover min, max and thresholds.
+- **Ruling:** sums of products of curves. Something it can't express becomes a
+  new input kind, a small engine change.
+
+### Named contributions
+
+`rim.push_ambient(field, key, value, hours, ease_hours)` adds a named
+contribution on top of a field's terms. It eases in over `ease_hours`, expires
+after `hours`, and shows up by name in the breakdown. The weather plugin
+pushes `"weather"`; a cold snap pushes `"cold_snap"`. Two mods add up instead
+of overwriting each other. `rim.set_ambient` still exists as a pin for tests
+and tools: it overrides everything until cleared.
+
+### The sky
+
+The sun is content. Core's one sun is a `daylight` term, and a mod can patch
+it, replace it, or add a second sun and a green moon without touching the engine
+or the weather plugin.
+
+- **`daylight` holds the sky; `light` holds what reaches the ground.** Core's
+  `light` term is `of = [{ ambient = "daylight" }, { ambient = "cloud", curve =
+  ... }]`. Sky mods touch only `daylight` terms, and weather touches only
+  `cloud`. So a mod that replaces the sun with two keeps the cloud dimming, and
+  weather never has to name a sun.
+- **Curves, not orbits.** A sky body is a brightness curve over the hour and
+  year. An engine that only needs to know how bright it is doesn't need orbital
+  mechanics.
+- **Day length stays fixed.** A day is `TICKS_PER_DAY` and `hour` runs 0–24,
+  because day length is pacing (needs, work, sleep), not astronomy. A planet
+  with long days is a curve with 20 bright hours.
+- **Later (0209):** `input = "cycle"` with its own period in days, for moon
+  phases and eclipses, and a sky tint made of labelled colour terms, one per
+  sky body, so a green moon mixes with dusk instead of replacing it. Light
+  stays a scalar in the sim; colour is the renderer's business.
+
+### Calendar
+
+`[[calendar]]` in core: a 60-day year of four 15-day seasons, starting on day
+9 of spring. The calendar is shared vocabulary (farming, the storyteller and
+mood all speak of spring), so core owns it, and a `season_changed` event
+fires as each begins. Seasons only *matter* once the weather plugin bends the
+temperature around them.
+
+### Script data and events
+
+Plugins keep state in the world, not in Luau locals: `rim.set_data(key,
+value)` stores plain data under a namespaced key. It is in the state hash, it
+will be saved, and the UI reads it with `view.data(key)`. That's how the
+forecast panel sees the weather plugin's queue. `rim.emit(name, table)` sends
+a script event to `rim.on` handlers in any mod (`weather_changed`).
+
+### The weather plugin
+
+- **Seasons:** patches core's temperature terms: the mean follows a year
+  curve (late spring starts like today, around 10°C; midwinter around −6°C),
+  and cloud damps the daily swing. Light dims under cloud through core's
+  `light` term; the plugin sets `cloud` and never touches `daylight`.
+- **Weather types:** clear, cloudy, rain, storm, fog. Each has a duration
+  range, blend hours, a weight (a function of the season and the previous
+  type) and channel settings. Precipitation below freezing falls as snow, so
+  there's no separate snow type: winter rain *is* snow.
+- **Forecast:** the current type and the next three. Each is picked with the
+  world RNG when it joins the queue, so the forecast is the future that will
+  happen unless an incident forces a change. Changes push the channels with
+  easing, so rain starts as a drizzle.
+- **Incidents:** cold snap, heat wave and storm, through core's storyteller.
+- They register through Luau (`rim.weather.register{...}`) until plugins can
+  declare their own def kinds (0208), then move to data.
+
+### Seeing the weather
+
+- **Light:** the renderer lights the world from the sim's `light` field
+  instead of its own curve: daylight, dark rooms, firelight. Brightness is
+  the square root of light (an overcast day at half the light still reads as
+  day), and firelight is the brighter of sky and fire rather than added, so a
+  campfire glows at night and hardly shows at noon. Indoors gets a
+  share of daylight, as if through windows. It's drawn as a multiplied
+  lightmap, so campfires glow and storms darken the map. The sky tint is a
+  colour curve over the day in data, keyed by label so sky mods can add to it.
+- **Weather:** the renderer reads channels, never weather names:
+  precipitation (rain, or snow below freezing), wind (slant and drift), fog,
+  and lightning in heavy storms. A mod that sets `precipitation` gets rain.
+  Nothing falls inside an enclosed room.
+
+### Cost and determinism
+
+- The engine evaluates terms for a handful of fields every 20 ticks: O(fields),
+  well under 0.01 ms. The plugin runs a Luau hook every 20 ticks that returns
+  at once until the current weather ends (0.2 µs a call; 30-80 µs before it
+  cached that). With weather, a tick costs the same as core alone: mean
+  0.004-0.005 ms over 5 days (seed 4).
+- On screen: 50 µs of CPU for 1,500 raindrops, 3 µs for the lighting pass
+  (the lightmap only rebuilds when emitters or rooms change).
+- Fixed-point terms, the world RNG only for picking weather, and pushes and
+  script data in the state hash: a year of weather hashes the same on every run.
+
+### Tuning seasons (balance harness)
+
+The bot builds a 5x5 hut with a bed; `--fire` adds a campfire inside. "Froze"
+is the founder's hours at zero warmth after night one.
+
+**The first week must play as §4a.** The first pass made it milder: cloudy
+nights stayed warm (cloud damped the daily swing to 45%) and the first night
+was sometimes overcast. So the first day is always clear (the first night is
+the shelter test core is tuned around), cloud damps the swing only to 80%,
+and rain and storms are colder. 5 days:
+
+| Founder froze after night one | Core alone | With weather |
+|---|---|---|
+| No shelter | 40/40 runs, 12.9 h | 80/80, 10.4 h |
+| Hut with a bed | 30/80, 3.1 h | 26/80, 2.0 h |
+| Hut, bed and campfire | 7/40, 1.6 h | 23/80, 1.7 h |
+
+Runs with a death: 10/80 either way (an early 40-seed run showed 8 against 2;
+at 80 seeds it was noise).
+
+**Winter needs a fire.** Starting on day 38 (late autumn) and playing 20 days
+into midwinter, 40 seeds:
+
+| | Colonies alive after winter | Founder alive |
+|---|---|---|
+| Hut with a bed | 0/40 | 0/40 |
+| Hut, bed and campfire | 24/40 | 20/40 |
+
+The deaths in heated runs are mostly wanderers the bot's single hut can't
+hold, and raids. Over a whole year the bot, which never builds more than one
+hut, loses most colonies with or without weather (core alone: 23/40), so
+year-long survival is a question for a better bot, not for the climate.
+**A cold snap asks for a fire.** Cold snaps start on day 5: -8°C for two days
+outside winter, -12°C in winter, with a warning to light a fire. An unheated
+hut leaks toward the outdoor temperature, so a hut alone doesn't carry you
+through one; a campfire does. 80 seeds, 8 days, snap on day 5:
+
+| | Colonies lost | Runs with a death |
+|---|---|---|
+| Hut, no snap | 9/80 | 29/80 |
+| Hut, snap (-8°C) | 16/80 | 47/80 |
+| Hut, snap at -5°C (tried) | 14/80 | 38/80 |
+| Hut and campfire, no snap | 2/80 | 18/80 |
+| Hut and campfire, snap (-8°C) | 1/80 | 24/80 |
+
+---
+
 ## 5. What's in `core` and what isn't
 
 `core` is the smallest complete game. Everything else is a plugin, including
@@ -229,13 +441,31 @@ things we build ourselves.
 
 | In `core`                                     | Out (plugins, first-party or community) |
 |-----------------------------------------------|-----------------------------------------|
-| Terrain, plants, rocks, map generation        | Seasons, temperature simulation         |
+| Terrain, plants, rocks, map generation        | Seasons and weather (`mods/weather`)    |
 | Needs: food, rest, warmth                     | Mood, mental breaks, relationships      |
+| Calendar, day and night, the atmosphere names | Other biomes, water flow, fire spread   |
 | Harvest, mine, build, haul (via delivery)     | Crafting benches, bills, research       |
 | Melee combat, health, death                   | Ranged weapons, armour, medicine        |
 | Wild animals, predators, hunting              | Taming, farming animals                 |
 | Storyteller, wealth, eras                     | Trade, factions, diplomacy              |
 | Incidents: raid, wanderer, herd, predators    | Everything else                         |
+
+`core` is itself a plugin: it loads from `mods/core` like any other mod, and
+the engine has no special case for it. What makes it core is that it's the one
+plugin everything else builds on. Three rules decide what goes in:
+
+1. **The smallest complete game.** Core alone must play: a map, a castaway,
+   hunger, rest, cold nights, building, animals and raids.
+2. **Core owns the shared vocabulary.** When two plugins must agree on a
+   name, core defines it: `temperature`, `precipitation`, `human`, `wood`,
+   the calendar. Plugins meet through core's names instead of depending on
+   each other, so farming can read `precipitation` whether or not the
+   weather plugin is what sets it.
+3. **Depth goes out.** Anything that deepens a loop rather than completing it
+   is a plugin: seasons, weather, mood, crafting chains.
+
+The test: with every plugin removed the game is complete but shallow (a CI
+run proves it); with core removed nothing works, because the names are gone.
 
 - **Tension:** mood is RimWorld's soul, so leaving it out makes the core feel thin.
 - **Ruling:** ship mood as the **first first-party plugin** (`rim.mood`). If
@@ -280,6 +510,32 @@ stat pipeline (wealth, threat)       ←  modifiers from every mod
   modders need a hook that doesn't exist, that's a feature request against the
   engine, and it's cheap to add because the engine is small. The API is semver'd
   (`api = "0.1"` in `mod.toml`).
+
+### Costs we accept
+
+Plugin-first isn't free. These are the costs, and what keeps each one small:
+
+- **Every mechanism is a promise.** Engine internals can be refactored
+  freely; a mechanism mods rely on is a contract. The API is versioned, and
+  we only expose what a second user needs.
+- **Generalising takes longer, and can over-reach.** Rule of three: a
+  mechanism earns its generality with two or three real users. Until then
+  it's a plain engine function (wind shelter, §4c).
+- **Performance has a floor.** Data-driven maths is slower than a hand-written
+  special case. Per-cell and per-tick work stays in Rust as mechanisms, data
+  compiles to flat programs, and every system has a measured budget.
+- **Behaviour is spread out.** A value may come from core's data, a plugin's
+  push, a patch and a script. So explanation tooling is mandatory: value
+  breakdowns, devtools showing which mod did what, conflict reports and
+  load-time validation.
+- **More combinations to balance.** First-party plugins live in this repo and
+  are tested together; the default install is what gets balanced; core alone
+  gets a smoke test in CI.
+- **Generic means less bespoke polish.** A renderer that reacts to channels
+  can't special-case a blizzard. Visuals become data too, so mods get the
+  same power we have.
+- **Plugins can tangle.** Plugins connect through core's shared names (§5),
+  not through each other, wherever they can.
 
 ### Load order
 
@@ -328,7 +584,9 @@ mid-range laptop. That means ≤ 2 ms per sim tick at 6× (≈ 360 ticks/sec).
    walls/doors/beds, food and rest needs, animals, melee, the Luau storyteller
    with raids and wanderers, wealth, F3 profiler. Two mods loaded: `core` and
    an example plugin that adds content, patches core and scripts an incident.
-2. **Shelter:** warmth, enclosed rooms, day/night visuals, eras.
+2. **Shelter:** warmth, enclosed rooms, eras.
+   **Weather** (a sprint inside it): seasons, weather and a forecast as the
+   first-party plugin `mods/weather`, lighting and weather visuals (§4c).
 3. **Save/load:** string-keyed component serialisation; unknown mod data is
    preserved.
 4. **`rim.mood`:** the first first-party plugin, and the test of the API.

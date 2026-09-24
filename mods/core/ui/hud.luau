@@ -12,10 +12,18 @@ end
 
 -- ─── Top bar: clock, wealth, weather, colonists ─────────────────────────────
 
+-- "Spring 9", and the year once there's more than one.
+local function date(view): string
+	local d = view.date()
+	local s = string.upper(string.sub(d.season, 1, 1)) .. string.sub(d.season, 2) .. " " .. d.day
+	return if d.year > 1 then s .. ", year " .. d.year else s
+end
+
 ui.define("core:clock", function(view)
 	local speed = if view.paused() then "paused" else view.speed() .. "×"
 	return row({ gap = "m", align = "center" }, {
 		label("Day " .. view.day(), { weight = "strong" }),
+		label(date(view), { id = "core:clock.date", color = "muted" }),
 		label(view.clock(), { weight = "strong" }),
 		label(speed, { color = if view.paused() then "bad" else "muted" }),
 	})

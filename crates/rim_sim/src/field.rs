@@ -20,6 +20,7 @@
 
 use crate::defs::{DefDb, DefId, IndoorMode};
 use crate::map::{Map, NEIGHBORS8};
+use crate::terms::{self, Env, Q};
 use crate::{IVec, TICKS_PER_DAY};
 use hecs::Entity;
 use std::collections::VecDeque;
@@ -29,6 +30,83 @@ pub const FIXED: f64 = 100.0;
 
 /// How often room-state fields update, in ticks.
 pub const ROOM_INTERVAL: u64 = 60;
+
+/// How often outdoor values are recomputed from their terms and pushes.
+pub const AMBIENT_INTERVAL: u64 = 20;
+
+/// A named contribution to a field's outdoor value (`rim.push_ambient`).
+/// It eases from `from` to `to` over `ease` ticks starting at `start`, and
+/// after `until` it eases back out to zero and disappears.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Push {
+    pub key: String,
+    pub from: i64,
+    pub to: i64,
+    pub start: u64,
+    pub ease: u64,
+    pub until: Option<u64>,
+    /// Easing out after expiring or being cleared; removed at zero.
+    pub fading: bool,
+}
+
+impl Push {
+    /// Current value in `Q` units.
+    pub fn value(&self, tick: u64) -> i64 {
+        if self.ease == 0 || tick >= self.start + self.ease {
+            return self.to;
+        }
+        let t = tick.saturating_sub(self.start) as i64;
+        self.from + (self.to - self.from) * t / self.ease as i64
+    }
+}
+
+/// Outdoor-value state for one field.
+#[derive(Clone, Debug, Default)]
+pub struct Atmos {
+    /// Set by `rim.set_ambient`: overrides terms and pushes (tests, tools).
+    pub pin: Option<i64>,
+    pub pushes: Vec<Push>,
+    /// Last computed outdoor value, `Q` units.
+    pub value: i64,
+}
+
+/// What terms see when outdoor values are computed.
+struct AmbEnv<'a> {
+    year: i64,
+    hour: i64,
+    tick: u64,
+    seed: u64,
+    vals: &'a [i64],
+}
+
+impl Env for AmbEnv<'_> {
+    fn year(&self) -> i64 {
+        self.year
+    }
+    fn hour(&self) -> i64 {
+        self.hour
+    }
+    fn ambient(&self, f: usize) -> i64 {
+        self.vals[f]
+    }
+    fn tick(&self) -> u64 {
+        self.tick
+    }
+    fn seed(&self) -> u64 {
+        self.seed
+    }
+}
+
+/// The clock, as terms see it.
+#[derive(Clone, Copy, Debug)]
+pub struct Clock {
+    pub tick: u64,
+    /// Fraction of the year, 0..Q.
+    pub year: i64,
+    /// Hour of day, 0..24·Q.
+    pub hour: i64,
+    pub seed: u64,
+}
 
 struct Emitter {
     entity: Entity,
@@ -54,6 +132,10 @@ pub struct Layer {
 
 pub struct Fields {
     pub layers: Vec<Layer>,
+    /// Outdoor-value state per field: pins, pushes, the last value.
+    pub atmos: Vec<Atmos>,
+    /// When outdoor values were last computed, so a breakdown matches them.
+    last_clock: Option<Clock>,
     emitters: Vec<Emitter>,
     seen_rebuilds: u64,
     /// Scratch for the stamping flood fill: generation-stamped distances.
@@ -63,6 +145,8 @@ pub struct Fields {
     queue: VecDeque<u32>,
     /// Cells re-stamped by the last `update`, for tests and the profiler.
     pub restamped: u64,
+    /// Bumped whenever any emitter's stamp changes, so renderers can cache.
+    pub revision: u64,
 }
 
 impl Fields {
@@ -71,8 +155,10 @@ impl Fields {
             layers: defs
                 .fields
                 .iter()
-                .map(|f| Layer { stamped: vec![0; cells], ambient: (f.ambient * FIXED) as i32, rooms: Vec::new() })
+                .map(|f| Layer { stamped: vec![0; cells], ambient: (f.base * FIXED) as i32, rooms: Vec::new() })
                 .collect(),
+            atmos: defs.fields.iter().map(|f| Atmos { value: terms::to_q(f.base), ..Default::default() }).collect(),
+            last_clock: None,
             emitters: Vec::new(),
             seen_rebuilds: u64::MAX,
             dist: vec![0; cells],
@@ -80,6 +166,7 @@ impl Fields {
             gen: 0,
             queue: VecDeque::new(),
             restamped: 0,
+            revision: 0,
         }
     }
 
@@ -104,6 +191,7 @@ impl Fields {
         let mut i = 0;
         while i < self.emitters.len() {
             if self.emitters[i].entity == entity {
+                self.revision += 1;
                 let e = self.emitters.remove(i);
                 let layer = &mut self.layers[e.field].stamped;
                 for (c, v) in e.cells {
@@ -117,6 +205,7 @@ impl Fields {
 
     /// Flood out from the emitter, adding a falloff by walking distance.
     fn stamp(&mut self, map: &Map, e: &mut Emitter) {
+        self.revision += 1;
         self.gen = self.gen.wrapping_add(1);
         if self.gen == 0 {
             self.dist_gen.iter_mut().for_each(|g| *g = 0);
@@ -182,8 +271,106 @@ impl Fields {
         }
     }
 
+    /// Recompute every outdoor value: terms (in dependency order), then
+    /// pushes, unless pinned. Expired pushes ease out and are dropped.
+    pub fn update_ambient(&mut self, defs: &DefDb, clock: Clock) {
+        let tick = clock.tick;
+        self.last_clock = Some(clock);
+        let mut vals: Vec<i64> = self.atmos.iter().map(|a| a.value).collect();
+        for &f in &defs.ambient_order {
+            let fd = &defs.fields[f];
+            let a = &mut self.atmos[f];
+            for p in a.pushes.iter_mut() {
+                if !p.fading && p.until.is_some_and(|u| tick >= u) {
+                    *p = Push { from: p.value(tick), to: 0, start: tick, until: None, fading: true, ..p.clone() };
+                }
+            }
+            a.pushes.retain(|p| !(p.fading && p.value(tick) == 0 && tick >= p.start + p.ease));
+            let v = match a.pin {
+                Some(v) => v,
+                None => {
+                    let env = AmbEnv { year: clock.year, hour: clock.hour, tick, seed: clock.seed, vals: &vals };
+                    let base = if fd.terms.is_empty() { terms::to_q(fd.base) } else { fd.terms.eval(&env) };
+                    base + a.pushes.iter().map(|p| p.value(tick)).sum::<i64>()
+                }
+            };
+            a.value = v;
+            vals[f] = v;
+            self.layers[f].ambient = (v / (Q / FIXED as i64)) as i32;
+        }
+    }
+
+    /// Add or replace a named contribution to a field's outdoor value.
+    pub fn push_ambient(
+        &mut self,
+        field: usize,
+        key: &str,
+        value: f64,
+        tick: u64,
+        hours: Option<f64>,
+        ease_hours: f64,
+    ) {
+        let ticks = |h: f64| (h.max(0.0) * TICKS_PER_DAY as f64 / 24.0).round() as u64;
+        let a = &mut self.atmos[field];
+        let from = a.pushes.iter().find(|p| p.key == key).map_or(0, |p| p.value(tick));
+        let push = Push {
+            key: key.to_string(),
+            from,
+            to: terms::to_q(value),
+            start: tick,
+            ease: ticks(ease_hours),
+            until: hours.map(|h| tick + ticks(h)),
+            fading: false,
+        };
+        match a.pushes.iter_mut().find(|p| p.key == key) {
+            Some(p) => *p = push,
+            None => a.pushes.push(push),
+        }
+    }
+
+    /// Ease a named contribution out over `ease_hours` and drop it.
+    pub fn clear_ambient(&mut self, field: usize, key: &str, tick: u64, ease_hours: f64) {
+        let ease = (ease_hours.max(0.0) * TICKS_PER_DAY as f64 / 24.0).round() as u64;
+        if let Some(p) = self.atmos[field].pushes.iter_mut().find(|p| p.key == key) {
+            *p = Push { from: p.value(tick), to: 0, start: tick, ease, until: None, fading: true, key: p.key.clone() };
+        }
+    }
+
+    /// Each part of a field's outdoor value, as last computed: its terms by
+    /// label, then pushes by key. A pin is reported alone.
+    pub fn explain_ambient(&self, defs: &DefDb, field: usize) -> Vec<(String, f64)> {
+        let a = &self.atmos[field];
+        let clock = self.last_clock.unwrap_or(Clock { tick: 0, year: 0, hour: 0, seed: 0 });
+        if let Some(v) = a.pin {
+            return vec![("pinned".into(), terms::from_q(v))];
+        }
+        let vals: Vec<i64> = self.atmos.iter().map(|a| a.value).collect();
+        let env = AmbEnv { year: clock.year, hour: clock.hour, tick: clock.tick, seed: clock.seed, vals: &vals };
+        let fd = &defs.fields[field];
+        let mut out: Vec<(String, f64)> = if fd.terms.is_empty() {
+            vec![("base".into(), fd.base)]
+        } else {
+            fd.terms.explain(&env).into_iter().map(|(l, v)| (l, terms::from_q(v))).collect()
+        };
+        out.extend(a.pushes.iter().map(|p| (p.key.clone(), terms::from_q(p.value(clock.tick)))));
+        out
+    }
+
+    /// Evaluate global terms (no per-cell inputs) against the outdoor values
+    /// as last computed. The renderer uses it for sky tints.
+    pub fn eval_global(&self, terms: &terms::Terms) -> f64 {
+        let clock = self.last_clock.unwrap_or(Clock { tick: 0, year: 0, hour: 0, seed: 0 });
+        let vals: Vec<i64> = self.atmos.iter().map(|a| a.value).collect();
+        let env = AmbEnv { year: clock.year, hour: clock.hour, tick: clock.tick, seed: clock.seed, vals: &vals };
+        terms::from_q(terms.eval(&env))
+    }
+
     /// Call once per tick after rooms are current.
-    pub fn update(&mut self, defs: &DefDb, map: &mut Map, tick: u64) {
+    pub fn update(&mut self, defs: &DefDb, map: &mut Map, clock: Clock) {
+        let tick = clock.tick;
+        if tick.is_multiple_of(AMBIENT_INTERVAL) {
+            self.update_ambient(defs, clock);
+        }
         let changed = map.take_changed_cells();
         if !changed.is_empty() {
             self.restamp_near(map, &changed);
@@ -279,12 +466,19 @@ impl Fields {
         self.value_fixed(defs, map, field, p) as f64 / FIXED
     }
 
-    pub fn set_ambient(&mut self, field: usize, v: f64) {
-        self.layers[field].ambient = (v * FIXED).round() as i32;
+    /// Pin a field's outdoor value, overriding its terms and pushes, or
+    /// unpin it with `None`. For tests and tools; mods push instead.
+    pub fn set_ambient(&mut self, field: usize, v: Option<f64>) {
+        let a = &mut self.atmos[field];
+        a.pin = v.map(terms::to_q);
+        if let Some(v) = a.pin {
+            a.value = v;
+            self.layers[field].ambient = (v / (Q / FIXED as i64)) as i32;
+        }
     }
 
     pub fn ambient(&self, field: usize) -> f64 {
-        self.layers[field].ambient as f64 / FIXED
+        terms::from_q(self.atmos[field].value)
     }
 
     pub fn emitter_count(&self) -> usize {
