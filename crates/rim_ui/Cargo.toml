@@ -14,4 +14,4 @@ taffy = "0.14"
 cosmic-text = "0.19"
 mlua = { version = "0.12", features = ["luau"] }
 serde = { version = "1", features = ["derive"] }
-toml = "0.8"
+toml = "1"
