@@ -139,9 +139,9 @@ fn walk(
     }
     if let Some(t) = &n.text {
         let color = apply(Some(t.color), patch, |p| p.color).unwrap();
-        let width = if t.wrap { Some(rect[2]) } else { None };
-        // An input is a padded box around its text; plain text has no padding.
-        let (tx, ty) = if n.input.is_some() { (rect[0] + s.pad[3], rect[1] + s.pad[0]) } else { (rect[0], rect[1]) };
+        let width = if t.wrap { Some(rect[2] - s.pad[1] - s.pad[3]) } else { None };
+        // Text sits inside its padding (layout measured the box with it).
+        let (tx, ty) = (rect[0] + s.pad[3], rect[1] + s.pad[0]);
         let quads = p.text.quads(&t.text, t.size, t.weight, width, tx, ty);
         if !quads.is_empty() {
             p.draw.push(Draw::Glyphs { quads, color: fade(color, alpha) });

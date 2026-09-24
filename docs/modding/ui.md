@@ -291,9 +291,10 @@ ui.mount("top", "my_mod:rename", { order = 70 })
 Click an input to focus it; typing, Backspace, Delete, the arrows, Home and
 End edit; Shift with an arrow selects; Enter calls `on_submit(text)`; Escape
 gives the keyboard back to the game. `on_change(text)` runs after every
-edit. While an input has focus the game sees no keys at all. `value` is what
-the box holds until the player types; to set the text from a script, give
-the node a new id.
+edit, and `on_key("up" | "down")` hears the keys the buffer has no use for,
+so a list under a query can move its selection. While an input has focus
+the game sees no keys at all. `value` is what the box holds until the player
+types; `ui.set_input(id, text)` replaces it from a script.
 
 A slider is any node with `on_drag`: while the pointer is held on it, the
 handler gets `(fx, fy)`, the pointer's position across the node as fractions.

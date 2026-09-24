@@ -183,6 +183,28 @@ const KEY_NAMES: &[(KeyCode, &str)] = &[
     (KeyCode::GraveAccent, "`"),
 ];
 
+/// A character from the text path that a text input should keep. Control
+/// characters are the keys the input already handles; the private-use
+/// range is how macOS spells its arrow, home, end and function keys in
+/// the same stream.
+fn typed_char(c: char) -> Option<char> {
+    let private = ('\u{e000}'..='\u{f8ff}').contains(&c);
+    (!c.is_control() && !private).then_some(c)
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn function_keys_are_not_text() {
+        assert_eq!(super::typed_char('a'), Some('a'));
+        assert_eq!(super::typed_char('é'), Some('é'));
+        assert_eq!(super::typed_char(' '), Some(' '));
+        assert_eq!(super::typed_char('\u{f701}'), None, "macOS down arrow");
+        assert_eq!(super::typed_char('\u{8}'), None, "backspace");
+        assert_eq!(super::typed_char('\u{1b}'), None, "escape");
+    }
+}
+
 /// The name a binding uses for a key, if it has one.
 pub fn key_name(code: KeyCode) -> Option<&'static str> {
     KEY_NAMES.iter().find(|(c, _)| *c == code).map(|(_, n)| *n)
@@ -507,7 +529,7 @@ impl RawInput {
         .collect();
         let mut chars = Vec::new();
         while let Some(c) = get_char_pressed() {
-            if !c.is_control() {
+            if let Some(c) = typed_char(c) {
                 chars.push(c);
             }
         }
@@ -663,6 +685,8 @@ pub fn frame(app: &mut App, raw: &RawInput) {
                 (KeyCode::Delete, Key::Delete),
                 (KeyCode::Left, Key::Left),
                 (KeyCode::Right, Key::Right),
+                (KeyCode::Up, Key::Up),
+                (KeyCode::Down, Key::Down),
                 (KeyCode::Home, Key::Home),
                 (KeyCode::End, Key::End),
                 (KeyCode::Escape, Key::Escape),

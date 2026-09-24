@@ -305,6 +305,7 @@ function kit.input(props)
 		placeholder = props.placeholder,
 		on_change = props.on_change,
 		on_submit = props.on_submit,
+		on_key = props.on_key,
 		w = props.w or 200,
 		pad = "xs",
 		padx = "s",

@@ -37,6 +37,7 @@ type Node = {
     handle: ("move" | "resize" | "close")?,
     src: string?, tint: boolean?,
     value: string?, placeholder: string?, on_change: ((text: string) -> ())?, on_submit: ((text: string) -> ())?,
+    on_key: ((key: string) -> ())?,
     on_drag: ((fx: number, fy: number) -> ())?,
     [number]: any,
 }
@@ -132,7 +133,7 @@ pub const UI_API: &[UiDoc] = &[
     d!(
         "ui.input",
         "(node: Node) -> Node",
-        "A line of text the player edits: { id = ..., value = ..., placeholder = ..., on_change = fn(text), on_submit = fn(text) }. The engine keeps the buffer by id across rebuilds and reloads; click to focus, Escape to leave."
+        "A line of text the player edits: { id = ..., value = ..., placeholder = ..., on_change = fn(text), on_submit = fn(text), on_key = fn(\"up\" | \"down\") }. The engine keeps the buffer by id across rebuilds and reloads; click to focus, Escape to leave."
     ),
     d!("ui.is_open", "(id: string) -> boolean", "Whether a window is open."),
     d!(
@@ -151,6 +152,7 @@ pub const UI_API: &[UiDoc] = &[
     d!("ui.row", "(node: Node?) -> Node", "A row: children left to right."),
     d!("ui.run", "(id: string) -> ()", "Run a bound action, as its key would."),
     d!("ui.scroll", "(node: Node?) -> Node", "A column that scrolls."),
+    d!("ui.set_input", "(id: string, text: string) -> ()", "Replace what a text input holds, caret at the end (the buffer is otherwise the player's)."),
     d!("ui.set_state", "(key: string, value: any) -> ()", "Keep a value across rebuilds."),
     d!("ui.slot", "(id: string) -> Node", "An extension point other mods fill with ui.extend."),
     d!("ui.spacer", "(node: Node?) -> Node", "Empty space that grows."),
