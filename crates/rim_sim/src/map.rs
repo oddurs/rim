@@ -56,7 +56,8 @@ pub struct Map {
     terrain_rev: Vec<u64>,
     /// Per chunk: bumped when anything drawn in a cell changes (what is on
     /// it, or how it looks), and at a chunk's border when a neighbour's does,
-    /// since joined walls look at their neighbours.
+    /// since joined walls look at their neighbours. Not a plan's progress:
+    /// that moves every tick of work, so renderers draw plans each frame.
     things_rev: Vec<u64>,
 }
 

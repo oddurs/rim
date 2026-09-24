@@ -13,7 +13,9 @@ use rim_sim::{Command, IVec, Sim};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
-/// What a renderer reads from each cell of each chunk.
+/// What a renderer reads from each cell of each chunk. A blueprint's
+/// progress is left out on purpose: it changes every tick of work, and
+/// renderers draw plans each frame rather than cache them (map.rs).
 fn fingerprints(w: &World) -> Vec<u64> {
     let (cw, ch) = w.map.chunks();
     let mut out = vec![0; (cw * ch) as usize];
