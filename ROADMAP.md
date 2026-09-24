@@ -147,7 +147,7 @@ Save/load that survives mod changes, and replays from seed + command log.
 
 ## colony — Colony
 
-`#·········` 6% · 1 of 16 done · due 2026-12-15
+`#·········` 5% · 1 of 19 done · due 2026-12-15
 
 Running more than one person: stockpiles, hauling, work priorities, skills, colonist panels.
 
@@ -155,17 +155,20 @@ Running more than one person: stockpiles, hauling, work priorities, skills, colo
 - [ ] `03b9b791` Derived fields and feels-like temperature <sup>feature · p1 · s · engine</sup>
 - [ ] `0cb48faf` Priority rules and colony stances <sup>feature · p1 · m · engine</sup>
 - [ ] `0e73145a` Work pools: work givers post work, pawns stop scanning <sup>perf · p0 · m · engine</sup>
-- [ ] `1e977052` Floating windows and a saved UI layout <sup>feature · p1 · m · client</sup>
+- [ ] `1e977052` Floating windows and a saved UI layout <sup>feature · p0 · m · engine</sup>
 - [ ] `29c323f5` Skills learned by doing <sup>feature · p1 · m · engine</sup>
 - [ ] `4ad6b386` Colonist inspection panel <sup>feature · p1 · m · client</sup>
+- [ ] `69494df0` Strings through one door <sup>chore · p2 · s · core</sup>
 - [ ] `8376a04f` Drafty rooms: room leak from terms <sup>feature · p3 · s · engine</sup>
 - [ ] `8cf4db07` Multi-cell things occupy every cell of their footprint <sup>feature · p3 · m · engine</sup>
 - [ ] `9bd9e8ab` Fire: burning, spread by wind, put out by rain <sup>feature · p1 · l · engine</sup>
 - [ ] `a7da68e2` Component kit v2: slider, text input and tables <sup>feature · p1 · m · core</sup>
+- [ ] `c3c4d136` Grid node and virtual list <sup>feature · p0 · m · engine</sup>
 - [ ] `ecd54de8` Stockpile zones and hauling <sup>feature · p0 · l · engine</sup>
 - [ ] `f1924f03` Why a colonist is doing that, and who will take a job <sup>feature · p1 · m · client</sup>
 - [ ] `f1b96df4` The Work Board: a painted priority grid with live demand <sup>feature · p0 · l · core</sup>
 - [ ] `fa0de3f5` Wind shelter: the lee of walls, rock and trees <sup>feature · p1 · m · engine</sup>
+- [ ] `fcb28d0c` Refresh tiers: a node says how often it may change <sup>feature · p1 · m · engine</sup>
 - [x] `3ab05834` Floors: built ground that remembers what it is made of <sup>feature · p1 · m · engine</sup>
 
 ## eras — Eras
@@ -184,16 +187,18 @@ The run gets a shape: eras, storyteller tiers, defensive strength in the threat 
 
 ## plugin-api — Plugin API
 
-`####······` 35% · 8 of 23 done · due 2027-02-01
+`####······` 32% · 8 of 25 done · due 2027-02-01
 
 The API grows up: stat pipeline, script components, custom jobs, needs and def kinds, modules and custom events, a real sandbox with hard limits, factions as data, rim test, typed API. Everything Mood needs, and everything DESIGN.md §10 says a mod from a stranger's repo must be safe to do.
 
+- [ ] `01e4d9fe` Text input the engine owns <sup>feature · p1 · m · engine</sup>
 - [ ] `14df87a8` Keybinds file and command palette <sup>feature · p1 · m · client</sup>
 - [ ] `63d2f10a` API deprecations warn with the replacement and the removal version <sup>feature · p2 · s · engine</sup>
 - [ ] `7f8ce379` Script-defined components on pawns and things <sup>feature · p0 · m · engine</sup>
 - [ ] `978be4f3` Factions as defs, not an engine enum <sup>feature · p0 · m · engine</sup>
 - [ ] `97e9d4a7` Stat pipeline: base values plus registered modifiers <sup>feature · p0 · l · engine</sup>
 - [ ] `b0da41ef` Custom def kinds: plugins declare their own data <sup>feature · p1 · m · engine</sup>
+- [ ] `b25b27e0` Image node and a mod atlas <sup>feature · p1 · m · engine</sup>
 - [ ] `b3df9f85` Mod-defined def kinds with schemas, and namespaced extension fields <sup>feature · p0 · l · engine</sup>
 - [ ] `c65db254` Per-mod budgets: profiler warnings and hard limits for runaway scripts <sup>feature · p1 · m · engine</sup>
 - [ ] `e2ce89c3` Sprites and atlases from mods <sup>feature · p2 · m · client</sup>
@@ -231,7 +236,7 @@ rim.mood — the first first-party plugin. Proves the API: if mood cannot be a p
 
 Making a mod feels like publishing a small open-source library: rim new, typed Luau, rim test in CI, a template repo with a GitHub Action, a compatibility report and a guide. Runs alongside Mood, which is its first customer.
 
-- [ ] `2c8ab1ef` Luau types for rim test's API, and type-check tests/ <sup>feature · p3 · s · tooling</sup>
+- [ ] `2c8ab1ef` Luau types for rim test's API, and type-check tests/ <sup>feature · p1 · s · tooling</sup>
 - [ ] `6d24a1ec` rim new: a GitHub-ready mod repo in one command <sup>chore · p0 · m · tooling</sup>
 - [ ] `9a4e2f10` Compatibility report: what a mod changes <sup>feature · p1 · s · tooling</sup>
 - [ ] `9f30ab9d` Hot reload of defs and scripts in dev mode <sup>feature · p0 · m · tooling</sup>
@@ -242,13 +247,14 @@ Making a mod feels like publishing a small open-source library: rim new, typed L
 
 ## scale — Scale
 
-`#·········` 9% · 1 of 11 done · due 2027-03-15
+`#·········` 8% · 1 of 12 done · due 2027-03-15
 
 Hit the performance budget: benchmark harness, hierarchical pathing, flow fields, spatial indices, incremental regions, render caching.
 
 - [ ] `1415721a` Water flow: runoff, puddles and floods <sup>feature · p3 · l · engine</sup>
 - [ ] `277ff6f2` Hierarchical pathfinding <sup>perf · p1 · l · engine</sup>
 - [ ] `66906291` Incremental region updates <sup>perf · p2 · m · engine</sup>
+- [ ] `8ee7a610` Anchored labels capped by priority inside the viewport <sup>perf · p2 · s · engine</sup>
 - [ ] `91de1172` Parallel systems where read and write sets allow <sup>spike · p2 · m · engine</sup>
 - [ ] `96d2dac9` Chunks: one dirty unit for regions, fields and the renderer <sup>perf · p2 · m · engine</sup>
 - [ ] `a353667b` Flow fields for raid groups <sup>perf · p2 · m · engine</sup>

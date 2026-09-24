@@ -5,9 +5,10 @@ type: feature
 status: backlog
 milestone: plugin-api
 depends_on:
-- 5514aac6-0300-4ff6-be19-fd44a5e50089
+- 01e4d9fe-095a-47d9-b06b-5d2c5099f063
+- 1e977052-1ce0-4280-a9ea-a6ff0c8f4cc8
 created: 2026-09-23
-updated: 2026-09-23
+updated: 2026-09-24
 priority: p1
 api: additive
 effort: m
@@ -19,14 +20,19 @@ pillar:
 
 ## Why
 
-Every action, core or modded, should be named, rebindable and findable without learning hotkeys.
+Every action a mod adds should be reachable without that mod drawing a
+button. A registry of named actions with keys makes the palette a list and
+the settings' keybinds tab the registry, editable.
 
 ## What
 
-Actions are registered by id (core and mods) and bound in `keybinds.toml`. Ctrl+K opens a palette that fuzzy-searches every action by name.
+- `ui.bind("core:pause", { key = "space" }, fn)`: a registry with defaults,
+  conflicts reported like replaced components.
+- A keybinds file per player overrides defaults.
+- The command palette: a window with a text input over the registry.
 
 ## Acceptance criteria
 
-- [ ] All core actions are named and bound in `keybinds.toml`
-- [ ] Mods register actions; they appear in the palette immediately
-- [ ] Rebinding by editing the file, and conflicts between bindings are reported
+- [ ] A mod's bound action fires from its key and from the palette
+- [ ] Two mods binding one key is reported
+- [ ] The keybinds file overrides a default and survives a restart

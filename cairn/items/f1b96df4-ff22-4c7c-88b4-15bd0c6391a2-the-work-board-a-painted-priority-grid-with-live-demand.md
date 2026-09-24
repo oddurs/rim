@@ -5,7 +5,8 @@ type: feature
 status: backlog
 milestone: colony
 depends_on:
-- 03ad3e3a-efe1-4186-b764-8dcd1d9344f1
+- c3c4d136-0740-4702-8fd9-8293fa4d65e8
+- fcb28d0c-35a3-4fca-977c-297d30a8e575
 created: 2026-09-24
 updated: 2026-09-24
 priority: p0
@@ -16,9 +17,6 @@ effort: l
 layer: core
 area: ui
 ---
-
-
-
 
 ## Why
 

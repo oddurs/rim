@@ -6,7 +6,7 @@ status: backlog
 milestone: sdk
 created: 2026-09-24
 updated: 2026-09-24
-priority: p3
+priority: p1
 api: additive
 layer: tooling
 area: modding
@@ -15,9 +15,18 @@ effort: s
 
 ## Why
 
-Test files use `test`, `t.world`, `t.expect` and world methods that luau-lsp doesn't know, so editors can't complete them and `scripts/check-luau.sh` skips `mods/*/tests`.
+Mechanisms 1-5 of the UI plan add three node kinds and nine functions. A
+UI mod that names a view function that does not exist should be told at
+load, not at first hover.
+
+## What
+
+- Generate `ui.d.luau`, `view.d.luau` and `act.d.luau` from the Rust
+  registrations in the build.
+- Version the UI surface as the sim API is (`ui_api` in `mod.toml`);
+  `rim check` refuses a mod that names a call the version lacks.
 
 ## Acceptance criteria
 
-- [ ] The test API is declared once in `modtest.rs`, and `types/test.d.luau` is generated from it with a drift test, like `rim` and `ui`
-- [ ] `scripts/check-luau.sh` checks `mods/*/tests` and the shipped tests pass
+- [ ] The generated types match the registrations, checked in CI
+- [ ] A mod naming a missing view call fails `rim check` with its name
