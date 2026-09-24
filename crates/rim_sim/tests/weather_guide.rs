@@ -12,8 +12,10 @@ use std::path::Path;
 
 #[test]
 fn guide_samples_run() {
-    let guide =
-        fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/modding/weather.md")).unwrap();
+    // Tolerate CRLF checkouts (a player's own files may have them).
+    let guide = fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/modding/weather.md"))
+        .unwrap()
+        .replace("\r\n", "\n");
     let mut files: Vec<(String, String)> = Vec::new();
     let mut lines = guide.lines().peekable();
     let mut prev = "";

@@ -28,3 +28,7 @@ Windows is a target platform (0135), and the stack should build there (Rust, mac
 ## 2026-09-23
 
 From 0163: also verify the UI resolves the system font on Windows (C:\Windows\Fonts\segoeui.ttf) and renders text; add a Windows run of the rim_ui test suite.
+
+## 2026-09-24
+
+Windows-only fix: git checked the docs out with CRLF, so the guide-sample tests (which split on '```lua\n') found no samples. .gitattributes now forces LF for text in every checkout (* text=auto eol=lf), and both guide tests tolerate CRLF anyway, since a player's own mod files may have it. TOML and Luau already parse CRLF.
