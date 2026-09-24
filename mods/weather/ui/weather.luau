@@ -5,7 +5,7 @@
 -- script data (view.data("weather:forecast")).
 
 local kit = require("@core/ui/kit")
-local row, col, label = kit.row, kit.col, kit.label
+local row, label = kit.row, kit.label
 
 local ARROWS = { "→", "↘", "↓", "↙", "←", "↖", "↑", "↗" }
 

@@ -114,6 +114,10 @@ Press **F12** and then **Kit gallery** to see every component in every state.
 
 ## Reading the game: `view`
 
+Every function in `ui`, `act` and `view`, with its types, is in the
+[UI API reference](api-ui.md). For editor completion see
+[Editor setup](scripting.md#editor-setup).
+
 | Call | Returns |
 |---|---|
 | `view.day()`, `view.clock()`, `view.tick()`, `view.hour()` | Game time |
@@ -201,7 +205,7 @@ ui.define("my_mod:tags", function(view)
 		table.insert(out, { kind = "anchored", entity = p.id, priority = 2, offset = p.radius + 4,
 			kit.label(p.name, { size = "small" }) })
 	end
-	return ui.col({}, out)
+	return ui.col(out)
 end)
 ui.mount("anchored", "my_mod:tags")
 ```

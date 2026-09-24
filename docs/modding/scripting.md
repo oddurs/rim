@@ -25,10 +25,12 @@ How it's configured, and why: [docs/engineering/dependencies.md](../engineering/
 
 ## Editor setup
 
-[`types/rim.d.luau`](../../types/rim.d.luau) declares the `rim` API for
-[luau-lsp](https://github.com/JohnnyMorganz/luau-lsp), so your editor can
-complete names, show the docs and flag a wrong call. The engine generates it
-from its own registrations, and CI fails if the two differ.
+[`types/rim.d.luau`](../../types/rim.d.luau) declares the `rim` API, and
+[`types/ui.d.luau`](../../types/ui.d.luau) declares the UI's `ui`, `act`
+and `view`, for [luau-lsp](https://github.com/JohnnyMorganz/luau-lsp), so
+your editor can complete names, show the docs and flag a wrong call. Both
+are generated from the engine's own declarations, and CI fails if they
+drift.
 
 In VS Code, install the Luau Language Server extension and add this to the
 workspace's `.vscode/settings.json`:
@@ -36,7 +38,7 @@ workspace's `.vscode/settings.json`:
 ```json
 {
   "luau-lsp.platform.type": "standard",
-  "luau-lsp.types.definitionFiles": { "@rim": "types/rim.d.luau" },
+  "luau-lsp.types.definitionFiles": { "@rim": "types/rim.d.luau", "@ui": "types/ui.d.luau" },
   "luau-lsp.sourcemap.enabled": false
 }
 ```
@@ -46,9 +48,9 @@ The root `.luaurc` maps each shipped mod to an alias, so
 the way the game resolves them. It's generated from the mods folder: after
 adding a mod, run `RIM_UPDATE_TYPES=1 cargo test -p rim_sim --test api_types`.
 
-To check from the command line, as CI does, run
-`LUAU_LSP=path/to/luau-lsp ./scripts/check-luau.sh`. Only sim scripts are
-checked so far: the UI globals (`ui`, `act`, `view`) aren't declared yet.
+The editor loads both files for every script, so it won't flag `rim` in UI
+code. To check each kind of script against only its own API, as CI does, run
+`LUAU_LSP=path/to/luau-lsp ./scripts/check-luau.sh`.
 
 Scripts are nonstrict by default. `--!strict` at the top of a file is stricter,
 but you'll need annotations on tables that start empty or `nil`. Type aliases
