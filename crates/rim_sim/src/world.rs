@@ -730,7 +730,7 @@ impl World {
                 h = crate::rng::mix(h ^ ((p.pos.x as u64) << 32 | p.pos.y as u32 as u64) ^ (p.hp as u64) << 48);
             }
         }
-        for (_, t) in self.ecs.query::<&Thing>().iter() {
+        for t in self.ecs.query::<&Thing>().iter() {
             // Order-independent combine for things.
             h = h.wrapping_add(crate::rng::mix(
                 (t.def as u64) << 40 ^ (t.pos.x as u64) << 20 ^ t.pos.y as u64 ^ (t.count as u64) << 56,

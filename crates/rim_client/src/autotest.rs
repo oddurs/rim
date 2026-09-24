@@ -246,7 +246,7 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     let tree = {
         let w = t.w();
         let mut best: Option<(u32, Entity, IVec)> = None;
-        for (e, th) in w.ecs.query::<&Thing>().without::<&Blueprint>().iter() {
+        for (e, th) in w.ecs.query::<(Entity, &Thing)>().without::<&Blueprint>().iter() {
             let d = th.pos.octile(hp);
             if th.def == oak && best.is_none_or(|b| d < b.0) && w.map.can_reach(hp, Goal::Touch(th.pos)) {
                 best = Some((d, e, th.pos));
@@ -289,7 +289,7 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.ticks(1);
     let designated = t.count::<(&Thing, &Designated)>();
     t.check(designated > 0, format!("dragging designates trees ({designated})"));
-    let wrong = t.w().ecs.query::<(&Thing, &Designated)>().iter().filter(|(_, (_, d))| d.0 != chop).count();
+    let wrong = t.w().ecs.query::<(&Thing, &Designated)>().iter().filter(|(_, d)| d.0 != chop).count();
     t.check(wrong == 0, "only chop designations were made");
 
     let site = open_square(t.w(), home, 6).expect("open ground for a hut");
@@ -347,7 +347,7 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         }
     }
     t.check(saw_interp, "pawns are drawn between cells while walking");
-    let built = t.w().ecs.query::<&Thing>().without::<&Blueprint>().iter().filter(|(_, th)| th.def == wall).count();
+    let built = t.w().ecs.query::<&Thing>().without::<&Blueprint>().iter().filter(|th| th.def == wall).count();
     t.check(built > 0, format!("the warrior chopped and built walls ({built})"));
     t.focus(site.offset(3, 3));
     t.shot("building").await;
@@ -521,6 +521,28 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.key(KeyCode::F12).await;
     t.frame().await;
     t.check(t.app.ui.find("core:devtools.panel").is_none(), "F12 closes devtools");
+
+    // ---------------------------------------------------------- render cost
+    println!("\n# render cost");
+    let zoom0 = t.app.cam.zoom;
+    t.act(Action::Zoom(0.01, 800.0, 480.0)); // all the way out: the most cells
+    t.frame().await;
+    let t0 = std::time::Instant::now();
+    t.frame().await;
+    let frame_ms = t0.elapsed().as_secs_f64() * 1e3;
+    macroquad::telemetry::enable();
+    macroquad::telemetry::capture_frame();
+    t.frame().await;
+    t.frame().await;
+    let calls = macroquad::telemetry::drawcalls().len();
+    macroquad::telemetry::disable();
+    println!(
+        "zoomed out ({:.1} px/cell): {calls} draw calls, frame {frame_ms:.1} ms (CPU, incl. present)",
+        t.app.cam.zoom
+    );
+    t.check(calls > 0, "the renderer's draw calls can be counted");
+    t.act(Action::Zoom(zoom0 / t.app.cam.zoom, 800.0, 480.0));
+    t.frame().await;
 
     // ---------------------------------------------------------- UI budget, live
     let (b, l, p) = (t.app.ui.info.build_us, t.app.ui.info.layout_us, t.app.ui.info.paint_us);

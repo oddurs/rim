@@ -56,8 +56,8 @@ fn stacks_near(s: &Sim, def: DefId, near: IVec) -> u32 {
         .query::<&Thing>()
         .without::<&Blueprint>()
         .iter()
-        .filter(|(_, t)| t.def == def && t.pos.chebyshev(near) <= 2)
-        .map(|(_, t)| t.count)
+        .filter(|t| t.def == def && t.pos.chebyshev(near) <= 2)
+        .map(|t| t.count)
         .sum()
 }
 

@@ -107,7 +107,7 @@ fn hunt_designation_kills_and_butchers() {
     run(&mut s, 3000);
     assert!(!s.world.pawn_alive(hare), "designated hare survived the hunt");
     let meat = s.world.defs.thing_id("raw_meat").unwrap();
-    let got: u32 = s.world.ecs.query::<&Thing>().iter().filter(|(_, t)| t.def == meat).map(|(_, t)| t.count).sum();
+    let got: u32 = s.world.ecs.query::<&Thing>().iter().filter(|t| t.def == meat).map(|t| t.count).sum();
     assert!(got > 0, "no meat dropped");
 }
 

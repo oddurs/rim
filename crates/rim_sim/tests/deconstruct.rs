@@ -53,8 +53,8 @@ fn stacks_near(s: &Sim, def: DefId, near: IVec) -> u32 {
         .query::<&Thing>()
         .without::<&Blueprint>()
         .iter()
-        .filter(|(_, t)| t.def == def && t.pos.chebyshev(near) <= 2)
-        .map(|(_, t)| t.count)
+        .filter(|t| t.def == def && t.pos.chebyshev(near) <= 2)
+        .map(|t| t.count)
         .sum()
 }
 
@@ -71,8 +71,14 @@ fn designating_marks_built_things_only() {
     let bp = s.world.spawn_fixture_of(wall, cells[1], true, Some(stone)).expect("a blueprint");
     // A tree somewhere in the same box.
     let oak = thing(&s, "tree_oak");
-    let tree =
-        s.world.ecs.query::<&Thing>().iter().find(|(_, t)| t.def == oak).map(|(e, _)| e).expect("an oak on the map");
+    let tree = s
+        .world
+        .ecs
+        .query::<(Entity, &Thing)>()
+        .iter()
+        .find(|(_, t)| t.def == oak)
+        .map(|(e, _)| e)
+        .expect("an oak on the map");
     let (lo, hi) = (IVec::new(0, 0), IVec::new(s.world.map.w - 1, s.world.map.h - 1));
     s.push(Command::Designate { designation: deconstruct_id(&s), a: lo, b: hi });
     s.step();
@@ -158,9 +164,9 @@ fn a_tree_still_offers_chop_not_deconstruct() {
         .ecs
         .query::<&Thing>()
         .iter()
-        .filter(|(_, t)| t.def == oak)
-        .min_by_key(|(_, t)| t.pos.octile(from))
-        .map(|(_, t)| t.pos)
+        .filter(|t| t.def == oak)
+        .min_by_key(|t| t.pos.octile(from))
+        .map(|t| t.pos)
         .expect("an oak");
     if let Some(o) = order::resolve(&s.world, founder, tree, None) {
         assert!(o.label.starts_with("Chop"), "{}", o.label);

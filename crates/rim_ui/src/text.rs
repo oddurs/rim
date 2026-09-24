@@ -10,7 +10,7 @@
 //! changes; a steady frame uploads nothing.
 
 use cosmic_text::{
-    fontdb, Attrs, Buffer, CacheKey, Family, FontSystem, Metrics, Shaping, SwashCache, SwashContent, Weight,
+    fontdb, Attrs, Buffer, CacheKey, Family, FontSystem, Hinting, Metrics, Shaping, SwashCache, SwashContent, Weight,
 };
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -60,6 +60,8 @@ pub struct FontInfo {
     /// A family the theme asked for that isn't installed (the system UI font
     /// was used instead).
     pub missing: Option<String>,
+    /// The font list came from the disk cache rather than a scan.
+    pub cached: bool,
 }
 
 /// Where a glyph sits in the atlas, and where to draw it relative to the pen.
@@ -169,14 +171,17 @@ pub struct Text {
     pub atlas: Atlas,
     /// Shaping cache misses, for tests and the profiler.
     pub shapes: u64,
+    /// Snap glyph advances to whole pixels. Crisper small text on 1x
+    /// displays; at 2x and above, subpixel positions read smoother.
+    hinting: bool,
 }
 
 impl Text {
     /// Load the system UI font (or `family`, if the theme names one) and
     /// every installed font as a fallback.
     pub fn new(family: Option<&str>) -> Result<Text, String> {
-        let mut db = fontdb::Database::new();
-        db.load_system_fonts();
+        // From the disk cache, or scanned (maybe already, on the preload thread).
+        let (mut db, from) = crate::fontcache::take();
         let fallback_faces = db.len();
 
         let mut chosen: Option<(String, String)> = None;
@@ -219,7 +224,13 @@ impl Text {
         let fonts = FontSystem::new_with_locale_and_db("en-US".into(), db);
         Ok(Text {
             fonts,
-            info: FontInfo { family: family.clone(), source, fallback_faces, missing },
+            info: FontInfo {
+                family: family.clone(),
+                source,
+                fallback_faces,
+                missing,
+                cached: from == crate::fontcache::FontsFrom::Cache,
+            },
             family,
             swash: SwashCache::new(),
             shaped: HashMap::new(),
@@ -227,6 +238,7 @@ impl Text {
             slots: HashMap::new(),
             atlas: Atlas::new(1024),
             shapes: 0,
+            hinting: false,
         })
     }
 
@@ -234,9 +246,21 @@ impl Text {
     /// as it was, old profiler numbers) are dropped so the cache stays small.
     pub fn begin_frame(&mut self) {
         self.frame += 1;
+        // cosmic-text's own shaping cache (text + attributes, any wrap
+        // width): keep runs used in the last few seconds.
+        self.fonts.shape_run_cache.trim(300);
         if self.frame.is_multiple_of(600) {
             let now = self.frame;
             self.shaped.retain(|_, (_, used)| now - *used < 600);
+        }
+    }
+
+    /// Turn width hinting on (1x displays) or off. Changing it drops shaped
+    /// text, since glyph positions change.
+    pub fn set_hinting(&mut self, on: bool) {
+        if on != self.hinting {
+            self.hinting = on;
+            self.shaped.clear();
         }
     }
 
@@ -261,6 +285,7 @@ impl Text {
             let line_height = (size * 1.3).ceil();
             let mut buf = Buffer::new(&mut self.fonts, Metrics::new(size, line_height));
             buf.set_size(width, None);
+            buf.set_hinting(if self.hinting { Hinting::Enabled } else { Hinting::Disabled });
             let attrs = Attrs::new().family(Family::Name(&self.family)).weight(Weight(weight));
             buf.set_text(text, &attrs, Shaping::Advanced, None);
             buf.shape_until_scroll(&mut self.fonts, false);

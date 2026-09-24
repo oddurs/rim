@@ -147,14 +147,20 @@ pub fn load_only(mods_dir: &Path, enabled: &dyn Fn(&str) -> bool) -> Result<Load
     for e in entries.into_iter().filter(|e| !e.removed) {
         let ctx = format!("{}/{} (from {})", e.kind, e.id, e.origin);
         let v = toml::Value::Table(e.value);
-        let err = |x: toml::de::Error| format!("{ctx}: {}", x.message());
+        let target = format!("{}/{}", e.kind, e.id);
+        // A macro, not a closure: each arm deserializes to a different type.
+        macro_rules! de {
+            ($v:expr) => {
+                deserialize($v, &ctx, &target, &set_by)
+            };
+        }
         match e.kind.as_str() {
-            "terrain" => defs.terrain.push(v.try_into().map_err(err)?),
-            "thing" => defs.things.push(v.try_into().map_err(err)?),
-            "creature" => defs.creatures.push(v.try_into().map_err(err)?),
-            "need" => defs.needs.push(v.try_into().map_err(err)?),
-            "designation" => defs.designations.push(v.try_into().map_err(err)?),
-            "field" => defs.fields.push(v.try_into().map_err(err)?),
+            "terrain" => defs.terrain.push(de!(v)?),
+            "thing" => defs.things.push(de!(v)?),
+            "creature" => defs.creatures.push(de!(v)?),
+            "need" => defs.needs.push(de!(v)?),
+            "designation" => defs.designations.push(de!(v)?),
+            "field" => defs.fields.push(de!(v)?),
             "calendar" => {
                 if calendars > 0 {
                     return Err(format!(
@@ -163,18 +169,18 @@ pub fn load_only(mods_dir: &Path, enabled: &dyn Fn(&str) -> bool) -> Result<Load
                     ));
                 }
                 calendars += 1;
-                defs.calendar = v.try_into().map_err(err)?;
+                defs.calendar = de!(v)?;
             }
             "sky" => {
                 if skies > 0 {
                     return Err(format!("{ctx}: only one [[sky]] may exist; patch sky/{} instead", defs.sky.id));
                 }
                 skies += 1;
-                defs.sky = v.try_into().map_err(err)?;
+                defs.sky = de!(v)?;
             }
-            "start" => defs.start = Some(v.try_into().map_err(err)?),
+            "start" => defs.start = Some(de!(v)?),
             "names" => {
-                let n: NamesDef = v.try_into().map_err(err)?;
+                let n: NamesDef = de!(v)?;
                 defs.names.extend(n.names);
             }
             _ => unreachable!(),
@@ -182,6 +188,34 @@ pub fn load_only(mods_dir: &Path, enabled: &dyn Fn(&str) -> bool) -> Result<Load
     }
     defs.finalize()?;
     Ok(LoadedMods { mods: order, defs, scripts, warnings })
+}
+
+/// Deserialize one def, and on failure say exactly where: the key path
+/// inside the def (`build.cost[0].count`) and, if a patch set that key, which
+/// mod's patch it was.
+fn deserialize<T: serde::de::DeserializeOwned>(
+    v: toml::Value,
+    ctx: &str,
+    target: &str,
+    set_by: &HashMap<String, String>,
+) -> Result<T, String> {
+    serde_path_to_error::deserialize(v).map_err(|e| {
+        let path = e.path().to_string();
+        let msg = e.into_inner().message().to_string();
+        if path.is_empty() || path == "." {
+            return format!("{ctx}: {msg}");
+        }
+        // The patch record keys look like `thing/wall.build.cost`: try the
+        // failing path and each of its parents, without list indices.
+        let plain: Vec<&str> =
+            path.split('.').map(|seg| seg.split('[').next().unwrap_or(seg)).filter(|s| !s.is_empty()).collect();
+        let patched = (1..=plain.len())
+            .rev()
+            .find_map(|n| set_by.get(&format!("{target}.{}", plain[..n].join("."))))
+            .map(|m| format!(" (patched by '{m}')"))
+            .unwrap_or_default();
+        format!("{ctx}: at `{path}`{patched}: {msg}")
+    })
 }
 
 /// Deep-merge `src` into `dst`, recording which mod set each leaf field.

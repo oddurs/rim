@@ -244,7 +244,7 @@ fn nearest_breach(w: &World, from: IVec, who: Faction, to: IVec) -> Option<Entit
         crate::map::NEIGHBORS8.iter().any(|(dx, dy)| w.map.region_at_for(p.offset(*dx, *dy), who) == r)
     };
     let mut best: Option<((i32, u32), Entity)> = None;
-    for (de, (t, owner)) in w.ecs.query::<(&Thing, &Owner)>().without::<&Blueprint>().iter() {
+    for (de, t, owner) in w.ecs.query::<(Entity, &Thing, &Owner)>().without::<&Blueprint>().iter() {
         if owner.0 == who || !w.map.blocks_fields(w.map.idx(t.pos)) {
             continue;
         }
@@ -378,7 +378,7 @@ fn find_food(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
     let defs = w.defs.clone();
     w.map.ensure_regions();
     let mut best: Option<(u32, Entity, bool)> = None;
-    for (te, t) in w.ecs.query::<&Thing>().without::<&Blueprint>().without::<&Regrow>().iter() {
+    for (te, t) in w.ecs.query::<(Entity, &Thing)>().without::<&Blueprint>().without::<&Regrow>().iter() {
         let td = defs.thing(t.def);
         let is_item = td.category == Category::Item && td.food.is_some();
         let is_plant =
@@ -438,7 +438,7 @@ fn beside(w: &World, cell: IVec, tag: &str) -> bool {
 /// A thing is one reservation: two pawns never share it.
 fn nearest_spot(w: &World, e: Entity, from: IVec, pick: impl Fn(&ThingDef) -> bool) -> Option<(Entity, IVec)> {
     let mut best: Option<(u32, Entity, IVec)> = None;
-    for (te, t) in w.ecs.query::<&Thing>().without::<&Blueprint>().iter() {
+    for (te, t) in w.ecs.query::<(Entity, &Thing)>().without::<&Blueprint>().iter() {
         let td = w.defs.thing(t.def);
         if td.spots.is_empty() || !pick(td) || w.reserved_by_other(te, e) {
             continue;
@@ -555,7 +555,7 @@ fn find_work(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
     /// (distance, blueprint, position, first missing material and how many)
     type Candidate = (u32, Entity, IVec, Option<(DefId, u32)>);
     let mut bps: Vec<Candidate> = Vec::new();
-    for (be, (t, bp)) in w.ecs.query::<(&Thing, &Blueprint)>().iter() {
+    for (be, t, bp) in w.ecs.query::<(Entity, &Thing, &Blueprint)>().iter() {
         if w.reserved_by_other(be, e) {
             continue;
         }
@@ -582,7 +582,9 @@ fn find_work(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
     }
 
     // Designated fixtures: harvest the natural ones, take down the built ones.
-    for (te, (t, des)) in w.ecs.query::<(&Thing, &Designated)>().without::<&Regrow>().without::<&Blueprint>().iter() {
+    for (te, t, des) in
+        w.ecs.query::<(Entity, &Thing, &Designated)>().without::<&Regrow>().without::<&Blueprint>().iter()
+    {
         let d = t.pos.octile(p.pos);
         if best.as_ref().is_some_and(|b| b.0 <= d) || w.reserved_by_other(te, e) {
             continue;
@@ -619,7 +621,7 @@ fn find_work(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
 /// Nearest reachable stack of `def` that nobody but `e` has claimed.
 pub fn nearest_item(w: &World, e: Entity, from: IVec, def: DefId) -> Option<(u32, Entity)> {
     let mut best: Option<(u32, Entity)> = None;
-    for (te, t) in w.ecs.query::<&Thing>().without::<&Blueprint>().iter() {
+    for (te, t) in w.ecs.query::<(Entity, &Thing)>().without::<&Blueprint>().iter() {
         if t.def != def || w.map.item_at(t.pos) != Some(te) {
             continue;
         }

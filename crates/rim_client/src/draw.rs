@@ -31,6 +31,55 @@ fn alpha(c: Color, a: f32) -> Color {
     Color::new(c.r, c.g, c.b, a)
 }
 
+/// The terrain as a texture, one texel per cell with the per-tile variation
+/// baked in, drawn as a single quad. Drawing a rectangle per cell cost ~100
+/// batched draw calls zoomed out; this is one. Rebuilt when the map changes.
+#[derive(Default)]
+pub struct Ground {
+    tex: Option<Texture2D>,
+    revision: Option<u64>,
+}
+
+impl Ground {
+    pub fn update(&mut self, w: &World) {
+        if self.revision == Some(w.map.revision) && self.tex.is_some() {
+            return;
+        }
+        self.revision = Some(w.map.revision);
+        let (mw, mh) = (w.map.w as usize, w.map.h as usize);
+        let mut bytes = vec![0u8; mw * mh * 4];
+        for i in 0..mw * mh {
+            let p = w.map.pos(i);
+            let base = w.defs.terrain[w.map.terrain[i] as usize].rgb;
+            let v = 0.94 + hash2_f(p.x as i64, p.y as i64, 99) as f32 * 0.1;
+            for (k, c) in base.iter().enumerate() {
+                bytes[i * 4 + k] = (*c as f32 * v).min(255.0) as u8;
+            }
+            bytes[i * 4 + 3] = 255;
+        }
+        let img = Image { bytes, width: mw as u16, height: mh as u16 };
+        match &self.tex {
+            Some(t) if t.width() as usize == mw && t.height() as usize == mh => t.update(&img),
+            _ => {
+                let t = Texture2D::from_image(&img);
+                // Crisp cell edges when zoomed in, like the rectangles were.
+                t.set_filter(FilterMode::Nearest);
+                self.tex = Some(t);
+            }
+        }
+    }
+}
+
+/// A filled circle, cheaper when small: under 6 px across a 20-sided circle
+/// looks the same as an 8-sided one, at 24 indices instead of 60.
+fn disc(x: f32, y: f32, r: f32, c: Color) {
+    if r < 6.0 {
+        draw_poly(x, y, 8, r, 0.0, c);
+    } else {
+        draw_circle(x, y, r, c);
+    }
+}
+
 pub fn world(app: &App) {
     let w = &app.sim.world;
     let defs = &w.defs;
@@ -43,15 +92,16 @@ pub fn world(app: &App) {
     let (tx0, ty0) = ((x0.floor() as i32).max(0), (y0.floor() as i32).max(0));
     let (tx1, ty1) = ((x1.ceil() as i32).min(w.map.w - 1), (y1.ceil() as i32).min(w.map.h - 1));
 
-    // Terrain, with a little per-tile variation.
-    for ty in ty0..=ty1 {
-        for tx in tx0..=tx1 {
-            let i = (ty * w.map.w + tx) as usize;
-            let base = rgb(defs.terrain[w.map.terrain[i] as usize].rgb);
-            let v = 0.94 + hash2_f(tx as i64, ty as i64, 99) as f32 * 0.1;
-            let (sx, sy) = cam.to_screen(tx as f32, ty as f32);
-            draw_rectangle(sx, sy, z + 0.5, z + 0.5, shade(base, v));
-        }
+    // Terrain: one quad from the baked ground texture.
+    if let Some(tex) = &app.ground.tex {
+        let (sx, sy) = cam.to_screen(0.0, 0.0);
+        draw_texture_ex(
+            tex,
+            sx,
+            sy,
+            WHITE,
+            DrawTextureParams { dest_size: Some(vec2(w.map.w as f32 * z, w.map.h as f32 * z)), ..Default::default() },
+        );
     }
 
     let t = get_time() as f32;
@@ -84,19 +134,19 @@ pub fn world(app: &App) {
                 let regrowing = w.ecs.get::<&Regrow>(e).is_ok();
                 match td.shape {
                     Shape::Tree => {
-                        draw_circle(cx + z * 0.06, cy + z * 0.08, z * 0.44, Color::new(0.0, 0.0, 0.0, 0.25));
-                        draw_circle(cx, cy, z * 0.42, c);
-                        draw_circle(cx - z * 0.1, cy - z * 0.1, z * 0.22, shade(c, 1.25));
+                        disc(cx + z * 0.06, cy + z * 0.08, z * 0.44, Color::new(0.0, 0.0, 0.0, 0.25));
+                        disc(cx, cy, z * 0.42, c);
+                        disc(cx - z * 0.1, cy - z * 0.1, z * 0.22, shade(c, 1.25));
                     }
                     Shape::Bush => {
                         if regrowing {
                             // Picked clean: small, dry and berry-less, so it
                             // doesn't read as food.
-                            draw_circle(cx, cy, z * 0.24, Color::new(c.r * 0.9 + 0.12, c.g * 0.75, c.b * 0.6, 1.0));
+                            disc(cx, cy, z * 0.24, Color::new(c.r * 0.9 + 0.12, c.g * 0.75, c.b * 0.6, 1.0));
                         } else {
-                            draw_circle(cx, cy, z * 0.36, c);
+                            disc(cx, cy, z * 0.36, c);
                             for (dx, dy) in [(-0.14, -0.1), (0.13, -0.12), (0.0, 0.14), (0.16, 0.1), (-0.15, 0.1)] {
-                                draw_circle(
+                                disc(
                                     cx + dx * z,
                                     cy + dy * z,
                                     (z * 0.085).max(2.0),
@@ -159,10 +209,10 @@ pub fn world(app: &App) {
                         );
                     }
                     Shape::Fire => {
-                        draw_circle(cx, cy, z * 0.38, Color::from_rgba(70, 60, 55, 255));
+                        disc(cx, cy, z * 0.38, Color::from_rgba(70, 60, 55, 255));
                         let f = 1.0 + (t * 9.0 + tx as f32).sin() * 0.08;
-                        draw_circle(cx, cy, z * 0.24 * f, c);
-                        draw_circle(cx, cy, z * 0.12 * f, Color::from_rgba(255, 220, 120, 255));
+                        disc(cx, cy, z * 0.24 * f, c);
+                        disc(cx, cy, z * 0.12 * f, Color::from_rgba(255, 220, 120, 255));
                     }
                     Shape::Item | Shape::Blob => {
                         draw_rectangle(sx + z * 0.2, sy + z * 0.2, z * 0.6, z * 0.6, c);
@@ -174,8 +224,8 @@ pub fn world(app: &App) {
                 }
                 if let Ok(d) = w.ecs.get::<&Designated>(e) {
                     let dc = rgb(defs.designations[d.0 as usize].rgb);
-                    draw_circle(sx + z * 0.82, sy + z * 0.18, z * 0.13 + 1.0, BLACK);
-                    draw_circle(sx + z * 0.82, sy + z * 0.18, z * 0.13, dc);
+                    disc(sx + z * 0.82, sy + z * 0.18, z * 0.13 + 1.0, BLACK);
+                    disc(sx + z * 0.82, sy + z * 0.18, z * 0.13, dc);
                 }
             }
         }
@@ -194,8 +244,8 @@ pub fn world(app: &App) {
         }
         let (sx, sy) = cam.to_screen(px, py);
         let r = cd.size * z;
-        draw_circle(sx + 1.5, sy + 2.0, r, Color::new(0.0, 0.0, 0.0, 0.3));
-        draw_circle(sx, sy, r, rgb(cd.rgb));
+        disc(sx + 1.5, sy + 2.0, r, Color::new(0.0, 0.0, 0.0, 0.3));
+        disc(sx, sy, r, rgb(cd.rgb));
         let ring = match p.faction {
             Faction::Player => Some(PLAYER),
             Faction::Hostile => Some(HOSTILE),

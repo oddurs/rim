@@ -52,7 +52,7 @@ fn nearest_thing(s: &mut Sim, from: IVec, def: &str) -> (Entity, IVec) {
     let id = s.world.defs.thing_id(def).unwrap();
     s.world.map.ensure_regions();
     let mut best: Option<(u32, Entity, IVec)> = None;
-    for (e, t) in s.world.ecs.query::<&Thing>().without::<&Blueprint>().iter() {
+    for (e, t) in s.world.ecs.query::<(Entity, &Thing)>().without::<&Blueprint>().iter() {
         if t.def != id {
             continue;
         }
@@ -86,7 +86,7 @@ fn order_chops_a_tree_nobody_designated() {
     run(&mut s, 3000);
     assert!(s.world.thing(tree).is_none(), "the tree is gone");
     let wood = s.world.defs.thing_id("wood").unwrap();
-    let dropped = s.world.ecs.query::<&Thing>().iter().any(|(_, t)| t.def == wood && t.pos.chebyshev(tp) <= 2);
+    let dropped = s.world.ecs.query::<&Thing>().iter().any(|t| t.def == wood && t.pos.chebyshev(tp) <= 2);
     assert!(dropped, "chopping leaves wood behind");
 }
 

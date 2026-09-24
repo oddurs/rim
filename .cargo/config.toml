@@ -1,0 +1,19 @@
+# Repo-wide Cargo settings. Machine-specific ones (a target dir on another
+# volume, a linker) belong in ~/.cargo/config.toml, not here.
+
+[env]
+# Determinism: Luau is C++, and clang fuses a*b+c into one FMA instruction on
+# arm64 by default. A fused result is rounded once, an unfused one twice, so
+# `%` on non-integers, math.noise, math.lerp and the vector library could give
+# different answers on a Mac and on an x86 PC, and lockstep would desync.
+# CI checks the built Luau library for FMA instructions (scripts/check-no-fma.sh).
+CXXFLAGS = "-ffp-contract=off"
+CFLAGS = "-ffp-contract=off"
+
+[alias]
+dist = "build --profile dist -p rim_client"
+prof = "build --profile profiling -p rim_client"
+
+# Deliberately no rustflags: no target-cpu=native (a binary per machine, and
+# crashes on older CPUs) and no fast-math. RUSTFLAGS in CI replaces, not
+# extends, build.rustflags, so anything here would silently not apply there.

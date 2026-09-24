@@ -28,7 +28,7 @@ fn warrior_chops_and_builds() {
         s.step();
     }
     let w = &s.world;
-    let built = w.ecs.query::<&Thing>().without::<&Blueprint>().iter().filter(|(_, t)| t.def == wall).count();
+    let built = w.ecs.query::<&Thing>().without::<&Blueprint>().iter().filter(|t| t.def == wall).count();
     let msgs: Vec<_> = w.messages.iter().map(|m| m.text.clone()).collect();
     assert!(built > 0, "no walls built out of {placed} blueprints; messages: {msgs:?}");
 }
