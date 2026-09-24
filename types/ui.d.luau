@@ -15,6 +15,17 @@ type Node = {
     entity: number?, cell: { number }?, priority: number?, offset: number?,
     [number]: any,
 }
+type Cell = string | number | { text: string?, bg: string?, color: string? } | nil
+type GridProps = {
+    rows: number, cols: number, cell: (r: number, c: number) -> Cell,
+    cell_w: Size?, cell_h: Size?, gap: Size?, size: string?, weight: string?,
+    on_press: ((r: number, c: number) -> any)?, on_paint: ((r: number, c: number, value: any) -> ())?,
+    id: string?, bg: string?, border: string?,
+}
+type ListProps = {
+    id: string, count: number, row_h: Size, row: (i: number) -> Node,
+    h: Size?, grow: number?, bg: string?, border: string?, pad: Size?,
+}
 type Layer = "top" | "bottom" | "left" | "right" | "anchored" | "cursor" | "modal" | "windows"
 type Need = { id: string, label: string, value: number, color: string, low: boolean }
 type Pawn = {
@@ -52,6 +63,10 @@ declare ui: {
     define: (id: string, build: (view: any) -> Node?) -> (),
     -- Add children to another component's extension point.
     extend: (id: string, add: any) -> (),
+    -- Rows by cols of cells the engine paints as one node. cell(r, c) describes each cell at build; on_press(r, c) returns the value a drag paints and on_paint(r, c, value) runs once per cell the drag enters.
+    grid: (props: GridProps) -> Node,
+    -- A scroll area that builds only the rows on screen. Needs an id, count, row_h and row(i); spacers stand in for the rows above and below.
+    list: (props: ListProps) -> Node,
     -- Show a component on a screen layer.
     mount: (layer: Layer, id: string, opts: { order: number?, align: string? }?) -> (),
     -- Hide a node by id.

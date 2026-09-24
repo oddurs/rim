@@ -147,7 +147,7 @@ Save/load that survives mod changes, and replays from seed + command log.
 
 ## colony — Colony
 
-`##········` 11% · 2 of 19 done · due 2026-12-15
+`##········` 16% · 3 of 19 done · due 2026-12-15
 
 Running more than one person: stockpiles, hauling, work priorities, skills, colonist panels.
 
@@ -162,7 +162,6 @@ Running more than one person: stockpiles, hauling, work priorities, skills, colo
 - [ ] `8cf4db07` Multi-cell things occupy every cell of their footprint <sup>feature · p3 · m · engine</sup>
 - [ ] `9bd9e8ab` Fire: burning, spread by wind, put out by rain <sup>feature · p1 · l · engine</sup>
 - [ ] `a7da68e2` Component kit v2: slider, text input and tables <sup>feature · p1 · m · core</sup>
-- [ ] `c3c4d136` Grid node and virtual list <sup>feature · p0 · m · engine</sup>
 - [ ] `ecd54de8` Stockpile zones and hauling <sup>feature · p0 · l · engine</sup>
 - [ ] `f1924f03` Why a colonist is doing that, and who will take a job <sup>feature · p1 · m · client</sup>
 - [ ] `f1b96df4` The Work Board: a painted priority grid with live demand <sup>feature · p0 · l · core</sup>
@@ -170,6 +169,7 @@ Running more than one person: stockpiles, hauling, work priorities, skills, colo
 - [ ] `fcb28d0c` Refresh tiers: a node says how often it may change <sup>feature · p1 · m · engine</sup>
 - [x] `3ab05834` Floors: built ground that remembers what it is made of <sup>feature · p1 · m · engine</sup>
 - [x] `69494df0` Strings through one door <sup>chore · p2 · s · core</sup>
+- [x] `c3c4d136` Grid node and virtual list <sup>feature · p0 · m · engine</sup>
 
 ## eras — Eras
 

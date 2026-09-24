@@ -95,6 +95,28 @@ ui.define("core:gallery", function(view)
 		kit.list({ t("core:gallery.row1", "list row one"), t("core:gallery.row2", "list row two"), t("core:gallery.row3", "list row three") }, function(item)
 			return label(item, { size = "small" })
 		end),
+		-- A paintable board and a long table: one node each, however many
+		-- cells or rows.
+		row({ gap = "m", align = "start" }, {
+			kit.grid({ id = "core:gallery.grid", rows = 8, cols = 12, cell_w = "m", cell_h = "m", bg = "surface_raised",
+				cell = function(r, c)
+					local on = ui.state("core:gallery.cells", {})[r * 100 + c]
+					return { bg = on and "accent" or nil }
+				end,
+				on_press = function(r, c)
+					return not ui.state("core:gallery.cells", {})[r * 100 + c]
+				end,
+				on_paint = function(r, c, value)
+					local cells = ui.state("core:gallery.cells", {})
+					cells[r * 100 + c] = value or nil
+					ui.set_state("core:gallery.cells", cells)
+				end }),
+			kit.table({ id = "core:gallery.table", h = 120, count = 500, row_h = "l",
+				columns = { { label = t("core:gallery.col_n", "#"), w = 40 }, { label = t("core:gallery.col_sq", "Square"), w = 80 } },
+				row = function(i)
+					return { tostring(i), tostring(i * i) }
+				end }),
+		}),
 	})
 end)
 ui.mount("windows", "core:gallery")

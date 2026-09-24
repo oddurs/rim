@@ -25,7 +25,7 @@ pub mod vm;
 use layout::Rect;
 use node::{Anchor, Kind, Len, Node, Style, TextStyle};
 use paint::{contains, Draw, Hit, PaintState};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::hash::Hasher;
 use std::rc::Rc;
 use std::time::Instant;
@@ -63,6 +63,31 @@ pub struct Output {
     pub captured_wheel: bool,
     /// Tab or Enter went to a focused UI element.
     pub captured_keys: bool,
+}
+
+/// A drag across a grid: the grid's key, the value the drag paints, and
+/// the cells painted so far so each is reported once.
+struct Painting {
+    key: u64,
+    value: mlua::Value,
+    done: HashSet<(usize, usize)>,
+}
+
+/// What routing found to run this frame.
+enum Call {
+    Click(mlua::Function),
+    /// A press on a grid cell: ask the mod what to paint, then paint it.
+    Press {
+        grid: Rc<node::Grid>,
+        key: u64,
+        cell: (usize, usize),
+    },
+    /// The drag entered another cell.
+    Paint {
+        f: mlua::Function,
+        cell: (usize, usize),
+        value: mlua::Value,
+    },
 }
 
 /// One laid-out layer from the last frame, kept for input routing.
@@ -116,6 +141,7 @@ pub struct Ui {
     hovered: Option<u64>,
     hovered_since: f64,
     pressed: Option<u64>,
+    painting: Option<Painting>,
     focused: Option<u64>,
     scroll: HashMap<u64, f32>,
     cache: HashMap<String, CachedLayout>,
@@ -190,6 +216,7 @@ impl Ui {
             hovered: None,
             hovered_since: 0.0,
             pressed: None,
+            painting: None,
             focused: None,
             scroll: HashMap::new(),
             cache: HashMap::new(),
@@ -285,6 +312,11 @@ impl Ui {
         true
     }
 
+    /// The hit for a node key, from last frame's layout.
+    fn hit_by_key(&self, key: u64) -> Option<(&'static str, Hit)> {
+        self.layers.iter().find_map(|l| l.hits.iter().find(|h| h.key == key).map(|h| (l.name, h.clone())))
+    }
+
     fn node_at<'a>(&'a self, layer: &str, root: usize, path: &[usize]) -> Option<&'a Node> {
         let l = self.layers.iter().find(|l| l.name == layer)?;
         let mut n = l.roots.get(root)?;
@@ -295,9 +327,9 @@ impl Ui {
     }
 
     /// Route input against last frame's layout. Returns clicked handlers.
-    fn route(&mut self, input: &Input, out: &mut Output) -> Vec<(mlua::Function, bool)> {
+    fn route(&mut self, input: &Input, out: &mut Output) -> Vec<Call> {
         let (mx, my) = input.mouse;
-        let mut handlers = Vec::new();
+        let mut handlers: Vec<Call> = Vec::new();
         let mut top: Option<(&'static str, Hit)> = None;
         let mut over_solid = false;
         let mut scroll_hit: Option<Hit> = None;
@@ -344,10 +376,34 @@ impl Ui {
         if input.left_pressed && out.mouse_over_ui {
             out.captured_left = true;
             self.pressed = hovered;
-            if let Some((_, h)) = &top {
+            if let Some((layer, h)) = &top {
                 if h.focusable {
                     self.focused = Some(h.key);
                 }
+                // A grid: the press picks the cell and asks what to paint.
+                let grid = self.node_at(layer, h.path[0], &h.path[1..]).and_then(|n| n.grid.clone());
+                if let Some(g) = grid {
+                    if let Some(cell) = g.cell_at(h.rect, mx, my) {
+                        handlers.push(Call::Press { grid: g, key: h.key, cell });
+                    }
+                }
+            }
+        }
+        // A drag across a grid: every newly entered cell gets the value.
+        if let Some(Painting { key, value, mut done }) = self.painting.take() {
+            if !input.left_released && self.pressed == Some(key) {
+                let found = self.hit_by_key(key).and_then(|(layer, h)| {
+                    let g = self.node_at(layer, h.path[0], &h.path[1..])?.grid.clone()?;
+                    Some((g.cell_at(h.rect, mx, my), g))
+                });
+                if let Some((Some(cell), g)) = found {
+                    if done.insert(cell) {
+                        if let Some(f) = g.on_paint.clone() {
+                            handlers.push(Call::Paint { f, cell, value: value.clone() });
+                        }
+                    }
+                }
+                self.painting = Some(Painting { key, value, done });
             }
         }
         if input.left_released {
@@ -355,7 +411,7 @@ impl Ui {
                 if p == h.key {
                     let root = h.path[0];
                     if let Some(f) = self.node_at(layer, root, &h.path[1..]).and_then(|n| n.on_click.clone()) {
-                        handlers.push((f, false));
+                        handlers.push(Call::Click(f));
                     }
                 }
             }
@@ -363,12 +419,13 @@ impl Ui {
                 out.captured_left = true;
             }
             self.pressed = None;
+            self.painting = None;
         }
         if input.right_pressed && out.mouse_over_ui {
             out.captured_right = true;
             if let Some((layer, h)) = &top {
                 if let Some(f) = self.node_at(layer, h.path[0], &h.path[1..]).and_then(|n| n.on_right_click.clone()) {
-                    handlers.push((f, true));
+                    handlers.push(Call::Click(f));
                 }
             }
         }
@@ -403,7 +460,7 @@ impl Ui {
                     .find_map(|l| l.hits.iter().find(|h| h.key == f).map(|h| (l.name, h.path.clone())));
                 if let Some((layer, path)) = found {
                     if let Some(func) = self.node_at(layer, path[0], &path[1..]).and_then(|n| n.on_click.clone()) {
-                        handlers.push((func, false));
+                        handlers.push(Call::Click(func));
                         out.captured_keys = true;
                     }
                 }
@@ -427,10 +484,28 @@ impl Ui {
         } else {
             self.shown.tree.clear();
         }
-        let handlers = self.route(input, &mut out);
-        let handled = !handlers.is_empty();
-        for (f, _) in handlers {
-            self.vm.call_handler(&f, world, client, &self.shown);
+        let calls = self.route(input, &mut out);
+        let handled = !calls.is_empty();
+        for call in calls {
+            match call {
+                Call::Click(f) => self.vm.call_handler(&f, world, client, &self.shown),
+                Call::Press { grid, key, cell } => {
+                    // What the drag paints is the mod's answer to the press;
+                    // the pressed cell is painted with it straight away.
+                    let (r, c) = (cell.0 as i64 + 1, cell.1 as i64 + 1);
+                    let value = match &grid.on_press {
+                        Some(f) => self.vm.call_with(f, (r, c), world, client, &self.shown).unwrap_or(mlua::Value::Nil),
+                        None => mlua::Value::Nil,
+                    };
+                    if let Some(f) = &grid.on_paint {
+                        self.vm.call_with(f, (r, c, value.clone()), world, client, &self.shown);
+                    }
+                    self.painting = Some(Painting { key, value, done: HashSet::from([cell]) });
+                }
+                Call::Paint { f, cell, value } => {
+                    self.vm.call_with(&f, (cell.0 as i64 + 1, cell.1 as i64 + 1, value), world, client, &self.shown);
+                }
+            }
         }
         let mut actions = self.vm.take_actions();
         if actions.contains(&UiAction::ToggleOutlines) {
@@ -450,7 +525,8 @@ impl Ui {
         let rebuilt =
             handled || input_happened || stale || ch != self.built_for || self.built.is_empty() || self.devtools;
         if rebuilt {
-            self.built = self.vm.build(world, client, &self.shown, &self.theme);
+            let lists = vm::ListEnv { scroll: &self.scroll, rects: &self.ids, keys: &self.id_keys };
+            self.built = self.vm.build(world, client, &self.shown, &self.theme, &lists);
             self.built_at = input.time;
             self.built_for = ch;
             self.builds += 1;
@@ -875,6 +951,7 @@ fn plain(key: u64, style: Style, children: Vec<Node>) -> Node {
         anchor: None,
         priority: 0,
         offset_y: 0.0,
+        grid: None,
         children,
     }
 }
@@ -904,6 +981,7 @@ fn flatten(n: &Node, depth: usize, out: &mut Vec<(usize, String, String, String)
         (Kind::Spacer, _) => "spacer",
         (Kind::Scroll, _) => "scroll",
         (Kind::Anchored, _) => "anchored",
+        (Kind::Grid, _) => "grid",
     };
     out.push((depth, kind.to_string(), n.id.as_deref().unwrap_or("").to_string(), n.owner.to_string()));
     for c in &n.children {

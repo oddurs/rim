@@ -476,7 +476,29 @@ fn hot_reload_swaps_the_ui_and_keeps_the_last_good_one_on_error() {
 
 #[test]
 fn whole_ui_fits_the_frame_budget_with_30_colonists() {
-    let mut sim = sim_at(&mods());
+    frame_budget(&mods());
+}
+
+/// The same budget with a 30x12 grid on screen: a board's worth of cells
+/// costs one node in the tree and one hit, not 360 of each.
+#[test]
+fn whole_ui_fits_the_frame_budget_with_a_grid_mounted() {
+    let dir = scratch_mods("gridbudget", &[("board", "", &[("ui/board.luau", BOARD)])]);
+    frame_budget(&dir);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A probe mod with a 30x12 grid on the windows layer.
+const BOARD: &str = r#"
+ui.define("board:grid", function(view)
+    return ui.grid({ id = "board:grid", rows = 30, cols = 12, cell_w = 18, cell_h = 18,
+        cell = function(r, c) return { text = tostring((r + c) % 10), bg = (r + c) % 2 == 0 and "surface_raised" or "surface" } end })
+end)
+ui.mount("windows", "board:grid")
+"#;
+
+fn frame_budget(dir: &std::path::Path) {
+    let mut sim = sim_at(dir);
     let human = sim.world.defs.creature_id("human").unwrap();
     let c = sim.world.colony_center().unwrap();
     for i in 0..29 {
@@ -531,6 +553,147 @@ fn whole_ui_fits_the_frame_budget_with_30_colonists() {
     let slack = if std::env::var_os("CI").is_some() { 3.0 } else { 1.0 };
     assert!(m_all < 1.0 * slack, "median frame {m_all:.3} ms (budget {:.1} ms)", 1.0 * slack);
     assert!(m_build < 2.0 * slack, "median rebuild frame {m_build:.3} ms (budget {:.1} ms)", 2.0 * slack);
+}
+
+#[test]
+fn a_grid_is_one_node_however_many_cells() {
+    let dir = scratch_mods("gridnodes", &[("board", "", &[("ui/board.luau", BOARD)])]);
+    let sim = sim_at(&dir);
+    let mut ui = ui_for(&sim);
+    let cv = client(&sim);
+    frame(&mut ui, &sim, &cv, Default::default());
+    let snap = ui.snapshot();
+    let tree = snap.split("== board:grid").nth(1).expect("the board is built");
+    let tree = tree.split("== ").next().unwrap();
+    assert_eq!(
+        tree.trim().lines().count(),
+        1,
+        "the grid is one node:
+{tree}"
+    );
+    assert!(tree.contains("grid 30x12 #board:grid"), "{tree}");
+    let rect = ui.find("board:grid").expect("laid out");
+    assert_eq!((rect[2], rect[3]), (12.0 * 18.0, 30.0 * 18.0), "sized from its cells");
+    assert!(ui.warnings().is_empty(), "{:?}", ui.warnings());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn dragging_across_a_grid_paints_each_cell_once_in_order() {
+    let dir = scratch_mods(
+        "griddrag",
+        &[(
+            "paint",
+            "",
+            &[(
+                "ui/paint.luau",
+                r#"
+ui.define("paint:board", function(view)
+    return ui.col({ id = "paint:panel", bg = "surface", pad = 0, gap = 0, w = 240, align = "start",
+        ui.grid({ id = "paint:grid", rows = 4, cols = 4, cell_w = 20, cell_h = 20, gap = 0,
+            cell = function(r, c) return tostring(r) .. tostring(c) end,
+            on_press = function(r, c) return "v" .. r .. c end,
+            on_paint = function(r, c, value)
+                ui.set_state("paint:log", ui.state("paint:log", "") .. r .. c .. "=" .. value .. " ")
+            end }),
+        ui.text({ ui.state("paint:log", "-"), id = "paint:log" }),
+    })
+end)
+ui.mount("windows", "paint:board")
+"#,
+            )],
+        )],
+    );
+    let sim = sim_at(&dir);
+    let mut ui = ui_for(&sim);
+    let cv = client(&sim);
+    frame(&mut ui, &sim, &cv, Default::default());
+    let g = ui.find("paint:grid").expect("the grid is laid out");
+    let at = |r: f32, c: f32| (g[0] + (c - 0.5) * 20.0, g[1] + (r - 0.5) * 20.0);
+    // Press on (2,2), drag right two cells, back over one, then down.
+    frame(&mut ui, &sim, &cv, Input { mouse: at(2.0, 2.0), ..Default::default() });
+    frame(&mut ui, &sim, &cv, Input { mouse: at(2.0, 2.0), left_pressed: true, time: 1.0, ..Default::default() });
+    for (i, (r, c)) in [(2.0, 3.0), (2.0, 4.0), (2.0, 3.0), (3.0, 3.0)].into_iter().enumerate() {
+        frame(&mut ui, &sim, &cv, Input { mouse: at(r, c), time: 2.0 + i as f64, ..Default::default() });
+    }
+    frame(&mut ui, &sim, &cv, Input { mouse: at(3.0, 3.0), left_released: true, time: 9.0, ..Default::default() });
+    frame(&mut ui, &sim, &cv, Input { mouse: at(3.0, 3.0), time: 10.0, ..Default::default() });
+    // Released: moving on paints nothing more.
+    frame(&mut ui, &sim, &cv, Input { mouse: at(4.0, 4.0), time: 11.0, ..Default::default() });
+    let snap = ui.snapshot();
+    assert!(
+        snap.contains("\"22=v22 23=v22 24=v22 33=v22 \""),
+        "each cell once, in order, with the press value:\n{snap}"
+    );
+    assert!(ui.warnings().is_empty(), "{:?}", ui.warnings());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_long_list_builds_only_the_rows_on_screen() {
+    let dir = scratch_mods(
+        "virtuallist",
+        &[(
+            "lister",
+            "",
+            &[(
+                "ui/list.luau",
+                r#"
+ui.define("lister:list", function(view)
+    return ui.col({ id = "lister:panel", bg = "surface", pad = 0,
+        ui.list({ id = "lister:scroll", h = 120, count = 200, row_h = 20,
+            row = function(i) return ui.text({ "vrow " .. i, id = "lister:row" .. i }) end }) })
+end)
+ui.mount("windows", "lister:list")
+"#,
+            )],
+        )],
+    );
+    let sim = sim_at(&dir);
+    let mut ui = ui_for(&sim);
+    let cv = client(&sim);
+    frame(&mut ui, &sim, &cv, Default::default());
+    frame(&mut ui, &sim, &cv, Input { time: 1.0, ..Default::default() });
+    let built = |ui: &rim_ui::Ui| ui.snapshot().matches("\"vrow ").count();
+    assert!(built(&ui) < 40, "{} rows built for a 120 px window", built(&ui));
+    assert!(ui.find("lister:row1").is_some() && ui.find("lister:row100").is_none());
+    let area = ui.find("lister:scroll").expect("the scroll area is laid out");
+    let at = centre(area);
+    for i in 0..200 {
+        frame(&mut ui, &sim, &cv, Input { mouse: at, wheel: -5.0, time: 2.0 + i as f64, ..Default::default() });
+    }
+    frame(&mut ui, &sim, &cv, Input { mouse: at, time: 300.0, ..Default::default() });
+    let got = ui.scroll_offset("lister:scroll").expect("scroll state");
+    assert_eq!(got, 200.0 * 20.0 - 120.0, "scrolled to the end");
+    assert!(built(&ui) < 40, "{} rows built at the end", built(&ui));
+    let last = ui.find("lister:row200").expect("the last row is built");
+    assert!((last[1] + last[3] - got - (area[1] + area[3])).abs() <= 1.0, "the last row sits at the bottom");
+    assert!(ui.warnings().is_empty(), "{:?}", ui.warnings());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The kit gallery, with its board and long table, renders without a
+/// warning: every sample is a real use of the kit.
+#[test]
+fn the_kit_gallery_renders_clean() {
+    let sim = sim_at(&mods());
+    let mut ui = ui_for(&sim);
+    let mut cv = client(&sim);
+    cv.show_devtools = true;
+    frame(&mut ui, &sim, &cv, Default::default());
+    let toggle = ui.find("core:devtools.gallery").expect("the gallery toggle");
+    click(&mut ui, &sim, &mut cv, centre(toggle));
+    frame(&mut ui, &sim, &cv, Input { time: 1.0, ..Default::default() });
+    let snap = ui.snapshot();
+    assert!(snap.contains("grid 8x12 #core:gallery.grid"), "{snap}");
+    assert!(ui.find("core:gallery.table").is_some(), "the table's list is laid out");
+    assert!(ui.warnings().is_empty(), "{:?}", ui.warnings());
+    // Painting the board flips a cell and the next build shows it.
+    let g = ui.find("core:gallery.grid").unwrap();
+    let at = (g[0] + 5.0, g[1] + 5.0);
+    frame(&mut ui, &sim, &cv, Input { mouse: at, left_pressed: true, time: 2.0, ..Default::default() });
+    frame(&mut ui, &sim, &cv, Input { mouse: at, left_released: true, time: 3.0, ..Default::default() });
+    assert!(ui.warnings().is_empty(), "{:?}", ui.warnings());
 }
 
 #[test]

@@ -140,6 +140,52 @@ function kit.list(items, render, props)
 	return node("col", props or { gap = "xs" }, rows)
 end
 
+-- A grid of cells the engine paints: one node however many cells. props:
+-- rows, cols, cell(r, c) -> text | { text, bg, color } | nil, cell_w,
+-- cell_h (tokens or px), gap, on_press(r, c) -> value, on_paint(r, c,
+-- value), id, size, weight. Press picks a value; the drag paints it into
+-- each cell it enters, once.
+function kit.grid(props)
+	props.kind = "grid"
+	props.cell_w = props.cell_w or "l"
+	props.cell_h = props.cell_h or "l"
+	props.gap = props.gap or 1
+	return props
+end
+
+-- A virtual table: a header row over a list that builds only the rows on
+-- screen. props: id (required: its scroll position is kept by it), columns
+-- = { {label, w} }, count, row(i) -> { cell, ... } (strings or nodes),
+-- row_h, h (the visible height), on_click(i).
+function kit.table(props)
+	local cols = props.columns
+	local header = {}
+	for _, c in cols do
+		table.insert(header, node("row", { w = c.w, pad = "xs" }, { kit.label(c.label, { size = "small", color = "muted" }) }))
+	end
+	local function row(i)
+		local cells = props.row(i)
+		local out = { kind = "row", align = "center", hover = { bg = "surface_raised" } }
+		if props.on_click then
+			out.on_click = function()
+				props.on_click(i)
+			end
+		end
+		for k, c in cols do
+			local v = cells[k]
+			if type(v) ~= "table" then
+				v = kit.label(tostring(v or ""), { size = "small" })
+			end
+			table.insert(out, node("row", { w = c.w, pad = "xs" }, { v }))
+		end
+		return out
+	end
+	return node("col", { id = props.id .. ".table", gap = 0 }, {
+		node("row", { bg = "surface_raised" }, header),
+		{ kind = "list", id = props.id, count = props.count, row = row, row_h = props.row_h or "l", h = props.h },
+	})
+end
+
 -- A context menu. props: items = { {label, on_click, disabled} }, id.
 function kit.menu(props)
 	local rows = {}
