@@ -62,7 +62,8 @@ pub fn world(mods: &Path, seed: u64) -> Result<Sim, String> {
 
     // What to build it from, chosen by what defs are rather than by name.
     let buildable = |d: usize| defs.things[d].build.is_some();
-    let of = |pred: &dyn Fn(usize) -> bool| (0..defs.things.len()).filter(|&d| buildable(d) && pred(d)).collect::<Vec<_>>();
+    let of =
+        |pred: &dyn Fn(usize) -> bool| (0..defs.things.len()).filter(|&d| buildable(d) && pred(d)).collect::<Vec<_>>();
     let walls = of(&|d| defs.things[d].blocks && !defs.things[d].door);
     let doors = of(&|d| defs.things[d].door);
     let floors = of(&|d| defs.things[d].category == Category::Floor);
@@ -87,7 +88,8 @@ pub fn world(mods: &Path, seed: u64) -> Result<Sim, String> {
             if !s.world.map.inb(p) {
                 continue;
             }
-            for e in [s.world.map.fixture_at(p), s.world.map.item_at(p), s.world.map.floor_at(p)].into_iter().flatten() {
+            for e in [s.world.map.fixture_at(p), s.world.map.item_at(p), s.world.map.floor_at(p)].into_iter().flatten()
+            {
                 s.world.despawn_thing(e);
             }
             let room = ((y / ROOM) * (COLONY / ROOM + 1) + x / ROOM) as usize;
@@ -266,7 +268,20 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
     );
     println!(
         "{:<10} {:>5} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7} {:>6} {:>8}",
-        "view", "zoom", "world", "p99", "ground", "things", "pawns", "weather", "light", "ui", "submit", "gpu", "calls", "indices"
+        "view",
+        "zoom",
+        "world",
+        "p99",
+        "ground",
+        "things",
+        "pawns",
+        "weather",
+        "light",
+        "ui",
+        "submit",
+        "gpu",
+        "calls",
+        "indices"
     );
     for r in &results {
         let sorted = r.world_ms();

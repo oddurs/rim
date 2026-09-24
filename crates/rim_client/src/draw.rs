@@ -90,7 +90,12 @@ fn visible(app: &App) -> (i32, i32, i32, i32) {
     let (w, cam) = (&app.sim.world, &app.cam);
     let (x0, y0) = cam.to_world(0.0, 0.0);
     let (x1, y1) = cam.to_world(screen_width(), screen_height());
-    ((x0.floor() as i32).max(0), (y0.floor() as i32).max(0), (x1.ceil() as i32).min(w.map.w - 1), (y1.ceil() as i32).min(w.map.h - 1))
+    (
+        (x0.floor() as i32).max(0),
+        (y0.floor() as i32).max(0),
+        (x1.ceil() as i32).min(w.map.w - 1),
+        (y1.ceil() as i32).min(w.map.h - 1),
+    )
 }
 
 /// The ground, then floors, items and fixtures.

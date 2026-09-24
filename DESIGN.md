@@ -877,7 +877,15 @@ doesn't round-trip is a desync that hasn't happened yet.
 ## 8. Performance budget
 
 Target: **250×250 map, 30 colonists, 200 total pawns, 6× speed, 60 fps** on a
-mid-range laptop. That means ≤ 2 ms per sim tick at 6× (≈ 360 ticks/sec).
+little old laptop with mods loaded. The reference machine is a 2017
+ultrabook: a four-core mobile CPU and integrated graphics (Intel UHD 620
+class) at 1080p. That means ≤ 2 ms per sim tick at 6× (≈ 360 ticks/sec).
+
+The frame's 16.7 ms is split: the sim's 2 ms a tick, the UI's 1 ms (§11),
+and **4 ms of CPU for the world renderer** on the whole map at the lowest
+zoom, the worst case. What is left is headroom for the GPU, the driver and
+a mod or two that isn't careful. `rim --bench-render` measures it on a
+dense colony, per pass, with draw calls; CI fails over budget.
 
 - Each system declares a tick interval (every tick, every N ticks, or
   event-only), and work is **staggered** by entity id.
@@ -889,7 +897,10 @@ mid-range laptop. That means ≤ 2 ms per sim tick at 6× (≈ 360 ticks/sec).
   Hierarchical pathing and flow fields for raids come later, behind the same
   interface.
 - Wealth and other aggregates are cached and recomputed on an interval.
-- Rendering culls to the viewport. Chunked meshes come later.
+- Rendering culls to the viewport. What doesn't move is drawn from
+  per-chunk meshes, rebuilt when the chunk changes; every mod's sprites
+  share one atlas, so the number of mods doesn't change the number of
+  draw calls.
 - Per-system and per-mod profiler overlay from day one.
 
 ---
