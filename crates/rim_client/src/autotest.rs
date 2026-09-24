@@ -731,7 +731,7 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.key(KeyCode::F12).await;
     t.frame().await;
     t.check(t.app.ui.find("weather:devtools.panel").is_some(), "F12 shows the weather devtools");
-    t.click_ui("weather:devtools.force.storm").await;
+    t.click_ui("weather:devtools.force.weather:storm").await;
     t.ticks(2);
     let head = match t.w().data.get("weather:forecast") {
         Some(Data::Table(q)) => q.values().next().and_then(|e| e.get("id").cloned()),
