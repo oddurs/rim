@@ -92,11 +92,10 @@ A one-week sprint inside Shelter. The world gets seasons and weather you can see
 
 ## shelter — Shelter
 
-`######····` 55% · 6 of 11 done · due 2026-11-01
+`#######···` 64% · 7 of 11 done · due 2026-11-01
 
 Exposure makes shelter matter: warmth, enclosed rooms, day/night, weather. Get four walls up before night two.
 
-- [ ] `0058` Doors that raiders must break through <sup>feature · p1 · m · engine</sup>
 - [ ] `0059` Founder trait: combat bonus and recruitment pull <sup>feature · p2 · s · core</sup>
 - [ ] `0136` Autotest seeds from the clock, so CI rolls dice <sup>bug · p1 · s · tooling</sup>
 - [ ] `0156` CI: build and test on Windows <sup>chore · p1 · s · tooling</sup>
@@ -105,6 +104,7 @@ Exposure makes shelter matter: warmth, enclosed rooms, day/night, weather. Get f
 - [x] `0053` Warmth need and exposure outdoors <sup>feature · p0 · m · engine</sup>
 - [x] `0054` Roofs, or does enclosure count as shelter? <sup>spike · p1 · s · engine</sup>
 - [x] `0055` Campfire gives warmth in a radius <sup>content · p1 · s · core</sup>
+- [x] `0058` Doors that raiders must break through <sup>feature · p1 · m · engine</sup>
 - [x] `0071` Prioritize: right-click to force a job <sup>feature · p1 · l · engine</sup>
 - [x] `0160` Field layers: data-driven scalar grids (temperature, light, beauty) <sup>feature · p0 · l · engine</sup>
 

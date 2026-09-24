@@ -104,7 +104,9 @@ fn doors_split_rooms_but_not_paths() {
     assert_ne!(m.room_at(inside).unwrap().id, m.room_at(outside).unwrap().id);
     assert_eq!(m.region_at(inside), m.region_at(outside), "same pathing region through the door");
     let w = &mut s.world;
-    assert!(w.pf.find(&w.map, outside, Goal::Cell(inside), 10_000).is_some(), "can walk in through the door");
+    // Nobody built this door, so it opens for anyone.
+    let f = rim_sim::world::Faction::Player;
+    assert!(w.pf.find(&w.map, outside, Goal::Cell(inside), 10_000, f).is_some(), "can walk in through the door");
 }
 
 #[test]

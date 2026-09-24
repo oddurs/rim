@@ -25,6 +25,10 @@ pub enum Faction {
 }
 
 impl Faction {
+    /// Every faction, in discriminant order. Per-faction tables index by
+    /// `as usize`, so this is also their length.
+    pub const ALL: [Faction; 3] = [Faction::Wild, Faction::Player, Faction::Hostile];
+
     pub fn parse(s: &str) -> Option<Self> {
         match s {
             "wild" => Some(Faction::Wild),
@@ -89,6 +93,10 @@ pub enum Job {
         target: Entity,
         until: u64,
     },
+    /// Break down a door that will not open for us.
+    Breach {
+        door: Entity,
+    },
     Flee {
         to: IVec,
         until: u64,
@@ -114,6 +122,7 @@ impl Job {
             Job::Sleep { .. } => "going to sleep",
             Job::Comfort { .. } => "warming up",
             Job::Attack { .. } => "fighting",
+            Job::Breach { .. } => "breaking in",
             Job::Flee { .. } => "fleeing",
             Job::Leave { .. } => "leaving",
         }
@@ -181,6 +190,11 @@ pub struct Blueprint {
     pub delivered: Vec<u32>,
     pub work_left: u32,
 }
+
+/// Which faction built this fixture. Doors read it: a door opens for its
+/// owner and stands in everyone else's way.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Owner(pub Faction);
 
 /// Player has marked this thing or creature for work.
 #[derive(Clone, Copy, Debug)]
@@ -529,6 +543,7 @@ impl World {
             }
             if self.map.fixture[i] == Some(e) {
                 self.map.set_fixture(t.pos, None, false, 0, false);
+                self.map.set_owner(t.pos, None);
             }
         }
         self.reservations.remove(&e);
