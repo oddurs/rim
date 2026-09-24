@@ -653,6 +653,7 @@ version = "0.1.0"
 dependencies = [
  "cosmic-text",
  "mlua",
+ "png",
  "rim_sim",
  "serde",
  "taffy",

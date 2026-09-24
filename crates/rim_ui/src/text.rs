@@ -193,6 +193,9 @@ pub struct Text {
     shaped: HashMap<ShapeKey, (Shaped, u64)>,
     frame: u64,
     slots: HashMap<CacheKey, Option<GlyphSlot>>,
+    /// Where each mod image (by name and factor) sits in the atlas; None
+    /// when it did not fit.
+    image_slots: HashMap<(String, u32), Option<[u16; 4]>>,
     pub atlas: Atlas,
     /// Shaping cache misses, for tests and the profiler.
     pub shapes: u64,
@@ -261,6 +264,7 @@ impl Text {
             shaped: HashMap::new(),
             frame: 0,
             slots: HashMap::new(),
+            image_slots: HashMap::new(),
             atlas: Atlas::new(1024),
             shapes: 0,
             hinting: false,
@@ -352,6 +356,58 @@ impl Text {
         out
     }
 
+    /// Forget placed images (after a reload replaced their pixels).
+    pub fn forget_images(&mut self) {
+        self.image_slots.clear();
+    }
+
+    /// A quad drawing a mod image over `dst`, placing its pixels in the
+    /// atlas the first time. None if it will not fit even an empty atlas.
+    pub fn image_quad(
+        &mut self,
+        img: &crate::image::ImageData,
+        name: &str,
+        dst: [f32; 4],
+        tinted: bool,
+    ) -> Option<GlyphQuad> {
+        let key = (name.to_string(), img.factor);
+        let slot = match self.image_slots.get(&key) {
+            Some(s) => *s,
+            None => {
+                let placed = self.place_image(img);
+                self.image_slots.insert(key, placed);
+                placed
+            }
+        }?;
+        Some(GlyphQuad {
+            dst,
+            uv: [slot[0] as f32, slot[1] as f32, slot[2] as f32, slot[3] as f32],
+            // A tinted image is a mask in the text colour, like a glyph.
+            color: !tinted,
+        })
+    }
+
+    fn place_image(&mut self, img: &crate::image::ImageData) -> Option<[u16; 4]> {
+        let (w, h) = (img.w, img.h);
+        let (ax, ay) = match self.atlas.alloc(w, h) {
+            Some(a) => a,
+            None => {
+                self.atlas.clear();
+                self.slots.clear();
+                self.image_slots.clear();
+                self.atlas.alloc(w, h)?
+            }
+        };
+        let size = self.atlas.size;
+        for row in 0..h {
+            let src = (row * w) as usize * 4;
+            let dst = ((ay + row) * size + ax) as usize * 4;
+            self.atlas.pixels[dst..dst + (w as usize) * 4].copy_from_slice(&img.rgba[src..src + (w as usize) * 4]);
+        }
+        self.atlas.dirty = true;
+        Some([ax as u16, ay as u16, w as u16, h as u16])
+    }
+
     /// Rasterise a glyph into the atlas the first time it's needed.
     fn slot(&mut self, key: CacheKey) -> Option<GlyphSlot> {
         if let Some(s) = self.slots.get(&key) {
@@ -369,6 +425,7 @@ impl Text {
                     // Full: start over. Everything re-rasterises on demand.
                     self.atlas.clear();
                     self.slots.clear();
+                    self.image_slots.clear();
                     self.atlas.alloc(w, h)?
                 }
             };

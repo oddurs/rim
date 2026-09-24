@@ -187,7 +187,7 @@ The run gets a shape: eras, storyteller tiers, defensive strength in the threat 
 
 ## plugin-api — Plugin API
 
-`####······` 32% · 8 of 25 done · due 2027-02-01
+`####······` 36% · 9 of 25 done · due 2027-02-01
 
 The API grows up: stat pipeline, script components, custom jobs, needs and def kinds, modules and custom events, a real sandbox with hard limits, factions as data, rim test, typed API. Everything Mood needs, and everything DESIGN.md §10 says a mod from a stranger's repo must be safe to do.
 
@@ -198,7 +198,6 @@ The API grows up: stat pipeline, script components, custom jobs, needs and def k
 - [ ] `978be4f3` Factions as defs, not an engine enum <sup>feature · p0 · m · engine</sup>
 - [ ] `97e9d4a7` Stat pipeline: base values plus registered modifiers <sup>feature · p0 · l · engine</sup>
 - [ ] `b0da41ef` Custom def kinds: plugins declare their own data <sup>feature · p1 · m · engine</sup>
-- [ ] `b25b27e0` Image node and a mod atlas <sup>feature · p1 · m · engine</sup>
 - [ ] `b3df9f85` Mod-defined def kinds with schemas, and namespaced extension fields <sup>feature · p0 · l · engine</sup>
 - [ ] `c65db254` Per-mod budgets: profiler warnings and hard limits for runaway scripts <sup>feature · p1 · m · engine</sup>
 - [ ] `e2ce89c3` Sprites and atlases from mods <sup>feature · p2 · m · client</sup>
@@ -214,6 +213,7 @@ The API grows up: stat pipeline, script components, custom jobs, needs and def k
 - [x] `51a9c5c6` Patch list operations: append, remove and match by key <sup>feature · p1 · m · engine</sup>
 - [x] `6191b800` Luau type definitions for the rim API <sup>docs · p2 · m · tooling</sup>
 - [x] `acaa16f4` rim test: Luau tests against seeded headless worlds <sup>feature · p0 · m · tooling</sup>
+- [x] `b25b27e0` Image node and a mod atlas <sup>feature · p1 · m · engine</sup>
 - [x] `ded7881a` Deterministic math in scripts: replace library trig and exp <sup>feature · p1 · s · engine</sup>
 - [x] `f6e18475` Mod modules: require("@mod/path") limited to declared dependencies <sup>feature · p0 · m · engine</sup>
 

@@ -27,6 +27,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `ui.define` | `(id: string, build: (view: any) -> Node?) -> ()` | Define a component under a namespaced id. |
 | `ui.extend` | `(id: string, add: any) -> ()` | Add children to another component's extension point. |
 | `ui.grid` | `(props: GridProps) -> Node` | Rows by cols of cells the engine paints as one node. cell(r, c) describes each cell at build; on_press(r, c) returns the value a drag paints and on_paint(r, c, value) runs once per cell the drag enters. |
+| `ui.image` | `(node: Node) -> Node` | A picture from a mod's ui/img: { src = "mod:name", tint = true }. Its own size unless w/h say otherwise; tint draws it in the text colour. A name@2x.png beside name.png is used on dense displays. |
 | `ui.is_open` | `(id: string) -> boolean` | Whether a window is open. |
 | `ui.list` | `(props: ListProps) -> Node` | A scroll area that builds only the rows on screen. Needs an id, count, row_h and row(i); spacers stand in for the rows above and below. |
 | `ui.mount` | `(layer: Layer, id: string, opts: { order: number?, align: string? }?) -> ()` | Show a component on a screen layer. |

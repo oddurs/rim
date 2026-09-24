@@ -14,6 +14,7 @@ type Node = {
     on_click: (() -> ())?, on_right_click: (() -> ())?, tooltip: string?, disabled: boolean?,
     entity: number?, cell: { number }?, priority: number?, offset: number?,
     handle: ("move" | "resize" | "close")?,
+    src: string?, tint: boolean?,
     [number]: any,
 }
 type Cell = string | number | { text: string?, bg: string?, color: string? } | nil
@@ -70,6 +71,8 @@ declare ui: {
     extend: (id: string, add: any) -> (),
     -- Rows by cols of cells the engine paints as one node. cell(r, c) describes each cell at build; on_press(r, c) returns the value a drag paints and on_paint(r, c, value) runs once per cell the drag enters.
     grid: (props: GridProps) -> Node,
+    -- A picture from a mod's ui/img: { src = "mod:name", tint = true }. Its own size unless w/h say otherwise; tint draws it in the text colour. A name@2x.png beside name.png is used on dense displays.
+    image: (node: Node) -> Node,
     -- Whether a window is open.
     is_open: (id: string) -> boolean,
     -- A scroll area that builds only the rows on screen. Needs an id, count, row_h and row(i); spacers stand in for the rows above and below.

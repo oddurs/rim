@@ -222,6 +222,20 @@ function kit.window(win)
 	})
 end
 
+-- An icon: a mod's image (`mod:name`, from its ui/img/) drawn in the text
+-- colour at `size` (a space token or px, square). opts: color, tooltip, id.
+function kit.icon(name: string, size: any, opts: { [string]: any }?)
+	local o = opts or {}
+	return { kind = "image", src = name, w = size, h = size, tint = true, color = o.color, tooltip = o.tooltip, id = o.id }
+end
+
+-- A picture as shipped: its own colours and, unless w/h say otherwise,
+-- its own size.
+function kit.image(name: string, opts: { [string]: any }?)
+	local o = opts or {}
+	return { kind = "image", src = name, w = o.w, h = o.h, tooltip = o.tooltip, id = o.id }
+end
+
 -- A context menu. props: items = { {label, on_click, disabled} }, id.
 function kit.menu(props)
 	local rows = {}

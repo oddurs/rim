@@ -30,6 +30,7 @@ type Node = {
     on_click: (() -> ())?, on_right_click: (() -> ())?, tooltip: string?, disabled: boolean?,
     entity: number?, cell: { number }?, priority: number?, offset: number?,
     handle: ("move" | "resize" | "close")?,
+    src: string?, tint: boolean?,
     [number]: any,
 }
 type Cell = string | number | { text: string?, bg: string?, color: string? } | nil
@@ -108,6 +109,11 @@ pub const UI_API: &[UiDoc] = &[
         "ui.grid",
         "(props: GridProps) -> Node",
         "Rows by cols of cells the engine paints as one node. cell(r, c) describes each cell at build; on_press(r, c) returns the value a drag paints and on_paint(r, c, value) runs once per cell the drag enters."
+    ),
+    d!(
+        "ui.image",
+        "(node: Node) -> Node",
+        "A picture from a mod's ui/img: { src = \"mod:name\", tint = true }. Its own size unless w/h say otherwise; tint draws it in the text colour. A name@2x.png beside name.png is used on dense displays."
     ),
     d!("ui.is_open", "(id: string) -> boolean", "Whether a window is open."),
     d!(

@@ -29,6 +29,17 @@ pub enum Kind {
     /// Rows by columns of cells the engine positions and paints: one node,
     /// however many cells. See `Grid`.
     Grid,
+    /// A picture from a mod's `ui/img`, drawn from the atlas. See `Image`.
+    Image,
+}
+
+/// What an image node shows: the picture by name and which variant, and
+/// the colour to draw it in when it is a tinted (monochrome) icon.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Image {
+    pub name: String,
+    pub factor: u32,
+    pub tint: Option<Rgba>,
 }
 
 /// One cell of a grid, as the component's `cell(r, c)` described it.
@@ -176,6 +187,8 @@ pub struct Node {
     /// Window chrome: dragging this moves or resizes the window, clicking
     /// it closes.
     pub handle: Option<Handle>,
+    /// Image nodes: the picture.
+    pub image: Option<Image>,
     pub children: Vec<Node>,
 }
 
@@ -235,8 +248,12 @@ impl Node {
             (Kind::Scroll, _) => "scroll",
             (Kind::Anchored, _) => "anchored",
             (Kind::Grid, _) => "grid",
+            (Kind::Image, _) => "image",
         };
         out.push_str(kind);
+        if let Some(i) = &self.image {
+            out.push_str(&format!(" {}{}", i.name, if i.tint.is_some() { " tinted" } else { "" }));
+        }
         if let Some(g) = &self.grid {
             out.push_str(&format!(" {}x{}", g.rows, g.cols));
         }
@@ -263,6 +280,7 @@ impl Node {
 pub struct Ctx<'a> {
     pub theme: &'a Theme,
     pub owner: Rc<str>,
+    pub images: &'a crate::image::Images,
 }
 
 /// A node with nothing in it, for engine-built containers.
@@ -288,6 +306,7 @@ pub fn blank(key: u64, owner: Rc<str>) -> Node {
         offset_y: 0.0,
         grid: None,
         handle: None,
+        image: None,
         children: Vec::new(),
     }
 }
@@ -422,6 +441,8 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
     let (mut cell_w, mut cell_h) = (None, None);
     let mut cell_fn: Option<Function> = None;
     let (mut on_press, mut on_paint) = (None, None);
+    let mut src: Option<String> = None;
+    let mut tint = false;
     let mut n = Node {
         kind: Kind::Box,
         id: None,
@@ -443,6 +464,7 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
         offset_y: 0.0,
         grid: None,
         handle: None,
+        image: None,
         children: Vec::new(),
     };
     for pair in t.pairs::<Value, Value>() {
@@ -469,6 +491,7 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
                     "scroll" => (Kind::Scroll, false),
                     "anchored" => (Kind::Anchored, false),
                     "grid" => (Kind::Grid, false),
+                    "image" => (Kind::Image, false),
                     other => return Err(format!("unknown node kind '{other}'")),
                 }
             }
@@ -546,6 +569,8 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
                     other => return Err(format!("unknown handle '{other}' (move, resize or close)")),
                 })
             }
+            "src" => src = Some(string("src", &v)?),
+            "tint" => tint = matches!(v, Value::Boolean(true)),
             other => return Err(format!("unknown property '{other}'")),
         }
     }
@@ -640,6 +665,37 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
         }));
         n.text = None;
     }
+    if kind == Kind::Image {
+        let Some(name) = src else { return Err("an image needs src = \"mod:name\"".into()) };
+        let Some(img) = ctx.images.pick(&name, theme.scale) else {
+            let mut known = ctx.images.names().join(", ");
+            if known.is_empty() {
+                known = "no mod ships one".into();
+            }
+            return Err(format!(
+                "image '{name}' not found: ui/img/{}.png in a mod ({known})",
+                name.rsplit(':').next().unwrap_or(&name)
+            ));
+        };
+        // Its own logical size unless the node says otherwise.
+        let f = img.factor as f32;
+        if style.w == Len::Auto {
+            style.w = Len::Px(img.w as f32 / f * theme.scale);
+        }
+        if style.h == Len::Auto {
+            style.h = Len::Px(img.h as f32 / f * theme.scale);
+        }
+        let tint_color = if tint {
+            Some(match text_color {
+                Some(c) => c,
+                None => theme.color("text")?,
+            })
+        } else {
+            None
+        };
+        n.image = Some(Image { name, factor: img.factor, tint: tint_color });
+        n.text = None;
+    }
     if kind == Kind::Anchored {
         n.anchor = Some(match (entity, cell) {
             (Some(e), _) => Anchor::Entity(e),
@@ -690,6 +746,7 @@ pub fn error_node(theme: &Theme, owner: Rc<str>, key: u64, what: &str, err: &str
         offset_y: 0.0,
         grid: None,
         handle: None,
+        image: None,
         children: vec![],
     };
     let pad = 4.0 * theme.scale;
@@ -719,6 +776,7 @@ pub fn error_node(theme: &Theme, owner: Rc<str>, key: u64, what: &str, err: &str
         offset_y: 0.0,
         grid: None,
         handle: None,
+        image: None,
         children: vec![text],
     }
 }
