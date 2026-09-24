@@ -1,0 +1,10 @@
+# The year. Core owns the calendar because it's shared vocabulary: farming,
+# the storyteller and mood all speak of spring. What the seasons *do* is up to
+# plugins (mods/weather bends the temperature around them).
+
+[[calendar]]
+id = "core"
+year_days = 60
+seasons = ["spring", "summer", "autumn", "winter"]
+# 0-based: the game starts on day 9 of spring.
+start_day = 8

@@ -23,7 +23,12 @@ pub struct Sim {
 
 impl Sim {
     pub fn new(mods_dir: &Path, seed: u64) -> Result<Sim, String> {
-        let loaded = modloader::load(mods_dir)?;
+        Self::with_mods(mods_dir, seed, &|_| true)
+    }
+
+    /// Load only the mods `enabled` accepts, by id.
+    pub fn with_mods(mods_dir: &Path, seed: u64, enabled: &dyn Fn(&str) -> bool) -> Result<Sim, String> {
+        let loaded = modloader::load_only(mods_dir, enabled)?;
         let scripts = ScriptHost::load(&loaded.scripts, &loaded.defs)?;
         let defs = Arc::new(loaded.defs);
         let mut world = World::new(defs.clone(), MAP_SIZE, MAP_SIZE, seed);
@@ -54,6 +59,8 @@ impl Sim {
             );
         }
         systems::wealth(&mut world);
+        let clock = world.clock();
+        world.fields.update_ambient(&defs, clock);
 
         Ok(Sim {
             world,
@@ -81,7 +88,8 @@ impl Sim {
         prof.time("regions", || w.map.ensure_regions());
         prof.time("rooms", || w.map.ensure_rooms());
         let defs = w.defs.clone();
-        prof.time("fields", || w.fields.update(&defs, &mut w.map, w.tick));
+        let clock = w.clock();
+        prof.time("fields", || w.fields.update(&defs, &mut w.map, clock));
         prof.time("pawns", || ai::tick_pawns(w));
         prof.time("deaths", || systems::deaths(w));
         if w.tick.is_multiple_of(systems::NEEDS_INTERVAL) {
@@ -96,6 +104,11 @@ impl Sim {
         }
         if w.tick > 0 && w.tick.is_multiple_of(TICKS_PER_DAY) {
             w.events.push(GameEvent::NewDay { day: w.day() });
+            let yesterday = w.season_index_at(w.tick - 1);
+            if w.season_index() != yesterday {
+                let season = w.season().to_string();
+                w.events.push(GameEvent::SeasonChanged { season, index: w.season_index(), year: w.year() });
+            }
         }
         self.scripts.run_hooks(w, prof);
         self.scripts.dispatch_events(w, prof);

@@ -2,7 +2,7 @@
 id: 182
 title: Calendar, seasons and script events
 type: feature
-status: planned
+status: doing
 milestone: weather
 created: 2026-09-23
 updated: 2026-09-23

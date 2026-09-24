@@ -605,12 +605,10 @@ pub fn apply(app: &mut App, action: Action) {
             app.ui.devtools = app.show_devtools;
         }
         Action::CycleOverlay => {
-            let n = app.sim.world.defs.fields.len();
-            app.overlay = match app.overlay {
-                None if n > 0 => Some(0),
-                Some(i) if i + 1 < n => Some(i + 1),
-                _ => None,
-            };
+            // Only fields that vary over the map have an overlay.
+            let fields = &app.sim.world.defs.fields;
+            let from = app.overlay.map_or(0, |i| i + 1);
+            app.overlay = (from..fields.len()).find(|&i| fields[i].overlay);
         }
         Action::Escape => {
             if app.tool != Tool::Select {

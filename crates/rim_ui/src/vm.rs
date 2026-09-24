@@ -514,6 +514,7 @@ impl UiVm {
                 row.set("label", fd.label.as_str())?;
                 row.set("unit", fd.unit.as_str())?;
                 row.set("hud", fd.hud)?;
+                row.set("overlay", fd.overlay)?;
                 row.set("ambient", l.world.fields.ambient(i))?;
                 row.set("shown", l.client.overlay == Some(i))?;
                 t.push(row)?;
@@ -521,6 +522,40 @@ impl UiVm {
             Ok(t)
         });
         view!("overlay", (), |_lua, l, _a| Ok(l.client.overlay.map(|i| l.world.defs.fields[i].label.clone())));
+        // The calendar: { year, season, day, day_of_year, year_days }.
+        view!("date", (), |lua, l, _a| {
+            let w = l.world;
+            let t = lua.create_table()?;
+            t.set("year", w.year() + 1)?;
+            t.set("season", w.season())?;
+            t.set("season_index", w.season_index() + 1)?;
+            t.set("day", w.day_of_season())?;
+            t.set("day_of_year", w.day_of_year() + 1)?;
+            t.set("year_days", w.defs.calendar.year_days)?;
+            Ok(t)
+        });
+        // A field's outdoor value, or nil for an unknown field.
+        view!("ambient", String, |_lua, l, id| {
+            Ok(l.world.defs.lookup("field", &id).map(|f| l.world.fields.ambient(f as usize)))
+        });
+        // Each part of a field's outdoor value: { {label, value}, ... }.
+        view!("explain", String, |lua, l, id| {
+            let t = lua.create_table()?;
+            if let Some(f) = l.world.defs.lookup("field", &id) {
+                for (label, v) in l.world.fields.explain_ambient(&l.world.defs, f as usize) {
+                    let row = lua.create_table()?;
+                    row.set("label", label)?;
+                    row.set("value", v)?;
+                    t.push(row)?;
+                }
+            }
+            Ok(t)
+        });
+        // Data a sim script stored with rim.set_data (a copy), or nil.
+        view!("data", String, |lua, l, key| match l.world.data.get(&key) {
+            Some(d) => rim_sim::data::to_lua(lua, d),
+            None => Ok(Value::Nil),
+        });
         view!("tools", (), |lua, l, _a| {
             let t = lua.create_table()?;
             for tool in &l.client.tools {

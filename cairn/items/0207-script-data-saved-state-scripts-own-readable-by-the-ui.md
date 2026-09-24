@@ -2,7 +2,7 @@
 id: 207
 title: 'Script data: saved state scripts own, readable by the UI'
 type: feature
-status: planned
+status: doing
 milestone: weather
 created: 2026-09-23
 updated: 2026-09-23

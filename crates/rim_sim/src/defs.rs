@@ -4,6 +4,7 @@
 //! Unknown fields are ignored on purpose: a plugin may annotate another
 //! mod's defs with data that only it understands.
 
+use crate::terms::{Terms, TermsDef};
 use serde::Deserialize;
 use std::collections::HashMap;
 
@@ -302,15 +303,30 @@ pub enum IndoorMode {
     Room,
 }
 
+/// A field's outdoor value: a constant, or labelled terms (see `terms`).
+#[derive(Deserialize, Clone, Debug)]
+#[serde(untagged)]
+pub enum AmbientDef {
+    Const(f64),
+    Terms(TermsDef),
+}
+
+impl Default for AmbientDef {
+    fn default() -> Self {
+        AmbientDef::Const(0.0)
+    }
+}
+
 #[derive(Deserialize, Clone, Debug)]
 pub struct FieldDef {
     pub id: String,
     pub label: String,
     #[serde(default)]
     pub unit: String,
-    /// Outdoor value until a script sets it.
+    /// Outdoor value: a constant, or terms over the time of day and year.
+    /// Plugins add named contributions on top (`rim.push_ambient`).
     #[serde(default)]
-    pub ambient: f64,
+    pub ambient: AmbientDef,
     #[serde(default)]
     pub indoor: IndoorMode,
     /// Room fields: fraction of the gap to outdoors closed per hour.
@@ -326,10 +342,47 @@ pub struct FieldDef {
     /// Show the outdoor value in the top bar.
     #[serde(default)]
     pub hud: bool,
+    /// Offer a map overlay (`O`). Off for values that are the same
+    /// everywhere, such as cloud cover.
+    #[serde(default = "dtrue")]
+    pub overlay: bool,
+    /// Compiled `ambient` terms (empty for a constant).
+    #[serde(skip)]
+    pub terms: Terms,
+    /// The constant part of `ambient` (0 when it's terms).
+    #[serde(skip)]
+    pub base: f64,
     #[serde(skip)]
     pub rgb_low: [u8; 3],
     #[serde(skip)]
     pub rgb_high: [u8; 3],
+}
+
+// ---------------------------------------------------------------- calendar
+
+fn d60() -> u32 {
+    60
+}
+
+/// The year: how long it is, what its seasons are called, and where the
+/// game starts in it. Core defines one; a plugin patches it.
+#[derive(Deserialize, Clone, Debug)]
+pub struct CalendarDef {
+    pub id: String,
+    #[serde(default = "d60")]
+    pub year_days: u32,
+    /// Equal parts of the year, in order.
+    #[serde(default)]
+    pub seasons: Vec<String>,
+    /// Day of the year (0-based) that the game starts on.
+    #[serde(default)]
+    pub start_day: u32,
+}
+
+impl Default for CalendarDef {
+    fn default() -> Self {
+        CalendarDef { id: "default".into(), year_days: 60, seasons: vec!["year".into()], start_day: 0 }
+    }
 }
 
 // ---------------------------------------------------------------- designations
@@ -387,12 +440,16 @@ pub struct DefDb {
     pub needs: Vec<NeedDef>,
     pub designations: Vec<DesignationDef>,
     pub fields: Vec<FieldDef>,
+    /// Fields in the order their ambient terms must be evaluated.
+    pub ambient_order: Vec<usize>,
+    pub calendar: CalendarDef,
     pub start: Option<StartDef>,
     pub names: Vec<String>,
     index: HashMap<(&'static str, String), DefId>,
 }
 
-pub const KINDS: &[&str] = &["terrain", "thing", "creature", "need", "designation", "field", "start", "names"];
+pub const KINDS: &[&str] =
+    &["terrain", "thing", "creature", "need", "designation", "field", "calendar", "start", "names"];
 
 impl DefDb {
     pub fn lookup(&self, kind: &'static str, id: &str) -> Option<DefId> {
@@ -448,10 +505,24 @@ impl DefDb {
         for d in &mut self.terrain {
             d.rgb = parse_color(&d.color).map_err(|e| format!("terrain/{}: {e}", d.id))?;
         }
+        let field_index = |id: &str| idx.get(&("field", id.to_string())).map(|&i| i as usize);
         for d in &mut self.fields {
             d.rgb_low = parse_color(&d.color_low).map_err(|e| format!("field/{}: {e}", d.id))?;
             d.rgb_high = parse_color(&d.color_high).map_err(|e| format!("field/{}: {e}", d.id))?;
+            match &d.ambient {
+                AmbientDef::Const(v) => d.base = *v,
+                AmbientDef::Terms(t) => d.terms = Terms::compile(t, &format!("field/{}", d.id), &field_index)?,
+            }
         }
+        let reads: Vec<Vec<usize>> = self.fields.iter().map(|f| f.terms.reads()).collect();
+        let names: Vec<&str> = self.fields.iter().map(|f| f.id.as_str()).collect();
+        self.ambient_order = crate::terms::order(&reads, &names)?;
+        let c = &mut self.calendar;
+        c.year_days = c.year_days.max(1);
+        if c.seasons.is_empty() {
+            c.seasons.push("year".into());
+        }
+        c.start_day %= c.year_days;
         for d in &mut self.needs {
             d.rgb = parse_color(&d.color).map_err(|e| format!("need/{}: {e}", d.id))?;
             if d.satisfier == Satisfier::Field {

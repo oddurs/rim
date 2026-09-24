@@ -269,12 +269,109 @@ impl ScriptHost {
             let f = field_id(w, &id)?;
             Ok(w.fields.ambient(f))
         });
-        // Set a field's open-sky value (the climate, a weather plugin...).
-        api!("set_ambient", (String, f64), |w, (id, v)| {
+        // Pin a field's outdoor value (tests, tools); nil unpins. Mods that
+        // want to change the weather push a named contribution instead.
+        api!("set_ambient", (String, Option<f64>), |w, (id, v)| {
             let f = field_id(w, &id)?;
             w.fields.set_ambient(f, v);
             Ok(())
         });
+        // A named contribution to a field's outdoor value, easing in over
+        // `ease_hours` and expiring after `hours` (nil: until cleared).
+        api!("push_ambient", (String, String, f64, Option<f64>, Option<f64>), |w, (id, key, v, hours, ease)| {
+            let f = field_id(w, &id)?;
+            let tick = w.tick;
+            w.fields.push_ambient(f, &key, v, tick, hours, ease.unwrap_or(0.0));
+            Ok(())
+        });
+        api!("clear_ambient", (String, String, Option<f64>), |w, (id, key, ease)| {
+            let f = field_id(w, &id)?;
+            let tick = w.tick;
+            w.fields.clear_ambient(f, &key, tick, ease.unwrap_or(0.0));
+            Ok(())
+        });
+        // Each part of a field's outdoor value: { {label, value}, ... }.
+        {
+            let ptr = self.world.clone();
+            let f = lua.create_function(move |lua, id: String| {
+                let parts = with_world(&ptr, |w| {
+                    let f = field_id(w, &id)?;
+                    Ok(w.fields.explain_ambient(&w.defs, f))
+                })?;
+                let out = lua.create_table()?;
+                for (label, v) in parts {
+                    let t = lua.create_table()?;
+                    t.set("label", label)?;
+                    t.set("value", v)?;
+                    out.push(t)?;
+                }
+                Ok(out)
+            })?;
+            rim.set("explain", f)?;
+        }
+
+        // ---- the calendar
+        api!("year", (), |w, _a| Ok(w.year() + 1));
+        api!("season", (), |w, _a| Ok(w.season().to_string()));
+        {
+            let ptr = self.world.clone();
+            let f = lua.create_function(move |lua, ()| {
+                let t = lua.create_table()?;
+                with_world(&ptr, |w| {
+                    t.set("year", w.year() + 1)?;
+                    t.set("season", w.season())?;
+                    t.set("season_index", w.season_index() + 1)?;
+                    t.set("day", w.day_of_season())?;
+                    t.set("day_of_year", w.day_of_year() + 1)?;
+                    t.set("year_days", w.defs.calendar.year_days)?;
+                    t.set("year_fraction", crate::terms::from_q(w.clock().year))?;
+                    Ok(())
+                })?;
+                Ok(t)
+            })?;
+            rim.set("date", f)?;
+        }
+        let seasons = lua.create_sequence_from(defs.calendar.seasons.iter().map(|s| s.as_str()))?;
+        rim.set("seasons", seasons)?;
+
+        // ---- script data and events
+        // Plain data kept in the world: hashed, saved, readable by the UI.
+        {
+            let ptr = self.world.clone();
+            let f = lua.create_function(move |_, (key, v): (String, Value)| {
+                let d = crate::data::from_lua(&v, &key, 0).map_err(mlua::Error::runtime)?;
+                with_world(&ptr, |w| {
+                    match d {
+                        Some(d) => w.data.insert(key, d),
+                        None => w.data.remove(&key),
+                    };
+                    Ok(())
+                })
+            })?;
+            rim.set("set_data", f)?;
+            let ptr = self.world.clone();
+            let f = lua.create_function(move |lua, key: String| {
+                let d = with_world(&ptr, |w| Ok(w.data.get(&key).cloned()))?;
+                match d {
+                    Some(d) => crate::data::to_lua(lua, &d),
+                    None => Ok(Value::Nil),
+                }
+            })?;
+            rim.set("get_data", f)?;
+            // Send an event to `rim.on(name, fn)` handlers in any mod.
+            let ptr = self.world.clone();
+            let f = lua.create_function(move |_, (name, v): (String, Option<Table>)| {
+                let data = match v {
+                    Some(t) => crate::data::from_lua(&Value::Table(t), &name, 0).map_err(mlua::Error::runtime)?,
+                    None => None,
+                };
+                with_world(&ptr, |w| {
+                    w.events.push(GameEvent::Script { name, data });
+                    Ok(())
+                })
+            })?;
+            rim.set("emit", f)?;
+        }
         // Sheltered: inside an enclosed room.
         api!("indoors", (i32, i32), |w, (x, y)| {
             w.map.ensure_rooms();
@@ -366,7 +463,19 @@ impl ScriptHost {
         }
     }
 
-    fn event_table(&self, w: &World, ev: &GameEvent) -> mlua::Result<(&'static str, Table)> {
+    fn event_table(&self, w: &World, ev: &GameEvent) -> mlua::Result<(String, Table)> {
+        if let GameEvent::Script { name, data } = ev {
+            let t = match data.as_ref().map(|d| crate::data::to_lua(&self.lua, d)).transpose()? {
+                Some(Value::Table(t)) => t,
+                _ => self.lua.create_table()?,
+            };
+            return Ok((name.clone(), t));
+        }
+        let (name, t) = self.builtin_event_table(w, ev)?;
+        Ok((name.to_string(), t))
+    }
+
+    fn builtin_event_table(&self, w: &World, ev: &GameEvent) -> mlua::Result<(&'static str, Table)> {
         let t = self.lua.create_table()?;
         let defs = &w.defs;
         let name = match ev {
@@ -403,6 +512,13 @@ impl ScriptHost {
                 t.set("day", *day)?;
                 "new_day"
             }
+            GameEvent::SeasonChanged { season, index, year } => {
+                t.set("season", season.as_str())?;
+                t.set("index", index + 1)?;
+                t.set("year", year + 1)?;
+                "season_changed"
+            }
+            GameEvent::Script { .. } => unreachable!("handled in event_table"),
             GameEvent::ColonyLost => "colony_lost",
         };
         Ok((name, t))

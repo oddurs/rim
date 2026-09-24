@@ -464,14 +464,15 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
 
     // ---------------------------------------------------------- 0160 field overlay
     println!("\n# field overlay (0160)");
-    let n = defs.fields.len();
-    t.check(n >= 2, format!("core defines field layers ({n})"));
+    let shown: Vec<usize> = (0..defs.fields.len()).filter(|&i| defs.fields[i].overlay).collect();
+    let n = shown.len();
+    t.check(n >= 2, format!("core defines field layers with overlays ({n})"));
     t.check(t.app.overlay.is_none(), "overlay starts off");
     let fire = defs.thing_id("campfire").unwrap();
     let spot = open_square(t.w(), site, 1).expect("room for a fire");
     let _ = t.app.sim.world.spawn_fixture(fire, spot, false);
     t.ticks(1);
-    for i in 0..n {
+    for &i in &shown {
         t.key(KeyCode::O).await;
         t.check(t.app.overlay == Some(i), format!("O shows the '{}' overlay", defs.fields[i].label));
         t.focus(spot);

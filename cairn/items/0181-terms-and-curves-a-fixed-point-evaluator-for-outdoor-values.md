@@ -2,7 +2,7 @@
 id: 181
 title: 'Terms and curves: a fixed-point evaluator for outdoor values'
 type: feature
-status: planned
+status: doing
 milestone: weather
 depends_on:
 - 180

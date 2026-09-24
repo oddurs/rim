@@ -60,7 +60,7 @@ fn ring(s: &mut Sim, o: IVec, size: i32) {
 fn run_at(s: &mut Sim, temp: f64, ticks: u64) {
     let t = field(s, "temperature");
     for _ in 0..ticks {
-        s.world.fields.set_ambient(t, temp);
+        s.world.fields.set_ambient(t, Some(temp));
         s.step();
     }
 }
@@ -278,8 +278,10 @@ fn cold_colonists_go_to_the_fire() {
 }
 
 #[test]
-fn climate_script_drives_the_day() {
-    let mut s = sim();
+fn core_climate_drives_the_day() {
+    // Core alone: the weather plugin would add seasons and clouds.
+    let mods = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mods");
+    let mut s = Sim::with_mods(&mods, 21, &|m| m == "core").expect("core loads");
     let t = field(&s, "temperature");
     let l = field(&s, "light");
     let mut coldest = f64::MAX;

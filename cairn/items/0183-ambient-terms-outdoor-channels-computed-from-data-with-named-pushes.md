@@ -2,7 +2,7 @@
 id: 183
 title: 'Ambient terms: outdoor channels computed from data, with named pushes'
 type: feature
-status: planned
+status: doing
 milestone: weather
 depends_on:
 - 181

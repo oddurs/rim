@@ -1,6 +1,6 @@
 //! Run the simulation with no window.
 //!
-//!   cargo run --release -p rim_sim --example headless -- --days 5 --seed 42
+//!   cargo run --release -p rim_sim --example headless -- --days 5 --seed 42 [--core]
 
 use rim_sim::world::{Faction, Pawn};
 use rim_sim::{Sim, TICKS_PER_DAY};
@@ -17,7 +17,9 @@ fn main() {
     let seed = arg("--seed", 42);
     let mods = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mods");
     let t = Instant::now();
-    let mut sim = Sim::new(&mods, seed).unwrap_or_else(|e| panic!("load failed: {e}"));
+    // --core: core alone, proving the base game stands without plugins.
+    let core = std::env::args().any(|a| a == "--core");
+    let mut sim = Sim::with_mods(&mods, seed, &|m| !core || m == "core").unwrap_or_else(|e| panic!("load failed: {e}"));
     println!("loaded {} mods in {:?}", sim.mods.len(), t.elapsed());
     for w in &sim.warnings {
         println!("  warning: {w}");
