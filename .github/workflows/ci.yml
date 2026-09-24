@@ -62,6 +62,11 @@ jobs:
         run: cargo run --release -p rim_sim --example headless -- --days 3 --seed 1 --core
       - name: Climate report, one year
         run: cargo run --release -p rim_sim --example year -- --seed 1
+      # DESIGN.md §8: 250x250, 30 colonists, 200 pawns. Fails if the mean tick
+      # is over the 2 ms budget (3x slack on shared runners).
+      - name: Benchmark, with a regression threshold
+        if: runner.os == 'Linux'
+        run: cargo run --release -p rim_sim --example bench -- --days 0.25 --check
       # macOS runners have no OpenGL; Linux renders in software under Xvfb.
       - name: Client autotest (drives every control, takes screenshots)
         if: runner.os == 'Linux'

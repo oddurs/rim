@@ -17,9 +17,6 @@ layer: engine
 area: ai
 ---
 
-
-
-
 ## Budget
 
 Choosing work under 0.2 ms a tick at 200 pawns on a stress map with every cell designated (DESIGN.md §4d).
@@ -41,3 +38,7 @@ Choosing work under 0.2 ms a tick at 200 pawns on a stress map with every cell d
 - [ ] Benchmark shows the budget is met, before and after recorded here
 - [ ] `find_work`'s scans are gone; blueprints, designations and hunts post to pools
 - [ ] Determinism test passes; a pool's order never depends on hash iteration
+
+## 2026-09-24
+
+Measurement (before), from the benchmark harness (examples/bench.rs, reference machine, release): cargo run --release -p rim_sim --example bench -- --days 0.5 --designate-all gives mean 6.67 ms per tick, p50 5.35, p99 23.2, max 43.7, with 'pawns' at 6.63 ms of it (seed 1, 250x250, 29 colonists, 199 pawns). Without --designate-all (a colony-sized area designated), 1 day: mean 0.238 ms but p99 8.35 ms and max 37.6 ms, also all 'pawns'.
