@@ -5,9 +5,9 @@ type: feature
 status: backlog
 milestone: plugin-api
 depends_on:
-- b144ca3c-2985-47be-b3ce-d07d4f17ceaa
+- b25b27e0-b43b-478f-b50b-825fedbf62e3
 created: 2026-09-23
-updated: 2026-09-23
+updated: 2026-09-24
 priority: p2
 api: additive
 effort: m

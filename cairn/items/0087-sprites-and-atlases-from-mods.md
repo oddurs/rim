@@ -4,8 +4,10 @@ title: Sprites and atlases from mods
 type: feature
 status: backlog
 milestone: plugin-api
+depends_on:
+- b25b27e0-b43b-478f-b50b-825fedbf62e3
 created: 2026-09-22
-updated: 2026-09-22
+updated: 2026-09-24
 priority: p2
 api: additive
 effort: m
