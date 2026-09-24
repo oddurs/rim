@@ -534,14 +534,18 @@ fn find_work(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
         }
     }
 
-    // Designated fixtures (chop, mine, harvest...).
-    for (te, (t, _)) in w.ecs.query::<(&Thing, &Designated)>().without::<&Regrow>().without::<&Blueprint>().iter() {
+    // Designated fixtures: harvest the natural ones, take down the built ones.
+    for (te, (t, des)) in w.ecs.query::<(&Thing, &Designated)>().without::<&Regrow>().without::<&Blueprint>().iter() {
         let d = t.pos.octile(p.pos);
         if best.as_ref().is_some_and(|b| b.0 <= d) || w.reserved_by_other(te, e) {
             continue;
         }
         if w.map.can_reach(p.pos, Goal::Touch(t.pos)) {
-            consider(&mut best, d, Job::Harvest { target: te, work: 0, forced: false }, te);
+            let job = match w.defs.designations[des.0 as usize].targets {
+                Targets::Built => Job::Deconstruct { target: te, work: 0 },
+                _ => Job::Harvest { target: te, work: 0, forced: false },
+            };
+            consider(&mut best, d, job, te);
         }
     }
 
@@ -610,6 +614,7 @@ fn run_job(w: &mut World, e: Entity, p: &mut Pawn) {
         Job::Harvest { target, work, forced } => (run_harvest(w, p, target, work, forced), 0),
         Job::Deliver { bp, src, want, stage } => (run_deliver(w, p, bp, src, want, stage), 0),
         Job::Construct { bp } => (run_construct(w, p, bp), 0),
+        Job::Deconstruct { target, work } => (run_deconstruct(w, p, target, work), 0),
         Job::Eat { src, t } => (run_eat(w, p, src, t), 0),
         Job::Sleep { bed, spot, stage } => (run_sleep(w, e, p, bed, spot, stage), 0),
         Job::Comfort { to, need, until } => (run_comfort(w, p, to, need, until), 0),
@@ -683,6 +688,35 @@ fn run_deliver(w: &mut World, p: &mut Pawn, bp: Entity, src: Entity, want: u32, 
                     let add = cn.min(bpc.cost[i].1.saturating_sub(bpc.delivered[i]));
                     bpc.delivered[i] += add;
                     p.carry = (cn > add).then_some((cdef, cn - add));
+                }
+            }
+            None
+        }
+    }
+}
+
+/// Take a built thing down. As much work as it took to put up, and a
+/// fraction of what it was made of comes back.
+fn run_deconstruct(w: &mut World, p: &mut Pawn, target: Entity, work: u32) -> Option<Job> {
+    let t = w.thing(target)?;
+    if w.ecs.get::<&Designated>(target).is_err() {
+        return None; // cancelled
+    }
+    let total = w.stat(target, "work").map_or(1, |x| x.round().max(1.0) as u32);
+    match go_to(w, p, Goal::Touch(t.pos)) {
+        Go::Failed => None,
+        Go::Moving => Some(Job::Deconstruct { target, work }),
+        Go::Arrived => {
+            if work + 1 < total {
+                return Some(Job::Deconstruct { target, work: work + 1 });
+            }
+            let refund = w.defs.thing(t.def).build.as_ref().map_or(0.0, |b| b.refund);
+            let cost = w.cost_of(target).unwrap_or_default();
+            w.despawn_thing(target);
+            for (d, n) in cost {
+                let back = (n as f64 * refund).round() as u32;
+                if back > 0 {
+                    w.place_item(d, t.pos, back);
                 }
             }
             None

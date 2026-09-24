@@ -67,6 +67,17 @@ pub fn apply(w: &mut World, c: Command) {
                     }
                 }
             }
+            Targets::Built => {
+                for p in cells(w, a, b).collect::<Vec<_>>() {
+                    let Some(f) = w.map.fixture_at(p) else { continue };
+                    let ours = w.ecs.get::<&Owner>(f).is_ok_and(|o| o.0 == Faction::Player);
+                    let built = w.thing(f).is_some_and(|t| defs.thing(t.def).build.is_some());
+                    // A blueprint is cancelled, not deconstructed.
+                    if ours && built && w.ecs.get::<&Blueprint>(f).is_err() {
+                        let _ = w.ecs.insert_one(f, Designated(designation));
+                    }
+                }
+            }
             Targets::Creature => {
                 for e in w.pawns.clone() {
                     let ok = w.ecs.get::<&Pawn>(e).is_ok_and(|p| {
@@ -134,6 +145,13 @@ pub fn apply(w: &mut World, c: Command) {
                 o.reserve.iter().filter_map(|t| w.reservations.get(t).copied()).filter(|&h| h != pawn).collect();
             for holder in held {
                 ai::interrupt(w, holder);
+            }
+            // A deconstruct order is a one-thing designation: the job checks
+            // for the mark so a later Cancel can still stop it.
+            if let Job::Deconstruct { target, .. } = o.job {
+                if let Some(d) = defs.designations.iter().position(|d| d.targets == Targets::Built) {
+                    let _ = w.ecs.insert_one(target, Designated(d as DefId));
+                }
             }
             // set_job drops the pawn's own claims, so take the new ones after.
             ai::set_job(w, pawn, o.job);

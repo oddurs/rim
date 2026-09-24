@@ -9,6 +9,7 @@
 //! buildable thing gets a working right-click without touching the engine.
 
 use crate::ai;
+use crate::defs::Targets;
 use crate::path::Goal;
 use crate::world::*;
 use crate::IVec;
@@ -103,10 +104,19 @@ fn fixture(w: &World, pawn: Entity, from: IVec, f: Entity) -> Option<Order> {
     if w.ecs.get::<&Regrow>(f).is_ok() {
         return None;
     }
-    let hd = td.harvest.as_ref()?;
-    Some(Order {
-        label: format!("{} {}", w.defs.designations[hd.desig_r as usize].label, td.label),
-        job: Job::Harvest { target: f, work: 0, forced: true },
+    if let Some(hd) = td.harvest.as_ref() {
+        return Some(Order {
+            label: format!("{} {}", w.defs.designations[hd.desig_r as usize].label, td.label),
+            job: Job::Harvest { target: f, work: 0, forced: true },
+            reserve: vec![f],
+        });
+    }
+    // Something the colony built, if any mod offers a way to take it down.
+    let ours = w.ecs.get::<&Owner>(f).is_ok_and(|o| o.0 == Faction::Player);
+    let take_down = w.defs.designations.iter().find(|d| d.targets == Targets::Built)?;
+    (ours && td.build.is_some()).then(|| Order {
+        label: format!("{} {}", take_down.label, td.label),
+        job: Job::Deconstruct { target: f, work: 0 },
         reserve: vec![f],
     })
 }
@@ -134,6 +144,10 @@ pub fn job_text(w: &World, p: &Pawn) -> String {
             Some(format!("{} {}", w.defs.designations[hd.desig_r as usize].label, td.label))
         }),
         Job::Construct { bp } => thing_label(*bp).map(|l| format!("Build {l}")),
+        Job::Deconstruct { target, .. } => {
+            let verb = w.defs.designations.iter().find(|d| d.targets == Targets::Built).map(|d| d.label.as_str());
+            thing_label(*target).map(|l| format!("{} {l}", verb.unwrap_or("Take down")))
+        }
         Job::Deliver { bp, .. } => thing_label(*bp).map(|l| format!("Haul to {l}")),
         Job::Eat { src, .. } => thing_label(*src).map(|l| format!("Eat {l}")),
         Job::Attack { target, .. } => w.ecs.get::<&Pawn>(*target).ok().map(|t| {
