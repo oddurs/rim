@@ -222,7 +222,7 @@ rim.mood — the first first-party plugin. Proves the API: if mood cannot be a p
 
 ## sdk — Modder SDK
 
-`··········` 0% · 0 of 7 done · due 2027-03-01
+`##········` 14% · 1 of 7 done · due 2027-03-01
 
 Making a mod feels like publishing a small open-source library: rim new, typed Luau, rim test in CI, a template repo with a GitHub Action, a compatibility report and a guide. Runs alongside Mood, which is its first customer.
 
@@ -231,8 +231,8 @@ Making a mod feels like publishing a small open-source library: rim new, typed L
 - [ ] `9f30ab9d` Hot reload of defs and scripts in dev mode <sup>feature · p0 · m · tooling</sup>
 - [ ] `be5845a1` rim: one binary to play, check, test and pack mods <sup>feature · p0 · m · client</sup>
 - [ ] `d26d78a0` Modding guide, tutorial and generated API reference <sup>docs · p1 · m · tooling</sup>
-- [ ] `dc32fa23` Weather devtools: force weather, scrub time, channel graphs <sup>chore · p1 · s · tooling</sup>
 - [ ] `f42fd04a` GitHub Action for mod repos: check and test against supported engine versions <sup>feature · p1 · s · tooling</sup>
+- [x] `dc32fa23` Weather devtools: force weather, scrub time, channel graphs <sup>chore · p1 · s · tooling</sup>
 
 ## scale — Scale
 
