@@ -780,9 +780,9 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.check(t.app.sky.particles() > 300, format!("rain falls ({} drops)", t.app.sky.particles()));
     println!(
         "weather visuals: {:.0} µs for {} particles, lighting {:.0} µs (CPU)",
-        t.app.sky.cost_us,
+        t.app.render_us.weather,
         t.app.sky.particles(),
-        t.app.sky.light_us
+        t.app.render_us.light
     );
     if hut.is_some() {
         t.check(t.app.sky.hidden > 0, format!("but not inside the hut ({} hidden)", t.app.sky.hidden));
@@ -820,9 +820,9 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     }
     println!(
         "storm visuals: {:.0} µs for {} particles, lighting {:.0} µs (CPU)",
-        t.app.sky.cost_us,
+        t.app.render_us.weather,
         t.app.sky.particles(),
-        t.app.sky.light_us
+        t.app.render_us.light
     );
     t.app.sky.strike();
     t.shot("storm").await;

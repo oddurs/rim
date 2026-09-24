@@ -14,7 +14,7 @@
 //! Colours are data: `[[sky]]` in core's defs (tints by label, night,
 //! firelight, how much daylight gets indoors).
 
-use crate::{App, Cam};
+use crate::Cam;
 use macroquad::miniquad::{BlendFactor, BlendState, BlendValue, Equation};
 use macroquad::prelude::*;
 use rim_sim::world::World;
@@ -74,12 +74,8 @@ pub struct Sky {
     last: f64,
     flash: f32,
     next_flash: f64,
-    /// Time spent drawing weather last frame, for the profiler (µs).
-    pub cost_us: f64,
     /// Particles skipped last frame because they were over an enclosed room.
     pub hidden: usize,
-    /// CPU time for the lighting pass last frame (µs).
-    pub light_us: f64,
 }
 
 impl Default for Sky {
@@ -93,9 +89,7 @@ impl Default for Sky {
             last: 0.0,
             flash: 0.0,
             next_flash: 0.0,
-            cost_us: 0.0,
             hidden: 0,
-            light_us: 0.0,
         }
     }
 }
@@ -256,7 +250,6 @@ impl Sky {
     /// Precipitation, fog and lightning. Call before `light`, so the weather
     /// is lit (and darkened) like the world.
     pub fn weather(&mut self, w: &World, cam: &Cam, air: &Air) {
-        let t0 = std::time::Instant::now();
         let now = get_time();
         let dt = ((now - self.last) as f32).clamp(0.0, 0.1);
         self.last = now;
@@ -346,7 +339,6 @@ impl Sky {
         } else {
             self.next_flash = 0.0;
         }
-        self.cost_us = t0.elapsed().as_secs_f64() * 1e6;
     }
 
     fn spawn(&mut self, snow: bool, x: f32, y: f32, wx: f32, wy: f32) -> Particle {
@@ -367,14 +359,4 @@ impl Sky {
     pub fn particles(&self) -> usize {
         self.parts.len()
     }
-}
-
-/// Draw the weather and light for this frame.
-pub fn draw(app: &mut App) {
-    let air = Air::read(&app.sim.world);
-    let (w, cam, sky) = (&app.sim.world, &app.cam, &mut app.sky);
-    sky.weather(w, cam, &air);
-    let t = std::time::Instant::now();
-    sky.light(w, cam, &air);
-    sky.light_us = t.elapsed().as_secs_f64() * 1e6;
 }
