@@ -43,7 +43,9 @@ impl T {
         self.input(raw).await;
     }
 
-    async fn shot(&mut self, name: &str) {
+    /// Render and read the frame back. The read has to come before
+    /// `next_frame` swaps the buffer away, or it reads black.
+    async fn grab(&mut self) -> Image {
         // Two frames: one to lay out, one to draw what was laid out.
         self.frame().await;
         let raw = RawInput { mouse: self.mouse, ..Default::default() };
@@ -51,11 +53,16 @@ impl T {
         frame(&mut self.app, &RawInput { time: self.clock, ..raw });
         render(&mut self.app);
         let img = get_screen_data();
+        next_frame().await;
+        img
+    }
+
+    async fn shot(&mut self, name: &str) {
+        let img = self.grab().await;
         self.shots += 1;
         let path = self.dir.join(format!("{:02}_{name}.png", self.shots));
         img.export_png(path.to_str().unwrap());
         println!("shot  {}", path.display());
-        next_frame().await;
     }
 
     fn check(&mut self, ok: bool, what: impl Into<String>) {
@@ -351,6 +358,69 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.check(built > 0, format!("the warrior chopped and built walls ({built})"));
     t.focus(site.offset(3, 3));
     t.shot("building").await;
+
+    // ---------------------------------------------------------- 0220 walls
+    println!("\n# walls join, in the colour of what they are made of (0220)");
+    let stone = defs.thing_id("stone").unwrap();
+    let wood = defs.thing_id("wood").unwrap();
+    // A free row of three cells: wood, wood, stone.
+    let row = (2..30i32)
+        .flat_map(|r| (-r..=r).flat_map(move |dy| (-r..=r).map(move |dx| home.offset(dx, dy))))
+        .find(|&o| {
+            (0..3).all(|i| {
+                let p = o.offset(i, 0);
+                t.w().map.passable(p) && t.w().map.fixture_at(p).is_none() && t.w().map.item_at(p).is_none()
+            }) && (-1..=3).all(|i| {
+                t.w().map.fixture_at(o.offset(i, -1)).is_none() && t.w().map.fixture_at(o.offset(i, 1)).is_none()
+            }) && t.w().map.fixture_at(o.offset(-1, 0)).is_none()
+                && t.w().map.fixture_at(o.offset(3, 0)).is_none()
+        })
+        .expect("a free row for three walls, with nothing at either end");
+    for (i, m) in [wood, wood, stone].into_iter().enumerate() {
+        t.app.sim.world.spawn_fixture_of(wall, row.offset(i as i32, 0), false, Some(m)).expect("a wall");
+    }
+    t.focus(row.offset(1, 0));
+    let img = t.grab().await;
+    let dpi = screen_dpi_scale();
+    let z = t.app.cam.zoom;
+    let px = |img: &Image, (x, y): (f32, f32)| {
+        let (xi, yi) = ((x * dpi) as u32, (y * dpi) as u32);
+        let c = img.get_pixel(xi.min(img.width() as u32 - 1), yi.min(img.height() as u32 - 1));
+        [c.r, c.g, c.b]
+    };
+    let dist = |a: [f32; 3], b: [f32; 3]| a.iter().zip(b).map(|(x, y)| (x - y).abs()).sum::<f32>();
+    let of = |rgb: [u8; 3]| [rgb[0] as f32 / 255.0, rgb[1] as f32 / 255.0, rgb[2] as f32 / 255.0];
+    let wood_c = px(&img, t.screen(row));
+    let stone_c = px(&img, t.screen(row.offset(2, 0)));
+    t.check(dist(wood_c, [0.0; 3]) > 0.1, format!("the frame was read back, not a cleared buffer ({wood_c:?})"));
+    t.check(
+        dist(wood_c, stone_c) > 0.15,
+        format!("a wood wall and a stone wall look different ({wood_c:?} vs {stone_c:?})"),
+    );
+    // Lighting tints everything alike, so ask which colour the stone wall
+    // is nearer: its material's, or the wall def's own brown.
+    let (to_stone, to_def) = (dist(stone_c, of(defs.thing(stone).rgb)), dist(stone_c, of(defs.thing(wall).rgb)));
+    t.check(
+        to_stone < to_def,
+        format!(
+            "the stone wall takes its colour from the material def, not the wall def ({to_stone:.2} vs {to_def:.2})"
+        ),
+    );
+    // The seam between the two wood walls carries no outline; the run's west end does.
+    let (cx, cy) = t.screen(row);
+    let seam = px(&img, (cx + z / 2.0, cy));
+    t.check(dist(seam, wood_c) < 0.08, format!("no seam between joined walls ({seam:?} vs fill {wood_c:?})"));
+    // The edge is a 1.5px line on the cell's border; where it rasterises is
+    // the renderer's business, so look across the first two pixels.
+    let end = [0.0, 0.5, 1.0, 1.5]
+        .into_iter()
+        .map(|dx| dist(px(&img, (cx - z / 2.0 + dx, cy)), wood_c))
+        .fold(0.0f32, f32::max);
+    t.check(
+        end > 0.12,
+        format!("the end of the run has an edge (strongest contrast {end:.2} against fill {wood_c:?})"),
+    );
+    t.shot("walls").await;
 
     // ---------------------------------------------------------- 0047 orders
     println!("\n# select, draft, move, attack (0047)");

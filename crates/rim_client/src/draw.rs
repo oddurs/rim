@@ -113,7 +113,13 @@ pub fn world(app: &App) {
                 let Some(e) = (if layer == 0 { w.map.item[i] } else { w.map.fixture[i] }) else { continue };
                 let Ok(th) = w.ecs.get::<&Thing>(e) else { continue };
                 let td = defs.thing(th.def);
-                let c = rgb(td.rgb);
+                // A thing built of something is drawn in that something's
+                // colour, so marble arrives looking like marble with no
+                // change here. Anything else keeps its def's colour.
+                let c = match w.ecs.get::<&MadeOf>(e) {
+                    Ok(m) => rgb(defs.thing(m.0).rgb),
+                    Err(_) => rgb(td.rgb),
+                };
                 let (sx, sy) = cam.to_screen(tx as f32, ty as f32);
                 let (cx, cy) = (sx + z / 2.0, sy + z / 2.0);
                 let bp = w.ecs.get::<&Blueprint>(e).ok();
@@ -162,12 +168,12 @@ pub fn world(app: &App) {
                     }
                     Shape::Wall => {
                         draw_rectangle(sx, sy, z + 0.5, z + 0.5, c);
-                        draw_rectangle_lines(sx + 0.5, sy + 0.5, z - 1.0, z - 1.0, 1.5, shade(c, 0.65));
+                        wall_edges(w, IVec::new(tx, ty), sx, sy, z, shade(c, 0.65));
                     }
                     Shape::Window => {
                         draw_rectangle(sx, sy, z + 0.5, z + 0.5, c);
                         draw_rectangle(sx + z * 0.2, sy + z * 0.2, z * 0.6, z * 0.6, Color::new(0.75, 0.88, 1.0, 0.9));
-                        draw_rectangle_lines(sx + 0.5, sy + 0.5, z - 1.0, z - 1.0, 1.5, shade(c, 0.65));
+                        wall_edges(w, IVec::new(tx, ty), sx, sy, z, shade(c, 0.65));
                     }
                     Shape::Door => {
                         draw_rectangle(sx + z * 0.08, sy + z * 0.08, z * 0.84, z * 0.84, c);
@@ -341,6 +347,36 @@ pub fn world_ui(app: &App) {
         draw_rectangle_lines(sx, sy, z, z, 2.0, tool_color(app));
     }
     order_flash(app);
+}
+
+/// Is the fixture at `p` part of a wall run: a wall, a window or a door,
+/// and built rather than planned? Walls join to these and draw no edge
+/// between, so a run reads as one wall with openings in it.
+fn joins_wall(w: &World, p: IVec) -> bool {
+    let Some(e) = w.map.fixture_at(p) else { return false };
+    if w.ecs.get::<&Blueprint>(e).is_ok() {
+        return false;
+    }
+    w.ecs.get::<&Thing>(e).is_ok_and(|t| matches!(w.defs.thing(t.def).shape, Shape::Wall | Shape::Window | Shape::Door))
+}
+
+/// The outline of a wall cell, drawn only on the sides that face something
+/// that is not wall. Corners and junctions come out joined for free.
+fn wall_edges(w: &World, p: IVec, sx: f32, sy: f32, z: f32, edge: Color) {
+    let (x0, y0, x1, y1) = (sx + 0.5, sy + 0.5, sx + z - 0.5, sy + z - 0.5);
+    let t = 1.5;
+    if !joins_wall(w, p.offset(0, -1)) {
+        draw_line(x0, y0, x1, y0, t, edge);
+    }
+    if !joins_wall(w, p.offset(0, 1)) {
+        draw_line(x0, y1, x1, y1, t, edge);
+    }
+    if !joins_wall(w, p.offset(-1, 0)) {
+        draw_line(x0, y0, x0, y1, t, edge);
+    }
+    if !joins_wall(w, p.offset(1, 0)) {
+        draw_line(x1, y0, x1, y1, t, edge);
+    }
 }
 
 /// A ring that closes on the cell an order just landed in, so the click
