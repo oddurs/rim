@@ -27,4 +27,9 @@ The storyteller's memory (last incident, tension) must survive a reload.
 
 ## 2026-09-24
 
+<<<<<<< ours
 Core's storyteller now keeps last/last_threat in script data (core:storyteller) instead of Luau locals, so the memory is hashed and will be saved; tested in mods/core/tests/storyteller.luau. What remains here: whether mods need a rim.state table beyond set_data's namespaced keys, and the save/load itself (0061).
+||||||| base
+=======
+From the save-format decision (DESIGN.md §7a): the Luau VM isn't saved, so any state a mod must keep lives in script data (rim.set_data: saved and hashed). Today core's storyteller keeps last/last_threat in Luau locals, which a load would reset and the desync check can't see. Move it to script data, and consider whether a per-mod rim.state table is still needed on top of set_data's namespaced keys.
+>>>>>>> theirs
