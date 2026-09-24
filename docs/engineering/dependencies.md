@@ -185,11 +185,14 @@ jump the camera or run a burst of ticks.
 Measured by the autotest, zoomed all the way out: **155 → 66 draw calls,
 5.9 → 2.2 ms CPU per frame.**
 
+**The UI batches with itself.** The glyph atlas reserves a 4×4 white block,
+and the client draws panels, outlines and glyphs as one mesh textured by the
+atlas, flushing only at clip changes. World stack counts use the same text
+and batch instead of macroquad's `draw_text`. With the HUD open at normal
+zoom: **72–78 → 5 draw calls**. Zoomed all the way out: about 10.
+
 **Next, if the renderer needs more:**
-- Draw UI rectangles from a white texel in the glyph atlas, so a panel
-  batches into one call per clip region.
-- Replace `draw_text` for item counts, which breaks the world batch.
-- Use sprite quads for plants.
+- Sprite quads for plants and pawns, instead of polygons.
 - Chunk the ground texture for maps beyond 250×250 (0098, 0193).
 
 ## Build profiles
