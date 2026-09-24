@@ -236,7 +236,7 @@ Making a mod feels like publishing a small open-source library: rim new, typed L
 
 ## scale — Scale
 
-`··········` 0% · 0 of 10 done · due 2027-03-15
+`#·········` 10% · 1 of 10 done · due 2027-03-15
 
 Hit the performance budget: benchmark harness, hierarchical pathing, flow fields, spatial indices, incremental regions, render caching.
 
@@ -248,8 +248,8 @@ Hit the performance budget: benchmark harness, hierarchical pathing, flow fields
 - [ ] `da558444` Ground renderer: terrain, wetness and snow in one shader pass <sup>perf · p2 · m · client</sup>
 - [ ] `dab55ea2` Meet the budget: 6x speed at 60 fps <sup>perf · p0 · l · engine</sup>
 - [ ] `e3c1f87b` Chunked terrain render caching <sup>perf · p1 · m · client</sup>
-- [ ] `ee7fe7fd` Benchmark harness: target map, 30 colonists, 200 pawns <sup>perf · p0 · m · tooling</sup>
 - [ ] `fbf3ee1c` Spatial index for things by def <sup>perf · p1 · m · engine</sup>
+- [x] `ee7fe7fd` Benchmark harness: target map, 30 colonists, 200 pawns <sup>perf · p0 · m · tooling</sup>
 
 ## platform — Modding platform
 
