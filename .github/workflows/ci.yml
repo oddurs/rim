@@ -143,6 +143,22 @@ jobs:
           echo "All $(ls crosscheck-*.txt | wc -l) platforms agree:"
           tail -n 1 "$first"
 
+  # Mod scripts against the declared API; `cargo test` (api_types) keeps the
+  # declaration itself in step with the host.
+  luau:
+    name: Mod scripts type-check
+    runs-on: ubuntu-latest
+    env:
+      LUAU_LSP_VERSION: 1.70.0
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install luau-lsp
+        run: |
+          curl -fsSL -o luau-lsp.zip "https://github.com/JohnnyMorganz/luau-lsp/releases/download/$LUAU_LSP_VERSION/luau-lsp-linux-x86_64.zip"
+          unzip -q luau-lsp.zip -d "$RUNNER_TEMP/luau-lsp"
+          echo "LUAU_LSP=$RUNNER_TEMP/luau-lsp/luau-lsp" >> "$GITHUB_ENV"
+      - run: ./scripts/check-luau.sh
+
   roadmap:
     name: Roadmap
     runs-on: ubuntu-latest

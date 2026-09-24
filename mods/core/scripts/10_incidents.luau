@@ -9,7 +9,7 @@ local POINTS_PER_PREDATOR = 90
 
 -- Spawn `n` creatures at one map edge. Returns how many appeared and a name.
 -- Hostile groups give up after RAID_DAYS.
-local function spawn_group(creature: string, faction: string, n: number)
+local function spawn_group(creature: string, faction: "player" | "hostile" | "wild", n: number)
 	local x, y = rim.edge_cell()
 	if not x then
 		return 0, nil
@@ -60,6 +60,7 @@ rim.register_incident({
 			return false
 		end
 		rim.message(`Raid! {count(got, "raider", "raiders")} approaching.`, "threat")
+		return true
 	end,
 })
 
@@ -81,6 +82,7 @@ rim.register_incident({
 			return false
 		end
 		rim.message(`A pack of {count(got, c.label, c.plural)} is hunting you!`, "threat")
+		return true
 	end,
 })
 
@@ -105,6 +107,7 @@ rim.register_incident({
 			return false
 		end
 		rim.message(`{name}, a wanderer, has heard of your colony and joined it.`, "good")
+		return true
 	end,
 })
 
@@ -124,6 +127,7 @@ rim.register_incident({
 			return false
 		end
 		rim.message(`A herd of {c.label} has wandered into the area.`, "info")
+		return true
 	end,
 })
 
@@ -145,5 +149,6 @@ rim.register_incident({
 		local count = math.floor(math.min(150, 25 + ctx.wealth * 0.02))
 		rim.spawn_item(thing, x, y, count)
 		rim.message(`Supplies have washed up nearby: {count} {thing}.`, "good")
+		return true
 	end,
 })

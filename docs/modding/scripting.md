@@ -21,6 +21,38 @@ How it's configured, and why: [docs/engineering/dependencies.md](../engineering/
     from the world's random numbers and replay identically.
 - **The game's API** is the `rim` table (`rim.every`, `rim.on`, `rim.spawn_pawn`,
   `rim.push_ambient`, ...), plus whatever other plugins add to it.
+  Every engine function is listed in the [script API reference](api-scripts.md).
+
+## Editor setup
+
+[`types/rim.d.luau`](../../types/rim.d.luau) declares the `rim` API for
+[luau-lsp](https://github.com/JohnnyMorganz/luau-lsp), so your editor can
+complete names, show the docs and flag a wrong call. The engine generates it
+from its own registrations, and CI fails if the two differ.
+
+In VS Code, install the Luau Language Server extension and add this to the
+workspace's `.vscode/settings.json`:
+
+```json
+{
+  "luau-lsp.platform.type": "standard",
+  "luau-lsp.types.definitionFiles": { "@rim": "types/rim.d.luau" },
+  "luau-lsp.sourcemap.enabled": false
+}
+```
+
+The root `.luaurc` maps each shipped mod to an alias, so
+`require("@core/ui/kit")` resolves the way the game resolves it. Add your mod
+there when you work in this repo.
+
+To check from the command line, as CI does, run
+`LUAU_LSP=path/to/luau-lsp ./scripts/check-luau.sh`. Only sim scripts are
+checked so far: the UI globals (`ui`, `act`, `view`) aren't declared yet.
+
+Scripts are nonstrict by default. `--!strict` at the top of a file is stricter,
+but you'll need annotations on tables that start empty or `nil`. Type aliases
+from the definition file, like `Faction`, aren't visible in scripts, so spell
+out the union instead: `"player" | "hostile" | "wild"`.
 
 ## Sharing an API with other mods
 
