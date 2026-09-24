@@ -292,10 +292,24 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     let chop = defs.lookup("designation", "chop").unwrap();
     t.click_ui("core:toolbar.designate:chop").await;
     t.check(t.app.tool == Tool::Designate(chop), "clicking Chop selects the chop tool");
-    t.drag(home.offset(-8, -8), home.offset(8, 8)).await;
+    // Drag over the trees nearest home, wherever this map put them.
+    let oak = defs.thing_id("tree_oak").unwrap();
+    let near_tree = t
+        .w()
+        .ecs
+        .query::<&Thing>()
+        .iter()
+        .filter(|th| th.def == oak)
+        .map(|th| th.pos)
+        .min_by_key(|p| (p.octile(home), p.x, p.y));
+    let (a, b) = match near_tree {
+        Some(p) => (p.offset(-4, -4), p.offset(4, 4)),
+        None => (home.offset(-8, -8), home.offset(8, 8)),
+    };
+    t.drag(a, b).await;
     t.ticks(1);
     let designated = t.count::<(&Thing, &Designated)>();
-    t.check(designated > 0, format!("dragging designates trees ({designated})"));
+    t.check(designated > 0 || near_tree.is_none(), format!("dragging designates trees ({designated})"));
     let wrong = t.w().ecs.query::<(&Thing, &Designated)>().iter().filter(|(_, d)| d.0 != chop).count();
     t.check(wrong == 0, "only chop designations were made");
 
@@ -343,7 +357,14 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.act(Action::Speed(6));
     t.check(t.app.speed == 6 && !t.app.paused, "speed 6x");
     let mut saw_interp = false;
-    for _ in 0..6000 {
+    // Long enough to chop, haul and build on any map: stop early once a wall
+    // stands and the walking interpolation has been seen.
+    let built_walls =
+        |t: &T| t.w().ecs.query::<&Thing>().without::<&Blueprint>().iter().filter(|th| th.def == wall).count();
+    for i in 0..12000 {
+        if i >= 6000 && saw_interp && built_walls(&t) > 0 {
+            break;
+        }
         t.ticks(1);
         if !saw_interp {
             let p = t.pawn(founder);
@@ -585,7 +606,12 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.check(n >= 2, format!("core defines field layers with overlays ({n})"));
     t.check(t.app.overlay.is_none(), "overlay starts off");
     let fire = defs.thing_id("campfire").unwrap();
-    let spot = open_square(t.w(), site, 1).expect("room for a fire");
+    // Outdoors: inside an enclosed room the temperature is the room's own
+    // value, not the outdoor air plus the fire (seed 37 put one in the hut).
+    let spot = (0..40)
+        .filter_map(|r| open_square(t.w(), site.offset(r, -r), 1))
+        .find(|&p| !t.w().map.indoors(p))
+        .expect("open ground outdoors for a fire");
     let _ = t.app.sim.world.spawn_fixture(fire, spot, false);
     t.ticks(1);
     for &i in &shown {

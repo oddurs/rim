@@ -159,11 +159,15 @@ async fn main() {
     // generates (from the disk cache: a few ms; a first run scans them all).
     rim_ui::fontcache::preload();
     let args: Vec<String> = std::env::args().collect();
-    let seed = args
-        .windows(2)
-        .find(|w| w[0] == "--seed")
-        .and_then(|w| w[1].parse().ok())
-        .unwrap_or_else(|| std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs());
+    let seed = args.windows(2).find(|w| w[0] == "--seed").and_then(|w| w[1].parse().ok()).unwrap_or_else(|| {
+        // The autotest is a test: the same map every run unless asked
+        // (scripts/autotest-sweep.sh covers other maps). Play gets a new one.
+        if args.iter().any(|a| a == "--autotest") {
+            7
+        } else {
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
+        }
+    });
     let ui_scale: f32 = args.windows(2).find(|w| w[0] == "--ui-scale").and_then(|w| w[1].parse().ok()).unwrap_or(1.0);
 
     let sim = match find_mods()
