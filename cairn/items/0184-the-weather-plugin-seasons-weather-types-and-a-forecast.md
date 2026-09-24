@@ -28,7 +28,7 @@ Weather is depth, not skeleton, so it is a first-party plugin built only on the 
 ## What
 
 - `mods/weather` (depends on core, enabled by default).
-- **Seasons:** patches core's `temperature` terms by label: the mean follows a year curve (spring starts like today; winter around −6°C), and cloud damps the daily swing. Light dims under cloud.
+- **Seasons:** patches core's `temperature` terms by label: the mean follows a year curve (spring starts like today; winter around −6°C), and cloud damps the daily swing. Light dims under cloud through core's `light` term: the plugin sets `cloud` and never patches `daylight`, so it works under any sky.
 - **Weather types**, registered in Luau (`rim.weather.register{...}`; data once custom def kinds land): clear, cloudy, rain, storm, fog. Each has a duration range, blend hours, a weight function of season and the previous type, and channel settings (cloud, precipitation, wind, fog, temperature offset). Precipitation below 0°C is snow.
 - **Forecast:** the current type and the next three, each picked with the world RNG when it joins the queue, kept in script data (`weather:forecast`). Changes push the channels with easing.
 - `rim.weather.current()`, `forecast()`, `force(id, hours)`; `weather_changed` via `rim.emit`.

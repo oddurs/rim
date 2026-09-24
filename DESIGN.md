@@ -250,7 +250,7 @@ the map a mood.
 | Layer | Owns |
 |---|---|
 | Engine | Terms and curves, the calendar, named contributions to outdoor values, script data and events |
-| `core` | The calendar, and the atmosphere fields as shared names: `temperature`, `light`, `cloud`, `precipitation`, `wind`, `wind_dir`, `fog`. Day and night as data |
+| `core` | The calendar, and the atmosphere fields as shared names: `temperature`, `daylight`, `light`, `cloud`, `precipitation`, `wind`, `wind_dir`, `fog`. The sun as data |
 | `mods/weather` | Seasons (by patching core's terms), weather types, the forecast, weather incidents, the weather HUD |
 
 Core declares `precipitation` even though only the weather plugin sets it,
@@ -304,6 +304,28 @@ pushes `"weather"`; a cold snap pushes `"cold_snap"`. Two mods add up instead
 of overwriting each other. `rim.set_ambient` still exists as a pin for tests
 and tools: it overrides everything until cleared.
 
+### The sky
+
+The sun is content. Core's one sun is a `daylight` term, and a mod can patch
+it, replace it, or add a second sun and a green moon without touching the engine
+or the weather plugin.
+
+- **`daylight` holds the sky; `light` holds what reaches the ground.** Core's
+  `light` term is `of = [{ ambient = "daylight" }, { ambient = "cloud", curve =
+  ... }]`. Sky mods touch only `daylight` terms, and weather touches only
+  `cloud`. So a mod that replaces the sun with two keeps the cloud dimming, and
+  weather never has to name a sun.
+- **Curves, not orbits.** A sky body is a brightness curve over the hour and
+  year. An engine that only needs to know how bright it is doesn't need orbital
+  mechanics.
+- **Day length stays fixed.** A day is `TICKS_PER_DAY` and `hour` runs 0–24,
+  because day length is pacing (needs, work, sleep), not astronomy. A planet
+  with long days is a curve with 20 bright hours.
+- **Later (0209):** `input = "cycle"` with its own period in days, for moon
+  phases and eclipses, and a sky tint made of labelled colour terms, one per
+  sky body, so a green moon mixes with dusk instead of replacing it. Light
+  stays a scalar in the sim; colour is the renderer's business.
+
 ### Calendar
 
 `[[calendar]]` in core: a 60-day year of four 15-day seasons, starting on day
@@ -324,7 +346,8 @@ a script event to `rim.on` handlers in any mod (`weather_changed`).
 
 - **Seasons:** patches core's temperature terms: the mean follows a year
   curve (late spring starts like today, around 10°C; midwinter around −6°C),
-  and cloud damps the daily swing. Light dims under cloud.
+  and cloud damps the daily swing. Light dims under cloud through core's
+  `light` term; the plugin sets `cloud` and never touches `daylight`.
 - **Weather types:** clear, cloudy, rain, storm, fog. Each has a duration
   range, blend hours, a weight (a function of the season and the previous
   type) and channel settings. Precipitation below freezing falls as snow, so
@@ -342,7 +365,8 @@ a script event to `rim.on` handlers in any mod (`weather_changed`).
 - **Light:** the renderer lights the world from the sim's `light` field
   instead of its own curve: daylight, dark rooms, firelight. Indoors gets a
   share of daylight, as if through windows. It's drawn as a multiplied
-  lightmap, so campfires glow and storms darken the map.
+  lightmap, so campfires glow and storms darken the map. The sky tint is a
+  colour curve over the day in data, keyed by label so sky mods can add to it.
 - **Weather:** the renderer reads channels, never weather names:
   precipitation (rain, or snow below freezing), wind (slant and drift), fog,
   and lightning in heavy storms. A mod that sets `precipitation` gets rain.
