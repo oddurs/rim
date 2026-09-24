@@ -1,12 +1,13 @@
 //! The cross-machine determinism scenario (0157): every platform in CI runs
 //! this and must print exactly the same lines.
 //!
-//!   cargo run --release -p rim_sim --example crosscheck [-- --days 20]
+//!   cargo run --release -p rim_sim --example crosscheck [-- --days N]
 //!
 //! All shipped mods, a fixed seed, and a player's commands (chop, forage,
 //! a walled hut with a door, a bed and a campfire), so it exercises the
 //! engine, the storyteller and its incidents, the weather plugin and the
-//! building code. Prints the state hash at the end of each day, so when two
+//! building code, over one calendar year by default so every season's weather
+//! and growth is in the hash. Prints the state hash at the end of each day, so when two
 //! platforms disagree the output shows the first day they diverged.
 
 use rim_sim::{Command, IVec, Sim, TICKS_PER_DAY};
@@ -18,10 +19,10 @@ fn arg(name: &str, default: u64) -> u64 {
 }
 
 fn main() {
-    let days = arg("--days", 20);
     let seed = arg("--seed", 1);
     let mods = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mods");
     let mut s = Sim::new(&mods, seed).expect("mods load");
+    let days = arg("--days", s.world.defs.calendar.year_days as u64);
     let defs = s.world.defs.clone();
     let des = |id: &str| defs.lookup("designation", id).expect(id);
     let thing = |id: &str| defs.thing_id(id).expect(id);

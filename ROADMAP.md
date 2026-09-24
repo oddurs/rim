@@ -92,14 +92,14 @@ A one-week sprint inside Shelter. The world gets seasons and weather you can see
 
 ## shelter — Shelter
 
-`########··` 71% · 10 of 14 done · due 2026-11-01
+`########··` 79% · 11 of 14 done · due 2026-11-01
 
 Exposure makes shelter matter: warmth, enclosed rooms, day/night, weather. Get four walls up before night two.
 
 - [ ] `2a2f2f48` Founder trait: combat bonus and recruitment pull <sup>feature · p2 · s · core</sup>
 - [ ] `e2c56c9a` UI frame-budget test asserts wall-clock time on shared CI runners <sup>bug · p2 · s · tooling</sup>
-- [ ] `05dbb688` CI: determinism must hold across machines, not just within one run <sup>chore · p1 · s · tooling</sup>
 - [ ] `48f92e6e` CI: build and test on Windows <sup>chore · p1 · s · tooling</sup>
+- [x] `05dbb688` CI: determinism must hold across machines, not just within one run <sup>chore · p1 · s · tooling</sup>
 - [x] `3974fb0f` Prioritize: right-click to force a job <sup>feature · p1 · l · engine</sup>
 - [x] `531096ee` Doors that raiders must break through <sup>feature · p1 · m · engine</sup>
 - [x] `6a6a4828` Autotest seeds from the clock, so CI rolls dice <sup>bug · p1 · s · tooling</sup>
