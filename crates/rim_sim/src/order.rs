@@ -86,8 +86,7 @@ fn fixture(w: &World, pawn: Entity, from: IVec, f: Entity) -> Option<Order> {
         return None;
     }
     if let Ok(bp) = w.ecs.get::<&Blueprint>(f) {
-        let cost = &td.build.as_ref()?.cost_r;
-        let missing = cost.iter().zip(&bp.delivered).find(|(c, d)| **d < c.1).map(|(c, d)| (c.0, c.1 - d));
+        let missing = bp.cost.iter().zip(&bp.delivered).find(|(c, d)| **d < c.1).map(|(c, d)| (c.0, c.1 - d));
         drop(bp);
         return Some(match missing {
             None => Order { label: format!("Build {}", td.label), job: Job::Construct { bp: f }, reserve: vec![f] },

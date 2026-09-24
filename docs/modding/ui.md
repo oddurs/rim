@@ -139,7 +139,7 @@ Press **F12** and then **Kit gallery** to see every component in every state.
 `act.set_overlay(index)`, `act.toggle_profiler()`, `act.toggle_devtools()`.
 
 Actions are queued and applied by the client, exactly like a key press.
-Toolbar keys look like `"designate:chop"` and `"build:wall_wood"`.
+Toolbar keys look like `"designate:chop"` and `"build:wall"`.
 
 For small bits of UI state that should survive rebuilds, such as the selected
 tab, use `ui.state(key, default)` and `ui.set_state(key, value)`.

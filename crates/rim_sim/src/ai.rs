@@ -491,7 +491,6 @@ pub fn comfortable_spot(w: &World, p: &Pawn) -> Option<IVec> {
 
 /// Nearest job among: construct, deliver materials, designated harvest, hunt.
 fn find_work(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
-    let defs = w.defs.clone();
     w.map.ensure_regions();
     let mut best: Option<(u32, Job, Entity)> = None;
     let consider = |best: &mut Option<(u32, Job, Entity)>, d: u32, job: Job, reserve: Entity| {
@@ -508,8 +507,7 @@ fn find_work(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
         if w.reserved_by_other(be, e) {
             continue;
         }
-        let cost = &defs.thing(t.def).build.as_ref().unwrap().cost_r;
-        let missing = cost.iter().zip(&bp.delivered).find(|(c, d)| **d < c.1).map(|(c, d)| (c.0, c.1 - d));
+        let missing = bp.cost.iter().zip(&bp.delivered).find(|(c, d)| **d < c.1).map(|(c, d)| (c.0, c.1 - d));
         bps.push((t.pos.octile(p.pos), be, t.pos, missing));
     }
     bps.sort_by_key(|b| (b.0, b.1.id()));
@@ -675,11 +673,9 @@ fn run_deliver(w: &mut World, p: &mut Pawn, bp: Entity, src: Entity, want: u32, 
         Go::Moving => Some(Job::Deliver { bp, src, want, stage }),
         Go::Arrived => {
             let (cdef, cn) = p.carry?;
-            let defs = w.defs.clone();
-            let cost = &defs.thing(b.def).build.as_ref()?.cost_r;
             if let Ok(mut bpc) = w.ecs.get::<&mut Blueprint>(bp) {
-                if let Some(i) = cost.iter().position(|c| c.0 == cdef) {
-                    let add = cn.min(cost[i].1.saturating_sub(bpc.delivered[i]));
+                if let Some(i) = bpc.cost.iter().position(|c| c.0 == cdef) {
+                    let add = cn.min(bpc.cost[i].1.saturating_sub(bpc.delivered[i]));
                     bpc.delivered[i] += add;
                     p.carry = (cn > add).then_some((cdef, cn - add));
                 }
@@ -693,8 +689,7 @@ fn run_construct(w: &mut World, p: &mut Pawn, bp: Entity) -> Option<Job> {
     let b = w.thing(bp)?;
     {
         let bpc = w.ecs.get::<&Blueprint>(bp).ok()?;
-        let cost = &w.defs.thing(b.def).build.as_ref()?.cost_r;
-        if cost.iter().zip(&bpc.delivered).any(|(c, d)| *d < c.1) {
+        if bpc.cost.iter().zip(&bpc.delivered).any(|(c, d)| *d < c.1) {
             return None;
         }
     }

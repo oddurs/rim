@@ -1,26 +1,17 @@
 # Anything with [build] shows up in the build toolbar under its `menu`.
 
+# One wall, built out of whatever is structural. hp, work and colour are
+# the wall's own; the material scales them (0213) and tints it (0220).
 [[thing]]
-id = "wall_wood"
-label = "wooden wall"
+id = "wall"
+label = "wall"
 color = "#7a5230"
 category = "building"
 shape = "wall"
 blocks = true
 hp = 200
 market_value = 8
-build = { menu = "structure", work = 180, cost = [{ thing = "wood", count = 5 }] }
-
-[[thing]]
-id = "wall_stone"
-label = "stone wall"
-color = "#8a857d"
-category = "building"
-shape = "wall"
-blocks = true
-hp = 450
-market_value = 9
-build = { menu = "structure", work = 360, cost = [{ thing = "stone", count = 5 }] }
+build = { menu = "structure", work = 180, stuff = { category = "structural", count = 5 } }
 
 [[thing]]
 id = "door_wood"

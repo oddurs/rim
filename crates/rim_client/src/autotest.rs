@@ -293,8 +293,8 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.check(wrong == 0, "only chop designations were made");
 
     let site = open_square(t.w(), home, 6).expect("open ground for a hut");
-    let wall = defs.thing_id("wall_wood").unwrap();
-    t.click_ui("core:toolbar.build:wall_wood").await;
+    let wall = defs.thing_id("wall").unwrap();
+    t.click_ui("core:toolbar.build:wall").await;
     t.check(t.app.tool == Tool::Build(wall), "clicking wooden wall selects the wall tool");
     let (ax, ay) = t.screen(site);
     let (bx, by) = t.screen(site.offset(5, 5));
@@ -317,7 +317,7 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         t.count::<&Blueprint>() == 14,
         format!("cancel removes the dragged row ({} left)", t.count::<&Blueprint>()),
     );
-    t.click_ui("core:toolbar.build:wall_wood").await;
+    t.click_ui("core:toolbar.build:wall").await;
     t.drag(site, site.offset(4, 0)).await;
     t.click_ui("core:toolbar.build:door_wood").await;
     t.drag(site.offset(5, 0), site.offset(5, 0)).await;
@@ -565,7 +565,7 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         }
     };
     // A closed 5x5 hut, so we can see that nothing falls indoors.
-    let wall = defs.thing_id("wall_wood").unwrap();
+    let wall = defs.thing_id("wall").unwrap();
     let hut = open_square(t.w(), site.offset(8, 0), 5).map(|o| {
         let c = o.offset(2, 2);
         for dy in -2..=2i32 {

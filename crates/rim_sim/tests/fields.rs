@@ -50,7 +50,7 @@ fn ring(s: &mut Sim, o: IVec, size: i32) {
     for y in 0..size {
         for x in 0..size {
             if x == 0 || y == 0 || x == size - 1 || y == size - 1 {
-                put(s, "wall_wood", o.offset(x, y));
+                put(s, "wall", o.offset(x, y));
             }
         }
     }
@@ -93,7 +93,7 @@ fn walls_block_emitters() {
     put(&mut s, "campfire", c);
     // A wall across the east side: warmth must walk around it.
     for dy in -4..=4 {
-        put(&mut s, "wall_wood", c.offset(2, dy));
+        put(&mut s, "wall", c.offset(2, dy));
     }
     s.step();
     let t = field(&s, "temperature");
@@ -126,10 +126,10 @@ fn emitter_changes_are_incremental() {
 
     // A wall far away re-stamps nothing; one within reach re-stamps just this fire.
     let base = s.world.fields.restamped;
-    put(&mut s, "wall_wood", o.offset(25, 25));
+    put(&mut s, "wall", o.offset(25, 25));
     s.step();
     assert_eq!(s.world.fields.restamped, base, "a distant wall should not re-stamp the fire");
-    put(&mut s, "wall_wood", o.offset(10, 8));
+    put(&mut s, "wall", o.offset(10, 8));
     s.step();
     let redone = s.world.fields.restamped - base;
     // The fire's two emitters (heat r5: <=121 cells, light r7: <=225), once each.
@@ -191,7 +191,7 @@ fn room_values_survive_rebuilds_elsewhere() {
     run_at(&mut s, 0.0, TICKS_PER_DAY / 24 * 3);
     let before = value(&s, t, o.offset(4, 4));
     let rebuilds = s.world.map.room_rebuilds;
-    put(&mut s, "wall_wood", o.offset(15, 15));
+    put(&mut s, "wall", o.offset(15, 15));
     run_at(&mut s, 0.0, 1);
     assert!(s.world.map.room_rebuilds > rebuilds, "the far wall rebuilt rooms");
     let after = value(&s, t, o.offset(4, 4));
@@ -266,15 +266,22 @@ fn cold_colonists_go_to_the_fire() {
             x.1 = NEED_MAX / 5;
         }
     });
-    let mut sought = false;
+    // The pawn finishes warming and wanders off again, so where it stands
+    // at a fixed tick proves nothing. What matters is that it sought
+    // warmth, was somewhere warm while doing so, and warmed up.
+    let (mut sought, mut warmest, mut peak) = (false, f64::MIN, 0);
     for _ in 0..1500 {
         run_at(&mut s, 2.0, 1);
-        sought |= matches!(s.world.ecs.get::<&Pawn>(e).unwrap().job, Job::Comfort { .. });
+        let p = s.world.ecs.get::<&Pawn>(e).unwrap();
+        if matches!(p.job, Job::Comfort { .. }) {
+            sought = true;
+            warmest = warmest.max(value(&s, t, p.pos));
+        }
+        peak = peak.max(warmth(&s, e));
     }
-    let at = s.world.pawn_pos(e).unwrap();
     assert!(sought, "a cold colonist should go looking for warmth");
-    assert!(value(&s, t, at) >= 11.0, "ended up somewhere warm: {}° at {at:?}", value(&s, t, at));
-    assert!(warmth(&s, e) > NEED_MAX / 5, "and warmed up");
+    assert!(warmest >= 11.0, "should have stood somewhere warm while warming up, best was {warmest}°");
+    assert!(peak > NEED_MAX / 2, "and warmed up, peak {peak}");
 }
 
 #[test]

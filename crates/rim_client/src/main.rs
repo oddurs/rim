@@ -28,7 +28,7 @@ pub enum Tool {
 }
 
 /// A toolbar entry: generated from defs, addressed by a stable key so UI
-/// scripts can name it ("designate:chop", "build:wall_wood").
+/// scripts can name it ("designate:chop", "build:wall").
 pub struct ToolDef {
     pub key: String,
     pub label: String,
@@ -676,8 +676,9 @@ pub fn apply(app: &mut App, action: Action) {
                     app.sim.push(Command::Designate { designation: d, a, b });
                 }
                 Tool::Build(t) => {
+                    let stuff = default_material(&app.sim.world, t);
                     for (a, b) in build_rects(defs.thing(t).blocks, a, b) {
-                        app.sim.push(Command::Build { thing: t, a, b });
+                        app.sim.push(Command::Build { stuff, thing: t, a, b });
                     }
                 }
                 Tool::Cancel => app.sim.push(Command::Cancel { a, b }),
@@ -707,6 +708,24 @@ pub fn apply(app: &mut App, action: Action) {
 
 /// Walls (anything that blocks) are drawn as a room outline; everything
 /// else fills the dragged rectangle.
+/// The material to build `thing` from until the player can choose (0215):
+/// whichever the colony has most of, falling back to the first the def
+/// would accept so a blueprint can still be placed and waited on.
+fn default_material(w: &rim_sim::world::World, thing: DefId) -> Option<DefId> {
+    let sc = w.defs.thing(thing).build.as_ref()?.stuff.as_ref()?;
+    let options = w.defs.materials(&sc.category);
+    let stock = |d: DefId| {
+        w.ecs
+            .query::<&rim_sim::world::Thing>()
+            .without::<&rim_sim::world::Blueprint>()
+            .iter()
+            .filter(|(_, t)| t.def == d)
+            .map(|(_, t)| t.count)
+            .sum::<u32>()
+    };
+    options.iter().copied().max_by_key(|&d| stock(d)).or_else(|| options.first().copied())
+}
+
 pub fn build_rects(blocks: bool, a: IVec, b: IVec) -> Vec<(IVec, IVec)> {
     let (x0, x1, y0, y1) = (a.x.min(b.x), a.x.max(b.x), a.y.min(b.y), a.y.max(b.y));
     if !blocks || x1 - x0 < 2 || y1 - y0 < 2 {

@@ -111,16 +111,16 @@ fn order_moves_an_undrafted_colonist() {
 fn order_hauls_to_a_blueprint_then_builds_it() {
     let (mut s, founder) = sim(5);
     let here = at(&s, founder);
-    let (wall, wood) = (s.world.defs.thing_id("wall_wood").unwrap(), s.world.defs.thing_id("wood").unwrap());
+    let (wall, wood) = (s.world.defs.thing_id("wall").unwrap(), s.world.defs.thing_id("wood").unwrap());
     let site = around(here, 10)
         .find(|&p| s.world.map.passable(p) && s.world.map.fixture_at(p).is_none())
         .expect("room to build");
-    let bp = s.world.spawn_fixture(wall, site, true).expect("blueprint placed");
+    let bp = s.world.spawn_fixture_of(wall, site, true, Some(wood)).expect("blueprint placed");
     s.world.place_item(wood, here, 40);
     s.step();
 
     let hint = order::resolve(&s.world, founder, site, None).expect("a blueprint offers an order");
-    assert_eq!(hint.label, "Haul wood to wooden wall");
+    assert_eq!(hint.label, "Haul wood to wall");
     order(&mut s, founder, site, None);
     assert!(matches!(job(&s, founder), Job::Deliver { bp: b, .. } if b == bp), "ordered to haul");
 

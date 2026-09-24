@@ -33,7 +33,7 @@ fn ring(s: &mut Sim, o: IVec, size: i32, door: Option<IVec>, gap: Option<IVec>) 
             if !edge || Some(p) == gap {
                 continue;
             }
-            put(s, if Some(p) == door { "door_wood" } else { "wall_wood" }, p);
+            put(s, if Some(p) == door { "door_wood" } else { "wall" }, p);
         }
     }
 }
@@ -139,7 +139,7 @@ fn rooms_rebuild_only_when_walls_change() {
     }
     assert_eq!(s.world.map.room_rebuilds, base, "rebuilt without a wall changing");
 
-    put(&mut s, "wall_wood", o);
+    put(&mut s, "wall", o);
     s.step();
     s.step();
     assert_eq!(s.world.map.room_rebuilds, base + 1, "one wall, one rebuild");
@@ -177,7 +177,7 @@ end)
     let mut s = Sim::new(&dir, 21).expect("mods load");
     let c = s.world.colony_center().unwrap();
     for (dx, dy) in rim_sim::map::NEIGHBORS8 {
-        put(&mut s, "wall_wood", c.offset(dx, dy));
+        put(&mut s, "wall", c.offset(dx, dy));
     }
     s.step();
     let _ = std::fs::remove_dir_all(&dir);
