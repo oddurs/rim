@@ -7,7 +7,7 @@ milestone: plugin-api
 depends_on:
 - be8174f0-ff41-44fe-b788-2ffff60e0d19
 created: 2026-09-23
-updated: 2026-09-23
+updated: 2026-09-24
 priority: p0
 api: breaking
 effort: m
@@ -27,3 +27,7 @@ pillar:
 - [ ] core defines `core:player`, `core:wild`, `core:hostile`; engine code refers to none of them by name except through a def flag (e.g. `player = true`)
 - [ ] Hostility checks in AI read the stance table
 - [ ] Determinism test still passes
+
+## 2026-09-24
+
+Reachability regions are one layer per Faction, indexed by the enum (map.rs). When factions become defs, the layers become one per door key: what differs between them is only which owned doors are open. See DESIGN.md §6a.

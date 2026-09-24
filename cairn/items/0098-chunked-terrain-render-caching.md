@@ -5,9 +5,10 @@ type: perf
 status: backlog
 milestone: scale
 depends_on:
+- 96d2dac9-cf4e-409a-a028-f49902c8d7d9
 - da558444-243f-43a5-b840-15e46328adfb
 created: 2026-09-22
-updated: 2026-09-23
+updated: 2026-09-24
 priority: p1
 api: none
 effort: m
@@ -31,3 +32,7 @@ Terrain draws from cached chunk textures.
 ## 2026-09-23
 
 The Weather sprint's ground renderer (0193) draws terrain, wetness and snow in one shader pass from map-sized textures, which removes the per-cell rectangles this item was going to cache. What's left here: chunking the textures for maps beyond 250×250 and caching things (plants, walls) by chunk.
+
+## 2026-09-24
+
+Caches per chunk from 'Chunks: one dirty unit for regions, fields and the renderer' rather than a render-only grid (DESIGN.md §6a).

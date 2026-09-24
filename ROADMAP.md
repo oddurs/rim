@@ -113,10 +113,11 @@ Exposure makes shelter matter: warmth, enclosed rooms, day/night, weather. Get f
 
 ## building — Building
 
-`##########` 100% · 11 of 11 done · due 2026-11-15
+`##########` 92% · 11 of 12 done · due 2026-11-15
 
 A one-week sprint inside Colony. Building stops being a fixed list of defs
 
+- [ ] `3dd22b0d` Looks: draw primitives and sprite keys replace named shapes <sup>feature · p2 · m · client</sup>
 - [x] `3f4c257d` Rooms made of something: leak and daylight from the boundary <sup>feature · p0 · l · engine</sup>
 - [x] `419a24ab` Interaction spots: furniture a pawn uses <sup>feature · p1 · m · engine</sup>
 - [x] `49e5e583` Walls that look joined, in the colour of what they are made of <sup>feature · p1 · m · client</sup>
@@ -146,7 +147,7 @@ Save/load that survives mod changes, and replays from seed + command log.
 
 ## colony — Colony
 
-`#·········` 7% · 1 of 15 done · due 2026-12-15
+`#·········` 6% · 1 of 16 done · due 2026-12-15
 
 Running more than one person: stockpiles, hauling, work priorities, skills, colonist panels.
 
@@ -158,6 +159,7 @@ Running more than one person: stockpiles, hauling, work priorities, skills, colo
 - [ ] `29c323f5` Skills learned by doing <sup>feature · p1 · m · engine</sup>
 - [ ] `4ad6b386` Colonist inspection panel <sup>feature · p1 · m · client</sup>
 - [ ] `8376a04f` Drafty rooms: room leak from terms <sup>feature · p3 · s · engine</sup>
+- [ ] `8cf4db07` Multi-cell things occupy every cell of their footprint <sup>feature · p3 · m · engine</sup>
 - [ ] `9bd9e8ab` Fire: burning, spread by wind, put out by rain <sup>feature · p1 · l · engine</sup>
 - [ ] `a7da68e2` Component kit v2: slider, text input and tables <sup>feature · p1 · m · core</sup>
 - [ ] `ecd54de8` Stockpile zones and hauling <sup>feature · p0 · l · engine</sup>
@@ -182,7 +184,7 @@ The run gets a shape: eras, storyteller tiers, defensive strength in the threat 
 
 ## plugin-api — Plugin API
 
-`####······` 32% · 7 of 22 done · due 2027-02-01
+`####······` 30% · 7 of 23 done · due 2027-02-01
 
 The API grows up: stat pipeline, script components, custom jobs, needs and def kinds, modules and custom events, a real sandbox with hard limits, factions as data, rim test, typed API. Everything Mood needs, and everything DESIGN.md §10 says a mod from a stranger's repo must be safe to do.
 
@@ -196,6 +198,7 @@ The API grows up: stat pipeline, script components, custom jobs, needs and def k
 - [ ] `b3df9f85` Mod-defined def kinds with schemas, and namespaced extension fields <sup>feature · p0 · l · engine</sup>
 - [ ] `c65db254` Per-mod budgets: profiler warnings and hard limits for runaway scripts <sup>feature · p1 · m · engine</sup>
 - [ ] `e2ce89c3` Sprites and atlases from mods <sup>feature · p2 · m · client</sup>
+- [ ] `e63fd9c3` Script hook for a stage of map generation <sup>feature · p3 · m · engine</sup>
 - [ ] `eb2c9422` Which platforms beyond desktop, and what do they cost? <sup>spike · p2 · s · engine</sup>
 - [ ] `ebb814ad` Sky bodies: a cycle input and coloured sky terms <sup>feature · p2 · m · engine</sup>
 - [ ] `ed876ad7` Monochrome icon set with mod-supplied icons <sup>feature · p2 · m · core</sup>
@@ -238,7 +241,7 @@ Making a mod feels like publishing a small open-source library: rim new, typed L
 
 ## scale — Scale
 
-`#·········` 10% · 1 of 10 done · due 2027-03-15
+`#·········` 9% · 1 of 11 done · due 2027-03-15
 
 Hit the performance budget: benchmark harness, hierarchical pathing, flow fields, spatial indices, incremental regions, render caching.
 
@@ -246,6 +249,7 @@ Hit the performance budget: benchmark harness, hierarchical pathing, flow fields
 - [ ] `277ff6f2` Hierarchical pathfinding <sup>perf · p1 · l · engine</sup>
 - [ ] `66906291` Incremental region updates <sup>perf · p2 · m · engine</sup>
 - [ ] `91de1172` Parallel systems where read and write sets allow <sup>spike · p2 · m · engine</sup>
+- [ ] `96d2dac9` Chunks: one dirty unit for regions, fields and the renderer <sup>perf · p2 · m · engine</sup>
 - [ ] `a353667b` Flow fields for raid groups <sup>perf · p2 · m · engine</sup>
 - [ ] `da558444` Ground renderer: terrain, wetness and snow in one shader pass <sup>perf · p2 · m · client</sup>
 - [ ] `dab55ea2` Meet the budget: 6x speed at 60 fps <sup>perf · p0 · l · engine</sup>
@@ -332,13 +336,14 @@ Ship it: tutorial, settings, audio, art pass, crash reports with replays, frozen
 
 ## world — World
 
-`··········` 0% · 0 of 6 done · due 2027-06-01
+`··········` 0% · 0 of 7 done · due 2027-06-01
 
 The world beyond the map: factions, traders drawn by wealth, quests, taming.
 
 - [ ] `0dcd58f1` Quests as Luau event chains <sup>feature · p2 · l · plugin</sup>
 - [ ] `40eed01c` Trade UI and currency <sup>feature · p1 · m · client</sup>
 - [ ] `5a2fda29` Animal taming and pens <sup>feature · p2 · m · engine</sup>
+- [ ] `77750f23` Map size is a world-creation parameter <sup>feature · p2 · s · engine</sup>
 - [ ] `9077e831` Traders: caravans pulled by wealth <sup>feature · p0 · m · core</sup>
 - [ ] `a27e294c` Factions with relations <sup>feature · p0 · l · engine</sup>
 - [ ] `e2cae1b2` Biomes: other climates as a plugin <sup>content · p2 · m · plugin</sup>
