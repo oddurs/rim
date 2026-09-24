@@ -36,8 +36,13 @@ fn with_world<R>(ptr: &WorldPtr, f: impl FnOnce(&mut World) -> mlua::Result<R>) 
     f(unsafe { &mut *p })
 }
 
-fn field_id(w: &World, id: &str) -> mlua::Result<usize> {
-    w.defs.lookup("field", id).map(|f| f as usize).ok_or_else(|| mlua::Error::runtime(format!("unknown field '{id}'")))
+/// A def id a script passed: bare ids are the calling mod's own.
+fn def_id(w: &World, kind: &'static str, id: &str, from: &str) -> mlua::Result<crate::defs::DefId> {
+    w.defs.resolve(kind, id, from).map_err(mlua::Error::runtime)
+}
+
+fn field_id(w: &World, id: &str, from: &str) -> mlua::Result<usize> {
+    def_id(w, "field", id, from).map(|f| f as usize)
 }
 
 /// The mod whose code is calling into the engine: the chunk name of the
@@ -642,6 +647,18 @@ impl ScriptHost {
                 rim.set($name, lua.create_function(move |_, $args: $ty| with_world(&ptr, |$w| $body))?)?;
                 self.declare($name, $sig, $doc);
             }};
+            // `$from` is the mod whose code is calling: bare def ids are its own.
+            ($name:literal, $sig:literal, $doc:literal, $ty:ty, |$w:ident, $from:ident, $args:pat_param| $body:expr) => {{
+                let ptr = self.world.clone();
+                rim.set(
+                    $name,
+                    lua.create_function(move |lua, $args: $ty| {
+                        let $from = calling_mod(lua).unwrap_or_default();
+                        with_world(&ptr, |$w| $body)
+                    })?,
+                )?;
+                self.declare($name, $sig, $doc);
+            }};
         }
 
         api!("tick", "() -> number", "The current tick. A day is `rim.ticks_per_day` ticks.", (), |w, _a| Ok(w.tick));
@@ -761,11 +778,8 @@ impl ScriptHost {
             "(creature: string, faction: Faction, x: number, y: number, name: string?) -> (number?, string?)",
             "Spawn a creature; returns its id and name, or nil if the cell is blocked.",
             (String, String, i32, i32, Option<String>),
-            |w, (creature, faction, x, y, name)| {
-                let def = w
-                    .defs
-                    .creature_id(&creature)
-                    .ok_or_else(|| mlua::Error::runtime(format!("unknown creature '{creature}'")))?;
+            |w, from, (creature, faction, x, y, name)| {
+                let def = def_id(w, "creature", &creature, &from)?;
                 let f = Faction::parse(&faction)
                     .ok_or_else(|| mlua::Error::runtime(format!("unknown faction '{faction}'")))?;
                 let p = IVec::new(x, y);
@@ -783,28 +797,28 @@ impl ScriptHost {
             "(id: string, x: number, y: number) -> number",
             "A field's value at a cell (temperature, light, ...).",
             (String, i32, i32),
-            |w, (id, x, y)| {
-                let f = field_id(w, &id)?;
+            |w, from, (id, x, y)| {
+                let f = field_id(w, &id, &from)?;
                 w.map.ensure_rooms();
                 let defs = w.defs.clone();
                 Ok(w.fields.value(&defs, &w.map, f, IVec::new(x, y)))
             }
         );
-        api!("ambient", "(id: string) -> number", "A field's outdoor value.", String, |w, id| {
-            let f = field_id(w, &id)?;
+        api!("ambient", "(id: string) -> number", "A field's outdoor value.", String, |w, from, id| {
+            let f = field_id(w, &id, &from)?;
             Ok(w.fields.ambient(f))
         });
         // Pin a field's outdoor value (tests, tools); nil unpins. Mods that
         // want to change the weather push a named contribution instead.
-        api!("set_ambient", "(id: string, value: number?) -> ()", "Pin a field's outdoor value, overriding its terms and pushes; nil unpins. For tests and tools: mods push instead.", (String, Option<f64>), |w, (id, v)| {
-            let f = field_id(w, &id)?;
+        api!("set_ambient", "(id: string, value: number?) -> ()", "Pin a field's outdoor value, overriding its terms and pushes; nil unpins. For tests and tools: mods push instead.", (String, Option<f64>), |w, from, (id, v)| {
+            let f = field_id(w, &id, &from)?;
             w.fields.set_ambient(f, v);
             Ok(())
         });
         // A named contribution to a field's outdoor value, easing in over
         // `ease_hours` and expiring after `hours` (nil: until cleared).
-        api!("push_ambient", "(field: string, key: string, value: number, hours: number?, ease_hours: number?) -> ()", "Add a named contribution to a field's outdoor value, easing in over ease_hours and expiring after hours (nil: until cleared).", (String, String, f64, Option<f64>, Option<f64>), |w, (id, key, v, hours, ease)| {
-            let f = field_id(w, &id)?;
+        api!("push_ambient", "(field: string, key: string, value: number, hours: number?, ease_hours: number?) -> ()", "Add a named contribution to a field's outdoor value, easing in over ease_hours and expiring after hours (nil: until cleared).", (String, String, f64, Option<f64>, Option<f64>), |w, from, (id, key, v, hours, ease)| {
+            let f = field_id(w, &id, &from)?;
             let tick = w.tick;
             w.fields.push_ambient(f, &key, v, tick, hours, ease.unwrap_or(0.0));
             Ok(())
@@ -814,8 +828,8 @@ impl ScriptHost {
             "(field: string, key: string, ease_hours: number?) -> ()",
             "Ease a named contribution out and remove it.",
             (String, String, Option<f64>),
-            |w, (id, key, ease)| {
-                let f = field_id(w, &id)?;
+            |w, from, (id, key, ease)| {
+                let f = field_id(w, &id, &from)?;
                 let tick = w.tick;
                 w.fields.clear_ambient(f, &key, tick, ease.unwrap_or(0.0));
                 Ok(())
@@ -825,8 +839,9 @@ impl ScriptHost {
         {
             let ptr = self.world.clone();
             let f = lua.create_function(move |lua, id: String| {
+                let from = calling_mod(lua).unwrap_or_default();
                 let parts = with_world(&ptr, |w| {
-                    let f = field_id(w, &id)?;
+                    let f = field_id(w, &id, &from)?;
                     Ok(w.fields.explain_ambient(&w.defs, f))
                 })?;
                 let out = lua.create_table()?;
@@ -988,9 +1003,8 @@ impl ScriptHost {
             "(thing: string, x: number, y: number, count: number) -> number",
             "Drop items near a cell, merging into stacks; returns how many didn't fit.",
             (String, i32, i32, u32),
-            |w, (thing, x, y, count)| {
-                let def =
-                    w.defs.thing_id(&thing).ok_or_else(|| mlua::Error::runtime(format!("unknown thing '{thing}'")))?;
+            |w, from, (thing, x, y, count)| {
+                let def = def_id(w, "thing", &thing, &from)?;
                 Ok(w.place_item(def, IVec::new(x, y), count))
             }
         );

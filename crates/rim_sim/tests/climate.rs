@@ -99,7 +99,7 @@ fn a_patch_changes_one_term_by_label() {
             "flat",
             &[(
                 "defs/patch.toml",
-                "[[patch]]\ntarget = \"field/temperature\"\nset = { ambient = { day = { scale = 0.0 }, mean = { of = [4.0] } } }\n",
+                "[[patch]]\ntarget = \"field/core:temperature\"\nset = { ambient = { day = { scale = 0.0 }, mean = { of = [4.0] } } }\n",
             )],
         )],
     );
@@ -118,14 +118,14 @@ fn bad_terms_and_cycles_fail_to_load_with_names() {
                [[field]]\nid = \"b\"\nlabel = \"b\"\nrange = [0.0, 1.0]\ncolor_low = \"#000000\"\ncolor_high = \"#ffffff\"\n[field.ambient.y]\nof = [{ ambient = \"a\" }]\n";
     let dir = with_test_mods("cycle", &[("loop", &[("defs/f.toml", cyc)])]);
     let err = Sim::new(&dir, 1).err().expect("a cycle must not load");
-    assert!(err.contains("cycle") && err.contains("a -> b -> a"), "{err}");
+    assert!(err.contains("cycle") && err.contains("loop:a -> loop:b -> loop:a"), "{err}");
     let _ = fs::remove_dir_all(dir);
 
     let bad =
-        "[[patch]]\ntarget = \"field/temperature\"\nset = { ambient = { day = { of = [{ input = \"moon\" }] } } }\n";
+        "[[patch]]\ntarget = \"field/core:temperature\"\nset = { ambient = { day = { of = [{ input = \"moon\" }] } } }\n";
     let dir = with_test_mods("badinput", &[("moon", &[("defs/p.toml", bad)])]);
     let err = Sim::new(&dir, 1).err().expect("an unknown input must not load");
-    assert!(err.contains("field/temperature, term 'day'") && err.contains("moon"), "{err}");
+    assert!(err.contains("field/core:temperature, term 'day'") && err.contains("moon"), "{err}");
     let _ = fs::remove_dir_all(dir);
 }
 
@@ -212,7 +212,7 @@ fn a_modded_sky_still_dims_under_cloud() {
     // Two suns instead of core's one: a dim early sun and a bright late one.
     let sky = r#"
 [[patch]]
-target = "field/daylight"
+target = "field/core:daylight"
 
 [patch.set.ambient.sun]
 scale = 0.0

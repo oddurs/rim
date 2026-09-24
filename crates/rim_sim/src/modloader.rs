@@ -103,11 +103,23 @@ pub fn load_only(mods_dir: &Path, enabled: &dyn Fn(&str) -> bool) -> Result<Load
                         warnings.push(format!("{origin}: unknown def kind '{kind}' ignored"));
                         continue;
                     }
-                    let id = t
+                    let raw = t
                         .get("id")
                         .and_then(|v| v.as_str())
-                        .ok_or_else(|| format!("{origin}: a [[{kind}]] entry has no id"))?
-                        .to_string();
+                        .ok_or_else(|| format!("{origin}: a [[{kind}]] entry has no id"))?;
+                    // Every id is the mod's own: "wall" in core is "core:wall".
+                    let id = match raw.split_once(':') {
+                        None => format!("{}:{raw}", m.id),
+                        Some((owner, _)) if owner == m.id => raw.to_string(),
+                        Some((owner, bare)) => {
+                            return Err(format!(
+                                "{origin}: [[{kind}]] id '{raw}' is in mod '{owner}'s namespace; a mod defines \
+                                 its own ids (id = \"{bare}\"), and changes another mod's with a [[patch]]"
+                            ))
+                        }
+                    };
+                    let mut t = t;
+                    t.insert("id".into(), toml::Value::String(id.clone()));
                     let key = (kind.clone(), id.clone());
                     if let Some(&i) = index.get(&key) {
                         return Err(format!(
@@ -129,12 +141,29 @@ pub fn load_only(mods_dir: &Path, enabled: &dyn Fn(&str) -> bool) -> Result<Load
             let Some((kind, id)) = target.split_once('/') else {
                 return Err(format!("{origin}: patch target '{target}' must look like kind/id"));
             };
-            let Some(&i) = index.get(&(kind.to_string(), id.to_string())) else {
+            // A bare id is the patching mod's own, like any reference.
+            let full = if id.contains(':') { id.to_string() } else { format!("{}:{id}", m.id) };
+            let Some(&i) = index.get(&(kind.to_string(), full.clone())) else {
+                let mut others: Vec<&String> = index
+                    .keys()
+                    .filter(|(k, other)| {
+                        k == kind && !id.contains(':') && other.split_once(':').is_some_and(|(_, b)| b == id)
+                    })
+                    .map(|(_, other)| other)
+                    .collect();
+                others.sort();
+                if let Some(other) = others.first() {
+                    return Err(format!(
+                        "{origin}: patch target {target}: that's another mod's def, so name it with its prefix: \
+                         target = \"{kind}/{other}\""
+                    ));
+                }
                 // Patching an optional mod that isn't installed is normal.
-                warnings.push(format!("{origin}: patch target {target} not found (skipped)"));
+                warnings.push(format!("{origin}: patch target {kind}/{full} not found (skipped)"));
                 continue;
             };
-            apply_patch(&mut entries[i], &p, &origin, target, &m.id, &mut log)?;
+            let target = format!("{kind}/{full}");
+            apply_patch(&mut entries[i], &p, &origin, &target, &m.id, &mut log)?;
         }
 
         let root = m.dir.join("scripts");

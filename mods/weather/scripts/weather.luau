@@ -152,7 +152,7 @@ end
 
 local function label_of(e): string
 	local t = types[e.id]
-	if t and t.cold_label and e.set.precipitation > 0 and rim.ambient("temperature") <= 0 then
+	if t and t.cold_label and e.set.precipitation > 0 and rim.ambient("core:temperature") <= 0 then
 		return t.cold_label
 	end
 	return if t then t.label else e.id
@@ -162,9 +162,9 @@ end
 local function apply(e, previous: string?)
 	local t = types[e.id]
 	for _, ch in CHANNELS do
-		rim.push_ambient(ch, "weather", e.set[ch], nil, t.blend)
+		rim.push_ambient("core:" .. ch, "weather", e.set[ch], nil, t.blend)
 	end
-	rim.push_ambient("wind_dir", "weather", e.wind_dir or 0, nil, t.blend)
+	rim.push_ambient("core:wind_dir", "weather", e.wind_dir or 0, nil, t.blend)
 	local label = label_of(e)
 	rim.emit("weather:changed", { from = previous, to = e.id, label = label })
 	if t.message then

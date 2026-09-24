@@ -29,15 +29,17 @@ build = { work = 10, cost = [{ thing = "wood", count = "ten" }] }
 "##,
         )],
     );
-    assert!(err.contains("thing/hut_kit") && err.contains("bad/defs/bad.toml"), "{err}");
+    assert!(err.contains("thing/bad:hut_kit") && err.contains("bad/defs/bad.toml"), "{err}");
     println!("{err}");
     assert!(err.contains("build.cost[0].count"), "names the key path: {err}");
 }
 
 #[test]
 fn a_bad_patch_names_the_mod_that_made_it() {
-    let err =
-        load_error("badpatch", &[("defs/p.toml", "[[patch]]\ntarget = \"thing/tree_oak\"\nset = { hp = \"lots\" }\n")]);
+    let err = load_error(
+        "badpatch",
+        &[("defs/p.toml", "[[patch]]\ntarget = \"thing/core:tree_oak\"\nset = { hp = \"lots\" }\n")],
+    );
     println!("{err}");
     assert!(err.contains("at `hp`") && err.contains("patched by 'bad'"), "{err}");
 }

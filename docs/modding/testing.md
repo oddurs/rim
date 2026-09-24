@@ -44,6 +44,9 @@ would. Every option is optional:
 
 Each world has its own sim VM, so tests don't affect each other.
 
+World methods take def ids qualified (`"core:wood"`), or bare when exactly one
+loaded mod defines that id.
+
 | Method | What it does |
 |---|---|
 | `w:step(n)`, `w:run_hours(h)`, `w:run_days(d)` | Advance the game |

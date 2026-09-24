@@ -21,7 +21,7 @@ end
 
 -- The label to show: rain below freezing is snow.
 local function label_of(e, view): string
-	local cold = e.cold_label and e.set and (e.set.precipitation or 0) > 0 and (view.ambient("temperature") or 0) <= 0
+	local cold = e.cold_label and e.set and (e.set.precipitation or 0) > 0 and (view.ambient("core:temperature") or 0) <= 0
 	return if cold then e.cold_label else (e.label or e.id)
 end
 
@@ -49,12 +49,12 @@ ui.extend("core:topbar.right", function(view)
 	if not q or not q[1] then
 		return nil
 	end
-	local wind = view.ambient("wind") or 0
+	local wind = view.ambient("core:wind") or 0
 	local text = string.format(
 		"%s · %.0f°C · %s %.0f m/s",
 		cap(label_of(q[1], view)),
-		view.ambient("temperature") or 0,
-		arrow(view.ambient("wind_dir") or 0),
+		view.ambient("core:temperature") or 0,
+		arrow(view.ambient("core:wind_dir") or 0),
 		wind
 	)
 	local open = ui.state("weather:open", false)
@@ -94,7 +94,7 @@ ui.define("weather:forecast", function(view)
 	end
 	table.insert(items, kit.divider())
 	table.insert(items, label("Temperature", { size = "small", color = "muted" }))
-	for _, part in view.explain("temperature") do
+	for _, part in view.explain("core:temperature") do
 		table.insert(
 			items,
 			row({ gap = "m" }, {

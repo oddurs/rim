@@ -84,7 +84,7 @@ pub const UI_API: &[UiDoc] = &[
     d!("act.toggle_outlines", "() -> ()", "Show or hide layout outlines (devtools)."),
     d!("act.toggle_pause", "() -> ()", "Pause or resume."),
     d!("act.toggle_profiler", "() -> ()", "Show or hide the profiler."),
-    d!("act.tool", "(key: string) -> ()", "Pick a toolbar tool (\"designate:chop\", \"build:wall\")."),
+    d!("act.tool", "(key: string) -> ()", "Pick a toolbar tool (\"designate:core:chop\", \"build:core:wall\")."),
     d!("ui.anchored", "(node: Node?) -> Node", "A node attached to a pawn (entity) or cell, on the anchored layer."),
     d!("ui.col", "(node: Node?) -> Node", "A column: children top to bottom."),
     d!("ui.define", "(id: string, build: (view: any) -> Node?) -> ()", "Define a component under a namespaced id."),

@@ -5,6 +5,30 @@ files. Redefining a def with the same kind and id is an error: patch it
 instead. Patches apply in load order: a mod's patches run after the mods it
 depends on, or loads after.
 
+## Ids
+
+Every def id belongs to the mod that defines it: core's `wall` is
+`core:wall`. Inside your own mod a bare id means your own def, and another
+mod's def needs its prefix. That applies to patch targets, references in your
+defs, and ids your scripts pass to `rim`:
+
+<!-- not a sample -->
+```toml
+[[creature]]
+id = "golem"                                      # my_mod:golem
+butcher = [{ thing = "iron", count = 5 },         # my_mod:iron
+           { thing = "core:raw_meat", count = 1 }] # core's meat
+```
+
+Two mods can both define `iron` without colliding. When a bare id isn't
+yours but another mod has it, the error says which prefix you meant.
+
+References in a def resolve in that def's own mod, even when your patch
+wrote them. If you append to `core:deer`'s `butcher`, a bare `iron` means
+core's iron, so write `my_mod:iron`.
+
+## Patches
+
 Every patch names its target as `kind/id` and does one or more of these, in
 this order:
 
@@ -21,7 +45,7 @@ Any other key is an error, so a typo like `sett` doesn't pass silently.
 
 ```toml
 [[patch]]
-target = "thing/berry_bush"
+target = "thing/core:berry_bush"
 set = { harvest = { regrow_days = 1.5 } }
 ```
 
@@ -35,11 +59,11 @@ to change part of one, use the list operations below.
 
 ```toml
 [[patch]]
-target = "creature/deer"
+target = "creature/core:deer"
 append = { butcher = [{ thing = "wood", count = 2 }], spawn = { terrain = ["dirt"] } }
 
 [[patch]]
-target = "creature/human"
+target = "creature/core:human"
 remove = { needs = ["warmth"] }
 ```
 
@@ -52,7 +76,7 @@ To change an element in place, match it by its keys and `set` what changes:
 
 ```toml
 [[patch]]
-target = "thing/window"
+target = "thing/core:window"
 
 [[patch.edit]]
 list = "boundary"                 # a dotted path, like "spawn.terrain"
@@ -60,7 +84,9 @@ match = { field = "temperature" }
 set = { leak = 2.0 }
 ```
 
-Every matching element is edited. If none match, that's a warning.
+Every matching element is edited. If none match, that's a warning. `match`
+and `remove` compare values as the target def wrote them: core's walls say
+`field = "temperature"`, so match on that, not on `"core:temperature"`.
 
 ## Conflicts
 

@@ -58,9 +58,9 @@ fn clicks_on_panels_never_reach_the_world() {
     let mut ui = ui_for(&sim);
     let mut cv = client(&sim);
     frame(&mut ui, &sim, &cv, Default::default());
-    let chop = ui.find("core:toolbar.designate:chop").unwrap();
+    let chop = ui.find("core:toolbar.designate:core:chop").unwrap();
     let actions = click(&mut ui, &sim, &mut cv, centre(chop));
-    assert_eq!(actions, vec![UiAction::Tool("designate:chop".into())]);
+    assert_eq!(actions, vec![UiAction::Tool("designate:core:chop".into())]);
 
     // A panel's background swallows the click but does nothing.
     let panel = ui.find("core:inspector").unwrap();
@@ -629,13 +629,13 @@ fn the_material_row_renders_beside_the_toolbar() {
         hp: if active { 140 } else { 320 },
         work: if active { 144 } else { 324 },
     };
-    cv.stuff = vec![mat("wood", "wood", 12, true), mat("stone", "stone blocks", 0, false)];
+    cv.stuff = vec![mat("core:wood", "wood", 12, true), mat("core:stone", "stone blocks", 0, false)];
     frame(&mut ui, &sim, &cv, Default::default());
     let snap = ui.snapshot();
     assert!(ui.find("core:toolbar.buttons").is_some(), "the toolbar must still build:\n{snap}");
     assert!(ui.find("core:stuff").is_some(), "the material row is there:\n{snap}");
     assert!(
-        ui.find("core:stuff.wood").is_some() && ui.find("core:stuff.stone").is_some(),
+        ui.find("core:stuff.core:wood").is_some() && ui.find("core:stuff.core:stone").is_some(),
         "one button per material:\n{snap}"
     );
     assert!(snap.contains("wood ×12"), "stock is shown:\n{snap}");

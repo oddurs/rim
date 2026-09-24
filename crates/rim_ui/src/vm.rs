@@ -629,13 +629,14 @@ impl UiVm {
             Ok(t)
         });
         // A field's outdoor value, or nil for an unknown field.
-        view!("ambient", String, |_lua, l, id| {
-            Ok(l.world.defs.lookup("field", &id).map(|f| l.world.fields.ambient(f as usize)))
+        view!("ambient", String, |lua, l, id| {
+            let from = ui_calling_mod(lua).unwrap_or_default();
+            Ok(l.world.defs.resolve("field", &id, &from).ok().map(|f| l.world.fields.ambient(f as usize)))
         });
         // Each part of a field's outdoor value: { {label, value}, ... }.
         view!("explain", String, |lua, l, id| {
             let t = lua.create_table()?;
-            if let Some(f) = l.world.defs.lookup("field", &id) {
+            if let Ok(f) = l.world.defs.resolve("field", &id, &ui_calling_mod(lua).unwrap_or_default()) {
                 for (label, v) in l.world.fields.explain_ambient(&l.world.defs, f as usize) {
                     let row = lua.create_table()?;
                     row.set("label", label)?;

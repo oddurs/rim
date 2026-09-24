@@ -3,7 +3,7 @@
 //! It feeds synthetic raw input through the same `frame()` the game loop
 //! uses: world clicks and drags pass through the UI's routing exactly as the
 //! mouse's would, and UI controls are clicked by node id (`core:toolbar.
-//! designate:chop`), not screen position. It checks the game state after
+//! designate:core:chop`), not screen position. It checks the game state after
 //! each step, saves screenshots to `dir` (default `target/autotest`), and
 //! exits non-zero if any check failed.
 
@@ -60,7 +60,8 @@ impl T {
     async fn shot(&mut self, name: &str) {
         let img = self.grab().await;
         self.shots += 1;
-        let path = self.dir.join(format!("{:02}_{name}.png", self.shots));
+        // Def ids have a colon ("core:light"), which Windows and CI artifacts refuse.
+        let path = self.dir.join(format!("{:02}_{}.png", self.shots, name.replace(':', "_")));
         img.export_png(path.to_str().unwrap());
         println!("shot  {}", path.display());
     }
@@ -290,7 +291,7 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     // ---------------------------------------------------------- 0046 designate / build / cancel
     println!("\n# designate, build, cancel (0046)");
     let chop = defs.lookup("designation", "chop").unwrap();
-    t.click_ui("core:toolbar.designate:chop").await;
+    t.click_ui("core:toolbar.designate:core:chop").await;
     t.check(t.app.tool == Tool::Designate(chop), "clicking Chop selects the chop tool");
     // Drag over the trees nearest home, wherever this map put them.
     let oak = defs.thing_id("tree_oak").unwrap();
@@ -315,7 +316,7 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
 
     let site = open_square(t.w(), home, 6).expect("open ground for a hut");
     let wall = defs.thing_id("wall").unwrap();
-    t.click_ui("core:toolbar.build:wall").await;
+    t.click_ui("core:toolbar.build:core:wall").await;
     t.check(t.app.tool == Tool::Build(wall), "clicking wooden wall selects the wall tool");
     let (ax, ay) = t.screen(site);
     let (bx, by) = t.screen(site.offset(5, 5));
@@ -338,7 +339,7 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         t.count::<&Blueprint>() == 14,
         format!("cancel removes the dragged row ({} left)", t.count::<&Blueprint>()),
     );
-    t.click_ui("core:toolbar.build:wall").await;
+    t.click_ui("core:toolbar.build:core:wall").await;
     t.drag(site, site.offset(4, 0)).await;
     t.click_ui("core:toolbar.build:door").await;
     t.drag(site.offset(5, 0), site.offset(5, 0)).await;
@@ -448,12 +449,12 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.key(KeyCode::Escape).await;
     t.frame().await;
     t.check(t.ui_rect("core:stuff").is_none(), "no material row while nothing is being built");
-    t.click_ui("core:toolbar.build:wall").await;
+    t.click_ui("core:toolbar.build:core:wall").await;
     t.frame().await;
     t.check(t.ui_rect("core:stuff").is_some(), "the wall tool brings up the material row");
     t.check(t.ui_rect("core:toolbar.buttons").is_some(), "and the toolbar is still there under it");
-    t.check(t.ui_rect("core:stuff.wood").is_some(), "the wall tool offers wood");
-    t.check(t.ui_rect("core:stuff.stone").is_some(), "and stone, whether or not there is any");
+    t.check(t.ui_rect("core:stuff.core:wood").is_some(), "the wall tool offers wood");
+    t.check(t.ui_rect("core:stuff.core:stone").is_some(), "and stone, whether or not there is any");
     let have_stone: u32 = t
         .w()
         .ecs
@@ -467,7 +468,7 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         have_stone > 0 || t.ui_text().contains("stone blocks · none"),
         format!("a material you have none of says so ({have_stone} stone on the map)"),
     );
-    let clicked = t.click_ui("core:stuff.stone").await;
+    let clicked = t.click_ui("core:stuff.core:stone").await;
     t.frame().await;
     t.check(clicked && t.app.stuff_for.contains(&(wall, stone)), "clicking stone picks it for the wall");
     let spot = (2..30i32)
@@ -482,10 +483,10 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.click_ui("core:toolbar.cancel").await;
     t.drag(spot, spot).await;
     t.ticks(1);
-    t.click_ui("core:toolbar.build:wall").await;
+    t.click_ui("core:toolbar.build:core:wall").await;
     t.frame().await;
     t.check(t.app.stuff_for.contains(&(wall, stone)), "the choice is remembered for the wall");
-    t.click_ui("core:stuff.wood").await;
+    t.click_ui("core:stuff.core:wood").await;
     t.key(KeyCode::Escape).await;
 
     // ---------------------------------------------------------- 0047 orders
@@ -640,7 +641,7 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.key(KeyCode::F12).await;
     t.frame().await;
     t.check(t.app.ui.find("core:devtools.panel").is_some(), "F12 opens devtools");
-    if let Some(r) = t.ui_rect("core:toolbar.designate:chop") {
+    if let Some(r) = t.ui_rect("core:toolbar.designate:core:chop") {
         t.input(RawInput { mouse: (r[0] + r[2] / 2.0, r[1] + r[3] / 2.0), ..Default::default() }).await;
         t.frame().await;
     }

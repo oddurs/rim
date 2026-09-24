@@ -9,10 +9,10 @@ max_hp = 80
 melee_damage = 8
 melee_cooldown = 80
 market_value = 70
-butcher = [{ thing = "raw_meat", count = 30 }]
-spawn = { terrain = ["dirt", "grass"], groups = 2, group = [1, 3] }
+butcher = [{ thing = "core:raw_meat", count = 30 }]
+spawn = { terrain = ["core:dirt", "core:grass"], groups = 2, group = [1, 3] }
 
 # Tier 1 — patches. Change core content without copying it.
 [[patch]]
-target = "thing/berry_bush"
+target = "thing/core:berry_bush"
 set = { harvest = { regrow_days = 1.5 } }

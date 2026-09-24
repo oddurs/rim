@@ -149,7 +149,7 @@ command, so it replays and stays in lockstep; a mod can only send under its
 own name. `act.advance(hours)` runs the game forward (devtools).
 
 Actions are queued and applied by the client, exactly like a key press.
-Toolbar keys look like `"designate:chop"` and `"build:wall"`.
+Toolbar keys are the tool and a def id, like `"designate:core:chop"` and `"build:core:wall"`.
 
 For small bits of UI state that should survive rebuilds, such as the selected
 tab, use `ui.state(key, default)` and `ui.set_state(key, value)`.
