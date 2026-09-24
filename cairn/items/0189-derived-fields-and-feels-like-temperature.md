@@ -1,12 +1,12 @@
 ---
-id: 189
+id: 03b9b791-082e-48f1-b51e-af6f42627685
 title: Derived fields and feels-like temperature
 type: feature
 status: backlog
 milestone: colony
 depends_on:
-- 181
-- 188
+- 3114946b-5434-4171-9cdb-86ae4e7bb38d
+- fa0de3f5-7ee7-4316-9e00-7db21bc43412
 created: 2026-09-23
 updated: 2026-09-23
 priority: p1

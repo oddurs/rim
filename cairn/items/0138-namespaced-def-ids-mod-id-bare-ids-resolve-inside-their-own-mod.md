@@ -1,5 +1,5 @@
 ---
-id: 138
+id: be8174f0-ff41-44fe-b788-2ffff60e0d19
 title: 'Namespaced def ids: mod:id, bare ids resolve inside their own mod'
 type: feature
 status: backlog

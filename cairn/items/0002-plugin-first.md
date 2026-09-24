@@ -1,5 +1,5 @@
 ---
-id: 2
+id: 3681b319-ce44-418a-a930-b49d6672c75f
 key: plugin-first
 title: Plugin-first
 type: pillar

@@ -1,12 +1,12 @@
 ---
-id: 9
+id: d02fb66e-af87-4c3e-93c5-48b9bfc1fb2b
 key: shelter
 title: Shelter
 type: milestone
 status: doing
 depends_on:
-- 8
-- 179
+- 61abad41-ecc6-4597-9ad4-d0193639e828
+- ed55b09d-0279-4625-a9a6-1993d72ea210
 created: 2026-09-22
 updated: 2026-09-23
 priority: p2

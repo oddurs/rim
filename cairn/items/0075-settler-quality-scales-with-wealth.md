@@ -1,5 +1,5 @@
 ---
-id: 75
+id: bc38c90a-8b4e-4883-8dab-c6a134f8fa28
 title: Settler quality scales with wealth
 type: content
 status: backlog

@@ -1,12 +1,12 @@
 ---
-id: 69
+id: 83427b76-8864-48df-a550-23c21e7d4878
 title: Deconstruct designation
 type: feature
 status: done
 milestone: building
 assignee: Oddur Sigurdsson
 depends_on:
-- 212
+- 763d8d64-9bee-459a-87c4-1ec543644f38
 created: 2026-09-22
 updated: 2026-09-23
 priority: p1

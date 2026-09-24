@@ -1,11 +1,11 @@
 ---
-id: 147
+id: ded7881a-1a0d-4ded-86a7-8c638bfe5d10
 title: 'Deterministic math in scripts: replace library trig and exp'
 type: feature
 status: backlog
 milestone: plugin-api
 depends_on:
-- 157
+- 05dbb688-66e3-47b0-b105-32651a8ebec0
 created: 2026-09-23
 updated: 2026-09-23
 priority: p1

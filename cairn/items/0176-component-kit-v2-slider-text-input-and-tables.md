@@ -1,11 +1,11 @@
 ---
-id: 176
+id: a7da68e2-7934-47e2-ae5d-3d438ebb61f1
 title: 'Component kit v2: slider, text input and tables'
 type: feature
 status: backlog
 milestone: colony
 depends_on:
-- 168
+- b144ca3c-2985-47be-b3ce-d07d4f17ceaa
 created: 2026-09-23
 updated: 2026-09-23
 priority: p1

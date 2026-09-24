@@ -1,11 +1,11 @@
 ---
-id: 172
+id: c96a6a8f-2e05-4658-9c7a-849d1f86510a
 title: Hot reload of UI scripts and theme
 type: feature
 status: done
 milestone: interface
 depends_on:
-- 167
+- 452628d7-a341-478d-9670-735b6eef1445
 created: 2026-09-23
 updated: 2026-09-23
 closed_at: 2026-09-23

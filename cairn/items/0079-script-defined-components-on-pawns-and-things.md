@@ -1,5 +1,5 @@
 ---
-id: 79
+id: 7f8ce379-3461-4ee4-8280-43b2cabe542c
 title: Script-defined components on pawns and things
 type: feature
 status: backlog

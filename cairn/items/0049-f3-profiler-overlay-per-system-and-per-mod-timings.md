@@ -1,11 +1,11 @@
 ---
-id: 49
+id: 9c50100e-a4bb-45b4-a6ce-bdde520d58ee
 title: 'F3 profiler overlay: per-system and per-mod timings'
 type: feature
 status: done
 milestone: castaway
 depends_on:
-- 45
+- 793e0a96-d4af-49d4-ad58-ff7493ddfdae
 created: 2026-09-22
 updated: 2026-09-23
 closed_at: 2026-09-23

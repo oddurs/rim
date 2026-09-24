@@ -1,12 +1,12 @@
 ---
-id: 197
+id: c7f07804-10de-4aa5-958b-1a3fcd1d353d
 title: Weather modding guide
 type: docs
 status: done
 milestone: weather
 depends_on:
-- 57
-- 184
+- cee5648a-9714-4498-9c57-1f46253100d0
+- 7c50b502-5e27-4807-a36c-0654fe9aec97
 created: 2026-09-23
 updated: 2026-09-23
 closed_at: 2026-09-23

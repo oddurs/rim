@@ -1,11 +1,11 @@
 ---
-id: 158
+id: 48ed0988-6716-4f17-820a-b0a3e0d2cf2a
 title: 'Audit float math in the sim: fixed-point, or f64 with rules?'
 type: spike
 status: backlog
 milestone: co-op
 depends_on:
-- 157
+- 05dbb688-66e3-47b0-b105-32651a8ebec0
 created: 2026-09-23
 updated: 2026-09-23
 priority: p0

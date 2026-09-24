@@ -1,12 +1,12 @@
 ---
-id: 47
+id: ce97d9ad-ea69-45e8-a239-85a593a8ad90
 title: 'Client: selection, draft, move and attack orders'
 type: feature
 status: done
 milestone: castaway
 depends_on:
-- 29
-- 45
+- ecaf561f-fe93-4eb2-95f2-eb8953588d24
+- 793e0a96-d4af-49d4-ad58-ff7493ddfdae
 created: 2026-09-22
 updated: 2026-09-23
 closed_at: 2026-09-23

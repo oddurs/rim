@@ -1,11 +1,11 @@
 ---
-id: 56
+id: 2e0b9d43-90e5-4051-bda6-81544e9caf0f
 title: 'Lighting from the light field: lightmap, glow and sky tint'
 type: feature
 status: done
 milestone: weather
 depends_on:
-- 183
+- 3bb54ba3-21f9-42a4-9f7c-8299b5db1db5
 created: 2026-09-22
 updated: 2026-09-23
 closed_at: 2026-09-23

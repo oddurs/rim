@@ -1,12 +1,12 @@
 ---
-id: 165
+id: ad0ab61f-b5e7-4a3d-b216-d1b9e7251cfb
 title: 'UI engine: node tree, flexbox layout and batched drawing'
 type: feature
 status: done
 milestone: interface
 depends_on:
-- 163
-- 164
+- 6d04638b-782a-4e56-9846-21fd720d35e2
+- 17505800-ecc8-4b94-b0e6-7bf04a26f06e
 created: 2026-09-23
 updated: 2026-09-23
 closed_at: 2026-09-23

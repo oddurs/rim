@@ -1,12 +1,12 @@
 ---
-id: 13
+id: 9446bd68-53cf-4313-958b-641d81a9a2ba
 key: plugin-api
 title: Plugin API
 type: milestone
 status: planned
 depends_on:
-- 12
-- 161
+- d7ddd3da-7e21-46cc-b61a-08a1d6cd830e
+- 7b325c7f-8a5c-4343-b898-1185c578bca3
 created: 2026-09-22
 updated: 2026-09-23
 priority: p2

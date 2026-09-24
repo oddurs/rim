@@ -1,5 +1,5 @@
 ---
-id: 4
+id: deaea483-fd12-49ab-b13f-50eb64df8c68
 key: performance
 title: Performance budget
 type: pillar

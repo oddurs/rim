@@ -1,11 +1,11 @@
 ---
-id: 161
+id: 7b325c7f-8a5c-4343-b898-1185c578bca3
 key: interface
 title: Interface
 type: milestone
 status: done
 depends_on:
-- 8
+- 61abad41-ecc6-4597-9ad4-d0193639e828
 created: 2026-09-23
 updated: 2026-09-23
 closed_at: 2026-09-23

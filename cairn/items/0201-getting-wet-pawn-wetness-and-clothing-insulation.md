@@ -1,11 +1,11 @@
 ---
-id: 201
+id: 308074c6-261d-4dbc-9ed9-5761053703e7
 title: 'Getting wet: pawn wetness and clothing insulation'
 type: feature
 status: backlog
 milestone: crafting
 depends_on:
-- 189
+- 03b9b791-082e-48f1-b51e-af6f42627685
 created: 2026-09-23
 updated: 2026-09-23
 priority: p2

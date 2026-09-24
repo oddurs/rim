@@ -1,11 +1,11 @@
 ---
-id: 27
+id: e280b168-ce91-4b09-bd06-91cc34f074b5
 title: Allocation-free A* with no corner cutting
 type: feature
 status: done
 milestone: foundations
 depends_on:
-- 26
+- f2ea0bd1-a7a0-4b13-84e9-8249f70275e3
 created: 2026-09-22
 updated: 2026-09-22
 priority: p0

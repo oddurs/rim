@@ -1,11 +1,11 @@
 ---
-id: 157
+id: 05dbb688-66e3-47b0-b105-32651a8ebec0
 title: 'CI: determinism must hold across machines, not just within one run'
 type: chore
 status: backlog
 milestone: shelter
 depends_on:
-- 156
+- 48f92e6e-2187-461a-a98b-f20e36ae1325
 created: 2026-09-23
 updated: 2026-09-23
 priority: p1

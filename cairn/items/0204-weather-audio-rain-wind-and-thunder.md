@@ -1,11 +1,11 @@
 ---
-id: 204
+id: 92f2ceaf-24c7-45ab-8401-bab550adceaa
 title: 'Weather audio: rain, wind and thunder'
 type: feature
 status: backlog
 milestone: '1.0'
 depends_on:
-- 194
+- 98a2cd63-6776-428f-b4f8-d10d0708cacc
 created: 2026-09-23
 updated: 2026-09-23
 priority: p2

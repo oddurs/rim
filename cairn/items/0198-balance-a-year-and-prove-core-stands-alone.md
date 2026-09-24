@@ -1,11 +1,11 @@
 ---
-id: 198
+id: 6859f08d-8fd4-46dc-a89f-ca74e4f5fb54
 title: Balance a year, and prove core stands alone
 type: chore
 status: done
 milestone: weather
 depends_on:
-- 57
+- cee5648a-9714-4498-9c57-1f46253100d0
 created: 2026-09-23
 updated: 2026-09-23
 closed_at: 2026-09-23

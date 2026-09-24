@@ -1,13 +1,13 @@
 ---
-id: 216
+id: 3f4c257d-5e6f-4417-86d4-58e1cc981c73
 title: 'Rooms made of something: leak and daylight from the boundary'
 type: feature
 status: done
 milestone: building
 assignee: Oddur Sigurdsson
 depends_on:
-- 211
-- 213
+- ab0599d2-dae6-450a-8cf0-9b3076d331d6
+- 82bc6c98-e5fb-42a5-9534-5f647d714654
 created: 2026-09-23
 updated: 2026-09-23
 priority: p0

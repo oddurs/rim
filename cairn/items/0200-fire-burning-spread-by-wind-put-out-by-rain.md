@@ -1,13 +1,13 @@
 ---
-id: 200
+id: 9bd9e8ab-6eef-44dc-b814-0b376ceec1e5
 title: 'Fire: burning, spread by wind, put out by rain'
 type: feature
 status: backlog
 milestone: colony
 depends_on:
-- 184
-- 186
-- 188
+- 7c50b502-5e27-4807-a36c-0654fe9aec97
+- d77d9e1f-f0ae-4e30-ae9c-95cd35c1346b
+- fa0de3f5-7ee7-4316-9e00-7db21bc43412
 created: 2026-09-23
 updated: 2026-09-23
 priority: p1

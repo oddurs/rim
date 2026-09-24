@@ -1,12 +1,12 @@
 ---
-id: 34
+id: b1fabfa8-7a11-47cc-b8da-295d3d0b60b6
 title: 'CI: build, test, clippy and fmt on every push'
 type: chore
 status: done
 milestone: foundations
 assignee: Oddur Sigurdsson
 depends_on:
-- 32
+- c7e9ab80-43d1-4121-8e75-e2dcb9bf3340
 created: 2026-09-22
 updated: 2026-09-22
 closed_at: 2026-09-22

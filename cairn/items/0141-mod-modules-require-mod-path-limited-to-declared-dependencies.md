@@ -1,11 +1,11 @@
 ---
-id: 141
+id: f6e18475-c7b8-407f-b31c-61f7d8769406
 title: 'Mod modules: require("@mod/path") limited to declared dependencies'
 type: feature
 status: backlog
 milestone: plugin-api
 depends_on:
-- 140
+- 3eb7e697-6bb4-4318-90f4-7f4d727b98c7
 created: 2026-09-23
 updated: 2026-09-23
 priority: p0

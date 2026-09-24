@@ -1,11 +1,11 @@
 ---
-id: 48
+id: 8e8dc2f2-674f-4278-9517-5f98178310ef
 title: 'Client: messages, colonist bar, clock and speed controls'
 type: feature
 status: done
 milestone: castaway
 depends_on:
-- 45
+- 793e0a96-d4af-49d4-ad58-ff7493ddfdae
 created: 2026-09-22
 updated: 2026-09-23
 closed_at: 2026-09-23

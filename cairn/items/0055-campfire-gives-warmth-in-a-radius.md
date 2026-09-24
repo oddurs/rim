@@ -1,5 +1,5 @@
 ---
-id: 55
+id: f31e7677-2119-4580-abcd-d39eb4a695af
 title: Campfire gives warmth in a radius
 type: content
 status: done

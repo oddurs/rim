@@ -1,11 +1,11 @@
 ---
-id: 163
+id: 6d04638b-782a-4e56-9846-21fd720d35e2
 title: 'System UI font: discovery, shaping and a glyph atlas'
 type: feature
 status: done
 milestone: interface
 depends_on:
-- 162
+- 36d3ea49-e9dd-40fa-b6aa-9dd67eee7485
 created: 2026-09-23
 updated: 2026-09-23
 closed_at: 2026-09-23

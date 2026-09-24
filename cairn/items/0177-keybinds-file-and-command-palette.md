@@ -1,11 +1,11 @@
 ---
-id: 177
+id: 14df87a8-1789-4cb0-ab15-f105f1b13085
 title: Keybinds file and command palette
 type: feature
 status: backlog
 milestone: plugin-api
 depends_on:
-- 171
+- 5514aac6-0300-4ff6-be19-fd44a5e50089
 created: 2026-09-23
 updated: 2026-09-23
 priority: p1

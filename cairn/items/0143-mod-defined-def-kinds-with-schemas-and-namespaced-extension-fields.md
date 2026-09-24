@@ -1,11 +1,11 @@
 ---
-id: 143
+id: b3df9f85-2cf7-4885-90e9-c736b606b486
 title: Mod-defined def kinds with schemas, and namespaced extension fields
 type: feature
 status: backlog
 milestone: plugin-api
 depends_on:
-- 138
+- be8174f0-ff41-44fe-b788-2ffff60e0d19
 created: 2026-09-23
 updated: 2026-09-23
 priority: p0

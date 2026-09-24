@@ -1,12 +1,12 @@
 ---
-id: 194
+id: 98a2cd63-6776-428f-b4f8-d10d0708cacc
 title: Rain, snow, fog and lightning from the weather channels
 type: feature
 status: done
 milestone: weather
 depends_on:
-- 56
-- 184
+- 2e0b9d43-90e5-4051-bda6-81544e9caf0f
+- 7c50b502-5e27-4807-a36c-0654fe9aec97
 created: 2026-09-23
 updated: 2026-09-23
 closed_at: 2026-09-23

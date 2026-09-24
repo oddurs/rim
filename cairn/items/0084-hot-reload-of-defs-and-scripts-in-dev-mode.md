@@ -1,11 +1,11 @@
 ---
-id: 84
+id: 9f30ab9d-cdc0-4e93-9e21-85026e9ecf62
 title: Hot reload of defs and scripts in dev mode
 type: feature
 status: backlog
 milestone: sdk
 depends_on:
-- 64
+- 38722b6e-b300-4282-93d7-b1399a6f60eb
 created: 2026-09-22
 updated: 2026-09-23
 priority: p0

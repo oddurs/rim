@@ -9,17 +9,18 @@
 #   cairn next               what is ready to work on
 #   cairn list --view api    everything that changes the modding contract
 #   cairn config             show the resolved schema
+#   cairn proposals          what agents have asked a person to decide
+#   cairn log --range main..HEAD   what a branch did to the backlog
 #
 # ORDER IS BEHAVIOUR: status order is board/list order; enum value order is
 # sort order. Do not alphabetise this file.
 
-format = 3
+format = 4
 
 [project]
 name = "rim"
 description = "A plugin-first 2D colony sim: one naked warrior, a world that notices you, and an engine built to be modded."
 dir = "cairn/items"
-id_width = 4
 default_type = "feature"
 default_status = "backlog"
 
@@ -155,11 +156,14 @@ name = "done"
 category = "done"
 color = "green"
 
+# Dropping work is a person's call: an agent proposes it with a reason, in
+# the item, and a person decides (`cairn proposals`).
 [[status]]
 name = "dropped"
 category = "dropped"
 color = "gray"
 board = false
+agent = "propose"
 
 # ─── Custom fields ───────────────────────────────────────────────────────────
 
@@ -202,6 +206,8 @@ description = "Effect on the plugin API (defs schema, Luau surface, events). Bre
 name = "due"
 kind = "date"
 description = "When a milestone is meant to land"
+# Dates are commitments; agents read them and say what they think in a note.
+agent = "read-only"
 
 # ─── Saved views ─────────────────────────────────────────────────────────────
 

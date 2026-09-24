@@ -1,13 +1,13 @@
 ---
-id: 191
+id: e1be8ebd-d90f-40a7-bf33-c579ad1f7410
 title: Plants grow in the weather
 type: feature
 status: backlog
 milestone: crafting
 depends_on:
-- 183
-- 185
-- 187
+- 3bb54ba3-21f9-42a4-9f7c-8299b5db1db5
+- 9b569a33-c488-42df-84c2-9bfa83a14b3e
+- 6dd4891c-f65e-4707-96f9-e6d46c6cd446
 created: 2026-09-23
 updated: 2026-09-23
 priority: p0

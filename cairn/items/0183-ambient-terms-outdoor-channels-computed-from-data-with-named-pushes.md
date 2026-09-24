@@ -1,12 +1,12 @@
 ---
-id: 183
+id: 3bb54ba3-21f9-42a4-9f7c-8299b5db1db5
 title: 'Ambient terms: outdoor channels computed from data, with named pushes'
 type: feature
 status: done
 milestone: weather
 depends_on:
-- 181
-- 182
+- 3114946b-5434-4171-9cdb-86ae4e7bb38d
+- eb3b0ac7-9922-4ab2-b9c1-8171e0b7f05f
 created: 2026-09-23
 updated: 2026-09-23
 closed_at: 2026-09-23

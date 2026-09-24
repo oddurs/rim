@@ -1,11 +1,11 @@
 ---
-id: 78
+id: 97e9d4a7-a81b-4107-8ae2-2e4b97b948ab
 title: 'Stat pipeline: base values plus registered modifiers'
 type: feature
 status: backlog
 milestone: plugin-api
 depends_on:
-- 213
+- 82bc6c98-e5fb-42a5-9534-5f647d714654
 created: 2026-09-22
 updated: 2026-09-23
 priority: p0

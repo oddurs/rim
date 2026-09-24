@@ -1,11 +1,11 @@
 ---
-id: 188
+id: fa0de3f5-7ee7-4316-9e00-7db21bc43412
 title: 'Wind shelter: the lee of walls, rock and trees'
 type: feature
 status: backlog
 milestone: colony
 depends_on:
-- 183
+- 3bb54ba3-21f9-42a4-9f7c-8299b5db1db5
 created: 2026-09-23
 updated: 2026-09-23
 priority: p1
