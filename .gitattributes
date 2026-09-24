@@ -6,3 +6,10 @@ ROADMAP.md merge=cairn
 # The driver unions its sequence fields, where two branches both meant what
 # they added, and leaves everything else to a person.
 cairn/items/*.md merge=cairn
+
+# Text files are LF in the repo and in every checkout, Windows included, so
+# mod files, docs and scripts are byte-identical on every platform (a CRLF
+# checkout broke the guide-sample tests on Windows CI).
+* text=auto eol=lf
+*.png binary
+*.ttf binary

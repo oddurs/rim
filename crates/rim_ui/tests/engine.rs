@@ -529,7 +529,8 @@ fn wildlife_plus_extends_the_top_bar() {
 /// the guide can't drift from what the engine accepts.
 #[test]
 fn guide_samples_run() {
-    let guide = std::fs::read_to_string(mods().join("../docs/modding/ui.md")).unwrap();
+    // Tolerate CRLF checkouts (a player's own files may have them).
+    let guide = std::fs::read_to_string(mods().join("../docs/modding/ui.md")).unwrap().replace("\r\n", "\n");
     let blocks: Vec<&str> = guide.split("```lua\n").skip(1).map(|b| b.split("```").next().unwrap()).collect();
     assert!(blocks.len() >= 4, "found {} samples", blocks.len());
     for (i, block) in blocks.iter().enumerate() {
