@@ -319,9 +319,9 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     );
     t.click_ui("core:toolbar.build:wall").await;
     t.drag(site, site.offset(4, 0)).await;
-    t.click_ui("core:toolbar.build:door_wood").await;
+    t.click_ui("core:toolbar.build:door").await;
     t.drag(site.offset(5, 0), site.offset(5, 0)).await;
-    t.click_ui("core:toolbar.build:bed_wood").await;
+    t.click_ui("core:toolbar.build:bed").await;
     t.drag(site.offset(2, 2), site.offset(2, 2)).await;
     t.ticks(1);
     t.check(

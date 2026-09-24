@@ -507,7 +507,7 @@ The engine knows *mechanisms*. It never knows *content*.
 ```
 rim_sim (engine)                        mods/core (content)
 ────────────────                        ───────────────────
-harvestable, buildable, edible, bed  ←  tree_oak, wall_wood, berries, bed_wood
+harvestable, buildable, edible, bed  ←  tree_oak, wall, berries, bed
 need w/ decay + satisfier kind       ←  food, rest
 creature w/ stats                    ←  human, deer, wolf
 incident registry, scheduler, events ←  storyteller.luau, raid.luau, ...

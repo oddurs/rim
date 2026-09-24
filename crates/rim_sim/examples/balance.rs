@@ -85,7 +85,7 @@ fn play(mods: &Path, seed: u64, days: u64) -> Report {
     s.push(Command::Designate { designation: des("harvest"), a: c.offset(-20, -20), b: c.offset(20, 20) });
     let hut = if std::env::args().any(|a| a == "--nohut") { None } else { open_square(&s, c, 5) };
     if let Some(o) = hut {
-        let (w, d, b) = (thing("wall"), thing("door_wood"), thing("bed_wood"));
+        let (w, d, b) = (thing("wall"), thing("door"), thing("bed"));
         let wood = thing("wood");
         let door = o.offset(2, 4);
         for y in 0..5 {
@@ -97,8 +97,8 @@ fn play(mods: &Path, seed: u64, days: u64) -> Report {
                 }
             }
         }
-        s.push(Command::Build { stuff: None, thing: d, a: door, b: door });
-        s.push(Command::Build { stuff: None, thing: b, a: o.offset(2, 2), b: o.offset(2, 2) });
+        s.push(Command::Build { stuff: Some(wood), thing: d, a: door, b: door });
+        s.push(Command::Build { stuff: Some(wood), thing: b, a: o.offset(2, 2), b: o.offset(2, 2) });
         if std::env::args().any(|a| a == "--fire") {
             let f = thing("campfire");
             s.push(Command::Build { stuff: None, thing: f, a: o.offset(1, 1), b: o.offset(1, 1) });
