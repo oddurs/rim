@@ -122,6 +122,41 @@ pub struct WindowDecl {
     pub comp: String,
 }
 
+/// A named action a mod bound to a key with `ui.bind`.
+#[derive(Clone)]
+pub struct Bind {
+    pub id: String,
+    pub owner: Rc<str>,
+    /// The default key, normalised: modifiers in order then the key, as
+    /// "ctrl+shift+p".
+    pub key: String,
+    pub label: String,
+    pub func: Function,
+}
+
+/// "Ctrl+Shift+P", "shift + ctrl+p" and "ctrl+shift+p" are one key.
+pub fn normalise_key(s: &str) -> String {
+    let parts: Vec<String> = s.split('+').map(|p| p.trim().to_ascii_lowercase()).filter(|p| !p.is_empty()).collect();
+    let mut mods: Vec<&str> = Vec::new();
+    let mut key = String::new();
+    for p in &parts {
+        match p.as_str() {
+            "ctrl" | "control" | "cmd" | "super" => mods.push("ctrl"),
+            "alt" | "option" => mods.push("alt"),
+            "shift" => mods.push("shift"),
+            _ => key = p.clone(),
+        }
+    }
+    let mut out: Vec<&str> = Vec::new();
+    for m in ["ctrl", "alt", "shift"] {
+        if mods.contains(&m) {
+            out.push(m);
+        }
+    }
+    out.push(&key);
+    out.join("+")
+}
+
 /// What a handler asked of a window; the engine applies it after the call.
 #[derive(Clone, Debug, PartialEq)]
 pub enum WindowOp {
@@ -154,6 +189,12 @@ struct Registry {
     window_open: HashMap<String, bool>,
     /// The function that draws a window's chrome around its body.
     chrome: Option<(Rc<str>, Function)>,
+    /// Bound actions in declaration order; a later bind of an id wins.
+    binds: Vec<Bind>,
+    /// The player's keys for bound ids, from the keybinds file.
+    key_overrides: HashMap<String, String>,
+    /// A handler asked for a node to take keyboard focus.
+    focus_req: Option<String>,
 }
 
 /// A loaded mod: id, directory, and which mods it may `require`.
@@ -483,6 +524,44 @@ impl UiVm {
         ui.set(
             "is_open",
             lua.create_function(move |_, id: String| Ok(r.borrow().window_open.get(&id).copied().unwrap_or(false)))?,
+        )?;
+        // ui.bind(id, { key, label }, fn): a named action reachable from
+        // its key and from the command palette.
+        let r = self.reg.clone();
+        ui.set(
+            "bind",
+            lua.create_function(move |_, (id, opts, func): (String, Table, Function)| {
+                let key: String = opts.get::<Option<String>>("key")?.unwrap_or_default();
+                if key.trim().is_empty() {
+                    return Err(rt(format!("ui.bind('{id}'): needs a key")));
+                }
+                let label: String = opts.get::<Option<String>>("label")?.unwrap_or_else(|| id.clone());
+                let mut reg = r.borrow_mut();
+                let owner: Rc<str> = reg.current.as_str().into();
+                reg.binds.push(Bind { id, owner, key: normalise_key(&key), label, func });
+                Ok(())
+            })?,
+        )?;
+        // ui.run(id): run a bound action, as its key would.
+        let r = self.reg.clone();
+        ui.set(
+            "run",
+            lua.create_function(move |_, id: String| {
+                let f = r.borrow().binds.iter().rev().find(|b| b.id == id).map(|b| b.func.clone());
+                match f {
+                    Some(f) => f.call::<()>(()),
+                    None => Err(rt(format!("ui.run: no action '{id}'"))),
+                }
+            })?,
+        )?;
+        // ui.focus(id): give a node (a text input) the keyboard.
+        let r = self.reg.clone();
+        ui.set(
+            "focus",
+            lua.create_function(move |_, id: String| {
+                r.borrow_mut().focus_req = Some(id);
+                Ok(())
+            })?,
         )?;
         let r = self.reg.clone();
         ui.set(
@@ -906,11 +985,67 @@ impl UiVm {
             Ok(t)
         });
         view!("outlines", (), |_lua, l, _a| Ok(l.engine.outlines));
+        // Every bound action with the key it currently has, for the palette.
+        let r = self.reg.clone();
+        view.set(
+            "binds",
+            lua.create_function(move |lua, ()| {
+                let reg = r.borrow();
+                let t = lua.create_table()?;
+                let mut seen: Vec<&str> = Vec::new();
+                for b in reg.binds.iter().rev() {
+                    if seen.contains(&b.id.as_str()) {
+                        continue;
+                    }
+                    seen.push(&b.id);
+                    let row = lua.create_table_with_capacity(0, 4)?;
+                    row.raw_set("id", b.id.as_str())?;
+                    row.raw_set("label", b.label.as_str())?;
+                    row.raw_set("key", reg.key_overrides.get(&b.id).unwrap_or(&b.key).as_str())?;
+                    row.raw_set("owner", &*b.owner)?;
+                    t.raw_push(row)?;
+                }
+                // Declaration order reads better than reverse.
+                let n = t.raw_len();
+                let out = lua.create_table_with_capacity(n, 0)?;
+                for i in (1..=n).rev() {
+                    out.raw_push(t.raw_get::<Value>(i)?)?;
+                }
+                Ok(out)
+            })?,
+        )?;
         Ok(view)
     }
 
     fn report_conflicts(&mut self) {
         let reg = self.reg.borrow();
+        let mut seen_ids: Vec<&str> = Vec::new();
+        for b in &reg.binds {
+            if seen_ids.contains(&b.id.as_str()) {
+                continue;
+            }
+            seen_ids.push(&b.id);
+            let owners: Vec<&str> = reg.binds.iter().filter(|o| o.id == b.id).map(|o| &*o.owner).collect();
+            if owners.iter().any(|o| *o != owners[0]) {
+                self.warnings.push(format!(
+                    "UI conflict: action '{}' bound by {} ('{}' wins by load order)",
+                    b.id,
+                    owners.iter().map(|o| format!("'{o}'")).collect::<Vec<_>>().join(" and "),
+                    owners.last().unwrap()
+                ));
+            }
+        }
+        // One key, two actions: the later declaration wins.
+        let mut by_key: Vec<(&str, &str)> = Vec::new();
+        for b in reg.binds.iter().filter(|b| seen_ids.contains(&b.id.as_str())) {
+            let key = reg.key_overrides.get(&b.id).map(String::as_str).unwrap_or(&b.key);
+            if let Some((_, other)) = by_key.iter().find(|(k, id)| *k == key && *id != b.id) {
+                self.warnings
+                    .push(format!("UI conflict: key '{key}' bound by '{other}' and '{}' ('{}' wins)", b.id, b.id));
+            }
+            by_key.retain(|(_, id)| *id != b.id);
+            by_key.push((key, &b.id));
+        }
         let mut seen: Vec<&str> = Vec::new();
         for w in &reg.windows {
             if seen.contains(&w.id.as_str()) {
@@ -965,6 +1100,50 @@ impl UiVm {
             }
         }
         out
+    }
+
+    /// The action bound to a key, by its current key (overrides applied).
+    pub fn bind_for_key(&self, key: &str) -> Option<Function> {
+        let reg = self.reg.borrow();
+        let mut seen: Vec<&str> = Vec::new();
+        for b in reg.binds.iter().rev() {
+            if seen.contains(&b.id.as_str()) {
+                continue;
+            }
+            seen.push(&b.id);
+            if reg.key_overrides.get(&b.id).map(String::as_str).unwrap_or(&b.key) == key {
+                return Some(b.func.clone());
+            }
+        }
+        None
+    }
+
+    /// The default key of a bound action.
+    pub fn default_key(&self, id: &str) -> Option<String> {
+        self.reg.borrow().binds.iter().rev().find(|b| b.id == id).map(|b| b.key.clone())
+    }
+
+    pub fn set_key_override(&mut self, id: &str, key: Option<String>) {
+        let mut reg = self.reg.borrow_mut();
+        match key {
+            Some(k) => {
+                reg.key_overrides.insert(id.to_string(), normalise_key(&k));
+            }
+            None => {
+                reg.key_overrides.remove(id);
+            }
+        }
+    }
+
+    pub fn key_overrides(&self) -> Vec<(String, String)> {
+        let reg = self.reg.borrow();
+        let mut v: Vec<(String, String)> = reg.key_overrides.iter().map(|(a, b)| (a.clone(), b.clone())).collect();
+        v.sort();
+        v
+    }
+
+    pub fn take_focus_req(&mut self) -> Option<String> {
+        self.reg.borrow_mut().focus_req.take()
     }
 
     pub fn take_window_ops(&mut self) -> Vec<WindowOp> {

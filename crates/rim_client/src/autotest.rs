@@ -124,7 +124,9 @@ impl T {
     /// Press a key, then let the UI catch up: actions apply after the UI's
     /// frame, and trees rebuild at most every 50 ms without input.
     async fn key(&mut self, k: KeyCode) {
-        let raw = RawInput { mouse: self.mouse, keys: vec![k], ..Default::default() };
+        // Named as the real input path names it, so core's bindings fire.
+        let pressed = crate::key_name(k).map(|n| vec![n.to_string()]).unwrap_or_default();
+        let raw = RawInput { mouse: self.mouse, keys: vec![k], pressed, ..Default::default() };
         self.input(raw).await;
         self.settle().await;
     }

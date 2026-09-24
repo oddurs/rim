@@ -293,6 +293,36 @@ A slider is any node with `on_drag`: while the pointer is held on it, the
 handler gets `(fx, fy)`, the pointer's position across the node as fractions.
 `kit.slider` draws a bar and reports `fx`.
 
+## Keys and the command palette
+
+An action a mod adds should be reachable without the mod drawing a button.
+`ui.bind` gives it a name, a default key and a label; it then fires from the
+key (when no text input is typing) and appears in the command palette
+(Ctrl+K), which lists every binding and runs the one the player picks:
+
+```lua
+ui.bind("my_mod:muster", { key = "m", label = "Muster everyone" }, function()
+	act.send("my_mod:muster")
+end)
+```
+
+Keys are named plainly: letters and digits as themselves, `space`, `enter`,
+`escape`, `tab`, `f1`..`f12`, the arrows, `home`, `end`, and punctuation as
+typed; modifiers go in front as `ctrl+`, `alt+` and `shift+` (`cmd` counts as
+`ctrl`). Two mods binding one id or one key is reported like a replaced
+component, and the later mod wins. The player's own keys live in
+`keybinds.toml` beside the UI layout, per player and per machine:
+
+```toml
+[keys]
+"core:pause" = "p"
+"my_mod:muster" = "ctrl+m"
+```
+
+Core's own keys (pause, speed, overlay, draft, devtools) are bindings too,
+so they can be rebound the same way. `ui.run(id)` runs a binding from a
+script, and `ui.focus(id)` hands a text input the keyboard.
+
 ## Anchored labels
 
 Return `anchored` nodes from a component mounted on the `anchored` layer to

@@ -53,6 +53,7 @@ type ListProps = {
 }
 type WindowOpts = { title: string?, w: number?, h: number?, resizable: boolean?, open: boolean? }
 type WindowInfo = { id: string, title: string, w: number, h: number, resizable: boolean, comp: string }
+type Bind = { id: string, label: string, key: string, owner: string }
 type Layer = "top" | "bottom" | "left" | "right" | "anchored" | "cursor" | "modal" | "windows"
 type Need = { id: string, label: string, value: number, color: string, low: boolean }
 type Pawn = {
@@ -108,10 +109,16 @@ pub const UI_API: &[UiDoc] = &[
     d!("act.toggle_profiler", "() -> ()", "Show or hide the profiler."),
     d!("act.tool", "(key: string) -> ()", "Pick a toolbar tool (\"designate:core:chop\", \"build:core:wall\")."),
     d!("ui.anchored", "(node: Node?) -> Node", "A node attached to a pawn (entity) or cell, on the anchored layer."),
+    d!(
+        "ui.bind",
+        "(id: string, opts: { key: string, label: string? }, run: () -> ()) -> ()",
+        "A named action with a default key (\"space\", \"f3\", \"ctrl+k\"): it fires from the key when no text input is typing, and from the command palette. The player's keybinds file overrides the key. Two mods binding one id or one key is reported."
+    ),
     d!("ui.close", "(id: string) -> ()", "Close a window."),
     d!("ui.col", "(node: Node?) -> Node", "A column: children top to bottom."),
     d!("ui.define", "(id: string, build: (view: any) -> Node?) -> ()", "Define a component under a namespaced id."),
     d!("ui.extend", "(id: string, add: any) -> ()", "Add children to another component's extension point."),
+    d!("ui.focus", "(id: string) -> ()", "Give a node (a text input) the keyboard once it is laid out."),
     d!(
         "ui.grid",
         "(props: GridProps) -> Node",
@@ -142,6 +149,7 @@ pub const UI_API: &[UiDoc] = &[
     d!("ui.remove", "(id: string) -> ()", "Hide a node by id."),
     d!("ui.replace", "(id: string, build: (view: any) -> Node?) -> ()", "Take over a node by id."),
     d!("ui.row", "(node: Node?) -> Node", "A row: children left to right."),
+    d!("ui.run", "(id: string) -> ()", "Run a bound action, as its key would."),
     d!("ui.scroll", "(node: Node?) -> Node", "A column that scrolls."),
     d!("ui.set_state", "(key: string, value: any) -> ()", "Keep a value across rebuilds."),
     d!("ui.slot", "(id: string) -> Node", "An extension point other mods fill with ui.extend."),
@@ -170,6 +178,7 @@ pub const UI_API: &[UiDoc] = &[
         "Decorate a node: get its tree, return a new one."
     ),
     d!("view.ambient", "(field: string) -> number?", "A field's outdoor value, or nil for an unknown field."),
+    d!("view.binds", "() -> { Bind }", "Every bound action with its label and current key, in declaration order."),
     d!("view.clock", "() -> string", "The time of day, \"HH:MM\"."),
     d!("view.colonists", "(max: number?) -> { Pawn }", "The colonists, or the first max of them (a bar that shows a few should not pay for all of them; view.count_pawns(\"player\") has the total)."),
     d!("view.colony_lost", "() -> boolean", "Whether every colonist is gone."),

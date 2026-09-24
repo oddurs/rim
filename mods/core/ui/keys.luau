@@ -1,0 +1,112 @@
+-- Keys: every action core offers is a named binding, so it is reachable
+-- from its key, from the command palette, and from a player's keybinds
+-- file without core drawing a button for it. A mod adds its own the same
+-- way; two mods on one key is reported.
+local kit = require("@core/ui/kit")
+local t = ui.t
+
+ui.bind("core:pause", { key = "space", label = t("core:keys.pause", "Pause or resume") }, function()
+	act.toggle_pause()
+end)
+ui.bind("core:speed1", { key = "1", label = t("core:keys.speed1", "Normal speed") }, function()
+	act.speed(1)
+end)
+ui.bind("core:speed2", { key = "2", label = t("core:keys.speed2", "Fast") }, function()
+	act.speed(3)
+end)
+ui.bind("core:speed3", { key = "3", label = t("core:keys.speed3", "Fastest") }, function()
+	act.speed(6)
+end)
+ui.bind("core:profiler", { key = "f3", label = t("core:keys.profiler", "Profiler") }, function()
+	act.toggle_profiler()
+end)
+ui.bind("core:devtools", { key = "f12", label = t("core:keys.devtools", "Devtools") }, function()
+	act.toggle_devtools()
+end)
+ui.bind("core:overlay", { key = "o", label = t("core:keys.overlay", "Next overlay") }, function()
+	act.cycle_overlay()
+end)
+ui.bind("core:draft", { key = "r", label = t("core:keys.draft", "Draft or undraft the selected colonist") }, function()
+	local id = view.selected()
+	local p = id and view.pawn(id)
+	if p and p.player then
+		act.draft(id, not p.drafted)
+	end
+end)
+ui.bind("core:center", { key = "c", label = t("core:keys.center", "Centre on the selected pawn") }, function()
+	local id = view.selected()
+	if id then
+		act.focus(id)
+	end
+end)
+ui.bind("core:palette", { key = "ctrl+k", label = t("core:keys.palette", "Command palette") }, function()
+	-- Window ops apply after the handler, so ask before toggling.
+	local opening = not ui.is_open("core:palette")
+	ui.toggle("core:palette")
+	if opening then
+		ui.focus("core:palette.query")
+	end
+end)
+
+-- Every bound action, filtered by what is typed; Enter runs the first.
+local function matches(query)
+	local out = {}
+	local q = string.lower(query)
+	for _, b in view.binds() do
+		if q == "" or string.find(string.lower(b.label .. " " .. b.id), q, 1, true) then
+			table.insert(out, b)
+		end
+	end
+	return out
+end
+
+local function run(id)
+	ui.close("core:palette")
+	ui.run(id)
+end
+
+ui.window("core:palette", { title = t("core:palette.title", "Commands"), w = 440, h = 360 }, function(view)
+	local query = ui.state("core:palette.query", "")
+	local rows = {}
+	for _, b in matches(query) do
+		table.insert(
+			rows,
+			kit.row({
+				id = "core:palette." .. b.id,
+				pad = "xs",
+				padx = "s",
+				gap = "m",
+				align = "center",
+				radius = "radius",
+				hover = { bg = "surface_hover" },
+				on_click = function()
+					run(b.id)
+				end,
+			}, {
+				kit.label(b.label),
+				{ kind = "spacer" },
+				kit.label(b.key, { size = "small", color = "muted" }),
+			})
+		)
+	end
+	if #rows == 0 then
+		table.insert(rows, kit.label(t("core:palette.none", "No command matches"), { size = "small", color = "muted" }))
+	end
+	return kit.col({ gap = "s" }, {
+		kit.input({
+			id = "core:palette.query",
+			placeholder = t("core:palette.hint", "Type a command"),
+			w = 400,
+			on_change = function(text)
+				ui.set_state("core:palette.query", text)
+			end,
+			on_submit = function(text)
+				local first = matches(text)[1]
+				if first then
+					run(first.id)
+				end
+			end,
+		}),
+		kit.col({ gap = 0 }, rows),
+	})
+end)
