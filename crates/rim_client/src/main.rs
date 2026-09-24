@@ -85,6 +85,8 @@ pub struct App {
     profile: (Vec<(String, f64)>, Vec<String>, f64),
     acc: f64,
     pan_anchor: Option<(f32, f32)>,
+    /// Input subscriber for wheel events (see `Wheel`).
+    wheel_sub: usize,
 }
 
 fn conf() -> Conf {
@@ -160,6 +162,7 @@ async fn main() {
         profile: (Vec::new(), Vec::new(), f64::MIN),
         acc: 0.0,
         pan_anchor: None,
+        wheel_sub: macroquad::input::utils::register_input_subscriber(),
     };
     app.selected = app.sim.world.colonists().next();
 
@@ -236,12 +239,43 @@ fn to_u8(c: Color) -> [u8; 3] {
 
 /// One frame's raw input, in logical points. The real loop gathers it from
 /// macroquad; `--autotest` builds it by hand, so both drive the same path.
+/// Sums every wheel event in a frame. `mouse_wheel()` keeps only the last
+/// one, and a trackpad sends several per frame.
+struct Wheel(f32);
+
+impl macroquad::miniquad::EventHandler for Wheel {
+    fn update(&mut self) {}
+    fn draw(&mut self) {}
+    fn mouse_wheel_event(&mut self, _x: f32, y: f32) {
+        self.0 += y;
+    }
+}
+
+impl Wheel {
+    /// Wheel movement this frame in mouse-wheel notches: one click of a
+    /// wheel is 1, a trackpad gives fractions. Backends report notches in
+    /// different units.
+    fn gather(sub: usize) -> f32 {
+        let mut w = Wheel(0.0);
+        macroquad::input::utils::repeat_all_miniquad_input(&mut w, sub);
+        let per_notch = if cfg!(target_os = "macos") {
+            10.0
+        } else if cfg!(target_os = "windows") {
+            120.0
+        } else {
+            1.0
+        };
+        (w.0 / per_notch).clamp(-4.0, 4.0)
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct RawInput {
     pub mouse: (f32, f32),
     pub left_pressed: bool,
     pub left_released: bool,
     pub right_pressed: bool,
+    /// Wheel movement in notches (fractional on a trackpad).
     pub wheel: f32,
     pub keys: Vec<KeyCode>,
     pub shift: bool,
@@ -302,13 +336,13 @@ impl RawInput {
                 app.pan_anchor = None;
             }
         }
-        let (_, wheel) = mouse_wheel();
+        let wheel = Wheel::gather(app.wheel_sub);
         RawInput {
             mouse: (mx, my),
             left_pressed: is_mouse_button_pressed(MouseButton::Left),
             left_released: is_mouse_button_released(MouseButton::Left),
             right_pressed: is_mouse_button_pressed(MouseButton::Right),
-            wheel: wheel.signum(),
+            wheel,
             keys,
             shift: is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift),
             pan: (dx, dy),
@@ -430,7 +464,9 @@ pub fn frame(app: &mut App, raw: &RawInput) {
     }
     let (mx, my) = raw.mouse;
     if raw.wheel != 0.0 && !out.captured_wheel {
-        apply(app, Action::Zoom(if raw.wheel > 0.0 { 1.12 } else { 1.0 / 1.12 }, mx, my));
+        // Proportional, so a trackpad zooms smoothly and a wheel click is
+        // one 12% step.
+        apply(app, Action::Zoom(1.12f32.powf(raw.wheel), mx, my));
     }
     if raw.left_pressed && !out.captured_left {
         apply(app, Action::LeftDown(mx, my));
