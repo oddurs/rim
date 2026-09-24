@@ -80,6 +80,8 @@ impl Sim {
         }
         prof.time("regions", || w.map.ensure_regions());
         prof.time("rooms", || w.map.ensure_rooms());
+        let defs = w.defs.clone();
+        prof.time("fields", || w.fields.update(&defs, &mut w.map, w.tick));
         prof.time("pawns", || ai::tick_pawns(w));
         prof.time("deaths", || systems::deaths(w));
         if w.tick.is_multiple_of(systems::NEEDS_INTERVAL) {

@@ -1,0 +1,31 @@
+# Field layers: scalar values over the map. The engine stamps emitters
+# (things with `emit`), keeps room values for `indoor = "room"` fields, and
+# scripts set the outdoor `ambient` (see scripts/20_climate.luau).
+
+[[field]]
+id = "temperature"
+label = "temperature"
+unit = "°C"
+ambient = 12.0
+indoor = "room"
+# Insulation: a sealed room closes 6% of the gap to outdoors per hour, so a
+# hut holds some of the day's warmth into the night.
+leak_per_hour = 0.06
+# Heating power: a campfire (12°) warms a 3x3 room about 10° an hour, up to
+# its cap. Bigger rooms warm slower and may need more than one fire.
+room_gain = 7.5
+range = [-10.0, 35.0]
+color_low = "#3b6fd4"
+color_high = "#e0452b"
+hud = true
+
+[[field]]
+id = "light"
+label = "light"
+unit = "%"
+ambient = 100.0
+# Indoors is dark unless something lights it.
+indoor = "none"
+range = [0.0, 100.0]
+color_low = "#0b0d1a"
+color_high = "#fff1a8"

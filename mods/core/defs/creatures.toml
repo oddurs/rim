@@ -12,7 +12,7 @@ melee_cooldown = 90
 intelligent = true
 retreat_below = 0.3
 market_value = 250
-needs = ["food", "rest"]
+needs = ["food", "rest", "warmth"]
 
 [[creature]]
 id = "deer"

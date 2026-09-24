@@ -111,6 +111,73 @@ You start as *the warrior*: a strong fighter with nothing on them.
 
 ---
 
+## 4a. Field layers
+
+Temperature, light, beauty, noise, danger and fertility are all the same
+thing: a scalar value over the grid that the world produces and pawns and
+systems read. So there is one engine mechanism, declared in data, instead of
+a special case for each.
+
+- **Ruling:** a `[[field]]` def declares a layer. Its value at a cell is a
+  *base* plus *stamped* emitter contributions.
+  - **Base:** the outdoor `ambient` under open sky, which scripts set (core's
+    `20_climate.luau` drives day and night). Inside an enclosed room it
+    depends on `indoor`: the room's own value (`room`, for temperature), zero
+    (`none`, for light: indoors is dark unless something lights it), or the
+    same as outdoors (`outdoor`).
+  - **Emitters:** any thing def can `emit = [{ field, amount, radius, cap }]`.
+    The contribution fades linearly with *walking* distance, so walls and
+    doors block it. Each emitter remembers exactly which cells it touched, so
+    adding or removing one costs only its own footprint, and a wall change
+    re-stamps only the emitters within reach of it.
+  - **Room state:** a `room` field holds one value per enclosed room. It leaks
+    toward outdoors at `leak_per_hour` (insulation) and is pushed by emitters
+    inside at `room_gain` (heating power), up to each emitter's `cap`. These
+    are separate on purpose: how well a hut holds warmth and how fast a fire
+    heats it are different questions. When walls change and rooms rebuild,
+    each new room inherits the cell-weighted average of what its cells held,
+    so a wall elsewhere changes nothing.
+  - Inside an enclosed room a `room` field is the room's value only; the
+    emitter's local stamp applies outdoors. (Adding both counted the same
+    fire twice and made huts too hot to be comfortable.)
+- **Cost:** O(1) to read a cell; O(footprint) per emitter change; O(rooms)
+  per room update (every 60 ticks), not O(cells). Values are integers in
+  hundredths, for determinism.
+- **Needs** can be driven by a field: `satisfier = "field"` with a `comfort`
+  range. The need drains in proportion to how far outside comfort the pawn
+  stands and refills inside it. Warmth is the first; a mood plugin could
+  drive comfort from beauty the same way.
+- **AI** looks for the nearest comfortable cell by walking. Failing that it
+  takes the least-uncomfortable cell in reach if it's clearly better than
+  where the pawn stands (an unheated hut beats the night outside). Idle
+  colonists wait somewhere comfortable instead of wandering in the cold.
+- **Scripts:** `rim.field(id, x, y)`, `rim.ambient(id)`, `rim.set_ambient(id, v)`.
+  **Client:** `O` cycles an overlay through every field that exists, so a
+  mod's new layer gets a map view for free.
+- **Scripts must not use `math.sin`/`math.cos`** for simulation values. They
+  come from each platform's maths library and can differ in the last bit,
+  which would break lockstep. The climate curve uses a smoothstep polynomial.
+
+### Tuning warmth (balance harness, 40 seeds, 5 days)
+
+Core climate: mean 10°C, swinging 9° either way (about 1°C at 03:00).
+Warmth: comfort 10–32°C, drains fully in 0.2 days at 10° outside comfort,
+refills in 0.1 days, hypothermia 40 hp/day at zero. Insulation 6%/hour,
+campfire 12° with radius 5, capped at 24° in a room.
+
+| Founder's hours at zero warmth after night one | Runs | Hours per run |
+|---|---|---|
+| No shelter | 40/40 | 14.5 |
+| Hut with a bed | 17/40 | 2.6 |
+| Hut with a bed and a campfire | 12/40 | 2.8 |
+
+The remaining hut cases are runs where the bot's hut wasn't finished by
+day 1. Exposure hurts and shelter fixes it, but a cold night isn't a death
+sentence: deaths stay at the pre-warmth baseline. Harsher winters belong to a
+seasons plugin, which only has to call `rim.set_ambient`.
+
+---
+
 ## 4b. Fights end in retreat, not death spirals
 
 The first balance pass (`examples/balance.rs`: a bot plays the opening on

@@ -33,6 +33,10 @@ fn with_world<R>(ptr: &WorldPtr, f: impl FnOnce(&mut World) -> mlua::Result<R>) 
     f(unsafe { &mut *p })
 }
 
+fn field_id(w: &World, id: &str) -> mlua::Result<usize> {
+    w.defs.lookup("field", id).map(|f| f as usize).ok_or_else(|| mlua::Error::runtime(format!("unknown field '{id}'")))
+}
+
 fn rim_sim_entity(id: u64) -> mlua::Result<hecs::Entity> {
     hecs::Entity::from_bits(id).ok_or_else(|| mlua::Error::runtime(format!("bad entity id {id}")))
 }
@@ -253,6 +257,23 @@ impl ScriptHost {
             let e = w.spawn_pawn(def, f, p, name);
             let name = w.ecs.get::<&Pawn>(e).map(|p| p.name.clone()).unwrap_or_default();
             Ok((Some(e.to_bits().get()), Some(name)))
+        });
+        // Field layers: temperature, light, whatever mods declare.
+        api!("field", (String, i32, i32), |w, (id, x, y)| {
+            let f = field_id(w, &id)?;
+            w.map.ensure_rooms();
+            let defs = w.defs.clone();
+            Ok(w.fields.value(&defs, &w.map, f, IVec::new(x, y)))
+        });
+        api!("ambient", String, |w, id| {
+            let f = field_id(w, &id)?;
+            Ok(w.fields.ambient(f))
+        });
+        // Set a field's open-sky value (the climate, a weather plugin...).
+        api!("set_ambient", (String, f64), |w, (id, v)| {
+            let f = field_id(w, &id)?;
+            w.fields.set_ambient(f, v);
+            Ok(())
         });
         // Sheltered: inside an enclosed room.
         api!("indoors", (i32, i32), |w, (x, y)| {

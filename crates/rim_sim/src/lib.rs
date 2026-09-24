@@ -6,6 +6,7 @@
 pub mod ai;
 pub mod command;
 pub mod defs;
+pub mod field;
 pub mod map;
 pub mod mapgen;
 pub mod modloader;

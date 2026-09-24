@@ -60,6 +60,8 @@ pub struct App {
     pub paused: bool,
     pub speed: u32,
     pub show_profiler: bool,
+    /// Field layer drawn over the map, if any (cycled with O).
+    pub overlay: Option<usize>,
     pub buttons: Vec<Button>,
     /// What a right-click would do, recomputed only when the cursor moves to
     /// another tile or the selection changes.
@@ -120,6 +122,7 @@ async fn main() {
         paused: false,
         speed: 1,
         show_profiler: false,
+        overlay: None,
         hint: None,
         hint_key: None,
         order_flash: None,
@@ -258,6 +261,8 @@ pub enum Action {
     TogglePause,
     Speed(u32),
     ToggleProfiler,
+    /// Cycle the field overlay: off, then each field the mods define.
+    CycleOverlay,
     Escape,
     ToggleDraft,
     NextColonist,
@@ -284,6 +289,7 @@ fn input(app: &mut App) {
         (KeyCode::Key3, Action::Speed(6)),
         (KeyCode::F3, Action::ToggleProfiler),
         (KeyCode::P, Action::ToggleProfiler),
+        (KeyCode::O, Action::CycleOverlay),
         (KeyCode::Escape, Action::Escape),
         (KeyCode::R, Action::ToggleDraft),
         (KeyCode::Tab, Action::NextColonist),
@@ -352,6 +358,14 @@ pub fn apply(app: &mut App, action: Action) {
             app.paused = false;
         }
         Action::ToggleProfiler => app.show_profiler = !app.show_profiler,
+        Action::CycleOverlay => {
+            let n = app.sim.world.defs.fields.len();
+            app.overlay = match app.overlay {
+                None if n > 0 => Some(0),
+                Some(i) if i + 1 < n => Some(i + 1),
+                _ => None,
+            };
+        }
         Action::Escape => {
             if app.tool != Tool::Select {
                 app.tool = Tool::Select;

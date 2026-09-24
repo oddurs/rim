@@ -18,6 +18,10 @@ pub struct Map {
     fix_door: Vec<bool>,
     /// Room id per cell (0 = wall, door or impassable).
     room: Vec<u32>,
+    /// Room ids from before the last rebuild, so state can carry over.
+    prev_room: Vec<u32>,
+    /// Cells whose walls or doors changed since the last `take_changed_cells`.
+    changed: Vec<u32>,
     rooms: Vec<Room>,
     rooms_dirty: bool,
     /// How many times rooms have been rebuilt (they only are when walls change).
@@ -65,6 +69,8 @@ impl Map {
             fix_cost: vec![0; n],
             fix_door: vec![false; n],
             room: vec![0; n],
+            prev_room: vec![0; n],
+            changed: Vec::new(),
             rooms: Vec::new(),
             rooms_dirty: true,
             room_rebuilds: 0,
@@ -107,6 +113,7 @@ impl Map {
         self.terrain_cost[i] = cost.min(u16::MAX as u32) as u16;
         self.regions_dirty = true;
         self.rooms_dirty = true;
+        self.changed.push(i as u32);
         self.revision += 1;
     }
 
@@ -119,6 +126,9 @@ impl Map {
         }
         if self.fix_door[i] != door {
             self.rooms_dirty = true;
+        }
+        if self.fix_block[i] != blocks || self.fix_door[i] != door {
+            self.changed.push(i as u32);
         }
         self.fix_block[i] = blocks;
         self.fix_door[i] = door;
@@ -201,6 +211,7 @@ impl Map {
         }
         self.rooms_dirty = false;
         self.room_rebuilds += 1;
+        std::mem::swap(&mut self.room, &mut self.prev_room);
         self.room.iter_mut().for_each(|r| *r = 0);
         self.rooms.clear();
         let mut stack = Vec::new();
@@ -232,6 +243,29 @@ impl Map {
             }
             self.rooms.push(room);
         }
+    }
+
+    /// Heat, light and the like stop at walls, doors and impassable ground.
+    pub fn blocks_fields(&self, i: usize) -> bool {
+        !self.passable_i(i) || self.fix_door[i]
+    }
+
+    /// Cells whose walls, doors or terrain changed since the last call.
+    pub fn take_changed_cells(&mut self) -> Vec<u32> {
+        std::mem::take(&mut self.changed)
+    }
+
+    pub fn room_count(&self) -> usize {
+        self.rooms.len()
+    }
+
+    pub fn room_by_id(&self, id: u32) -> Room {
+        self.rooms[id as usize - 1]
+    }
+
+    /// (current, previous) room id of a cell; previous is from before the last rebuild.
+    pub fn room_ids(&self, i: usize) -> (u32, u32) {
+        (self.room[i], self.prev_room[i])
     }
 
     /// Open floor that belongs to a room: passable and not a doorway.
