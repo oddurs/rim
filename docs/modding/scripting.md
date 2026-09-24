@@ -42,8 +42,9 @@ workspace's `.vscode/settings.json`:
 ```
 
 The root `.luaurc` maps each shipped mod to an alias, so
-`require("@core/ui/kit")` resolves the way the game resolves it. Add your mod
-there when you work in this repo.
+`require("@core/scripts/storyteller")` and `require("@core/ui/kit")` resolve
+the way the game resolves them. It's generated from the mods folder: after
+adding a mod, run `RIM_UPDATE_TYPES=1 cargo test -p rim_sim --test api_types`.
 
 To check from the command line, as CI does, run
 `LUAU_LSP=path/to/luau-lsp ./scripts/check-luau.sh`. Only sim scripts are
@@ -54,27 +55,46 @@ but you'll need annotations on tables that start empty or `nil`. Type aliases
 from the definition file, like `Faction`, aren't visible in scripts, so spell
 out the union instead: `"player" | "hostile" | "wild"`.
 
-## Sharing an API with other mods
+## Sharing code: modules
 
-`rim` is how mods offer APIs to each other. While mods load, a mod may add
-new names to it:
+`rim` is the engine's API, and it's read-only: `rim.my_mod = {}` is an error.
+Mods share code as **modules**. A script returns what it exports:
 
 ```lua
-rim.my_mod = {}
-function rim.my_mod.register(def) ... end
+-- mods/my_mod/scripts/api.luau
+local api = {}
+function api.register(def) ... end
+return api
 ```
 
-Other mods that depend on yours call `rim.my_mod.register`. The rules are
-enforced:
+and other scripts `require` it:
 
-- **Add, never replace.** Assigning to a name that already exists (an
-  engine function like `rim.spawn_pawn`, or another mod's `rim.weather`) is an
-  error that names both mods, and the mod fails to load.
-- **Only while loading.** Once every script has loaded, `rim` and every table
-  in it are read-only, so no mod can change the engine's API or another
-  mod's while the game runs. Keep changing state in your own locals or in
-  script data (`rim.set_data`), not in your API table.
-- `getmetatable(rim)` gives nothing away.
+```lua
+local api = require("@my_mod/scripts/api") -- any mod's script, by path
+local util = require("./lib/util")         -- your own, relative to this file
+```
+
+- **Top-level scripts run at load**, in name order. Scripts in
+  subdirectories of `scripts/` are modules only: they run when something
+  requires them. Either way a script runs once, and every `require` of it
+  gets the same value.
+- **Only declared dependencies.** A mod can require its own scripts and
+  those of mods in its `depends` or `optional` list (`mod.toml`). Anything
+  else is a load error naming both mods. Requiring an `optional` mod that
+  isn't installed gives `nil`, so you can check:
+  `local weather = require("@weather/scripts/weather")`, then
+  `if weather then ... end`.
+- **At load time.** Require at the top of a script. A module that hasn't
+  loaded can't be required from a hook later, and a require cycle is a load
+  error that prints the chain.
+- **Exports are frozen** once their mod has loaded. Later scripts in the
+  same mod can still add to them, but other mods can only read and call
+  them. Keep changing state in locals or in script data (`rim.set_data`),
+  not in your exports.
+
+Core exports its storyteller (`require("@core/scripts/storyteller")`, with
+`register_incident`), and the weather plugin exports `weather` (see
+[Modding climate and weather](weather.md)).
 
 The standard libraries and the global table are read-only too:
 `math.floor = ...` is an error. Each script's own globals live in a private
@@ -92,7 +112,7 @@ rim.emit("my_mod:flood", { x = 10, y = 20 })
 
 Emitting `"other_mod:..."` or a bare engine name is an error. The namespace is
 the mod whose code calls `rim.emit`: when your hook calls
-`rim.weather.force`, it's the weather plugin that emits `weather:changed`.
+weather's `force`, it's the weather plugin that emits `weather:changed`.
 Handlers run in load order, then registration order, and payloads are plain
 data.
 

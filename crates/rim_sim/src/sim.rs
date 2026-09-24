@@ -36,7 +36,7 @@ impl Sim {
     /// Everything configurable: which mods, and the map's size (square).
     pub fn build(mods_dir: &Path, seed: u64, enabled: &dyn Fn(&str) -> bool, size: i32) -> Result<Sim, String> {
         let loaded = modloader::load_only(mods_dir, enabled)?;
-        let scripts = ScriptHost::load(&loaded.scripts, &loaded.defs)?;
+        let scripts = ScriptHost::load(&loaded.mods, &loaded.scripts, &loaded.defs)?;
         let warnings: Vec<String> = loaded.warnings.iter().chain(&scripts.warnings).cloned().collect();
         let defs = Arc::new(loaded.defs);
         let mut world = World::new(defs.clone(), size, size, seed);

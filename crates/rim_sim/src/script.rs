@@ -6,9 +6,10 @@
 //! `math.random`/`os` are removed, so scripts stay deterministic.
 //!
 //! Each script gets its own global environment (reads fall through to the
-//! shared globals), so mods can't clobber each other by accident. The `rim`
-//! table itself is shared: that's how one plugin offers an API to others
-//! (e.g. core's storyteller exposes `rim.register_incident`).
+//! shared globals), so mods can't clobber each other by accident. `rim` is
+//! the engine's and read-only. Mods share code as modules (DESIGN.md §10):
+//! a script returns its exports, and `require("@core/scripts/storyteller")`
+//! gets them, but only from a mod listed in `depends` or `optional`.
 
 use crate::modloader::ScriptSource;
 use crate::path::Goal;
@@ -18,6 +19,7 @@ use crate::{IVec, TICKS_PER_DAY};
 use mlua::chunk::Compiler;
 use mlua::{Function, IntoLuaMulti, Lua, LuaOptions, StdLib, Table, Value, VmState};
 use std::cell::{Cell, RefCell};
+use std::collections::{BTreeMap, BTreeSet};
 use std::rc::Rc;
 use std::time::Instant;
 
@@ -39,8 +41,8 @@ fn field_id(w: &World, id: &str) -> mlua::Result<usize> {
 }
 
 /// The mod whose code is calling into the engine: the chunk name of the
-/// nearest Luau frame ("@weather/scripts/00_weather.luau" is weather's). Not
-/// the mod whose hook is running: when mod B calls `rim.weather.force`, it's
+/// nearest Luau frame ("@weather/scripts/weather.luau" is weather's). Not
+/// the mod whose hook is running: when mod B calls weather's `force`, it's
 /// the weather plugin's code that emits `weather:changed`.
 fn calling_mod(lua: &Lua) -> Option<String> {
     (1..16).find_map(|level| {
@@ -75,10 +77,7 @@ struct Handler {
 struct Registry {
     /// The mod whose code is running: loading, or in a hook or handler.
     current_mod: String,
-    /// Who put each key in `rim` ("the engine", or "mod 'x'"): nothing may be
-    /// replaced, only added, and only while mods load.
-    owners: std::collections::HashMap<String, String>,
-    /// Set once every script has loaded: `rim` is read-only from then on.
+    /// Set once every script has loaded: `require` only works before.
     loaded: bool,
     /// Hooks and handlers stopped for running away (by function pointer).
     disabled: std::collections::HashSet<usize>,
@@ -230,8 +229,153 @@ pub fn pow_operator_lines(src: &str) -> Vec<usize> {
     out
 }
 
+/// Mod scripts as modules (DESIGN.md §10). Keys are paths from the mods
+/// folder: "core/scripts/storyteller.luau".
+struct Modules {
+    /// Every script: its mod and source.
+    sources: BTreeMap<String, (String, String)>,
+    /// Each installed mod's `depends` and `optional`.
+    deps: BTreeMap<String, (Vec<String>, Vec<String>)>,
+    reg: Rc<RefCell<Registry>>,
+    /// What each script returned, once it has run.
+    done: RefCell<BTreeMap<String, Value>>,
+    /// Scripts running now, outermost first, to name a cycle.
+    stack: RefCell<Vec<String>>,
+    /// Mods whose top-level scripts have all run. Their exports are frozen,
+    /// so later mods can use them but not change them.
+    sealed: RefCell<BTreeSet<String>>,
+}
+
+impl Modules {
+    fn seal(&self, mod_id: &str) {
+        self.sealed.borrow_mut().insert(mod_id.to_string());
+        let prefix = format!("{mod_id}/");
+        for (_, v) in self.done.borrow().iter().filter(|(k, _)| k.starts_with(&prefix)) {
+            freeze(v);
+        }
+    }
+}
+
+/// A module's exports can't be changed once its mod has loaded.
+fn freeze(v: &Value) {
+    if let Value::Table(t) = v {
+        t.set_readonly(true);
+    }
+}
+
+/// Where `require(path)` in the script `from` points: its mod, and its path
+/// without the extension ("core/scripts/storyteller"). `@mod/scripts/x` names
+/// any mod's script; `./x` and `../x` are relative to `from`, within its mod.
+fn resolve_require(from: &str, path: &str) -> Result<(String, String), String> {
+    let joined = if let Some(rest) = path.strip_prefix('@') {
+        rest.to_string()
+    } else if path.starts_with("./") || path.starts_with("../") {
+        let dir = from.rsplit_once('/').map_or("", |(d, _)| d);
+        format!("{dir}/{path}")
+    } else {
+        return Err(format!("require(\"{path}\"): use \"@<mod>/scripts/<name>\", or \"./<name>\" within your own mod"));
+    };
+    let mut parts: Vec<&str> = Vec::new();
+    for c in joined.split('/') {
+        match c {
+            "" | "." => {}
+            ".." if parts.len() > 2 => {
+                parts.pop();
+            }
+            ".." => return Err(format!("require(\"{path}\"): leaves the mod's scripts folder")),
+            c => parts.push(c),
+        }
+    }
+    if parts.len() < 3 || parts[1] != "scripts" {
+        return Err(format!(
+            "require(\"{path}\"): sim modules live in a mod's scripts folder: \"@<mod>/scripts/<name>\""
+        ));
+    }
+    Ok((parts[0].to_string(), parts.join("/")))
+}
+
+/// A script's own global environment, with its own `require`. Its globals
+/// land here, and reads fall through to the shared globals.
+///
+/// Marked safe so Luau takes its fast paths (cached imports like
+/// `math.floor`, builtin fastcalls, fast `pairs`); without it every global
+/// access is a full lookup. It's sound because the globals, `rim` and loaded
+/// modules' exports are all read-only.
+fn module_env(lua: &Lua, m: &Rc<Modules>, key: &str) -> mlua::Result<Table> {
+    let env = lua.create_table()?;
+    let (m2, from) = (m.clone(), key.to_string());
+    let require = lua.create_function(move |lua, path: String| {
+        let (target, base) = resolve_require(&from, &path).map_err(mlua::Error::runtime)?;
+        let me = from.split('/').next().unwrap_or_default();
+        if target != me {
+            let (depends, optional) = m2.deps.get(me).cloned().unwrap_or_default();
+            let optional = optional.contains(&target);
+            if !optional && !depends.contains(&target) {
+                return Err(mlua::Error::runtime(format!(
+                    "mod '{me}' requires \"{path}\" but doesn't list '{target}' in depends or optional (mod.toml)"
+                )));
+            }
+            if optional && !m2.deps.contains_key(&target) {
+                return Ok(Value::Nil);
+            }
+        }
+        let key = [format!("{base}.luau"), format!("{base}/init.luau")]
+            .into_iter()
+            .find(|k| m2.sources.contains_key(k))
+            .ok_or_else(|| mlua::Error::runtime(format!("require(\"{path}\"): there's no {base}.luau")))?;
+        run_module(lua, &m2, &key)
+    })?;
+    env.raw_set("require", require)?;
+    let mt = lua.create_table()?;
+    mt.set("__index", lua.globals())?;
+    env.set_metatable(Some(mt))?;
+    env.set_safeenv(true);
+    Ok(env)
+}
+
+/// Run a script once and remember what it returned.
+fn run_module(lua: &Lua, m: &Rc<Modules>, key: &str) -> mlua::Result<Value> {
+    if let Some(v) = m.done.borrow().get(key) {
+        return Ok(v.clone());
+    }
+    let cycle = {
+        let stack = m.stack.borrow();
+        stack.iter().position(|k| k == key).map(|i| {
+            let chain: Vec<&str> = stack[i..].iter().map(String::as_str).chain([key]).collect();
+            chain.join(" -> ")
+        })
+    };
+    if let Some(chain) = cycle {
+        return Err(mlua::Error::runtime(format!("require cycle: {chain}")));
+    }
+    if m.reg.borrow().loaded {
+        return Err(mlua::Error::runtime(format!(
+            "{key} hasn't been loaded: require modules while scripts load, at the top of a script"
+        )));
+    }
+    let (mod_id, source) = &m.sources[key];
+    let env = module_env(lua, m, key)?;
+    m.stack.borrow_mut().push(key.to_string());
+    let prev = std::mem::replace(&mut m.reg.borrow_mut().current_mod, mod_id.clone());
+    let result = lua.load(source.as_str()).set_name(format!("@{key}")).set_environment(env).eval::<Value>();
+    m.reg.borrow_mut().current_mod = prev;
+    m.stack.borrow_mut().pop();
+    let v = result?;
+    if m.sealed.borrow().contains(mod_id) {
+        freeze(&v);
+    }
+    m.done.borrow_mut().insert(key.to_string(), v.clone());
+    Ok(v)
+}
+
 impl ScriptHost {
-    pub fn load(scripts: &[ScriptSource], defs: &crate::defs::DefDb) -> Result<Self, String> {
+    /// Run every mod's top-level scripts, mods in load order (`mods`), each
+    /// mod's scripts by name. Modules they require run first, once.
+    pub fn load(
+        mods: &[crate::modloader::ModManifest],
+        scripts: &[ScriptSource],
+        defs: &crate::defs::DefDb,
+    ) -> Result<Self, String> {
         let lua = Lua::new_with(sim_libs(), LuaOptions::default()).map_err(|e| format!("script VM: {e}"))?;
         // Level 2 inlines small local functions and unrolls constant loops;
         // debug level 1 keeps line numbers in errors.
@@ -278,37 +422,31 @@ impl ScriptHost {
                     s.mod_id, s.name
                 ));
             }
-            host.reg.borrow_mut().current_mod = s.mod_id.clone();
-            host.steps.set(STEP_BUDGET);
-            let name = format!("{}/scripts/{}", s.mod_id, s.name);
-            let env = host.env().map_err(|e| e.to_string())?;
-            host.lua
-                .load(&s.source)
-                .set_name(format!("@{name}"))
-                .set_environment(env)
-                .exec()
-                .map_err(|e| format!("{name}: {e}"))?;
         }
-        host.freeze_api().map_err(|e| format!("script API setup failed: {e}"))?;
-        Ok(host)
-    }
-
-    /// Every script has loaded: `rim` and every table in it (the engine's
-    /// and each plugin's API) become read-only, so no mod can change another
-    /// mod's or the engine's API while the game runs.
-    fn freeze_api(&self) -> mlua::Result<()> {
-        let mut r = self.reg.borrow_mut();
+        let modules = Rc::new(Modules {
+            sources: scripts
+                .iter()
+                .map(|s| (format!("{}/scripts/{}", s.mod_id, s.name), (s.mod_id.clone(), s.source.clone())))
+                .collect(),
+            deps: mods.iter().map(|m| (m.id.clone(), (m.depends.clone(), m.optional.clone()))).collect(),
+            reg: host.reg.clone(),
+            done: RefCell::default(),
+            stack: RefCell::default(),
+            sealed: RefCell::default(),
+        });
+        for m in mods {
+            for s in scripts.iter().filter(|s| s.entry && s.mod_id == m.id) {
+                host.steps.set(STEP_BUDGET);
+                let key = format!("{}/scripts/{}", s.mod_id, s.name);
+                run_module(&host.lua, &modules, &key).map_err(|e| format!("{key}: {e}"))?;
+            }
+            modules.seal(&m.id);
+        }
+        let mut r = host.reg.borrow_mut();
         r.loaded = true;
         r.current_mod.clear();
         drop(r);
-        let api: Table = self.lua.named_registry_value("rim_api")?;
-        for pair in api.pairs::<Value, Value>() {
-            if let (_, Value::Table(t)) = pair? {
-                t.set_readonly(true);
-            }
-        }
-        api.set_readonly(true);
-        Ok(())
+        Ok(host)
     }
 
     fn declare(&self, name: &'static str, sig: &'static str, doc: &'static str) {
@@ -324,8 +462,8 @@ impl ScriptHost {
 
     /// Every name the engine put in `rim` (declared or not: tests compare).
     pub fn engine_names(&self) -> Vec<String> {
-        let r = self.reg.borrow();
-        let mut v: Vec<String> = r.owners.iter().filter(|(_, o)| *o == "the engine").map(|(k, _)| k.clone()).collect();
+        let api: Table = self.lua.named_registry_value("rim_api").expect("rim is installed");
+        let mut v: Vec<String> = api.pairs::<String, Value>().filter_map(|p| p.ok().map(|(k, _)| k)).collect();
         v.sort();
         v
     }
@@ -339,7 +477,7 @@ impl ScriptHost {
         for d in self.api() {
             out.push_str(&format!("    -- {}\n    {}: {},\n", d.doc, d.name, d.sig));
         }
-        out.push_str("    -- Plugins' APIs (rim.weather, rim.register_incident, ...).\n    [string]: any,\n}\n");
+        out.push_str("}\n");
         out
     }
 
@@ -364,27 +502,8 @@ impl ScriptHost {
         out
     }
 
-    /// A script's own global environment: its globals land here, and reads
-    /// fall through to the shared globals.
-    ///
-    /// Marked safe so Luau takes its fast paths (cached imports like
-    /// `math.floor`, builtin fastcalls, fast `pairs`); without it every global
-    /// access is a full lookup. The price: a chain like `rim.weather.register`
-    /// is resolved when the script loads, so replacing a function in `rim`
-    /// later isn't seen by scripts loaded before. Plugins add to `rim`; they
-    /// don't monkey-patch it.
-    fn env(&self) -> mlua::Result<Table> {
-        let env = self.lua.create_table()?;
-        let mt = self.lua.create_table()?;
-        mt.set("__index", self.lua.globals())?;
-        env.set_metatable(Some(mt))?;
-        env.set_safeenv(true);
-        Ok(env)
-    }
-
     /// Make the standard libraries and the global table read-only, so no mod
-    /// can break another's `math` or `string`. `rim` itself stays writable:
-    /// that's how plugins offer APIs to each other.
+    /// can break another's `math` or `string`.
     fn lock_down(&self) -> mlua::Result<()> {
         let g = self.lua.globals();
         for lib in ["math", "string", "table", "bit32", "utf8", "buffer"] {
@@ -872,43 +991,28 @@ impl ScriptHost {
             }
         );
 
-        // Mods see `rim` through a proxy. Reads go to the API table; a write
-        // may add a new key while mods load, and never replace one, so no mod
-        // can swap out the engine's functions or another plugin's API.
-        {
-            let mut r = self.reg.borrow_mut();
-            for pair in rim.pairs::<String, Value>() {
-                r.owners.insert(pair?.0, "the engine".to_string());
+        // Mods see `rim` through a proxy: reads go to the API table, and a
+        // write is an error that says how to share code instead.
+        lua.set_named_registry_value("rim_api", rim.clone())?;
+        for pair in rim.pairs::<Value, Value>() {
+            if let (_, Value::Table(t)) = pair? {
+                t.set_readonly(true);
             }
         }
-        lua.set_named_registry_value("rim_api", rim.clone())?;
+        rim.set_readonly(true);
         let proxy = lua.create_table()?;
         let mt = lua.create_table()?;
-        mt.set("__index", rim.clone())?;
+        mt.set("__index", rim)?;
         let reg = self.reg.clone();
-        let api = rim;
         mt.set(
             "__newindex",
-            lua.create_function(move |lua, (_t, k, v): (Table, Value, Value)| {
-                let mut r = reg.borrow_mut();
-                let me = calling_mod(lua).unwrap_or_else(|| r.current_mod.clone());
-                let Value::String(key) = k else {
-                    return Err(mlua::Error::runtime(format!("mod '{me}': keys in rim must be strings")));
-                };
-                let key = key.to_string_lossy().to_string();
-                if r.loaded {
-                    return Err(mlua::Error::runtime(format!(
-                        "mod '{me}' can't set rim.{key}: rim is read-only once mods have loaded (add to it at load time)"
-                    )));
-                }
-                if let Some(owner) = r.owners.get(&key) {
-                    return Err(mlua::Error::runtime(format!(
-                        "mod '{me}' can't replace rim.{key}: it belongs to {owner}"
-                    )));
-                }
-                api.raw_set(key.as_str(), v)?;
-                r.owners.insert(key, format!("mod '{me}'"));
-                Ok(())
+            lua.create_function(move |lua, (_t, k, _v): (Table, Value, Value)| -> mlua::Result<()> {
+                let me = calling_mod(lua).unwrap_or_else(|| reg.borrow().current_mod.clone());
+                let key = k.to_string().unwrap_or_else(|_| "?".into());
+                Err(mlua::Error::runtime(format!(
+                    "mod '{me}' can't set rim.{key}: rim is the engine's and read-only. To share code, return it \
+                     from a script and require it (docs/modding/scripting.md)"
+                )))
             })?,
         )?;
         // getmetatable(rim) can't reach the proxy's workings.

@@ -161,7 +161,7 @@ fn a_one_def_mod_adds_a_material() {
     std::fs::create_dir_all(marble.join("defs")).unwrap();
     std::fs::write(
         marble.join("mod.toml"),
-        "id = \"marble\"\nname = \"Marble\"\nversion = \"0.0.0\"\napi = \"0.1\"\ndepends = [\"core\"]\n",
+        "id = \"marble\"\nname = \"Marble\"\nversion = \"0.0.0\"\napi = \"0.2\"\ndepends = [\"core\"]\n",
     )
     .unwrap();
     std::fs::write(

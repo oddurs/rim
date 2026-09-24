@@ -84,15 +84,14 @@ fn nondeterministic_and_escape_hatches_are_gone() {
 }
 
 #[test]
-fn libraries_are_read_only_but_rim_is_open_to_plugins() {
+fn the_standard_libraries_are_read_only() {
     let s = run(
         "readonly",
         r#"
-        rim.my_plugin_api = function() return 7 end
         rim.every(1, function()
             local ok = pcall(function() math.floor = nil end)
             local ok2 = pcall(function() string.x = 1 end)
-            rim.set_data("probe:r", { math = ok, string = ok2, api = rim.my_plugin_api() })
+            rim.set_data("probe:r", { math = ok, string = ok2 })
         end)
     "#,
         2,
@@ -100,7 +99,6 @@ fn libraries_are_read_only_but_rim_is_open_to_plugins() {
     let r = s.world.data.get("probe:r").expect("ran");
     assert_eq!(r.get("math"), Some(&Data::Bool(false)), "math is read-only");
     assert_eq!(r.get("string"), Some(&Data::Bool(false)), "string is read-only");
-    assert_eq!(r.get("api").and_then(|d| d.num()), Some(7.0), "rim accepts plugin APIs");
 }
 
 /// Test vectors for the math functions scripts get: libm's results, bit for
@@ -176,19 +174,23 @@ fn load_error(name: &str, ship: &[&str], script: &str) -> String {
 }
 
 #[test]
-fn no_mod_can_replace_the_engine_api_or_another_mods() {
+fn rim_is_the_engines_and_read_only() {
     let err = load_error("replace-engine", &["core"], "rim.spawn_pawn = function() end\n");
-    assert!(err.contains("mod 'rogue' can't replace rim.spawn_pawn: it belongs to the engine"), "{err}");
-    let err = load_error("replace-plugin", &["core"], "rim.register_incident = nil\n");
-    assert!(err.contains("rim.register_incident: it belongs to mod 'core'"), "{err}");
-    let err = load_error("replace-weather", &["core", "weather"], "rim.weather = {}\n");
-    assert!(err.contains("rim.weather: it belongs to mod 'weather'"), "{err}");
+    assert!(err.contains("mod 'rogue' can't set rim.spawn_pawn: rim is the engine's and read-only"), "{err}");
+    let err = load_error("add-to-rim", &["core"], "rim.my_api = {}\n");
+    assert!(err.contains("can't set rim.my_api") && err.contains("require"), "{err}");
     let err = load_error("metatable", &["core"], "setmetatable(rim, nil)\n");
     assert!(err.to_lowercase().contains("metatable"), "{err}");
 }
 
 #[test]
-fn rim_is_read_only_once_mods_have_loaded() {
+fn another_mods_exports_can_be_used_but_not_changed() {
+    let err = load_error(
+        "patch-weather",
+        &["core", "weather"],
+        "local weather = require(\"@weather/scripts/weather\")\nweather.force = function() end\n",
+    );
+    assert!(err.contains("readonly"), "{err}");
     let dir = test_mods(
         "frozen",
         &["core", "weather"],
@@ -197,11 +199,12 @@ fn rim_is_read_only_once_mods_have_loaded() {
             &[(
                 "scripts/probe.luau",
                 r#"
+        local weather = require("@weather/scripts/weather")
         rim.every(1, function()
             local a = pcall(function() rim.late_api = 1 end)
-            local b = pcall(function() rim.weather.register = nil end)
+            local b = pcall(function() weather.register = nil end)
             local c = pcall(function() rim.creature_defs[1] = nil end)
-            rim.set_data("probe:r", { add = a, plugin = b, data = c })
+            rim.set_data("probe:r", { add = a, plugin = b, data = c, types = #weather.types() })
         end)
     "#,
             )],
@@ -213,7 +216,117 @@ fn rim_is_read_only_once_mods_have_loaded() {
     let _ = fs::remove_dir_all(dir);
     let r = s.world.data.get("probe:r").expect("ran");
     for k in ["add", "plugin", "data"] {
-        assert_eq!(r.get(k), Some(&Data::Bool(false)), "{k} must fail after load");
+        assert_eq!(r.get(k), Some(&Data::Bool(false)), "{k} must fail");
+    }
+    assert!(r.get("types").and_then(|d| d.num()).unwrap_or(0.0) >= 5.0, "and weather's API works");
+}
+
+/// Load a single test mod made of `files`; its error, or the sim.
+fn modules(name: &str, manifest_extra: &str, files: &[(&str, &str)]) -> Result<Sim, String> {
+    let dir = test_mods(name, &["core"], &[("probe", files)]);
+    if !manifest_extra.is_empty() {
+        let toml = dir.join("probe/mod.toml");
+        let text = fs::read_to_string(&toml).unwrap();
+        fs::write(&toml, format!("{text}{manifest_extra}\n")).unwrap();
+    }
+    let s = Sim::new(&dir, 1);
+    let _ = fs::remove_dir_all(dir);
+    s
+}
+
+#[test]
+fn modules_run_once_and_resolve_relative_and_mod_paths() {
+    let mut s = modules(
+        "require",
+        "",
+        &[
+            // Modules in subdirectories only run when required.
+            ("scripts/lib/count.luau", "return { n = 0 }\n"),
+            ("scripts/lib/thing.luau", "local c = require(\"./count\")\nc.n += 1\nreturn { made = true }\n"),
+            ("scripts/lib/unused.luau", "error(\"never required, never run\")\n"),
+            ("scripts/a.luau", "return require(\"./lib/thing\")\n"),
+            (
+                "scripts/b.luau",
+                r#"
+        local a = require("./a")
+        local thing = require("@probe/scripts/lib/thing")
+        local count = require("./lib/count")
+        local storyteller = require("@core/scripts/storyteller")
+        local same = a == thing
+        rim.every(1, function()
+            rim.set_data("probe:r", {
+                same = same,
+                runs = count.n,
+                core = type(storyteller.register_incident) == "function",
+                late = (pcall(require, "./lib/unused")),
+            })
+        end)
+    "#,
+            ),
+        ],
+    )
+    .unwrap_or_else(|e| panic!("loads: {e}"));
+    s.step();
+    s.step();
+    let r = s.world.data.get("probe:r").expect("ran");
+    assert_eq!(r.get("same"), Some(&Data::Bool(true)), "one module, one table, however it's named");
+    assert_eq!(r.get("runs").and_then(|d| d.num()), Some(1.0), "a module runs once");
+    assert_eq!(r.get("core"), Some(&Data::Bool(true)), "a dependency's exports");
+    assert_eq!(r.get("late"), Some(&Data::Bool(false)), "require only works while loading");
+}
+
+#[test]
+fn require_is_limited_to_declared_dependencies() {
+    // Two test mods that depend only on core: one can't reach the other.
+    let dir = test_mods(
+        "undeclared",
+        &["core"],
+        &[
+            ("aa", &[("scripts/a.luau", "local b = require(\"@bb/scripts/b\")\n")]),
+            ("bb", &[("scripts/b.luau", "return {}\n")]),
+        ],
+    );
+    let err = Sim::new(&dir, 1).err().expect("must not load");
+    let _ = fs::remove_dir_all(dir);
+    assert!(err.contains("mod 'aa' requires \"@bb/scripts/b\" but doesn't list 'bb' in depends or optional"), "{err}");
+
+    // An optional mod that isn't installed gives nil.
+    let mut s = modules(
+        "optional",
+        "optional = [\"not_installed\"]",
+        &[(
+            "scripts/p.luau",
+            r#"
+        local m = require("@not_installed/scripts/api")
+        rim.every(1, function() rim.set_data("probe:nil", m == nil) end)
+    "#,
+        )],
+    )
+    .unwrap_or_else(|e| panic!("loads: {e}"));
+    s.step();
+    assert_eq!(s.world.data.get("probe:nil"), Some(&Data::Bool(true)));
+}
+
+#[test]
+fn require_cycles_and_bad_paths_are_load_errors() {
+    let err =
+        modules("cycle", "", &[("scripts/a.luau", "require(\"./b\")\n"), ("scripts/b.luau", "require(\"./a\")\n")])
+            .err()
+            .expect("a cycle must not load");
+    assert!(
+        err.contains("require cycle: probe/scripts/a.luau -> probe/scripts/b.luau -> probe/scripts/a.luau"),
+        "{err}"
+    );
+    for (path, want) in [
+        ("storyteller", "use \"@<mod>/scripts/<name>\""),
+        ("@core/ui/kit", "sim modules live in a mod's scripts folder"),
+        ("../../core/scripts/storyteller", "leaves the mod's scripts folder"),
+        ("./nothing", "there's no probe/scripts/nothing.luau"),
+    ] {
+        let err = modules("badpath", "", &[("scripts/p.luau", &format!("require(\"{path}\")\n"))])
+            .err()
+            .expect("a bad path must not load");
+        assert!(err.contains(want), "{path}: {err}");
     }
 }
 

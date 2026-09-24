@@ -2,7 +2,7 @@
 //!
 //! Pipeline:
 //! 1. Read every `mods/*/mod.toml`, check API compatibility.
-//! 2. Topologically sort on `depends` + `load_after`; ties break by id so the
+//! 2. Topologically sort on `depends`, `optional` and `load_after`; ties break by id so the
 //!    order is deterministic across machines.
 //! 3. For each mod in order: add its defs (redefining another mod's def is an
 //!    error — use a patch), then apply its `[[patch]]` entries.
@@ -28,6 +28,10 @@ pub struct ModManifest {
     pub description: String,
     #[serde(default)]
     pub depends: Vec<String>,
+    /// Mods this one uses when they're installed: it may `require` them, and
+    /// loads after them if they're there.
+    #[serde(default)]
+    pub optional: Vec<String>,
     #[serde(default)]
     pub load_after: Vec<String>,
     #[serde(skip)]
@@ -36,8 +40,12 @@ pub struct ModManifest {
 
 pub struct ScriptSource {
     pub mod_id: String,
+    /// Path under the mod's `scripts/`, with `/` separators: `storyteller.luau`, `lib/util.luau`.
     pub name: String,
     pub source: String,
+    /// Top-level scripts run at load, in name order. Scripts in
+    /// subdirectories are modules: they run only when something requires them.
+    pub entry: bool,
 }
 
 pub struct LoadedMods {
@@ -134,10 +142,13 @@ pub fn load_only(mods_dir: &Path, enabled: &dyn Fn(&str) -> bool) -> Result<Load
             }
         }
 
-        for file in files_with_ext(&m.dir.join("scripts"), "luau") {
-            let name = file.file_name().unwrap().to_string_lossy().to_string();
+        let root = m.dir.join("scripts");
+        for file in luau_files(&root) {
+            let rel = file.strip_prefix(&root).unwrap();
+            let entry = rel.components().count() == 1;
+            let name = rel.components().map(|c| c.as_os_str().to_string_lossy()).collect::<Vec<_>>().join("/");
             let source = fs::read_to_string(&file).map_err(|e| format!("{}/scripts/{name}: {e}", m.id))?;
-            scripts.push(ScriptSource { mod_id: m.id.clone(), name, source });
+            scripts.push(ScriptSource { mod_id: m.id.clone(), name, source, entry });
         }
     }
 
@@ -296,7 +307,7 @@ fn sort(mods: Vec<ModManifest>) -> Result<Vec<ModManifest>, String> {
             }
             before.insert(d.clone());
         }
-        for d in &m.load_after {
+        for d in m.optional.iter().chain(&m.load_after) {
             if by_id.contains_key(d) {
                 before.insert(d.clone());
             }
@@ -317,6 +328,18 @@ fn sort(mods: Vec<ModManifest>) -> Result<Vec<ModManifest>, String> {
         order.push(by_id.remove(&id).unwrap());
     }
     Ok(order)
+}
+
+/// Every `.luau` file under `dir`, at any depth, in a fixed order.
+fn luau_files(dir: &Path) -> Vec<PathBuf> {
+    let mut out = files_with_ext(dir, "luau");
+    let mut subdirs: Vec<PathBuf> =
+        fs::read_dir(dir).map(|rd| rd.flatten().map(|e| e.path()).filter(|p| p.is_dir()).collect()).unwrap_or_default();
+    subdirs.sort();
+    for d in subdirs {
+        out.extend(luau_files(&d));
+    }
+    out
 }
 
 fn files_with_ext(dir: &Path, ext: &str) -> Vec<PathBuf> {

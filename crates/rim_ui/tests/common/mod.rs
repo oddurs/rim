@@ -73,7 +73,7 @@ pub fn scratch_mods(name: &str, extra: &[ExtraMod]) -> PathBuf {
         std::fs::create_dir_all(m.join("ui")).unwrap();
         std::fs::write(
             m.join("mod.toml"),
-            format!("id = \"{id}\"\nname = \"{id}\"\nversion = \"0.0.0\"\napi = \"0.1\"\ndepends = [\"core\"]\n{manifest_extra}\n"),
+            format!("id = \"{id}\"\nname = \"{id}\"\nversion = \"0.0.0\"\napi = \"0.2\"\ndepends = [\"core\"]\n{manifest_extra}\n"),
         )
         .unwrap();
         for (file, body) in *files {

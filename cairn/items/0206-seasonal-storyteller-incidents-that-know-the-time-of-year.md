@@ -25,7 +25,7 @@ A good storyteller paces the year: migrations in spring, raids after harvest, wa
 
 ## What
 
-- Incident weights in `00_storyteller.luau` read `rim.season()`.
+- Incident weights in `storyteller.luau` read `rim.season()`.
 - A calm spell after a hard weather incident, so storms and raids don't stack.
 
 ## Acceptance criteria

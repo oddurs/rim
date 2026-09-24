@@ -140,7 +140,7 @@ fn with_furniture(who: &str) -> PathBuf {
     std::fs::create_dir_all(m.join("defs")).unwrap();
     std::fs::write(
         m.join("mod.toml"),
-        "id = \"seats\"\nname = \"Seats\"\nversion = \"0.0.0\"\napi = \"0.1\"\ndepends = [\"core\"]\n",
+        "id = \"seats\"\nname = \"Seats\"\nversion = \"0.0.0\"\napi = \"0.2\"\ndepends = [\"core\"]\n",
     )
     .unwrap();
     std::fs::write(

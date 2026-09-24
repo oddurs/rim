@@ -154,10 +154,13 @@ the future that will actually happen, unless something forces a change.
 While it lasts, a weather type pushes a `"weather"` contribution to `cloud`,
 `precipitation`, `wind`, `wind_dir`, `fog` and `temperature`.
 
-Add a weather type (depend on `weather` in your `mod.toml`):
+Add a weather type. List `weather` in your `mod.toml`'s `depends` (or
+`optional`, if your mod works without it) and require its module:
 
 ```lua
-rim.weather.register({
+local weather = require("@weather/scripts/weather")
+
+weather.register({
 	id = "my_mod:drizzle",
 	label = "drizzle",
 	cold_label = "flurries", -- shown when it falls below freezing
@@ -184,24 +187,27 @@ rim.weather.register({
 
 | Call | What it does |
 |---|---|
-| `rim.weather.current()` | `{ id, label, start, ends, set }` for the weather now |
-| `rim.weather.forecast()` | The current weather and the three after it |
-| `rim.weather.force(id, hours)` | Replace the current weather; the rest of the forecast follows on later |
-| `rim.weather.weights(previous, tick)` | Each type's weight to follow `previous` at `tick` |
-| `rim.weather.types()` | Registered ids, in order |
+| `weather.current()` | `{ id, label, start, ends, set }` for the weather now |
+| `weather.forecast()` | The current weather and the three after it |
+| `weather.force(id, hours)` | Replace the current weather; the rest of the forecast follows on later |
+| `weather.weights(previous, tick)` | Each type's weight to follow `previous` at `tick` |
+| `weather.types()` | Registered ids, in order |
 
 It emits `weather:changed` (`from`, `to`, `label`) when the weather changes.
 Its incidents (cold snap, heat wave, storm) go through core's storyteller like
 any other. A storm incident is just:
 
 ```lua
-rim.register_incident({
+local storyteller = require("@core/scripts/storyteller")
+local weather = require("@weather/scripts/weather")
+
+storyteller.register_incident({
 	id = "my_mod:squall",
 	kind = "neutral",
 	min_day = 3,
 	weight = 0.2,
 	execute = function(ctx)
-		rim.weather.force("storm", 2)
+		weather.force("storm", 2)
 	end,
 })
 ```

@@ -1,8 +1,9 @@
 -- The core storyteller. Wealth is gravity: it pulls in good and bad alike.
 --
--- Exposes rim.register_incident so any plugin can add incidents:
+-- Exports register_incident, so any plugin can add incidents:
 --
---   rim.register_incident {
+--   local storyteller = require("@core/scripts/storyteller")
+--   storyteller.register_incident {
 --     id = "my_event",
 --     kind = "threat" | "good" | "neutral",
 --     min_day = 0,
@@ -15,7 +16,7 @@
 
 local incidents = {}
 
-function rim.register_incident(def)
+local function register_incident(def)
 	assert(type(def.id) == "string", "incident needs an id")
 	assert(type(def.execute) == "function", `incident '{def.id}' needs execute(ctx)`)
 	def.kind = def.kind or "neutral"
@@ -104,3 +105,7 @@ end)
 rim.on("colony_lost", function()
 	rim.message(`The colony lasted {rim.day()} days.`, "bad")
 end)
+
+return {
+	register_incident = register_incident,
+}

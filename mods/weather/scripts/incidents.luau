@@ -2,6 +2,9 @@
 -- forced weather, so it shows up by name in the temperature breakdown and
 -- in the forecast, and stacks with whatever else is going on.
 
+local storyteller = require("@core/scripts/storyteller")
+local weather = require("./weather")
+
 -- Is a named contribution to the temperature still in effect?
 local function active(key: string): boolean
 	for _, part in rim.explain("temperature") do
@@ -17,15 +20,16 @@ local function calm(ctx): boolean
 end
 
 -- Each incident's effect, by id, so tools and tests can set one off:
--- rim.weather.incident("cold_snap").
+-- require("@weather/scripts/incidents").fire("cold_snap").
 local effects = {}
+local incidents = {}
 
 local function register(def)
 	effects[def.id] = def.execute
-	rim.register_incident(def)
+	storyteller.register_incident(def)
 end
 
-function rim.weather.incident(id: string)
+function incidents.fire(id: string)
 	local f = effects[id]
 	assert(f, `unknown weather incident '{id}'`)
 	f({})
@@ -60,7 +64,7 @@ register({
 	execute = function(ctx)
 		rim.push_ambient("temperature", "heat_wave", 10, 48, 4)
 		-- Clear, still skies while it lasts.
-		rim.weather.force("clear", 30)
+		weather.force("clear", 30)
 		rim.message("A heat wave settles in.", "bad")
 	end,
 })
@@ -73,11 +77,13 @@ register({
 		return if rim.season() == "summer" or rim.season() == "autumn" then 0.25 else 0.15
 	end,
 	can_fire = function(ctx)
-		local w = rim.weather.current()
+		local w = weather.current()
 		return w ~= nil and w.id ~= "storm"
 	end,
 	execute = function(ctx)
 		-- The storm's own message says what's happening.
-		rim.weather.force("storm", 6 + rim.random() * 6)
+		weather.force("storm", 6 + rim.random() * 6)
 	end,
 })
+
+return incidents
