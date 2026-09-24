@@ -32,6 +32,7 @@ type ListProps = {
 }
 type WindowOpts = { title: string?, w: number?, h: number?, resizable: boolean?, open: boolean? }
 type WindowInfo = { id: string, title: string, w: number, h: number, resizable: boolean, comp: string }
+type Bind = { id: string, label: string, key: string, owner: string }
 type Layer = "top" | "bottom" | "left" | "right" | "anchored" | "cursor" | "modal" | "windows"
 type Need = { id: string, label: string, value: number, color: string, low: boolean }
 type Pawn = {
@@ -63,6 +64,8 @@ type TreeRow = { depth: number, kind: string, id: string, owner: string }
 declare ui: {
     -- A node attached to a pawn (entity) or cell, on the anchored layer.
     anchored: (node: Node?) -> Node,
+    -- A named action with a default key ("space", "f3", "ctrl+k"): it fires from the key when no text input is typing, and from the command palette. The player's keybinds file overrides the key. Two mods binding one id or one key is reported.
+    bind: (id: string, opts: { key: string, label: string? }, run: () -> ()) -> (),
     -- Close a window.
     close: (id: string) -> (),
     -- A column: children top to bottom.
@@ -71,6 +74,8 @@ declare ui: {
     define: (id: string, build: (view: any) -> Node?) -> (),
     -- Add children to another component's extension point.
     extend: (id: string, add: any) -> (),
+    -- Give a node (a text input) the keyboard once it is laid out.
+    focus: (id: string) -> (),
     -- Rows by cols of cells the engine paints as one node. cell(r, c) describes each cell at build; on_press(r, c) returns the value a drag paints and on_paint(r, c, value) runs once per cell the drag enters.
     grid: (props: GridProps) -> Node,
     -- A picture from a mod's ui/img: { src = "mod:name", tint = true }. Its own size unless w/h say otherwise; tint draws it in the text colour. A name@2x.png beside name.png is used on dense displays.
@@ -91,6 +96,8 @@ declare ui: {
     replace: (id: string, build: (view: any) -> Node?) -> (),
     -- A row: children left to right.
     row: (node: Node?) -> Node,
+    -- Run a bound action, as its key would.
+    run: (id: string) -> (),
     -- A column that scrolls.
     scroll: (node: Node?) -> Node,
     -- Keep a value across rebuilds.
@@ -149,6 +156,8 @@ declare act: {
 declare view: {
     -- A field's outdoor value, or nil for an unknown field.
     ambient: (field: string) -> number?,
+    -- Every bound action with its label and current key, in declaration order.
+    binds: () -> { Bind },
     -- The time of day, "HH:MM".
     clock: () -> string,
     -- The colonists, or the first max of them (a bar that shows a few should not pay for all of them; view.count_pawns("player") has the total).

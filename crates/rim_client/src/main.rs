@@ -105,6 +105,95 @@ fn frame_time() -> f32 {
     get_frame_time().min(0.1)
 }
 
+/// Every key a binding can name, with its name. Letters and digits are
+/// themselves; the rest are spelled out.
+const KEY_NAMES: &[(KeyCode, &str)] = &[
+    (KeyCode::A, "a"),
+    (KeyCode::B, "b"),
+    (KeyCode::C, "c"),
+    (KeyCode::D, "d"),
+    (KeyCode::E, "e"),
+    (KeyCode::F, "f"),
+    (KeyCode::G, "g"),
+    (KeyCode::H, "h"),
+    (KeyCode::I, "i"),
+    (KeyCode::J, "j"),
+    (KeyCode::K, "k"),
+    (KeyCode::L, "l"),
+    (KeyCode::M, "m"),
+    (KeyCode::N, "n"),
+    (KeyCode::O, "o"),
+    (KeyCode::P, "p"),
+    (KeyCode::Q, "q"),
+    (KeyCode::R, "r"),
+    (KeyCode::S, "s"),
+    (KeyCode::T, "t"),
+    (KeyCode::U, "u"),
+    (KeyCode::V, "v"),
+    (KeyCode::W, "w"),
+    (KeyCode::X, "x"),
+    (KeyCode::Y, "y"),
+    (KeyCode::Z, "z"),
+    (KeyCode::Key0, "0"),
+    (KeyCode::Key1, "1"),
+    (KeyCode::Key2, "2"),
+    (KeyCode::Key3, "3"),
+    (KeyCode::Key4, "4"),
+    (KeyCode::Key5, "5"),
+    (KeyCode::Key6, "6"),
+    (KeyCode::Key7, "7"),
+    (KeyCode::Key8, "8"),
+    (KeyCode::Key9, "9"),
+    (KeyCode::F1, "f1"),
+    (KeyCode::F2, "f2"),
+    (KeyCode::F3, "f3"),
+    (KeyCode::F4, "f4"),
+    (KeyCode::F5, "f5"),
+    (KeyCode::F6, "f6"),
+    (KeyCode::F7, "f7"),
+    (KeyCode::F8, "f8"),
+    (KeyCode::F9, "f9"),
+    (KeyCode::F10, "f10"),
+    (KeyCode::F11, "f11"),
+    (KeyCode::F12, "f12"),
+    (KeyCode::Space, "space"),
+    (KeyCode::Escape, "escape"),
+    (KeyCode::Tab, "tab"),
+    (KeyCode::Enter, "enter"),
+    (KeyCode::Backspace, "backspace"),
+    (KeyCode::Delete, "delete"),
+    (KeyCode::Left, "left"),
+    (KeyCode::Right, "right"),
+    (KeyCode::Up, "up"),
+    (KeyCode::Down, "down"),
+    (KeyCode::Home, "home"),
+    (KeyCode::End, "end"),
+    (KeyCode::PageUp, "pageup"),
+    (KeyCode::PageDown, "pagedown"),
+    (KeyCode::Minus, "-"),
+    (KeyCode::Equal, "="),
+    (KeyCode::Comma, ","),
+    (KeyCode::Period, "."),
+    (KeyCode::Slash, "/"),
+    (KeyCode::Semicolon, ";"),
+    (KeyCode::Apostrophe, "'"),
+    (KeyCode::LeftBracket, "["),
+    (KeyCode::RightBracket, "]"),
+    (KeyCode::Backslash, "\\"),
+    (KeyCode::GraveAccent, "`"),
+];
+
+/// The name a binding uses for a key, if it has one.
+pub fn key_name(code: KeyCode) -> Option<&'static str> {
+    KEY_NAMES.iter().find(|(c, _)| *c == code).map(|(_, n)| *n)
+}
+
+/// Where a per-player file is kept: the platform's data directory, so it
+/// follows the player, not the save.
+fn player_file(name: &str) -> Option<PathBuf> {
+    layout_path().map(|p| p.with_file_name(name))
+}
+
 /// Where the UI layout is kept: the platform's per-user data directory,
 /// so it follows the player, not the save.
 fn layout_path() -> Option<PathBuf> {
@@ -215,6 +304,12 @@ async fn game() {
             eprintln!("  warning: ui layout file ignored: {e}");
         }
     }
+    let keys_file = if args.iter().any(|a| a == "--autotest") { None } else { player_file("keybinds.toml") };
+    if let Some(text) = keys_file.as_ref().and_then(|p| std::fs::read_to_string(p).ok()) {
+        if let Err(e) = ui.restore_keybinds(&text) {
+            eprintln!("  warning: keybinds file ignored: {e}");
+        }
+    }
     eprintln!("rim: seed {seed}, {} mods loaded, UI font {}", sim.mods.len(), ui.info.font);
     for w in sim.warnings.iter().chain(&ui.warnings()) {
         eprintln!("  warning: {w}");
@@ -265,6 +360,14 @@ async fn game() {
                 let _ = p.parent().map(std::fs::create_dir_all);
                 if let Err(e) = std::fs::write(p, app.ui.layout_toml()) {
                     eprintln!("rim: could not save the UI layout to {}: {e}", p.display());
+                }
+            }
+        }
+        if app.ui.take_keys_dirty() {
+            if let Some(p) = &keys_file {
+                let _ = p.parent().map(std::fs::create_dir_all);
+                if let Err(e) = std::fs::write(p, app.ui.keybinds_toml()) {
+                    eprintln!("rim: could not save the keybinds to {}: {e}", p.display());
                 }
             }
         }
@@ -374,6 +477,8 @@ pub struct RawInput {
     pub keys: Vec<KeyCode>,
     /// Characters typed this frame, for a focused text input.
     pub chars: Vec<char>,
+    /// Every key pressed this frame by name, with modifiers ("ctrl+k").
+    pub pressed: Vec<String>,
     pub shift: bool,
     /// Camera pan this frame, in tiles (WASD, middle-drag).
     pub pan: (f32, f32),
@@ -387,18 +492,8 @@ impl RawInput {
     fn gather(app: &mut App) -> RawInput {
         let (mx, my) = mouse_position();
         let keys = [
-            KeyCode::Space,
-            KeyCode::Key1,
-            KeyCode::Key2,
-            KeyCode::Key3,
-            KeyCode::F3,
-            KeyCode::P,
-            KeyCode::O,
-            KeyCode::F12,
             KeyCode::Escape,
-            KeyCode::R,
             KeyCode::Tab,
-            KeyCode::C,
             KeyCode::Enter,
             KeyCode::Backspace,
             KeyCode::Delete,
@@ -414,6 +509,25 @@ impl RawInput {
         while let Some(c) = get_char_pressed() {
             if !c.is_control() {
                 chars.push(c);
+            }
+        }
+        let ctrl = is_key_down(KeyCode::LeftControl)
+            || is_key_down(KeyCode::RightControl)
+            || is_key_down(KeyCode::LeftSuper)
+            || is_key_down(KeyCode::RightSuper);
+        let alt = is_key_down(KeyCode::LeftAlt) || is_key_down(KeyCode::RightAlt);
+        let shift_down = is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift);
+        let mut pressed = Vec::new();
+        for (code, name) in KEY_NAMES {
+            if is_key_pressed(*code) {
+                let mut s = String::new();
+                for (on, m) in [(ctrl, "ctrl+"), (alt, "alt+"), (shift_down, "shift+")] {
+                    if on {
+                        s.push_str(m);
+                    }
+                }
+                s.push_str(name);
+                pressed.push(s);
             }
         }
 
@@ -453,6 +567,7 @@ impl RawInput {
             wheel,
             keys,
             chars,
+            pressed,
             shift: is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift),
             pan: (dx, dy),
             time: get_time(),
@@ -539,6 +654,7 @@ pub fn frame(app: &mut App, raw: &RawInput) {
         tab: has(KeyCode::Tab),
         shift: raw.shift,
         enter: has(KeyCode::Enter),
+        pressed: raw.pressed.clone(),
         keys: {
             use rim_ui::Key;
             let mut keys: Vec<Key> = raw.chars.iter().map(|&c| Key::Char(c)).collect();
@@ -568,22 +684,14 @@ pub fn frame(app: &mut App, raw: &RawInput) {
 
     // Keys, unless the UI used them (a focused text input takes them all;
     // Tab/Enter go to a focused control).
+    // Everything else with a key is a core binding (mods/core/ui/keys.luau).
     for k in raw.keys.iter().filter(|_| !out.captured_keys) {
         let action = match k {
-            KeyCode::Space => Action::TogglePause,
-            KeyCode::Key1 => Action::Speed(1),
-            KeyCode::Key2 => Action::Speed(3),
-            KeyCode::Key3 => Action::Speed(6),
-            KeyCode::F3 | KeyCode::P => Action::ToggleProfiler,
-            KeyCode::F12 => Action::ToggleDevtools,
-            KeyCode::O => Action::CycleOverlay,
             KeyCode::Escape => {
                 app.ui.blur();
                 Action::Escape
             }
-            KeyCode::R => Action::ToggleDraft,
-            KeyCode::Tab if !out.captured_keys => Action::NextColonist,
-            KeyCode::C => Action::CenterSelected,
+            KeyCode::Tab => Action::NextColonist,
             _ => continue,
         };
         apply(app, action);

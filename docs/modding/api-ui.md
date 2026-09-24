@@ -22,10 +22,12 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `act.toggle_profiler` | `() -> ()` | Show or hide the profiler. |
 | `act.tool` | `(key: string) -> ()` | Pick a toolbar tool ("designate:core:chop", "build:core:wall"). |
 | `ui.anchored` | `(node: Node?) -> Node` | A node attached to a pawn (entity) or cell, on the anchored layer. |
+| `ui.bind` | `(id: string, opts: { key: string, label: string? }, run: () -> ()) -> ()` | A named action with a default key ("space", "f3", "ctrl+k"): it fires from the key when no text input is typing, and from the command palette. The player's keybinds file overrides the key. Two mods binding one id or one key is reported. |
 | `ui.close` | `(id: string) -> ()` | Close a window. |
 | `ui.col` | `(node: Node?) -> Node` | A column: children top to bottom. |
 | `ui.define` | `(id: string, build: (view: any) -> Node?) -> ()` | Define a component under a namespaced id. |
 | `ui.extend` | `(id: string, add: any) -> ()` | Add children to another component's extension point. |
+| `ui.focus` | `(id: string) -> ()` | Give a node (a text input) the keyboard once it is laid out. |
 | `ui.grid` | `(props: GridProps) -> Node` | Rows by cols of cells the engine paints as one node. cell(r, c) describes each cell at build; on_press(r, c) returns the value a drag paints and on_paint(r, c, value) runs once per cell the drag enters. |
 | `ui.image` | `(node: Node) -> Node` | A picture from a mod's ui/img: { src = "mod:name", tint = true }. Its own size unless w/h say otherwise; tint draws it in the text colour. A name@2x.png beside name.png is used on dense displays. |
 | `ui.input` | `(node: Node) -> Node` | A line of text the player edits: { id = ..., value = ..., placeholder = ..., on_change = fn(text), on_submit = fn(text) }. The engine keeps the buffer by id across rebuilds and reloads; click to focus, Escape to leave. |
@@ -36,6 +38,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `ui.remove` | `(id: string) -> ()` | Hide a node by id. |
 | `ui.replace` | `(id: string, build: (view: any) -> Node?) -> ()` | Take over a node by id. |
 | `ui.row` | `(node: Node?) -> Node` | A row: children left to right. |
+| `ui.run` | `(id: string) -> ()` | Run a bound action, as its key would. |
 | `ui.scroll` | `(node: Node?) -> Node` | A column that scrolls. |
 | `ui.set_state` | `(key: string, value: any) -> ()` | Keep a value across rebuilds. |
 | `ui.slot` | `(id: string) -> Node` | An extension point other mods fill with ui.extend. |
@@ -48,6 +51,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `ui.window_chrome` | `(draw: (win: WindowInfo) -> Node) -> ()` | The function that draws every window's chrome around ui.slot(win.comp); nodes marked handle = "move", "resize" or "close" are routed by the engine. Core sets it. |
 | `ui.wrap` | `(id: string, wrap: (inner: Node, view: any) -> Node?) -> ()` | Decorate a node: get its tree, return a new one. |
 | `view.ambient` | `(field: string) -> number?` | A field's outdoor value, or nil for an unknown field. |
+| `view.binds` | `() -> { Bind }` | Every bound action with its label and current key, in declaration order. |
 | `view.clock` | `() -> string` | The time of day, "HH:MM". |
 | `view.colonists` | `(max: number?) -> { Pawn }` | The colonists, or the first max of them (a bar that shows a few should not pay for all of them; view.count_pawns("player") has the total). |
 | `view.colony_lost` | `() -> boolean` | Whether every colonist is gone. |

@@ -51,6 +51,9 @@ pub struct Input {
     pub enter: bool,
     /// Keys for a focused text input this frame, in order.
     pub keys: Vec<Key>,
+    /// Every key pressed this frame by name ("space", "f3", "ctrl+k"), for
+    /// bound actions. Ignored while a text input has focus.
+    pub pressed: Vec<String>,
     /// Wall-clock seconds.
     pub time: f64,
 }
@@ -249,6 +252,10 @@ pub struct Ui {
     pub images: image::Images,
     /// Every text input's buffer, by node id. Outlives rebuilds and reloads.
     edits: HashMap<String, edit::EditState>,
+    /// A node a handler asked to focus, resolved once it is laid out.
+    focus_pending: Option<String>,
+    /// A key override changed since the keybinds were last taken.
+    keys_dirty: bool,
 }
 
 fn total_scale(dpi: f32, user: f32) -> f32 {
@@ -327,7 +334,44 @@ impl Ui {
             layout_dirty: false,
             images,
             edits: HashMap::new(),
+            focus_pending: None,
+            keys_dirty: false,
         })
+    }
+
+    /// The player's keys as TOML: only actions rebound from their default.
+    pub fn keybinds_toml(&self) -> String {
+        let mut keys = toml::Table::new();
+        for (id, key) in self.vm.key_overrides() {
+            keys.insert(id, toml::Value::String(key));
+        }
+        let mut doc = toml::Table::new();
+        doc.insert("keys".into(), toml::Value::Table(keys));
+        toml::to_string(&doc).unwrap_or_default()
+    }
+
+    /// Restore keys from `keybinds_toml`. Ids no mod declares are kept for
+    /// when their mod comes back.
+    pub fn restore_keybinds(&mut self, text: &str) -> Result<(), String> {
+        let doc: toml::Table = text.parse().map_err(|e: toml::de::Error| e.message().to_string())?;
+        let Some(toml::Value::Table(keys)) = doc.get("keys") else { return Ok(()) };
+        for (id, v) in keys {
+            let toml::Value::String(k) = v else { return Err(format!("{id}: a key is a string")) };
+            self.vm.set_key_override(id, Some(k.clone()));
+        }
+        Ok(())
+    }
+
+    /// Bind an action to another key for this player, or back to its default.
+    pub fn rebind(&mut self, id: &str, key: Option<&str>) {
+        let default = self.vm.default_key(id);
+        let key = key.map(vm::normalise_key).filter(|k| Some(k) != default.as_ref());
+        self.vm.set_key_override(id, key);
+        self.keys_dirty = true;
+    }
+
+    pub fn take_keys_dirty(&mut self) -> bool {
+        std::mem::take(&mut self.keys_dirty)
     }
 
     /// A text input's buffer and caret (tests, devtools).
@@ -767,6 +811,15 @@ impl Ui {
                 enter = false;
             }
         }
+        // Bound actions fire from their keys, unless a text input is typing.
+        if !input.pressed.is_empty() && self.focused_input().is_none() {
+            for key in &input.pressed {
+                if let Some(f) = self.vm.bind_for_key(key) {
+                    handlers.push(Call::Click(f));
+                    out.captured_keys = true;
+                }
+            }
+        }
         // Keyboard focus: once a UI control has focus (it was clicked or
         // tabbed to), Tab cycles focusable elements and Enter activates. Tab
         // with nothing focused belongs to the game (next colonist).
@@ -851,6 +904,9 @@ impl Ui {
             }
         }
         self.screen = client.screen;
+        if let Some(id) = self.vm.take_focus_req() {
+            self.focus_pending = Some(id);
+        }
         let ops = self.vm.take_window_ops();
         let windows_changed = !ops.is_empty();
         for op in &ops {
@@ -875,6 +931,7 @@ impl Ui {
             || input.right_pressed
             || input.wheel != 0.0
             || !input.keys.is_empty()
+            || !input.pressed.is_empty()
             || input.tab
             || input.enter;
         let t0 = Instant::now();
@@ -1162,6 +1219,16 @@ impl Ui {
         self.layers = layers;
         self.ids = ids;
         self.id_keys = id_keys;
+        // A requested focus lands once the node exists in a layout.
+        if let Some(id) = self.focus_pending.take() {
+            match self.id_keys.get(&id) {
+                Some(k) => {
+                    self.focused = Some(*k);
+                    self.edits.entry(id).or_default();
+                }
+                None => self.focus_pending = Some(id),
+            }
+        }
         self.built = built;
         self.built_wins = built_wins;
         actions.extend(self.vm.take_actions());

@@ -746,6 +746,130 @@ fn a_slider_reports_the_drag() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A probe mod binding an action that counts its own runs.
+const BIND_MOD: &str = r#"
+ui.bind("probe:hello", { key = "h", label = "Say hello" }, function()
+    ui.set_state("probe:fired", ui.state("probe:fired", 0) + 1)
+end)
+ui.define("probe:count", function(view)
+    return ui.text({ "fired=" .. ui.state("probe:fired", 0), id = "probe:count" })
+end)
+ui.mount("top", "probe:count", { order = 90 })
+"#;
+
+fn press(
+    ui: &mut rim_ui::Ui,
+    sim: &rim_sim::Sim,
+    cv: &rim_ui::view::ClientView,
+    t: &mut f64,
+    key: &str,
+) -> rim_ui::Output {
+    *t += 0.1;
+    let out = frame(ui, sim, cv, Input { pressed: vec![key.to_string()], time: *t, ..Default::default() });
+    *t += 0.1;
+    frame(ui, sim, cv, Input { time: *t, ..Default::default() });
+    out
+}
+
+#[test]
+fn a_mods_bound_action_fires_from_its_key_and_from_the_palette() {
+    let dir = scratch_mods("bindkey", &[("probe", "", &[("ui/bind.luau", BIND_MOD)])]);
+    let sim = sim_at(&dir);
+    let mut ui = ui_for(&sim);
+    let mut cv = client(&sim);
+    frame(&mut ui, &sim, &cv, Default::default());
+    let mut t = 1.0;
+    let out = press(&mut ui, &sim, &cv, &mut t, "h");
+    assert!(out.captured_keys, "a bound key is the UI's");
+    assert!(ui.snapshot().contains("fired=1"), "{}", ui.snapshot());
+    let out = press(&mut ui, &sim, &cv, &mut t, "j");
+    assert!(!out.captured_keys, "an unbound key is the game's");
+    assert!(ui.snapshot().contains("fired=1"));
+
+    // The palette: Ctrl+K opens it with the query focused; typing filters;
+    // Enter runs the first match and closes it.
+    press(&mut ui, &sim, &cv, &mut t, "ctrl+k");
+    assert!(ui.is_open("core:palette"), "the palette opened");
+    assert_eq!(ui.focused_id().as_deref(), Some("core:palette.query"), "the query has the keyboard");
+    assert!(ui.find("core:palette.probe:hello").is_some(), "the action is listed");
+    assert!(ui.find("core:palette.core:pause").is_some(), "core's keys are listed too");
+    let out = press(&mut ui, &sim, &cv, &mut t, "h");
+    assert!(out.captured_keys && ui.snapshot().contains("fired=1"), "keys type into the query, not into bindings");
+    for c in "ello".chars() {
+        t += 0.1;
+        frame(&mut ui, &sim, &cv, Input { keys: vec![rim_ui::Key::Char(c)], time: t, ..Default::default() });
+    }
+    t += 0.1;
+    frame(&mut ui, &sim, &cv, Input { time: t, ..Default::default() });
+    assert!(ui.find("core:palette.probe:hello").is_some() && ui.find("core:palette.core:pause").is_none(), "filtered");
+    t += 0.1;
+    frame(&mut ui, &sim, &cv, Input { enter: true, time: t, ..Default::default() });
+    t += 0.1;
+    frame(&mut ui, &sim, &cv, Input { time: t, ..Default::default() });
+    assert!(ui.snapshot().contains("fired=2"), "Enter ran the first match: {}", ui.snapshot());
+    assert!(!ui.is_open("core:palette"), "and closed the palette");
+    // Clicking a row runs it too.
+    press(&mut ui, &sim, &cv, &mut t, "ctrl+k");
+    let row = ui.find("core:palette.probe:hello").unwrap();
+    click(&mut ui, &sim, &mut cv, centre(row));
+    t += 0.1;
+    frame(&mut ui, &sim, &cv, Input { time: t, ..Default::default() });
+    assert!(ui.snapshot().contains("fired=3"), "{}", ui.snapshot());
+    assert!(ui.warnings().is_empty(), "{:?}", ui.warnings());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn two_mods_binding_one_key_is_reported() {
+    let dir = scratch_mods(
+        "bindconflict",
+        &[
+            ("one", "", &[("ui/k.luau", "ui.bind(\"one:a\", { key = \"Shift+X\" }, function() end)")]),
+            ("two", "", &[("ui/k.luau", "ui.bind(\"two:b\", { key = \"shift + x\" }, function() end)\nui.bind(\"one:a\", { key = \"y\" }, function() end)")]),
+        ],
+    );
+    let sim = sim_at(&dir);
+    let ui = ui_for(&sim);
+    let w = ui.warnings();
+    assert!(w.iter().any(|w| w.starts_with("UI conflict: key 'shift+x' bound by")), "one key, two actions: {w:?}");
+    assert!(
+        w.iter().any(|w| w.starts_with("UI conflict: action 'one:a' bound by 'one' and 'two'")),
+        "one id, two mods: {w:?}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn the_keybinds_file_overrides_a_default_and_survives_a_restart() {
+    let dir = scratch_mods("bindfile", &[("probe", "", &[("ui/bind.luau", BIND_MOD)])]);
+    let sim = sim_at(&dir);
+    let mut ui = ui_for(&sim);
+    let cv = client(&sim);
+    ui.restore_keybinds("[keys]\n\"probe:hello\" = \"J\"\n").unwrap();
+    frame(&mut ui, &sim, &cv, Default::default());
+    let mut t = 1.0;
+    press(&mut ui, &sim, &cv, &mut t, "h");
+    assert!(ui.snapshot().contains("fired=0"), "the default key no longer fires");
+    press(&mut ui, &sim, &cv, &mut t, "j");
+    assert!(ui.snapshot().contains("fired=1"), "the player's key does");
+    // Rebinding from the engine, and back to the default, round-trips.
+    ui.rebind("probe:hello", Some("ctrl+H"));
+    assert!(ui.take_keys_dirty());
+    let saved = ui.keybinds_toml();
+    assert!(saved.contains("\"probe:hello\" = \"ctrl+h\""), "{saved}");
+    ui.rebind("probe:hello", Some("h"));
+    assert!(!ui.keybinds_toml().contains("probe:hello"), "the default is not an override");
+    // A restart: a fresh engine restores the file and the key holds.
+    let mut ui2 = ui_for(&sim);
+    ui2.restore_keybinds(&saved).unwrap();
+    frame(&mut ui2, &sim, &cv, Default::default());
+    press(&mut ui2, &sim, &cv, &mut t, "h");
+    assert!(ui2.snapshot().contains("fired=0"));
+    press(&mut ui2, &sim, &cv, &mut t, "ctrl+h");
+    assert!(ui2.snapshot().contains("fired=1"), "{}", ui2.snapshot());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn a_scroll_area_stops_exactly_at_its_last_row() {
     let dir = scratch_mods(
@@ -1422,7 +1546,7 @@ fn strings_go_through_one_door() {
     let dir = mods().join("core").join("ui");
     // Every `t("<key>", ...)` call, by hand: a regex crate is not worth it.
     let mut keys = Vec::new();
-    for f in ["hud.luau", "devtools.luau", "labels.luau"] {
+    for f in ["hud.luau", "devtools.luau", "labels.luau", "keys.luau", "window.luau"] {
         let src = std::fs::read_to_string(dir.join(f)).unwrap();
         let mut rest = src.as_str();
         while let Some(i) = rest.find("t(\"") {
@@ -1515,7 +1639,7 @@ fn no_bare_literals_in_core_ui() {
         })
     };
     let mut hits = Vec::new();
-    for f in ["hud.luau", "devtools.luau", "labels.luau"] {
+    for f in ["hud.luau", "devtools.luau", "labels.luau", "keys.luau", "window.luau"] {
         let src = std::fs::read_to_string(dir.join(f)).unwrap();
         for (n, line) in src.lines().enumerate() {
             if line.trim_start().starts_with("--") {
