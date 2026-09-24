@@ -132,6 +132,8 @@ pub struct ScriptHost {
     steps: Rc<Cell<u64>>,
     /// The current call used up its step budget.
     ran_away: Rc<Cell<bool>>,
+    /// Every script, and what the loaded ones exported.
+    modules: Option<Rc<Modules>>,
 }
 
 /// Only libraries whose results are the same on every machine and that can't
@@ -411,6 +413,7 @@ impl ScriptHost {
             reg: Rc::new(RefCell::new(Registry::default())),
             steps,
             ran_away,
+            modules: None,
         };
         host.install(defs).map_err(|e| format!("script API setup failed: {e}"))?;
         host.lock_down().map_err(|e| format!("script API setup failed: {e}"))?;
@@ -446,6 +449,7 @@ impl ScriptHost {
         r.loaded = true;
         r.current_mod.clear();
         drop(r);
+        host.modules = Some(modules);
         Ok(host)
     }
 
@@ -1020,6 +1024,42 @@ impl ScriptHost {
         proxy.set_metatable(Some(mt))?;
         g.set("rim", proxy)?;
         Ok(())
+    }
+
+    /// Call a function a loaded module exports, like a hook would: for tests
+    /// and tools (`rim test`'s `w:call`). `path` is a require path,
+    /// "@core/scripts/storyteller"; arguments and the result are plain data.
+    pub fn call_export(
+        &self,
+        w: &mut World,
+        path: &str,
+        func: &str,
+        args: &[Option<crate::data::Data>],
+    ) -> Result<Option<crate::data::Data>, String> {
+        let modules = self.modules.as_ref().ok_or("scripts haven't loaded")?;
+        let (mod_id, base) = resolve_require("", path)?;
+        let exports = [format!("{base}.luau"), format!("{base}/init.luau")]
+            .iter()
+            .find_map(|k| modules.done.borrow().get(k).cloned())
+            .ok_or_else(|| format!("{path} isn't loaded (is '{mod_id}' enabled, and does something require it?)"))?;
+        let Value::Table(exports) = exports else { return Err(format!("{path} doesn't export a table")) };
+        let f: Function = exports.get(func).map_err(|_| format!("{path} doesn't export a function '{func}'"))?;
+        let args: Vec<Value> = args
+            .iter()
+            .map(|a| match a {
+                Some(d) => crate::data::to_lua(&self.lua, d),
+                None => Ok(Value::Nil),
+            })
+            .collect::<mlua::Result<_>>()
+            .map_err(|e| e.to_string())?;
+        self.world.0.set(w as *mut World);
+        self.steps.set(STEP_BUDGET);
+        self.reg.borrow_mut().current_mod = mod_id;
+        let r = f.call::<Value>(mlua::MultiValue::from_iter(args));
+        self.world.0.set(std::ptr::null_mut());
+        self.reg.borrow_mut().current_mod.clear();
+        let v = r.map_err(|e| format!("{path}: {func}: {e}"))?;
+        crate::data::from_lua(&v, func, 0)
     }
 
     fn call(&self, w: &mut World, prof: &mut Profile, mod_id: &str, f: &Function, args: impl IntoLuaMulti) {

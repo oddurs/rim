@@ -43,6 +43,7 @@ cargo run --release -p rim_sim --example balance -- --seeds 40   # bot plays the
 cargo run --release -p rim_sim --example year -- --seed 7        # a year of weather, day by day
 cargo run --release -p rim_sim --example headless -- --days 3 --core   # core alone, no plugins
 cargo run --release -p rim_client -- --autotest                   # drive every control, save screenshots (seed 7)
+cargo run --release -p rim_client -- test                         # the mods' own Luau tests, headless
 scripts/autotest-sweep.sh 1 44                                    # the autotest over many maps
 cargo dist                                                        # a shipping build (LTO); cargo prof for profiling
 ```
@@ -62,6 +63,7 @@ cargo dist                                                        # a shipping b
 ## Modding and engineering docs
 
 - [Patching defs](docs/modding/patches.md): change another mod's data, including lists, without owning it.
+- [Testing a mod](docs/modding/testing.md): `rim test` runs a mod's Luau tests against seeded headless worlds.
 - [Scripting rules](docs/modding/scripting.md): the Luau sandbox, limits and determinism.
 - API references, generated from the engine: [`rim` for sim scripts](docs/modding/api-scripts.md) and [`ui`, `act`, `view` for UI scripts](docs/modding/api-ui.md).
 - [Modding the interface](docs/modding/ui.md) and [climate and weather](docs/modding/weather.md).

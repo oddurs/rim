@@ -37,6 +37,32 @@ local function threat_points(wealth: number, strength: number, day: number): num
 	return math.max(35, (40 + wealth * 0.03 + day * 6) * exposure)
 end
 
+-- What incidents are told about the colony.
+local function context()
+	local tick, tpd = rim.tick(), rim.ticks_per_day
+	local ctx = {
+		day = tick / tpd,
+		wealth = rim.wealth(),
+		colonists = rim.colonists(),
+		strength = rim.colony_strength(),
+		since_threat = (tick - state.last_threat) / tpd,
+	}
+	ctx.points = threat_points(ctx.wealth, ctx.strength, ctx.day)
+	return ctx
+end
+
+-- Run an incident's effect now, as if the storyteller had picked it.
+local function run(inc, ctx): boolean
+	if inc.execute(ctx) == false then
+		return false
+	end
+	state.last = rim.tick()
+	if inc.kind == "threat" then
+		state.last_threat = state.last
+	end
+	return true
+end
+
 rim.every(CHECK_TICKS, function()
 	local colonists = rim.colonists()
 	if colonists == 0 then
@@ -55,15 +81,8 @@ rim.every(CHECK_TICKS, function()
 		return
 	end
 
-	local day = tick / tpd
-	local ctx = {
-		day = day,
-		wealth = wealth,
-		colonists = colonists,
-		strength = rim.colony_strength(),
-		since_threat = (tick - state.last_threat) / tpd,
-	}
-	ctx.points = threat_points(wealth, ctx.strength, day)
+	local ctx = context()
+	local day = ctx.day
 
 	local total, pool = 0, {}
 	for _, inc in incidents do
@@ -91,12 +110,7 @@ rim.every(CHECK_TICKS, function()
 	for _, e in pool do
 		r -= e.w
 		if r <= 0 then
-			if e.inc.execute(ctx) ~= false then
-				state.last = tick
-				if e.inc.kind == "threat" then
-					state.last_threat = tick
-				end
-			end
+			run(e.inc, ctx)
 			return
 		end
 	end
@@ -106,6 +120,35 @@ rim.on("colony_lost", function()
 	rim.message(`The colony lasted {rim.day()} days.`, "bad")
 end)
 
+-- Fire an incident by id now, skipping the dice, for tests and tools:
+-- fire("raid", { points = 300 }) overrides parts of its context. Returns
+-- whether it happened (an incident can fizzle).
+local function fire(id: string, overrides: { [string]: any }?): boolean
+	for _, inc in incidents do
+		if inc.id == id then
+			local ctx = context()
+			if overrides then
+				for k, v in overrides do
+					ctx[k] = v
+				end
+			end
+			return run(inc, ctx)
+		end
+	end
+	error(`no incident '{id}'`)
+end
+
+-- Registered incident ids, in order.
+local function ids(): { string }
+	local out = {}
+	for _, inc in incidents do
+		table.insert(out, inc.id)
+	end
+	return out
+end
+
 return {
 	register_incident = register_incident,
+	fire = fire,
+	ids = ids,
 }

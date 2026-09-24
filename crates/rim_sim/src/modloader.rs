@@ -410,7 +410,7 @@ fn merge(dst: &mut toml::Table, src: &toml::Table, path: &str, mod_id: &str, log
     }
 }
 
-fn discover(dir: &Path) -> Result<Vec<ModManifest>, String> {
+pub(crate) fn discover(dir: &Path) -> Result<Vec<ModManifest>, String> {
     let rd = fs::read_dir(dir).map_err(|e| format!("cannot read mods dir {}: {e}", dir.display()))?;
     let mut out = Vec::new();
     for ent in rd.flatten() {
