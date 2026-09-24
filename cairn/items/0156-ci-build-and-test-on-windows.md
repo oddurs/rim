@@ -2,12 +2,12 @@
 id: 48f92e6e-2187-461a-a98b-f20e36ae1325
 title: 'CI: build and test on Windows'
 type: chore
-status: doing
+status: done
 milestone: shelter
 assignee: Oddur Sigurdsson
-claimed: 2026-09-24
 created: 2026-09-23
 updated: 2026-09-24
+closed_at: 2026-09-24
 priority: p1
 api: none
 effort: s
@@ -21,9 +21,9 @@ Windows is a target platform (0135), and the stack should build there (Rust, mac
 
 ## Acceptance criteria
 
-- [ ] `windows-latest` added to the test matrix in `.github/workflows/ci.yml`
-- [ ] Clippy, `cargo test` (including determinism) and the headless soak pass on Windows
-- [ ] Any Windows-only fixes (paths, line endings in mod files) recorded as notes here
+- [x] `windows-latest` added to the test matrix in `.github/workflows/ci.yml`
+- [x] Clippy, `cargo test` (including determinism) and the headless soak pass on Windows
+- [x] Any Windows-only fixes (paths, line endings in mod files) recorded as notes here
 
 ## 2026-09-23
 
@@ -32,3 +32,7 @@ From 0163: also verify the UI resolves the system font on Windows (C:\Windows\Fo
 ## 2026-09-24
 
 Windows-only fix: git checked the docs out with CRLF, so the guide-sample tests (which split on '```lua\n') found no samples. .gitattributes now forces LF for text in every checkout (* text=auto eol=lf), and both guide tests tolerate CRLF anyway, since a player's own mod files may have it. TOML and Luau already parse CRLF.
+
+## 2026-09-24
+
+Windows has run the full matrix since #25: clippy, cargo test --workspace (determinism and rim_ui included), both headless soaks and the crosscheck, all green on main (run 35962798275). The 0163 font check is now a test: tests/system_font.rs asserts the UI font comes from the platform's list (segoeui.ttf or arial.ttf on Windows) rather than the first installed face, and that shaping gives real advances. The FMA check is skipped on Windows: no objdump, and MSVC doesn't contract under /fp:precise.
