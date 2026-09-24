@@ -64,5 +64,8 @@ fn guide_samples_run() {
     let parts = s.world.fields.explain_ambient(&s.world.defs, daylight);
     assert!(parts.iter().any(|p| p.0 == "white_sun"), "{parts:?}");
     assert!(s.world.defs.sky.tint.contains_key("green_moon"));
+    let types = format!("{:?}", s.world.data.get("weather:types"));
+    assert!(types.contains("guide:drizzle"), "the [[weather.type]] sample registers: {types}");
+    assert!(s.warnings.iter().all(|w| !w.contains("unknown def kind")), "{:?}", s.warnings);
     let _ = fs::remove_dir_all(dir);
 }

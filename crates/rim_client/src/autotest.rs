@@ -737,7 +737,7 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         Some(Data::Table(q)) => q.values().next().and_then(|e| e.get("id").cloned()),
         _ => None,
     };
-    t.check(head == Some(Data::Str("storm".into())), format!("forcing a storm from devtools works ({head:?})"));
+    t.check(head == Some(Data::Str("weather:storm".into())), format!("forcing a storm from devtools works ({head:?})"));
     let before = t.w().tick;
     t.click_ui("weather:devtools.advance.24").await;
     let skipped = t.w().tick - before;

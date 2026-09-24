@@ -97,7 +97,7 @@ fn frequencies_follow_the_weights() {
         let want = w / total_w;
         assert!((got - want).abs() < 0.05 * want.max(0.1), "{id}: {got:.3} of picks, weight share {want:.3}");
     }
-    assert!(weights.iter().any(|w| w.0 == "rain"), "rain is possible in autumn: {weights:?}");
+    assert!(weights.iter().any(|w| w.0 == "weather:rain"), "rain is possible in autumn: {weights:?}");
     let _ = fs::remove_dir_all(dir);
 }
 
@@ -148,11 +148,11 @@ fn forcing_the_weather_and_hearing_about_it() {
         s.step();
     }
     let q = queue(&s);
-    assert_eq!(q[0].0, "storm", "the storm is the current weather: {q:?}");
+    assert_eq!(q[0].0, "weather:storm", "the storm is the current weather: {q:?}");
     assert_eq!(q[0].2 - q[0].1, (3 * TICKS_PER_DAY / 24) as i64, "for three hours");
     assert!(q.windows(2).all(|w| w[0].2 == w[1].1), "the rest of the forecast follows on: {q:?}");
     let Some(Data::Table(log)) = s.world.data.get("t:log") else { panic!("no weather:changed events") };
-    assert_eq!(log.values().last(), Some(&Data::Str("storm".into())), "weather:changed fired for the storm");
+    assert_eq!(log.values().last(), Some(&Data::Str("weather:storm".into())), "weather:changed fired for the storm");
     let wind = s.world.defs.lookup("field", "wind").unwrap() as usize;
     for _ in 0..TICKS_PER_DAY / 24 * 2 {
         s.step();
@@ -217,7 +217,7 @@ fn weather_incidents_show_in_the_breakdown_and_forecast() {
     let labels: Vec<String> = s.world.fields.explain_ambient(&s.world.defs, t).into_iter().map(|p| p.0).collect();
     assert!(labels.contains(&"cold_snap".to_string()), "{labels:?}");
     assert!(labels.contains(&"heat_wave".to_string()), "{labels:?}");
-    assert_eq!(queue(&s)[0].0, "storm", "the storm is in the forecast as the current weather");
+    assert_eq!(queue(&s)[0].0, "weather:storm", "the storm is in the forecast as the current weather");
     let texts: Vec<&str> = s.world.messages.iter().map(|m| m.text.as_str()).collect();
     assert!(texts.iter().any(|m| m.contains("cold snap")), "{texts:?}");
     assert!(texts.iter().any(|m| m.contains("storm")), "{texts:?}");
@@ -239,8 +239,8 @@ fn the_weather_can_be_forced_by_a_command() {
     s.step();
     s.step();
     let q = queue(&s);
-    assert_eq!(q[0].0, "fog", "{q:?}");
+    assert_eq!(q[0].0, "weather:fog", "{q:?}");
     assert!((q[0].2 - q[0].1 - (5 * TICKS_PER_DAY / 24) as i64).abs() <= 1, "five hours: {q:?}");
     let Some(Data::Table(types)) = s.world.data.get("weather:types") else { panic!("types are published") };
-    assert!(types.values().any(|v| v == &Data::Str("storm".into())));
+    assert!(types.values().any(|v| v == &Data::Str("weather:storm".into())));
 }

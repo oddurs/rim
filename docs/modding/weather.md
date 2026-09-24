@@ -154,36 +154,36 @@ the future that will actually happen, unless something forces a change.
 While it lasts, a weather type pushes a `"weather"` contribution to `cloud`,
 `precipitation`, `wind`, `wind_dir`, `fog` and `temperature`.
 
-Add a weather type. List `weather` in your `mod.toml`'s `depends` (or
-`optional`, if your mod works without it) and require its module:
+Weather types are data: the plugin declares a `type` def kind, and its own
+five live in [`defs/types.toml`](../../mods/weather/defs/types.toml). To add
+one, list `weather` in your `mod.toml`'s `depends`, then write a
+`[[weather.type]]`:
 
-```lua
-local weather = require("@weather/scripts/weather")
-
-weather.register({
-	id = "my_mod:drizzle",
-	label = "drizzle",
-	cold_label = "flurries", -- shown when it falls below freezing
-	hours = { 3, 8 }, -- how long a spell lasts
-	blend = 1.5, -- hours to ease in from the previous weather
-	weight = function(ctx)
-		-- ctx: season, year_fraction, previous, first_day
-		if ctx.first_day then
-			return 0
-		end
-		return if ctx.season == "autumn" then 1.5 else 0.5
-	end,
-	set = {
-		-- a number, or { min, max } picked once per spell
-		cloud = { 70, 90 },
-		precipitation = { 0.2, 0.8 },
-		wind = { 1, 4 },
-		fog = 0,
-		temperature = -1,
-	},
-	message = "A fine drizzle sets in.", -- optional; a string or function(label)
-})
+```toml
+[[weather.type]]
+id = "drizzle"                      # my_mod:drizzle
+label = "drizzle"
+cold_label = "flurries"             # shown when it falls below freezing
+hours = [3, 8]                      # how long a spell lasts
+blend = 1.5                         # hours to ease in from the previous weather
+first_day = false                   # keep it off the first day
+season = { autumn = 1.5, default = 0.5 }   # weight by season
+follows = { "weather:cloudy" = 1.5 }       # likelier after overcast
+set = { cloud = [70, 90], precipitation = [0.2, 0.8], wind = [1, 4], fog = 0, temperature = -1 }
+message = "A fine drizzle sets in." # optional; cold_message for the cold label
 ```
+
+A type's weight is `weight` × its season's entry × its `follows` entry for
+the previous type. `set` takes a number, or `[min, max]` picked once per
+spell. Change the shipped types with patches, like any def:
+`target = "weather:type/weather:storm"`.
+
+If a weight needs code, register the type from a script instead:
+`require("@weather/scripts/weather").register({ ..., weight = function(ctx) ... end })`,
+where `ctx` holds `season`, `year_fraction`, `previous` and `first_day`.
+
+The weather module has these functions, and they take the plugin's own
+types by bare name (`"storm"`) or qualified (`"weather:storm"`):
 
 | Call | What it does |
 |---|---|

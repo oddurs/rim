@@ -30,6 +30,8 @@ declare rim: {
     date: () -> Date,
     -- Days since the game began, from 0.
     day: () -> number,
+    -- Entries of a def kind a mod declared with [[kind]], in load order: "type" for your own kind, "weather:type" for another mod's.
+    defs: (kind: string) -> { {[string]: any} },
     -- A random open cell on the map edge that can reach the colony.
     edge_cell: () -> (number?, number?),
     -- Send an event to rim.on handlers in any mod. Only under your own name: "your_mod:event".

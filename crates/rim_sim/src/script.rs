@@ -587,6 +587,35 @@ impl ScriptHost {
         }
         rim.set("creature_defs", creatures)?;
         self.declare("creature_defs", "{CreatureInfo}", "Every creature def.");
+        // Entries of the def kinds mods declare, as fresh tables, so a
+        // script may adjust the ones it registers.
+        {
+            let mod_defs = defs.mod_defs.clone();
+            rim.set(
+                "defs",
+                lua.create_function(move |lua, kind: String| {
+                    let from = calling_mod(lua).unwrap_or_default();
+                    let full = if kind.contains(':') { kind.clone() } else { format!("{from}:{kind}") };
+                    let Some(list) = mod_defs.get(&full) else {
+                        let known: Vec<&str> = mod_defs.keys().map(String::as_str).collect();
+                        return Err(mlua::Error::runtime(format!(
+                            "no def kind '{full}' (declared: {})",
+                            if known.is_empty() { "none".to_string() } else { known.join(", ") }
+                        )));
+                    };
+                    let out = lua.create_table()?;
+                    for d in list {
+                        out.push(crate::data::to_lua(lua, d)?)?;
+                    }
+                    Ok(out)
+                })?,
+            )?;
+        }
+        self.declare(
+            "defs",
+            "(kind: string) -> { {[string]: any} }",
+            "Entries of a def kind a mod declared with [[kind]], in load order: \"type\" for your own kind, \"weather:type\" for another mod's.",
+        );
         let things = lua.create_table()?;
         for td in &defs.things {
             let t = lua.create_table()?;

@@ -78,7 +78,7 @@ register({
 	end,
 	can_fire = function(ctx)
 		local w = weather.current()
-		return w ~= nil and w.id ~= "storm"
+		return w ~= nil and w.id ~= "weather:storm"
 	end,
 	execute = function(ctx)
 		-- The storm's own message says what's happening.

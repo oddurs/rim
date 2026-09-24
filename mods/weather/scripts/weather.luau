@@ -11,7 +11,9 @@
 -- and the renderer draws whatever those say. Precipitation below freezing
 -- falls as snow, so winter rain *is* snow.
 --
--- Other mods add weather through this module (see docs/modding/weather.md):
+-- Weather types are data: [[type]] in defs/types.toml, [[weather.type]] from
+-- other mods (see docs/modding/weather.md). A type that needs code, such as a
+-- weight no table can express, registers from a script instead:
 --
 --   local weather = require("@weather/scripts/weather")
 --   weather.register {
@@ -34,6 +36,14 @@ local KEY = "weather:forecast"
 
 local types = {}
 local order = {} -- registration order, so picking is deterministic
+
+-- Weather's own types can be named bare ("storm" for "weather:storm").
+local function type_id(id: string?): string?
+	if id == nil or types[id] or string.find(id, ":", 1, true) then
+		return id
+	end
+	return `weather:{id}`
+end
 
 local weather = {}
 
@@ -244,19 +254,20 @@ end
 -- for what would follow `previous` at tick `start`.
 function weather.weights(previous: string?, start: number)
 	local out = {}
-	for _, e in weights(previous, start) do
+	for _, e in weights(type_id(previous), start) do
 		out[e.id] = e.w
 	end
 	return out
 end
 
 function weather.pick(previous: string?, start: number)
-	return pick(previous, start)
+	return pick(type_id(previous), start)
 end
 
 -- Replace the current weather with `id` for `hours`. What was forecast
 -- after it still comes, later.
 function weather.force(id: string, h: number)
+	id = type_id(id) :: string
 	local t = types[id]
 	assert(t, `unknown weather '{id}'`)
 	local q = load_queue() or {}
@@ -289,9 +300,43 @@ end
 -- Devtools: the weather plugin's own UI asks for a weather type through a
 -- command (act.send), so forcing weather replays and stays in lockstep.
 rim.on("weather:force", function(e)
-	if types[e.id] then
+	if types[type_id(e.id)] then
 		weather.force(e.id, e.hours or 12)
 	end
 end)
+
+-- Every [[type]] from any mod, in load order. Bare ids in `follows` are the
+-- defining mod's own, like any def reference.
+for _, def in rim.defs("type") do
+	local owner = string.match(def.id, "^([^:]+):") or "weather"
+	local follows = {}
+	for k, v in def.follows do
+		follows[if string.find(k, ":", 1, true) then k else `{owner}:{k}`] = v
+	end
+	local season, base, first_day = def.season, def.weight, def.first_day
+	local cold_label = if def.cold_label ~= "" then def.cold_label else nil
+	local message, cold_message = def.message, def.cold_message
+	weather.register({
+		id = def.id,
+		label = def.label,
+		cold_label = cold_label,
+		hours = def.hours,
+		blend = def.blend,
+		set = def.set,
+		message_kind = def.message_kind,
+		weight = function(ctx)
+			if ctx.first_day and not first_day then
+				return 0
+			end
+			return base * (season[ctx.season] or season.default or 1) * (follows[ctx.previous] or 1)
+		end,
+		message = if message ~= "" or cold_message ~= "" then function(label)
+			if label == cold_label and cold_message ~= "" then
+				return cold_message
+			end
+			return if message ~= "" then message else nil
+		end else nil,
+	})
+end
 
 return weather
