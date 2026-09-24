@@ -460,6 +460,82 @@ through one; a campfire does. 80 seeds, 8 days, snap on day 5:
 
 ---
 
+## 4d. Work: who does what
+
+With three colonists the player watches; with thirty they can only set policy.
+RimWorld's priority grid shows that a policy can be the fun part: a number per
+colonist per work type turns a crowd into something you tune. Its mods show
+what players want added: finer levels and priorities that change with the
+hour. What it hides is where the grid goes wrong: the leftmost column wins a
+tie, nobody can see why a colonist isn't cooking, the grid doesn't change
+with winter or a siege, and it doesn't show how much work is waiting.
+
+### Tension: numbers or a ranked list?
+
+- **For numbers:** a grid of 30 colonists by 12 work types is the densest
+  control in the genre, and experienced players think in it.
+- **For a ranked list:** a newcomer thinks "Ana: doctor, then cook, then
+  build". Ordering is easier to reason about than numbers.
+- **Ruling:** numbers in the sim, and both views in the UI. The ranked view
+  of one colonist writes numbers underneath, so the two never disagree.
+
+### Mechanisms
+
+- **`[[work_type]]`** (core data): id, label, icon, skill, default priority,
+  and `order`, the tie-break, which the UI shows and lets you drag.
+- **`[[priority_scale]]`:** `levels = 4` in core. A mod that wants 9 changes
+  one line and the UI follows. 0 means never.
+- **Effective priority = base + rules.** A `[[priority_rule]]` shifts or
+  sets work types while its `when` holds: an hour range, a season, an alert,
+  a need, or a stance. Anything a curve can't say is a Luau predicate, cached
+  and not run every tick. Each value explains itself, like
+  `rim.explain`: `Hauling 2 = base 4, harvest_rush -1, stance Siege -1`.
+- **Stances:** named sets of rules ("Normal", "Harvest", "Winter prep",
+  "Siege") that change the whole colony with one click. Mods add them.
+- **Work pools, not scans.** Work givers post work to a pool per work type
+  when something changes (a designation, a blueprint, an item outside a
+  stockpile). Pools are bucketed by reachability region and chunk, so
+  unreachable work is rejected in O(1). A pawn walks its work types in
+  effective-priority order, cached until the grid, a rule or a stance
+  changes, and stops at the first level that has reachable work. Inside
+  that level an integer score picks: distance, urgency (rot, fire,
+  bleeding) and skill fit. That avoids walking across the map for one
+  pebble without asking the player to manage it.
+- **Luau work givers** post into the same pools, within a per-tick budget.
+  Scripts say what work exists; the engine says who does it.
+- **Why:** the engine keeps the top few candidates of a choice, with the
+  reason each lost (unreachable, reserved, no materials, priority 0), only
+  for pawns someone is inspecting.
+- Priority changes are `Command`s, rules run in the sim, scores are
+  integers: determinism holds.
+
+### The Work Board
+
+A panel in core's UI mod, so a mod can patch or replace it.
+
+- **Painted, not typed.** Drag across cells to paint a value, scroll a cell
+  to nudge it, press a number while hovering, shift-scroll a column. A cell
+  shows the priority by brightness, the skill as a bar and passion as a
+  flame.
+- **Columns show demand:** jobs waiting, the backlog's trend, and coverage.
+  A column with work waiting and no one on it at a high priority is marked.
+- **Rows show now:** the current job, a 24-hour schedule strip, time idle.
+- **Effective values are visible:** a cell reads `2→1` when a rule or stance
+  moves it, and hovering explains why.
+- **The why panel** on a colonist: what they picked and its score, and each
+  work type they passed over with the reason, linked to the map.
+- **On the map:** hovering a column lights its waiting jobs; hovering a job
+  shows who would take it and when ("Bo in ~20s, then Cyd"). A right-click
+  order still forces it.
+
+### Cost
+
+Choosing work costs work posted and pools checked, not map size. At 200 pawns
+the budget is under 0.2 ms a tick for work choice, measured with a stress map
+of every cell designated.
+
+---
+
 ## 5. What's in `core` and what isn't
 
 `core` is the smallest complete game. Everything else is a plugin, including
@@ -627,7 +703,7 @@ mid-range laptop. That means ≤ 2 ms per sim tick at 6× (≈ 360 ticks/sec).
 3. **Save/load:** string-keyed component serialisation; unknown mod data is
    preserved.
 4. **`rim.mood`:** the first first-party plugin, and the test of the API.
-5. **Stockpiles and hauling, work priorities, skills.**
+5. **Stockpiles and hauling, work priorities (§4d), skills.**
 6. **WASM tier, mod browser, co-op lockstep.**
 
 ---

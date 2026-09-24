@@ -144,12 +144,14 @@ Save/load that survives mod changes, and replays from seed + command log.
 
 ## colony — Colony
 
-`··········` 0% · 0 of 10 done · due 2026-12-15
+`··········` 0% · 0 of 14 done · due 2026-12-15
 
 Running more than one person: stockpiles, hauling, work priorities, skills, colonist panels.
 
-- [ ] `03ad3e3a` Work priorities per colonist <sup>feature · p0 · l · engine</sup>
+- [ ] `03ad3e3a` Work types and priorities per colonist <sup>feature · p0 · m · engine</sup>
 - [ ] `03b9b791` Derived fields and feels-like temperature <sup>feature · p1 · s · engine</sup>
+- [ ] `0cb48faf` Priority rules and colony stances <sup>feature · p1 · m · engine</sup>
+- [ ] `0e73145a` Work pools: work givers post work, pawns stop scanning <sup>perf · p0 · m · engine</sup>
 - [ ] `1e977052` Floating windows and a saved UI layout <sup>feature · p1 · m · client</sup>
 - [ ] `29c323f5` Skills learned by doing <sup>feature · p1 · m · engine</sup>
 - [ ] `4ad6b386` Colonist inspection panel <sup>feature · p1 · m · client</sup>
@@ -157,6 +159,8 @@ Running more than one person: stockpiles, hauling, work priorities, skills, colo
 - [ ] `9bd9e8ab` Fire: burning, spread by wind, put out by rain <sup>feature · p1 · l · engine</sup>
 - [ ] `a7da68e2` Component kit v2: slider, text input and tables <sup>feature · p1 · m · core</sup>
 - [ ] `ecd54de8` Stockpile zones and hauling <sup>feature · p0 · l · engine</sup>
+- [ ] `f1924f03` Why a colonist is doing that, and who will take a job <sup>feature · p1 · m · client</sup>
+- [ ] `f1b96df4` The Work Board: a painted priority grid with live demand <sup>feature · p0 · l · core</sup>
 - [ ] `fa0de3f5` Wind shelter: the lee of walls, rock and trees <sup>feature · p1 · m · engine</sup>
 
 ## eras — Eras
