@@ -3,11 +3,12 @@ id: 161
 key: interface
 title: Interface
 type: milestone
-status: planned
+status: done
 depends_on:
 - 8
 created: 2026-09-23
 updated: 2026-09-23
+closed_at: 2026-09-23
 priority: p2
 api: none
 due: 2026-10-09
@@ -44,3 +45,7 @@ Floating windows and a saved layout, sliders/text input/tables, a keybinds file 
 - **Text rendering** on macroquad is the unknown; the spike decides before anything depends on it.
 - **Two Luau VMs** double the sandboxing surface. The UI VM uses the same rules as 0140, and the port must not slip in any mutation path.
 - **Autotest churn:** tests move from screen coordinates to node ids in the port, not after.
+
+## 2026-09-23
+
+Sprint closed 2026-09-23, ahead of its 2026-10-09 date. Definition of done: the Rust HUD is deleted (draw.rs draws the world and a draw list); the autotest passes against node ids on macOS and Linux CI; the whole UI costs 0.12 ms median / 0.66 ms rebuild frames with 30 colonists; wildlife_plus changes the HUD through ui.extend and conflicts are reported (tested). Every item is closed; 0163's Windows check moved to 0156. PR #5.

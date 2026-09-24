@@ -1,19 +1,15 @@
 //! Rendering. Read-only access to the simulation.
 
-use crate::{rgb, App, Tool, TOOLBAR_H, TOPBAR_H};
+use crate::{rgb, App, Tool};
 use macroquad::prelude::*;
-use rim_sim::defs::{Satisfier, Shape};
-use rim_sim::hecs::Entity;
-use rim_sim::order;
+use rim_sim::defs::Shape;
 use rim_sim::rng::hash2_f;
 use rim_sim::world::*;
-use rim_sim::{IVec, TICKS_PER_DAY};
+use rim_sim::IVec;
+use rim_ui::paint::Draw;
 
 const PLAYER: Color = Color::new(0.35, 0.8, 1.0, 1.0);
 const HOSTILE: Color = Color::new(1.0, 0.3, 0.25, 1.0);
-const PANEL: Color = Color::new(0.07, 0.08, 0.09, 0.86);
-const TEXT: Color = Color::new(0.92, 0.92, 0.9, 1.0);
-const DIM: Color = Color::new(0.6, 0.62, 0.62, 1.0);
 
 /// Interpolated position of a pawn's center, in tiles.
 pub fn pawn_pos(p: &Pawn) -> (f32, f32) {
@@ -172,8 +168,6 @@ pub fn world(app: &App) {
     }
 
     // Pawns.
-    let mut labels: Vec<(String, f32, f32, f32, Color)> = Vec::new();
-    let hovered = crate::pawn_under(app, mouse_position().0, mouse_position().1);
     for &e in &w.pawns {
         let Ok(p) = w.ecs.get::<&Pawn>(e) else { continue };
         if !p.active {
@@ -218,16 +212,7 @@ pub fn world(app: &App) {
             draw_rectangle(sx - r, sy + r + 3.0, r * 2.0, 3.0, Color::new(0.2, 0.0, 0.0, 0.8));
             draw_rectangle(sx - r, sy + r + 3.0, r * 2.0 * f, 3.0, Color::new(1.0 - f, f, 0.1, 1.0));
         }
-        // Text goes on top of the night overlay, so it's collected for later.
-        if p.asleep {
-            labels.push(("z".into(), sx + r * 0.6, sy - r * 0.6, 18.0 + (t * 2.0).sin() * 2.0, WHITE));
-        }
-        // Colonists are always named; others when hovered or selected.
-        let named = p.faction == Faction::Player || app.selected == Some(e) || hovered == Some(e);
-        if named && z >= 14.0 {
-            let label = if cd.intelligent { p.name.clone() } else { cd.label.clone() };
-            labels.push((label, sx, sy + r + 15.0, 15.0, ring.unwrap_or(WHITE)));
-        }
+        // Names, the sleep marker and bubbles are anchored UI (core:labels).
     }
 
     // Hit flashes.
@@ -259,11 +244,6 @@ pub fn world(app: &App) {
     if dark > 0.0 {
         draw_rectangle(0.0, 0.0, screen_width(), screen_height(), Color::new(0.02, 0.03, 0.12, dark));
     }
-    for (text, x, y, size, c) in labels {
-        let x = if text == "z" { x } else { x - measure_text(&text, None, size as u16, 1.0).width / 2.0 };
-        draw_text(&text, x + 1.0, y + 1.0, size, BLACK);
-        draw_text(&text, x, y, size, c);
-    }
 
     // Drag rectangle preview.
     if let Some(a) = app.drag_start {
@@ -289,8 +269,6 @@ pub fn world(app: &App) {
             draw_rectangle(s0x, s0y, s1x - s0x, s1y - s0y, alpha(c, 0.18));
         }
         draw_rectangle_lines(s0x, s0y, s1x - s0x, s1y - s0y, 2.0, c);
-        let label = format!("{}x{}", (bx - ax) as i32, (by - ay) as i32);
-        draw_text(&label, s1x + 6.0, s1y, 18.0, WHITE);
     } else if app.tool != Tool::Select {
         let (mx, my) = mouse_position();
         let tp = cam.tile_at(mx, my);
@@ -317,285 +295,104 @@ fn order_flash(app: &App) {
 }
 
 fn tool_color(app: &App) -> Color {
-    app.buttons.iter().find(|b| b.tool == app.tool).map_or(WHITE, |b| b.color)
+    app.tools.iter().find(|b| b.tool == app.tool).map_or(WHITE, |b| b.color)
 }
 
-// ================================================================== HUD
+// ================================================================== UI
 
-pub fn hud(app: &App) {
-    let w = &app.sim.world;
-    top_bar(app);
-    messages(app);
-    toolbar(app);
-    if let Some(e) = app.selected {
-        pawn_panel(app, e);
-    }
-    hover_info(app);
-    order_hint(app);
-    if app.show_profiler {
-        profiler(app);
-    }
-    if w.colony_lost {
-        let msg = format!("The colony is lost after {} days.", w.day());
-        let d = measure_text(&msg, None, 40, 1.0);
-        let (cx, cy) = (screen_width() / 2.0, screen_height() / 2.0);
-        draw_rectangle(cx - d.width / 2.0 - 30.0, cy - 50.0, d.width + 60.0, 80.0, PANEL);
-        draw_text(&msg, cx - d.width / 2.0, cy, 40.0, HOSTILE);
-    }
-}
-
-fn top_bar(app: &App) {
-    let w = &app.sim.world;
-    draw_rectangle(0.0, 0.0, screen_width(), TOPBAR_H, PANEL);
-    draw_text(clock_text(app), 10.0, 19.0, 20.0, if app.paused { YELLOW } else { TEXT });
-
-    // Colonist bar, centered.
-    for (e, rect) in colonist_rects(app) {
-        let sel = app.selected == Some(e);
-        let Ok(p) = w.ecs.get::<&Pawn>(e) else { continue };
-        draw_rectangle(
-            rect.x,
-            rect.y,
-            rect.w,
-            rect.h,
-            if sel { Color::new(0.25, 0.3, 0.35, 1.0) } else { Color::new(0.14, 0.16, 0.18, 1.0) },
-        );
-        let f = p.hp.max(0) as f32 / w.defs.creature(p.def).max_hp as f32;
-        draw_rectangle(rect.x, rect.y + rect.h - 3.0, rect.w * f, 3.0, if f > 0.5 { GREEN } else { ORANGE });
-        draw_text(&p.name, rect.x + 6.0, rect.y + 16.0, 17.0, if p.drafted { PLAYER } else { TEXT });
-    }
-
-    let help = "Space pause  1/2/3 speed  R draft  Tab next  O overlay  F3 profiler";
-    let d = measure_text(help, None, 15, 1.0);
-    draw_text(help, screen_width() - d.width - 10.0, 18.0, 15.0, DIM);
-}
-
-/// "Day 3  14:05  3x   Wealth 812"
-pub fn clock_text(app: &App) -> String {
-    let w = &app.sim.world;
-    let hour = w.hour();
-    let clock = format!("{:02}:{:02}", hour as u32, (hour.fract() * 60.0) as u32);
-    let speed = if app.paused { "paused".to_string() } else { format!("{}x", app.speed) };
-    let mut s = format!("Day {}  {}  {}   Wealth {:.0}", w.day() + 1, clock, speed, w.wealth);
-    for (fi, fd) in w.defs.fields.iter().enumerate().filter(|(_, f)| f.hud) {
-        s.push_str(&format!("   {:.0}{} outside", w.fields.ambient(fi), fd.unit));
-    }
-    if let Some(fi) = app.overlay {
-        s.push_str(&format!("   [overlay: {}]", w.defs.fields[fi].label));
-    }
-    s
-}
-
-pub fn message_color(kind: MsgKind) -> Color {
-    match kind {
-        MsgKind::Info => TEXT,
-        MsgKind::Good => Color::new(0.5, 0.95, 0.5, 1.0),
-        MsgKind::Threat => Color::new(1.0, 0.45, 0.35, 1.0),
-        MsgKind::Bad => Color::new(1.0, 0.7, 0.3, 1.0),
-    }
-}
-
-pub fn colonist_rects(app: &App) -> Vec<(Entity, Rect)> {
-    let cols: Vec<Entity> = app.sim.world.colonists().collect();
-    // Start after the clock, however long mods make it.
-    let mut x = measure_text(clock_text(app), None, 20, 1.0).width + 30.0;
-    cols.into_iter()
-        .map(|e| {
-            let name = app.sim.world.ecs.get::<&Pawn>(e).map(|p| p.name.clone()).unwrap_or_default();
-            let wd = measure_text(&name, None, 17, 1.0).width + 12.0;
-            let r = Rect::new(x, 3.0, wd.max(60.0), TOPBAR_H - 6.0);
-            x += r.w + 4.0;
-            (e, r)
-        })
-        .collect()
-}
-
-pub fn colonist_bar_hit(app: &App, mx: f32, my: f32) -> Option<Entity> {
-    colonist_rects(app).into_iter().find(|(_, r)| r.contains(vec2(mx, my))).map(|(e, _)| e)
-}
-
-fn messages(app: &App) {
-    let w = &app.sim.world;
-    let mut y = TOPBAR_H + 22.0;
-    for m in w.messages.iter().rev().take(8) {
-        let age = w.tick.saturating_sub(m.tick) as f32 / TICKS_PER_DAY as f32;
-        if age > 1.0 {
-            break;
+/// Draw the UI's draw list. It's in physical pixels; macroquad draws in
+/// logical points, so divide by the DPI factor. Glyphs are rasterised at
+/// physical size, so text lands 1:1 on the screen's pixels.
+pub fn ui(list: &[Draw], atlas: &Texture2D, dpi: f32) {
+    let s = 1.0 / dpi;
+    let col = |c: [f32; 4]| Color::new(c[0], c[1], c[2], c[3]);
+    for d in list {
+        match d {
+            Draw::Rect { rect, color, radius } => {
+                rounded_rect(rect[0] * s, rect[1] * s, rect[2] * s, rect[3] * s, radius * s, col(*color));
+            }
+            Draw::Outline { rect, color, width, radius } => {
+                rounded_outline(rect[0] * s, rect[1] * s, rect[2] * s, rect[3] * s, radius * s, width * s, col(*color));
+            }
+            Draw::Glyphs { quads, color } => {
+                for q in quads {
+                    let tint = if q.color { WHITE } else { col(*color) };
+                    draw_texture_ex(
+                        atlas,
+                        q.dst[0] * s,
+                        q.dst[1] * s,
+                        tint,
+                        DrawTextureParams {
+                            dest_size: Some(vec2(q.dst[2] * s, q.dst[3] * s)),
+                            source: Some(Rect::new(q.uv[0], q.uv[1], q.uv[2], q.uv[3])),
+                            ..Default::default()
+                        },
+                    );
+                }
+            }
+            Draw::Clip(r) => unsafe {
+                // The scissor works in framebuffer pixels: the UI's own units.
+                get_internal_gl().quad_gl.scissor(Some((
+                    r[0] as i32,
+                    r[1] as i32,
+                    r[2].ceil() as i32,
+                    r[3].ceil() as i32,
+                )));
+            },
+            Draw::Unclip => unsafe {
+                get_internal_gl().quad_gl.scissor(None);
+            },
         }
-        let c = message_color(m.kind);
-        let a = (1.0 - age).clamp(0.35, 1.0);
-        let d = measure_text(&m.text, None, 18, 1.0);
-        draw_rectangle(8.0, y - 16.0, d.width + 12.0, 22.0, alpha(PANEL, 0.6 * a));
-        draw_text(&m.text, 14.0, y, 18.0, alpha(c, a));
-        y += 24.0;
+    }
+    unsafe {
+        get_internal_gl().quad_gl.scissor(None);
     }
 }
 
-fn toolbar(app: &App) {
-    let y = screen_height() - TOOLBAR_H;
-    draw_rectangle(0.0, y, screen_width(), TOOLBAR_H, PANEL);
-    for b in &app.buttons {
-        let r = Rect::new(b.rect.x, y + 6.0, b.rect.w, b.rect.h);
-        let active = app.tool == b.tool;
-        draw_rectangle(
-            r.x,
-            r.y,
-            r.w,
-            r.h,
-            if active { alpha(b.color, 0.45) } else { Color::new(0.15, 0.16, 0.18, 1.0) },
-        );
-        draw_rectangle(r.x, r.y + r.h - 3.0, r.w, 3.0, b.color);
-        draw_text(&b.label, r.x + 11.0, r.y + 21.0, 18.0, TEXT);
-    }
-}
-
-fn bar(x: f32, y: f32, w: f32, label: &str, f: f32, c: Color) {
-    draw_text(label, x, y + 12.0, 16.0, DIM);
-    draw_rectangle(x + 60.0, y + 2.0, w, 11.0, Color::new(0.15, 0.15, 0.15, 1.0));
-    draw_rectangle(x + 60.0, y + 2.0, w * f.clamp(0.0, 1.0), 11.0, c);
-}
-
-fn pawn_panel(app: &App, e: Entity) {
-    let w = &app.sim.world;
-    let Ok(p) = w.ecs.get::<&Pawn>(e) else { return };
-    let cd = w.defs.creature(p.def);
-    let h = 70.0 + p.needs.len() as f32 * 18.0 + if p.faction == Faction::Player { 20.0 } else { 0.0 };
-    let (x, y) = (8.0, screen_height() - TOOLBAR_H - h - 8.0);
-    draw_rectangle(x, y, 280.0, h, PANEL);
-    let title = if p.founder { format!("{} (founder)", p.name) } else { p.name.clone() };
-    draw_text(&title, x + 10.0, y + 22.0, 22.0, TEXT);
-    let doing = if p.drafted { "drafted".to_string() } else { order::job_text(w, &p) };
-    let sub = format!("{} · {} · {}", cd.label, p.faction.name(), doing);
-    draw_text(&sub, x + 10.0, y + 40.0, 16.0, DIM);
-    let mut yy = y + 48.0;
-    bar(x + 10.0, yy, 190.0, "health", p.hp as f32 / cd.max_hp as f32, Color::new(0.4, 0.8, 0.4, 1.0));
-    yy += 18.0;
-    for (nid, v) in &p.needs {
-        let nd = w.defs.need(*nid);
-        let c = rgb(nd.rgb);
-        bar(
-            x + 10.0,
-            yy,
-            190.0,
-            &nd.label,
-            *v as f32 / NEED_MAX as f32,
-            if nd.satisfier == Satisfier::Food && *v < 2000 { ORANGE } else { c },
-        );
-        yy += 18.0;
-    }
-    if p.faction == Faction::Player {
-        let hint = if p.drafted { "R undraft · right-click move/attack" } else { "R draft · right-click to order" };
-        draw_text(hint, x + 10.0, yy + 14.0, 15.0, DIM);
-    }
-}
-
-/// What a right-click here would do, pinned to the cursor. Says it before
-/// the click so the player can aim.
-fn order_hint(app: &App) {
-    let Some(text) = &app.hint else { return };
-    let (mx, my) = mouse_position();
-    let d = measure_text(text, None, 16, 1.0);
-    let (w, h) = (d.width + 14.0, 22.0);
-    let x = (mx + 18.0).min(screen_width() - w - 4.0);
-    let y = (my + 12.0).min(screen_height() - TOOLBAR_H - h - 4.0);
-    draw_rectangle(x, y, w, h, PANEL);
-    draw_rectangle_lines(x, y, w, h, 1.0, alpha(PLAYER, 0.5));
-    draw_text(text, x + 7.0, y + 16.0, 16.0, TEXT);
-}
-
-fn hover_info(app: &App) {
-    let (mx, my) = mouse_position();
-    if my > screen_height() - TOOLBAR_H || my < TOPBAR_H {
+/// A filled rectangle with rounded corners, from pieces that never
+/// overlap, so translucent colours stay even.
+fn rounded_rect(x: f32, y: f32, w: f32, h: f32, r: f32, c: Color) {
+    let r = r.min(w / 2.0).min(h / 2.0);
+    if r < 0.5 {
+        draw_rectangle(x, y, w, h, c);
         return;
     }
-    let w = &app.sim.world;
-    let tp: IVec = app.cam.tile_at(mx, my);
-    if !w.map.inb(tp) {
-        return;
-    }
-    let i = w.map.idx(tp);
-    let shelter = match w.map.room_at(tp) {
-        Some(r) if r.enclosed() => format!("indoors, room of {} cells", r.cells),
-        Some(_) => "outdoors".to_string(),
-        None => String::new(),
-    };
-    let mut lines =
-        vec![format!("{} ({}, {})  {}", w.defs.terrain[w.map.terrain[i] as usize].label, tp.x, tp.y, shelter)];
-    let readings: Vec<String> = w
-        .defs
-        .fields
-        .iter()
-        .enumerate()
-        .map(|(fi, fd)| format!("{} {:.0}{}", fd.label, w.fields.value(&w.defs, &w.map, fi, tp), fd.unit))
-        .collect();
-    if !readings.is_empty() {
-        lines.push(readings.join("   "));
-    }
-    for e in [w.map.fixture[i], w.map.item[i]].into_iter().flatten() {
-        if let Ok(t) = w.ecs.get::<&Thing>(e) {
-            let td = w.defs.thing(t.def);
-            let mut s = td.label.clone();
-            if let Ok(bp) = w.ecs.get::<&Blueprint>(e) {
-                let cost = &td.build.as_ref().unwrap().cost_r;
-                let parts: Vec<String> = cost
-                    .iter()
-                    .zip(&bp.delivered)
-                    .map(|(c, d)| format!("{}/{} {}", d, c.1, w.defs.thing(c.0).label))
-                    .collect();
-                s = format!("{s} (blueprint: {})", parts.join(", "));
-            } else if t.count > 1 {
-                s = format!("{s} x{}", t.count);
-            }
-            if w.ecs.get::<&Regrow>(e).is_ok() {
-                s.push_str(" (regrowing)");
-            }
-            lines.push(s);
-        }
-    }
-    let wd = lines.iter().map(|l| measure_text(l, None, 16, 1.0).width).fold(0.0, f32::max) + 16.0;
-    let h = lines.len() as f32 * 18.0 + 8.0;
-    let (x, y) = (screen_width() - wd - 8.0, screen_height() - TOOLBAR_H - h - 8.0);
-    draw_rectangle(x, y, wd, h, PANEL);
-    for (k, l) in lines.iter().enumerate() {
-        draw_text(l, x + 8.0, y + 18.0 + k as f32 * 18.0, 16.0, if k == 0 { DIM } else { TEXT });
+    draw_rectangle(x + r, y, w - 2.0 * r, h, c);
+    draw_rectangle(x, y + r, r, h - 2.0 * r, c);
+    draw_rectangle(x + w - r, y + r, r, h - 2.0 * r, c);
+    for (cx, cy, a0) in
+        [(x + r, y + r, 180.0f32), (x + w - r, y + r, 270.0), (x + w - r, y + h - r, 0.0), (x + r, y + h - r, 90.0)]
+    {
+        corner_fan(cx, cy, r, a0, c);
     }
 }
 
-fn profiler(app: &App) {
-    let s = &app.sim;
-    let w = &s.world;
-    let mut lines: Vec<(String, Color)> = Vec::new();
-    lines.push(("PROFILER (smoothed µs per call)".into(), YELLOW));
-    let mut entries = s.profile.entries.clone();
-    entries.sort_by(|a, b| a.0.starts_with("mod:").cmp(&b.0.starts_with("mod:")).then(b.1.partial_cmp(&a.1).unwrap()));
-    for (name, us) in entries {
-        let c = if name.starts_with("mod:") { Color::new(0.7, 0.85, 1.0, 1.0) } else { TEXT };
-        lines.push((format!("{name:<16} {us:>9.1}"), c));
-    }
-    lines.push((String::new(), TEXT));
-    lines.push((format!("tick {}   pawns {}   entities {}", w.tick, w.pawns.len(), w.ecs.len()), TEXT));
-    lines.push((format!("paths {}   nodes {}", w.pf.searches, w.pf.expanded), TEXT));
-    lines.push((format!("reservations {}", w.reservations.len()), TEXT));
-    let (hooks, handlers) = s.scripts.hook_count();
-    lines.push((format!("script hooks {hooks}   handlers {handlers}"), TEXT));
-    lines.push((String::new(), TEXT));
-    lines.push(("MODS (load order)".into(), YELLOW));
-    for m in &s.mods {
-        lines.push((format!("{} {} ({})", m.id, m.version, m.name), TEXT));
-    }
-    if !s.warnings.is_empty() {
-        lines.push((String::new(), TEXT));
-        lines.push(("WARNINGS".into(), ORANGE));
-        for wn in &s.warnings {
-            lines.push((wn.clone(), ORANGE));
+fn corner_fan(cx: f32, cy: f32, r: f32, a0: f32, c: Color) {
+    const STEPS: usize = 4;
+    let mut prev = None;
+    for i in 0..=STEPS {
+        let a = (a0 + 90.0 * i as f32 / STEPS as f32).to_radians();
+        let p = vec2(cx + r * a.cos(), cy + r * a.sin());
+        if let Some(q) = prev {
+            draw_triangle(vec2(cx, cy), q, p, c);
         }
+        prev = Some(p);
     }
-    let wd = lines.iter().map(|l| measure_text(&l.0, None, 16, 1.0).width).fold(0.0, f32::max) + 20.0;
-    let h = lines.len() as f32 * 18.0 + 12.0;
-    let x = screen_width() - wd - 8.0;
-    let y = TOPBAR_H + 8.0;
-    draw_rectangle(x, y, wd, h, PANEL);
-    for (k, (l, c)) in lines.iter().enumerate() {
-        draw_text(l, x + 10.0, y + 20.0 + k as f32 * 18.0, 16.0, *c);
+}
+
+fn rounded_outline(x: f32, y: f32, w: f32, h: f32, r: f32, t: f32, c: Color) {
+    let r = r.min(w / 2.0).min(h / 2.0);
+    if r < 0.5 {
+        draw_rectangle_lines(x, y, w, h, t * 2.0, c);
+        return;
+    }
+    draw_rectangle(x + r, y, w - 2.0 * r, t, c);
+    draw_rectangle(x + r, y + h - t, w - 2.0 * r, t, c);
+    draw_rectangle(x, y + r, t, h - 2.0 * r, c);
+    draw_rectangle(x + w - t, y + r, t, h - 2.0 * r, c);
+    for (cx, cy, a0) in
+        [(x + r, y + r, 180.0f32), (x + w - r, y + r, 270.0), (x + w - r, y + h - r, 0.0), (x + r, y + h - r, 90.0)]
+    {
+        draw_arc(cx, cy, 6, r - t / 2.0, a0, t, 90.0, c);
     }
 }

@@ -53,24 +53,24 @@ First playable vertical slice. One warrior, harvest, build, eat, sleep, animals,
 
 ## interface — Interface
 
-`··········` 0% · 0 of 14 done · due 2026-10-09
+`##########` 100% · 14 of 14 done · due 2026-10-09
 
 A two-week sprint. The whole HUD moves out of Rust into `mods/core/ui/`, written in Luau on a small UI engine, so any mod can extend, replace, wrap or remove any part of the interface. Design: DESIGN.md §11.
 
-- [ ] `0082` UI mod operations: extend, replace, wrap and remove by id <sup>feature · p0 · m · client</sup>
-- [ ] `0162` UI stack: taffy layout, cosmic-text and a second Luau VM on macroquad <sup>spike · p0 · s · client</sup>
-- [ ] `0163` System UI font: discovery, shaping and a glyph atlas <sup>feature · p0 · m · client</sup>
-- [ ] `0164` Theme tokens: ui/theme.toml, mod patches and UI scale <sup>feature · p0 · s · client</sup>
-- [ ] `0165` UI engine: node tree, flexbox layout and batched drawing <sup>feature · p0 · l · client</sup>
-- [ ] `0166` UI layers and input routing <sup>feature · p0 · m · client</sup>
-- [ ] `0167` Client-only UI Luau VM with view and act APIs <sup>feature · p0 · l · client</sup>
-- [ ] `0168` Component kit v1: buttons, bars, tabs, lists, tooltips, menus, toasts, bubbles <sup>feature · p0 · l · core</sup>
-- [ ] `0169` Anchored layer: world-attached labels, bars and bubbles without overlap <sup>feature · p1 · m · client</sup>
-- [ ] `0170` Docking shell: top, bottom, left and right regions <sup>feature · p0 · m · client</sup>
-- [ ] `0171` Port the HUD into mods/core/ui and delete the Rust HUD <sup>feature · p0 · l · core</sup>
-- [ ] `0172` Hot reload of UI scripts and theme <sup>feature · p1 · s · tooling</sup>
-- [ ] `0173` UI devtools (F12): inspect any element <sup>feature · p1 · m · tooling</sup>
-- [ ] `0174` UI modding guide <sup>docs · p2 · s · tooling</sup>
+- [x] `0082` UI mod operations: extend, replace, wrap and remove by id <sup>feature · p0 · m · client</sup>
+- [x] `0162` UI stack: taffy layout, cosmic-text and a second Luau VM on macroquad <sup>spike · p0 · s · client</sup>
+- [x] `0163` System UI font: discovery, shaping and a glyph atlas <sup>feature · p0 · m · client</sup>
+- [x] `0164` Theme tokens: ui/theme.toml, mod patches and UI scale <sup>feature · p0 · s · client</sup>
+- [x] `0165` UI engine: node tree, flexbox layout and batched drawing <sup>feature · p0 · l · client</sup>
+- [x] `0166` UI layers and input routing <sup>feature · p0 · m · client</sup>
+- [x] `0167` Client-only UI Luau VM with view and act APIs <sup>feature · p0 · l · client</sup>
+- [x] `0168` Component kit v1: buttons, bars, tabs, lists, tooltips, menus, toasts, bubbles <sup>feature · p0 · l · core</sup>
+- [x] `0169` Anchored layer: world-attached labels, bars and bubbles without overlap <sup>feature · p1 · m · client</sup>
+- [x] `0170` Docking shell: top, bottom, left and right regions <sup>feature · p0 · m · client</sup>
+- [x] `0171` Port the HUD into mods/core/ui and delete the Rust HUD <sup>feature · p0 · l · core</sup>
+- [x] `0172` Hot reload of UI scripts and theme <sup>feature · p1 · s · tooling</sup>
+- [x] `0173` UI devtools (F12): inspect any element <sup>feature · p1 · m · tooling</sup>
+- [x] `0174` UI modding guide <sup>docs · p2 · s · tooling</sup>
 
 ## shelter — Shelter
 

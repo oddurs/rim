@@ -2,12 +2,13 @@
 id: 166
 title: UI layers and input routing
 type: feature
-status: planned
+status: done
 milestone: interface
 depends_on:
 - 165
 created: 2026-09-23
 updated: 2026-09-23
+closed_at: 2026-09-23
 priority: p0
 api: none
 effort: m
@@ -25,8 +26,12 @@ Layers, bottom to top: world, anchored, docked, windows, menus and tooltips, mod
 
 ## Acceptance criteria
 
-- [ ] Clicking a panel never reaches the world; clicking empty screen does
-- [ ] Hover, pressed, focused and disabled states restyle nodes through tokens
-- [ ] Modal layer blocks everything beneath it
-- [ ] Tab and Shift+Tab move focus between focusable nodes; Enter activates
-- [ ] Tests for routing: panel over world, menu over panel, modal over all
+- [x] Clicking a panel never reaches the world; clicking empty screen does
+- [x] Hover, pressed, focused and disabled states restyle nodes through tokens
+- [x] Modal layer blocks everything beneath it
+- [x] Tab and Shift+Tab move focus between focusable nodes; Enter activates
+- [x] Tests for routing: panel over world, menu over panel, modal over all
+
+## 2026-09-23
+
+Layers bottom to top: anchored, docked, windows, cursor, modal, tooltip. Panels with a background swallow clicks; empty screen goes to the world (tests). Tab moves focus once a UI control has it (Tab otherwise stays the game's 'next colonist'); Enter activates; Escape gives the keyboard back. Verified by `cargo test -p rim_ui` (15 engine tests, headless) and `rim --autotest` (92/92, screenshots reviewed).

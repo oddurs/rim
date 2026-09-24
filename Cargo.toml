@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/rim_sim", "crates/rim_client"]
+members = ["crates/rim_sim", "crates/rim_ui", "crates/rim_client"]
 
 [profile.dev]
 opt-level = 1

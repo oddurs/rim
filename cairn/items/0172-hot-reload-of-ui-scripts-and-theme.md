@@ -2,12 +2,13 @@
 id: 172
 title: Hot reload of UI scripts and theme
 type: feature
-status: planned
+status: done
 milestone: interface
 depends_on:
 - 167
 created: 2026-09-23
 updated: 2026-09-23
+closed_at: 2026-09-23
 priority: p1
 api: none
 effort: s
@@ -27,6 +28,10 @@ In dev mode a file watcher reloads a changed `ui/*.luau` or `theme.toml` into a 
 
 ## Acceptance criteria
 
-- [ ] Saving a UI script or theme updates the running game within a second
-- [ ] The simulation's state hash is unaffected by any number of reloads
-- [ ] A syntax or runtime error shows in place, naming file and line; the last good UI keeps running
+- [x] Saving a UI script or theme updates the running game within a second
+- [x] The simulation's state hash is unaffected by any number of reloads
+- [x] A syntax or runtime error shows in place, naming file and line; the last good UI keeps running
+
+## 2026-09-23
+
+Ui::check_reload polls UI script and theme mtimes twice a second. Test: a changed script swaps in; a broken one keeps the last good UI and shows the error; the sim's state hash is unaffected. Cached trees are dropped before the old VM (found by the test: they held references into it). Verified by `cargo test -p rim_ui` (15 engine tests, headless) and `rim --autotest` (92/92, screenshots reviewed).

@@ -2,12 +2,13 @@
 id: 82
 title: 'UI mod operations: extend, replace, wrap and remove by id'
 type: feature
-status: planned
+status: done
 milestone: interface
 depends_on:
 - 171
 created: 2026-09-22
 updated: 2026-09-23
+closed_at: 2026-09-23
 priority: p0
 api: additive
 effort: m
@@ -34,8 +35,12 @@ Two mods replacing or removing the same id is a conflict, reported like def patc
 
 ## Acceptance criteria
 
-- [ ] All four operations work on core's HUD components
-- [ ] `wildlife_plus` adds a wild-animal counter to the top bar with `ui.extend`
-- [ ] Two mods replacing one id is reported as a conflict naming both, and load order decides the winner
-- [ ] Operating on an unknown id is a warning naming the mod and the id
-- [ ] Each node records which mod contributed it, for devtools
+- [x] All four operations work on core's HUD components
+- [x] `wildlife_plus` adds a wild-animal counter to the top bar with `ui.extend`
+- [x] Two mods replacing one id is reported as a conflict naming both, and load order decides the winner
+- [x] Operating on an unknown id is a warning naming the mod and the id
+- [x] Each node records which mod contributed it, for devtools
+
+## 2026-09-23
+
+extend/replace/wrap/remove apply wherever a node carries the id (components and inner nodes). wildlife_plus adds a wildlife counter to core:topbar.right. Conflicts (two mods replacing one id) and unknown ids are reported; nodes record their owner. Tests: mods_extend_replace_wrap_and_remove, wildlife_plus_extends_the_top_bar. Verified by `cargo test -p rim_ui` (15 engine tests, headless) and `rim --autotest` (92/92, screenshots reviewed).

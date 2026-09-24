@@ -566,3 +566,25 @@ another mod.
 - **Per-mod UI time** shows in the profiler; a component that errors shows an
   error box in its place and the rest of the UI keeps running.
 - Budget: **under 1 ms per frame** for the whole UI.
+
+### How it's built, and what it costs
+
+- **Stack** (decided by spike 0162): `rim_ui` is a crate with no renderer
+  dependency. It takes Luau component trees in and puts a draw list and a
+  glyph atlas out, so layout, text, routing and the VM are tested headless in
+  CI. Layout is taffy's flexbox; text is shaped by cosmic-text and
+  rasterised into an atlas the client uploads only when it changes. The UI
+  works in physical pixels, so text lands 1:1 on the screen at any DPI.
+- **Budget**, 30 colonists, profiler open, 349 nodes: **0.12 ms median
+  frame**; 0.66 ms on the frames that rebuild trees. Trees rebuild on input or
+  client change and otherwise at 20 Hz: hover and press restyle at paint
+  time and anchored labels are re-placed every frame, so nothing visible
+  goes stale in between. Layout is cached by tree hash, and small trees
+  (labels, tooltips) by content.
+- **Numbers shown to scripts refresh at 4 Hz.** A readout that changes every
+  frame would otherwise re-lay out the whole shell every frame (it did: 220
+  layouts in 230 frames before this rule).
+- **Lesson:** a layout measure function must return the size flex decided
+  when it's given one. Ignoring it collapsed every spacer to zero and
+  stacked docked panels at the top; the shell test now checks that panels sit
+  *against* their edges, not merely inside the screen.

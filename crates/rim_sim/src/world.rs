@@ -247,6 +247,9 @@ pub struct World {
     pub wealth: f64,
     /// Recent melee hits (pos, tick) for renderers.
     pub hits: Vec<(IVec, u64)>,
+    /// The last few notable events (tick, kind, pawn, name) for the UI:
+    /// "joined", "died", "left". Not part of the simulation state.
+    pub recent_events: Vec<(u64, &'static str, Entity, String)>,
     pub colony_lost: bool,
 }
 
@@ -268,6 +271,7 @@ impl World {
             pf: Pathfinder::default(),
             wealth: 0.0,
             hits: Vec::new(),
+            recent_events: Vec::new(),
             colony_lost: false,
         }
     }
@@ -326,9 +330,18 @@ impl World {
         let e = self.ecs.spawn((p,));
         self.pawns.push(e);
         if faction == Faction::Player {
+            self.note_event("joined", e, &name);
             self.events.push(GameEvent::PawnJoined { id: e, name, def });
         }
         e
+    }
+
+    /// Remember a notable event for the UI (bounded; not simulation state).
+    pub fn note_event(&mut self, kind: &'static str, e: Entity, name: &str) {
+        self.recent_events.push((self.tick, kind, e, name.to_string()));
+        if self.recent_events.len() > 32 {
+            self.recent_events.remove(0);
+        }
     }
 
     pub fn pawn_alive(&self, e: Entity) -> bool {

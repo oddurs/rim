@@ -11,4 +11,5 @@ path = "src/main.rs"
 
 [dependencies]
 rim_sim = { path = "../rim_sim" }
+rim_ui = { path = "../rim_ui" }
 macroquad = "0.4"
