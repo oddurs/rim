@@ -201,6 +201,10 @@ Measured by the autotest, zoomed all the way out: **155 → 66 draw calls,
 | `profiling` (`cargo prof`) | samply / Instruments | release + full debug info |
 | `dist` (`cargo dist`) | shipped builds | fat LTO, one codegen unit, stripped, packed `.dSYM` on macOS |
 
+- **`dist`, measured:** it builds in about 1.5 minutes. The binary is 6.4 MB
+  (8.5 MB for release), passes the autotest, and ends a 20-day run with the
+  same state hash as a release build: LTO and one codegen unit don't change
+  results.
 - **`panic` stays `unwind` everywhere.** mlua turns a panic in a Rust callback
   into a Lua error, so a broken mod reports an error instead of killing the
   game. Tests always build with unwind, so `abort` in release would also
