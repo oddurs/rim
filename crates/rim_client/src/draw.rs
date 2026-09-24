@@ -133,6 +133,31 @@ pub fn world(app: &App) {
                             Color::from_rgba(230, 225, 210, 255),
                         );
                     }
+                    Shape::Table => {
+                        // A slab on two legs.
+                        draw_rectangle(sx + z * 0.14, sy + z * 0.55, z * 0.1, z * 0.35, shade(c, 0.6));
+                        draw_rectangle(sx + z * 0.76, sy + z * 0.55, z * 0.1, z * 0.35, shade(c, 0.6));
+                        draw_rectangle(sx + z * 0.06, sy + z * 0.3, z * 0.88, z * 0.28, c);
+                    }
+                    Shape::Chair => {
+                        // A seat with a back.
+                        draw_rectangle(sx + z * 0.28, sy + z * 0.15, z * 0.44, z * 0.18, shade(c, 0.7));
+                        draw_rectangle(sx + z * 0.25, sy + z * 0.4, z * 0.5, z * 0.3, c);
+                        draw_rectangle(sx + z * 0.3, sy + z * 0.7, z * 0.08, z * 0.22, shade(c, 0.6));
+                        draw_rectangle(sx + z * 0.62, sy + z * 0.7, z * 0.08, z * 0.22, shade(c, 0.6));
+                    }
+                    Shape::Stove => {
+                        // A box with a warm mouth; steady, unlike a fire.
+                        draw_rectangle(sx + z * 0.12, sy + z * 0.12, z * 0.76, z * 0.76, shade(c, 0.85));
+                        draw_rectangle_lines(sx + z * 0.12, sy + z * 0.12, z * 0.76, z * 0.76, 1.5, shade(c, 0.5));
+                        draw_rectangle(
+                            sx + z * 0.3,
+                            sy + z * 0.45,
+                            z * 0.4,
+                            z * 0.3,
+                            Color::from_rgba(255, 150, 60, 255),
+                        );
+                    }
                     Shape::Fire => {
                         draw_circle(cx, cy, z * 0.38, Color::from_rgba(70, 60, 55, 255));
                         let f = 1.0 + (t * 9.0 + tx as f32).sin() * 0.08;

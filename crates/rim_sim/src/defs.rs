@@ -92,6 +92,9 @@ pub enum Shape {
     Door,
     Window,
     Bed,
+    Table,
+    Chair,
+    Stove,
     Fire,
     Item,
 }

@@ -129,8 +129,8 @@ fn copy_dir(from: &Path, to: &Path) {
     }
 }
 
-/// Core has no table yet (0219). A throwaway mod declares one, and a chair
-/// that is only a seat beside it. `who` keeps two tests in one process
+/// Core has a table and a chair (0219); this mod declares its own pair under
+/// other names, so the mechanism is proven without leaning on core's content. `who` keeps two tests in one process
 /// from building, and then deleting, the same directory under each other.
 fn with_furniture(who: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("rim-seats-{}-{who}", std::process::id()));
@@ -147,21 +147,21 @@ fn with_furniture(who: &str) -> PathBuf {
         m.join("defs/seats.toml"),
         r##"
 [[thing]]
-id = "table"
-label = "table"
+id = "bench"
+label = "bench"
 color = "#8c6a48"
 category = "building"
 shape = "bed"
-tags = ["table"]
+tags = ["bench"]
 build = { menu = "furniture", work = 200, stuff = { category = "structural", count = 10 } }
 
 [[thing]]
-id = "chair"
-label = "chair"
+id = "stool"
+label = "stool"
 color = "#a07a50"
 category = "building"
 shape = "bed"
-spots = [{ dx = 0, dy = 0, beside = "table" }]
+spots = [{ dx = 0, dy = 0, beside = "bench" }]
 build = { menu = "furniture", work = 100, stuff = { category = "structural", count = 4 } }
 "##,
     )
@@ -179,8 +179,8 @@ fn a_pawn_eats_at_a_table_when_there_is_one() {
         .flat_map(|r| [table_at.offset(r, 0), table_at.offset(-r, 0), table_at.offset(0, r), table_at.offset(0, -r)])
         .find(|&p| p.chebyshev(table_at) == 1 && s.world.map.passable(p) && s.world.map.fixture_at(p).is_none())
         .expect("room for a chair beside the table");
-    put(&mut s, "table", table_at);
-    let chair = put(&mut s, "chair", chair_at);
+    put(&mut s, "bench", table_at);
+    let chair = put(&mut s, "stool", chair_at);
     let berries = thing(&s, "berries");
     let food_at = cells[2];
     s.world.place_item(berries, food_at, 10);
@@ -206,7 +206,7 @@ fn a_chair_alone_in_a_field_is_not_a_seat() {
     let dir = with_furniture("stool");
     let (mut s, e) = alone(&dir);
     let cells = open_cells(&s, 2);
-    put(&mut s, "chair", cells[0]);
+    put(&mut s, "stool", cells[0]);
     let berries = thing(&s, "berries");
     s.world.place_item(berries, cells[1], 10);
     set_need(&mut s, e, "food", NEED_MAX / 10);

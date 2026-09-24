@@ -54,6 +54,53 @@ bed = { rest_rate = 1.8 }
 spots = [{ dx = 0, dy = 0 }]
 build = { menu = "furniture", work = 500, stuff = { category = "structural", count = 25 } }
 
+# Furniture is passable at a cost rather than blocking: a chair has to be
+# stood on to be sat in, and a blocking piece inside a room would count as
+# part of its boundary. Every piece is built of whatever is structural.
+
+[[thing]]
+id = "table"
+label = "table"
+color = "#8c6a48"
+category = "building"
+shape = "table"
+path_cost = 80
+hp = 120
+market_value = 25
+tags = ["table"]
+build = { menu = "furniture", work = 200, stuff = { category = "structural", count = 10 } }
+
+# A seat, when it stands beside a table; a stool in a field otherwise.
+[[thing]]
+id = "chair"
+label = "chair"
+color = "#a07a50"
+category = "building"
+shape = "chair"
+path_cost = 40
+hp = 80
+market_value = 10
+spots = [{ dx = 0, dy = 0, beside = "table" }]
+build = { menu = "furniture", work = 100, stuff = { category = "structural", count = 4 } }
+
+# Warms a room a little harder than a campfire and holds it a little
+# warmer, with less light. It does not cook: that needs bills, which live
+# outside core (DESIGN.md 5).
+[[thing]]
+id = "stove"
+label = "stove"
+color = "#5a534d"
+category = "building"
+shape = "stove"
+path_cost = 90
+hp = 150
+market_value = 35
+build = { menu = "furniture", work = 250, stuff = { category = "structural", count = 12 } }
+emit = [
+    { field = "temperature", amount = 14.0, radius = 4, cap = 26.0 },
+    { field = "light", amount = 30.0, radius = 3 },
+]
+
 [[thing]]
 id = "campfire"
 label = "campfire"
