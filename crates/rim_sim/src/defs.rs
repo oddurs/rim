@@ -615,7 +615,41 @@ pub struct DefDb {
     pub sky: SkyDef,
     pub start: Option<StartDef>,
     pub names: Vec<String>,
+    /// Qualified ids ("core:wall").
     index: HashMap<(&'static str, String), DefId>,
+    /// Bare ids ("wall"), for tools and tests that don't care which mod.
+    bare: HashMap<(&'static str, String), Vec<DefId>>,
+}
+
+/// The mod a qualified id belongs to: "core" for "core:wall".
+pub fn home_of(id: &str) -> &str {
+    id.split_once(':').map_or("", |(m, _)| m)
+}
+
+/// Resolve a def reference written in mod `home`: a qualified id is taken
+/// as is, a bare one means `home`'s own def (DESIGN.md §10). The error
+/// suggests the prefix when another mod has that id.
+fn resolve_in(
+    index: &HashMap<(&'static str, String), DefId>,
+    bare: &HashMap<(&'static str, String), Vec<DefId>>,
+    ids: &dyn Fn(DefId) -> String,
+    kind: &'static str,
+    id: &str,
+    home: &str,
+) -> Result<DefId, String> {
+    let full = if id.contains(':') { id.to_string() } else { format!("{home}:{id}") };
+    if let Some(&d) = index.get(&(kind, full.clone())) {
+        return Ok(d);
+    }
+    let elsewhere: Vec<String> = match id.contains(':') {
+        false => bare.get(&(kind, id.to_string())).map(|v| v.iter().map(|&d| ids(d)).collect()).unwrap_or_default(),
+        true => Vec::new(),
+    };
+    Err(match elsewhere.as_slice() {
+        [] => format!("unknown {kind} '{full}'"),
+        [one] => format!("unknown {kind} '{full}': another mod's def needs its prefix, \"{one}\""),
+        many => format!("unknown {kind} '{full}': another mod's def needs its prefix, one of {}", many.join(", ")),
+    })
 }
 
 impl DefDb {
@@ -652,8 +686,36 @@ pub const KINDS: &[&str] =
     &["terrain", "thing", "creature", "need", "designation", "field", "calendar", "sky", "start", "names"];
 
 impl DefDb {
+    /// A def by qualified id ("core:wall"), or by a bare id ("wall") that
+    /// exactly one mod defines. For tools and tests: mod content resolves
+    /// strictly, with `resolve`.
     pub fn lookup(&self, kind: &'static str, id: &str) -> Option<DefId> {
-        self.index.get(&(kind, id.to_string())).copied()
+        if id.contains(':') {
+            return self.index.get(&(kind, id.to_string())).copied();
+        }
+        match self.bare.get(&(kind, id.to_string())).map(Vec::as_slice) {
+            Some([one]) => Some(*one),
+            _ => None,
+        }
+    }
+
+    /// A def reference written by mod `from`: a bare id is `from`'s own.
+    pub fn resolve(&self, kind: &'static str, id: &str, from: &str) -> Result<DefId, String> {
+        resolve_in(&self.index, &self.bare, &|d| self.id_of(kind, d), kind, id, from)
+    }
+
+    /// The qualified id of a def.
+    pub fn id_of(&self, kind: &str, d: DefId) -> String {
+        let i = d as usize;
+        match kind {
+            "terrain" => self.terrain[i].id.clone(),
+            "thing" => self.things[i].id.clone(),
+            "creature" => self.creatures[i].id.clone(),
+            "need" => self.needs[i].id.clone(),
+            "designation" => self.designations[i].id.clone(),
+            "field" => self.fields[i].id.clone(),
+            _ => String::new(),
+        }
     }
     pub fn thing_id(&self, id: &str) -> Option<DefId> {
         self.lookup("thing", id)
@@ -692,11 +754,25 @@ impl DefDb {
         for (i, d) in self.fields.iter().enumerate() {
             index.insert(("field", d.id.clone()), i as DefId);
         }
+        let mut bare: HashMap<(&'static str, String), Vec<DefId>> = HashMap::new();
+        for ((kind, id), &d) in &index {
+            let short = id.split_once(':').map_or(id.as_str(), |(_, b)| b);
+            bare.entry((*kind, short.to_string())).or_default().push(d);
+        }
+        for v in bare.values_mut() {
+            v.sort_unstable();
+        }
         self.index = index;
+        self.bare = bare;
 
-        let idx = &self.index;
+        // Every def's references resolve in its own mod (the id's prefix).
+        let ids: HashMap<(&'static str, DefId), String> =
+            self.index.iter().map(|((k, id), &d)| ((*k, d), id.clone())).collect();
+        let (idx, bare) = (&self.index, &self.bare);
         let get = |kind: &'static str, id: &str, ctx: &str| -> Result<DefId, String> {
-            idx.get(&(kind, id.to_string())).copied().ok_or_else(|| format!("{ctx}: unknown {kind} '{id}'"))
+            let home = home_of(ctx.split_once('/').map_or("", |(_, rest)| rest));
+            resolve_in(idx, bare, &|d| ids.get(&(kind, d)).cloned().unwrap_or_default(), kind, id, home)
+                .map_err(|e| format!("{ctx}: {e}"))
         };
         let counts = |v: &[ItemCount], ctx: &str| -> Result<Vec<(DefId, u32)>, String> {
             v.iter().map(|c| Ok((get("thing", &c.thing, ctx)?, c.count))).collect()
@@ -705,8 +781,10 @@ impl DefDb {
         for d in &mut self.terrain {
             d.rgb = parse_color(&d.color).map_err(|e| format!("terrain/{}: {e}", d.id))?;
         }
-        let field_index = |id: &str| idx.get(&("field", id.to_string())).map(|&i| i as usize);
+        let field_in = |home: &str, id: &str| get("field", id, &format!("field/{home}:")).ok().map(|i| i as usize);
         for d in &mut self.fields {
+            let home = home_of(&d.id).to_string();
+            let field_index = |id: &str| field_in(&home, id);
             d.rgb_low = parse_color(&d.color_low).map_err(|e| format!("field/{}: {e}", d.id))?;
             d.rgb_high = parse_color(&d.color_high).map_err(|e| format!("field/{}: {e}", d.id))?;
             match &d.ambient {
@@ -724,6 +802,8 @@ impl DefDb {
         }
         c.start_day %= c.year_days;
         let sky = &mut self.sky;
+        let sky_home = home_of(&sky.id).to_string();
+        let field_index = |id: &str| field_in(&sky_home, id);
         sky.rgb_night = parse_color(&sky.night).map_err(|e| format!("sky/{}: {e}", sky.id))?;
         sky.rgb_fire = parse_color(&sky.firelight).map_err(|e| format!("sky/{}: {e}", sky.id))?;
         for (label, t) in &mut sky.tint {
@@ -782,7 +862,7 @@ impl DefDb {
             d.melee_cooldown = d.melee_cooldown.max(1);
         }
         if let Some(s) = &mut self.start {
-            s.creature_r = get("creature", &s.creature, "start")?;
+            s.creature_r = get("creature", &s.creature, &format!("start/{}", s.id))?;
         }
         if self.terrain.is_empty() {
             return Err("no terrain defined — is the core mod installed?".into());

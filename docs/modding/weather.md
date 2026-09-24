@@ -65,7 +65,7 @@ is one patch to the weather plugin's `mean`:
 
 ```toml
 [[patch]]
-target = "field/temperature"
+target = "field/core:temperature"
 
 [patch.set.ambient.mean]
 of = [{ input = "year", curve = [
@@ -98,8 +98,8 @@ A volcanic winter, from a script:
 ```lua
 rim.on("season_changed", function(e)
 	if e.season == "autumn" and e.year == 2 then
-		rim.push_ambient("temperature", "ashfall", -6, 24 * 20, 12)
-		rim.push_ambient("cloud", "ashfall", 40, 24 * 20, 12)
+		rim.push_ambient("core:temperature", "ashfall", -6, 24 * 20, 12)
+		rim.push_ambient("core:cloud", "ashfall", 40, 24 * 20, 12)
 		rim.message("Ash darkens the sky. It will be a hard winter.", "threat")
 	end
 end)
@@ -223,7 +223,7 @@ keeps the storm dimming. Two suns:
 
 ```toml
 [[patch]]
-target = "field/daylight"
+target = "field/core:daylight"
 
 [patch.set.ambient.sun]
 scale = 0.0
@@ -243,7 +243,7 @@ adds one without reshaping the others:
 
 ```toml
 [[patch]]
-target = "sky/core"
+target = "sky/core:core"
 
 [patch.set.tint.green_moon]
 color = "#7dffa0"

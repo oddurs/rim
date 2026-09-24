@@ -103,7 +103,7 @@ declare act: {
     toggle_pause: () -> (),
     -- Show or hide the profiler.
     toggle_profiler: () -> (),
-    -- Pick a toolbar tool ("designate:chop", "build:wall").
+    -- Pick a toolbar tool ("designate:core:chop", "build:core:wall").
     tool: (key: string) -> (),
 }
 

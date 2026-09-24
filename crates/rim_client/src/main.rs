@@ -29,7 +29,7 @@ pub enum Tool {
 }
 
 /// A toolbar entry: generated from defs, addressed by a stable key so UI
-/// scripts can name it ("designate:chop", "build:wall").
+/// scripts can name it ("designate:core:chop", "build:core:wall").
 pub struct ToolDef {
     pub key: String,
     pub label: String,

@@ -3,7 +3,7 @@
 # patch the same terms. See DESIGN.md §4c.
 
 [[patch]]
-target = "field/temperature"
+target = "field/core:temperature"
 
 # The year's mean: late spring (where the game starts) is core's 10°C;
 # midsummer 19°C; midwinter -6°C. x is the fraction of the year.

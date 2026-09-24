@@ -7,7 +7,7 @@ local weather = require("./weather")
 
 -- Is a named contribution to the temperature still in effect?
 local function active(key: string): boolean
-	for _, part in rim.explain("temperature") do
+	for _, part in rim.explain("core:temperature") do
 		if part.label == key then
 			return true
 		end
@@ -48,7 +48,7 @@ register({
 		-- Two days of cold, easing in over three hours so there's time to
 		-- act: -12°C in winter, -8°C in spring and autumn.
 		local drop = if rim.season() == "winter" then -12 else -8
-		rim.push_ambient("temperature", "cold_snap", drop, 48, 3)
+		rim.push_ambient("core:temperature", "cold_snap", drop, 48, 3)
 		rim.message("A cold snap is coming. Bring in wood and keep a fire lit.", "threat")
 	end,
 })
@@ -62,7 +62,7 @@ register({
 	end,
 	can_fire = calm,
 	execute = function(ctx)
-		rim.push_ambient("temperature", "heat_wave", 10, 48, 4)
+		rim.push_ambient("core:temperature", "heat_wave", 10, 48, 4)
 		-- Clear, still skies while it lasts.
 		weather.force("clear", 30)
 		rim.message("A heat wave settles in.", "bad")

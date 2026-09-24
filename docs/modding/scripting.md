@@ -22,6 +22,10 @@ How it's configured, and why: [docs/engineering/dependencies.md](../engineering/
 - **The game's API** is the `rim` table (`rim.every`, `rim.on`, `rim.spawn_pawn`,
   `rim.push_ambient`, ...), plus whatever other plugins add to it.
   Every engine function is listed in the [script API reference](api-scripts.md).
+- **Def ids** are namespaced by mod: core's wall is `core:wall`. A bare id
+  you pass to `rim` means your own mod's def, so write `core:temperature`
+  for core's field. Ids come back qualified (`rim.thing_defs[i].id` is
+  `"core:wood"`). See [Patching defs](patches.md#ids).
 
 ## Editor setup
 

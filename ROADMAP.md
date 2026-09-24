@@ -132,7 +132,7 @@ A one-week sprint inside Colony. Building stops being a fixed list of defs
 
 ## persistence — Persistence
 
-`··········` 0% · 0 of 8 done · due 2026-11-20
+`##········` 13% · 1 of 8 done · due 2026-11-20
 
 Save/load that survives mod changes, and replays from seed + command log.
 
@@ -141,9 +141,9 @@ Save/load that survives mod changes, and replays from seed + command log.
 - [ ] `65f0b723` Per-mod script state: rim.state persisted with the save <sup>feature · p0 · m · engine</sup>
 - [ ] `70edf863` Save format: component-keyed, versioned, mod-aware <sup>spike · p0 · s · engine</sup>
 - [ ] `b4ad855e` Keep unknown mod data when a mod is removed <sup>feature · p1 · m · engine</sup>
-- [ ] `be8174f0` Namespaced def ids: mod:id, bare ids resolve inside their own mod <sup>feature · p0 · m · engine</sup>
 - [ ] `c5d185be` Serialize world, pawns, things and jobs <sup>feature · p0 · l · engine</sup>
 - [ ] `ca786a8e` Mod save migrations: a migrate hook when a mod's version changes <sup>feature · p1 · m · engine</sup>
+- [x] `be8174f0` Namespaced def ids: mod:id, bare ids resolve inside their own mod <sup>feature · p0 · m · engine</sup>
 
 ## colony — Colony
 

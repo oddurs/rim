@@ -20,7 +20,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `act.toggle_outlines` | `() -> ()` | Show or hide layout outlines (devtools). |
 | `act.toggle_pause` | `() -> ()` | Pause or resume. |
 | `act.toggle_profiler` | `() -> ()` | Show or hide the profiler. |
-| `act.tool` | `(key: string) -> ()` | Pick a toolbar tool ("designate:chop", "build:wall"). |
+| `act.tool` | `(key: string) -> ()` | Pick a toolbar tool ("designate:core:chop", "build:core:wall"). |
 | `ui.anchored` | `(node: Node?) -> Node` | A node attached to a pawn (entity) or cell, on the anchored layer. |
 | `ui.col` | `(node: Node?) -> Node` | A column: children top to bottom. |
 | `ui.define` | `(id: string, build: (view: any) -> Node?) -> ()` | Define a component under a namespaced id. |

@@ -35,16 +35,16 @@ fn append_and_remove_edit_lists_in_place() {
         "append",
         r#"
 [[patch]]
-target = "creature/deer"
+target = "creature/core:deer"
 append = { butcher = [{ thing = "wood", count = 2 }], spawn = { terrain = ["dirt"] } }
 
 [[patch]]
-target = "creature/human"
+target = "creature/core:human"
 remove = { needs = ["warmth"] }
 "#,
         r#"
 [[patch]]
-target = "creature/deer"
+target = "creature/core:deer"
 append = { butcher = [{ thing = "stone", count = 1 }] }
 remove = { spawn = { terrain = ["grass"] } }
 "#,
@@ -66,7 +66,7 @@ fn edit_changes_the_matched_element_only() {
         "edit",
         r#"
 [[patch]]
-target = "thing/window"
+target = "thing/core:window"
 
 [[patch.edit]]
 list = "boundary"
@@ -74,7 +74,7 @@ match = { field = "temperature" }
 set = { leak = 2.0 }
 
 [[patch]]
-target = "thing/wall"
+target = "thing/core:wall"
 remove = { boundary = [{ field = "temperature" }] }
 "#,
         "",
@@ -95,7 +95,7 @@ fn list_conflicts_are_reported() {
     // Two mods setting the same matched field conflict, like any field.
     let edit = r#"
 [[patch]]
-target = "thing/window"
+target = "thing/core:window"
 [[patch.edit]]
 list = "boundary"
 match = { field = "temperature" }
@@ -104,38 +104,42 @@ set = { leak = LEAK }
     let s = load("edit-conflict", &edit.replace("LEAK", "2.0"), &edit.replace("LEAK", "3.0")).expect("loads");
     let c = conflicts(&s);
     assert!(
-        c.iter().any(|w| w.contains("thing/window.boundary[field=\"temperature\"].leak set by both 'aa' and 'bb'")),
+        c.iter()
+            .any(|w| w.contains("thing/core:window.boundary[field=\"temperature\"].leak set by both 'aa' and 'bb'")),
         "{c:?}"
     );
 
     // Replacing a whole list another mod appended to loses their edit.
     let s = load(
         "replace-conflict",
-        "[[patch]]\ntarget = \"creature/deer\"\nappend = { butcher = [{ thing = \"wood\", count = 2 }] }\n",
-        "[[patch]]\ntarget = \"creature/deer\"\nset = { butcher = [] }\n",
+        "[[patch]]\ntarget = \"creature/core:deer\"\nappend = { butcher = [{ thing = \"wood\", count = 2 }] }\n",
+        "[[patch]]\ntarget = \"creature/core:deer\"\nset = { butcher = [] }\n",
     )
     .expect("loads");
     let c = conflicts(&s);
-    assert!(c.iter().any(|w| w.contains("'bb' sets creature/deer.butcher, replacing the list 'aa' edited")), "{c:?}");
+    assert!(
+        c.iter().any(|w| w.contains("'bb' sets creature/core:deer.butcher, replacing the list 'aa' edited")),
+        "{c:?}"
+    );
 }
 
 #[test]
 fn list_patch_mistakes_are_named() {
-    let err = load("typo", "[[patch]]\ntarget = \"creature/deer\"\nsett = { hp = 1 }\n", "").err().expect("fails");
-    assert!(err.contains("aa/defs/p.toml: patch on creature/deer has an unknown key 'sett'"), "{err}");
-    let err = load("not-a-list", "[[patch]]\ntarget = \"creature/deer\"\nappend = { label = [\"x\"] }\n", "")
+    let err = load("typo", "[[patch]]\ntarget = \"creature/core:deer\"\nsett = { hp = 1 }\n", "").err().expect("fails");
+    assert!(err.contains("aa/defs/p.toml: patch on creature/core:deer has an unknown key 'sett'"), "{err}");
+    let err = load("not-a-list", "[[patch]]\ntarget = \"creature/core:deer\"\nappend = { label = [\"x\"] }\n", "")
         .err()
         .expect("fails");
-    assert!(err.contains("can't append to creature/deer.label: it isn't a list"), "{err}");
+    assert!(err.contains("can't append to creature/core:deer.label: it isn't a list"), "{err}");
     let err = load(
         "bad-append",
-        "[[patch]]\ntarget = \"creature/deer\"\nappend = { butcher = [{ thing = \"wood\" }] }\n",
+        "[[patch]]\ntarget = \"creature/core:deer\"\nappend = { butcher = [{ thing = \"wood\" }] }\n",
         "",
     )
     .err()
     .expect("fails");
     assert!(
-        err.contains("creature/deer") && err.contains("patched by 'aa'"),
+        err.contains("creature/core:deer") && err.contains("patched by 'aa'"),
         "a bad appended value names the mod: {err}"
     );
 
@@ -143,10 +147,10 @@ fn list_patch_mistakes_are_named() {
         "no-match",
         r#"
 [[patch]]
-target = "creature/human"
+target = "creature/core:human"
 remove = { needs = ["joy"] }
 [[patch]]
-target = "thing/wall"
+target = "thing/core:wall"
 [[patch.edit]]
 list = "boundary"
 match = { field = "light" }
@@ -156,7 +160,7 @@ set = { pass = 0.5 }
     )
     .expect("loads");
     assert!(
-        s.warnings.iter().any(|w| w.contains("remove from creature/human.needs: nothing matched \"joy\"")),
+        s.warnings.iter().any(|w| w.contains("remove from creature/core:human.needs: nothing matched \"joy\"")),
         "{:?}",
         s.warnings
     );
@@ -167,7 +171,14 @@ set = { pass = 0.5 }
 #[test]
 fn guide_samples_load() {
     let guide = fs::read_to_string(common::mods().join("../docs/modding/patches.md")).unwrap().replace("\r\n", "\n");
-    let samples: Vec<&str> = guide.split("```toml\n").skip(1).map(|b| b.split("```").next().unwrap()).collect();
+    // Blocks after `<!-- not a sample -->` are fragments, not whole defs.
+    let samples: Vec<&str> = guide
+        .split("```toml\n")
+        .collect::<Vec<_>>()
+        .windows(2)
+        .filter(|w| !w[0].trim_end().ends_with("<!-- not a sample -->"))
+        .map(|w| w[1].split("```").next().unwrap())
+        .collect();
     assert!(samples.len() >= 3, "found {} samples", samples.len());
     let s = load("guide", &samples.join("\n"), "").unwrap_or_else(|e| panic!("the guide's samples don't load: {e}"));
     assert!(conflicts(&s).is_empty(), "{:?}", s.warnings);
