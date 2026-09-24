@@ -595,9 +595,11 @@ stat pipeline (wealth, threat)       ←  modifiers from every mod
 ### Three plugin tiers
 
 1. **Data (TOML defs + patches).** Most mods live here. Patches are declarative
-   (`target = "thing/wood"`, `set = {...}`), and the loader **detects
-   conflicts** (two mods setting the same field) and reports them rather than
-   letting the last one win silently.
+   (`target = "thing/wood"`, `set = {...}`). Lists are edited, not owned
+   (`append`, `remove`, and `[[patch.edit]]` by a matching key), so two mods
+   can both add to one list. The loader **detects conflicts** (two mods setting
+   the same field, or one replacing a list another edited) and reports them
+   rather than letting the last one win silently.
 2. **Script (Luau).** Sandboxed, typed, fast. Behaviour lives here: incidents,
    the storyteller, custom events. Scripts get a deterministic RNG and no I/O.
    Every hook call is timed **per mod**, and the timings are visible in-game (F3).

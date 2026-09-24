@@ -76,7 +76,7 @@ pub fn load_only(mods_dir: &Path, enabled: &dyn Fn(&str) -> bool) -> Result<Load
 
     let mut entries: Vec<Entry> = Vec::new();
     let mut index: HashMap<(String, String), usize> = HashMap::new();
-    let mut set_by: HashMap<String, String> = HashMap::new();
+    let mut log = PatchLog::default();
     let mut scripts = Vec::new();
 
     for m in &order {
@@ -134,12 +134,7 @@ pub fn load_only(mods_dir: &Path, enabled: &dyn Fn(&str) -> bool) -> Result<Load
                 warnings.push(format!("{origin}: patch target {target} not found (skipped)"));
                 continue;
             };
-            if p.get("remove").and_then(|v| v.as_bool()) == Some(true) {
-                entries[i].removed = true;
-            }
-            if let Some(toml::Value::Table(set)) = p.get("set") {
-                merge(&mut entries[i].value, set, target, &m.id, &mut set_by, &mut warnings);
-            }
+            apply_patch(&mut entries[i], &p, &origin, target, &m.id, &mut log)?;
         }
 
         let root = m.dir.join("scripts");
@@ -162,7 +157,7 @@ pub fn load_only(mods_dir: &Path, enabled: &dyn Fn(&str) -> bool) -> Result<Load
         // A macro, not a closure: each arm deserializes to a different type.
         macro_rules! de {
             ($v:expr) => {
-                deserialize($v, &ctx, &target, &set_by)
+                deserialize($v, &ctx, &target, &log)
             };
         }
         match e.kind.as_str() {
@@ -198,6 +193,7 @@ pub fn load_only(mods_dir: &Path, enabled: &dyn Fn(&str) -> bool) -> Result<Load
         }
     }
     defs.finalize()?;
+    warnings.extend(log.warnings);
     Ok(LoadedMods { mods: order, defs, scripts, warnings })
 }
 
@@ -208,7 +204,7 @@ fn deserialize<T: serde::de::DeserializeOwned>(
     v: toml::Value,
     ctx: &str,
     target: &str,
-    set_by: &HashMap<String, String>,
+    log: &PatchLog,
 ) -> Result<T, String> {
     serde_path_to_error::deserialize(v).map_err(|e| {
         let path = e.path().to_string();
@@ -222,33 +218,191 @@ fn deserialize<T: serde::de::DeserializeOwned>(
             path.split('.').map(|seg| seg.split('[').next().unwrap_or(seg)).filter(|s| !s.is_empty()).collect();
         let patched = (1..=plain.len())
             .rev()
-            .find_map(|n| set_by.get(&format!("{target}.{}", plain[..n].join("."))))
+            .find_map(|n| {
+                let key = format!("{target}.{}", plain[..n].join("."));
+                log.set_by.get(&key).or_else(|| log.list_by.get(&key))
+            })
             .map(|m| format!(" (patched by '{m}')"))
             .unwrap_or_default();
         format!("{ctx}: at `{path}`{patched}: {msg}")
     })
 }
 
-/// Deep-merge `src` into `dst`, recording which mod set each leaf field.
-fn merge(
+/// What patches did, for conflict warnings and for naming the mod behind a
+/// bad value. Keys are paths like `thing/wall.build.cost`.
+#[derive(Default)]
+struct PatchLog {
+    /// The mod whose `set` wrote each field.
+    set_by: HashMap<String, String>,
+    /// The last mod to append to, remove from or edit each list.
+    list_by: BTreeMap<String, String>,
+    warnings: Vec<String>,
+}
+
+const PATCH_KEYS: &[&str] = &["target", "set", "remove", "append", "edit"];
+
+/// One `[[patch]]` on its target def, in a fixed order: `set` replaces
+/// fields, `edit` changes matched elements of a list, `remove` takes
+/// elements out, `append` adds them.
+fn apply_patch(
+    e: &mut Entry,
+    p: &toml::Table,
+    origin: &str,
+    target: &str,
+    mod_id: &str,
+    log: &mut PatchLog,
+) -> Result<(), String> {
+    if let Some(k) = p.keys().find(|k| !PATCH_KEYS.contains(&k.as_str())) {
+        return Err(format!("{origin}: patch on {target} has an unknown key '{k}' (one of {})", PATCH_KEYS.join(", ")));
+    }
+    if let Some(v) = p.get("set") {
+        let toml::Value::Table(set) = v else { return Err(format!("{origin}: 'set' must be a table")) };
+        merge(&mut e.value, set, target, mod_id, log);
+    }
+    match p.get("edit") {
+        None => {}
+        Some(toml::Value::Array(edits)) => {
+            for ed in edits {
+                let toml::Value::Table(ed) = ed else { return Err(format!("{origin}: each 'edit' must be a table")) };
+                edit_list(&mut e.value, ed, origin, target, mod_id, log)?;
+            }
+        }
+        Some(_) => return Err(format!("{origin}: 'edit' must be a list of tables ([[patch.edit]])")),
+    }
+    match p.get("remove") {
+        None => {}
+        Some(toml::Value::Boolean(b)) => e.removed |= b,
+        Some(toml::Value::Table(t)) => list_op(&mut e.value, t, target, origin, mod_id, false, log)?,
+        Some(_) => return Err(format!("{origin}: 'remove' is true (remove the def) or a table of list elements")),
+    }
+    match p.get("append") {
+        None => {}
+        Some(toml::Value::Table(t)) => list_op(&mut e.value, t, target, origin, mod_id, true, log)?,
+        Some(_) => return Err(format!("{origin}: 'append' must be a table of lists")),
+    }
+    Ok(())
+}
+
+/// Does a list element match a pattern? A table pattern matches a table
+/// that has all its keys with equal values; anything else must be equal.
+fn matches(el: &toml::Value, pattern: &toml::Value) -> bool {
+    match (el, pattern) {
+        (toml::Value::Table(e), toml::Value::Table(pat)) => pat.iter().all(|(k, v)| e.get(k) == Some(v)),
+        _ => el == pattern,
+    }
+}
+
+/// `append` or `remove`: `src` mirrors the def's shape down to lists.
+fn list_op(
     dst: &mut toml::Table,
     src: &toml::Table,
     path: &str,
+    origin: &str,
     mod_id: &str,
-    set_by: &mut HashMap<String, String>,
-    warnings: &mut Vec<String>,
-) {
+    append: bool,
+    log: &mut PatchLog,
+) -> Result<(), String> {
+    let verb = if append { "append" } else { "remove" };
+    for (k, v) in src {
+        let p = format!("{path}.{k}");
+        match v {
+            toml::Value::Table(sub) => {
+                let entry = dst.entry(k.clone()).or_insert_with(|| toml::Value::Table(toml::Table::new()));
+                let toml::Value::Table(d) = entry else {
+                    return Err(format!("{origin}: can't {verb} inside {p}: it isn't a table"));
+                };
+                list_op(d, sub, &p, origin, mod_id, append, log)?;
+            }
+            toml::Value::Array(items) => {
+                let entry = dst.entry(k.clone()).or_insert_with(|| toml::Value::Array(Vec::new()));
+                let toml::Value::Array(list) = entry else {
+                    return Err(format!("{origin}: can't {verb} to {p}: it isn't a list"));
+                };
+                if append {
+                    list.extend(items.iter().cloned());
+                } else {
+                    for pat in items {
+                        let before = list.len();
+                        list.retain(|el| !matches(el, pat));
+                        if list.len() == before {
+                            log.warnings.push(format!("{origin}: remove from {p}: nothing matched {pat}"));
+                        }
+                    }
+                }
+                log.list_by.insert(p, mod_id.to_string());
+            }
+            _ => return Err(format!("{origin}: {verb} {p}: give a list of elements")),
+        }
+    }
+    Ok(())
+}
+
+/// `[[patch.edit]]`: `set` merged into each element of `list` that `match`es.
+fn edit_list(
+    dst: &mut toml::Table,
+    ed: &toml::Table,
+    origin: &str,
+    target: &str,
+    mod_id: &str,
+    log: &mut PatchLog,
+) -> Result<(), String> {
+    if let Some(k) = ed.keys().find(|k| !["list", "match", "set"].contains(&k.as_str())) {
+        return Err(format!("{origin}: edit on {target} has an unknown key '{k}' (list, match, set)"));
+    }
+    let list_path = ed
+        .get("list")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| format!("{origin}: edit needs list = \"path.to.list\""))?;
+    let Some(toml::Value::Table(pat)) = ed.get("match") else {
+        return Err(format!("{origin}: edit of {list_path} needs match = {{ key = value }}"));
+    };
+    let Some(toml::Value::Table(set)) = ed.get("set") else {
+        return Err(format!("{origin}: edit of {list_path} needs set = {{ ... }}"));
+    };
+    let mut node = dst;
+    let mut keys = list_path.split('.').peekable();
+    let list = loop {
+        let k = keys.next().unwrap_or_default();
+        match (node.get_mut(k), keys.peek().is_some()) {
+            (Some(toml::Value::Table(t)), true) => node = t,
+            (Some(toml::Value::Array(a)), false) => break a,
+            _ => return Err(format!("{origin}: edit: {target}.{list_path} isn't a list")),
+        }
+    };
+    let key: Vec<String> = pat.iter().map(|(k, v)| format!("{k}={v}")).collect();
+    let el_path = format!("{target}.{list_path}[{}]", key.join(","));
+    let pattern = toml::Value::Table(pat.clone());
+    let mut hit = false;
+    for el in list.iter_mut().filter(|el| matches(el, &pattern)) {
+        let toml::Value::Table(t) = el else { continue };
+        merge(t, set, &el_path, mod_id, log);
+        hit = true;
+    }
+    if !hit {
+        log.warnings.push(format!("{origin}: edit of {el_path}: no element matched (skipped)"));
+    }
+    log.list_by.insert(format!("{target}.{list_path}"), mod_id.to_string());
+    Ok(())
+}
+
+/// Deep-merge `src` into `dst`, recording which mod set each leaf field.
+/// Replacing a list another mod edited is reported: their edits are lost.
+fn merge(dst: &mut toml::Table, src: &toml::Table, path: &str, mod_id: &str, log: &mut PatchLog) {
     for (k, v) in src {
         let p = format!("{path}.{k}");
         match (dst.get_mut(k), v) {
-            (Some(toml::Value::Table(d)), toml::Value::Table(s)) => merge(d, s, &p, mod_id, set_by, warnings),
+            (Some(toml::Value::Table(d)), toml::Value::Table(s)) => merge(d, s, &p, mod_id, log),
             _ => {
-                if let Some(prev) = set_by.insert(p.clone(), mod_id.to_string()) {
+                if let Some(prev) = log.set_by.insert(p.clone(), mod_id.to_string()) {
                     if prev != mod_id {
-                        warnings.push(format!(
+                        log.warnings.push(format!(
                             "patch conflict: {p} set by both '{prev}' and '{mod_id}' ('{mod_id}' wins by load order)"
                         ));
                     }
+                }
+                if let Some(prev) = log.list_by.get(&p).filter(|m| *m != mod_id) {
+                    log.warnings
+                        .push(format!("patch conflict: '{mod_id}' sets {p}, replacing the list '{prev}' edited"));
                 }
                 dst.insert(k.clone(), v.clone());
             }
