@@ -651,6 +651,93 @@ Then it merges defs, applies patches and runs scripts in that order.
 
 ---
 
+## 6a. The grid is a contract, not a look
+
+The map is a flat lattice of integer cells (`crates/rim_sim/src/map.rs`).
+What the engine promises about it is short:
+
+- One terrain, one fixture and one item stack per cell, plus a movement cost.
+- Passability is 4-connected. A* may step diagonally only when both
+  orthogonal neighbours are open, so the two never disagree.
+- Regions (reachability), rooms (§4) and fields (§4a) are derived from the
+  lattice and rebuilt only when it changes.
+- The map edge is a game concept: a room that touches it is outdoors, and
+  raiders arrive and leave across it.
+
+Everything the player *sees* on that lattice, and everything that *lives* on
+it, is data.
+
+### Tension: should mods be able to replace the grid?
+
+- **For:** the pitch is "write a mod that challenges the base game". Hex
+  maps, height, streamed infinite worlds and free-form placement are all
+  things people will want to try.
+- **Against:** determinism, A*, region and room flood-fills, field stamping
+  and lockstep co-op all assume integer cells on a lattice with a fixed
+  neighbourhood. Making the topology pluggable would put a trait call on
+  every hot path and make every one of those systems generic over a shape
+  nobody has asked for yet.
+- **Ruling:** the **lattice and the tick are engine**. A mod that wants a
+  different topology is a fork, and the design says so out loud. In
+  exchange, every other property of the map is open:
+  - **Layers, not cells.** The map is a set of named per-cell layers, stored
+    as flat arrays. Terrain, fixture and item are engine layers because
+    pathing and rooms read them; every other layer (pollution, roads,
+    elevation, ownership) is a `[[field]]` a mod declares, and it gets a map
+    overlay for free. Nothing about a new layer touches `map.rs`.
+  - **Size is a parameter.** The map's dimensions come from world creation
+    (a biome or plugin may set them), not a constant. The edge stays a hard
+    boundary whatever the size.
+  - **One cell, one pawn, one wall.** Sub-cell movement is render
+    interpolation and never feeds back (§7). A thing that covers several
+    cells occupies each of them in the fixture layer, all pointing at one
+    entity, so pathing and rooms never learn about footprints.
+  - **Generation is a stage, not a secret.** Terrain bands, spawns and
+    wildlife are data today. A script may take over a stage of map
+    generation through a hook, with the engine's noise exposed in fixed
+    point so a Luau-generated map is as deterministic as a Rust one.
+
+### Tension: pretty out of the box, or plain and overridable?
+
+- **For shipping art:** first impressions. A colony sim of coloured squares
+  looks like a prototype.
+- **Against:** every sprite core ships is a sprite a mod has to match or
+  replace, and the renderer that draws it grows a special case per kind of
+  thing. Today `Shape` names content: `tree`, `bed`, `stove`, `chair`, and
+  the renderer decides what joins to a wall by matching on `wall`, `window`
+  and `door`. A mod that adds a loom picks the least wrong of those, a mod
+  that adds a fence cannot make it join, and a mod that ships a tileset
+  cannot use it at all.
+- **Ruling:** **core is plain, and the look is data.**
+  - A def declares a `look`: a colour plus one **primitive** from a small
+    fixed set (fill, outline, disc, glyph) or a **sprite key** into an atlas
+    the mod ships. Primitives stay in code because they are mechanisms
+    (§10); the named content shapes go.
+  - Core ships no sprites. Out of the box the game is coloured rectangles,
+    discs and glyphs, which is the fastest thing to draw and the easiest
+    thing to read.
+  - The renderer never matches on a def id. It reads the look, the material
+    tint, and the cell's neighbours. **Autotiling is a data rule**: a def
+    says which neighbours count as joined and which variant each neighbour
+    mask picks. Then walls, fences, hedges and marble all join without a
+    renderer change.
+  - The renderer reacts to the map's `revision` and to field channels. It
+    cannot special-case a blizzard, and that is the cost §6 accepted.
+
+### Speed follows from the ruling
+
+- Flat arrays and small integer costs are already the shape of the data;
+  keep it structure-of-arrays.
+- **Chunks are the one structural addition.** Incremental region updates,
+  render caching and field re-stamping all want the same unit: a fixed-size
+  chunk with a dirty bit. One chunk grid serves all three rather than each
+  system inventing its own.
+- Regions are one layer per faction, indexed by an enum. When factions
+  become defs, the layers become one per door key, and the enum goes with
+  the rest of the content that leaked into the engine.
+
+---
+
 ## 7. Determinism is non-negotiable
 
 - All player input becomes a `Command` that is applied at a tick boundary.
