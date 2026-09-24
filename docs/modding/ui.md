@@ -85,7 +85,7 @@ ui.mount("windows", "my_mod:greeting")
 
 | Property | Meaning |
 |---|---|
-| `kind` | `row`, `col`, `text`, `spacer`, `scroll`, `anchored` |
+| `kind` | `row`, `col`, `text`, `spacer`, `scroll`, `anchored`, `grid`, `list`, `image` |
 | `id` | Namespaced id, so other mods can find this node |
 | `gap`, `pad`, `padx`, `pady` | Spacing: a `space` token (`"s"`, `"m"`) or a number |
 | `w`, `h` | Size: a number, `"fill"`, or a percentage like `"50%"` |
@@ -99,6 +99,7 @@ ui.mount("windows", "my_mod:greeting")
 | `on_click`, `on_right_click` | Functions called when clicked |
 | `tooltip` | Text shown after a short hover |
 | `handle` | Window chrome: `move`, `resize` or `close` (see Windows) |
+| `src`, `tint` | Image: `src = "mod:name"` names a PNG under that mod's `ui/img/`; `tint = true` draws it in the text colour (see Images) |
 | `disabled` | Dims the node and everything inside it, and ignores clicks |
 
 A typo in a property or token name is an error. It appears as a red box where
@@ -225,6 +226,31 @@ Core draws the chrome (`kit.window`): a title bar that drags, a close button,
 the body in a scroll area, and a resize grip when `resizable`. A theme mod
 can register its own with `ui.window_chrome`; nodes marked `handle = "move"`,
 `"resize"` or `"close"` are what the engine routes.
+## Images
+
+PNGs under a mod's `ui/img/` are images named `mod:stem`. An image node
+draws one from the atlas the text already uses, at its own size unless `w`
+and `h` say otherwise:
+
+```lua
+local kit = require("@core/ui/kit")
+
+ui.define("my_mod:badge", function(view)
+	return ui.row({ gap = "s", align = "center",
+		kit.icon("core:check", "m"),
+		kit.icon("core:check", "l", { color = "good" }),
+		kit.image("core:check"),
+	})
+end)
+ui.mount("top", "my_mod:badge", { order = 60 })
+```
+
+`tint = true` (what `kit.icon` sets) draws the image as a mask in the text
+colour, so a white-on-transparent icon follows the theme. Without it the
+picture keeps its own colours. Ship `stem@2x.png` beside `stem.png` for
+dense displays: the engine picks it from 1.5x up. No SVG, no nine-slice, no
+animation. A `src` nobody ships is a named warning and a red placeholder
+where the image would be, so the rest of the panel still works.
 
 ## Anchored labels
 

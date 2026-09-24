@@ -14,6 +14,7 @@
 
 pub mod api;
 pub mod fontcache;
+pub mod image;
 pub mod layout;
 pub mod node;
 pub mod paint;
@@ -209,6 +210,8 @@ pub struct Ui {
     win_rects: Vec<(String, Rect)>,
     /// A window moved, resized, opened or closed since the layout was last taken.
     layout_dirty: bool,
+    /// The mods' PNGs, placed in the atlas as they are drawn.
+    pub images: image::Images,
 }
 
 fn total_scale(dpi: f32, user: f32) -> f32 {
@@ -234,6 +237,8 @@ impl Ui {
         let dirs: Vec<(String, &std::path::Path)> = mods.iter().map(|m| (m.id.clone(), m.dir.as_path())).collect();
         let mut theme = Theme::load(&dirs, total_scale(dpi, user_scale));
         let text = Text::new(if theme.font.is_empty() { None } else { Some(theme.font.as_str()) })?;
+        let mut images = image::Images::load(&dirs);
+        theme.warnings.append(&mut images.warnings);
         if let Some(want) = &text.info.missing {
             let by = theme.set_by.get("font.family").cloned().unwrap_or_default();
             theme.warnings.push(format!(
@@ -282,6 +287,7 @@ impl Ui {
             built_wins: Vec::new(),
             win_rects: Vec::new(),
             layout_dirty: false,
+            images,
         })
     }
 
@@ -451,7 +457,9 @@ impl Ui {
     /// Reload UI scripts and theme unconditionally.
     pub fn reload_now(&mut self) -> bool {
         let dirs: Vec<(String, &std::path::Path)> = self.mods.iter().map(|m| (m.id.clone(), m.dir.as_path())).collect();
-        let theme = Theme::load(&dirs, self.theme.scale);
+        let mut theme = Theme::load(&dirs, self.theme.scale);
+        let mut images = image::Images::load(&dirs);
+        theme.warnings.append(&mut images.warnings);
         let vm = UiVm::load(&self.mods);
         let broken: Vec<String> = vm
             .warnings
@@ -471,6 +479,8 @@ impl Ui {
         self.last_trees.clear();
         self.theme = theme;
         self.vm = vm;
+        self.images = images;
+        self.text.forget_images();
         self.cache.clear();
         self.small.clear();
         self.reload_error = None;
@@ -758,7 +768,8 @@ impl Ui {
             || self.built.is_empty()
             || self.devtools;
         if rebuilt {
-            let lists = vm::ListEnv { scroll: &self.scroll, rects: &self.ids, keys: &self.id_keys };
+            let lists =
+                vm::ListEnv { scroll: &self.scroll, rects: &self.ids, keys: &self.id_keys, images: &self.images };
             self.built = self.vm.build(world, client, &self.shown, &self.theme, &lists);
             let open: Vec<(String, (f32, f32))> =
                 self.windows.iter().filter(|w| w.open).map(|w| (w.id.clone(), (w.w, w.h))).collect();
@@ -892,7 +903,7 @@ impl Ui {
             let t = Instant::now();
             for (ri, (root, rects)) in placed.into_iter().enumerate() {
                 let mut hits = Vec::new();
-                paint::paint(&root, &rects, (0.0, 0.0), &state, &mut self.text, &mut draw, &mut hits);
+                paint::paint(&root, &rects, (0.0, 0.0), &state, &mut self.text, &self.images, &mut draw, &mut hits);
                 for mut h in hits {
                     h.path.insert(0, ri);
                     lo.hits.push(h);
@@ -1220,6 +1231,7 @@ fn plain(key: u64, style: Style, children: Vec<Node>) -> Node {
         offset_y: 0.0,
         grid: None,
         handle: None,
+        image: None,
         children,
     }
 }
@@ -1250,6 +1262,7 @@ fn flatten(n: &Node, depth: usize, out: &mut Vec<(usize, String, String, String)
         (Kind::Scroll, _) => "scroll",
         (Kind::Anchored, _) => "anchored",
         (Kind::Grid, _) => "grid",
+        (Kind::Image, _) => "image",
     };
     out.push((depth, kind.to_string(), n.id.as_deref().unwrap_or("").to_string(), n.owner.to_string()));
     for c in &n.children {

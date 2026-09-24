@@ -342,7 +342,7 @@ impl UiVm {
 
         // ---- ui: node constructors, registration, operations, state.
         let ui = lua.create_table()?;
-        for kind in ["row", "col", "text", "spacer", "scroll", "anchored", "grid", "list"] {
+        for kind in ["row", "col", "text", "spacer", "scroll", "anchored", "grid", "list", "image"] {
             let f = lua.create_function(move |lua, v: Value| {
                 let t = match v {
                     Value::Table(t) => t,
@@ -1139,6 +1139,8 @@ pub struct ListEnv<'a> {
     pub scroll: &'a HashMap<u64, f32>,
     pub rects: &'a HashMap<String, crate::layout::Rect>,
     pub keys: &'a HashMap<String, u64>,
+    /// The mods' images, for sizing image nodes at build.
+    pub images: &'a crate::image::Images,
 }
 
 struct Builder<'a> {
@@ -1241,7 +1243,7 @@ impl Builder<'_> {
         for k in ["count", "row", "row_h"] {
             let _ = t.raw_set(k, Value::Nil);
         }
-        let ctx = Ctx { theme: self.theme, owner: owner.clone() };
+        let ctx = Ctx { theme: self.theme, owner: owner.clone(), images: self.lists.images };
         let mut node = match node_from_table(&ctx, t, key) {
             Ok(n) => n,
             Err(e) => return self.fail(owner, key, what, e),
@@ -1339,7 +1341,7 @@ impl Builder<'_> {
         if kind.as_deref() == Some("list") {
             return Some(self.expand_list(t, key, owner, id.as_deref()));
         }
-        let ctx = Ctx { theme: self.theme, owner: owner.clone() };
+        let ctx = Ctx { theme: self.theme, owner: owner.clone(), images: self.lists.images };
         let mut node = match node_from_table(&ctx, t, key) {
             Ok(n) => n,
             Err(e) => return Some(self.fail(owner, key, id.as_deref().unwrap_or("node"), e)),

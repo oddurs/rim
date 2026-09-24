@@ -67,6 +67,12 @@ ui.window("core:gallery", { title = t("core:gallery.title", "Kit gallery"), w = 
 			button({ label = t("core:gallery.swatch", "Swatch"), swatch = "good" }),
 			button({ label = t("core:gallery.tooltip", "Tooltip"), tooltip = t("core:gallery.tooltip_text", "Tooltips appear after a short pause.") }),
 		}),
+		row({ gap = "s", align = "center" }, {
+			kit.icon("core:check", "m"),
+			kit.icon("core:check", "l", { color = "good" }),
+			kit.image("core:check", { id = "core:gallery.image" }),
+			label(t("core:gallery.icons", "icons follow the text colour; images keep their own"), { size = "small", color = "muted" }),
+		}),
 		row({ gap = "xs" }, {
 			kit.toggle({ label = t("core:gallery.toggle_off", "Toggle off"), on = false }),
 			kit.toggle({ label = t("core:gallery.toggle_on", "Toggle on"), on = true }),

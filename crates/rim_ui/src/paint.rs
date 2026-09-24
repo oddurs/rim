@@ -81,35 +81,41 @@ pub fn paint(
     offset: (f32, f32),
     state: &PaintState,
     text: &mut Text,
+    images: &crate::image::Images,
     draw: &mut Vec<Draw>,
     hits: &mut Vec<Hit>,
 ) {
-    let mut i = 0;
-    let mut path = Vec::new();
-    walk(root, rects, &mut i, offset, None, false, state, text, draw, hits, &mut path);
+    let mut p = Painter { state, text, images, draw, hits, i: 0, path: Vec::new() };
+    walk(root, rects, offset, None, false, &mut p);
 }
 
-#[allow(clippy::too_many_arguments)]
+/// What every node needs while painting, and where the walk is: the next
+/// rect to take and the path from the root.
+struct Painter<'a> {
+    state: &'a PaintState<'a>,
+    text: &'a mut Text,
+    images: &'a crate::image::Images,
+    draw: &'a mut Vec<Draw>,
+    hits: &'a mut Vec<Hit>,
+    i: usize,
+    path: Vec<usize>,
+}
+
 fn walk(
     n: &Node,
     rects: &[Rect],
-    i: &mut usize,
     offset: (f32, f32),
     clip: Option<Rect>,
     // A disabled ancestor dims everything inside it.
     inherited_disabled: bool,
-    state: &PaintState,
-    text: &mut Text,
-    draw: &mut Vec<Draw>,
-    hits: &mut Vec<Hit>,
-    path: &mut Vec<usize>,
+    p: &mut Painter,
 ) {
-    let r0 = rects[*i];
-    *i += 1;
+    let r0 = rects[p.i];
+    p.i += 1;
     let rect = [r0[0] + offset.0, r0[1] + offset.1, r0[2], r0[3]];
-    let hovered = state.hovered == Some(n.key) && !n.disabled;
-    let pressed = state.pressed == Some(n.key) && hovered;
-    let focused = state.focused == Some(n.key);
+    let hovered = p.state.hovered == Some(n.key) && !n.disabled;
+    let pressed = p.state.pressed == Some(n.key) && hovered;
+    let focused = p.state.focused == Some(n.key);
     let patch = if pressed {
         n.press.as_ref().or(n.hover.as_ref())
     } else if hovered {
@@ -120,21 +126,37 @@ fn walk(
         None
     };
     let disabled = n.disabled || inherited_disabled;
-    let alpha = if disabled { state.disabled_alpha } else { 1.0 };
+    let alpha = if disabled { p.state.disabled_alpha } else { 1.0 };
 
     let s = &n.style;
     if let Some(bg) = apply(s.bg, patch, |p| p.bg) {
-        draw.push(Draw::Rect { rect, color: fade(bg, alpha), radius: s.radius });
+        p.draw.push(Draw::Rect { rect, color: fade(bg, alpha), radius: s.radius });
     }
     if let Some(b) = apply(s.border, patch, |p| p.border) {
-        draw.push(Draw::Outline { rect, color: fade(b, alpha), width: s.border_w.max(1.0), radius: s.radius });
+        p.draw.push(Draw::Outline { rect, color: fade(b, alpha), width: s.border_w.max(1.0), radius: s.radius });
     }
     if let Some(t) = &n.text {
         let color = apply(Some(t.color), patch, |p| p.color).unwrap();
         let width = if t.wrap { Some(rect[2]) } else { None };
-        let quads = text.quads(&t.text, t.size, t.weight, width, rect[0], rect[1]);
+        let quads = p.text.quads(&t.text, t.size, t.weight, width, rect[0], rect[1]);
         if !quads.is_empty() {
-            draw.push(Draw::Glyphs { quads, color: fade(color, alpha) });
+            p.draw.push(Draw::Glyphs { quads, color: fade(color, alpha) });
+        }
+    }
+    if let Some(img) = &n.image {
+        let quad = p
+            .images
+            .pick(&img.name, 1.0)
+            .filter(|d| d.factor == img.factor)
+            .or_else(|| p.images.pick(&img.name, 2.0))
+            .and_then(|d| p.text.image_quad(d, &img.name, rect, img.tint.is_some()));
+        match quad {
+            Some(q) => {
+                let color = fade(img.tint.unwrap_or([1.0, 1.0, 1.0, 1.0]), alpha);
+                p.draw.push(Draw::Glyphs { quads: vec![q], color });
+            }
+            // Too big for the atlas: a plain box where it would be.
+            None => p.draw.push(Draw::Rect { rect, color: fade([0.8, 0.2, 0.5, 0.6], alpha), radius: 0.0 }),
         }
     }
     if let Some(g) = &n.grid {
@@ -147,23 +169,23 @@ fn walk(
                 let cell = &g.cells[r * g.cols + c];
                 let cr = g.cell_rect(rect, r, c);
                 if let Some(bg) = cell.bg {
-                    draw.push(Draw::Rect { rect: cr, color: fade(bg, alpha), radius: 0.0 });
+                    p.draw.push(Draw::Rect { rect: cr, color: fade(bg, alpha), radius: 0.0 });
                 }
                 if !cell.text.is_empty() {
-                    let quads = text.quads(&cell.text, g.size, g.weight, None, cr[0] + inset, cr[1] + inset);
+                    let quads = p.text.quads(&cell.text, g.size, g.weight, None, cr[0] + inset, cr[1] + inset);
                     if !quads.is_empty() {
-                        draw.push(Draw::Glyphs { quads, color: fade(cell.color.unwrap_or(default_color), alpha) });
+                        p.draw.push(Draw::Glyphs { quads, color: fade(cell.color.unwrap_or(default_color), alpha) });
                     }
                 }
             }
         }
     }
     if n.is_interactive() || n.kind == Kind::Scroll {
-        hits.push(Hit {
+        p.hits.push(Hit {
             key: n.key,
             rect,
             clip,
-            path: path.clone(),
+            path: p.path.clone(),
             interactive: n.is_interactive() && !n.disabled,
             scroll: n.kind == Kind::Scroll,
             focusable: (n.focusable || n.on_click.is_some()) && !n.disabled,
@@ -174,21 +196,21 @@ fn walk(
     let mut child_offset = offset;
     if s.clip {
         let c = clip.map_or(rect, |c| intersect(c, rect));
-        draw.push(Draw::Clip(c));
+        p.draw.push(Draw::Clip(c));
         child_clip = Some(c);
         if n.kind == Kind::Scroll {
-            child_offset.1 -= state.scroll.get(&n.key).copied().unwrap_or(0.0);
+            child_offset.1 -= p.state.scroll.get(&n.key).copied().unwrap_or(0.0);
         }
     }
     for (ci, c) in n.children.iter().enumerate() {
-        path.push(ci);
-        walk(c, rects, i, child_offset, child_clip, disabled, state, text, draw, hits, path);
-        path.pop();
+        p.path.push(ci);
+        walk(c, rects, child_offset, child_clip, disabled, p);
+        p.path.pop();
     }
     if s.clip {
-        draw.push(Draw::Unclip);
+        p.draw.push(Draw::Unclip);
         if let Some(outer) = clip {
-            draw.push(Draw::Clip(outer));
+            p.draw.push(Draw::Clip(outer));
         }
     }
 }

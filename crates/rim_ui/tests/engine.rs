@@ -451,6 +451,136 @@ fn the_devtools_toggle_opens_the_gallery_window() {
     assert!(!ui.is_open("core:gallery"));
 }
 
+/// A solid PNG of one colour, `size` px square, as bytes.
+fn solid_png(size: u32, rgba: [u8; 4]) -> Vec<u8> {
+    let mut out = Vec::new();
+    {
+        let mut enc = png::Encoder::new(&mut out, size, size);
+        enc.set_color(png::ColorType::Rgba);
+        enc.set_depth(png::BitDepth::Eight);
+        let mut w = enc.write_header().unwrap();
+        let px: Vec<u8> = (0..size * size).flat_map(|_| rgba).collect();
+        w.write_image_data(&px).unwrap();
+    }
+    out
+}
+
+/// A mods dir with a probe mod shipping `probe:dot` at 1x (4 px) and 2x
+/// (8 px), and a component showing it plain, tinted, and one that is missing.
+fn image_mods(name: &str) -> std::path::PathBuf {
+    let dir = scratch_mods(
+        name,
+        &[(
+            "probe",
+            "",
+            &[(
+                "ui/img.luau",
+                r#"
+ui.define("probe:pics", function(view)
+    return ui.row({ id = "probe:pics", gap = 0, pad = 0,
+        ui.image({ id = "probe:plain", src = "probe:dot" }),
+        ui.image({ id = "probe:tinted", src = "probe:dot", tint = true }),
+        ui.image({ id = "probe:accent", src = "probe:dot", tint = true, color = "accent", w = 10, h = 10 }),
+        ui.image({ id = "probe:missing", src = "probe:nothing" }),
+    })
+end)
+ui.mount("top", "probe:pics", { order = 90 })
+"#,
+            )],
+        )],
+    );
+    let img = dir.join("probe").join("ui").join("img");
+    std::fs::create_dir_all(&img).unwrap();
+    std::fs::write(img.join("dot.png"), solid_png(4, [255, 0, 0, 255])).unwrap();
+    std::fs::write(img.join("dot@2x.png"), solid_png(8, [0, 255, 0, 255])).unwrap();
+    dir
+}
+
+/// The image quads drawn last frame, by the rect they cover.
+fn image_quads(out: &rim_ui::Output) -> Vec<(rim_ui::text::GlyphQuad, [f32; 4])> {
+    out.draw
+        .iter()
+        .filter_map(|d| match d {
+            Draw::Glyphs { quads, color } if quads.len() == 1 && quads[0].uv[2] >= 4.0 && quads[0].uv[2] <= 8.0 => {
+                Some((quads[0], *color))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn a_mods_png_draws_at_1x_and_2x_with_no_client_change() {
+    let dir = image_mods("img1x");
+    let sim = sim_at(&dir);
+    let mut ui = ui_for(&sim);
+    let cv = client(&sim);
+    let out = frame(&mut ui, &sim, &cv, Default::default());
+    let r = ui.find("probe:plain").expect("the image is laid out");
+    assert_eq!((r[2], r[3]), (4.0, 4.0), "its own size at 1x");
+    let quads = image_quads(&out);
+    let plain = quads.iter().find(|(q, _)| q.dst == r).expect("a quad over the image");
+    assert_eq!((plain.0.uv[2], plain.0.uv[3]), (4.0, 4.0), "the 1x pixels");
+    assert!(plain.0.color, "a plain image keeps its own colours");
+    // The atlas holds the red pixels where the quad points.
+    let a = &ui.text.atlas;
+    let i = ((plain.0.uv[1] as u32) * a.size + plain.0.uv[0] as u32) as usize * 4;
+    assert_eq!(&a.pixels[i..i + 4], &[255, 0, 0, 255]);
+    assert!(ui.warnings().iter().all(|w| !w.contains("'probe:dot'")), "{:?}", ui.warnings());
+
+    // At 2x the @2x file is used: 8 atlas pixels over 8 screen pixels.
+    let mut ui2 = rim_ui::Ui::new(rim_ui::mods_of(&sim), 2.0, 1.0).unwrap();
+    let cv2 = rim_ui::view::ClientView { scale: 2.0, ..client(&sim) };
+    let out2 = frame(&mut ui2, &sim, &cv2, Default::default());
+    let r2 = ui2.find("probe:plain").unwrap();
+    assert_eq!((r2[2], r2[3]), (8.0, 8.0), "4 logical px is 8 physical");
+    let q2 = image_quads(&out2).into_iter().find(|(q, _)| q.dst == r2).expect("a quad at 2x");
+    assert_eq!((q2.0.uv[2], q2.0.uv[3]), (8.0, 8.0), "the 2x pixels");
+    let a = &ui2.text.atlas;
+    let i = ((q2.0.uv[1] as u32) * a.size + q2.0.uv[0] as u32) as usize * 4;
+    assert_eq!(&a.pixels[i..i + 4], &[0, 255, 0, 255], "the @2x file's pixels");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_missing_image_is_a_named_warning_and_a_placeholder() {
+    let dir = image_mods("imgmissing");
+    let sim = sim_at(&dir);
+    let mut ui = ui_for(&sim);
+    let cv = client(&sim);
+    frame(&mut ui, &sim, &cv, Default::default());
+    let w = ui.warnings();
+    assert!(
+        w.iter().any(|w| w.contains("image 'probe:nothing' not found") && w.contains("ui/img/nothing.png")),
+        "named: {w:?}"
+    );
+    assert!(ui.find("probe:plain").is_some(), "the rest of the row still shows");
+    let snap = ui.snapshot();
+    assert!(snap.contains("probe:nothing"), "a placeholder stands where the image would be:\n{snap}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn tinted_icons_follow_the_text_colour() {
+    let dir = image_mods("imgtint");
+    let sim = sim_at(&dir);
+    let mut ui = ui_for(&sim);
+    let cv = client(&sim);
+    let out = frame(&mut ui, &sim, &cv, Default::default());
+    let quads = image_quads(&out);
+    let text = ui.theme.color("text").unwrap();
+    let accent = ui.theme.color("accent").unwrap();
+    let tinted = ui.find("probe:tinted").unwrap();
+    let (q, c) = quads.iter().find(|(q, _)| q.dst == tinted).expect("the tinted quad");
+    assert!(!q.color, "a tinted image is a mask, like a glyph");
+    assert_eq!(*c, text, "in the theme's text colour");
+    let acc = ui.find("probe:accent").unwrap();
+    assert_eq!((acc[2], acc[3]), (10.0, 10.0), "w/h override the image's size");
+    let (_, c) = quads.iter().find(|(q, _)| q.dst == acc).expect("the accent quad");
+    assert_eq!(*c, accent, "color picks the tint");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn a_scroll_area_stops_exactly_at_its_last_row() {
     let dir = scratch_mods(
