@@ -184,7 +184,7 @@ The run gets a shape: eras, storyteller tiers, defensive strength in the threat 
 
 ## plugin-api — Plugin API
 
-`####······` 30% · 7 of 23 done · due 2027-02-01
+`####······` 35% · 8 of 23 done · due 2027-02-01
 
 The API grows up: stat pipeline, script components, custom jobs, needs and def kinds, modules and custom events, a real sandbox with hard limits, factions as data, rim test, typed API. Everything Mood needs, and everything DESIGN.md §10 says a mod from a stranger's repo must be safe to do.
 
@@ -193,7 +193,6 @@ The API grows up: stat pipeline, script components, custom jobs, needs and def k
 - [ ] `7f8ce379` Script-defined components on pawns and things <sup>feature · p0 · m · engine</sup>
 - [ ] `978be4f3` Factions as defs, not an engine enum <sup>feature · p0 · m · engine</sup>
 - [ ] `97e9d4a7` Stat pipeline: base values plus registered modifiers <sup>feature · p0 · l · engine</sup>
-- [ ] `acaa16f4` rim test: Luau tests against seeded headless worlds <sup>feature · p0 · m · tooling</sup>
 - [ ] `b0da41ef` Custom def kinds: plugins declare their own data <sup>feature · p1 · m · engine</sup>
 - [ ] `b3df9f85` Mod-defined def kinds with schemas, and namespaced extension fields <sup>feature · p0 · l · engine</sup>
 - [ ] `c65db254` Per-mod budgets: profiler warnings and hard limits for runaway scripts <sup>feature · p1 · m · engine</sup>
@@ -209,6 +208,7 @@ The API grows up: stat pipeline, script components, custom jobs, needs and def k
 - [x] `3eb7e697` Luau VM runs without sandbox mode, and the rim table is writable by any mod <sup>bug · p0 · s · engine</sup>
 - [x] `51a9c5c6` Patch list operations: append, remove and match by key <sup>feature · p1 · m · engine</sup>
 - [x] `6191b800` Luau type definitions for the rim API <sup>docs · p2 · m · tooling</sup>
+- [x] `acaa16f4` rim test: Luau tests against seeded headless worlds <sup>feature · p0 · m · tooling</sup>
 - [x] `ded7881a` Deterministic math in scripts: replace library trig and exp <sup>feature · p1 · s · engine</sup>
 - [x] `f6e18475` Mod modules: require("@mod/path") limited to declared dependencies <sup>feature · p0 · m · engine</sup>
 
@@ -227,10 +227,11 @@ rim.mood — the first first-party plugin. Proves the API: if mood cannot be a p
 
 ## sdk — Modder SDK
 
-`##········` 14% · 1 of 7 done · due 2027-03-01
+`##········` 13% · 1 of 8 done · due 2027-03-01
 
 Making a mod feels like publishing a small open-source library: rim new, typed Luau, rim test in CI, a template repo with a GitHub Action, a compatibility report and a guide. Runs alongside Mood, which is its first customer.
 
+- [ ] `2c8ab1ef` Luau types for rim test's API, and type-check tests/ <sup>feature · p3 · s · tooling</sup>
 - [ ] `6d24a1ec` rim new: a GitHub-ready mod repo in one command <sup>chore · p0 · m · tooling</sup>
 - [ ] `9a4e2f10` Compatibility report: what a mod changes <sup>feature · p1 · s · tooling</sup>
 - [ ] `9f30ab9d` Hot reload of defs and scripts in dev mode <sup>feature · p0 · m · tooling</sup>
