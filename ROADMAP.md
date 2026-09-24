@@ -110,13 +110,12 @@ Exposure makes shelter matter: warmth, enclosed rooms, day/night, weather. Get f
 
 ## building — Building
 
-`#####·····` 45% · 5 of 11 done · due 2026-11-15
+`######····` 55% · 6 of 11 done · due 2026-11-15
 
 A one-week sprint inside Colony. Building stops being a fixed list of defs
 
 - [ ] `0069` Deconstruct designation <sup>feature · p1 · s · engine</sup>
 - [ ] `0215` Pick the material before you place it <sup>feature · p1 · s · plugin</sup>
-- [ ] `0217` Windows: light in, heat out <sup>content · p1 · s · core</sup>
 - [ ] `0218` Interaction spots: furniture a pawn uses <sup>feature · p1 · m · engine</sup>
 - [ ] `0219` Furniture: table, chair, stove <sup>content · p2 · s · core</sup>
 - [ ] `0220` Walls that look joined, in the colour of what they are made of <sup>feature · p1 · m · client</sup>
@@ -125,6 +124,7 @@ A one-week sprint inside Colony. Building stops being a fixed list of defs
 - [x] `0213` Material factors on built things <sup>feature · p0 · m · engine</sup>
 - [x] `0214` Core collapses to one wall, one door, one bed <sup>content · p1 · s · core</sup>
 - [x] `0216` Rooms made of something: leak and daylight from the boundary <sup>feature · p0 · l · engine</sup>
+- [x] `0217` Windows: light in, heat out <sup>content · p1 · s · core</sup>
 
 ## persistence — Persistence
 

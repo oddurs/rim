@@ -114,6 +114,11 @@ pub fn world(app: &App) {
                         draw_rectangle(sx, sy, z + 0.5, z + 0.5, c);
                         draw_rectangle_lines(sx + 0.5, sy + 0.5, z - 1.0, z - 1.0, 1.5, shade(c, 0.65));
                     }
+                    Shape::Window => {
+                        draw_rectangle(sx, sy, z + 0.5, z + 0.5, c);
+                        draw_rectangle(sx + z * 0.2, sy + z * 0.2, z * 0.6, z * 0.6, Color::new(0.75, 0.88, 1.0, 0.9));
+                        draw_rectangle_lines(sx + 0.5, sy + 0.5, z - 1.0, z - 1.0, 1.5, shade(c, 0.65));
+                    }
                     Shape::Door => {
                         draw_rectangle(sx + z * 0.08, sy + z * 0.08, z * 0.84, z * 0.84, c);
                         draw_rectangle(sx + z * 0.45, sy + z * 0.1, z * 0.1, z * 0.8, shade(c, 0.6));

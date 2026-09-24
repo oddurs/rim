@@ -139,7 +139,7 @@ fn a_walled_out_raider_goes_for_the_door() {
 
     run(&mut s, 120);
     let job = s.world.ecs.get::<&Pawn>(raider).expect("alive").job.clone();
-    assert!(matches!(job, Job::Breach { door: d } if d == door), "a shut-out raider breaks the door: {job:?}");
+    assert!(matches!(job, Job::Breach { target } if target == door), "a shut-out raider breaks the door: {job:?}");
 }
 
 #[test]
