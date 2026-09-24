@@ -1,12 +1,12 @@
 ---
-id: 119
+id: 7f26e2e3-89ee-4a50-b80c-5fea90522e58
 title: 'Mod manager: browse, enable and resolve conflicts'
 type: feature
 status: backlog
 milestone: platform
 depends_on:
-- 152
-- 154
+- 9e979a26-5dc0-4122-b62d-fc48f14d8488
+- 76a0bc45-13c1-4725-b5ce-47957109ac41
 created: 2026-09-22
 updated: 2026-09-23
 priority: p0

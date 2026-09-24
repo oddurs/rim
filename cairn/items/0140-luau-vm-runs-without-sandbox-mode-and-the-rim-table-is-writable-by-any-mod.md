@@ -1,5 +1,5 @@
 ---
-id: 140
+id: 3eb7e697-6bb4-4318-90f4-7f4d727b98c7
 title: Luau VM runs without sandbox mode, and the rim table is writable by any mod
 type: bug
 status: backlog

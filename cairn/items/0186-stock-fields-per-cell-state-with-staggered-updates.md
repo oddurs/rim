@@ -1,12 +1,12 @@
 ---
-id: 186
+id: d77d9e1f-f0ae-4e30-ae9c-95cd35c1346b
 title: 'Stock fields: per-cell state with staggered updates'
 type: feature
 status: backlog
 milestone: crafting
 depends_on:
-- 181
-- 185
+- 3114946b-5434-4171-9cdb-86ae4e7bb38d
+- 9b569a33-c488-42df-84c2-9bfa83a14b3e
 created: 2026-09-23
 updated: 2026-09-23
 priority: p0

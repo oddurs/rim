@@ -1,11 +1,11 @@
 ---
-id: 145
+id: 978be4f3-0b80-4b7f-a036-126009306617
 title: Factions as defs, not an engine enum
 type: feature
 status: backlog
 milestone: plugin-api
 depends_on:
-- 138
+- be8174f0-ff41-44fe-b788-2ffff60e0d19
 created: 2026-09-23
 updated: 2026-09-23
 priority: p0

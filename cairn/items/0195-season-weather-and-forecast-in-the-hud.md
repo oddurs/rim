@@ -1,13 +1,13 @@
 ---
-id: 195
+id: f8a1844d-1830-464d-a061-e0ebe0de2920
 title: Season, weather and forecast in the HUD
 type: feature
 status: done
 milestone: weather
 depends_on:
-- 181
-- 184
-- 207
+- 3114946b-5434-4171-9cdb-86ae4e7bb38d
+- 7c50b502-5e27-4807-a36c-0654fe9aec97
+- b023a009-64d7-4113-81eb-4220b069b74b
 created: 2026-09-23
 updated: 2026-09-23
 closed_at: 2026-09-23

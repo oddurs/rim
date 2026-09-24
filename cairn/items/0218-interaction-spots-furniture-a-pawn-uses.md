@@ -1,5 +1,5 @@
 ---
-id: 218
+id: 419a24ab-276f-417d-a2ff-8de0a67b62ed
 title: 'Interaction spots: furniture a pawn uses'
 type: feature
 status: done

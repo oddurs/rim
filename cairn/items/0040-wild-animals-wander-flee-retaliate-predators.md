@@ -1,12 +1,12 @@
 ---
-id: 40
+id: 58337b73-d485-4e78-88cf-7ca4803fd585
 title: 'Wild animals: wander, flee, retaliate, predators'
 type: feature
 status: done
 milestone: castaway
 assignee: Oddur Sigurdsson
 depends_on:
-- 35
+- 297469a6-dae6-4334-a41f-6f0d5c80f7e5
 created: 2026-09-22
 updated: 2026-09-22
 closed_at: 2026-09-22

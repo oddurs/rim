@@ -1,11 +1,11 @@
 ---
-id: 137
+id: e10b560c-1dd3-42bd-8234-92d40a7f1241
 key: sdk
 title: Modder SDK
 type: milestone
 status: planned
 depends_on:
-- 13
+- 9446bd68-53cf-4313-958b-641d81a9a2ba
 created: 2026-09-23
 updated: 2026-09-23
 priority: p2

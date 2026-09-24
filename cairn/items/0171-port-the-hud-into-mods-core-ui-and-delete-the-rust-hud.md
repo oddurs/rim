@@ -1,12 +1,12 @@
 ---
-id: 171
+id: 5514aac6-0300-4ff6-be19-fd44a5e50089
 title: Port the HUD into mods/core/ui and delete the Rust HUD
 type: feature
 status: done
 milestone: interface
 depends_on:
-- 169
-- 170
+- 16eecb22-0f2b-4532-bc5d-3795083879a8
+- aaca3f7a-9228-48ec-b73d-dab28cc66b68
 created: 2026-09-23
 updated: 2026-09-23
 closed_at: 2026-09-23

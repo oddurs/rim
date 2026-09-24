@@ -1,12 +1,12 @@
 ---
-id: 215
+id: 99f5e167-ea90-4228-9822-e5572a2f9f78
 title: Pick the material before you place it
 type: feature
 status: done
 milestone: building
 assignee: Oddur Sigurdsson
 depends_on:
-- 212
+- 763d8d64-9bee-459a-87c4-1ec543644f38
 created: 2026-09-23
 updated: 2026-09-24
 priority: p1

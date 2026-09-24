@@ -13,13 +13,12 @@
 # ORDER IS BEHAVIOUR: status order is board/list order; enum value order is
 # sort order. Do not alphabetise this file.
 
-format = 3
+format = 4
 
 [project]
 name = "rim"
 description = "A plugin-first 2D colony sim: one naked warrior, a world that notices you, and an engine built to be modded."
 dir = "cairn/items"
-id_width = 4
 default_type = "feature"
 default_status = "backlog"
 

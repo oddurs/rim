@@ -1,11 +1,11 @@
 ---
-id: 57
+id: cee5648a-9714-4498-9c57-1f46253100d0
 title: 'Weather incidents: cold snap, heat wave and storm'
 type: content
 status: done
 milestone: weather
 depends_on:
-- 184
+- 7c50b502-5e27-4807-a36c-0654fe9aec97
 created: 2026-09-22
 updated: 2026-09-23
 closed_at: 2026-09-23

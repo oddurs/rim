@@ -13,19 +13,19 @@ The design behind these milestones is in [DESIGN.md](DESIGN.md). Every milestone
 
 The headless engine: defs, mod loading and patching, map, pathing, AI skeleton, commands, Luau host. Ends when the determinism test passes.
 
-- [x] `0022` Cargo workspace: headless sim crate and client crate <sup>chore · p0 · s · tooling</sup>
-- [x] `0023` Typed def schema: terrain, thing, creature, need, designation, start, names <sup>feature · p0 · m · engine</sup>
-- [x] `0024` Mod loader: discovery, API version check, deterministic load order <sup>feature · p0 · m · engine</sup>
-- [x] `0025` Declarative def patches with conflict detection <sup>feature · p0 · m · engine</sup>
-- [x] `0026` Tile map with fixture and item layers, and reachability regions <sup>feature · p0 · m · engine</sup>
-- [x] `0027` Allocation-free A* with no corner cutting <sup>feature · p0 · m · engine</sup>
-- [x] `0028` Deterministic RNG owned by the world <sup>feature · p0 · s · engine</sup>
-- [x] `0029` Command queue applied at tick boundaries <sup>feature · p0 · s · engine</sup>
-- [x] `0030` Luau host: sandbox, per-script environments, rim.every and rim.on <sup>feature · p0 · l · engine</sup>
-- [x] `0031` Data-driven map generation <sup>feature · p1 · m · engine</sup>
-- [x] `0032` Determinism test: same seed and commands give the same state hash <sup>chore · p0 · s · engine</sup>
-- [x] `0033` Headless runner for soak tests and benchmarks <sup>chore · p1 · s · tooling</sup>
-- [x] `0034` CI: build, test, clippy and fmt on every push <sup>chore · p2 · s · tooling</sup>
+- [x] `4504c561` Mod loader: discovery, API version check, deterministic load order <sup>feature · p0 · m · engine</sup>
+- [x] `69816584` Declarative def patches with conflict detection <sup>feature · p0 · m · engine</sup>
+- [x] `6a2574b0` Deterministic RNG owned by the world <sup>feature · p0 · s · engine</sup>
+- [x] `7e68156c` Cargo workspace: headless sim crate and client crate <sup>chore · p0 · s · tooling</sup>
+- [x] `8dcec2bf` Data-driven map generation <sup>feature · p1 · m · engine</sup>
+- [x] `aaaae5e7` Luau host: sandbox, per-script environments, rim.every and rim.on <sup>feature · p0 · l · engine</sup>
+- [x] `b1fabfa8` CI: build, test, clippy and fmt on every push <sup>chore · p2 · s · tooling</sup>
+- [x] `c7e9ab80` Determinism test: same seed and commands give the same state hash <sup>chore · p0 · s · engine</sup>
+- [x] `e15682e1` Typed def schema: terrain, thing, creature, need, designation, start, names <sup>feature · p0 · m · engine</sup>
+- [x] `e280b168` Allocation-free A* with no corner cutting <sup>feature · p0 · m · engine</sup>
+- [x] `eaf91831` Headless runner for soak tests and benchmarks <sup>chore · p1 · s · tooling</sup>
+- [x] `ecaf561f` Command queue applied at tick boundaries <sup>feature · p0 · s · engine</sup>
+- [x] `f2ea0bd1` Tile map with fixture and item layers, and reachability regions <sup>feature · p0 · m · engine</sup>
 
 ## castaway — Castaway
 
@@ -33,23 +33,23 @@ The headless engine: defs, mod loading and patching, map, pathing, AI skeleton, 
 
 First playable vertical slice. One warrior, harvest, build, eat, sleep, animals, melee, raids and wanderers from a Luau storyteller. Two mods loaded: core and an example plugin.
 
-- [x] `0035` Pawn AI: staggered thinking and job state machines <sup>feature · p0 · l · engine</sup>
-- [x] `0036` Harvest, mine and forage <sup>feature · p0 · m · engine</sup>
-- [x] `0037` Blueprints: deliver materials, then construct <sup>feature · p0 · m · engine</sup>
-- [x] `0038` Needs: food and rest, starvation and healing <sup>feature · p0 · m · engine</sup>
-- [x] `0039` Melee combat, death and butchering <sup>feature · p0 · m · engine</sup>
-- [x] `0040` Wild animals: wander, flee, retaliate, predators <sup>feature · p1 · m · engine</sup>
-- [x] `0041` Core content: terrain, plants, rocks, items, walls, door, bed, campfire <sup>content · p0 · m · core</sup>
-- [x] `0042` Core creatures: human, deer, hare, wolf <sup>content · p0 · s · core</sup>
-- [x] `0043` Storyteller as a Luau plugin with a shared incident registry <sup>feature · p0 · m · core</sup>
-- [x] `0044` Incidents: raid, wanderer joins, herd, predator pack, windfall <sup>content · p0 · m · core</sup>
-- [x] `0045` Client: camera, terrain, things and pawns with viewport culling <sup>feature · p0 · l · client</sup>
-- [x] `0046` Client: data-driven toolbar from designation and buildable defs <sup>feature · p0 · m · client</sup>
-- [x] `0047` Client: selection, draft, move and attack orders <sup>feature · p0 · m · client</sup>
-- [x] `0048` Client: messages, colonist bar, clock and speed controls <sup>feature · p1 · s · client</sup>
-- [x] `0049` F3 profiler overlay: per-system and per-mod timings <sup>feature · p1 · s · client</sup>
-- [x] `0050` Example plugin wildlife_plus: new creature, a patch and a Luau incident <sup>content · p1 · s · plugin</sup>
-- [x] `0051` Balance the first three days <sup>spike · p1 · s · core</sup>
+- [x] `202ed9e1` Incidents: raid, wanderer joins, herd, predator pack, windfall <sup>content · p0 · m · core</sup>
+- [x] `297469a6` Pawn AI: staggered thinking and job state machines <sup>feature · p0 · l · engine</sup>
+- [x] `452e1558` Client: data-driven toolbar from designation and buildable defs <sup>feature · p0 · m · client</sup>
+- [x] `58337b73` Wild animals: wander, flee, retaliate, predators <sup>feature · p1 · m · engine</sup>
+- [x] `5dd4c240` Blueprints: deliver materials, then construct <sup>feature · p0 · m · engine</sup>
+- [x] `68db17e7` Core content: terrain, plants, rocks, items, walls, door, bed, campfire <sup>content · p0 · m · core</sup>
+- [x] `733259cb` Example plugin wildlife_plus: new creature, a patch and a Luau incident <sup>content · p1 · s · plugin</sup>
+- [x] `793e0a96` Client: camera, terrain, things and pawns with viewport culling <sup>feature · p0 · l · client</sup>
+- [x] `7fe11ef9` Melee combat, death and butchering <sup>feature · p0 · m · engine</sup>
+- [x] `87288902` Harvest, mine and forage <sup>feature · p0 · m · engine</sup>
+- [x] `8e8dc2f2` Client: messages, colonist bar, clock and speed controls <sup>feature · p1 · s · client</sup>
+- [x] `9c50100e` F3 profiler overlay: per-system and per-mod timings <sup>feature · p1 · s · client</sup>
+- [x] `a20962ab` Needs: food and rest, starvation and healing <sup>feature · p0 · m · engine</sup>
+- [x] `c9973f7f` Storyteller as a Luau plugin with a shared incident registry <sup>feature · p0 · m · core</sup>
+- [x] `ce97d9ad` Client: selection, draft, move and attack orders <sup>feature · p0 · m · client</sup>
+- [x] `d447889b` Balance the first three days <sup>spike · p1 · s · core</sup>
+- [x] `e97ef234` Core creatures: human, deer, hare, wolf <sup>content · p0 · s · core</sup>
 
 ## interface — Interface
 
@@ -57,20 +57,20 @@ First playable vertical slice. One warrior, harvest, build, eat, sleep, animals,
 
 A two-week sprint. The whole HUD moves out of Rust into `mods/core/ui/`, written in Luau on a small UI engine, so any mod can extend, replace, wrap or remove any part of the interface. Design: DESIGN.md §11.
 
-- [x] `0082` UI mod operations: extend, replace, wrap and remove by id <sup>feature · p0 · m · client</sup>
-- [x] `0162` UI stack: taffy layout, cosmic-text and a second Luau VM on macroquad <sup>spike · p0 · s · client</sup>
-- [x] `0163` System UI font: discovery, shaping and a glyph atlas <sup>feature · p0 · m · client</sup>
-- [x] `0164` Theme tokens: ui/theme.toml, mod patches and UI scale <sup>feature · p0 · s · client</sup>
-- [x] `0165` UI engine: node tree, flexbox layout and batched drawing <sup>feature · p0 · l · client</sup>
-- [x] `0166` UI layers and input routing <sup>feature · p0 · m · client</sup>
-- [x] `0167` Client-only UI Luau VM with view and act APIs <sup>feature · p0 · l · client</sup>
-- [x] `0168` Component kit v1: buttons, bars, tabs, lists, tooltips, menus, toasts, bubbles <sup>feature · p0 · l · core</sup>
-- [x] `0169` Anchored layer: world-attached labels, bars and bubbles without overlap <sup>feature · p1 · m · client</sup>
-- [x] `0170` Docking shell: top, bottom, left and right regions <sup>feature · p0 · m · client</sup>
-- [x] `0171` Port the HUD into mods/core/ui and delete the Rust HUD <sup>feature · p0 · l · core</sup>
-- [x] `0172` Hot reload of UI scripts and theme <sup>feature · p1 · s · tooling</sup>
-- [x] `0173` UI devtools (F12): inspect any element <sup>feature · p1 · m · tooling</sup>
-- [x] `0174` UI modding guide <sup>docs · p2 · s · tooling</sup>
+- [x] `16eecb22` Anchored layer: world-attached labels, bars and bubbles without overlap <sup>feature · p1 · m · client</sup>
+- [x] `17505800` Theme tokens: ui/theme.toml, mod patches and UI scale <sup>feature · p0 · s · client</sup>
+- [x] `36d3ea49` UI stack: taffy layout, cosmic-text and a second Luau VM on macroquad <sup>spike · p0 · s · client</sup>
+- [x] `452628d7` Client-only UI Luau VM with view and act APIs <sup>feature · p0 · l · client</sup>
+- [x] `5514aac6` Port the HUD into mods/core/ui and delete the Rust HUD <sup>feature · p0 · l · core</sup>
+- [x] `6d04638b` System UI font: discovery, shaping and a glyph atlas <sup>feature · p0 · m · client</sup>
+- [x] `7497597f` UI layers and input routing <sup>feature · p0 · m · client</sup>
+- [x] `959bba6d` UI devtools (F12): inspect any element <sup>feature · p1 · m · tooling</sup>
+- [x] `aaca3f7a` Docking shell: top, bottom, left and right regions <sup>feature · p0 · m · client</sup>
+- [x] `ac5a569b` UI modding guide <sup>docs · p2 · s · tooling</sup>
+- [x] `ad0ab61f` UI engine: node tree, flexbox layout and batched drawing <sup>feature · p0 · l · client</sup>
+- [x] `b144ca3c` Component kit v1: buttons, bars, tabs, lists, tooltips, menus, toasts, bubbles <sup>feature · p0 · l · core</sup>
+- [x] `c96a6a8f` Hot reload of UI scripts and theme <sup>feature · p1 · s · tooling</sup>
+- [x] `c9b1406d` UI mod operations: extend, replace, wrap and remove by id <sup>feature · p0 · m · client</sup>
 
 ## weather — Weather
 
@@ -78,17 +78,17 @@ A two-week sprint. The whole HUD moves out of Rust into `mods/core/ui/`, written
 
 A one-week sprint inside Shelter. The world gets seasons and weather you can see coming: firelit nights, rain that rolls in on the forecast, and a first winter that needs a heated hut. The engine gains a few general mechanisms (terms over curves, a calendar, named contributions to outdoor values, script data); the weather itself is a first-party plugin, `mods/weather`, built only on the public API. Design: DESIGN.md §4c.
 
-- [x] `0056` Lighting from the light field: lightmap, glow and sky tint <sup>feature · p0 · m · client</sup>
-- [x] `0057` Weather incidents: cold snap, heat wave and storm <sup>content · p1 · s · plugin</sup>
-- [x] `0181` Terms and curves: a fixed-point evaluator for outdoor values <sup>feature · p0 · s · engine</sup>
-- [x] `0182` Calendar, seasons and script events <sup>feature · p0 · s · engine</sup>
-- [x] `0183` Ambient terms: outdoor channels computed from data, with named pushes <sup>feature · p0 · m · engine</sup>
-- [x] `0184` The weather plugin: seasons, weather types and a forecast <sup>feature · p0 · m · plugin</sup>
-- [x] `0194` Rain, snow, fog and lightning from the weather channels <sup>feature · p1 · m · client</sup>
-- [x] `0195` Season, weather and forecast in the HUD <sup>feature · p1 · s · client</sup>
-- [x] `0197` Weather modding guide <sup>docs · p1 · s · tooling</sup>
-- [x] `0198` Balance a year, and prove core stands alone <sup>chore · p0 · m · core</sup>
-- [x] `0207` Script data: saved state scripts own, readable by the UI <sup>feature · p0 · s · engine</sup>
+- [x] `2e0b9d43` Lighting from the light field: lightmap, glow and sky tint <sup>feature · p0 · m · client</sup>
+- [x] `3114946b` Terms and curves: a fixed-point evaluator for outdoor values <sup>feature · p0 · s · engine</sup>
+- [x] `3bb54ba3` Ambient terms: outdoor channels computed from data, with named pushes <sup>feature · p0 · m · engine</sup>
+- [x] `6859f08d` Balance a year, and prove core stands alone <sup>chore · p0 · m · core</sup>
+- [x] `7c50b502` The weather plugin: seasons, weather types and a forecast <sup>feature · p0 · m · plugin</sup>
+- [x] `98a2cd63` Rain, snow, fog and lightning from the weather channels <sup>feature · p1 · m · client</sup>
+- [x] `b023a009` Script data: saved state scripts own, readable by the UI <sup>feature · p0 · s · engine</sup>
+- [x] `c7f07804` Weather modding guide <sup>docs · p1 · s · tooling</sup>
+- [x] `cee5648a` Weather incidents: cold snap, heat wave and storm <sup>content · p1 · s · plugin</sup>
+- [x] `eb3b0ac7` Calendar, seasons and script events <sup>feature · p0 · s · engine</sup>
+- [x] `f8a1844d` Season, weather and forecast in the HUD <sup>feature · p1 · s · client</sup>
 
 ## shelter — Shelter
 
@@ -96,18 +96,18 @@ A one-week sprint inside Shelter. The world gets seasons and weather you can see
 
 Exposure makes shelter matter: warmth, enclosed rooms, day/night, weather. Get four walls up before night two.
 
-- [ ] `0059` Founder trait: combat bonus and recruitment pull <sup>feature · p2 · s · core</sup>
-- [ ] `0136` Autotest seeds from the clock, so CI rolls dice <sup>bug · p1 · s · tooling</sup>
-- [ ] `0156` CI: build and test on Windows <sup>chore · p1 · s · tooling</sup>
-- [ ] `0157` CI: determinism must hold across machines, not just within one run <sup>chore · p1 · s · tooling</sup>
-- [ ] `0221` UI frame-budget test asserts wall-clock time on shared CI runners <sup>bug · p2 · s · tooling</sup>
-- [x] `0052` Room detection: enclosed regions bounded by walls and doors <sup>feature · p0 · m · engine</sup>
-- [x] `0053` Warmth need and exposure outdoors <sup>feature · p0 · m · engine</sup>
-- [x] `0054` Roofs, or does enclosure count as shelter? <sup>spike · p1 · s · engine</sup>
-- [x] `0055` Campfire gives warmth in a radius <sup>content · p1 · s · core</sup>
-- [x] `0058` Doors that raiders must break through <sup>feature · p1 · m · engine</sup>
-- [x] `0071` Prioritize: right-click to force a job <sup>feature · p1 · l · engine</sup>
-- [x] `0160` Field layers: data-driven scalar grids (temperature, light, beauty) <sup>feature · p0 · l · engine</sup>
+- [ ] `05dbb688` CI: determinism must hold across machines, not just within one run <sup>chore · p1 · s · tooling</sup>
+- [ ] `2a2f2f48` Founder trait: combat bonus and recruitment pull <sup>feature · p2 · s · core</sup>
+- [ ] `48f92e6e` CI: build and test on Windows <sup>chore · p1 · s · tooling</sup>
+- [ ] `6a6a4828` Autotest seeds from the clock, so CI rolls dice <sup>bug · p1 · s · tooling</sup>
+- [ ] `e2c56c9a` UI frame-budget test asserts wall-clock time on shared CI runners <sup>bug · p2 · s · tooling</sup>
+- [x] `3974fb0f` Prioritize: right-click to force a job <sup>feature · p1 · l · engine</sup>
+- [x] `531096ee` Doors that raiders must break through <sup>feature · p1 · m · engine</sup>
+- [x] `6adcd8f6` Field layers: data-driven scalar grids (temperature, light, beauty) <sup>feature · p0 · l · engine</sup>
+- [x] `8733f34a` Warmth need and exposure outdoors <sup>feature · p0 · m · engine</sup>
+- [x] `dade762a` Roofs, or does enclosure count as shelter? <sup>spike · p1 · s · engine</sup>
+- [x] `f31e7677` Campfire gives warmth in a radius <sup>content · p1 · s · core</sup>
+- [x] `f51af7ba` Room detection: enclosed regions bounded by walls and doors <sup>feature · p0 · m · engine</sup>
 
 ## building — Building
 
@@ -115,17 +115,17 @@ Exposure makes shelter matter: warmth, enclosed rooms, day/night, weather. Get f
 
 A one-week sprint inside Colony. Building stops being a fixed list of defs
 
-- [x] `0069` Deconstruct designation <sup>feature · p1 · s · engine</sup>
-- [x] `0211` Do room properties come from the boundary? <sup>spike · p0 · s · engine</sup>
-- [x] `0212` Stuff: one buildable, many materials <sup>feature · p0 · m · engine</sup>
-- [x] `0213` Material factors on built things <sup>feature · p0 · m · engine</sup>
-- [x] `0214` Core collapses to one wall, one door, one bed <sup>content · p1 · s · core</sup>
-- [x] `0215` Pick the material before you place it <sup>feature · p1 · s · plugin</sup>
-- [x] `0216` Rooms made of something: leak and daylight from the boundary <sup>feature · p0 · l · engine</sup>
-- [x] `0217` Windows: light in, heat out <sup>content · p1 · s · core</sup>
-- [x] `0218` Interaction spots: furniture a pawn uses <sup>feature · p1 · m · engine</sup>
-- [x] `0219` Furniture: table, chair, stove <sup>content · p2 · s · core</sup>
-- [x] `0220` Walls that look joined, in the colour of what they are made of <sup>feature · p1 · m · client</sup>
+- [x] `3f4c257d` Rooms made of something: leak and daylight from the boundary <sup>feature · p0 · l · engine</sup>
+- [x] `419a24ab` Interaction spots: furniture a pawn uses <sup>feature · p1 · m · engine</sup>
+- [x] `49e5e583` Walls that look joined, in the colour of what they are made of <sup>feature · p1 · m · client</sup>
+- [x] `579f8374` Furniture: table, chair, stove <sup>content · p2 · s · core</sup>
+- [x] `763d8d64` Stuff: one buildable, many materials <sup>feature · p0 · m · engine</sup>
+- [x] `82bc6c98` Material factors on built things <sup>feature · p0 · m · engine</sup>
+- [x] `83427b76` Deconstruct designation <sup>feature · p1 · s · engine</sup>
+- [x] `8d8cc16f` Windows: light in, heat out <sup>content · p1 · s · core</sup>
+- [x] `99f5e167` Pick the material before you place it <sup>feature · p1 · s · plugin</sup>
+- [x] `ab0599d2` Do room properties come from the boundary? <sup>spike · p0 · s · engine</sup>
+- [x] `cecf0ba9` Core collapses to one wall, one door, one bed <sup>content · p1 · s · core</sup>
 
 ## persistence — Persistence
 
@@ -133,14 +133,14 @@ A one-week sprint inside Colony. Building stops being a fixed list of defs
 
 Save/load that survives mod changes, and replays from seed + command log.
 
-- [ ] `0060` Save format: component-keyed, versioned, mod-aware <sup>spike · p0 · s · engine</sup>
-- [ ] `0061` Serialize world, pawns, things and jobs <sup>feature · p0 · l · engine</sup>
-- [ ] `0062` Per-mod script state: rim.state persisted with the save <sup>feature · p0 · m · engine</sup>
-- [ ] `0063` Keep unknown mod data when a mod is removed <sup>feature · p1 · m · engine</sup>
-- [ ] `0064` Replays: seed, mod list and command log <sup>feature · p1 · m · engine</sup>
-- [ ] `0065` Autosave and load menu <sup>feature · p1 · m · client</sup>
-- [ ] `0138` Namespaced def ids: mod:id, bare ids resolve inside their own mod <sup>feature · p0 · m · engine</sup>
-- [ ] `0139` Mod save migrations: a migrate hook when a mod's version changes <sup>feature · p1 · m · engine</sup>
+- [ ] `01e86e7b` Autosave and load menu <sup>feature · p1 · m · client</sup>
+- [ ] `38722b6e` Replays: seed, mod list and command log <sup>feature · p1 · m · engine</sup>
+- [ ] `65f0b723` Per-mod script state: rim.state persisted with the save <sup>feature · p0 · m · engine</sup>
+- [ ] `70edf863` Save format: component-keyed, versioned, mod-aware <sup>spike · p0 · s · engine</sup>
+- [ ] `b4ad855e` Keep unknown mod data when a mod is removed <sup>feature · p1 · m · engine</sup>
+- [ ] `be8174f0` Namespaced def ids: mod:id, bare ids resolve inside their own mod <sup>feature · p0 · m · engine</sup>
+- [ ] `c5d185be` Serialize world, pawns, things and jobs <sup>feature · p0 · l · engine</sup>
+- [ ] `ca786a8e` Mod save migrations: a migrate hook when a mod's version changes <sup>feature · p1 · m · engine</sup>
 
 ## colony — Colony
 
@@ -148,16 +148,16 @@ Save/load that survives mod changes, and replays from seed + command log.
 
 Running more than one person: stockpiles, hauling, work priorities, skills, colonist panels.
 
-- [ ] `0066` Stockpile zones and hauling <sup>feature · p0 · l · engine</sup>
-- [ ] `0067` Work priorities per colonist <sup>feature · p0 · l · engine</sup>
-- [ ] `0068` Skills learned by doing <sup>feature · p1 · m · engine</sup>
-- [ ] `0070` Colonist inspection panel <sup>feature · p1 · m · client</sup>
-- [ ] `0175` Floating windows and a saved UI layout <sup>feature · p1 · m · client</sup>
-- [ ] `0176` Component kit v2: slider, text input and tables <sup>feature · p1 · m · core</sup>
-- [ ] `0188` Wind shelter: the lee of walls, rock and trees <sup>feature · p1 · m · engine</sup>
-- [ ] `0189` Derived fields and feels-like temperature <sup>feature · p1 · s · engine</sup>
-- [ ] `0190` Drafty rooms: room leak from terms <sup>feature · p3 · s · engine</sup>
-- [ ] `0200` Fire: burning, spread by wind, put out by rain <sup>feature · p1 · l · engine</sup>
+- [ ] `03ad3e3a` Work priorities per colonist <sup>feature · p0 · l · engine</sup>
+- [ ] `03b9b791` Derived fields and feels-like temperature <sup>feature · p1 · s · engine</sup>
+- [ ] `1e977052` Floating windows and a saved UI layout <sup>feature · p1 · m · client</sup>
+- [ ] `29c323f5` Skills learned by doing <sup>feature · p1 · m · engine</sup>
+- [ ] `4ad6b386` Colonist inspection panel <sup>feature · p1 · m · client</sup>
+- [ ] `8376a04f` Drafty rooms: room leak from terms <sup>feature · p3 · s · engine</sup>
+- [ ] `9bd9e8ab` Fire: burning, spread by wind, put out by rain <sup>feature · p1 · l · engine</sup>
+- [ ] `a7da68e2` Component kit v2: slider, text input and tables <sup>feature · p1 · m · core</sup>
+- [ ] `ecd54de8` Stockpile zones and hauling <sup>feature · p0 · l · engine</sup>
+- [ ] `fa0de3f5` Wind shelter: the lee of walls, rock and trees <sup>feature · p1 · m · engine</sup>
 
 ## eras — Eras
 
@@ -165,13 +165,13 @@ Running more than one person: stockpiles, hauling, work priorities, skills, colo
 
 The run gets a shape: eras, storyteller tiers, defensive strength in the threat model, the chronicle.
 
-- [ ] `0072` Era defs with conditions <sup>feature · p0 · m · engine</sup>
-- [ ] `0073` era_reached event and storyteller tiers <sup>feature · p0 · m · core</sup>
-- [ ] `0074` Defensive strength in the threat model <sup>feature · p0 · m · core</sup>
-- [ ] `0075` Settler quality scales with wealth <sup>content · p1 · s · core</sup>
-- [ ] `0076` Chronicle: notable events and an end-of-run story <sup>feature · p1 · m · engine</sup>
-- [ ] `0077` Tension curve and recovery windows <sup>spike · p1 · s · core</sup>
-- [ ] `0206` Seasonal storyteller: incidents that know the time of year <sup>feature · p2 · s · core</sup>
+- [ ] `1aab96a4` Seasonal storyteller: incidents that know the time of year <sup>feature · p2 · s · core</sup>
+- [ ] `3489c778` Era defs with conditions <sup>feature · p0 · m · engine</sup>
+- [ ] `58ba2b7a` Chronicle: notable events and an end-of-run story <sup>feature · p1 · m · engine</sup>
+- [ ] `7b51525f` Defensive strength in the threat model <sup>feature · p0 · m · core</sup>
+- [ ] `bc38c90a` Settler quality scales with wealth <sup>content · p1 · s · core</sup>
+- [ ] `f84ff7d3` era_reached event and storyteller tiers <sup>feature · p0 · m · core</sup>
+- [ ] `fddc451d` Tension curve and recovery windows <sup>spike · p1 · s · core</sup>
 
 ## plugin-api — Plugin API
 
@@ -179,27 +179,27 @@ The run gets a shape: eras, storyteller tiers, defensive strength in the threat 
 
 The API grows up: stat pipeline, script components, custom jobs, needs and def kinds, modules and custom events, a real sandbox with hard limits, factions as data, rim test, typed API. Everything Mood needs, and everything DESIGN.md §10 says a mod from a stranger's repo must be safe to do.
 
-- [ ] `0078` Stat pipeline: base values plus registered modifiers <sup>feature · p0 · l · engine</sup>
-- [ ] `0079` Script-defined components on pawns and things <sup>feature · p0 · m · engine</sup>
-- [ ] `0080` Custom jobs and work givers from Luau <sup>feature · p0 · l · engine</sup>
-- [ ] `0081` Custom needs with script satisfiers <sup>feature · p0 · m · engine</sup>
-- [ ] `0083` Per-mod budgets: profiler warnings and hard limits for runaway scripts <sup>feature · p1 · m · engine</sup>
-- [ ] `0085` Luau type definitions for the rim API <sup>docs · p1 · s · tooling</sup>
-- [ ] `0087` Sprites and atlases from mods <sup>feature · p2 · m · client</sup>
-- [ ] `0140` Luau VM runs without sandbox mode, and the rim table is writable by any mod <sup>bug · p0 · s · engine</sup>
-- [ ] `0141` Mod modules: require("@mod/path") limited to declared dependencies <sup>feature · p0 · m · engine</sup>
-- [ ] `0142` Custom namespaced events: rim.emit and rim.on("mod:event") <sup>feature · p0 · s · engine</sup>
-- [ ] `0143` Mod-defined def kinds with schemas, and namespaced extension fields <sup>feature · p0 · l · engine</sup>
-- [ ] `0144` Patch list operations: append, remove and match by key <sup>feature · p1 · m · engine</sup>
-- [ ] `0145` Factions as defs, not an engine enum <sup>feature · p0 · m · engine</sup>
-- [ ] `0146` rim test: Luau tests against seeded headless worlds <sup>feature · p0 · m · tooling</sup>
-- [ ] `0147` Deterministic math in scripts: replace library trig and exp <sup>feature · p1 · s · engine</sup>
-- [ ] `0148` API deprecations warn with the replacement and the removal version <sup>feature · p2 · s · engine</sup>
-- [ ] `0159` Which platforms beyond desktop, and what do they cost? <sup>spike · p2 · s · engine</sup>
-- [ ] `0177` Keybinds file and command palette <sup>feature · p1 · m · client</sup>
-- [ ] `0178` Monochrome icon set with mod-supplied icons <sup>feature · p2 · m · core</sup>
-- [ ] `0208` Custom def kinds: plugins declare their own data <sup>feature · p1 · m · engine</sup>
-- [ ] `0209` Sky bodies: a cycle input and coloured sky terms <sup>feature · p2 · m · engine</sup>
+- [ ] `14df87a8` Keybinds file and command palette <sup>feature · p1 · m · client</sup>
+- [ ] `1c626720` Custom namespaced events: rim.emit and rim.on("mod:event") <sup>feature · p0 · s · engine</sup>
+- [ ] `3eb7e697` Luau VM runs without sandbox mode, and the rim table is writable by any mod <sup>bug · p0 · s · engine</sup>
+- [ ] `51a9c5c6` Patch list operations: append, remove and match by key <sup>feature · p1 · m · engine</sup>
+- [ ] `6191b800` Luau type definitions for the rim API <sup>docs · p1 · s · tooling</sup>
+- [ ] `63d2f10a` API deprecations warn with the replacement and the removal version <sup>feature · p2 · s · engine</sup>
+- [ ] `7f8ce379` Script-defined components on pawns and things <sup>feature · p0 · m · engine</sup>
+- [ ] `978be4f3` Factions as defs, not an engine enum <sup>feature · p0 · m · engine</sup>
+- [ ] `97e9d4a7` Stat pipeline: base values plus registered modifiers <sup>feature · p0 · l · engine</sup>
+- [ ] `acaa16f4` rim test: Luau tests against seeded headless worlds <sup>feature · p0 · m · tooling</sup>
+- [ ] `b0da41ef` Custom def kinds: plugins declare their own data <sup>feature · p1 · m · engine</sup>
+- [ ] `b3df9f85` Mod-defined def kinds with schemas, and namespaced extension fields <sup>feature · p0 · l · engine</sup>
+- [ ] `c65db254` Per-mod budgets: profiler warnings and hard limits for runaway scripts <sup>feature · p1 · m · engine</sup>
+- [ ] `ded7881a` Deterministic math in scripts: replace library trig and exp <sup>feature · p1 · s · engine</sup>
+- [ ] `e2ce89c3` Sprites and atlases from mods <sup>feature · p2 · m · client</sup>
+- [ ] `eb2c9422` Which platforms beyond desktop, and what do they cost? <sup>spike · p2 · s · engine</sup>
+- [ ] `ebb814ad` Sky bodies: a cycle input and coloured sky terms <sup>feature · p2 · m · engine</sup>
+- [ ] `ed876ad7` Monochrome icon set with mod-supplied icons <sup>feature · p2 · m · core</sup>
+- [ ] `f6e18475` Mod modules: require("@mod/path") limited to declared dependencies <sup>feature · p0 · m · engine</sup>
+- [ ] `fdafcb10` Custom jobs and work givers from Luau <sup>feature · p0 · l · engine</sup>
+- [ ] `fecf1c87` Custom needs with script satisfiers <sup>feature · p0 · m · engine</sup>
 
 ## mood — Mood
 
@@ -207,12 +207,12 @@ The API grows up: stat pipeline, script components, custom jobs, needs and def k
 
 rim.mood — the first first-party plugin. Proves the API: if mood cannot be a plugin, fix the API.
 
-- [ ] `0088` rim.mood plugin: mood need and thoughts <sup>feature · p0 · l · plugin</sup>
-- [ ] `0089` Thoughts: raw food, slept outside, colonist died, nice room <sup>content · p1 · m · plugin</sup>
-- [ ] `0090` Mental breaks: wander, sulk, berserk <sup>feature · p1 · m · plugin</sup>
-- [ ] `0091` What did mood need that plugins could not do? <sup>spike · p0 · s · engine</sup>
-- [ ] `0092` Mood panel via UI extension points <sup>feature · p1 · s · plugin</sup>
-- [ ] `0202` Mood from weather and seasons <sup>feature · p2 · s · plugin</sup>
+- [ ] `65399b78` What did mood need that plugins could not do? <sup>spike · p0 · s · engine</sup>
+- [ ] `79e19fa0` Mood panel via UI extension points <sup>feature · p1 · s · plugin</sup>
+- [ ] `871cde5e` Thoughts: raw food, slept outside, colonist died, nice room <sup>content · p1 · m · plugin</sup>
+- [ ] `c4d85d17` rim.mood plugin: mood need and thoughts <sup>feature · p0 · l · plugin</sup>
+- [ ] `d3cbbd74` Mental breaks: wander, sulk, berserk <sup>feature · p1 · m · plugin</sup>
+- [ ] `f690b16e` Mood from weather and seasons <sup>feature · p2 · s · plugin</sup>
 
 ## sdk — Modder SDK
 
@@ -220,13 +220,13 @@ rim.mood — the first first-party plugin. Proves the API: if mood cannot be a p
 
 Making a mod feels like publishing a small open-source library: rim new, typed Luau, rim test in CI, a template repo with a GitHub Action, a compatibility report and a guide. Runs alongside Mood, which is its first customer.
 
-- [ ] `0084` Hot reload of defs and scripts in dev mode <sup>feature · p0 · m · tooling</sup>
-- [ ] `0086` Modding guide, tutorial and generated API reference <sup>docs · p1 · m · tooling</sup>
-- [ ] `0122` rim new: a GitHub-ready mod repo in one command <sup>chore · p0 · m · tooling</sup>
-- [ ] `0123` Compatibility report: what a mod changes <sup>feature · p1 · s · tooling</sup>
-- [ ] `0149` rim: one binary to play, check, test and pack mods <sup>feature · p0 · m · client</sup>
-- [ ] `0150` GitHub Action for mod repos: check and test against supported engine versions <sup>feature · p1 · s · tooling</sup>
-- [ ] `0196` Weather devtools: force weather, scrub time, channel graphs <sup>chore · p1 · s · tooling</sup>
+- [ ] `6d24a1ec` rim new: a GitHub-ready mod repo in one command <sup>chore · p0 · m · tooling</sup>
+- [ ] `9a4e2f10` Compatibility report: what a mod changes <sup>feature · p1 · s · tooling</sup>
+- [ ] `9f30ab9d` Hot reload of defs and scripts in dev mode <sup>feature · p0 · m · tooling</sup>
+- [ ] `be5845a1` rim: one binary to play, check, test and pack mods <sup>feature · p0 · m · client</sup>
+- [ ] `d26d78a0` Modding guide, tutorial and generated API reference <sup>docs · p1 · m · tooling</sup>
+- [ ] `dc32fa23` Weather devtools: force weather, scrub time, channel graphs <sup>chore · p1 · s · tooling</sup>
+- [ ] `f42fd04a` GitHub Action for mod repos: check and test against supported engine versions <sup>feature · p1 · s · tooling</sup>
 
 ## scale — Scale
 
@@ -234,16 +234,16 @@ Making a mod feels like publishing a small open-source library: rim new, typed L
 
 Hit the performance budget: benchmark harness, hierarchical pathing, flow fields, spatial indices, incremental regions, render caching.
 
-- [ ] `0093` Benchmark harness: target map, 30 colonists, 200 pawns <sup>perf · p0 · m · tooling</sup>
-- [ ] `0094` Hierarchical pathfinding <sup>perf · p1 · l · engine</sup>
-- [ ] `0095` Flow fields for raid groups <sup>perf · p2 · m · engine</sup>
-- [ ] `0096` Spatial index for things by def <sup>perf · p1 · m · engine</sup>
-- [ ] `0097` Incremental region updates <sup>perf · p2 · m · engine</sup>
-- [ ] `0098` Chunked terrain render caching <sup>perf · p1 · m · client</sup>
-- [ ] `0099` Parallel systems where read and write sets allow <sup>spike · p2 · m · engine</sup>
-- [ ] `0100` Meet the budget: 6x speed at 60 fps <sup>perf · p0 · l · engine</sup>
-- [ ] `0193` Ground renderer: terrain, wetness and snow in one shader pass <sup>perf · p2 · m · client</sup>
-- [ ] `0199` Water flow: runoff, puddles and floods <sup>feature · p3 · l · engine</sup>
+- [ ] `1415721a` Water flow: runoff, puddles and floods <sup>feature · p3 · l · engine</sup>
+- [ ] `277ff6f2` Hierarchical pathfinding <sup>perf · p1 · l · engine</sup>
+- [ ] `66906291` Incremental region updates <sup>perf · p2 · m · engine</sup>
+- [ ] `91de1172` Parallel systems where read and write sets allow <sup>spike · p2 · m · engine</sup>
+- [ ] `a353667b` Flow fields for raid groups <sup>perf · p2 · m · engine</sup>
+- [ ] `da558444` Ground renderer: terrain, wetness and snow in one shader pass <sup>perf · p2 · m · client</sup>
+- [ ] `dab55ea2` Meet the budget: 6x speed at 60 fps <sup>perf · p0 · l · engine</sup>
+- [ ] `e3c1f87b` Chunked terrain render caching <sup>perf · p1 · m · client</sup>
+- [ ] `ee7fe7fd` Benchmark harness: target map, 30 colonists, 200 pawns <sup>perf · p0 · m · tooling</sup>
+- [ ] `fbf3ee1c` Spatial index for things by def <sup>perf · p1 · m · engine</sup>
 
 ## platform — Modding platform
 
@@ -251,15 +251,15 @@ Hit the performance budget: benchmark harness, hierarchical pathing, flow fields
 
 Mods reach players without a closed store: versioned dependencies, a modlist lockfile, a git-backed mod index, rim add, the in-game mod manager, mod crater, and the WASM tier. See DESIGN.md §10.
 
-- [ ] `0118` WASM plugin tier with the same API surface <sup>feature · p0 · xl · engine</sup>
-- [ ] `0119` Mod manager: browse, enable and resolve conflicts <sup>feature · p0 · m · client</sup>
-- [ ] `0121` Capability declarations and trust prompts <sup>feature · p1 · m · engine</sup>
-- [ ] `0151` Mod dependencies with version ranges, optional deps and incompatibilities <sup>feature · p0 · m · engine</sup>
-- [ ] `0152` Modlist lockfile: exact versions, content hashes and conflict choices <sup>feature · p0 · m · engine</sup>
-- [ ] `0153` Mod index: a git repo of mod entries, checked by CI <sup>feature · p0 · m · tooling</sup>
-- [ ] `0154` Install mods from the index or a git URL: rim add <sup>feature · p0 · m · tooling</sup>
-- [ ] `0155` Mod crater: engine CI runs indexed mods' tests before a change lands <sup>feature · p1 · m · tooling</sup>
-- [x] `0120` Mod packaging and distribution <sup>spike · p1 · m · tooling</sup>
+- [ ] `02704617` WASM plugin tier with the same API surface <sup>feature · p0 · xl · engine</sup>
+- [ ] `5f7eb168` Capability declarations and trust prompts <sup>feature · p1 · m · engine</sup>
+- [ ] `76a0bc45` Install mods from the index or a git URL: rim add <sup>feature · p0 · m · tooling</sup>
+- [ ] `7f26e2e3` Mod manager: browse, enable and resolve conflicts <sup>feature · p0 · m · client</sup>
+- [ ] `9e979a26` Modlist lockfile: exact versions, content hashes and conflict choices <sup>feature · p0 · m · engine</sup>
+- [ ] `b7f5cde1` Mod index: a git repo of mod entries, checked by CI <sup>feature · p0 · m · tooling</sup>
+- [ ] `d80bce19` Mod crater: engine CI runs indexed mods' tests before a change lands <sup>feature · p1 · m · tooling</sup>
+- [ ] `dbb8f031` Mod dependencies with version ranges, optional deps and incompatibilities <sup>feature · p0 · m · engine</sup>
+- [x] `c8598bbd` Mod packaging and distribution <sup>spike · p1 · m · tooling</sup>
 
 ## defense — Defense
 
@@ -267,14 +267,14 @@ Mods reach players without a closed store: versioned dependencies, a modlist loc
 
 Combat depth: ranged weapons, apparel and armor, equipment, downed and rescue, raid tactics, turrets.
 
-- [ ] `0101` Ranged weapons and projectiles <sup>feature · p0 · l · engine</sup>
-- [ ] `0102` Apparel and armor <sup>feature · p0 · l · engine</sup>
-- [ ] `0103` Equipment: pick up and equip, raiders drop gear <sup>feature · p1 · m · engine</sup>
-- [ ] `0104` Downed state, rescue and medicine <sup>feature · p1 · l · engine</sup>
-- [ ] `0105` Raid AI: groups, building targets and retreat <sup>feature · p1 · l · engine</sup>
-- [ ] `0106` Turrets and traps <sup>content · p2 · m · plugin</sup>
-- [ ] `0107` Siege and sapper raids <sup>content · p2 · m · core</sup>
-- [ ] `0205` Fog and darkness limit sight <sup>feature · p3 · m · engine</sup>
+- [ ] `3503525f` Raid AI: groups, building targets and retreat <sup>feature · p1 · l · engine</sup>
+- [ ] `41006a46` Apparel and armor <sup>feature · p0 · l · engine</sup>
+- [ ] `6499049f` Siege and sapper raids <sup>content · p2 · m · core</sup>
+- [ ] `6d15500e` Turrets and traps <sup>content · p2 · m · plugin</sup>
+- [ ] `713009ac` Fog and darkness limit sight <sup>feature · p3 · m · engine</sup>
+- [ ] `cdddbcee` Downed state, rescue and medicine <sup>feature · p1 · l · engine</sup>
+- [ ] `d5d0ea1f` Equipment: pick up and equip, raiders drop gear <sup>feature · p1 · m · engine</sup>
+- [ ] `e2ad4bec` Ranged weapons and projectiles <sup>feature · p0 · l · engine</sup>
 
 ## co-op — Co-op
 
@@ -282,12 +282,12 @@ Combat depth: ranged weapons, apparel and armor, equipment, downed and rescue, r
 
 Lockstep co-op on top of determinism: command broadcast, desync detection, mod-list handshake.
 
-- [ ] `0124` Lockstep or server-authoritative? <sup>spike · p0 · s · engine</sup>
-- [ ] `0125` Lockstep netcode with command broadcast <sup>feature · p0 · xl · engine</sup>
-- [ ] `0126` Desync detection and resync from snapshot <sup>feature · p0 · l · engine</sup>
-- [ ] `0127` Mod-list handshake <sup>feature · p0 · s · engine</sup>
-- [ ] `0128` Shared control and player cursors <sup>feature · p2 · m · client</sup>
-- [ ] `0158` Audit float math in the sim: fixed-point, or f64 with rules? <sup>spike · p0 · m · engine</sup>
+- [ ] `21e5d6c2` Lockstep or server-authoritative? <sup>spike · p0 · s · engine</sup>
+- [ ] `3a5b3cd8` Lockstep netcode with command broadcast <sup>feature · p0 · xl · engine</sup>
+- [ ] `48ed0988` Audit float math in the sim: fixed-point, or f64 with rules? <sup>spike · p0 · m · engine</sup>
+- [ ] `c31738fc` Mod-list handshake <sup>feature · p0 · s · engine</sup>
+- [ ] `c6ea8076` Shared control and player cursors <sup>feature · p2 · m · client</sup>
+- [ ] `fa6f0afb` Desync detection and resync from snapshot <sup>feature · p0 · l · engine</sup>
 
 ## crafting — Crafting
 
@@ -295,17 +295,17 @@ Lockstep co-op on top of determinism: command broadcast, desync detection, mod-l
 
 Production chains: workbenches and bills, cooking, farming, tailoring, research as a plugin.
 
-- [ ] `0108` Workbenches and bills <sup>feature · p0 · l · engine</sup>
-- [ ] `0109` Cooking: raw food into meals <sup>content · p1 · s · core</sup>
-- [ ] `0110` Farming: growing zones and crops <sup>feature · p0 · l · engine</sup>
-- [ ] `0111` Research as a plugin <sup>feature · p1 · l · plugin</sup>
-- [ ] `0112` Tailoring: make apparel <sup>content · p2 · s · core</sup>
-- [ ] `0185` Terrain properties, tags and distance-to inputs <sup>feature · p0 · s · engine</sup>
-- [ ] `0186` Stock fields: per-cell state with staggered updates <sup>feature · p0 · l · engine</sup>
-- [ ] `0187` Ground wetness and snow in core <sup>content · p0 · m · core</sup>
-- [ ] `0191` Plants grow in the weather <sup>feature · p0 · m · engine</sup>
-- [ ] `0192` Snow and mud slow movement <sup>feature · p3 · s · engine</sup>
-- [ ] `0201` Getting wet: pawn wetness and clothing insulation <sup>feature · p2 · m · engine</sup>
+- [ ] `049e2f73` Workbenches and bills <sup>feature · p0 · l · engine</sup>
+- [ ] `0927f0af` Tailoring: make apparel <sup>content · p2 · s · core</sup>
+- [ ] `2c03427e` Cooking: raw food into meals <sup>content · p1 · s · core</sup>
+- [ ] `308074c6` Getting wet: pawn wetness and clothing insulation <sup>feature · p2 · m · engine</sup>
+- [ ] `6dd4891c` Ground wetness and snow in core <sup>content · p0 · m · core</sup>
+- [ ] `6f1e7410` Snow and mud slow movement <sup>feature · p3 · s · engine</sup>
+- [ ] `704889c9` Research as a plugin <sup>feature · p1 · l · plugin</sup>
+- [ ] `9b569a33` Terrain properties, tags and distance-to inputs <sup>feature · p0 · s · engine</sup>
+- [ ] `b1444a26` Farming: growing zones and crops <sup>feature · p0 · l · engine</sup>
+- [ ] `d77d9e1f` Stock fields: per-cell state with staggered updates <sup>feature · p0 · l · engine</sup>
+- [ ] `e1be8ebd` Plants grow in the weather <sup>feature · p0 · m · engine</sup>
 
 ## 1.0 — 1.0
 
@@ -313,14 +313,14 @@ Production chains: workbenches and bills, cooking, farming, tailoring, research 
 
 Ship it: tutorial, settings, audio, art pass, crash reports with replays, frozen API 1.0, packages.
 
-- [ ] `0129` First-hour guidance <sup>feature · p1 · m · client</sup>
-- [ ] `0130` Settings: keybinds, audio, UI scale <sup>feature · p1 · m · client</sup>
-- [ ] `0131` Audio: ambience, combat, UI <sup>feature · p1 · l · client</sup>
-- [ ] `0132` Art pass for all core defs <sup>content · p1 · xl · core</sup>
-- [ ] `0133` Crash reports with seed, mods and replay attached <sup>feature · p1 · m · tooling</sup>
-- [ ] `0134` Freeze plugin API 1.0 <sup>chore · p0 · m · engine</sup>
-- [ ] `0135` Packages for macOS, Windows and Linux <sup>chore · p0 · m · tooling</sup>
-- [ ] `0204` Weather audio: rain, wind and thunder <sup>feature · p2 · m · client</sup>
+- [ ] `05033e73` Settings: keybinds, audio, UI scale <sup>feature · p1 · m · client</sup>
+- [ ] `215ac655` Packages for macOS, Windows and Linux <sup>chore · p0 · m · tooling</sup>
+- [ ] `3b3f5a9d` Freeze plugin API 1.0 <sup>chore · p0 · m · engine</sup>
+- [ ] `5958b5a0` Audio: ambience, combat, UI <sup>feature · p1 · l · client</sup>
+- [ ] `779a54c2` First-hour guidance <sup>feature · p1 · m · client</sup>
+- [ ] `8a8deb4a` Crash reports with seed, mods and replay attached <sup>feature · p1 · m · tooling</sup>
+- [ ] `92f2ceaf` Weather audio: rain, wind and thunder <sup>feature · p2 · m · client</sup>
+- [ ] `f4e97005` Art pass for all core defs <sup>content · p1 · xl · core</sup>
 
 ## world — World
 
@@ -328,10 +328,10 @@ Ship it: tutorial, settings, audio, art pass, crash reports with replays, frozen
 
 The world beyond the map: factions, traders drawn by wealth, quests, taming.
 
-- [ ] `0113` Factions with relations <sup>feature · p0 · l · engine</sup>
-- [ ] `0114` Traders: caravans pulled by wealth <sup>feature · p0 · m · core</sup>
-- [ ] `0115` Trade UI and currency <sup>feature · p1 · m · client</sup>
-- [ ] `0116` Quests as Luau event chains <sup>feature · p2 · l · plugin</sup>
-- [ ] `0117` Animal taming and pens <sup>feature · p2 · m · engine</sup>
-- [ ] `0203` Biomes: other climates as a plugin <sup>content · p2 · m · plugin</sup>
+- [ ] `0dcd58f1` Quests as Luau event chains <sup>feature · p2 · l · plugin</sup>
+- [ ] `40eed01c` Trade UI and currency <sup>feature · p1 · m · client</sup>
+- [ ] `5a2fda29` Animal taming and pens <sup>feature · p2 · m · engine</sup>
+- [ ] `9077e831` Traders: caravans pulled by wealth <sup>feature · p0 · m · core</sup>
+- [ ] `a27e294c` Factions with relations <sup>feature · p0 · l · engine</sup>
+- [ ] `e2cae1b2` Biomes: other climates as a plugin <sup>content · p2 · m · plugin</sup>
 

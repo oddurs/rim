@@ -1,12 +1,12 @@
 ---
-id: 209
+id: ebb814ad-369d-4ddd-99de-e755c2b14eb9
 title: 'Sky bodies: a cycle input and coloured sky terms'
 type: feature
 status: backlog
 milestone: plugin-api
 depends_on:
-- 56
-- 183
+- 2e0b9d43-90e5-4051-bda6-81544e9caf0f
+- 3bb54ba3-21f9-42a4-9f7c-8299b5db1db5
 created: 2026-09-23
 updated: 2026-09-23
 priority: p2

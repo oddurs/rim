@@ -1,11 +1,11 @@
 ---
-id: 179
+id: ed55b09d-0279-4625-a9a6-1993d72ea210
 key: weather
 title: Weather
 type: milestone
 status: done
 depends_on:
-- 161
+- 7b325c7f-8a5c-4343-b898-1185c578bca3
 created: 2026-09-23
 updated: 2026-09-23
 closed_at: 2026-09-23

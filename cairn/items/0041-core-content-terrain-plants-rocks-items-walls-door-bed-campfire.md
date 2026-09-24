@@ -1,5 +1,5 @@
 ---
-id: 41
+id: 68db17e7-d47d-4db9-b371-71db1e41635a
 title: 'Core content: terrain, plants, rocks, items, walls, door, bed, campfire'
 type: content
 status: done

@@ -1,13 +1,13 @@
 ---
-id: 184
+id: 7c50b502-5e27-4807-a36c-0654fe9aec97
 title: 'The weather plugin: seasons, weather types and a forecast'
 type: feature
 status: done
 milestone: weather
 depends_on:
-- 182
-- 183
-- 207
+- eb3b0ac7-9922-4ab2-b9c1-8171e0b7f05f
+- 3bb54ba3-21f9-42a4-9f7c-8299b5db1db5
+- b023a009-64d7-4113-81eb-4220b069b74b
 created: 2026-09-23
 updated: 2026-09-23
 closed_at: 2026-09-23

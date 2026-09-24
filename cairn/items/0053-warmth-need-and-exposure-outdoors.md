@@ -1,12 +1,12 @@
 ---
-id: 53
+id: 8733f34a-4447-47ad-8f7e-42af2c66e4ac
 title: Warmth need and exposure outdoors
 type: feature
 status: done
 milestone: shelter
 depends_on:
-- 52
-- 160
+- f51af7ba-8fba-4127-bda0-07387348a786
+- 6adcd8f6-07a8-44d2-9135-872bcc0115ad
 created: 2026-09-22
 updated: 2026-09-23
 closed_at: 2026-09-23

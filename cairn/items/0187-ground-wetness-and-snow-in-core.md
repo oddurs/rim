@@ -1,12 +1,12 @@
 ---
-id: 187
+id: 6dd4891c-f65e-4707-96f9-e6d46c6cd446
 title: Ground wetness and snow in core
 type: content
 status: backlog
 milestone: crafting
 depends_on:
-- 184
-- 186
+- 7c50b502-5e27-4807-a36c-0654fe9aec97
+- d77d9e1f-f0ae-4e30-ae9c-95cd35c1346b
 created: 2026-09-23
 updated: 2026-09-23
 priority: p0

@@ -1,11 +1,11 @@
 ---
-id: 175
+id: 1e977052-1ce0-4280-a9ea-a6ff0c8f4cc8
 title: Floating windows and a saved UI layout
 type: feature
 status: backlog
 milestone: colony
 depends_on:
-- 171
+- 5514aac6-0300-4ff6-be19-fd44a5e50089
 created: 2026-09-23
 updated: 2026-09-23
 priority: p1

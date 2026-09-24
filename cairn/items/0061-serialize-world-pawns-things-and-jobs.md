@@ -1,11 +1,11 @@
 ---
-id: 61
+id: c5d185be-9bb8-491d-b73d-94f75e4018f0
 title: Serialize world, pawns, things and jobs
 type: feature
 status: backlog
 milestone: persistence
 depends_on:
-- 60
+- 70edf863-73a1-4a4d-b284-84e9803d2252
 created: 2026-09-22
 updated: 2026-09-22
 priority: p0

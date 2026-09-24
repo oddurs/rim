@@ -1,11 +1,11 @@
 ---
-id: 167
+id: 452628d7-a341-478d-9670-735b6eef1445
 title: Client-only UI Luau VM with view and act APIs
 type: feature
 status: done
 milestone: interface
 depends_on:
-- 165
+- ad0ab61f-b5e7-4a3d-b216-d1b9e7251cfb
 created: 2026-09-23
 updated: 2026-09-23
 closed_at: 2026-09-23

@@ -1,11 +1,11 @@
 ---
-id: 181
+id: 3114946b-5434-4171-9cdb-86ae4e7bb38d
 title: 'Terms and curves: a fixed-point evaluator for outdoor values'
 type: feature
 status: done
 milestone: weather
 depends_on:
-- 180
+- f3eaa893-ba62-4eb0-87aa-1f6195e2636a
 created: 2026-09-23
 updated: 2026-09-23
 closed_at: 2026-09-23

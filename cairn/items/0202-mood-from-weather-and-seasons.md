@@ -1,12 +1,12 @@
 ---
-id: 202
+id: f690b16e-d379-4576-b497-01d66c9e17f8
 title: Mood from weather and seasons
 type: feature
 status: backlog
 milestone: mood
 depends_on:
-- 182
-- 184
+- eb3b0ac7-9922-4ab2-b9c1-8171e0b7f05f
+- 7c50b502-5e27-4807-a36c-0654fe9aec97
 created: 2026-09-23
 updated: 2026-09-23
 priority: p2

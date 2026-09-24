@@ -1,11 +1,11 @@
 ---
-id: 139
+id: ca786a8e-09cf-49ef-8003-1b49468a16a4
 title: 'Mod save migrations: a migrate hook when a mod''s version changes'
 type: feature
 status: backlog
 milestone: persistence
 depends_on:
-- 62
+- 65f0b723-5310-4dc6-a0f6-ba1223edb25b
 created: 2026-09-23
 updated: 2026-09-23
 priority: p1

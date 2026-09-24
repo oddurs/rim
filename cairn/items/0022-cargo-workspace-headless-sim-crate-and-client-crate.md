@@ -1,5 +1,5 @@
 ---
-id: 22
+id: 7e68156c-8ea0-4d65-90a3-a6f7a03b67b7
 title: 'Cargo workspace: headless sim crate and client crate'
 type: chore
 status: done

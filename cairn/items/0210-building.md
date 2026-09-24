@@ -1,11 +1,11 @@
 ---
-id: 210
+id: 3ea7990a-1734-430e-848e-37d7df696b57
 key: building
 title: Building
 type: milestone
 status: done
 depends_on:
-- 9
+- d02fb66e-af87-4c3e-93c5-48b9bfc1fb2b
 created: 2026-09-23
 updated: 2026-09-24
 priority: p1

@@ -1,12 +1,12 @@
 ---
-id: 168
+id: b144ca3c-2985-47be-b3ce-d07d4f17ceaa
 title: 'Component kit v1: buttons, bars, tabs, lists, tooltips, menus, toasts, bubbles'
 type: feature
 status: done
 milestone: interface
 depends_on:
-- 166
-- 167
+- 7497597f-90fd-4a66-8c79-70a6abfbd390
+- 452628d7-a341-478d-9670-735b6eef1445
 created: 2026-09-23
 updated: 2026-09-23
 closed_at: 2026-09-23

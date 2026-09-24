@@ -1,11 +1,11 @@
 ---
-id: 25
+id: 69816584-120b-45fa-b00c-aa229a9c0359
 title: Declarative def patches with conflict detection
 type: feature
 status: done
 milestone: foundations
 depends_on:
-- 24
+- 4504c561-95b3-4d62-8691-3a129260a3c9
 created: 2026-09-22
 updated: 2026-09-22
 priority: p0

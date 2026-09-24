@@ -1,12 +1,12 @@
 ---
-id: 217
+id: 8d8cc16f-b5a7-4da3-9308-3991eed8e94b
 title: 'Windows: light in, heat out'
 type: content
 status: done
 milestone: building
 assignee: Oddur Sigurdsson
 depends_on:
-- 216
+- 3f4c257d-5e6f-4417-86d4-58e1cc981c73
 created: 2026-09-23
 updated: 2026-09-23
 priority: p1

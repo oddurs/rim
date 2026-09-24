@@ -1,11 +1,11 @@
 ---
-id: 164
+id: 17505800-ecc8-4b94-b0e6-7bf04a26f06e
 title: 'Theme tokens: ui/theme.toml, mod patches and UI scale'
 type: feature
 status: done
 milestone: interface
 depends_on:
-- 162
+- 36d3ea49-e9dd-40fa-b6aa-9dd67eee7485
 created: 2026-09-23
 updated: 2026-09-23
 closed_at: 2026-09-23

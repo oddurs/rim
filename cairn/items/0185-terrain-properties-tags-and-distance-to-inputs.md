@@ -1,11 +1,11 @@
 ---
-id: 185
+id: 9b569a33-c488-42df-84c2-9bfa83a14b3e
 title: Terrain properties, tags and distance-to inputs
 type: feature
 status: backlog
 milestone: crafting
 depends_on:
-- 181
+- 3114946b-5434-4171-9cdb-86ae4e7bb38d
 created: 2026-09-23
 updated: 2026-09-23
 priority: p0

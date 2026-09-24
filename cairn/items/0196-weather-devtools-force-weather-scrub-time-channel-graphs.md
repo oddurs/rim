@@ -1,12 +1,12 @@
 ---
-id: 196
+id: dc32fa23-2b01-4682-b41a-2e18c0561516
 title: 'Weather devtools: force weather, scrub time, channel graphs'
 type: chore
 status: backlog
 milestone: sdk
 depends_on:
-- 184
-- 187
+- 7c50b502-5e27-4807-a36c-0654fe9aec97
+- 6dd4891c-f65e-4707-96f9-e6d46c6cd446
 created: 2026-09-23
 updated: 2026-09-23
 priority: p1

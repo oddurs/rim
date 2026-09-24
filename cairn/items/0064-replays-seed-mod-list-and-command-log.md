@@ -1,11 +1,11 @@
 ---
-id: 64
+id: 38722b6e-b300-4282-93d7-b1399a6f60eb
 title: 'Replays: seed, mod list and command log'
 type: feature
 status: backlog
 milestone: persistence
 depends_on:
-- 32
+- c7e9ab80-43d1-4121-8e75-e2dcb9bf3340
 created: 2026-09-22
 updated: 2026-09-22
 priority: p1
