@@ -147,7 +147,7 @@ Every function in `ui`, `act` and `view`, with its types, is in the
 | `view.profile()`, `view.stats()`, `view.mods()`, `view.warnings()` | Profiler and load information |
 | `view.date()` | `{ year, season, day, day_of_year, year_days }` |
 | `view.ambient(field)`, `view.explain(field)` | A field's outdoor value; each term and push that makes it up |
-| `view.data(key)` | Data a sim script stored with `rim.set_data` (the weather plugin's forecast is `"weather:forecast"`) |
+| `view.data(key)` | Data a sim script stored with `rim.set_data`, by its full key: the weather plugin's forecast is `"weather:forecast"` |
 | `view.ticks_per_day()` | For turning ticks into hours |
 | `view.time()` | Wall-clock seconds, for animation |
 

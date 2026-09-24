@@ -42,7 +42,7 @@ declare rim: {
     explain: (field: string) -> {Part},
     -- A field's value at a cell (temperature, light, ...).
     field: (id: string, x: number, y: number) -> number,
-    -- A copy of stored script data, or nil.
+    -- A copy of stored script data, or nil. A bare key is your mod's; "weather:forecast" reads another's.
     get_data: (key: string) -> any,
     -- Hour of the day, 0 to 24 (tick 0 is 06:00).
     hour: () -> number,
@@ -74,7 +74,7 @@ declare rim: {
     seasons: {string},
     -- Pin a field's outdoor value, overriding its terms and pushes; nil unpins. For tests and tools: mods push instead.
     set_ambient: (id: string, value: number?) -> (),
-    -- Keep plain data in the world (hashed, saved, readable by the UI as view.data). Use "your_mod:key".
+    -- Keep plain data in the world (hashed, saved, readable by the UI as view.data). A bare key is your mod's ("state" is "your_mod:state"); you can't write another mod's.
     set_data: (key: string, value: any) -> (),
     -- Drop items near a cell, merging into stacks; returns how many didn't fit.
     spawn_item: (thing: string, x: number, y: number, count: number) -> number,

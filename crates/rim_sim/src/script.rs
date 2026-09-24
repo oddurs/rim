@@ -922,9 +922,27 @@ impl ScriptHost {
 
         // ---- script data and events
         // Plain data kept in the world: hashed, saved, readable by the UI.
+        // Keys belong to a mod: a bare key is the caller's own, and a mod
+        // writes only under its own name, so a mod's saved state is exactly
+        // its keys (DESIGN.md §7a).
         {
             let ptr = self.world.clone();
-            let f = lua.create_function(move |_, (key, v): (String, Value)| {
+            let reg = self.reg.clone();
+            let f = lua.create_function(move |lua, (key, v): (String, Value)| {
+                let me = calling_mod(lua).unwrap_or_else(|| reg.borrow().current_mod.clone());
+                let key = match key.split_once(':') {
+                    None => format!("{me}:{key}"),
+                    Some((owner, _)) if owner == me => key,
+                    Some((owner, _)) => {
+                        return Err(mlua::Error::runtime(format!(
+                            "mod '{me}' can't write \"{key}\": script data under \"{owner}:\" is {owner}'s. \
+                             Write \"{me}:<key>\", or a bare key"
+                        )))
+                    }
+                };
+                if key.len() <= me.len() + 1 {
+                    return Err(mlua::Error::runtime(format!("mod '{me}': a script data key can't be empty")));
+                }
                 let d = crate::data::from_lua(&v, &key, 0).map_err(mlua::Error::runtime)?;
                 with_world(&ptr, |w| {
                     match d {
@@ -938,10 +956,18 @@ impl ScriptHost {
             self.declare(
                 "set_data",
                 "(key: string, value: any) -> ()",
-                "Keep plain data in the world (hashed, saved, readable by the UI as view.data). Use \"your_mod:key\".",
+                "Keep plain data in the world (hashed, saved, readable by the UI as view.data). A bare key is your \
+                 mod's (\"state\" is \"your_mod:state\"); you can't write another mod's.",
             );
             let ptr = self.world.clone();
+            let reg = self.reg.clone();
             let f = lua.create_function(move |lua, key: String| {
+                let key = if key.contains(':') {
+                    key
+                } else {
+                    let me = calling_mod(lua).unwrap_or_else(|| reg.borrow().current_mod.clone());
+                    format!("{me}:{key}")
+                };
                 let d = with_world(&ptr, |w| Ok(w.data.get(&key).cloned()))?;
                 match d {
                     Some(d) => crate::data::to_lua(lua, &d),
@@ -949,7 +975,11 @@ impl ScriptHost {
                 }
             })?;
             rim.set("get_data", f)?;
-            self.declare("get_data", "(key: string) -> any", "A copy of stored script data, or nil.");
+            self.declare(
+                "get_data",
+                "(key: string) -> any",
+                "A copy of stored script data, or nil. A bare key is your mod's; \"weather:forecast\" reads another's.",
+            );
             // Send an event to `rim.on(name, fn)` handlers in any mod. Mod
             // events are namespaced by the sender: "weather:changed".
             let ptr = self.world.clone();

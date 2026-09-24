@@ -24,7 +24,7 @@ are in [Scripting rules](scripting.md).
 | `rim.every` | `(interval: number, fn: () -> ()) -> ()` | Run fn every `interval` ticks (hooks are staggered). Register at load time. |
 | `rim.explain` | `(field: string) -> {Part}` | Each part of a field's outdoor value: its terms, then pushes. |
 | `rim.field` | `(id: string, x: number, y: number) -> number` | A field's value at a cell (temperature, light, ...). |
-| `rim.get_data` | `(key: string) -> any` | A copy of stored script data, or nil. |
+| `rim.get_data` | `(key: string) -> any` | A copy of stored script data, or nil. A bare key is your mod's; "weather:forecast" reads another's. |
 | `rim.hour` | `() -> number` | Hour of the day, 0 to 24 (tick 0 is 06:00). |
 | `rim.indoors` | `(x: number, y: number) -> boolean` | Whether a cell is inside an enclosed room. |
 | `rim.leave_after` | `(id: number, ticks: number) -> ()` | Make a pawn give up and walk off the map after `ticks`. |
@@ -40,7 +40,7 @@ are in [Scripting rules](scripting.md).
 | `rim.season` | `() -> string` | The current season's name. |
 | `rim.seasons` | `{string}` | The calendar's season names, in order. |
 | `rim.set_ambient` | `(id: string, value: number?) -> ()` | Pin a field's outdoor value, overriding its terms and pushes; nil unpins. For tests and tools: mods push instead. |
-| `rim.set_data` | `(key: string, value: any) -> ()` | Keep plain data in the world (hashed, saved, readable by the UI as view.data). Use "your_mod:key". |
+| `rim.set_data` | `(key: string, value: any) -> ()` | Keep plain data in the world (hashed, saved, readable by the UI as view.data). A bare key is your mod's ("state" is "your_mod:state"); you can't write another mod's. |
 | `rim.spawn_item` | `(thing: string, x: number, y: number, count: number) -> number` | Drop items near a cell, merging into stacks; returns how many didn't fit. |
 | `rim.spawn_pawn` | `(creature: string, faction: Faction, x: number, y: number, name: string?) -> (number?, string?)` | Spawn a creature; returns its id and name, or nil if the cell is blocked. |
 | `rim.stat` | `(id: number, name: string) -> number?` | A thing's stat by name: its def's base times its material's factor. |
