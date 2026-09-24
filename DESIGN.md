@@ -366,7 +366,8 @@ Plugins keep state in the world, not in Luau locals: `rim.set_data(key,
 value)` stores plain data under a namespaced key. It is in the state hash, it
 will be saved, and the UI reads it with `view.data(key)`. That's how the
 forecast panel sees the weather plugin's queue. `rim.emit(name, table)` sends
-a script event to `rim.on` handlers in any mod (`weather_changed`).
+a script event to `rim.on` handlers in any mod, named under the sender's
+namespace (`weather:changed`).
 
 ### The weather plugin
 

@@ -190,7 +190,7 @@ rim.weather.register({
 | `rim.weather.weights(previous, tick)` | Each type's weight to follow `previous` at `tick` |
 | `rim.weather.types()` | Registered ids, in order |
 
-It emits `weather_changed` (`from`, `to`, `label`) when the weather changes.
+It emits `weather:changed` (`from`, `to`, `label`) when the weather changes.
 Its incidents (cold snap, heat wave, storm) go through core's storyteller like
 any other. A storm incident is just:
 

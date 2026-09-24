@@ -128,7 +128,7 @@ fn channels_ease_between_weathers() {
 #[test]
 fn forcing_the_weather_and_hearing_about_it() {
     let script = r#"
-        rim.on("weather_changed", function(e)
+        rim.on("weather:changed", function(e)
             local log = rim.get_data("t:log") or {}
             table.insert(log, e.to)
             rim.set_data("t:log", log)
@@ -149,8 +149,8 @@ fn forcing_the_weather_and_hearing_about_it() {
     assert_eq!(q[0].0, "storm", "the storm is the current weather: {q:?}");
     assert_eq!(q[0].2 - q[0].1, (3 * TICKS_PER_DAY / 24) as i64, "for three hours");
     assert!(q.windows(2).all(|w| w[0].2 == w[1].1), "the rest of the forecast follows on: {q:?}");
-    let Some(Data::Table(log)) = s.world.data.get("t:log") else { panic!("no weather_changed events") };
-    assert_eq!(log.values().last(), Some(&Data::Str("storm".into())), "weather_changed fired for the storm");
+    let Some(Data::Table(log)) = s.world.data.get("t:log") else { panic!("no weather:changed events") };
+    assert_eq!(log.values().last(), Some(&Data::Str("storm".into())), "weather:changed fired for the storm");
     let wind = s.world.defs.lookup("field", "wind").unwrap() as usize;
     for _ in 0..TICKS_PER_DAY / 24 * 2 {
         s.step();

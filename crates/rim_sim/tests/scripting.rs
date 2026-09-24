@@ -39,8 +39,9 @@ fn an_endless_loop_is_stopped_and_the_game_goes_on() {
     );
     let e = errors(&s);
     assert!(e.iter().any(|m| m.contains("endless loop")), "{e:?}");
-    // The hook still runs on later ticks.
-    assert!(s.world.data.get("probe:calls").and_then(|d| d.num()).unwrap_or(0.0) >= 3.0);
+    // The runaway hook is switched off, and says so; the game goes on.
+    assert_eq!(s.world.data.get("probe:calls").and_then(|d| d.num()), Some(1.0), "not called again");
+    assert!(s.world.messages.iter().any(|m| m.text.contains("[probe]") && m.text.contains("switched off")));
 }
 
 #[test]
@@ -165,4 +166,92 @@ fn a_pow_operator_that_could_desync_is_flagged() {
         "{:?}",
         s.warnings
     );
+}
+
+fn load_error(name: &str, ship: &[&str], script: &str) -> String {
+    let dir = test_mods(name, ship, &[("rogue", &[("scripts/rogue.luau", script)])]);
+    let err = Sim::new(&dir, 1).err().expect("the rogue mod must not load");
+    let _ = fs::remove_dir_all(dir);
+    err
+}
+
+#[test]
+fn no_mod_can_replace_the_engine_api_or_another_mods() {
+    let err = load_error("replace-engine", &["core"], "rim.spawn_pawn = function() end\n");
+    assert!(err.contains("mod 'rogue' can't replace rim.spawn_pawn: it belongs to the engine"), "{err}");
+    let err = load_error("replace-plugin", &["core"], "rim.register_incident = nil\n");
+    assert!(err.contains("rim.register_incident: it belongs to mod 'core'"), "{err}");
+    let err = load_error("replace-weather", &["core", "weather"], "rim.weather = {}\n");
+    assert!(err.contains("rim.weather: it belongs to mod 'weather'"), "{err}");
+    let err = load_error("metatable", &["core"], "setmetatable(rim, nil)\n");
+    assert!(err.to_lowercase().contains("metatable"), "{err}");
+}
+
+#[test]
+fn rim_is_read_only_once_mods_have_loaded() {
+    let dir = test_mods(
+        "frozen",
+        &["core", "weather"],
+        &[(
+            "probe",
+            &[(
+                "scripts/probe.luau",
+                r#"
+        rim.every(1, function()
+            local a = pcall(function() rim.late_api = 1 end)
+            local b = pcall(function() rim.weather.register = nil end)
+            local c = pcall(function() rim.creature_defs[1] = nil end)
+            rim.set_data("probe:r", { add = a, plugin = b, data = c })
+        end)
+    "#,
+            )],
+        )],
+    );
+    let mut s = Sim::new(&dir, 1).expect("loads");
+    s.step();
+    s.step();
+    let _ = fs::remove_dir_all(dir);
+    let r = s.world.data.get("probe:r").expect("ran");
+    for k in ["add", "plugin", "data"] {
+        assert_eq!(r.get(k), Some(&Data::Bool(false)), "{k} must fail after load");
+    }
+}
+
+#[test]
+fn mods_emit_only_their_own_events() {
+    let s = run(
+        "emit",
+        r#"
+        rim.every(1, function()
+            rim.set_data("probe:own", (pcall(rim.emit, "probe:hello", {})))
+            rim.set_data("probe:other", (pcall(rim.emit, "weather:changed", {})))
+            rim.set_data("probe:bare", (pcall(rim.emit, "pawn_died", {})))
+        end)
+    "#,
+        2,
+    );
+    assert_eq!(s.world.data.get("probe:own"), Some(&Data::Bool(true)));
+    assert_eq!(s.world.data.get("probe:other"), Some(&Data::Bool(false)), "can't speak for another mod");
+    assert_eq!(s.world.data.get("probe:bare"), Some(&Data::Bool(false)), "engine event names are the engine's");
+}
+
+#[test]
+fn a_slow_mod_is_named_in_the_warnings() {
+    // Slow but not runaway: about 20k steps of work every tick.
+    let s = run(
+        "slow",
+        r#"
+        rim.every(1, function()
+            local t = {}
+            for i = 1, 20000 do t[i % 64 + 1] = tostring(i) end
+        end)
+    "#,
+        1300,
+    );
+    assert!(
+        s.warnings.iter().any(|w| w.contains("mod 'probe' is slow")),
+        "the profiler names the slow mod: {:?}",
+        s.warnings
+    );
+    assert!(!s.warnings.iter().any(|w| w.contains("mod 'core' is slow")), "{:?}", s.warnings);
 }

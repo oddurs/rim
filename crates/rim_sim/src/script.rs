@@ -38,6 +38,22 @@ fn field_id(w: &World, id: &str) -> mlua::Result<usize> {
     w.defs.lookup("field", id).map(|f| f as usize).ok_or_else(|| mlua::Error::runtime(format!("unknown field '{id}'")))
 }
 
+/// The mod whose code is calling into the engine: the chunk name of the
+/// nearest Luau frame ("@weather/scripts/00_weather.luau" is weather's). Not
+/// the mod whose hook is running: when mod B calls `rim.weather.force`, it's
+/// the weather plugin's code that emits `weather:changed`.
+fn calling_mod(lua: &Lua) -> Option<String> {
+    (1..16).find_map(|level| {
+        lua.inspect_stack(level, |d| {
+            let src = d.source().source?.to_string();
+            let rest = src.strip_prefix('@')?;
+            let (mod_id, path) = rest.split_once('/')?;
+            path.starts_with("scripts/").then(|| mod_id.to_string())
+        })
+        .flatten()
+    })
+}
+
 fn rim_sim_entity(id: u64) -> mlua::Result<hecs::Entity> {
     hecs::Entity::from_bits(id).ok_or_else(|| mlua::Error::runtime(format!("bad entity id {id}")))
 }
@@ -57,7 +73,15 @@ struct Handler {
 
 #[derive(Default)]
 struct Registry {
+    /// The mod whose code is running: loading, or in a hook or handler.
     current_mod: String,
+    /// Who put each key in `rim` ("the engine", or "mod 'x'"): nothing may be
+    /// replaced, only added, and only while mods load.
+    owners: std::collections::HashMap<String, String>,
+    /// Set once every script has loaded: `rim` is read-only from then on.
+    loaded: bool,
+    /// Hooks and handlers stopped for running away (by function pointer).
+    disabled: std::collections::HashSet<usize>,
     hooks: Vec<Hook>,
     handlers: Vec<Handler>,
 }
@@ -72,6 +96,10 @@ pub const MEMORY_LIMIT: usize = 256 << 20;
 /// weather plugin's heaviest call uses a few thousand.
 pub const STEP_BUDGET: u64 = 100_000_000;
 
+/// Average time a mod's script calls may take before the profiler warns
+/// about it (µs). A whole tick at 6x has 2 ms (DESIGN.md §8).
+pub const MOD_BUDGET_US: f64 = 500.0;
+
 pub struct ScriptHost {
     /// Load-time advice for mod authors (determinism hazards).
     pub warnings: Vec<String>,
@@ -80,6 +108,8 @@ pub struct ScriptHost {
     reg: Rc<RefCell<Registry>>,
     /// Interrupts left for the current call (see `STEP_BUDGET`).
     steps: Rc<Cell<u64>>,
+    /// The current call used up its step budget.
+    ran_away: Rc<Cell<bool>>,
 }
 
 /// Only libraries whose results are the same on every machine and that can't
@@ -190,11 +220,14 @@ impl ScriptHost {
         );
         lua.set_memory_limit(MEMORY_LIMIT).map_err(|e| format!("script VM: {e}"))?;
         let steps = Rc::new(Cell::new(STEP_BUDGET));
+        let ran_away = Rc::new(Cell::new(false));
         {
             let steps = steps.clone();
+            let ran_away = ran_away.clone();
             lua.set_interrupt(move |_| {
                 let left = steps.get();
                 if left == 0 {
+                    ran_away.set(true);
                     return Err(mlua::Error::runtime(format!(
                         "stopped: ran more than {STEP_BUDGET} steps in one call (an endless loop?)"
                     )));
@@ -209,6 +242,7 @@ impl ScriptHost {
             world: Rc::new(WorldPtr(Cell::new(std::ptr::null_mut()))),
             reg: Rc::new(RefCell::new(Registry::default())),
             steps,
+            ran_away,
         };
         host.install(defs).map_err(|e| format!("script API setup failed: {e}"))?;
         host.lock_down().map_err(|e| format!("script API setup failed: {e}"))?;
@@ -231,7 +265,26 @@ impl ScriptHost {
                 .exec()
                 .map_err(|e| format!("{name}: {e}"))?;
         }
+        host.freeze_api().map_err(|e| format!("script API setup failed: {e}"))?;
         Ok(host)
+    }
+
+    /// Every script has loaded: `rim` and every table in it (the engine's
+    /// and each plugin's API) become read-only, so no mod can change another
+    /// mod's or the engine's API while the game runs.
+    fn freeze_api(&self) -> mlua::Result<()> {
+        let mut r = self.reg.borrow_mut();
+        r.loaded = true;
+        r.current_mod.clear();
+        drop(r);
+        let api: Table = self.lua.named_registry_value("rim_api")?;
+        for pair in api.pairs::<Value, Value>() {
+            if let (_, Value::Table(t)) = pair? {
+                t.set_readonly(true);
+            }
+        }
+        api.set_readonly(true);
+        Ok(())
     }
 
     /// A script's own global environment: its globals land here, and reads
@@ -555,9 +608,17 @@ impl ScriptHost {
                 }
             })?;
             rim.set("get_data", f)?;
-            // Send an event to `rim.on(name, fn)` handlers in any mod.
+            // Send an event to `rim.on(name, fn)` handlers in any mod. Mod
+            // events are namespaced by the sender: "weather:changed".
             let ptr = self.world.clone();
-            let f = lua.create_function(move |_, (name, v): (String, Option<Table>)| {
+            let reg = self.reg.clone();
+            let f = lua.create_function(move |lua, (name, v): (String, Option<Table>)| {
+                let me = calling_mod(lua).unwrap_or_else(|| reg.borrow().current_mod.clone());
+                if !name.starts_with(&format!("{me}:")) || name.len() <= me.len() + 1 {
+                    return Err(mlua::Error::runtime(format!(
+                        "mod '{me}' can only emit its own events, named \"{me}:<event>\" (got \"{name}\")"
+                    )));
+                }
                 let data = match v {
                     Some(t) => crate::data::from_lua(&Value::Table(t), &name, 0).map_err(mlua::Error::runtime)?,
                     None => None,
@@ -610,21 +671,74 @@ impl ScriptHost {
             Ok(w.place_item(def, IVec::new(x, y), count))
         });
 
-        g.set("rim", rim)?;
+        // Mods see `rim` through a proxy. Reads go to the API table; a write
+        // may add a new key while mods load, and never replace one, so no mod
+        // can swap out the engine's functions or another plugin's API.
+        {
+            let mut r = self.reg.borrow_mut();
+            for pair in rim.pairs::<String, Value>() {
+                r.owners.insert(pair?.0, "the engine".to_string());
+            }
+        }
+        lua.set_named_registry_value("rim_api", rim.clone())?;
+        let proxy = lua.create_table()?;
+        let mt = lua.create_table()?;
+        mt.set("__index", rim.clone())?;
+        let reg = self.reg.clone();
+        let api = rim;
+        mt.set(
+            "__newindex",
+            lua.create_function(move |lua, (_t, k, v): (Table, Value, Value)| {
+                let mut r = reg.borrow_mut();
+                let me = calling_mod(lua).unwrap_or_else(|| r.current_mod.clone());
+                let Value::String(key) = k else {
+                    return Err(mlua::Error::runtime(format!("mod '{me}': keys in rim must be strings")));
+                };
+                let key = key.to_string_lossy().to_string();
+                if r.loaded {
+                    return Err(mlua::Error::runtime(format!(
+                        "mod '{me}' can't set rim.{key}: rim is read-only once mods have loaded (add to it at load time)"
+                    )));
+                }
+                if let Some(owner) = r.owners.get(&key) {
+                    return Err(mlua::Error::runtime(format!(
+                        "mod '{me}' can't replace rim.{key}: it belongs to {owner}"
+                    )));
+                }
+                api.raw_set(key.as_str(), v)?;
+                r.owners.insert(key, format!("mod '{me}'"));
+                Ok(())
+            })?,
+        )?;
+        // getmetatable(rim) can't reach the proxy's workings.
+        mt.set("__metatable", "rim")?;
+        proxy.set_metatable(Some(mt))?;
+        g.set("rim", proxy)?;
         Ok(())
     }
 
     fn call(&self, w: &mut World, prof: &mut Profile, mod_id: &str, f: &Function, args: impl IntoLuaMulti) {
         self.world.0.set(w as *mut World);
         self.steps.set(STEP_BUDGET);
+        self.ran_away.set(false);
+        self.reg.borrow_mut().current_mod = mod_id.to_string();
         let t = Instant::now();
         let r = f.call::<()>(args);
         self.world.0.set(std::ptr::null_mut());
         prof.add(&format!("mod:{mod_id}"), t.elapsed().as_secs_f64() * 1e6);
+        self.reg.borrow_mut().current_mod.clear();
         if let Err(e) = r {
             let text = format!("[{mod_id}] script error: {e}");
             eprintln!("{text}");
             w.message(text, MsgKind::Bad);
+            // A runaway won't behave better next time: stop calling it.
+            if self.ran_away.get() {
+                self.reg.borrow_mut().disabled.insert(f.to_pointer() as usize);
+                w.message(
+                    format!("[{mod_id}] a hook ran past its step budget and has been switched off for this game."),
+                    MsgKind::Bad,
+                );
+            }
         }
     }
 
@@ -634,6 +748,7 @@ impl ScriptHost {
             r.hooks
                 .iter()
                 .filter(|h| (w.tick + h.phase).is_multiple_of(h.interval))
+                .filter(|h| !r.disabled.contains(&(h.func.to_pointer() as usize)))
                 .map(|h| (h.func.clone(), h.mod_id.clone()))
                 .collect()
         };
@@ -657,7 +772,11 @@ impl ScriptHost {
             };
             let targets: Vec<(Function, String)> = {
                 let r = self.reg.borrow();
-                r.handlers.iter().filter(|h| h.event == name).map(|h| (h.func.clone(), h.mod_id.clone())).collect()
+                r.handlers
+                    .iter()
+                    .filter(|h| h.event == name && !r.disabled.contains(&(h.func.to_pointer() as usize)))
+                    .map(|h| (h.func.clone(), h.mod_id.clone()))
+                    .collect()
             };
             for (f, m) in targets {
                 self.call(w, prof, &m, &f, t.clone());

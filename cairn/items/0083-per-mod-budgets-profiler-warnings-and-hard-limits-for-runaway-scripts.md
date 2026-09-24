@@ -5,7 +5,7 @@ type: feature
 status: backlog
 milestone: plugin-api
 created: 2026-09-22
-updated: 2026-09-22
+updated: 2026-09-24
 priority: p1
 api: none
 effort: m
@@ -22,8 +22,12 @@ One slow mod should be visible and throttled, not a mystery. A runaway mod (`whi
 
 ## Acceptance criteria
 
-- [ ] Budget in ms per mod
-- [ ] Warning in the profiler when exceeded
-- [ ] Hard instruction limit per call via the Luau interrupt; the offending mod is named and its hook disabled
+- [x] Budget in ms per mod
+- [x] Warning in the profiler when exceeded
+- [x] Hard instruction limit per call via the Luau interrupt; the offending mod is named and its hook disabled
 - [ ] Memory cap per mod
-- [ ] Limits are counted in instructions, not wall time, so they are deterministic
+- [x] Limits are counted in instructions, not wall time, so they are deterministic
+
+## 2026-09-24
+
+Done: a counted step budget per call (100M interrupts, #19) stops a runaway, names the mod, and now switches that hook or handler off for the game; a mod whose calls average over 0.5 ms (MOD_BUDGET_US) is named once in the load warnings the profiler shows (wall-clock, so warning only). Tests: an_endless_loop_is_stopped_and_the_game_goes_on, a_slow_mod_is_named_in_the_warnings. Open: a memory cap per mod. The VM has a 256 MB cap overall; per-mod accounting needs Luau memory categories (lua_setmemcat / lua_totalbytes), which mlua 0.12 only exposes through heap dumps, too slow per call.

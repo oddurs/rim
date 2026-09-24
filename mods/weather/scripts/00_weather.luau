@@ -166,7 +166,7 @@ local function apply(e, previous: string?)
 	end
 	rim.push_ambient("wind_dir", "weather", e.wind_dir or 0, nil, t.blend)
 	local label = label_of(e)
-	rim.emit("weather_changed", { from = previous, to = e.id, label = label })
+	rim.emit("weather:changed", { from = previous, to = e.id, label = label })
 	if t.message then
 		local text = if type(t.message) == "function" then t.message(label) else t.message
 		if text then
