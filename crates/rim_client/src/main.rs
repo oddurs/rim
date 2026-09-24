@@ -88,17 +88,53 @@ pub struct App {
     pan_anchor: Option<(f32, f32)>,
     /// Lighting and weather on screen.
     pub sky: sky::Sky,
+    /// The terrain, baked into a texture.
+    pub ground: draw::Ground,
     /// Input subscriber for wheel events (see `Wheel`).
     wheel_sub: usize,
 }
 
-fn conf() -> Conf {
-    Conf {
-        window_title: "rim".to_owned(),
-        window_width: 1600,
-        window_height: 960,
-        window_resizable: true,
-        high_dpi: true,
+/// Seconds since the last frame, clamped: macroquad's value is raw, so the
+/// first frame (load time) or a window drag would otherwise jump the camera
+/// and run a burst of sim ticks.
+fn frame_time() -> f32 {
+    get_frame_time().min(0.1)
+}
+
+/// Window and renderer settings. Reasoning: docs/engineering/dependencies.md.
+fn conf() -> macroquad::conf::Conf {
+    use macroquad::miniquad::conf::{AppleGfxApi, LinuxBackend, Platform};
+    macroquad::conf::Conf {
+        miniquad_conf: Conf {
+            window_title: "rim".to_owned(),
+            window_width: 1600,
+            window_height: 960,
+            window_resizable: true,
+            high_dpi: true,
+            // No MSAA: shapes are drawn at the display's resolution and the
+            // UI is anti-aliased in its glyph atlas; 4x costs real GPU
+            // bandwidth at Retina sizes (and software GL in CI).
+            sample_count: 1,
+            platform: Platform {
+                // Vsync where the platform honours it (macOS paces frames
+                // with the display itself and ignores this).
+                swap_interval: Some(1),
+                // The sim runs every frame, so never block waiting for input.
+                blocking_event_loop: false,
+                // Metal can't run the GLSL lighting shader (sky.rs).
+                apple_gfx_api: AppleGfxApi::OpenGl,
+                // Wayland support is marked unstable upstream: X11 first.
+                linux_backend: LinuxBackend::X11WithWaylandFallback,
+                linux_wm_class: "rim",
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        // Batches: a draw call ends when it runs out of room. Indices are the
+        // limit (6 per rectangle, 60 per circle), so give them 1.5x the
+        // vertices. Vertex capacity must stay under 65,536 (u16 indices).
+        draw_call_vertex_capacity: 16_000,
+        draw_call_index_capacity: 24_000,
         ..Default::default()
     }
 }
@@ -169,6 +205,7 @@ async fn main() {
         acc: 0.0,
         pan_anchor: None,
         sky: sky::Sky::default(),
+        ground: draw::Ground::default(),
         wheel_sub: macroquad::input::utils::register_input_subscriber(),
     };
     app.selected = app.sim.world.colonists().next();
@@ -316,7 +353,7 @@ impl RawInput {
         .filter(|k| is_key_pressed(*k))
         .collect();
 
-        let speed = 18.0 * get_frame_time() * 40.0 / app.cam.zoom;
+        let speed = 18.0 * frame_time() * 40.0 / app.cam.zoom;
         let (mut dx, mut dy) = (0.0, 0.0);
         if is_key_down(KeyCode::W) || is_key_down(KeyCode::Up) {
             dy -= speed;
@@ -492,6 +529,7 @@ pub fn frame(app: &mut App, raw: &RawInput) {
 }
 
 pub fn render(app: &mut App) {
+    app.ground.update(&app.sim.world);
     draw::world(app);
     sky::draw(app);
     draw::world_ui(app);
@@ -529,7 +567,7 @@ fn step(app: &mut App) {
         app.acc = 0.0;
         return;
     }
-    app.acc += get_frame_time() as f64 * 60.0 * app.speed as f64;
+    app.acc += frame_time() as f64 * 60.0 * app.speed as f64;
     let budget = std::time::Instant::now();
     while app.acc >= 1.0 {
         app.sim.step();

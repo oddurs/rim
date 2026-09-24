@@ -522,6 +522,28 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.frame().await;
     t.check(t.app.ui.find("core:devtools.panel").is_none(), "F12 closes devtools");
 
+    // ---------------------------------------------------------- render cost
+    println!("\n# render cost");
+    let zoom0 = t.app.cam.zoom;
+    t.act(Action::Zoom(0.01, 800.0, 480.0)); // all the way out: the most cells
+    t.frame().await;
+    let t0 = std::time::Instant::now();
+    t.frame().await;
+    let frame_ms = t0.elapsed().as_secs_f64() * 1e3;
+    macroquad::telemetry::enable();
+    macroquad::telemetry::capture_frame();
+    t.frame().await;
+    t.frame().await;
+    let calls = macroquad::telemetry::drawcalls().len();
+    macroquad::telemetry::disable();
+    println!(
+        "zoomed out ({:.1} px/cell): {calls} draw calls, frame {frame_ms:.1} ms (CPU, incl. present)",
+        t.app.cam.zoom
+    );
+    t.check(calls > 0, "the renderer's draw calls can be counted");
+    t.act(Action::Zoom(zoom0 / t.app.cam.zoom, 800.0, 480.0));
+    t.frame().await;
+
     // ---------------------------------------------------------- UI budget, live
     let (b, l, p) = (t.app.ui.info.build_us, t.app.ui.info.layout_us, t.app.ui.info.paint_us);
     println!(

@@ -242,7 +242,10 @@ pub fn system_fonts() -> (Database, FontsFrom) {
     (db, FontsFrom::Scan)
 }
 
-static PRELOAD: OnceLock<Mutex<Option<JoinHandle<(Database, FontsFrom)>>>> = OnceLock::new();
+/// The background load started by `preload`, until `take` joins it.
+type Preload = Mutex<Option<JoinHandle<(Database, FontsFrom)>>>;
+
+static PRELOAD: OnceLock<Preload> = OnceLock::new();
 
 /// Start finding the system fonts on a background thread. Call as early as
 /// possible (before loading mods and generating the map); `take` joins it.
