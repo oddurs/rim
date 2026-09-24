@@ -27,6 +27,19 @@ The headless engine: defs, mod loading and patching, map, pathing, AI skeleton, 
 - [x] `ecaf561f` Command queue applied at tick boundaries <sup>feature · p0 · s · engine</sup>
 - [x] `f2ea0bd1` Tile map with fixture and item layers, and reachability regions <sup>feature · p0 · m · engine</sup>
 
+## graphics — Graphics
+
+`··········` 0% · 0 of 6 done
+
+A sprint: fast on a little old laptop with mods loaded. The reference machine is a 2017 integrated GPU (Intel UHD 620 class) at 1080p: 60 fps on the DESIGN.md §8 map with 20 mods, which gives the world renderer 4 ms of CPU a frame. It starts by measuring, with a render benchmark that CI gates on. Then the look becomes data (primitives and sprite keys, no content names in the renderer), every mod's sprites pack into one shared atlas so the number of mods doesn't change the number of draw calls, whatever doesn't move is cached per chunk on the GPU, and a render scale keeps high-DPI screens within an integrated GPU's pixel budget. Design: DESIGN.md §6a, §8.
+
+- [ ] `30760c07` Render scale: the world at a fraction of the screen's pixels <sup>feature · p1 · m · client</sup>
+- [ ] `3dd22b0d` Looks: draw primitives and sprite keys replace named shapes <sup>feature · p0 · l · engine</sup>
+- [ ] `4376f91e` Render benchmark and a frame budget CI holds <sup>perf · p0 · m · client</sup>
+- [ ] `96d2dac9` Chunks: one dirty unit for regions, fields and the renderer <sup>perf · p0 · m · engine</sup>
+- [ ] `e2ce89c3` Sprites from mods, packed into one world atlas at load <sup>feature · p0 · m · client</sup>
+- [ ] `e3c1f87b` Chunked meshes: what does not move is drawn from the GPU <sup>perf · p0 · m · client</sup>
+
 ## castaway — Castaway
 
 `##########` 100% · 17 of 17 done · due 2026-10-15
@@ -115,11 +128,10 @@ Exposure makes shelter matter: warmth, enclosed rooms, day/night, weather. Get f
 
 ## building — Building
 
-`##########` 92% · 11 of 12 done · due 2026-11-15
+`##########` 100% · 11 of 11 done · due 2026-11-15
 
 A one-week sprint inside Colony. Building stops being a fixed list of defs
 
-- [ ] `3dd22b0d` Looks: draw primitives and sprite keys replace named shapes <sup>feature · p2 · m · client</sup>
 - [x] `3f4c257d` Rooms made of something: leak and daylight from the boundary <sup>feature · p0 · l · engine</sup>
 - [x] `419a24ab` Interaction spots: furniture a pawn uses <sup>feature · p1 · m · engine</sup>
 - [x] `49e5e583` Walls that look joined, in the colour of what they are made of <sup>feature · p1 · m · client</sup>
@@ -189,7 +201,7 @@ The run gets a shape: eras, storyteller tiers, defensive strength in the threat 
 
 ## plugin-api — Plugin API
 
-`#####·····` 44% · 11 of 25 done · due 2027-02-01
+`#####·····` 46% · 11 of 24 done · due 2027-02-01
 
 The API grows up: stat pipeline, script components, custom jobs, needs and def kinds, modules and custom events, a real sandbox with hard limits, factions as data, rim test, typed API. Everything Mood needs, and everything DESIGN.md §10 says a mod from a stranger's repo must be safe to do.
 
@@ -200,7 +212,6 @@ The API grows up: stat pipeline, script components, custom jobs, needs and def k
 - [ ] `b0da41ef` Custom def kinds: plugins declare their own data <sup>feature · p1 · m · engine</sup>
 - [ ] `b3df9f85` Mod-defined def kinds with schemas, and namespaced extension fields <sup>feature · p0 · l · engine</sup>
 - [ ] `c65db254` Per-mod budgets: profiler warnings and hard limits for runaway scripts <sup>feature · p1 · m · engine</sup>
-- [ ] `e2ce89c3` Sprites and atlases from mods <sup>feature · p2 · m · client</sup>
 - [ ] `e63fd9c3` Script hook for a stage of map generation <sup>feature · p3 · m · engine</sup>
 - [ ] `eb2c9422` Which platforms beyond desktop, and what do they cost? <sup>spike · p2 · s · engine</sup>
 - [ ] `ebb814ad` Sky bodies: a cycle input and coloured sky terms <sup>feature · p2 · m · engine</sup>
@@ -249,7 +260,7 @@ Making a mod feels like publishing a small open-source library: rim new, typed L
 
 ## scale — Scale
 
-`##········` 17% · 2 of 12 done · due 2027-03-15
+`##········` 20% · 2 of 10 done · due 2027-03-15
 
 Hit the performance budget: benchmark harness, hierarchical pathing, flow fields, spatial indices, incremental regions, render caching.
 
@@ -257,11 +268,9 @@ Hit the performance budget: benchmark harness, hierarchical pathing, flow fields
 - [ ] `277ff6f2` Hierarchical pathfinding <sup>perf · p1 · l · engine</sup>
 - [ ] `66906291` Incremental region updates <sup>perf · p2 · m · engine</sup>
 - [ ] `91de1172` Parallel systems where read and write sets allow <sup>spike · p2 · m · engine</sup>
-- [ ] `96d2dac9` Chunks: one dirty unit for regions, fields and the renderer <sup>perf · p2 · m · engine</sup>
 - [ ] `a353667b` Flow fields for raid groups <sup>perf · p2 · m · engine</sup>
 - [ ] `da558444` Ground renderer: terrain, wetness and snow in one shader pass <sup>perf · p2 · m · client</sup>
 - [ ] `dab55ea2` Meet the budget: 6x speed at 60 fps <sup>perf · p0 · l · engine</sup>
-- [ ] `e3c1f87b` Chunked terrain render caching <sup>perf · p1 · m · client</sup>
 - [ ] `fbf3ee1c` Spatial index for things by def <sup>perf · p1 · m · engine</sup>
 - [x] `8ee7a610` Anchored labels capped by priority inside the viewport <sup>perf · p2 · s · engine</sup>
 - [x] `ee7fe7fd` Benchmark harness: target map, 30 colonists, 200 pawns <sup>perf · p0 · m · tooling</sup>

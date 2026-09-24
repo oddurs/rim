@@ -3,13 +3,15 @@ id: 3dd22b0d-a723-4acb-ae23-4095dc784e7e
 title: 'Looks: draw primitives and sprite keys replace named shapes'
 type: feature
 status: backlog
-milestone: building
+milestone: graphics
+depends_on:
+- 4376f91e-f671-4ca5-9a6a-8c42848043eb
 created: 2026-09-24
 updated: 2026-09-24
-priority: p2
+priority: p0
 api: breaking
-effort: m
-layer: client
+effort: l
+layer: engine
 area: render
 pillar:
 - plugin-first
@@ -44,3 +46,7 @@ Breaking (`shape` goes away), so it lands before the save format, per §10.
 - [ ] Core plays with looks only, screenshots reviewed
 - [ ] The example plugin ships an atlas and a def that uses a sprite key
 - [ ] A def with no look draws as a fill in its colour, so nothing is invisible
+
+## 2026-09-24
+
+Graphics milestone: 'The example plugin ships an atlas and a def that uses a sprite key' now belongs to e2ce89c3 (the shared world atlas); this item defines sprite keys and validates them.

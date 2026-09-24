@@ -3,10 +3,10 @@ id: 96d2dac9-cf4e-409a-a028-f49902c8d7d9
 title: 'Chunks: one dirty unit for regions, fields and the renderer'
 type: perf
 status: backlog
-milestone: scale
+milestone: graphics
 created: 2026-09-24
 updated: 2026-09-24
-priority: p2
+priority: p0
 api: none
 effort: m
 layer: engine
