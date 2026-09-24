@@ -28,7 +28,13 @@ local GRACE_DAYS = 2 -- no threats before this
 local CHECK_TICKS = 500 -- how often we roll
 local MTB_DAYS = 0.9 -- mean days between incidents for a poor colony
 
-local state = { last = 0, last_threat = 0 }
+-- What the storyteller remembers lives in script data, not in a local:
+-- saved with the game and part of the state hash (DESIGN.md §7a).
+local MEMORY = "core:storyteller"
+
+local function memory(): { last: number, last_threat: number }
+	return rim.get_data(MEMORY) or { last = 0, last_threat = 0 }
+end
 
 -- Exposure is wealth relative to how hard a target the colony is.
 -- A rich, well-defended colony draws the same raids as a poorer, weaker one.
@@ -45,7 +51,7 @@ local function context()
 		wealth = rim.wealth(),
 		colonists = rim.colonists(),
 		strength = rim.colony_strength(),
-		since_threat = (tick - state.last_threat) / tpd,
+		since_threat = (tick - memory().last_threat) / tpd,
 	}
 	ctx.points = threat_points(ctx.wealth, ctx.strength, ctx.day)
 	return ctx
@@ -56,10 +62,12 @@ local function run(inc, ctx): boolean
 	if inc.execute(ctx) == false then
 		return false
 	end
-	state.last = rim.tick()
+	local m = memory()
+	m.last = rim.tick()
 	if inc.kind == "threat" then
-		state.last_threat = state.last
+		m.last_threat = m.last
 	end
+	rim.set_data(MEMORY, m)
 	return true
 end
 
@@ -70,7 +78,7 @@ rim.every(CHECK_TICKS, function()
 	end
 	local tick = rim.tick()
 	local tpd = rim.ticks_per_day
-	if tick - state.last < tpd * 0.35 then
+	if tick - memory().last < tpd * 0.35 then
 		return
 	end
 
