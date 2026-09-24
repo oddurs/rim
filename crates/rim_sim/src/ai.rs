@@ -103,10 +103,10 @@ fn go_to(w: &mut World, p: &mut Pawn, goal: Goal) -> Go {
         return Go::Moving;
     }
     w.map.ensure_regions();
-    if !w.map.can_reach(p.pos, goal) {
+    if !w.map.can_reach_for(p.pos, goal, p.faction) {
         return Go::Failed;
     }
-    match w.pf.find(&w.map, p.pos, goal, 30_000) {
+    match w.pf.find(&w.map, p.pos, goal, 30_000, p.faction) {
         Some(path) => {
             p.path = path;
             p.path_goal = Some(goal);
@@ -217,11 +217,41 @@ fn think_hostile(w: &mut World, e: Entity, p: &mut Pawn) -> Option<Job> {
     }
     if let Some((t, tp)) = nearest_pawn(w, e, p.pos, 1000, |o| o.faction == Faction::Player && !out_of_fight(&defs, o))
     {
-        if reachable(w, p.pos, Goal::Touch(tp)) {
+        w.map.ensure_regions();
+        if w.map.can_reach_for(p.pos, Goal::Touch(tp), p.faction) {
             return Some(Job::Attack { target: t, until: w.tick + 3000 });
+        }
+        // Walled out. A door is the thin part of the wall, so break that.
+        if let Some(door) = nearest_breach(w, p.pos, p.faction, tp) {
+            return Some(Job::Breach { door });
         }
     }
     wander(w, p, 8)
+}
+
+/// The nearest door standing between `from`'s side and `to`'s side, as the
+/// faction locked out sees it. A locked door is a hole in every region
+/// layer but its owner's, so the door to break is the one whose neighbours
+/// include both sides. Call `ensure_regions` first.
+fn nearest_breach(w: &World, from: IVec, who: Faction, to: IVec) -> Option<Entity> {
+    let (mine, theirs) = (w.map.region_at_for(from, who), w.map.region_at_for(to, who));
+    if mine == 0 || theirs == 0 || mine == theirs {
+        return None;
+    }
+    let touches = |p: IVec, r: u32| {
+        crate::map::NEIGHBORS8.iter().any(|(dx, dy)| w.map.region_at_for(p.offset(*dx, *dy), who) == r)
+    };
+    let mut best: Option<(u32, Entity)> = None;
+    for (de, t) in w.ecs.query::<&Thing>().without::<&Blueprint>().iter() {
+        let d = t.pos.octile(from);
+        if best.is_some_and(|b| b.0 <= d) || !w.map.locked_against(w.map.idx(t.pos), who) {
+            continue;
+        }
+        if touches(t.pos, mine) && touches(t.pos, theirs) && w.map.can_reach_for(from, Goal::Touch(t.pos), who) {
+            best = Some((d, de));
+        }
+    }
+    best.map(|b| b.1)
 }
 
 fn think_animal(w: &mut World, e: Entity, p: &mut Pawn) -> Option<Job> {
@@ -581,6 +611,7 @@ fn run_job(w: &mut World, e: Entity, p: &mut Pawn) {
         Job::Sleep { bed, spot, stage } => (run_sleep(w, e, p, bed, spot, stage), 0),
         Job::Comfort { to, need, until } => (run_comfort(w, p, to, need, until), 0),
         Job::Attack { target, until } => (run_attack(w, e, p, target, until), 0),
+        Job::Breach { door } => (run_breach(w, p, door), 0),
     };
     match next {
         Some(j) => p.job = j,
@@ -709,6 +740,10 @@ pub fn complete_building(w: &mut World, bp: Entity) {
     let td = w.defs.thing(t.def);
     let (blocks, cost, door) = (td.blocks, td.path_cost, td.door);
     w.map.set_fixture(t.pos, Some(bp), blocks, cost, door);
+    // The colony built it, so the colony owns it. A door only opens for
+    // its owner; everyone else has to come through it the hard way.
+    let _ = w.ecs.insert_one(bp, Owner(Faction::Player));
+    w.map.set_owner(t.pos, Some(Faction::Player));
     let defs = w.defs.clone();
     w.fields.add_emitters(&defs, &w.map, bp, t.def, t.pos);
     if blocks {
@@ -843,12 +878,57 @@ fn run_attack(w: &mut World, e: Entity, p: &mut Pawn, target: Entity, until: u64
     }
 }
 
-fn hit(w: &mut World, e: Entity, p: &mut Pawn, target: Entity, tpos: IVec) {
+/// Hack at a door until it gives. The job ends when the door is gone,
+/// and the next think finds the way in now open.
+fn run_breach(w: &mut World, p: &mut Pawn, door: Entity) -> Option<Job> {
+    let t = w.thing(door)?;
+    match go_to(w, p, Goal::Touch(t.pos)) {
+        Go::Failed => None,
+        Go::Moving => Some(Job::Breach { door }),
+        Go::Arrived => {
+            if p.cooldown == 0 {
+                hit_thing(w, p, door, t.pos);
+            }
+            Some(Job::Breach { door })
+        }
+    }
+}
+
+/// One melee swing, before it is applied to anything.
+fn swing(w: &mut World, p: &mut Pawn) -> i32 {
     let defs = w.defs.clone();
     let cd = defs.creature(p.def);
     let bonus = if p.founder { defs.start.as_ref().map_or(0, |s| s.founder_damage_bonus) } else { 0 };
-    let dmg = ((cd.melee_damage + bonus) * (70 + w.rng.below(61) as i32) / 100).max(1);
     p.cooldown = cd.melee_cooldown;
+    ((cd.melee_damage + bonus) * (70 + w.rng.below(61) as i32) / 100).max(1)
+}
+
+fn mark_hit(w: &mut World, tpos: IVec) {
+    w.hits.push((tpos, w.tick));
+    if w.hits.len() > 64 {
+        w.hits.remove(0);
+    }
+}
+
+fn hit_thing(w: &mut World, p: &mut Pawn, target: Entity, tpos: IVec) {
+    let dmg = swing(w, p);
+    let broken = match w.ecs.get::<&mut Thing>(target) {
+        Ok(mut t) => {
+            t.hp -= dmg;
+            t.hp <= 0
+        }
+        Err(_) => return,
+    };
+    if broken {
+        let label = w.thing(target).map(|t| w.defs.thing(t.def).label.clone()).unwrap_or_default();
+        w.despawn_thing(target);
+        w.message(format!("The {label} is broken down."), MsgKind::Threat);
+    }
+    mark_hit(w, tpos);
+}
+
+fn hit(w: &mut World, e: Entity, p: &mut Pawn, target: Entity, tpos: IVec) {
+    let dmg = swing(w, p);
     if let Ok(mut t) = w.ecs.get::<&mut Pawn>(target) {
         t.hp -= dmg;
         t.last_attacker = Some(e);
@@ -856,8 +936,5 @@ fn hit(w: &mut World, e: Entity, p: &mut Pawn, target: Entity, tpos: IVec) {
             t.dead = true;
         }
     }
-    w.hits.push((tpos, w.tick));
-    if w.hits.len() > 64 {
-        w.hits.remove(0);
-    }
+    mark_hit(w, tpos);
 }

@@ -4,6 +4,7 @@
 //! Hierarchical pathing and flow fields can slot in behind `find` later.
 
 use crate::map::{Map, NEIGHBORS8};
+use crate::world::Faction;
 use crate::IVec;
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
@@ -43,8 +44,9 @@ pub struct Pathfinder {
 }
 
 impl Pathfinder {
-    /// Returns the path as a stack: `last()` is the next step. Excludes `start`.
-    pub fn find(&mut self, map: &Map, start: IVec, goal: Goal, max_nodes: u32) -> Option<Vec<IVec>> {
+    /// Returns the path as a stack: `last()` is the next step. Excludes
+    /// `start`. Doors `who` does not own are walls to this search.
+    pub fn find(&mut self, map: &Map, start: IVec, goal: Goal, max_nodes: u32, who: Faction) -> Option<Vec<IVec>> {
         let n = (map.w * map.h) as usize;
         if self.g.len() != n {
             self.g = vec![0; n];
@@ -93,14 +95,15 @@ impl Pathfinder {
                 break;
             }
             let cg = self.g[ci];
+            let open = |q: IVec| map.passable_for(q, who);
             for (k, (dx, dy)) in NEIGHBORS8.iter().enumerate() {
                 let q = cp.offset(*dx, *dy);
-                if !map.passable(q) {
+                if !open(q) {
                     continue;
                 }
                 let diag = k >= 4;
                 // No corner cutting.
-                if diag && (!map.passable(cp.offset(*dx, 0)) || !map.passable(cp.offset(0, *dy))) {
+                if diag && (!open(cp.offset(*dx, 0)) || !open(cp.offset(0, *dy))) {
                     continue;
                 }
                 let qi = map.idx(q);

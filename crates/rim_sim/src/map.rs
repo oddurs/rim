@@ -3,6 +3,7 @@
 
 use crate::defs::DefId;
 use crate::path::Goal;
+use crate::world::Faction;
 use crate::IVec;
 use hecs::Entity;
 
@@ -16,6 +17,10 @@ pub struct Map {
     fix_block: Vec<bool>,
     fix_cost: Vec<u16>,
     fix_door: Vec<bool>,
+    /// Who owns the fixture here, as `faction as u8 + 1`; 0 is nobody.
+    /// Only doors read it: a door opens for its owner and blocks everyone
+    /// else, which is what makes a wall with a door in it still a wall.
+    fix_owner: Vec<u8>,
     /// Room id per cell (0 = wall, door or impassable).
     room: Vec<u32>,
     /// Room ids from before the last rebuild, so state can carry over.
@@ -26,9 +31,11 @@ pub struct Map {
     rooms_dirty: bool,
     /// How many times rooms have been rebuilt (they only are when walls change).
     pub room_rebuilds: u64,
-    /// Connected-component id per cell (0 = impassable). Lets us reject
-    /// unreachable targets in O(1) before running A*.
-    region: Vec<u32>,
+    /// Connected-component id per cell (0 = impassable), one layer per
+    /// faction, indexed by `Faction as usize`. They differ only where an
+    /// owned door stands: what a raider can walk to is not what the owner
+    /// can. Lets us reject unreachable targets in O(1) before running A*.
+    regions: [Vec<u32>; Faction::ALL.len()],
     regions_dirty: bool,
     /// Bumped whenever passability changes; renderers can use it to cache.
     pub revision: u64,
@@ -68,13 +75,14 @@ impl Map {
             fix_block: vec![false; n],
             fix_cost: vec![0; n],
             fix_door: vec![false; n],
+            fix_owner: vec![0; n],
             room: vec![0; n],
             prev_room: vec![0; n],
             changed: Vec::new(),
             rooms: Vec::new(),
             rooms_dirty: true,
             room_rebuilds: 0,
-            region: vec![0; n],
+            regions: std::array::from_fn(|_| vec![0; n]),
             regions_dirty: true,
             revision: 0,
         }
@@ -126,6 +134,9 @@ impl Map {
         }
         if self.fix_door[i] != door {
             self.rooms_dirty = true;
+            // An owned door is a wall to everyone but its owner, so gaining
+            // or losing one changes who can reach what.
+            self.regions_dirty = true;
         }
         if self.fix_block[i] != blocks || self.fix_door[i] != door {
             self.changed.push(i as u32);
@@ -156,51 +167,99 @@ impl Map {
             return;
         }
         self.regions_dirty = false;
-        self.region.iter_mut().for_each(|r| *r = 0);
-        let mut next = 1;
         let mut stack = Vec::new();
-        for start in 0..self.region.len() {
-            if self.region[start] != 0 || !self.passable_i(start) {
-                continue;
-            }
-            self.region[start] = next;
-            stack.push(start);
-            while let Some(i) = stack.pop() {
-                let p = self.pos(i);
-                // 4-connected is exact: diagonal moves need both orthogonals open.
-                for (dx, dy) in &NEIGHBORS8[..4] {
-                    let q = p.offset(*dx, *dy);
-                    if !self.inb(q) {
-                        continue;
-                    }
-                    let j = self.idx(q);
-                    if self.region[j] == 0 && self.passable_i(j) {
-                        self.region[j] = next;
-                        stack.push(j);
+        for who in Faction::ALL {
+            let open = |m: &Self, i: usize| m.passable_i(i) && !m.locked_against(i, who);
+            let mut region = std::mem::take(&mut self.regions[who as usize]);
+            region.iter_mut().for_each(|r| *r = 0);
+            let mut next = 1;
+            for start in 0..region.len() {
+                if region[start] != 0 || !open(self, start) {
+                    continue;
+                }
+                region[start] = next;
+                stack.push(start);
+                while let Some(i) = stack.pop() {
+                    let p = self.pos(i);
+                    // 4-connected is exact: diagonal moves need both orthogonals open.
+                    for (dx, dy) in &NEIGHBORS8[..4] {
+                        let q = p.offset(*dx, *dy);
+                        if !self.inb(q) {
+                            continue;
+                        }
+                        let j = self.idx(q);
+                        if region[j] == 0 && open(self, j) {
+                            region[j] = next;
+                            stack.push(j);
+                        }
                     }
                 }
+                next += 1;
             }
-            next += 1;
+            self.regions[who as usize] = region;
         }
     }
 
-    pub fn region_at(&self, p: IVec) -> u32 {
+    /// A door that `who` does not own. Passable to its owner, a wall to
+    /// everyone else, and the only thing the region layers disagree about.
+    #[inline]
+    pub fn locked_against(&self, i: usize, who: Faction) -> bool {
+        self.fix_door[i] && self.fix_owner[i] != 0 && self.fix_owner[i] != who as u8 + 1
+    }
+
+    /// Can `who` walk into `p` without breaking something?
+    #[inline]
+    pub fn passable_for(&self, p: IVec, who: Faction) -> bool {
+        self.inb(p) && self.passable_i(self.idx(p)) && !self.locked_against(self.idx(p), who)
+    }
+
+    /// Give the fixture at `p` an owner, or take ownership away.
+    pub fn set_owner(&mut self, p: IVec, owner: Option<Faction>) {
+        let i = self.idx(p);
+        let v = owner.map_or(0, |f| f as u8 + 1);
+        if self.fix_owner[i] == v {
+            return;
+        }
+        self.fix_owner[i] = v;
+        self.regions_dirty = true;
+        self.revision += 1;
+    }
+
+    pub fn owner_at(&self, p: IVec) -> Option<Faction> {
+        let v = self.fix_owner[self.idx(p)];
+        (v > 0).then(|| Faction::ALL[v as usize - 1])
+    }
+
+    /// Region id as `who` sees it. Call `ensure_regions` first.
+    pub fn region_at_for(&self, p: IVec, who: Faction) -> u32 {
         if self.inb(p) {
-            self.region[self.idx(p)]
+            self.regions[who as usize][self.idx(p)]
         } else {
             0
         }
     }
 
-    /// Cheap reachability test. Call `ensure_regions` first.
+    /// Region id ignoring ownership, for callers that only care about the
+    /// shape of the land (map generation, plant spread).
+    pub fn region_at(&self, p: IVec) -> u32 {
+        self.region_at_for(p, Faction::Player)
+    }
+
+    /// Cheap reachability test for a colonist. Call `ensure_regions` first.
     pub fn can_reach(&self, from: IVec, goal: Goal) -> bool {
-        let rf = self.region_at(from);
+        self.can_reach_for(from, goal, Faction::Player)
+    }
+
+    /// Cheap reachability test, from `who`'s side of the doors.
+    pub fn can_reach_for(&self, from: IVec, goal: Goal, who: Faction) -> bool {
+        let region_at = |p: IVec| self.region_at_for(p, who);
+        let rf = region_at(from);
         if rf == 0 {
             return true; // standing somewhere odd (fresh wall): let A* decide
         }
         match goal {
-            Goal::Cell(c) => self.region_at(c) == rf,
-            Goal::Touch(c) => (-1..=1).any(|dy| (-1..=1).any(|dx| self.region_at(c.offset(dx, dy)) == rf)),
+            Goal::Cell(c) => region_at(c) == rf,
+            Goal::Touch(c) => (-1..=1).any(|dy| (-1..=1).any(|dx| region_at(c.offset(dx, dy)) == rf)),
         }
     }
 
@@ -293,6 +352,6 @@ impl Map {
         if r == 0 {
             return 0;
         }
-        self.region.iter().filter(|&&x| x == r).count()
+        self.regions[Faction::Player as usize].iter().filter(|&&x| x == r).count()
     }
 }
