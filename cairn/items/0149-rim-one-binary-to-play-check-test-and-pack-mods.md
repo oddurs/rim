@@ -9,7 +9,7 @@ depends_on:
 - 48f92e6e-2187-461a-a98b-f20e36ae1325
 - eb2c9422-7ed6-4060-806c-6d1cee5a0ba1
 created: 2026-09-23
-updated: 2026-09-23
+updated: 2026-09-24
 priority: p0
 api: none
 effort: m
@@ -31,8 +31,12 @@ One binary. `rim` with no arguments starts the game; everything else is a subcom
 
 - [ ] `rim` with no arguments starts the game as today; existing client flags (`--seed`, `--autotest`) keep working
 - [ ] `rim check [path]` loads a mod with its dependencies and reports errors, conflicts, deprecations
-- [ ] `rim test [path]` runs its tests (0146)
+- [x] `rim test [path]` runs its tests (0146)
 - [ ] `rim run [path]` starts the game with the mod in dev mode
 - [ ] `rim pack` builds a release archive plus its content hash
 - [ ] `check`, `test` and `pack` run with no display (tested under CI without Xvfb)
 - [ ] Prebuilt for macOS, Windows and Linux on every engine release
+
+## 2026-09-24
+
+rim test [path] landed with 0146 (#38?), dispatched before the window opens; check and pack can follow the same pattern in crates/rim_client/src/cli.rs.

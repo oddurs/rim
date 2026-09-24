@@ -6,6 +6,7 @@
 //! UI didn't take drives the world. The HUD itself is core's UI mod.
 
 mod autotest;
+mod cli;
 mod draw;
 mod sky;
 
@@ -153,8 +154,17 @@ async fn fail(e: String) {
     }
 }
 
-#[macroquad::main(conf)]
-async fn main() {
+fn main() {
+    // Subcommands that need no window run before one opens, so they work
+    // on headless CI machines.
+    let args: Vec<String> = std::env::args().collect();
+    if args.get(1).map(String::as_str) == Some("test") {
+        std::process::exit(cli::test(&args[2..]));
+    }
+    macroquad::Window::from_config(conf(), game());
+}
+
+async fn game() {
     // Find the system fonts on another thread while mods load and the map
     // generates (from the disk cache: a few ms; a first run scans them all).
     rim_ui::fontcache::preload();

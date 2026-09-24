@@ -55,6 +55,18 @@ jobs:
         # into an FMA under its default /fp:precise.
         if: runner.os != 'Windows'
         run: ./scripts/check-no-fma.sh
+      # Mods' own tests, through the player's binary with no display (no
+      # Xvfb here, and macOS runners have no OpenGL): `rim test` must never
+      # open a window.
+      - name: Mod tests (rim test)
+        run: cargo run --release -p rim_client -- test --junit target/rim-test.xml
+      - name: Upload the mod test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rim-test-${{ matrix.os }}
+          path: target/rim-test.xml
+          if-no-files-found: ignore
       - name: Headless soak, 3 in-game days
         run: cargo run --release -p rim_sim --example headless -- --days 3 --seed 1
       # The base game must stand without any plugin (DESIGN.md §5).

@@ -11,6 +11,7 @@ pub mod field;
 pub mod map;
 pub mod mapgen;
 pub mod modloader;
+pub mod modtest;
 pub mod order;
 pub mod path;
 pub mod profile;
