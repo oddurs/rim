@@ -123,11 +123,19 @@ ui.window("core:gallery", { title = t("core:gallery.title", "Kit gallery"), w = 
 					cells[r * 100 + c] = value or nil
 					ui.set_state("core:gallery.cells", cells)
 				end }),
-			kit.table({ id = "core:gallery.table", h = 120, count = 500, row_h = "l",
-				columns = { { label = t("core:gallery.col_n", "#"), w = 40 }, { label = t("core:gallery.col_sq", "Square"), w = 80 } },
-				row = function(i)
-					return { tostring(i), tostring(i * i) }
-				end }),
+			kit.table({ id = "core:gallery.table", h = 120, row_h = "l", rows = ui.state("core:gallery.rows", nil) or (function()
+				-- Five hundred rows, made once: a sortable, virtualised table.
+				local rows = {}
+				for i = 1, 500 do
+					rows[i] = { n = i, sq = i * i, rem = (i * 7919) % 97 }
+				end
+				ui.set_state("core:gallery.rows", rows)
+				return rows
+			end)(), columns = {
+				{ label = t("core:gallery.col_n", "#"), w = 40, key = "n" },
+				{ label = t("core:gallery.col_sq", "Square"), w = 80, key = "sq" },
+				{ label = t("core:gallery.col_rem", "Mod 97"), w = 60, key = "rem" },
+			} }),
 		}),
 	})
 end)

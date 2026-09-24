@@ -121,6 +121,12 @@ and sizes only from theme tokens, so they follow whatever theme is loaded.
 
 Press **F12** and then **Kit gallery** to see every component in every state.
 
+`kit.table` shows records in columns over a virtual list: give it `rows`
+(an array of records) and `columns` with a `key` or `value` each, and a
+click on a header sorts by that column; give it `count` and `row(i)` to
+build cells by hand. `kit.input` and `kit.slider` are the text and drag
+controls; their state is the engine's (see Text input and sliders).
+
 ## Reading the game: `view`
 
 Every function in `ui`, `act` and `view`, with its types, is in the
