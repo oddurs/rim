@@ -694,6 +694,7 @@ fn run_harvest(w: &mut World, p: &mut Pawn, target: Entity, work: u32, forced: b
                 } else {
                     let ready_at = w.tick + (hd.regrow_days * crate::TICKS_PER_DAY as f64) as u64;
                     let _ = w.ecs.insert_one(target, Regrow { ready_at });
+                    w.map.touch(t.pos);
                 }
                 for &(yd, n) in &hd.yields_r {
                     w.place_item(yd, t.pos, n);

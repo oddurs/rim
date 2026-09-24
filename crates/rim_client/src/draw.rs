@@ -3,6 +3,7 @@
 use crate::{rgb, App, Tool};
 use macroquad::prelude::*;
 use rim_sim::defs::Shape;
+use rim_sim::map::CHUNK;
 use rim_sim::rng::hash2_f;
 use rim_sim::world::*;
 use rim_sim::IVec;
@@ -33,39 +34,56 @@ fn alpha(c: Color, a: f32) -> Color {
 
 /// The terrain as a texture, one texel per cell with the per-tile variation
 /// baked in, drawn as a single quad. Drawing a rectangle per cell cost ~100
-/// batched draw calls zoomed out; this is one. Rebuilt when the map changes.
+/// batched draw calls zoomed out; this is one. A chunk is re-uploaded when
+/// its terrain changes, and nothing else: chopping a tree doesn't touch it.
 #[derive(Default)]
 pub struct Ground {
     tex: Option<Texture2D>,
-    revision: Option<u64>,
+    /// The terrain revision each chunk was last uploaded at.
+    revs: Vec<u64>,
 }
 
 impl Ground {
+    /// RGBA for the cells in `[x0, x0 + w) × [y0, y0 + h)`.
+    fn texels(w: &World, x0: i32, y0: i32, cw: i32, ch: i32) -> Image {
+        let mut bytes = vec![0u8; (cw * ch * 4) as usize];
+        for y in 0..ch {
+            for x in 0..cw {
+                let p = IVec::new(x0 + x, y0 + y);
+                let base = w.defs.terrain[w.map.terrain[w.map.idx(p)] as usize].rgb;
+                let v = 0.94 + hash2_f(p.x as i64, p.y as i64, 99) as f32 * 0.1;
+                let o = ((y * cw + x) * 4) as usize;
+                for (k, c) in base.iter().enumerate() {
+                    bytes[o + k] = (*c as f32 * v).min(255.0) as u8;
+                }
+                bytes[o + 3] = 255;
+            }
+        }
+        Image { bytes, width: cw as u16, height: ch as u16 }
+    }
+
     pub fn update(&mut self, w: &World) {
-        if self.revision == Some(w.map.revision) && self.tex.is_some() {
+        let (mw, mh) = (w.map.w, w.map.h);
+        let (cx, cy) = w.map.chunks();
+        let fits = self.tex.as_ref().is_some_and(|t| t.width() as i32 == mw && t.height() as i32 == mh);
+        if !fits {
+            let t = Texture2D::from_image(&Self::texels(w, 0, 0, mw, mh));
+            // Crisp cell edges when zoomed in, like the rectangles were.
+            t.set_filter(FilterMode::Nearest);
+            self.tex = Some(t);
+            self.revs = (0..(cx * cy) as usize).map(|c| w.map.terrain_rev(c)).collect();
             return;
         }
-        self.revision = Some(w.map.revision);
-        let (mw, mh) = (w.map.w as usize, w.map.h as usize);
-        let mut bytes = vec![0u8; mw * mh * 4];
-        for i in 0..mw * mh {
-            let p = w.map.pos(i);
-            let base = w.defs.terrain[w.map.terrain[i] as usize].rgb;
-            let v = 0.94 + hash2_f(p.x as i64, p.y as i64, 99) as f32 * 0.1;
-            for (k, c) in base.iter().enumerate() {
-                bytes[i * 4 + k] = (*c as f32 * v).min(255.0) as u8;
+        let Some(tex) = &self.tex else { return };
+        for (c, seen) in self.revs.iter_mut().enumerate() {
+            let now = w.map.terrain_rev(c);
+            if *seen == now {
+                continue;
             }
-            bytes[i * 4 + 3] = 255;
-        }
-        let img = Image { bytes, width: mw as u16, height: mh as u16 };
-        match &self.tex {
-            Some(t) if t.width() as usize == mw && t.height() as usize == mh => t.update(&img),
-            _ => {
-                let t = Texture2D::from_image(&img);
-                // Crisp cell edges when zoomed in, like the rectangles were.
-                t.set_filter(FilterMode::Nearest);
-                self.tex = Some(t);
-            }
+            *seen = now;
+            let (x0, y0) = ((c as i32 % cx) * CHUNK, (c as i32 / cx) * CHUNK);
+            let (cw, ch) = (CHUNK.min(mw - x0), CHUNK.min(mh - y0));
+            tex.update_part(&Self::texels(w, x0, y0, cw, ch), x0, y0, cw, ch);
         }
     }
 }
