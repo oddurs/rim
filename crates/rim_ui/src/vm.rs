@@ -311,7 +311,7 @@ impl UiVm {
 
         // ---- ui: node constructors, registration, operations, state.
         let ui = lua.create_table()?;
-        for kind in ["row", "col", "text", "spacer", "scroll", "anchored"] {
+        for kind in ["row", "col", "text", "spacer", "scroll", "anchored", "grid", "list"] {
             let f = lua.create_function(move |lua, v: Value| {
                 let t = match v {
                     Value::Table(t) => t,
@@ -835,13 +835,14 @@ impl UiVm {
         client: &ClientView,
         engine: &EngineInfo,
         theme: &Theme,
+        lists: &ListEnv,
     ) -> Vec<(Mount, Node)> {
         let mounts = self.mounts();
         let view: Table = self.lua.globals().get("view").unwrap();
         let mut times: HashMap<Rc<str>, f64> = HashMap::new();
         let mut errors = Vec::new();
         let out = self.lend(world, client, engine, || {
-            let mut b = Builder { vm: self, theme, view: &view, times: &mut times, errors: &mut errors };
+            let mut b = Builder { vm: self, theme, view: &view, times: &mut times, errors: &mut errors, lists };
             mounts
                 .into_iter()
                 .filter_map(|m| {
@@ -885,6 +886,30 @@ impl UiVm {
         out
     }
 
+    /// Run a handler with arguments and hand back what it returned.
+    pub fn call_with(
+        &mut self,
+        f: &Function,
+        args: impl mlua::IntoLuaMulti,
+        world: &World,
+        client: &ClientView,
+        engine: &EngineInfo,
+    ) -> Option<Value> {
+        self.deadline.set(Some(Instant::now() + CALL_DEADLINE));
+        let r = self.lend(world, client, engine, || f.call::<Value>(args));
+        self.deadline.set(None);
+        match r {
+            Ok(v) => Some(v),
+            Err(e) => {
+                let e = format!("handler: {}", first_line(&e.to_string()));
+                if !self.errors.contains(&e) {
+                    self.errors.push(e);
+                }
+                None
+            }
+        }
+    }
+
     /// Run a click handler, then collect whatever actions it queued.
     pub fn call_handler(&mut self, f: &Function, world: &World, client: &ClientView, engine: &EngineInfo) {
         self.deadline.set(Some(Instant::now() + CALL_DEADLINE));
@@ -919,12 +944,21 @@ fn first_line(s: &str) -> String {
     s.lines().next().unwrap_or("").to_string()
 }
 
+/// What a virtual list needs from last frame to know its visible span:
+/// scroll offsets by node key, and rects by id.
+pub struct ListEnv<'a> {
+    pub scroll: &'a HashMap<u64, f32>,
+    pub rects: &'a HashMap<String, crate::layout::Rect>,
+    pub keys: &'a HashMap<String, u64>,
+}
+
 struct Builder<'a> {
     vm: &'a UiVm,
     theme: &'a Theme,
     view: &'a Table,
     times: &'a mut HashMap<Rc<str>, f64>,
     errors: &'a mut Vec<String>,
+    lists: &'a ListEnv<'a>,
 }
 
 impl Builder<'_> {
@@ -989,6 +1023,75 @@ impl Builder<'_> {
         }
     }
 
+    /// Overscan: rows built beyond the visible span on each side, so a
+    /// scroll of a few pixels needs no rebuild to show what enters.
+    const OVERSCAN: usize = 4;
+
+    fn expand_list(&mut self, t: &Table, key: u64, owner: &Rc<str>, id: Option<&str>) -> Node {
+        let what = id.unwrap_or("list");
+        let Some(id) = id else {
+            return self.fail(owner, key, what, "a list needs an id (its scroll position is kept by it)".into());
+        };
+        let count: usize = match t.get::<Option<f64>>("count") {
+            Ok(Some(n)) if n >= 0.0 => n as usize,
+            _ => return self.fail(owner, key, what, "a list needs count".into()),
+        };
+        let row_fn: Function = match t.get::<Option<Function>>("row") {
+            Ok(Some(f)) => f,
+            _ => return self.fail(owner, key, what, "a list needs row(i)".into()),
+        };
+        let row_h = match t.get::<Value>("row_h") {
+            Ok(v) if !matches!(v, Value::Nil) => match crate::node::size_of(self.theme, "space", "row_h", &v) {
+                Ok(h) => h,
+                Err(e) => return self.fail(owner, key, what, e),
+            },
+            _ => return self.fail(owner, key, what, "a list needs row_h (every row is that tall)".into()),
+        };
+        // The table becomes the scroll node; the list props leave with it.
+        let _ = t.raw_set("kind", "scroll");
+        for k in ["count", "row", "row_h"] {
+            let _ = t.raw_set(k, Value::Nil);
+        }
+        let ctx = Ctx { theme: self.theme, owner: owner.clone() };
+        let mut node = match node_from_table(&ctx, t, key) {
+            Ok(n) => n,
+            Err(e) => return self.fail(owner, key, what, e),
+        };
+        let seen_h = self.lists.rects.get(id).map(|r| r[3]).unwrap_or(400.0 * self.theme.scale);
+        let scrolled = self.lists.keys.get(id).and_then(|k| self.lists.scroll.get(k)).copied().unwrap_or(0.0);
+        // The scroll offset is clamped after layout, so a wheel past the end
+        // arrives here unclamped: keep at least the last row in the span, or
+        // the area's content would be spacers alone and measure as empty.
+        let first = ((scrolled / row_h.max(1.0)) as usize).saturating_sub(Self::OVERSCAN).min(count.saturating_sub(1));
+        let last = (((scrolled + seen_h) / row_h.max(1.0)) as usize + 1 + Self::OVERSCAN)
+            .clamp(first + 1, count.max(1))
+            .min(count);
+        // Stand-ins for the rows off screen: fixed height, and a floor on
+        // it, since a box in a full column would otherwise shrink.
+        let spacer = |key: u64, h: f32| Node {
+            style: crate::node::Style { h: crate::node::Len::Px(h), min_h: Some(h), ..Default::default() },
+            ..crate::node::blank(key, owner.clone())
+        };
+        node.children.push(spacer(key_for(key, 0, None), first as f32 * row_h));
+        for i in first..last {
+            let v = match self.call(owner, &row_fn, i as i64 + 1) {
+                Ok(v) => v,
+                Err(e) => {
+                    node.children.push(self.fail(owner, key_for(key, i + 1, None), what, e));
+                    continue;
+                }
+            };
+            let Value::Table(rt) = v else { continue };
+            let ck = key_for(key, i + 1, None);
+            if let Some(mut n) = self.convert(&rt, ck, owner, None) {
+                n.style.h = crate::node::Len::Px(row_h);
+                node.children.push(n);
+            }
+        }
+        node.children.push(spacer(key_for(key, count + 2, None), (count - last) as f32 * row_h));
+        node
+    }
+
     /// Convert a node table and its children. `applied` is the id whose
     /// operations were already applied by `expand_slot`.
     fn convert(&mut self, t: &Table, key: u64, owner: &Rc<str>, applied: Option<&str>) -> Option<Node> {
@@ -1041,6 +1144,12 @@ impl Builder<'_> {
             }
         }
 
+        // A virtual list is a scroll area that builds only the rows on
+        // screen: a spacer stands in for the rows above, another for the
+        // rows below, so scrolling and clamping need nothing new.
+        if kind.as_deref() == Some("list") {
+            return Some(self.expand_list(t, key, owner, id.as_deref()));
+        }
         let ctx = Ctx { theme: self.theme, owner: owner.clone() };
         let mut node = match node_from_table(&ctx, t, key) {
             Ok(n) => n,

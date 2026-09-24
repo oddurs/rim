@@ -137,6 +137,27 @@ fn walk(
             draw.push(Draw::Glyphs { quads, color: fade(color, alpha) });
         }
     }
+    if let Some(g) = &n.grid {
+        // Cells are painted here, not laid out: one node's worth of tree
+        // however many there are. Text sits inset from the cell's corner.
+        let inset = (g.cell_h * 0.15).min(4.0);
+        let default_color = n.style.border.unwrap_or([0.9, 0.9, 0.9, 1.0]);
+        for r in 0..g.rows {
+            for c in 0..g.cols {
+                let cell = &g.cells[r * g.cols + c];
+                let cr = g.cell_rect(rect, r, c);
+                if let Some(bg) = cell.bg {
+                    draw.push(Draw::Rect { rect: cr, color: fade(bg, alpha), radius: 0.0 });
+                }
+                if !cell.text.is_empty() {
+                    let quads = text.quads(&cell.text, g.size, g.weight, None, cr[0] + inset, cr[1] + inset);
+                    if !quads.is_empty() {
+                        draw.push(Draw::Glyphs { quads, color: fade(cell.color.unwrap_or(default_color), alpha) });
+                    }
+                }
+            }
+        }
+    }
     if n.is_interactive() || n.kind == Kind::Scroll {
         hits.push(Hit {
             key: n.key,

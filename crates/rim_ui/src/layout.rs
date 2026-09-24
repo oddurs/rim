@@ -7,6 +7,7 @@
 use crate::node::{Align, Kind, Len, Node};
 use crate::text::Text;
 use taffy::prelude::*;
+use taffy::style::ExpandedDimension;
 use taffy::{Overflow, Point};
 
 /// x, y, w, h in physical pixels.
@@ -65,8 +66,8 @@ fn build(taffy: &mut TaffyTree<Option<Measure>>, n: &Node) -> NodeId {
         min_size: Size { width: lpa(s.min_w), height: lpa(s.min_h) },
         max_size: Size { width: lpa(s.max_w), height: lpa(s.max_h) },
         flex_grow: s.grow,
-        // Text never shrinks below its content; boxes may.
-        flex_shrink: if n.kind == Kind::Text { 0.0 } else { 1.0 },
+        // Text and grids never shrink below their content; boxes may.
+        flex_shrink: if matches!(n.kind, Kind::Text | Kind::Grid) { 0.0 } else { 1.0 },
         align_items: s.align.map(align_items),
         justify_content: s.justify.map(justify),
         overflow: if n.kind == Kind::Scroll {
@@ -103,16 +104,23 @@ fn measure(
     text: &mut Text,
     input: taffy::LayoutInput,
     ctx: Option<&mut Option<Measure>>,
+    style: &Style,
     wrap_at: Option<f32>,
     fit: bool,
 ) -> taffy::LayoutOutput {
     let known = input.known_dimensions;
     // Childless boxes (spacers) have no content of their own, but once flex
     // has sized them the answer must be that size.
+    // A childless root (a bare grid on the windows layer) reaches here with
+    // nothing known, so its own fixed size is the answer then.
     let Some(Some(m)) = ctx else {
+        let fixed = |d: Dimension| match d.expand() {
+            ExpandedDimension::Length(v) => v,
+            _ => 0.0,
+        };
         return taffy::LayoutOutput::from_outer_size(Size {
-            width: known.width.unwrap_or(0.0),
-            height: known.height.unwrap_or(0.0),
+            width: known.width.unwrap_or_else(|| fixed(style.size.width)),
+            height: known.height.unwrap_or_else(|| fixed(style.size.height)),
         });
     };
     let width = match (known.width, input.available_space.width) {
@@ -143,7 +151,7 @@ impl Engine {
             .compute_layout_with_measure(
                 root_id,
                 Size { width: AvailableSpace::Definite(avail.0), height: AvailableSpace::Definite(avail.1) },
-                |input, _id, ctx, _style| measure(text, input, ctx, None, true),
+                |input, _id, ctx, style| measure(text, input, ctx, style, None, true),
             )
             .unwrap();
         let mut out = Vec::with_capacity(self.taffy.total_node_count());
@@ -159,7 +167,7 @@ impl Engine {
             .compute_layout_with_measure(
                 root_id,
                 Size { width: AvailableSpace::MaxContent, height: AvailableSpace::MaxContent },
-                |input, _id, ctx, _style| measure(text, input, ctx, Some(max.0), false),
+                |input, _id, ctx, style| measure(text, input, ctx, style, Some(max.0), false),
             )
             .unwrap();
         let l = self.taffy.layout(root_id).unwrap();
@@ -178,7 +186,7 @@ impl Engine {
             .compute_layout_with_measure(
                 root_id,
                 Size { width: AvailableSpace::Definite(size.0), height: AvailableSpace::Definite(size.1) },
-                |input, _id, ctx, _style| measure(text, input, ctx, None, true),
+                |input, _id, ctx, style| measure(text, input, ctx, style, None, true),
             )
             .unwrap();
         let l = self.taffy.layout(root_id).unwrap();

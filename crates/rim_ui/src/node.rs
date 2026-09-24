@@ -18,6 +18,57 @@ pub enum Kind {
     Scroll,
     /// A child attached to an entity or cell in the world (anchored layer).
     Anchored,
+    /// Rows by columns of cells the engine positions and paints: one node,
+    /// however many cells. See `Grid`.
+    Grid,
+}
+
+/// One cell of a grid, as the component's `cell(r, c)` described it.
+#[derive(Clone, Debug, PartialEq, Default)]
+pub struct GridCell {
+    pub text: String,
+    pub bg: Option<Rgba>,
+    pub color: Option<Rgba>,
+}
+
+/// A grid's shape and its cells. The node is laid out as one leaf of
+/// `cols * cell_w` by `rows * cell_h`; cells are painted, not laid out, so
+/// a 30 by 12 board costs the tree one node.
+#[derive(Clone)]
+pub struct Grid {
+    pub rows: usize,
+    pub cols: usize,
+    pub cell_w: f32,
+    pub cell_h: f32,
+    pub gap: f32,
+    pub size: f32,
+    pub weight: u16,
+    pub cells: Vec<GridCell>,
+    /// Called once when a drag starts, with the cell: returns the value the
+    /// whole drag paints.
+    pub on_press: Option<Function>,
+    /// Called for the pressed cell and each newly entered one: (r, c, value).
+    pub on_paint: Option<Function>,
+}
+
+impl Grid {
+    /// The cell under a point inside the grid's rect, if any.
+    pub fn cell_at(&self, rect: [f32; 4], x: f32, y: f32) -> Option<(usize, usize)> {
+        let (dx, dy) = (x - rect[0], y - rect[1]);
+        if dx < 0.0 || dy < 0.0 {
+            return None;
+        }
+        let (c, r) = ((dx / (self.cell_w + self.gap)) as usize, (dy / (self.cell_h + self.gap)) as usize);
+        (r < self.rows && c < self.cols).then_some((r, c))
+    }
+    pub fn cell_rect(&self, rect: [f32; 4], r: usize, c: usize) -> [f32; 4] {
+        [
+            rect[0] + c as f32 * (self.cell_w + self.gap),
+            rect[1] + r as f32 * (self.cell_h + self.gap),
+            self.cell_w,
+            self.cell_h,
+        ]
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Default)]
@@ -112,12 +163,18 @@ pub struct Node {
     pub priority: i32,
     /// Anchored nodes: pixels above (negative) or below the anchor.
     pub offset_y: f32,
+    /// Grid nodes: the cells.
+    pub grid: Option<Rc<Grid>>,
     pub children: Vec<Node>,
 }
 
 impl Node {
     pub fn is_interactive(&self) -> bool {
-        self.on_click.is_some() || self.on_right_click.is_some() || self.tooltip.is_some() || self.focusable
+        self.on_click.is_some()
+            || self.on_right_click.is_some()
+            || self.tooltip.is_some()
+            || self.focusable
+            || self.grid.as_ref().is_some_and(|g| g.on_press.is_some() || g.on_paint.is_some())
     }
 
     /// Hash of everything that affects layout, for the layout cache.
@@ -165,8 +222,12 @@ impl Node {
             (Kind::Spacer, _) => "spacer",
             (Kind::Scroll, _) => "scroll",
             (Kind::Anchored, _) => "anchored",
+            (Kind::Grid, _) => "grid",
         };
         out.push_str(kind);
+        if let Some(g) = &self.grid {
+            out.push_str(&format!(" {}x{}", g.rows, g.cols));
+        }
         if let Some(id) = &self.id {
             out.push_str(&format!(" #{id}"));
         }
@@ -190,6 +251,37 @@ impl Node {
 pub struct Ctx<'a> {
     pub theme: &'a Theme,
     pub owner: Rc<str>,
+}
+
+/// A node with nothing in it, for engine-built containers.
+pub fn blank(key: u64, owner: Rc<str>) -> Node {
+    Node {
+        kind: Kind::Box,
+        id: None,
+        aka: None,
+        owner,
+        key,
+        style: Style::default(),
+        text: None,
+        hover: None,
+        press: None,
+        focus: None,
+        disabled: false,
+        on_click: None,
+        on_right_click: None,
+        tooltip: None,
+        focusable: false,
+        anchor: None,
+        priority: 0,
+        offset_y: 0.0,
+        grid: None,
+        children: Vec::new(),
+    }
+}
+
+/// `size`, for callers outside this module.
+pub fn size_of(theme: &Theme, section: &str, k: &str, v: &Value) -> Result<f32, String> {
+    size(theme, section, k, v)
 }
 
 /// A size from a token name or a number, in physical pixels. Reads the
@@ -301,6 +393,9 @@ pub fn key_for(parent: u64, index: usize, id: Option<&str>) -> u64 {
 pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
     let theme = ctx.theme;
     let mut kind = Kind::Box;
+    // Field order in a table is not fixed, and `cell` means a position on an
+    // anchored node but the cell function on a grid: read the kind first.
+    let is_grid = matches!(t.raw_get::<Value>("kind"), Ok(Value::String(s)) if s.as_bytes().as_ref() == b"grid");
     let mut style = Style::default();
     let mut text: Option<String> = None;
     let mut text_size = None;
@@ -310,6 +405,10 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
     let mut has_radius = false;
     let mut entity: Option<u64> = None;
     let mut cell: Option<(i32, i32)> = None;
+    let (mut rows, mut cols) = (0usize, 0usize);
+    let (mut cell_w, mut cell_h) = (None, None);
+    let mut cell_fn: Option<Function> = None;
+    let (mut on_press, mut on_paint) = (None, None);
     let mut n = Node {
         kind: Kind::Box,
         id: None,
@@ -329,6 +428,7 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
         anchor: None,
         priority: 0,
         offset_y: 0.0,
+        grid: None,
         children: Vec::new(),
     };
     for pair in t.pairs::<Value, Value>() {
@@ -354,6 +454,7 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
                     "spacer" => (Kind::Spacer, false),
                     "scroll" => (Kind::Scroll, false),
                     "anchored" => (Kind::Anchored, false),
+                    "grid" => (Kind::Grid, false),
                     other => return Err(format!("unknown node kind '{other}'")),
                 }
             }
@@ -399,6 +500,9 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
                     _ => return Err("'entity' must be an entity id".into()),
                 })
             }
+            // `cell` is a position on an anchored node and the cell function
+            // on a grid.
+            "cell" if is_grid => cell_fn = Some(function("cell", v)?),
             "cell" => {
                 let Value::Table(c) = v else { return Err("cell must be {x, y}".into()) };
                 cell = Some((c.get(1).map_err(|e| e.to_string())?, c.get(2).map_err(|e| e.to_string())?));
@@ -414,6 +518,12 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
             "focusable" => n.focusable = matches!(v, Value::Boolean(true)),
             "priority" => n.priority = num("priority", &v)? as i32,
             "offset" => n.offset_y = num("offset", &v)? * theme.scale,
+            "rows" => rows = num("rows", &v)?.max(0.0) as usize,
+            "cols" => cols = num("cols", &v)?.max(0.0) as usize,
+            "cell_w" => cell_w = Some(size(theme, "space", "cell_w", &v)?),
+            "cell_h" => cell_h = Some(size(theme, "space", "cell_h", &v)?),
+            "on_press" => on_press = Some(function("on_press", v)?),
+            "on_paint" => on_paint = Some(function("on_paint", v)?),
             other => return Err(format!("unknown property '{other}'")),
         }
     }
@@ -446,6 +556,67 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
             },
             wrap,
         });
+    }
+    if kind == Kind::Grid {
+        let (Some(cw), Some(ch)) = (cell_w, cell_h) else { return Err("a grid needs cell_w and cell_h".into()) };
+        let Some(cell_fn) = cell_fn else { return Err("a grid needs cell(r, c)".into()) };
+        let tsize = match text_size {
+            Some(s) => s,
+            None => theme.size_named("text", "small")?,
+        };
+        let tweight = match text_weight {
+            Some(w) => w,
+            None => theme.weight_named("regular")?,
+        };
+        let mut cells = Vec::with_capacity(rows * cols);
+        for r in 0..rows {
+            for c in 0..cols {
+                let v: Value = cell_fn.call((r as i64 + 1, c as i64 + 1)).map_err(|e| e.to_string())?;
+                cells.push(match v {
+                    Value::Nil => GridCell::default(),
+                    Value::String(s) => {
+                        GridCell { text: s.to_str().map_err(|e| e.to_string())?.to_string(), ..Default::default() }
+                    }
+                    Value::Integer(i) => GridCell { text: i.to_string(), ..Default::default() },
+                    Value::Number(x) => GridCell { text: x.to_string(), ..Default::default() },
+                    Value::Table(ct) => {
+                        let text = match ct.get::<Value>("text").map_err(|e| e.to_string())? {
+                            Value::Nil => match ct.get::<Value>(1).map_err(|e| e.to_string())? {
+                                Value::Nil => String::new(),
+                                v => string("text", &v)?,
+                            },
+                            v => string("text", &v)?,
+                        };
+                        let bg = match ct.get::<Value>("bg").map_err(|e| e.to_string())? {
+                            Value::Nil => None,
+                            v => Some(color(theme, "bg", &v)?),
+                        };
+                        let col = match ct.get::<Value>("color").map_err(|e| e.to_string())? {
+                            Value::Nil => None,
+                            v => Some(color(theme, "color", &v)?),
+                        };
+                        GridCell { text, bg, color: col }
+                    }
+                    _ => return Err(format!("cell({}, {}) must return text, a table or nil", r + 1, c + 1)),
+                });
+            }
+        }
+        let gap = style.gap;
+        style.w = Len::Px((cols as f32 * (cw + gap) - gap).max(0.0));
+        style.h = Len::Px((rows as f32 * (ch + gap) - gap).max(0.0));
+        n.grid = Some(Rc::new(Grid {
+            rows,
+            cols,
+            cell_w: cw,
+            cell_h: ch,
+            gap,
+            size: tsize,
+            weight: tweight,
+            cells,
+            on_press,
+            on_paint,
+        }));
+        n.text = None;
     }
     if kind == Kind::Anchored {
         n.anchor = Some(match (entity, cell) {
@@ -495,6 +666,7 @@ pub fn error_node(theme: &Theme, owner: Rc<str>, key: u64, what: &str, err: &str
         anchor: None,
         priority: 0,
         offset_y: 0.0,
+        grid: None,
         children: vec![],
     };
     let pad = 4.0 * theme.scale;
@@ -522,6 +694,7 @@ pub fn error_node(theme: &Theme, owner: Rc<str>, key: u64, what: &str, err: &str
         anchor: None,
         priority: 0,
         offset_y: 0.0,
+        grid: None,
         children: vec![text],
     }
 }
