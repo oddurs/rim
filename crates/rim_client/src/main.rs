@@ -105,6 +105,20 @@ fn frame_time() -> f32 {
     get_frame_time().min(0.1)
 }
 
+/// Where the UI layout is kept: the platform's per-user data directory,
+/// so it follows the player, not the save.
+fn layout_path() -> Option<PathBuf> {
+    let var = |k: &str| std::env::var_os(k).map(PathBuf::from);
+    let base = if cfg!(target_os = "macos") {
+        var("HOME").map(|h| h.join("Library/Application Support"))
+    } else if cfg!(windows) {
+        var("APPDATA")
+    } else {
+        var("XDG_DATA_HOME").or_else(|| var("HOME").map(|h| h.join(".local/share")))
+    };
+    base.map(|b| b.join("rim").join("ui-layout.toml"))
+}
+
 /// Window and renderer settings. Reasoning: docs/engineering/dependencies.md.
 fn conf() -> macroquad::conf::Conf {
     use macroquad::miniquad::conf::{AppleGfxApi, LinuxBackend, Platform};
@@ -189,10 +203,18 @@ async fn game() {
         Ok(s) => s,
         Err(e) => return fail(e).await,
     };
-    let ui = match Ui::new(rim_ui::mods_of(&sim), screen_dpi_scale(), ui_scale) {
+    let mut ui = match Ui::new(rim_ui::mods_of(&sim), screen_dpi_scale(), ui_scale) {
         Ok(u) => u,
         Err(e) => return fail(format!("UI failed to start: {e}")).await,
     };
+    // Window positions are the player's, per machine: not in a save game,
+    // and not touched by the autotest.
+    let layout_file = if args.iter().any(|a| a == "--autotest") { None } else { layout_path() };
+    if let Some(text) = layout_file.as_ref().and_then(|p| std::fs::read_to_string(p).ok()) {
+        if let Err(e) = ui.restore_layout(&text) {
+            eprintln!("  warning: ui layout file ignored: {e}");
+        }
+    }
     eprintln!("rim: seed {seed}, {} mods loaded, UI font {}", sim.mods.len(), ui.info.font);
     for w in sim.warnings.iter().chain(&ui.warnings()) {
         eprintln!("  warning: {w}");
@@ -238,6 +260,14 @@ async fn game() {
     loop {
         let raw = RawInput::gather(&mut app);
         frame(&mut app, &raw);
+        if app.ui.take_layout_dirty() {
+            if let Some(p) = &layout_file {
+                let _ = p.parent().map(std::fs::create_dir_all);
+                if let Err(e) = std::fs::write(p, app.ui.layout_toml()) {
+                    eprintln!("rim: could not save the UI layout to {}: {e}", p.display());
+                }
+            }
+        }
         render(&mut app);
         next_frame().await
     }

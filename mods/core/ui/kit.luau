@@ -186,6 +186,42 @@ function kit.table(props)
 	})
 end
 
+-- The chrome around a window the engine manages: a title bar that drags,
+-- a close button, the body in a scroll area, and a resize grip when the
+-- window allows it. `win` is the engine's record: id, title, w, h,
+-- resizable, comp (the component shown inside). The `handle` marks are
+-- what the engine routes; the rest is ordinary kit.
+function kit.window(win)
+	return node("col", {
+		id = win.id .. ".window",
+		w = win.w,
+		h = win.h,
+		gap = 0,
+		pad = 0,
+		bg = "surface",
+		border = "line_strong",
+		clip = true,
+	}, {
+		node("row", { id = win.id .. ".title", handle = "move", align = "center", gap = "s", pad = "s", padx = "m", bg = "surface_raised", radius = 0 }, {
+			kit.label(win.title, { weight = "strong" }),
+			{ kind = "spacer" },
+			node("row", {
+				id = win.id .. ".close",
+				handle = "close",
+				pad = "xs",
+				padx = "s",
+				radius = "radius",
+				hover = { bg = "surface_hover" },
+				press = { bg = "surface_press" },
+			}, { kit.label(ui.t("core:window.close", "×"), { color = "muted" }) }),
+		}),
+		{ kind = "scroll", grow = 1, pad = "m", gap = "s", ui.slot(win.comp) },
+		win.resizable and node("row", { justify = "end", pad = 0 }, {
+			node("row", { id = win.id .. ".resize", handle = "resize", w = 14, h = 14, bg = "line", radius = 0 }),
+		}),
+	})
+end
+
 -- A context menu. props: items = { {label, on_click, disabled} }, id.
 function kit.menu(props)
 	local rows = {}

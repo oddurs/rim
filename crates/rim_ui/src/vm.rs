@@ -86,6 +86,30 @@ struct Comp {
     func: Function,
 }
 
+/// A window a mod declared with `ui.window`. Sizes are logical pixels: the
+/// engine scales them, and saves them unscaled.
+#[derive(Clone, Debug)]
+pub struct WindowDecl {
+    pub id: String,
+    pub owner: Rc<str>,
+    pub title: String,
+    pub w: f32,
+    pub h: f32,
+    pub resizable: bool,
+    /// Open when first seen, before any saved layout says otherwise.
+    pub open: bool,
+    /// The component shown inside the chrome.
+    pub comp: String,
+}
+
+/// What a handler asked of a window; the engine applies it after the call.
+#[derive(Clone, Debug, PartialEq)]
+pub enum WindowOp {
+    Open(String),
+    Close(String),
+    Toggle(String),
+}
+
 #[derive(Default)]
 struct Registry {
     current: String,
@@ -103,6 +127,13 @@ struct Registry {
     strings_by: HashMap<String, String>,
     /// Every key `ui.t` has been asked for, so a test can list them.
     used_strings: HashSet<String>,
+    /// Windows in declaration order; a later declaration of an id wins.
+    windows: Vec<WindowDecl>,
+    window_ops: Vec<WindowOp>,
+    /// Which windows are open, as the engine last told us.
+    window_open: HashMap<String, bool>,
+    /// The function that draws a window's chrome around its body.
+    chrome: Option<(Rc<str>, Function)>,
 }
 
 /// A loaded mod: id, directory, and which mods it may `require`.
@@ -370,6 +401,67 @@ impl UiVm {
                 let mut reg = r.borrow_mut();
                 let owner: Rc<str> = reg.current.as_str().into();
                 reg.mounts.push(Mount { layer, id, order, align, owner });
+                Ok(())
+            })?,
+        )?;
+        // ui.window(id, { title, w, h, resizable, open }, component): a
+        // window the engine moves, sizes, stacks and remembers. The
+        // component is a function (defined under the window's id) or the
+        // id of one.
+        let r = self.reg.clone();
+        ui.set(
+            "window",
+            lua.create_function(move |_, (id, opts, comp): (String, Table, Value)| {
+                let mut reg = r.borrow_mut();
+                let owner: Rc<str> = reg.current.as_str().into();
+                let comp = match comp {
+                    Value::Function(func) => {
+                        reg.comps.insert(id.clone(), Comp { owner: owner.clone(), func });
+                        id.clone()
+                    }
+                    Value::String(s) => s.to_str()?.to_string(),
+                    _ => return Err(rt("ui.window: the component is a function or a component id")),
+                };
+                let num = |k: &str, d: f32| opts.get::<Option<f32>>(k).ok().flatten().unwrap_or(d);
+                reg.windows.push(WindowDecl {
+                    id,
+                    owner,
+                    title: opts.get::<Option<String>>("title").ok().flatten().unwrap_or_default(),
+                    w: num("w", 360.0),
+                    h: num("h", 240.0),
+                    resizable: opts.get::<Option<bool>>("resizable").ok().flatten().unwrap_or(false),
+                    open: opts.get::<Option<bool>>("open").ok().flatten().unwrap_or(false),
+                    comp,
+                });
+                Ok(())
+            })?,
+        )?;
+        for (name, op) in [
+            ("open", WindowOp::Open as fn(String) -> WindowOp),
+            ("close", WindowOp::Close),
+            ("toggle", WindowOp::Toggle),
+        ] {
+            let r = self.reg.clone();
+            ui.set(
+                name,
+                lua.create_function(move |_, id: String| {
+                    r.borrow_mut().window_ops.push(op(id));
+                    Ok(())
+                })?,
+            )?;
+        }
+        let r = self.reg.clone();
+        ui.set(
+            "is_open",
+            lua.create_function(move |_, id: String| Ok(r.borrow().window_open.get(&id).copied().unwrap_or(false)))?,
+        )?;
+        let r = self.reg.clone();
+        ui.set(
+            "window_chrome",
+            lua.create_function(move |_, f: Function| {
+                let mut reg = r.borrow_mut();
+                let owner: Rc<str> = reg.current.as_str().into();
+                reg.chrome = Some((owner, f));
                 Ok(())
             })?,
         )?;
@@ -790,6 +882,22 @@ impl UiVm {
 
     fn report_conflicts(&mut self) {
         let reg = self.reg.borrow();
+        let mut seen: Vec<&str> = Vec::new();
+        for w in &reg.windows {
+            if seen.contains(&w.id.as_str()) {
+                continue;
+            }
+            seen.push(&w.id);
+            let owners: Vec<&str> = reg.windows.iter().filter(|o| o.id == w.id).map(|o| &*o.owner).collect();
+            if owners.iter().any(|o| *o != owners[0]) {
+                self.warnings.push(format!(
+                    "UI conflict: window '{}' declared by {} ('{}' wins by load order)",
+                    w.id,
+                    owners.iter().map(|o| format!("'{o}'")).collect::<Vec<_>>().join(" and "),
+                    owners.last().unwrap()
+                ));
+            }
+        }
         let mut ids: Vec<&String> = reg.replaces.keys().chain(reg.removes.keys()).collect();
         ids.sort();
         ids.dedup();
@@ -817,6 +925,101 @@ impl UiVm {
         self.reg.borrow().mounts.clone()
     }
 
+    /// Declared windows, one per id: the last declaration wins.
+    pub fn windows(&self) -> Vec<WindowDecl> {
+        let reg = self.reg.borrow();
+        let mut out: Vec<WindowDecl> = Vec::new();
+        for w in &reg.windows {
+            match out.iter_mut().find(|o| o.id == w.id) {
+                Some(o) => *o = w.clone(),
+                None => out.push(w.clone()),
+            }
+        }
+        out
+    }
+
+    pub fn take_window_ops(&mut self) -> Vec<WindowOp> {
+        std::mem::take(&mut self.reg.borrow_mut().window_ops)
+    }
+
+    pub fn set_window_open(&mut self, id: &str, open: bool) {
+        self.reg.borrow_mut().window_open.insert(id.to_string(), open);
+    }
+
+    /// Build the open windows, in the order given: each one's chrome (the
+    /// registered `ui.window_chrome` function, given the window's record)
+    /// around its component. Without a chrome function the component
+    /// stands alone. Sizes are logical.
+    pub fn build_windows(
+        &mut self,
+        open: &[(String, (f32, f32))],
+        world: &World,
+        client: &ClientView,
+        engine: &EngineInfo,
+        theme: &Theme,
+        lists: &ListEnv,
+    ) -> Vec<(String, Node)> {
+        let decls = self.windows();
+        let chrome = self.reg.borrow().chrome.clone();
+        self.run_build(world, client, engine, theme, lists, |b| {
+            open.iter()
+                .filter_map(|(id, size)| {
+                    let decl = decls.iter().find(|d| d.id == *id)?;
+                    let key = key_for(1, 0, Some(id));
+                    let node = match &chrome {
+                        Some((chrome_owner, f)) => {
+                            let win = b.vm.lua.create_table().ok()?;
+                            let _ = win.set("id", decl.id.as_str());
+                            let _ = win.set("title", decl.title.as_str());
+                            let _ = win.set("w", size.0);
+                            let _ = win.set("h", size.1);
+                            let _ = win.set("resizable", decl.resizable);
+                            let _ = win.set("comp", decl.comp.as_str());
+                            match b.call(chrome_owner, f, win) {
+                                Ok(Value::Table(t)) => b.convert(&t, key, chrome_owner, None),
+                                Ok(_) => Some(b.fail(chrome_owner, key, "window chrome", "must return a node".into())),
+                                Err(e) => Some(b.fail(chrome_owner, key, "window chrome", e)),
+                            }
+                        }
+                        None => b.expand_slot(&decl.comp, key, &decl.owner),
+                    }?;
+                    Some((id.clone(), node))
+                })
+                .collect()
+        })
+    }
+
+    /// Run `f` with a builder: scripts may read the world, their time is
+    /// charged to their mod, and errors are kept once each.
+    fn run_build<R>(
+        &mut self,
+        world: &World,
+        client: &ClientView,
+        engine: &EngineInfo,
+        theme: &Theme,
+        lists: &ListEnv,
+        f: impl FnOnce(&mut Builder) -> R,
+    ) -> R {
+        let view: Table = self.lua.globals().get("view").unwrap();
+        let mut times: HashMap<Rc<str>, f64> = HashMap::new();
+        let mut errors = Vec::new();
+        let out = self.lend(world, client, engine, || {
+            let mut b = Builder { vm: self, theme, view: &view, times: &mut times, errors: &mut errors, lists };
+            f(&mut b)
+        });
+        for (m, us) in times {
+            let e = self.mod_time.entry(m.to_string()).or_insert(us);
+            *e = *e * 0.9 + us * 0.1;
+        }
+        for e in errors {
+            if !self.errors.contains(&e) {
+                eprintln!("rim_ui: {e}");
+                self.errors.push(e);
+            }
+        }
+        out
+    }
+
     fn lend<R>(&self, world: &World, client: &ClientView, engine: &EngineInfo, f: impl FnOnce() -> R) -> R {
         self.lent.world.set(world);
         self.lent.client.set(client);
@@ -838,11 +1041,7 @@ impl UiVm {
         lists: &ListEnv,
     ) -> Vec<(Mount, Node)> {
         let mounts = self.mounts();
-        let view: Table = self.lua.globals().get("view").unwrap();
-        let mut times: HashMap<Rc<str>, f64> = HashMap::new();
-        let mut errors = Vec::new();
-        let out = self.lend(world, client, engine, || {
-            let mut b = Builder { vm: self, theme, view: &view, times: &mut times, errors: &mut errors, lists };
+        let out = self.run_build(world, client, engine, theme, lists, |b| {
             mounts
                 .into_iter()
                 .filter_map(|m| {
@@ -852,16 +1051,6 @@ impl UiVm {
                 })
                 .collect::<Vec<_>>()
         });
-        for (m, us) in times {
-            let e = self.mod_time.entry(m.to_string()).or_insert(us);
-            *e = *e * 0.9 + us * 0.1;
-        }
-        for e in errors {
-            if !self.errors.contains(&e) {
-                eprintln!("rim_ui: {e}");
-                self.errors.push(e);
-            }
-        }
         if !self.unknown_checked {
             self.unknown_checked = true;
             let seen = self.seen_ids.borrow();

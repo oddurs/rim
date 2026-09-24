@@ -10,6 +10,14 @@ use mlua::{Function, Table, Value};
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 
+/// A part of a window's chrome the engine routes itself.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Handle {
+    Move,
+    Resize,
+    Close,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Kind {
     Box,
@@ -165,6 +173,9 @@ pub struct Node {
     pub offset_y: f32,
     /// Grid nodes: the cells.
     pub grid: Option<Rc<Grid>>,
+    /// Window chrome: dragging this moves or resizes the window, clicking
+    /// it closes.
+    pub handle: Option<Handle>,
     pub children: Vec<Node>,
 }
 
@@ -175,6 +186,7 @@ impl Node {
             || self.tooltip.is_some()
             || self.focusable
             || self.grid.as_ref().is_some_and(|g| g.on_press.is_some() || g.on_paint.is_some())
+            || self.handle.is_some()
     }
 
     /// Hash of everything that affects layout, for the layout cache.
@@ -275,6 +287,7 @@ pub fn blank(key: u64, owner: Rc<str>) -> Node {
         priority: 0,
         offset_y: 0.0,
         grid: None,
+        handle: None,
         children: Vec::new(),
     }
 }
@@ -429,6 +442,7 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
         priority: 0,
         offset_y: 0.0,
         grid: None,
+        handle: None,
         children: Vec::new(),
     };
     for pair in t.pairs::<Value, Value>() {
@@ -524,6 +538,14 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
             "cell_h" => cell_h = Some(size(theme, "space", "cell_h", &v)?),
             "on_press" => on_press = Some(function("on_press", v)?),
             "on_paint" => on_paint = Some(function("on_paint", v)?),
+            "handle" => {
+                n.handle = Some(match string("handle", &v)?.as_str() {
+                    "move" => Handle::Move,
+                    "resize" => Handle::Resize,
+                    "close" => Handle::Close,
+                    other => return Err(format!("unknown handle '{other}' (move, resize or close)")),
+                })
+            }
             other => return Err(format!("unknown property '{other}'")),
         }
     }
@@ -667,6 +689,7 @@ pub fn error_node(theme: &Theme, owner: Rc<str>, key: u64, what: &str, err: &str
         priority: 0,
         offset_y: 0.0,
         grid: None,
+        handle: None,
         children: vec![],
     };
     let pad = 4.0 * theme.scale;
@@ -695,6 +718,7 @@ pub fn error_node(theme: &Theme, owner: Rc<str>, key: u64, what: &str, err: &str
         priority: 0,
         offset_y: 0.0,
         grid: None,
+        handle: None,
         children: vec![text],
     }
 }

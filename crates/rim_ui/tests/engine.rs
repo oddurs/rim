@@ -285,6 +285,172 @@ ui.mount("windows", "sender:panel")
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// Two windows a probe mod declares open, each with a line of text inside.
+const TWO_WINDOWS: &str = r#"
+ui.window("probe:a", { title = "Alpha", w = 300, h = 200, resizable = true, open = true }, function(view)
+    return ui.text({ "alpha body", id = "probe:a.body" })
+end)
+ui.window("probe:b", { title = "Beta", w = 300, h = 200, open = true }, function(view)
+    return ui.text({ "beta body", id = "probe:b.body" })
+end)
+"#;
+
+fn drag(ui: &mut rim_ui::Ui, sim: &rim_sim::Sim, cv: &rim_ui::view::ClientView, from: (f32, f32), by: (f32, f32)) {
+    let to = (from.0 + by.0, from.1 + by.1);
+    frame(ui, sim, cv, Input { mouse: from, time: 1.0, ..Default::default() });
+    frame(ui, sim, cv, Input { mouse: from, left_pressed: true, time: 2.0, ..Default::default() });
+    frame(ui, sim, cv, Input { mouse: to, time: 3.0, ..Default::default() });
+    frame(ui, sim, cv, Input { mouse: to, left_released: true, time: 4.0, ..Default::default() });
+    frame(ui, sim, cv, Input { mouse: to, time: 5.0, ..Default::default() });
+}
+
+#[test]
+fn windows_drag_resize_close_and_stack() {
+    let dir = scratch_mods("windows", &[("probe", "", &[("ui/win.luau", TWO_WINDOWS)])]);
+    let sim = sim_at(&dir);
+    let mut ui = ui_for(&sim);
+    let mut cv = client(&sim);
+    frame(&mut ui, &sim, &cv, Default::default());
+    assert_eq!(ui.window_order(), ["probe:a", "probe:b"], "declared open, in order");
+    let a = ui.window_rect("probe:a").expect("alpha is placed");
+    let b = ui.window_rect("probe:b").expect("beta is placed");
+    assert_eq!((a[2], a[3]), (300.0, 200.0), "sized as declared");
+    assert_eq!((b[0] - a[0], b[1] - a[1]), (24.0, 24.0), "the second cascades from the first");
+    assert!(ui.find("probe:a.body").is_some() && ui.find("probe:b.body").is_some(), "both bodies show");
+    assert!(ui.warnings().is_empty(), "{:?}", ui.warnings());
+
+    // Stacking: a press on alpha's body (under beta's title bar? no: alpha
+    // is to the upper left, so press its own corner) raises it above beta.
+    let title = ui.find("probe:a.title").unwrap();
+    click(&mut ui, &sim, &mut cv, (title[0] + 10.0, title[1] + 10.0));
+    assert_eq!(ui.window_order(), ["probe:b", "probe:a"], "the pressed window comes to the front");
+    assert!(ui.take_layout_dirty(), "stacking is part of the layout");
+
+    // Drag by the title bar.
+    let title = ui.find("probe:a.title").unwrap();
+    drag(&mut ui, &sim, &cv, (title[0] + 10.0, title[1] + 10.0), (50.0, 30.0));
+    let moved = ui.window_rect("probe:a").unwrap();
+    assert_eq!((moved[0] - a[0], moved[1] - a[1]), (50.0, 30.0), "moved by the drag");
+    assert!(ui.take_layout_dirty());
+    // The body moved with it and stays clickable.
+    let body = ui.find("probe:a.body").unwrap();
+    assert!(body[0] > moved[0] && body[1] > moved[1] + 20.0, "body inside the window, below the title");
+
+    // Resize by the grip.
+    let grip = ui.find("probe:a.resize").expect("alpha is resizable");
+    drag(&mut ui, &sim, &cv, centre(grip), (40.0, 20.0));
+    let grown = ui.window_rect("probe:a").unwrap();
+    assert_eq!((grown[2], grown[3]), (340.0, 220.0), "grew by the drag");
+    assert!(ui.find("probe:b.resize").is_none(), "beta declared no resize");
+
+    // Never off screen: a drag far past the edge keeps the title bar reachable.
+    let title = ui.find("probe:a.title").unwrap();
+    drag(&mut ui, &sim, &cv, (title[0] + 10.0, title[1] + 10.0), (5000.0, 5000.0));
+    let r = ui.window_rect("probe:a").unwrap();
+    assert!(r[0] <= 1600.0 - 80.0 && r[1] <= 960.0 - 40.0, "{r:?} stays reachable");
+
+    // Close by the button.
+    let close = ui.find("probe:a.close").unwrap();
+    click(&mut ui, &sim, &mut cv, centre(close));
+    frame(&mut ui, &sim, &cv, Input { time: 9.0, ..Default::default() });
+    assert!(!ui.is_open("probe:a"));
+    assert!(ui.window_rect("probe:a").is_none() && ui.find("probe:a.body").is_none(), "closed windows are not built");
+    assert_eq!(ui.window_order(), ["probe:b"]);
+    // Reopened from the engine (a handler would use ui.open), it is back on top.
+    ui.open_window("probe:a");
+    frame(&mut ui, &sim, &cv, Input { time: 10.0, ..Default::default() });
+    assert_eq!(ui.window_order(), ["probe:b", "probe:a"]);
+    assert!(ui.warnings().is_empty(), "{:?}", ui.warnings());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_window_layout_survives_a_restart_and_a_mod_update() {
+    let dir = scratch_mods("winlayout", &[("probe", "", &[("ui/win.luau", TWO_WINDOWS)])]);
+    let sim = sim_at(&dir);
+    let mut ui = ui_for(&sim);
+    let mut cv = client(&sim);
+    frame(&mut ui, &sim, &cv, Default::default());
+    let title = ui.find("probe:a.title").unwrap();
+    drag(&mut ui, &sim, &cv, (title[0] + 10.0, title[1] + 10.0), (-100.0, -60.0));
+    let grip = ui.find("probe:a.resize").unwrap();
+    drag(&mut ui, &sim, &cv, centre(grip), (60.0, 40.0));
+    let close = ui.find("probe:b.close").unwrap();
+    click(&mut ui, &sim, &mut cv, centre(close));
+    frame(&mut ui, &sim, &cv, Input { time: 20.0, ..Default::default() });
+    let a = ui.window_rect("probe:a").unwrap();
+    let saved = ui.layout_toml();
+    assert!(saved.contains("[window.\"probe:a\"]"), "{saved}");
+    let _ = std::fs::remove_dir_all(&dir);
+
+    // A "mod update": alpha's default size changed and beta now opens by
+    // default; the saved layout still wins on both.
+    let updated = TWO_WINDOWS.replace("w = 300, h = 200, resizable = true", "w = 500, h = 400, resizable = true");
+    let dir = scratch_mods("winlayout2", &[("probe", "", &[("ui/win.luau", &updated)])]);
+    let sim = sim_at(&dir);
+    let mut ui = ui_for(&sim);
+    ui.restore_layout(&saved).expect("the layout parses");
+    frame(&mut ui, &sim, &cv, Default::default());
+    assert_eq!(ui.window_rect("probe:a"), Some(a), "alpha is where it was, at the size it was");
+    assert!(!ui.is_open("probe:b"), "beta stays closed");
+    assert!(!ui.take_layout_dirty(), "restoring is not a change");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn two_mods_declaring_one_window_is_reported() {
+    let dir = scratch_mods(
+        "winconflict",
+        &[
+            (
+                "one",
+                "",
+                &[(
+                    "ui/win.luau",
+                    "ui.window(\"shared:win\", { title = \"One\" }, function(view) return ui.text({ \"one\" }) end)",
+                )],
+            ),
+            (
+                "two",
+                "",
+                &[(
+                    "ui/win.luau",
+                    "ui.window(\"shared:win\", { title = \"Two\" }, function(view) return ui.text({ \"two\" }) end)",
+                )],
+            ),
+        ],
+    );
+    let sim = sim_at(&dir);
+    let ui = ui_for(&sim);
+    let w = ui.warnings();
+    assert!(
+        w.iter().any(|w| w.starts_with("UI conflict: window 'shared:win' declared by")),
+        "a shared window id is reported: {w:?}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn the_devtools_toggle_opens_the_gallery_window() {
+    let sim = sim_at(&mods());
+    let mut ui = ui_for(&sim);
+    let mut cv = client(&sim);
+    cv.show_devtools = true;
+    frame(&mut ui, &sim, &cv, Default::default());
+    assert!(!ui.is_open("core:gallery"));
+    let toggle = ui.find("core:devtools.gallery").expect("the gallery toggle");
+    click(&mut ui, &sim, &mut cv, centre(toggle));
+    frame(&mut ui, &sim, &cv, Input { time: 1.0, ..Default::default() });
+    assert!(ui.is_open("core:gallery"));
+    assert!(ui.find("core:gallery.panel").is_some(), "the gallery shows in its window");
+    assert!(ui.find("core:gallery.resize").is_some());
+    assert!(ui.warnings().is_empty(), "{:?}", ui.warnings());
+    let close = ui.find("core:gallery.close").unwrap();
+    click(&mut ui, &sim, &mut cv, centre(close));
+    frame(&mut ui, &sim, &cv, Input { time: 2.0, ..Default::default() });
+    assert!(!ui.is_open("core:gallery"));
+}
+
 #[test]
 fn a_scroll_area_stops_exactly_at_its_last_row() {
     let dir = scratch_mods(
