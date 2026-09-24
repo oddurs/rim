@@ -93,9 +93,9 @@ pub enum Job {
         target: Entity,
         until: u64,
     },
-    /// Break down a door that will not open for us.
+    /// Break through a piece of wall, door or window that is in the way.
     Breach {
-        door: Entity,
+        target: Entity,
     },
     Flee {
         to: IVec,

@@ -28,6 +28,21 @@ build = { menu = "structure", work = 300, stuff = { category = "structural", cou
 # A door is the draughty part of a wall.
 boundary = [{ field = "temperature", leak = 1.5 }]
 
+# A wall with a pane in it: shut to feet, open to daylight, and the
+# draughtiest thing in the room. Built of the frame's material; the pane is
+# implied, since nothing in core makes glass yet.
+[[thing]]
+id = "window"
+label = "window"
+color = "#9a7b58"
+category = "building"
+shape = "window"
+blocks = true
+hp = 60
+market_value = 12
+build = { menu = "structure", work = 220, stuff = { category = "structural", count = 3 } }
+boundary = [{ field = "light", pass = 0.35 }, { field = "temperature", leak = 4.0 }]
+
 [[thing]]
 id = "bed"
 label = "bed"

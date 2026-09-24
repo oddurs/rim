@@ -87,6 +87,7 @@ pub enum Shape {
     Rock,
     Wall,
     Door,
+    Window,
     Bed,
     Fire,
     Item,

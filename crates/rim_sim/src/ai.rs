@@ -222,17 +222,19 @@ fn think_hostile(w: &mut World, e: Entity, p: &mut Pawn) -> Option<Job> {
             return Some(Job::Attack { target: t, until: w.tick + 3000 });
         }
         // Walled out. A door is the thin part of the wall, so break that.
-        if let Some(door) = nearest_breach(w, p.pos, p.faction, tp) {
-            return Some(Job::Breach { door });
+        if let Some(target) = nearest_breach(w, p.pos, p.faction, tp) {
+            return Some(Job::Breach { target });
         }
     }
     wander(w, p, 8)
 }
 
-/// The nearest door standing between `from`'s side and `to`'s side, as the
-/// faction locked out sees it. A locked door is a hole in every region
-/// layer but its owner's, so the door to break is the one whose neighbours
-/// include both sides. Call `ensure_regions` first.
+/// The weakest owned piece standing between `from`'s side and `to`'s side,
+/// as the faction shut out sees it: the window before the door, the door
+/// before the wall. A piece in the way is one whose neighbours include
+/// both sides. Nothing natural qualifies -- you cannot dig through a
+/// mountain -- and nothing unowned does, since it was never shut against
+/// anyone. Ties go to the nearest. Call `ensure_regions` first.
 fn nearest_breach(w: &World, from: IVec, who: Faction, to: IVec) -> Option<Entity> {
     let (mine, theirs) = (w.map.region_at_for(from, who), w.map.region_at_for(to, who));
     if mine == 0 || theirs == 0 || mine == theirs {
@@ -241,14 +243,17 @@ fn nearest_breach(w: &World, from: IVec, who: Faction, to: IVec) -> Option<Entit
     let touches = |p: IVec, r: u32| {
         crate::map::NEIGHBORS8.iter().any(|(dx, dy)| w.map.region_at_for(p.offset(*dx, *dy), who) == r)
     };
-    let mut best: Option<(u32, Entity)> = None;
-    for (de, t) in w.ecs.query::<&Thing>().without::<&Blueprint>().iter() {
-        let d = t.pos.octile(from);
-        if best.is_some_and(|b| b.0 <= d) || !w.map.locked_against(w.map.idx(t.pos), who) {
+    let mut best: Option<((i32, u32), Entity)> = None;
+    for (de, (t, owner)) in w.ecs.query::<(&Thing, &Owner)>().without::<&Blueprint>().iter() {
+        if owner.0 == who || !w.map.blocks_fields(w.map.idx(t.pos)) {
+            continue;
+        }
+        let key = (t.hp, t.pos.octile(from));
+        if best.is_some_and(|b| b.0 <= key) {
             continue;
         }
         if touches(t.pos, mine) && touches(t.pos, theirs) && w.map.can_reach_for(from, Goal::Touch(t.pos), who) {
-            best = Some((d, de));
+            best = Some((key, de));
         }
     }
     best.map(|b| b.1)
@@ -609,7 +614,7 @@ fn run_job(w: &mut World, e: Entity, p: &mut Pawn) {
         Job::Sleep { bed, spot, stage } => (run_sleep(w, e, p, bed, spot, stage), 0),
         Job::Comfort { to, need, until } => (run_comfort(w, p, to, need, until), 0),
         Job::Attack { target, until } => (run_attack(w, e, p, target, until), 0),
-        Job::Breach { door } => (run_breach(w, p, door), 0),
+        Job::Breach { target } => (run_breach(w, p, target), 0),
     };
     match next {
         Some(j) => p.job = j,
@@ -873,18 +878,18 @@ fn run_attack(w: &mut World, e: Entity, p: &mut Pawn, target: Entity, until: u64
     }
 }
 
-/// Hack at a door until it gives. The job ends when the door is gone,
-/// and the next think finds the way in now open.
-fn run_breach(w: &mut World, p: &mut Pawn, door: Entity) -> Option<Job> {
-    let t = w.thing(door)?;
+/// Hack at a piece of the wall until it gives. The job ends when it is
+/// gone, and the next think finds the way in now open.
+fn run_breach(w: &mut World, p: &mut Pawn, target: Entity) -> Option<Job> {
+    let t = w.thing(target)?;
     match go_to(w, p, Goal::Touch(t.pos)) {
         Go::Failed => None,
-        Go::Moving => Some(Job::Breach { door }),
+        Go::Moving => Some(Job::Breach { target }),
         Go::Arrived => {
             if p.cooldown == 0 {
-                hit_thing(w, p, door, t.pos);
+                hit_thing(w, p, target, t.pos);
             }
-            Some(Job::Breach { door })
+            Some(Job::Breach { target })
         }
     }
 }
