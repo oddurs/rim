@@ -67,7 +67,7 @@ fn build(taffy: &mut TaffyTree<Option<Measure>>, n: &Node) -> NodeId {
         max_size: Size { width: lpa(s.max_w), height: lpa(s.max_h) },
         flex_grow: s.grow,
         // Text and grids never shrink below their content; boxes may.
-        flex_shrink: if matches!(n.kind, Kind::Text | Kind::Grid | Kind::Image) { 0.0 } else { 1.0 },
+        flex_shrink: if matches!(n.kind, Kind::Text | Kind::Grid | Kind::Image | Kind::Input) { 0.0 } else { 1.0 },
         align_items: s.align.map(align_items),
         justify_content: s.justify.map(justify),
         overflow: if n.kind == Kind::Scroll {

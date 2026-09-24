@@ -13,6 +13,7 @@
 //! 4. lays out (cached by tree hash) and paints.
 
 pub mod api;
+pub mod edit;
 pub mod fontcache;
 pub mod image;
 pub mod layout;
@@ -47,8 +48,23 @@ pub struct Input {
     pub tab: bool,
     pub shift: bool,
     pub enter: bool,
+    /// Keys for a focused text input this frame, in order.
+    pub keys: Vec<Key>,
     /// Wall-clock seconds.
     pub time: f64,
+}
+
+/// A key a text input understands. Tab and Enter are `Input` flags.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Key {
+    Char(char),
+    Backspace,
+    Delete,
+    Left,
+    Right,
+    Home,
+    End,
+    Escape,
 }
 
 /// What the client needs back from a frame.
@@ -77,6 +93,17 @@ struct Painting {
 /// What routing found to run this frame.
 enum Call {
     Click(mlua::Function),
+    /// An input's text changed, or was submitted.
+    Text {
+        f: mlua::Function,
+        text: String,
+    },
+    /// The pointer is held on a node with on_drag: fractions across it.
+    Drag {
+        f: mlua::Function,
+        fx: f32,
+        fy: f32,
+    },
     /// A press on a grid cell: ask the mod what to paint, then paint it.
     Press {
         grid: Rc<node::Grid>,
@@ -212,6 +239,8 @@ pub struct Ui {
     layout_dirty: bool,
     /// The mods' PNGs, placed in the atlas as they are drawn.
     pub images: image::Images,
+    /// Every text input's buffer, by node id. Outlives rebuilds and reloads.
+    edits: HashMap<String, edit::EditState>,
 }
 
 fn total_scale(dpi: f32, user: f32) -> f32 {
@@ -288,7 +317,28 @@ impl Ui {
             win_rects: Vec::new(),
             layout_dirty: false,
             images,
+            edits: HashMap::new(),
         })
+    }
+
+    /// A text input's buffer and caret (tests, devtools).
+    pub fn edit_state(&self, id: &str) -> Option<&edit::EditState> {
+        self.edits.get(id)
+    }
+
+    /// The id of the focused node, if it has one.
+    pub fn focused_id(&self) -> Option<String> {
+        let f = self.focused?;
+        self.id_keys.iter().find(|(_, k)| **k == f).map(|(id, _)| id.clone())
+    }
+
+    /// The focused node, if it is a text input: its id and handlers.
+    fn focused_input(&self) -> Option<(String, Option<mlua::Function>, Option<mlua::Function>)> {
+        let f = self.focused?;
+        let (layer, h) = self.hit_by_key(f)?;
+        let n = self.node_at(layer, h.path[0], &h.path[1..])?;
+        let input = n.input.as_ref()?;
+        Some((n.id.as_deref()?.to_string(), input.on_change.clone(), input.on_submit.clone()))
     }
 
     /// Open windows in stacking order, bottom first.
@@ -600,12 +650,30 @@ impl Ui {
                 if h.focusable {
                     self.focused = Some(h.key);
                 }
+                // Clicking an input starts editing what it shows, caret at the end.
+                if let Some(n) = self.node_at(layer, h.path[0], &h.path[1..]) {
+                    if let (Some(id), Some(inp)) = (n.id.as_deref(), &n.input) {
+                        if !self.edits.contains_key(id) {
+                            self.edits.insert(id.to_string(), edit::EditState::at_end(&inp.value));
+                        }
+                    }
+                }
                 // A grid: the press picks the cell and asks what to paint.
                 let grid = self.node_at(layer, h.path[0], &h.path[1..]).and_then(|n| n.grid.clone());
                 if let Some(g) = grid {
                     if let Some(cell) = g.cell_at(h.rect, mx, my) {
                         handlers.push(Call::Press { grid: g, key: h.key, cell });
                     }
+                }
+            }
+        }
+        // A held pointer on a node with on_drag reports where it is.
+        if let Some(p) = self.pressed {
+            if let Some((layer, h)) = self.hit_by_key(p) {
+                if let Some(f) = self.node_at(layer, h.path[0], &h.path[1..]).and_then(|n| n.on_drag.clone()) {
+                    let fx = ((mx - h.rect[0]) / h.rect[2].max(1.0)).clamp(0.0, 1.0);
+                    let fy = ((my - h.rect[1]) / h.rect[3].max(1.0)).clamp(0.0, 1.0);
+                    handlers.push(Call::Drag { f, fx, fy });
                 }
             }
         }
@@ -655,6 +723,41 @@ impl Ui {
             }
         }
 
+        // A focused text input takes every key: characters edit the buffer,
+        // Enter submits, Escape gives the keyboard back.
+        let mut enter = input.enter;
+        if let Some((id, on_change, on_submit)) = self.focused_input() {
+            out.captured_keys = true;
+            let mut changed = false;
+            let e = self.edits.entry(id.clone()).or_default();
+            for k in &input.keys {
+                match k {
+                    Key::Char(c) => {
+                        e.insert(&c.to_string());
+                        changed = true;
+                    }
+                    Key::Backspace => changed |= e.backspace(),
+                    Key::Delete => changed |= e.delete(),
+                    Key::Left => e.left(input.shift),
+                    Key::Right => e.right(input.shift),
+                    Key::Home => e.home(input.shift),
+                    Key::End => e.end(input.shift),
+                    Key::Escape => self.focused = None,
+                }
+            }
+            let text = e.text.clone();
+            if changed {
+                if let Some(f) = on_change {
+                    handlers.push(Call::Text { f, text: text.clone() });
+                }
+            }
+            if enter {
+                if let Some(f) = on_submit {
+                    handlers.push(Call::Text { f, text });
+                }
+                enter = false;
+            }
+        }
         // Keyboard focus: once a UI control has focus (it was clicked or
         // tabbed to), Tab cycles focusable elements and Enter activates. Tab
         // with nothing focused belongs to the game (next colonist).
@@ -677,7 +780,7 @@ impl Ui {
                 out.captured_keys = true;
             }
         }
-        if input.enter {
+        if enter {
             if let Some(f) = self.focused {
                 let found = self
                     .layers
@@ -714,6 +817,12 @@ impl Ui {
         for call in calls {
             match call {
                 Call::Click(f) => self.vm.call_handler(&f, world, client, &self.shown),
+                Call::Text { f, text } => {
+                    self.vm.call_with(&f, text, world, client, &self.shown);
+                }
+                Call::Drag { f, fx, fy } => {
+                    self.vm.call_with(&f, (fx, fy), world, client, &self.shown);
+                }
                 Call::Press { grid, key, cell } => {
                     // What the drag paints is the mod's answer to the press;
                     // the pressed cell is painted with it straight away.
@@ -756,6 +865,7 @@ impl Ui {
             || input.left_released
             || input.right_pressed
             || input.wheel != 0.0
+            || !input.keys.is_empty()
             || input.tab
             || input.enter;
         let stale = input.time - self.built_at >= REBUILD_EVERY || input.time < self.built_at;
@@ -768,8 +878,13 @@ impl Ui {
             || self.built.is_empty()
             || self.devtools;
         if rebuilt {
-            let lists =
-                vm::ListEnv { scroll: &self.scroll, rects: &self.ids, keys: &self.id_keys, images: &self.images };
+            let lists = vm::ListEnv {
+                scroll: &self.scroll,
+                rects: &self.ids,
+                keys: &self.id_keys,
+                images: &self.images,
+                edits: &self.edits,
+            };
             self.built = self.vm.build(world, client, &self.shown, &self.theme, &lists);
             let open: Vec<(String, (f32, f32))> =
                 self.windows.iter().filter(|w| w.open).map(|w| (w.id.clone(), (w.w, w.h))).collect();
@@ -794,11 +909,13 @@ impl Ui {
         let mut nodes = 0;
         let mut layouts = self.info.layouts;
         let state_scroll = std::mem::take(&mut self.scroll);
+        let state_edits = std::mem::take(&mut self.edits);
         let state = PaintState {
             hovered: self.hovered,
             pressed: self.pressed,
             focused: self.focused,
             scroll: &state_scroll,
+            edits: &state_edits,
             disabled_alpha: 0.45,
         };
 
@@ -936,6 +1053,7 @@ impl Ui {
             layers.push(lo);
         }
         self.scroll = state_scroll;
+        self.edits = state_edits;
         self.clamp_scroll(&layers);
 
         // Devtools: the node under the cursor, any node at all.
@@ -1232,6 +1350,8 @@ fn plain(key: u64, style: Style, children: Vec<Node>) -> Node {
         grid: None,
         handle: None,
         image: None,
+        input: None,
+        on_drag: None,
         children,
     }
 }
@@ -1263,6 +1383,7 @@ fn flatten(n: &Node, depth: usize, out: &mut Vec<(usize, String, String, String)
         (Kind::Anchored, _) => "anchored",
         (Kind::Grid, _) => "grid",
         (Kind::Image, _) => "image",
+        (Kind::Input, _) => "input",
     };
     out.push((depth, kind.to_string(), n.id.as_deref().unwrap_or("").to_string(), n.owner.to_string()));
     for c in &n.children {

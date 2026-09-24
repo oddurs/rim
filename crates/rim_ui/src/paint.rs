@@ -50,6 +50,8 @@ pub struct PaintState<'a> {
     pub pressed: Option<u64>,
     pub focused: Option<u64>,
     pub scroll: &'a std::collections::HashMap<u64, f32>,
+    /// Text inputs' buffers, for the caret and selection.
+    pub edits: &'a std::collections::HashMap<String, crate::edit::EditState>,
     pub disabled_alpha: f32,
 }
 
@@ -138,9 +140,36 @@ fn walk(
     if let Some(t) = &n.text {
         let color = apply(Some(t.color), patch, |p| p.color).unwrap();
         let width = if t.wrap { Some(rect[2]) } else { None };
-        let quads = p.text.quads(&t.text, t.size, t.weight, width, rect[0], rect[1]);
+        // An input is a padded box around its text; plain text has no padding.
+        let (tx, ty) = if n.input.is_some() { (rect[0] + s.pad[3], rect[1] + s.pad[0]) } else { (rect[0], rect[1]) };
+        let quads = p.text.quads(&t.text, t.size, t.weight, width, tx, ty);
         if !quads.is_empty() {
             p.draw.push(Draw::Glyphs { quads, color: fade(color, alpha) });
+        }
+        // The focused input: its selection (over the text, at low alpha)
+        // and a caret in the text colour.
+        if let (Some(inp), true) = (&n.input, focused) {
+            if let Some(e) = n.id.as_deref().and_then(|id| p.state.edits.get(id)) {
+                let line_h = p.text.shape(&t.text, t.size, t.weight, None).height.max(t.size);
+                let mut x_at = |ch: usize| -> f32 {
+                    if inp.placeholder {
+                        return tx;
+                    }
+                    tx + p.text.shape(e.prefix(ch), t.size, t.weight, None).width
+                };
+                let (lo, hi) = e.selection();
+                let sel = (lo != hi).then(|| (x_at(lo), x_at(hi)));
+                let cx = x_at(e.caret);
+                if let Some((x0, x1)) = sel {
+                    p.draw.push(Draw::Rect {
+                        rect: [x0, ty, x1 - x0, line_h],
+                        color: [0.35, 0.7, 1.0, 0.35],
+                        radius: 0.0,
+                    });
+                }
+                let w = (t.size / 12.0).max(1.0).round();
+                p.draw.push(Draw::Rect { rect: [cx, ty, w, line_h], color: fade(color, alpha), radius: 0.0 });
+            }
         }
     }
     if let Some(img) = &n.image {

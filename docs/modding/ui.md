@@ -100,6 +100,8 @@ ui.mount("windows", "my_mod:greeting")
 | `tooltip` | Text shown after a short hover |
 | `handle` | Window chrome: `move`, `resize` or `close` (see Windows) |
 | `src`, `tint` | Image: `src = "mod:name"` names a PNG under that mod's `ui/img/`; `tint = true` draws it in the text colour (see Images) |
+| `value`, `placeholder`, `on_change`, `on_submit` | Text input (see Text input and sliders) |
+| `on_drag` | Called with `(fx, fy)`, fractions across the node, while the pointer is held on it |
 | `disabled` | Dims the node and everything inside it, and ignores clicks |
 
 A typo in a property or token name is an error. It appears as a red box where
@@ -251,6 +253,40 @@ picture keeps its own colours. Ship `stem@2x.png` beside `stem.png` for
 dense displays: the engine picks it from 1.5x up. No SVG, no nine-slice, no
 animation. A `src` nobody ships is a named warning and a red placeholder
 where the image would be, so the rest of the panel still works.
+
+## Text input and sliders
+
+The tree is rebuilt twenty times a second, so a caret cannot live in a
+script. An `input` node's buffer, caret and selection are the engine's, keyed
+by the node's `id`: what the player typed is there after every rebuild, after
+a hot reload, and until the mod reads it back.
+
+```lua
+local kit = require("@core/ui/kit")
+
+ui.define("my_mod:rename", function(view)
+	return ui.row({ gap = "s", align = "center",
+		kit.input({ id = "my_mod:name", placeholder = "New name", on_submit = function(text)
+			ui.set_state("my_mod:name", text)
+		end }),
+		kit.slider({ id = "my_mod:volume", value = ui.state("my_mod:volume", 0.5), on_change = function(v)
+			ui.set_state("my_mod:volume", v)
+		end }),
+	})
+end)
+ui.mount("top", "my_mod:rename", { order = 70 })
+```
+
+Click an input to focus it; typing, Backspace, Delete, the arrows, Home and
+End edit; Shift with an arrow selects; Enter calls `on_submit(text)`; Escape
+gives the keyboard back to the game. `on_change(text)` runs after every
+edit. While an input has focus the game sees no keys at all. `value` is what
+the box holds until the player types; to set the text from a script, give
+the node a new id.
+
+A slider is any node with `on_drag`: while the pointer is held on it, the
+handler gets `(fx, fy)`, the pointer's position across the node as fractions.
+`kit.slider` draws a bar and reports `fx`.
 
 ## Anchored labels
 
