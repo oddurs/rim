@@ -9,6 +9,9 @@ content ids in engine code, it belongs in a mod instead.
 - `cargo test -p rim_sim` — includes the determinism test; it must pass
 - Sim changes must stay deterministic: world RNG only, no HashMap iteration,
   all player input through `Command`.
+- Dropping an item or moving a milestone's `due` is a person's call:
+  `cairn propose <ID> status=dropped --why "..."`, then `cairn proposals`.
+  The cairn block below is generated: `cairn agent --view next --write CLAUDE.md`.
 
 <!-- cairn:begin -->
 ## Roadmap and issues
@@ -19,8 +22,8 @@ This project tracks its roadmap and issues with `cairn`. Every item is a Markdow
 
 ### The loop
 
-1. `cairn next` — what is ready to start. It excludes anything blocked by unfinished dependencies and puts work already in progress first.
-2. `cairn claim <ID>` — take it before you start, so no one duplicates the work. `cairn claim --next` picks and claims the top-ranked unclaimed item in one step, and prints its body so you can begin immediately.
+1. `cairn next --view next` — what is ready to start. It excludes anything blocked by unfinished dependencies and puts work already in progress first.
+2. `cairn claim <ID>` — take it before you start, so no one duplicates the work. `cairn claim --next --view next` picks and claims the top-ranked unclaimed item in one step, and prints its body so you can begin immediately.
 3. Do the work. Record what you learn: `cairn set <ID> <field>=<value>` for fields, `cairn note <ID> "<TEXT>"` for anything that needs a sentence — why you chose something, what you tried, what to watch for.
 4. `cairn tick <ID> <N>` as each acceptance criterion becomes true — `cairn show <ID> --criteria` lists them numbered. Tick what is true, not what would let you close.
 5. `cairn close <ID>` when it is done, or `cairn release <ID>` to hand it back.
@@ -29,8 +32,8 @@ This project tracks its roadmap and issues with `cairn`. Every item is a Markdow
 ### Commands
 
 ```sh
-cairn next --json                 # ready work, ranked
-cairn claim --next                # take the next ready item
+cairn next --view next --json                 # ready work, ranked
+cairn claim --next --view next                # take the next ready item
 cairn search <TEXT> --json        # titles, bodies and labels
 cairn list --json                 # all open items
 cairn list --filter 'blocked=false,priority=p0'
@@ -45,6 +48,12 @@ cairn check                       # validate; run before finishing
 cairn render                      # regenerate ROADMAP.md
 ```
 
+Selection uses saved view `next`. Additional filters only narrow it; the view's sort and columns do not change `next` ranking. Over MCP, pass `{"view":"next"}` to `next_items` and to `claim_item` without an id. A direct claim is an explicit assignment outside this selection policy. Regenerate these instructions with `cairn agent --view next --write AGENTS.md`.
+
+Claims coordinate writers in the same item directory, not separate branches, worktrees, or clones. Agree on assignments before splitting work.
+
+Item identities are immutable UUIDv4 strings. Use full `id` values from JSON for durable references; commands also accept unambiguous prefixes of at least 8 hex digits. Store full identities in ID-reference fields, never prefixes. Migrated legacy numbers remain lookup aliases; new items do not receive numbers.
+
 ### Schema
 
 - **Types**: `feature`, `bug`, `spike`, `perf`, `content`, `chore`, `docs`, `milestone`, `pillar`
@@ -54,8 +63,8 @@ cairn render                      # regenerate ROADMAP.md
 - **`layer`**: one of engine, core, plugin, client, tooling — engine = rim_sim mechanisms; core = the core mod; plugin = first-party plugin; client = renderer/UI
 - **`area`**: one of sim, ai, pathing, map, modding, scripting, storyteller, combat, needs, building, save, net, render, ui, audio, perf, tests, docs — Subsystem this touches
 - **`api`**: one of none, additive, breaking — Effect on the plugin API (defs schema, Luau surface, events). Breaking needs an api version bump.
-- **`due`**: date, YYYY-MM-DD — When a milestone is meant to land
-- **Milestones**: `foundations` (due 2026-09-30), `castaway` (due 2026-10-15), `shelter` (due 2026-11-01), `persistence` (due 2026-11-20), `colony` (due 2026-12-15), `eras` (due 2027-01-10), `plugin-api` (due 2027-02-01), `mood` (due 2027-02-20), `sdk` (due 2027-03-01), `scale` (due 2027-03-15), `platform` (due 2027-07-01), `defense` (due 2027-04-10), `co-op` (due 2027-08-15), `crafting` (due 2027-05-01), `1.0` (due 2027-10-01), `world` (due 2027-06-01)
+- **`due`**: date, YYYY-MM-DD — When a milestone is meant to land — **you may read this and not set it**
+- **Milestones**: `foundations` (due 2026-09-30), `castaway` (due 2026-10-15), `interface` (due 2026-10-09), `weather` (due 2026-10-01), `shelter` (due 2026-11-01), `building` (due 2026-11-15), `persistence` (due 2026-11-20), `colony` (due 2026-12-15), `eras` (due 2027-01-10), `plugin-api` (due 2027-02-01), `mood` (due 2027-02-20), `sdk` (due 2027-03-01), `scale` (due 2027-03-15), `platform` (due 2027-07-01), `defense` (due 2027-04-10), `co-op` (due 2027-08-15), `crafting` (due 2027-05-01), `1.0` (due 2027-10-01), `world` (due 2027-06-01)
 - **Saved views** (`cairn list --view NAME`): `now`, `next`, `api`, `engine`, `plugins`, `perf`, `decisions`, `triage`
 
 ### Rules

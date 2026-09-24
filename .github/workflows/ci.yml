@@ -76,13 +76,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      # Format 4 (UUID identities) is not in a tagged release yet, so build the
+      # commit that introduced it. Go back to install.sh with
+      # CAIRN_VERSION=1.0.0-alpha.1 once that is tagged.
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cairn
+          key: cairn-c7d4230
       - name: Install cairn
-        run: |
-          curl -fsSL https://raw.githubusercontent.com/oddurs/cairn/main/install.sh | CAIRN_VERSION=0.2.1 sh
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-      - name: Validate items against the schema
-        run: cairn check
-      - name: ROADMAP.md is up to date
-        run: |
-          cairn render -q
-          git diff --exit-code ROADMAP.md
+        run: command -v cairn || cargo install --locked --git https://github.com/oddurs/cairn --rev c7d4230 cairn-md
+      - name: Items match the schema and ROADMAP.md is up to date
+        run: cairn check --render --strict
