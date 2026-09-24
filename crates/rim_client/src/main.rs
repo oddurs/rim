@@ -535,15 +535,28 @@ pub fn frame(app: &mut App, raw: &RawInput) {
 
 pub fn render(app: &mut App) {
     app.ground.update(&app.sim.world);
-    draw::world(app);
+    let counts = draw::world(app);
     sky::draw(app);
     draw::world_ui(app);
+    // Stack counts, in the UI's text: shaped into the same atlas, drawn in
+    // the same batch as the UI. After lighting, so they read at night.
+    let dpi = screen_dpi_scale();
+    let mut labels = Vec::with_capacity(counts.len() * 2);
+    for (x, y, n) in counts {
+        let text = n.to_string();
+        for (dx, color) in [(1.0, [0.0, 0.0, 0.0, 0.6]), (0.0, [1.0, 1.0, 1.0, 1.0])] {
+            let quads = app.ui.text.quads(&text, 13.0 * dpi, 600, None, (x + dx) * dpi, (y + dx) * dpi);
+            labels.push(rim_ui::paint::Draw::Glyphs { quads, color });
+        }
+    }
     if app.ui.text.atlas.dirty {
         let a = &app.ui.text.atlas;
         app.atlas.update(&Image { bytes: a.pixels.clone(), width: a.size as u16, height: a.size as u16 });
         app.ui.text.atlas.dirty = false;
     }
-    draw::ui(&app.last_draw, &app.atlas, screen_dpi_scale());
+    let white = app.ui.text.atlas.white_texel();
+    draw::ui(&labels, &app.atlas, white, dpi);
+    draw::ui(&app.last_draw, &app.atlas, white, dpi);
 }
 
 fn apply_ui(app: &mut App, a: UiAction) {

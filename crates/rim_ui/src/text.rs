@@ -117,17 +117,41 @@ pub struct Atlas {
     shelf_h: u32,
 }
 
+/// A solid white block at the atlas origin. The renderer draws shapes
+/// (panels, outlines) with this texel so they batch with glyphs in one draw
+/// call instead of switching between textured and untextured geometry.
+const WHITE: u32 = 4;
+/// Glyph shelves start below the white block.
+const FIRST_SHELF: u32 = WHITE + 1;
+
 impl Atlas {
     fn new(size: u32) -> Self {
-        Atlas {
+        let mut a = Atlas {
             size,
             pixels: vec![0; (size * size * 4) as usize],
             dirty: true,
             generation: 0,
             shelf_x: 1,
-            shelf_y: 1,
+            shelf_y: FIRST_SHELF,
             shelf_h: 0,
+        };
+        a.fill_white();
+        a
+    }
+
+    fn fill_white(&mut self) {
+        for y in 0..WHITE {
+            for x in 0..WHITE {
+                let i = ((y * self.size + x) * 4) as usize;
+                self.pixels[i..i + 4].copy_from_slice(&[255, 255, 255, 255]);
+            }
         }
+    }
+
+    /// The centre of the white block, in pixels: sample here for solid
+    /// colour. The centre, so linear filtering never reaches a glyph.
+    pub fn white_texel(&self) -> (f32, f32) {
+        (WHITE as f32 / 2.0, WHITE as f32 / 2.0)
     }
 
     /// Shelf packing: fill a row left to right, then start a new row.
@@ -151,8 +175,9 @@ impl Atlas {
 
     fn clear(&mut self) {
         self.pixels.iter_mut().for_each(|p| *p = 0);
+        self.fill_white();
         self.shelf_x = 1;
-        self.shelf_y = 1;
+        self.shelf_y = FIRST_SHELF;
         self.shelf_h = 0;
         self.generation += 1;
         self.dirty = true;

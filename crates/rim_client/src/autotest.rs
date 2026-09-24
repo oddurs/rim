@@ -642,22 +642,28 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     let zoom0 = t.app.cam.zoom;
     t.act(Action::Zoom(0.01, 800.0, 480.0)); // all the way out: the most cells
     t.frame().await;
+    // CPU cost of issuing the frame's drawing (not the GPU, not vsync).
     let t0 = std::time::Instant::now();
-    t.frame().await;
+    render(&mut t.app);
     let frame_ms = t0.elapsed().as_secs_f64() * 1e3;
+    t.frame().await;
     macroquad::telemetry::enable();
     macroquad::telemetry::capture_frame();
     t.frame().await;
     t.frame().await;
     let calls = macroquad::telemetry::drawcalls().len();
     macroquad::telemetry::disable();
-    println!(
-        "zoomed out ({:.1} px/cell): {calls} draw calls, frame {frame_ms:.1} ms (CPU, incl. present)",
-        t.app.cam.zoom
-    );
+    println!("zoomed out ({:.1} px/cell): {calls} draw calls, render {frame_ms:.2} ms (CPU)", t.app.cam.zoom);
     t.check(calls > 0, "the renderer's draw calls can be counted");
     t.act(Action::Zoom(zoom0 / t.app.cam.zoom, 800.0, 480.0));
     t.frame().await;
+    macroquad::telemetry::enable();
+    macroquad::telemetry::capture_frame();
+    t.frame().await;
+    t.frame().await;
+    let calls = macroquad::telemetry::drawcalls().len();
+    macroquad::telemetry::disable();
+    println!("normal zoom, HUD open: {calls} draw calls");
 
     // ---------------------------------------------------------- UI budget, live
     let (b, l, p) = (t.app.ui.info.build_us, t.app.ui.info.layout_us, t.app.ui.info.paint_us);

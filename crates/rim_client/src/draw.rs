@@ -80,7 +80,13 @@ fn disc(x: f32, y: f32, r: f32, c: Color) {
     }
 }
 
-pub fn world(app: &App) {
+/// Stack counts to label, in screen points: (top-left x, y, count). The
+/// client draws them with the UI's own text so they share its atlas and
+/// batch (macroquad's `draw_text` broke the world's batch twice per label).
+pub type Counts = Vec<(f32, f32, u32)>;
+
+pub fn world(app: &App) -> Counts {
+    let mut counts = Counts::new();
     let w = &app.sim.world;
     let defs = &w.defs;
     let cam = &app.cam;
@@ -224,7 +230,7 @@ pub fn world(app: &App) {
                         draw_rectangle(sx + z * 0.2, sy + z * 0.2, z * 0.6, z * 0.6, c);
                         draw_rectangle_lines(sx + z * 0.2, sy + z * 0.2, z * 0.6, z * 0.6, 1.0, shade(c, 0.6));
                         if z >= 22.0 && th.count > 1 {
-                            draw_text(th.count.to_string(), sx + z * 0.22, sy + z * 0.95, 14.0, WHITE);
+                            counts.push((sx + z * 0.22, sy + z * 0.95 - 12.0, th.count));
                         }
                     }
                 }
@@ -308,6 +314,7 @@ pub fn world(app: &App) {
             }
         }
     }
+    counts
 }
 
 /// Tool previews and markers, drawn after lighting so they stay readable.
@@ -404,34 +411,162 @@ fn tool_color(app: &App) -> Color {
 /// Draw the UI's draw list. It's in physical pixels; macroquad draws in
 /// logical points, so divide by the DPI factor. Glyphs are rasterised at
 /// physical size, so text lands 1:1 on the screen's pixels.
-pub fn ui(list: &[Draw], atlas: &Texture2D, dpi: f32) {
+/// The UI as meshes textured by the glyph atlas. Shapes sample the atlas's
+/// white texel and glyphs their slots, so a whole clip region is one draw
+/// call; drawing shapes untextured broke the batch at every switch between
+/// a panel and its text.
+struct UiBatch<'a> {
+    atlas: &'a Texture2D,
+    /// 1 / atlas size, to turn pixel coordinates into UVs.
+    inv: f32,
+    white: (f32, f32),
+    verts: Vec<Vertex>,
+    idx: Vec<u16>,
+}
+
+/// Flush before a mesh outgrows a draw call (see `conf()` in main.rs).
+const UI_MAX_VERTS: usize = 15_000;
+
+impl UiBatch<'_> {
+    fn room(&mut self, verts: usize) {
+        if self.verts.len() + verts > UI_MAX_VERTS {
+            self.flush();
+        }
+    }
+
+    fn flush(&mut self) {
+        if self.idx.is_empty() {
+            return;
+        }
+        draw_mesh(&Mesh {
+            vertices: std::mem::take(&mut self.verts),
+            indices: std::mem::take(&mut self.idx),
+            texture: Some(self.atlas.clone()),
+        });
+    }
+
+    /// An axis-aligned quad; `uv` is a source rectangle in atlas pixels.
+    fn quad(&mut self, x: f32, y: f32, w: f32, h: f32, uv: [f32; 4], c: Color) {
+        if w <= 0.0 || h <= 0.0 {
+            return;
+        }
+        self.room(4);
+        let n = self.verts.len() as u16;
+        let (u0, v0, u1, v1) =
+            (uv[0] * self.inv, uv[1] * self.inv, (uv[0] + uv[2]) * self.inv, (uv[1] + uv[3]) * self.inv);
+        self.verts.extend([
+            Vertex::new(x, y, 0.0, u0, v0, c),
+            Vertex::new(x + w, y, 0.0, u1, v0, c),
+            Vertex::new(x + w, y + h, 0.0, u1, v1, c),
+            Vertex::new(x, y + h, 0.0, u0, v1, c),
+        ]);
+        self.idx.extend([n, n + 1, n + 2, n, n + 2, n + 3]);
+    }
+
+    fn rect(&mut self, x: f32, y: f32, w: f32, h: f32, c: Color) {
+        let (u, v) = self.white;
+        self.quad(x, y, w, h, [u, v, 0.0, 0.0], c);
+    }
+
+    fn tri(&mut self, a: Vec2, b: Vec2, d: Vec2, c: Color) {
+        self.room(3);
+        let n = self.verts.len() as u16;
+        let (u, v) = (self.white.0 * self.inv, self.white.1 * self.inv);
+        self.verts.extend([
+            Vertex::new(a.x, a.y, 0.0, u, v, c),
+            Vertex::new(b.x, b.y, 0.0, u, v, c),
+            Vertex::new(d.x, d.y, 0.0, u, v, c),
+        ]);
+        self.idx.extend([n, n + 1, n + 2]);
+    }
+
+    /// A filled rectangle with rounded corners, from pieces that never
+    /// overlap, so translucent colours stay even.
+    fn rounded_rect(&mut self, [x, y, w, h]: [f32; 4], r: f32, c: Color) {
+        let r = r.min(w / 2.0).min(h / 2.0);
+        if r < 0.5 {
+            self.rect(x, y, w, h, c);
+            return;
+        }
+        self.rect(x + r, y, w - 2.0 * r, h, c);
+        self.rect(x, y + r, r, h - 2.0 * r, c);
+        self.rect(x + w - r, y + r, r, h - 2.0 * r, c);
+        for (cx, cy, a0) in
+            [(x + r, y + r, 180.0f32), (x + w - r, y + r, 270.0), (x + w - r, y + h - r, 0.0), (x + r, y + h - r, 90.0)]
+        {
+            const STEPS: usize = 4;
+            let mut prev = None;
+            for i in 0..=STEPS {
+                let a = (a0 + 90.0 * i as f32 / STEPS as f32).to_radians();
+                let p = vec2(cx + r * a.cos(), cy + r * a.sin());
+                if let Some(q) = prev {
+                    self.tri(vec2(cx, cy), q, p, c);
+                }
+                prev = Some(p);
+            }
+        }
+    }
+
+    /// A rounded outline `t` thick, inside the rectangle.
+    fn rounded_outline(&mut self, [x, y, w, h]: [f32; 4], r: f32, t: f32, c: Color) {
+        let r = r.min(w / 2.0).min(h / 2.0);
+        if r < 0.5 {
+            // A frame of four strips that don't overlap.
+            self.rect(x, y, w, t, c);
+            self.rect(x, y + h - t, w, t, c);
+            self.rect(x, y + t, t, h - 2.0 * t, c);
+            self.rect(x + w - t, y + t, t, h - 2.0 * t, c);
+            return;
+        }
+        self.rect(x + r, y, w - 2.0 * r, t, c);
+        self.rect(x + r, y + h - t, w - 2.0 * r, t, c);
+        self.rect(x, y + r, t, h - 2.0 * r, c);
+        self.rect(x + w - t, y + r, t, h - 2.0 * r, c);
+        // Each corner: a quarter ring from r - t to r, in two segments.
+        for (cx, cy, a0) in
+            [(x + r, y + r, 180.0f32), (x + w - r, y + r, 270.0), (x + w - r, y + h - r, 0.0), (x + r, y + h - r, 90.0)]
+        {
+            const STEPS: usize = 2;
+            let (inner, outer) = ((r - t).max(0.0), r);
+            for i in 0..STEPS {
+                let a = (a0 + 90.0 * i as f32 / STEPS as f32).to_radians();
+                let b = (a0 + 90.0 * (i + 1) as f32 / STEPS as f32).to_radians();
+                let (da, db) = (vec2(a.cos(), a.sin()), vec2(b.cos(), b.sin()));
+                let o = vec2(cx, cy);
+                let (p0, p1, p2, p3) = (o + da * inner, o + da * outer, o + db * inner, o + db * outer);
+                self.tri(p0, p1, p2, c);
+                self.tri(p2, p1, p3, c);
+            }
+        }
+    }
+}
+
+pub fn ui(list: &[Draw], atlas: &Texture2D, white: (f32, f32), dpi: f32) {
     let s = 1.0 / dpi;
     let col = |c: [f32; 4]| Color::new(c[0], c[1], c[2], c[3]);
+    let mut b = UiBatch {
+        atlas,
+        inv: 1.0 / atlas.width(),
+        white,
+        verts: Vec::with_capacity(4096),
+        idx: Vec::with_capacity(6144),
+    };
     for d in list {
         match d {
             Draw::Rect { rect, color, radius } => {
-                rounded_rect(rect[0] * s, rect[1] * s, rect[2] * s, rect[3] * s, radius * s, col(*color));
+                b.rounded_rect(rect.map(|v| v * s), radius * s, col(*color));
             }
             Draw::Outline { rect, color, width, radius } => {
-                rounded_outline(rect[0] * s, rect[1] * s, rect[2] * s, rect[3] * s, radius * s, width * s, col(*color));
+                b.rounded_outline(rect.map(|v| v * s), radius * s, width * s, col(*color));
             }
             Draw::Glyphs { quads, color } => {
                 for q in quads {
                     let tint = if q.color { WHITE } else { col(*color) };
-                    draw_texture_ex(
-                        atlas,
-                        q.dst[0] * s,
-                        q.dst[1] * s,
-                        tint,
-                        DrawTextureParams {
-                            dest_size: Some(vec2(q.dst[2] * s, q.dst[3] * s)),
-                            source: Some(Rect::new(q.uv[0], q.uv[1], q.uv[2], q.uv[3])),
-                            ..Default::default()
-                        },
-                    );
+                    b.quad(q.dst[0] * s, q.dst[1] * s, q.dst[2] * s, q.dst[3] * s, q.uv, tint);
                 }
             }
             Draw::Clip(r) => unsafe {
+                b.flush();
                 // The scissor works in framebuffer pixels: the UI's own units.
                 get_internal_gl().quad_gl.scissor(Some((
                     r[0] as i32,
@@ -441,59 +576,13 @@ pub fn ui(list: &[Draw], atlas: &Texture2D, dpi: f32) {
                 )));
             },
             Draw::Unclip => unsafe {
+                b.flush();
                 get_internal_gl().quad_gl.scissor(None);
             },
         }
     }
+    b.flush();
     unsafe {
         get_internal_gl().quad_gl.scissor(None);
-    }
-}
-
-/// A filled rectangle with rounded corners, from pieces that never
-/// overlap, so translucent colours stay even.
-fn rounded_rect(x: f32, y: f32, w: f32, h: f32, r: f32, c: Color) {
-    let r = r.min(w / 2.0).min(h / 2.0);
-    if r < 0.5 {
-        draw_rectangle(x, y, w, h, c);
-        return;
-    }
-    draw_rectangle(x + r, y, w - 2.0 * r, h, c);
-    draw_rectangle(x, y + r, r, h - 2.0 * r, c);
-    draw_rectangle(x + w - r, y + r, r, h - 2.0 * r, c);
-    for (cx, cy, a0) in
-        [(x + r, y + r, 180.0f32), (x + w - r, y + r, 270.0), (x + w - r, y + h - r, 0.0), (x + r, y + h - r, 90.0)]
-    {
-        corner_fan(cx, cy, r, a0, c);
-    }
-}
-
-fn corner_fan(cx: f32, cy: f32, r: f32, a0: f32, c: Color) {
-    const STEPS: usize = 4;
-    let mut prev = None;
-    for i in 0..=STEPS {
-        let a = (a0 + 90.0 * i as f32 / STEPS as f32).to_radians();
-        let p = vec2(cx + r * a.cos(), cy + r * a.sin());
-        if let Some(q) = prev {
-            draw_triangle(vec2(cx, cy), q, p, c);
-        }
-        prev = Some(p);
-    }
-}
-
-fn rounded_outline(x: f32, y: f32, w: f32, h: f32, r: f32, t: f32, c: Color) {
-    let r = r.min(w / 2.0).min(h / 2.0);
-    if r < 0.5 {
-        draw_rectangle_lines(x, y, w, h, t * 2.0, c);
-        return;
-    }
-    draw_rectangle(x + r, y, w - 2.0 * r, t, c);
-    draw_rectangle(x + r, y + h - t, w - 2.0 * r, t, c);
-    draw_rectangle(x, y + r, t, h - 2.0 * r, c);
-    draw_rectangle(x + w - t, y + r, t, h - 2.0 * r, c);
-    for (cx, cy, a0) in
-        [(x + r, y + r, 180.0f32), (x + w - r, y + r, 270.0), (x + w - r, y + h - r, 0.0), (x + r, y + h - r, 90.0)]
-    {
-        draw_arc(cx, cy, 6, r - t / 2.0, a0, t, 90.0, c);
     }
 }
