@@ -87,6 +87,7 @@ impl Sim {
         }
         prof.time("regions", || w.map.ensure_regions());
         prof.time("rooms", || w.map.ensure_rooms());
+        prof.time("boundary", || w.refresh_boundaries());
         let defs = w.defs.clone();
         let clock = w.clock();
         prof.time("fields", || w.fields.update(&defs, &mut w.map, clock));

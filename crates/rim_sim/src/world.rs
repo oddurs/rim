@@ -311,6 +311,8 @@ pub struct World {
     /// "joined", "died", "left". Not part of the simulation state.
     pub recent_events: Vec<(u64, &'static str, Entity, String)>,
     pub colony_lost: bool,
+    /// The room rebuild the boundary sums were last computed for.
+    seen_room_rebuilds: u64,
     /// State that scripts keep in the world (`rim.set_data`), by key.
     pub data: BTreeMap<String, Data>,
 }
@@ -335,6 +337,7 @@ impl World {
             hits: Vec::new(),
             recent_events: Vec::new(),
             colony_lost: false,
+            seen_room_rebuilds: u64::MAX,
             data: BTreeMap::new(),
         }
     }
@@ -601,6 +604,55 @@ impl World {
 
     pub fn thing(&self, e: Entity) -> Option<Thing> {
         self.ecs.get::<&Thing>(e).ok().map(|t| (*t).clone())
+    }
+
+    // ------------------------------------------------------------ boundaries
+
+    /// After a room rebuild: what each room is made of, as two numbers per
+    /// field. The map already knows each room's boundary cells; this looks
+    /// up what stands in them and what it is made of. Pieces that declare
+    /// nothing count as the field's own constant, so a boundary nobody
+    /// described behaves exactly as it did before there were boundaries.
+    pub fn refresh_boundaries(&mut self) {
+        if self.map.room_rebuilds == self.seen_room_rebuilds {
+            return;
+        }
+        self.seen_room_rebuilds = self.map.room_rebuilds;
+        let defs = self.defs.clone();
+        let rooms = self.map.room_count();
+        self.fields.reset_boundaries(rooms);
+        for r in 0..rooms {
+            let cells = self.map.room_boundary(r as u32 + 1);
+            if cells.is_empty() {
+                continue;
+            }
+            for (fi, fd) in defs.fields.iter().enumerate() {
+                let (mut leak_sum, mut pass_sum) = (0.0, 0.0);
+                for &c in cells {
+                    let piece = self.map.fixture[c as usize].and_then(|e| {
+                        let t = self.ecs.get::<&Thing>(e).ok()?;
+                        let b = defs.thing(t.def).boundary.iter().find(|b| b.field_r as usize == fi)?;
+                        let made_of = self.ecs.get::<&MadeOf>(e).ok().map(|m| m.0);
+                        Some((b.leak, b.pass, made_of))
+                    });
+                    match piece {
+                        Some((leak, pass, made_of)) => {
+                            let f = if fd.boundary_factor.is_empty() {
+                                1.0
+                            } else {
+                                defs.factor(made_of, &fd.boundary_factor)
+                            };
+                            // A factor of zero would make a piece infinitely leaky.
+                            let f = if f > 0.0 { f } else { 1.0 };
+                            leak_sum += leak / f;
+                            pass_sum += pass * f;
+                        }
+                        None => leak_sum += 1.0,
+                    }
+                }
+                self.fields.set_boundary(fi, r as u32 + 1, leak_sum / cells.len() as f64, pass_sum.min(1.0));
+            }
+        }
     }
 
     // ------------------------------------------------------------ stats

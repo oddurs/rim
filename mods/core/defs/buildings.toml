@@ -12,6 +12,7 @@ blocks = true
 hp = 200
 market_value = 8
 build = { menu = "structure", work = 180, stuff = { category = "structural", count = 5 } }
+boundary = [{ field = "temperature", leak = 1.0 }]
 
 [[thing]]
 id = "door"
@@ -24,6 +25,8 @@ path_cost = 60
 hp = 150
 market_value = 15
 build = { menu = "structure", work = 300, stuff = { category = "structural", count = 10 } }
+# A door is the draughty part of a wall.
+boundary = [{ field = "temperature", leak = 1.5 }]
 
 [[thing]]
 id = "bed"

@@ -19,6 +19,9 @@ fn d1() -> u32 {
 fn dtrue() -> bool {
     true
 }
+fn d1f() -> f64 {
+    1.0
+}
 fn dsize() -> f32 {
     0.35
 }
@@ -126,6 +129,10 @@ pub struct ThingDef {
     /// Field sources: a campfire emits heat and light.
     #[serde(default)]
     pub emit: Vec<EmitDef>,
+    /// What this piece does to a room it helps enclose, per field. A wall
+    /// leaks a little, a window leaks a lot and lets daylight through.
+    #[serde(default)]
+    pub boundary: Vec<BoundaryDef>,
     #[serde(skip)]
     pub rgb: [u8; 3],
 }
@@ -188,6 +195,24 @@ pub struct StuffCost {
     /// Matched against an item's `stuff.categories`.
     pub category: String,
     pub count: u32,
+}
+
+/// One piece of a room's boundary, as a field sees it. The room's numbers
+/// are the average `leak` and the summed `pass` of every piece around it,
+/// each scaled by the material factor the field names.
+#[derive(Deserialize, Clone, Debug)]
+pub struct BoundaryDef {
+    pub field: String,
+    /// How leaky this piece is, as a multiple of the field's `leak_per_hour`.
+    /// 1.0 is exactly the constant; divided by the material factor.
+    #[serde(default = "d1f")]
+    pub leak: f64,
+    /// Fraction of the outdoor value this piece lets into the room, for
+    /// fields that are otherwise dark indoors. Multiplied by the factor.
+    #[serde(default)]
+    pub pass: f64,
+    #[serde(skip)]
+    pub field_r: DefId,
 }
 
 /// An item that things can be built out of.
@@ -365,6 +390,11 @@ pub struct FieldDef {
     /// Room fields: how strongly emitters inside push the room's value.
     #[serde(default)]
     pub room_gain: f64,
+    /// Which material factor scales this field's boundary pieces: a better
+    /// material leaks less and passes more. Content names it; the engine
+    /// only looks it up. Empty means materials do not matter to this field.
+    #[serde(default)]
+    pub boundary_factor: String,
     /// Overlay colour ramp across `range`.
     pub range: [f64; 2],
     pub color_low: String,
@@ -688,6 +718,9 @@ impl DefDb {
             }
             if let Some(s) = &mut d.spawn {
                 s.terrain_r = s.terrain.iter().map(|t| get("terrain", t, &ctx)).collect::<Result<_, _>>()?;
+            }
+            for b in &mut d.boundary {
+                b.field_r = get("field", &b.field, &ctx)?;
             }
             for em in &mut d.emit {
                 em.field_r = get("field", &em.field, &ctx)?;
