@@ -606,7 +606,12 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.check(n >= 2, format!("core defines field layers with overlays ({n})"));
     t.check(t.app.overlay.is_none(), "overlay starts off");
     let fire = defs.thing_id("campfire").unwrap();
-    let spot = open_square(t.w(), site, 1).expect("room for a fire");
+    // Outdoors: inside an enclosed room the temperature is the room's own
+    // value, not the outdoor air plus the fire (seed 37 put one in the hut).
+    let spot = (0..40)
+        .filter_map(|r| open_square(t.w(), site.offset(r, -r), 1))
+        .find(|&p| !t.w().map.indoors(p))
+        .expect("open ground outdoors for a fire");
     let _ = t.app.sim.world.spawn_fixture(fire, spot, false);
     t.ticks(1);
     for &i in &shown {
