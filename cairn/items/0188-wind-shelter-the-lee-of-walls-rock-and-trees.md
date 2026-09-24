@@ -2,8 +2,8 @@
 id: 188
 title: 'Wind shelter: the lee of walls, rock and trees'
 type: feature
-status: planned
-milestone: weather
+status: backlog
+milestone: colony
 depends_on:
 - 183
 created: 2026-09-23
@@ -35,3 +35,7 @@ A wall on the windward side should matter even without a roof: it keeps the wind
 - [ ] Recomputed only on an octant change or a blocker change (test counts recomputes)
 - [ ] Full recompute at 250×250 under 0.5 ms, recorded here
 - [ ] The overlay shows exposure
+
+## 2026-09-23
+
+Moved to Colony. Rescoped: wind shelter has one user (feels-like, 0189), so it starts as a plain engine function over walls and wind direction, not a generic field kind (rule of three, DESIGN.md §6).

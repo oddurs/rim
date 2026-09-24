@@ -2,13 +2,13 @@
 id: 192
 title: Snow and mud slow movement
 type: feature
-status: planned
-milestone: weather
+status: backlog
+milestone: crafting
 depends_on:
 - 187
 created: 2026-09-23
 updated: 2026-09-23
-priority: p2
+priority: p3
 api: additive
 effort: s
 layer: engine
@@ -33,3 +33,7 @@ Deep snow should change how a winter plays: short trips, woodpiles near the door
 - [ ] Pawns cross deep snow measurably slower (test)
 - [ ] Paths prefer a cleared route when one is close (test)
 - [ ] No region rebuilds from snow (test); pathing cost measured before and after
+
+## 2026-09-23
+
+Moved to Crafting with snow cover (0187).

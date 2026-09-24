@@ -2,8 +2,8 @@
 id: 187
 title: Ground wetness and snow in core
 type: content
-status: planned
-milestone: weather
+status: backlog
+milestone: crafting
 depends_on:
 - 184
 - 186
@@ -36,3 +36,7 @@ The ground is where weather lasts. Wetness drives plant growth and farming; snow
 - [ ] Tuning targets met on the climate report (numbers recorded here)
 - [ ] Enclosed rooms stay dry and snow-free
 - [ ] Overlay and hover show both
+
+## 2026-09-23
+
+Moved to Crafting: wetness is the first stock field, and farming is its first reader. Lives in `mods/weather` (the weather plugin), not core; core declares the field name only if a second plugin needs it.

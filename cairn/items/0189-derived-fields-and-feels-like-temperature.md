@@ -2,8 +2,8 @@
 id: 189
 title: Derived fields and feels-like temperature
 type: feature
-status: planned
-milestone: weather
+status: backlog
+milestone: colony
 depends_on:
 - 181
 - 188
@@ -36,3 +36,7 @@ What hurts a colonist is not the thermometer but wind chill and cold rain. A der
 - [ ] Standing in the lee of a wall in a cold wind is measurably warmer than in the open (test)
 - [ ] Warmth drains faster in a cold storm than on a still night at the same temperature
 - [ ] Warmth balance rerun (see the balance item) with no regression in the first week
+
+## 2026-09-23
+
+Moved to Colony with wind shelter (0188).

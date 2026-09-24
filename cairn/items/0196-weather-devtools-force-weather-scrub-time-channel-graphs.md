@@ -1,9 +1,9 @@
 ---
 id: 196
-title: Weather devtools and a headless climate report
+title: 'Weather devtools: force weather, scrub time, channel graphs'
 type: chore
-status: planned
-milestone: weather
+status: backlog
+milestone: sdk
 depends_on:
 - 184
 - 187
@@ -33,3 +33,7 @@ Tuning a year by playing it is hopeless. Modders and we need to force weather, s
 - [ ] Forcing a regime and scrubbing the hour work from devtools
 - [ ] The climate report runs a year in under 30 s in release
 - [ ] CI uploads the report
+
+## 2026-09-23
+
+Moved to SDK. The headless year report moved into 0198 (balance) as an example; what's left here is the devtools tab.

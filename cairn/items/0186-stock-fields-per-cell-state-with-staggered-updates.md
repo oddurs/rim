@@ -2,8 +2,8 @@
 id: 186
 title: 'Stock fields: per-cell state with staggered updates'
 type: feature
-status: planned
-milestone: weather
+status: backlog
+milestone: crafting
 depends_on:
 - 181
 - 185
@@ -40,3 +40,7 @@ Wetness and snow remember: it rained yesterday, so the ground is still wet. Toda
 - [ ] 250×250 with two stock fields: at most 0.02 ms mean per tick, measured and recorded here
 - [ ] Emitters and scripts can add to a stock field
 - [ ] Deterministic: same seed, same values after a year
+
+## 2026-09-23
+
+Moved to Crafting with the lean Weather sprint. v1 terms (0181) only take global inputs (year, hour, outdoor values, noise, constants); this item extends them with per-cell inputs (field, self, base, above_base, terrain, sky, near) and owns the per-cell benchmark from the dropped spike 0180.

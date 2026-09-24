@@ -2,8 +2,8 @@
 id: 185
 title: Terrain properties, tags and distance-to inputs
 type: feature
-status: planned
-milestone: weather
+status: backlog
+milestone: crafting
 depends_on:
 - 181
 created: 2026-09-23
@@ -35,3 +35,7 @@ Ground state and plant growth vary across the map because the ground does: sand 
 - [ ] Terrain props and tags load from data; a mod can add a prop and read it in terms
 - [ ] `near` distances are correct after a terrain change (test) and cost only the changed area
 - [ ] Core terrain has fertility, drainage and water table
+
+## 2026-09-23
+
+Moved to Crafting with the lean Weather sprint: nothing reads terrain properties until farming (0110).

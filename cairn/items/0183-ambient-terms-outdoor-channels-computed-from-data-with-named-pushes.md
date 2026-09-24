@@ -21,20 +21,20 @@ pillar:
 
 ## Why
 
-The outdoor value of every field is today set by `20_climate.luau` with `rim.set_ambient`, and the last writer silently wins. Declaring ambients as terms makes the climate data, lets incidents add to it rather than overwrite it, and gives every channel a breakdown.
+Declaring outdoor values as terms makes the climate data, lets incidents and plugins add to it instead of overwriting it, and gives every value a breakdown.
 
 ## What
 
-- `[[field]]` gains `ambient = [terms]`. Fields are evaluated in dependency order (temperature reads cloud); a cycle is a load error naming the fields.
-- Recomputed every 20 ticks (one game minute and a bit), O(channels).
-- `rim.push_ambient(field, key, value, hours)`: a named, timed offset, shown in the breakdown and expiring on its own. Pushing the same key replaces it. `rim.clear_ambient(field, key)`.
-- `rim.set_ambient` keeps working for fields without ambient terms, and warns once for fields with them.
-- Core fields: `temperature`, `light`, `cloud`, `precipitation`, `humidity`, `wind`, `wind_dir` (degrees, eased the short way round). `20_climate.luau` is deleted; its curve becomes core data.
+- `[[field]]` gains `ambient = { label = term, ... }`. Fields evaluate in dependency order every 20 ticks; a cycle is a load error.
+- `rim.push_ambient(field, key, value, hours?, ease_hours?)`: a named contribution added on top of the terms, easing from its current value over `ease_hours` and expiring after `hours`. `rim.clear_ambient(field, key)`.
+- `rim.set_ambient` pins a value (tests and tools), overriding terms and pushes; `nil` unpins.
+- Core fields (shared vocabulary): `temperature`, `light`, `cloud`, `precipitation`, `wind`, `wind_dir`, `fog`, with no weather of their own. `20_climate.luau` is deleted; day and night become core data.
+- `rim.explain(field)` and `view.explain(field)`: each term and push with its contribution.
 
 ## Acceptance criteria
 
-- [ ] Core's climate is data only; `20_climate.luau` is gone
-- [ ] Spring's first three days stay within 1.5°C of today's curve each hour, so the warmth tuning in §4a holds
-- [ ] A push shows in the breakdown, stacks with other keys and expires on time
+- [ ] Core's day and night are data; `20_climate.luau` is gone
+- [ ] With core alone, each hour of the first three days is within 1.5°C of today's curve
+- [ ] Pushes add, ease, expire and show in the breakdown
 - [ ] Dependency cycles are reported at load
 - [ ] Tick cost measured before and after

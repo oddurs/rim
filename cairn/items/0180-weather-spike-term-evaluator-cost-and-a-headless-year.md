@@ -2,7 +2,7 @@
 id: 180
 title: 'Weather spike: term evaluator cost and a headless year'
 type: spike
-status: planned
+status: dropped
 milestone: weather
 created: 2026-09-23
 updated: 2026-09-23
@@ -38,3 +38,7 @@ Can a data-declared term evaluator (sums of products of piecewise-linear curves,
 - [ ] A 60-day year printed headless: daily mean/min/max temperature, regime, rain, mean wetness, snow
 - [ ] Fixed-point error against the f64 reference measured, and within 0.01 of the field's unit
 - [ ] Decision recorded in DESIGN.md §4c
+
+## 2026-09-23
+
+Dropped when the sprint was cut to the lean version: v1 terms only evaluate outdoor values (O(fields) every 20 ticks), so there is no per-cell cost to measure yet. The per-cell benchmark is a criterion of 0186 (stock fields), where it matters.

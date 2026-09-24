@@ -2,8 +2,8 @@
 id: 191
 title: Plants grow in the weather
 type: feature
-status: planned
-milestone: weather
+status: backlog
+milestone: crafting
 depends_on:
 - 183
 - 185
@@ -40,3 +40,7 @@ Weather has to matter to food. Growth driven by fields makes spring a flush, sum
 - [ ] Wild plants spread more on wet fertile ground than dry sand over a year
 - [ ] Plant pass cost with 5,000 plants measured and recorded here
 - [ ] `regrow_days` still loads for mods that use it
+
+## 2026-09-23
+
+Moved to Crafting: plant growth pays off with farming. Rain and seasons from `mods/weather` are its inputs.

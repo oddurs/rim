@@ -74,31 +74,21 @@ A two-week sprint. The whole HUD moves out of Rust into `mods/core/ui/`, written
 
 ## weather — Weather
 
-`··········` 0% · 0 of 21 done · due 2026-10-14
+`··········` 0% · 0 of 11 done · due 2026-10-01
 
-A three-week sprint inside Shelter. Weather becomes a first-class system: seasons, weather regimes with a forecast, ground wetness and snow, wind shelter, plants that grow in the weather, and lighting and weather you can see. All of it is one engine mechanism (labelled terms over curves, on field layers) and core data, so a mod can add a monsoon or a harsher winter without touching Rust. Design: DESIGN.md §4c.
+A one-week sprint inside Shelter. The world gets seasons and weather you can see coming: firelit nights, rain that rolls in on the forecast, and a first winter that needs a heated hut. The engine gains a few general mechanisms (terms over curves, a calendar, named contributions to outdoor values, script data); the weather itself is a first-party plugin, `mods/weather`, built only on the public API. Design: DESIGN.md §4c.
 
 - [ ] `0056` Lighting from the light field: lightmap, glow and sky tint <sup>feature · p0 · m · client</sup>
-- [ ] `0057` Weather incidents: cold snap, heat wave and storm <sup>content · p1 · s · core</sup>
-- [ ] `0180` Weather spike: term evaluator cost and a headless year <sup>spike · p0 · s · engine</sup>
-- [ ] `0181` Terms and curves: one fixed-point evaluator for rates, targets and weights <sup>feature · p0 · m · engine</sup>
-- [ ] `0182` Calendar: year, seasons and day of year <sup>feature · p0 · s · engine</sup>
+- [ ] `0057` Weather incidents: cold snap, heat wave and storm <sup>content · p1 · s · plugin</sup>
+- [ ] `0181` Terms and curves: a fixed-point evaluator for outdoor values <sup>feature · p0 · s · engine</sup>
+- [ ] `0182` Calendar, seasons and script events <sup>feature · p0 · s · engine</sup>
 - [ ] `0183` Ambient terms: outdoor channels computed from data, with named pushes <sup>feature · p0 · m · engine</sup>
-- [ ] `0184` Weather regimes and a forecast queue <sup>feature · p0 · m · engine</sup>
-- [ ] `0185` Terrain properties, tags and distance-to inputs <sup>feature · p0 · s · engine</sup>
-- [ ] `0186` Stock fields: per-cell state with staggered updates <sup>feature · p0 · l · engine</sup>
-- [ ] `0187` Ground wetness and snow in core <sup>content · p0 · m · core</sup>
-- [ ] `0188` Wind shelter: the lee of walls, rock and trees <sup>feature · p1 · m · engine</sup>
-- [ ] `0189` Derived fields and feels-like temperature <sup>feature · p1 · s · engine</sup>
-- [ ] `0190` Drafty rooms: room leak from terms <sup>feature · p2 · s · engine</sup>
-- [ ] `0191` Plants grow in the weather <sup>feature · p0 · m · engine</sup>
-- [ ] `0192` Snow and mud slow movement <sup>feature · p2 · s · engine</sup>
-- [ ] `0193` Ground renderer: terrain, wetness and snow in one shader pass <sup>perf · p1 · m · client</sup>
-- [ ] `0194` Precipitation, fog and lightning <sup>feature · p1 · m · client</sup>
-- [ ] `0195` Weather in the HUD: readout, forecast and breakdown <sup>feature · p1 · s · client</sup>
-- [ ] `0196` Weather devtools and a headless climate report <sup>chore · p1 · s · tooling</sup>
-- [ ] `0197` Weather modding guide and the weather_plus plugin <sup>docs · p1 · s · plugin</sup>
-- [ ] `0198` Balance: a year with seasons <sup>chore · p0 · m · core</sup>
+- [ ] `0184` The weather plugin: seasons, weather types and a forecast <sup>feature · p0 · m · plugin</sup>
+- [ ] `0194` Rain, snow, fog and lightning from the weather channels <sup>feature · p1 · m · client</sup>
+- [ ] `0195` Season, weather and forecast in the HUD <sup>feature · p1 · s · client</sup>
+- [ ] `0197` Weather modding guide <sup>docs · p1 · s · tooling</sup>
+- [ ] `0198` Balance a year, and prove core stands alone <sup>chore · p0 · m · core</sup>
+- [ ] `0207` Script data: saved state scripts own, readable by the UI <sup>feature · p0 · s · engine</sup>
 
 ## shelter — Shelter
 
@@ -135,7 +125,7 @@ Save/load that survives mod changes, and replays from seed + command log.
 
 ## colony — Colony
 
-`··········` 0% · 0 of 8 done · due 2026-12-15
+`··········` 0% · 0 of 11 done · due 2026-12-15
 
 Running more than one person: stockpiles, hauling, work priorities, skills, colonist panels.
 
@@ -146,6 +136,9 @@ Running more than one person: stockpiles, hauling, work priorities, skills, colo
 - [ ] `0070` Colonist inspection panel <sup>feature · p1 · m · client</sup>
 - [ ] `0175` Floating windows and a saved UI layout <sup>feature · p1 · m · client</sup>
 - [ ] `0176` Component kit v2: slider, text input and tables <sup>feature · p1 · m · core</sup>
+- [ ] `0188` Wind shelter: the lee of walls, rock and trees <sup>feature · p1 · m · engine</sup>
+- [ ] `0189` Derived fields and feels-like temperature <sup>feature · p1 · s · engine</sup>
+- [ ] `0190` Drafty rooms: room leak from terms <sup>feature · p3 · s · engine</sup>
 - [ ] `0200` Fire: burning, spread by wind, put out by rain <sup>feature · p1 · l · engine</sup>
 
 ## eras — Eras
@@ -164,7 +157,7 @@ The run gets a shape: eras, storyteller tiers, defensive strength in the threat 
 
 ## plugin-api — Plugin API
 
-`··········` 0% · 0 of 19 done · due 2027-02-01
+`··········` 0% · 0 of 20 done · due 2027-02-01
 
 The API grows up: stat pipeline, script components, custom jobs, needs and def kinds, modules and custom events, a real sandbox with hard limits, factions as data, rim test, typed API. Everything Mood needs, and everything DESIGN.md §10 says a mod from a stranger's repo must be safe to do.
 
@@ -187,6 +180,7 @@ The API grows up: stat pipeline, script components, custom jobs, needs and def k
 - [ ] `0159` Which platforms beyond desktop, and what do they cost? <sup>spike · p2 · s · engine</sup>
 - [ ] `0177` Keybinds file and command palette <sup>feature · p1 · m · client</sup>
 - [ ] `0178` Monochrome icon set with mod-supplied icons <sup>feature · p2 · m · core</sup>
+- [ ] `0208` Custom def kinds: plugins declare their own data <sup>feature · p1 · m · engine</sup>
 
 ## mood — Mood
 
@@ -203,7 +197,7 @@ rim.mood — the first first-party plugin. Proves the API: if mood cannot be a p
 
 ## sdk — Modder SDK
 
-`··········` 0% · 0 of 6 done · due 2027-03-01
+`··········` 0% · 0 of 7 done · due 2027-03-01
 
 Making a mod feels like publishing a small open-source library: rim new, typed Luau, rim test in CI, a template repo with a GitHub Action, a compatibility report and a guide. Runs alongside Mood, which is its first customer.
 
@@ -213,10 +207,11 @@ Making a mod feels like publishing a small open-source library: rim new, typed L
 - [ ] `0123` Compatibility report: what a mod changes <sup>feature · p1 · s · tooling</sup>
 - [ ] `0149` rim: one binary to play, check, test and pack mods <sup>feature · p0 · m · client</sup>
 - [ ] `0150` GitHub Action for mod repos: check and test against supported engine versions <sup>feature · p1 · s · tooling</sup>
+- [ ] `0196` Weather devtools: force weather, scrub time, channel graphs <sup>chore · p1 · s · tooling</sup>
 
 ## scale — Scale
 
-`··········` 0% · 0 of 9 done · due 2027-03-15
+`··········` 0% · 0 of 10 done · due 2027-03-15
 
 Hit the performance budget: benchmark harness, hierarchical pathing, flow fields, spatial indices, incremental regions, render caching.
 
@@ -228,6 +223,7 @@ Hit the performance budget: benchmark harness, hierarchical pathing, flow fields
 - [ ] `0098` Chunked terrain render caching <sup>perf · p1 · m · client</sup>
 - [ ] `0099` Parallel systems where read and write sets allow <sup>spike · p2 · m · engine</sup>
 - [ ] `0100` Meet the budget: 6x speed at 60 fps <sup>perf · p0 · l · engine</sup>
+- [ ] `0193` Ground renderer: terrain, wetness and snow in one shader pass <sup>perf · p2 · m · client</sup>
 - [ ] `0199` Water flow: runoff, puddles and floods <sup>feature · p3 · l · engine</sup>
 
 ## platform — Modding platform
@@ -276,7 +272,7 @@ Lockstep co-op on top of determinism: command broadcast, desync detection, mod-l
 
 ## crafting — Crafting
 
-`··········` 0% · 0 of 6 done · due 2027-05-01
+`··········` 0% · 0 of 11 done · due 2027-05-01
 
 Production chains: workbenches and bills, cooking, farming, tailoring, research as a plugin.
 
@@ -285,6 +281,11 @@ Production chains: workbenches and bills, cooking, farming, tailoring, research 
 - [ ] `0110` Farming: growing zones and crops <sup>feature · p0 · l · engine</sup>
 - [ ] `0111` Research as a plugin <sup>feature · p1 · l · plugin</sup>
 - [ ] `0112` Tailoring: make apparel <sup>content · p2 · s · core</sup>
+- [ ] `0185` Terrain properties, tags and distance-to inputs <sup>feature · p0 · s · engine</sup>
+- [ ] `0186` Stock fields: per-cell state with staggered updates <sup>feature · p0 · l · engine</sup>
+- [ ] `0187` Ground wetness and snow in core <sup>content · p0 · m · core</sup>
+- [ ] `0191` Plants grow in the weather <sup>feature · p0 · m · engine</sup>
+- [ ] `0192` Snow and mud slow movement <sup>feature · p3 · s · engine</sup>
 - [ ] `0201` Getting wet: pawn wetness and clothing insulation <sup>feature · p2 · m · engine</sup>
 
 ## 1.0 — 1.0
