@@ -12,6 +12,7 @@
 //!    avoidance, the cursor label, modals, tooltips),
 //! 4. lays out (cached by tree hash) and paints.
 
+pub mod api;
 pub mod fontcache;
 pub mod layout;
 pub mod node;

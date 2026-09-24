@@ -461,6 +461,21 @@ impl UiVm {
         Ok(())
     }
 
+    /// Every function in `ui`, `act` and `view` ("view.tick"), sorted: tests
+    /// check them against the declarations in `api.rs`.
+    pub fn api_names(&self) -> Vec<String> {
+        let mut v = Vec::new();
+        for global in ["ui", "act", "view"] {
+            if let Ok(t) = self.lua.globals().get::<Table>(global) {
+                for (k, _) in t.pairs::<String, Value>().flatten() {
+                    v.push(format!("{global}.{k}"));
+                }
+            }
+        }
+        v.sort();
+        v
+    }
+
     /// `view`: read-only questions about the world and the client.
     fn view_api(&self) -> mlua::Result<Table> {
         let lua = &self.lua;
