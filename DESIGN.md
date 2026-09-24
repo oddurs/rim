@@ -488,3 +488,81 @@ PR to the index. If that loop is good, content follows.
 - **Ruling:** Luau for scripts. People who want other languages get them
   through the WASM tier, which compiles from Rust, AssemblyScript, Zig and
   others.
+
+---
+
+## 11. Interface
+
+The UI follows the same split as the game: the engine provides a few UI
+mechanisms, and **the interface you see is a mod** (`mods/core/ui/`). Any
+panel, bar, menu or bubble can be extended, replaced, wrapped or removed by
+another mod.
+
+### Tension: immediate-mode widgets or a retained tree?
+
+- **For immediate mode (egui, Dear ImGui, today's HUD):** quick to write, and
+  there's no tree to keep in sync.
+- **Against:** the only way to change it is to edit Rust. There's nothing to
+  address, so mods can't reach in, restyle it or test it.
+- **Ruling:** a **retained tree described in Luau**, built React-style: a
+  component is a function from a read-only view of the game to a tree of
+  plain nodes. The engine does layout (a flexbox subset via `taffy`),
+  drawing, input and caching. Because a tree is data, mods can find a node by
+  id and change it, tests can compare trees as text, and devtools can show
+  which mod put what on screen.
+
+### Tension: one Luau VM or two?
+
+- **For sharing the sim's VM:** one runtime, and mods can call their own sim
+  code directly.
+- **Against:** the sim VM is deterministic and synchronised in co-op. UI code
+  wants the wall clock, animation and per-player choices, and a UI bug must
+  never be able to desync a game.
+- **Ruling:** the UI runs in its **own client-only Luau VM**, sandboxed like
+  the sim's (§10). It can only *read* the world through `view` and *act*
+  through `act`, which queues the same Commands mouse and keyboard produce.
+  Each co-op player can run different UI mods.
+
+### Layout: a shell of regions and layers
+
+- **Regions:** `top`, `bottom`, `left`, `right` dock panels at the screen
+  edges; panels declare a region, an order and size limits, and regions
+  stack them. The world stays visible under translucent panels.
+- **Layers**, bottom to top: world, anchored (labels, bars, bubbles tied to
+  entities or cells), docked, windows, menus and tooltips, modal, toasts.
+  Input goes to the top layer first; whatever the UI doesn't handle falls
+  through to the world.
+- **Anchored UI avoids collisions:** labels near each other are nudged apart
+  by priority (selected, colonists, hostiles, others), which fixes overlapping
+  names once for everything.
+
+### Looks: plain, minimal, tokens
+
+- Every visual value is a **token** in `ui/theme.toml` (spacing on a 4 px
+  grid, three text sizes, colours, radius, borders). Mods patch tokens like
+  defs, with the same conflict reporting.
+- Translucent dark surfaces, 1 px hairlines, one accent colour, no textures.
+  Emphasis comes from weight and colour, not size.
+- **The system UI font**, found at runtime and never shipped: San Francisco
+  on macOS, Segoe UI on Windows, `sans-serif` from fontconfig on Linux, with
+  fallbacks for other scripts. A theme can name another font.
+- One **UI scale** multiplies every token and follows the display's DPI.
+
+### Tension: stable ids or free-form trees?
+
+- **For free-form:** less ceremony for small mods.
+- **Against:** a mod can only change what it can name.
+- **Ruling:** every component has a **namespaced id** (`core:clock`,
+  `core:inspector.tabs`). Mods get four operations, applied in load order:
+  `ui.extend` (add children), `ui.replace`, `ui.wrap` and `ui.remove`. Two
+  mods replacing the same id is reported as a conflict, like def patches.
+
+### Built for hacking
+
+- **Hot reload:** saving a UI script or theme updates the running game
+  without touching the simulation.
+- **Devtools (F12):** hover any element to see its id, owning mod, layout box
+  and tokens.
+- **Per-mod UI time** shows in the profiler; a component that errors shows an
+  error box in its place and the rest of the UI keeps running.
+- Budget: **under 1 ms per frame** for the whole UI.

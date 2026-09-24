@@ -4,8 +4,11 @@ title: Colonist inspection panel
 type: feature
 status: backlog
 milestone: colony
+depends_on:
+- 175
+- 176
 created: 2026-09-22
-updated: 2026-09-22
+updated: 2026-09-23
 priority: p1
 api: none
 effort: m
