@@ -33,6 +33,22 @@ my_mod/tests/flood.luau: a flood soaks the colony
 my_mod/tests/flood.luau:5: expected true, got nil (world seed 7, tick 1667)
 ```
 
+## Checking a mod
+
+`rim check` loads a mod with only what it depends on, then plays a few
+in-game hours on a small map. It reports load errors, load warnings (patch
+conflicts, patches that matched nothing, determinism hazards like `^`) and
+script errors:
+
+```sh
+rim check mods/my_mod            # exits 1 on an error
+rim check --strict               # every mod in ./mods; warnings fail too
+rim check mods/my_mod --hours 48 # play longer before judging
+```
+
+Loading with only your dependencies catches a mod that quietly relies on
+another mod being installed.
+
 ## Worlds
 
 `t.world({ seed, mods, size })` builds a fresh world, exactly as a new game

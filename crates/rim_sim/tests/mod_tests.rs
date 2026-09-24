@@ -29,3 +29,14 @@ fn shipped_mods_pass_their_tests() {
     }
     assert!(failed.is_empty(), "{} of {ran} mod tests failed:\n\n{}", failed.len(), failed.join("\n\n"));
 }
+
+/// `rim check`: every shipped mod loads with only its dependencies, with no
+/// warnings and no script errors in its first hours.
+#[test]
+fn shipped_mods_check_clean() {
+    let mods = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mods");
+    for m in ["core", "weather", "wildlife_plus"] {
+        let r = modtest::check_mod(&mods.join(m), 6.0).unwrap_or_else(|e| panic!("{m}: {e}"));
+        assert!(r.warnings.is_empty() && r.errors.is_empty(), "{m}: {:?} {:?}", r.warnings, r.errors);
+    }
+}

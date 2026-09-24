@@ -139,6 +139,9 @@ pub struct ScriptHost {
     ran_away: Rc<Cell<bool>>,
     /// Every script, and what the loaded ones exported.
     modules: Option<Rc<Modules>>,
+    /// Print script errors to stderr as well as the message feed. Tools that
+    /// report errors themselves (`rim check`) turn it off.
+    pub echo_errors: bool,
 }
 
 /// Only libraries whose results are the same on every machine and that can't
@@ -419,6 +422,7 @@ impl ScriptHost {
             steps,
             ran_away,
             modules: None,
+            echo_errors: true,
         };
         host.install(defs).map_err(|e| format!("script API setup failed: {e}"))?;
         host.lock_down().map_err(|e| format!("script API setup failed: {e}"))?;
@@ -1088,7 +1092,9 @@ impl ScriptHost {
         self.reg.borrow_mut().current_mod.clear();
         if let Err(e) = r {
             let text = format!("[{mod_id}] script error: {e}");
-            eprintln!("{text}");
+            if self.echo_errors {
+                eprintln!("{text}");
+            }
             w.message(text, MsgKind::Bad);
             // A runaway won't behave better next time: stop calling it.
             if self.ran_away.get() {
