@@ -98,6 +98,7 @@ ui.mount("windows", "my_mod:greeting")
 | `hover`, `press`, `focus` | Colour changes for each state: `{ bg = "surface_hover" }` |
 | `on_click`, `on_right_click` | Functions called when clicked |
 | `tooltip` | Text shown after a short hover |
+| `handle` | Window chrome: `move`, `resize` or `close` (see Windows) |
 | `disabled` | Dims the node and everything inside it, and ignores clicks |
 
 A typo in a property or token name is an error. It appears as a red box where
@@ -190,6 +191,40 @@ inspector).
 If two mods replace or remove the same id, that's reported as a conflict
 naming both, and load order decides which wins. Operating on an id nobody
 defines is reported as a warning. Both show in the F3 profiler.
+
+## Windows
+
+A window is a panel the engine moves, resizes, stacks and remembers. Declare
+one with its default size and the component shown inside; open it from any
+handler:
+
+```lua
+local kit = require("@core/ui/kit")
+
+ui.window("my_mod:settings", { title = "Settings", w = 420, h = 320, resizable = true }, function(view)
+	return ui.col({ gap = "s", ui.text({ "Settings live here" }) })
+end)
+
+ui.define("my_mod:settings_button", function(view)
+	return kit.button({ label = "Settings", on_click = function()
+		ui.toggle("my_mod:settings")
+	end })
+end)
+ui.mount("top", "my_mod:settings_button", { order = 50 })
+```
+
+`ui.open`, `ui.close` and `ui.toggle` take the window's id; `ui.is_open` reads
+it. `open = true` in the options shows the window the first time it is seen.
+A mod never moves a window: the player does, and the engine keeps where each
+one is, per player and per machine, beside the client's settings (never in a
+save game). The record is keyed by the window's id, so it survives a restart
+and a mod update that changes the default size. Two mods declaring one id is
+a conflict, reported like a replaced component.
+
+Core draws the chrome (`kit.window`): a title bar that drags, a close button,
+the body in a scroll area, and a resize grip when `resizable`. A theme mod
+can register its own with `ui.window_chrome`; nodes marked `handle = "move"`,
+`"resize"` or `"close"` are what the engine routes.
 
 ## Anchored labels
 

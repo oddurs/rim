@@ -23,13 +23,12 @@ ui.define("core:devtools", function(view)
 		table.insert(rows, label(t("core:devtools.point", "Point at anything to inspect it."), { size = "small", color = "muted" }))
 	end
 
-	local gallery = ui.state("core:gallery", false)
 	table.insert(rows, row({ gap = "xs" }, {
 		kit.toggle({ id = "core:devtools.outlines", label = t("core:devtools.outlines", "Outlines"), on = view.outlines(), on_click = function()
 			act.toggle_outlines()
 		end }),
-		kit.toggle({ id = "core:devtools.gallery", label = t("core:devtools.gallery", "Kit gallery"), on = gallery, on_click = function()
-			ui.set_state("core:gallery", not gallery)
+		kit.toggle({ id = "core:devtools.gallery", label = t("core:devtools.gallery", "Kit gallery"), on = ui.is_open("core:gallery"), on_click = function()
+			ui.toggle("core:gallery")
 		end }),
 	}))
 
@@ -55,14 +54,12 @@ ui.define("core:devtools", function(view)
 end)
 ui.mount("right", "core:devtools", { align = "start", order = -10 })
 
--- Every kit component in every state, for review.
-ui.define("core:gallery", function(view)
-	if not (view.show_devtools() and ui.state("core:gallery", false)) then
-		return nil
-	end
+-- Every kit component in every state, for review: a window the devtools
+-- panel opens.
+ui.window("core:gallery", { title = t("core:gallery.title", "Kit gallery"), w = 560, h = 480, resizable = true }, function(view)
 	local tab = ui.state("core:gallery.tab", "a")
-	return kit.panel({ id = "core:gallery.panel", w = 520, gap = "m", bg = "surface_raised" }, {
-		kit.heading(t("core:gallery.title", "Kit gallery"), t("core:gallery.note", "every component, every state")),
+	return col({ id = "core:gallery.panel", gap = "m" }, {
+		kit.heading(t("core:gallery.note", "every component, every state")),
 		row({ gap = "xs" }, {
 			button({ label = t("core:gallery.button", "Button") }),
 			button({ label = t("core:gallery.active", "Active"), active = true }),
@@ -119,4 +116,3 @@ ui.define("core:gallery", function(view)
 		}),
 	})
 end)
-ui.mount("windows", "core:gallery")

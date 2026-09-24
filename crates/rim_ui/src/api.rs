@@ -29,6 +29,7 @@ type Node = {
     hover: Colors?, press: Colors?, focus: Colors?, focusable: boolean?,
     on_click: (() -> ())?, on_right_click: (() -> ())?, tooltip: string?, disabled: boolean?,
     entity: number?, cell: { number }?, priority: number?, offset: number?,
+    handle: ("move" | "resize" | "close")?,
     [number]: any,
 }
 type Cell = string | number | { text: string?, bg: string?, color: string? } | nil
@@ -42,6 +43,8 @@ type ListProps = {
     id: string, count: number, row_h: Size, row: (i: number) -> Node,
     h: Size?, grow: number?, bg: string?, border: string?, pad: Size?,
 }
+type WindowOpts = { title: string?, w: number?, h: number?, resizable: boolean?, open: boolean? }
+type WindowInfo = { id: string, title: string, w: number, h: number, resizable: boolean, comp: string }
 type Layer = "top" | "bottom" | "left" | "right" | "anchored" | "cursor" | "modal" | "windows"
 type Need = { id: string, label: string, value: number, color: string, low: boolean }
 type Pawn = {
@@ -97,6 +100,7 @@ pub const UI_API: &[UiDoc] = &[
     d!("act.toggle_profiler", "() -> ()", "Show or hide the profiler."),
     d!("act.tool", "(key: string) -> ()", "Pick a toolbar tool (\"designate:core:chop\", \"build:core:wall\")."),
     d!("ui.anchored", "(node: Node?) -> Node", "A node attached to a pawn (entity) or cell, on the anchored layer."),
+    d!("ui.close", "(id: string) -> ()", "Close a window."),
     d!("ui.col", "(node: Node?) -> Node", "A column: children top to bottom."),
     d!("ui.define", "(id: string, build: (view: any) -> Node?) -> ()", "Define a component under a namespaced id."),
     d!("ui.extend", "(id: string, add: any) -> ()", "Add children to another component's extension point."),
@@ -105,6 +109,7 @@ pub const UI_API: &[UiDoc] = &[
         "(props: GridProps) -> Node",
         "Rows by cols of cells the engine paints as one node. cell(r, c) describes each cell at build; on_press(r, c) returns the value a drag paints and on_paint(r, c, value) runs once per cell the drag enters."
     ),
+    d!("ui.is_open", "(id: string) -> boolean", "Whether a window is open."),
     d!(
         "ui.list",
         "(props: ListProps) -> Node",
@@ -115,6 +120,7 @@ pub const UI_API: &[UiDoc] = &[
         "(layer: Layer, id: string, opts: { order: number?, align: string? }?) -> ()",
         "Show a component on a screen layer."
     ),
+    d!("ui.open", "(id: string) -> ()", "Open a window (and bring it to the front)."),
     d!("ui.remove", "(id: string) -> ()", "Hide a node by id."),
     d!("ui.replace", "(id: string, build: (view: any) -> Node?) -> ()", "Take over a node by id."),
     d!("ui.row", "(node: Node?) -> Node", "A row: children left to right."),
@@ -129,6 +135,17 @@ pub const UI_API: &[UiDoc] = &[
         "A user-visible string by key: a mod's ui/lang.toml can replace it; until one does, the default."
     ),
     d!("ui.text", "(node: Node | string) -> Node", "Text: { \"words\", size = ..., color = ... }."),
+    d!("ui.toggle", "(id: string) -> ()", "Open a window if closed, close it if open."),
+    d!(
+        "ui.window",
+        "(id: string, opts: WindowOpts, component: ((view: any) -> Node?) | string) -> ()",
+        "Declare a window the engine moves, sizes, stacks and remembers between runs. The component is shown inside the chrome; a function is defined under the window's id."
+    ),
+    d!(
+        "ui.window_chrome",
+        "(draw: (win: WindowInfo) -> Node) -> ()",
+        "The function that draws every window's chrome around ui.slot(win.comp); nodes marked handle = \"move\", \"resize\" or \"close\" are routed by the engine. Core sets it."
+    ),
     d!(
         "ui.wrap",
         "(id: string, wrap: (inner: Node, view: any) -> Node?) -> ()",

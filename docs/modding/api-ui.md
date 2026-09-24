@@ -22,12 +22,15 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `act.toggle_profiler` | `() -> ()` | Show or hide the profiler. |
 | `act.tool` | `(key: string) -> ()` | Pick a toolbar tool ("designate:core:chop", "build:core:wall"). |
 | `ui.anchored` | `(node: Node?) -> Node` | A node attached to a pawn (entity) or cell, on the anchored layer. |
+| `ui.close` | `(id: string) -> ()` | Close a window. |
 | `ui.col` | `(node: Node?) -> Node` | A column: children top to bottom. |
 | `ui.define` | `(id: string, build: (view: any) -> Node?) -> ()` | Define a component under a namespaced id. |
 | `ui.extend` | `(id: string, add: any) -> ()` | Add children to another component's extension point. |
 | `ui.grid` | `(props: GridProps) -> Node` | Rows by cols of cells the engine paints as one node. cell(r, c) describes each cell at build; on_press(r, c) returns the value a drag paints and on_paint(r, c, value) runs once per cell the drag enters. |
+| `ui.is_open` | `(id: string) -> boolean` | Whether a window is open. |
 | `ui.list` | `(props: ListProps) -> Node` | A scroll area that builds only the rows on screen. Needs an id, count, row_h and row(i); spacers stand in for the rows above and below. |
 | `ui.mount` | `(layer: Layer, id: string, opts: { order: number?, align: string? }?) -> ()` | Show a component on a screen layer. |
+| `ui.open` | `(id: string) -> ()` | Open a window (and bring it to the front). |
 | `ui.remove` | `(id: string) -> ()` | Hide a node by id. |
 | `ui.replace` | `(id: string, build: (view: any) -> Node?) -> ()` | Take over a node by id. |
 | `ui.row` | `(node: Node?) -> Node` | A row: children left to right. |
@@ -38,6 +41,9 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `ui.state` | `(key: string, default: any) -> any` | A value kept with ui.set_state, or default. |
 | `ui.t` | `(key: string, default: string?) -> string` | A user-visible string by key: a mod's ui/lang.toml can replace it; until one does, the default. |
 | `ui.text` | `(node: Node \| string) -> Node` | Text: { "words", size = ..., color = ... }. |
+| `ui.toggle` | `(id: string) -> ()` | Open a window if closed, close it if open. |
+| `ui.window` | `(id: string, opts: WindowOpts, component: ((view: any) -> Node?) \| string) -> ()` | Declare a window the engine moves, sizes, stacks and remembers between runs. The component is shown inside the chrome; a function is defined under the window's id. |
+| `ui.window_chrome` | `(draw: (win: WindowInfo) -> Node) -> ()` | The function that draws every window's chrome around ui.slot(win.comp); nodes marked handle = "move", "resize" or "close" are routed by the engine. Core sets it. |
 | `ui.wrap` | `(id: string, wrap: (inner: Node, view: any) -> Node?) -> ()` | Decorate a node: get its tree, return a new one. |
 | `view.ambient` | `(field: string) -> number?` | A field's outdoor value, or nil for an unknown field. |
 | `view.clock` | `() -> string` | The time of day, "HH:MM". |

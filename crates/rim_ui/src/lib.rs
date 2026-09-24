@@ -99,7 +99,35 @@ struct LayerOut {
     solids: Vec<Rect>,
     /// Every node with its rect, for devtools and `find`.
     all: Vec<(Rect, usize, Vec<usize>)>,
+    /// The window each root belongs to (windows layer), by root index.
+    wins: Vec<Option<String>>,
 }
+
+/// Where a window is and whether it shows, in logical pixels so a saved
+/// layout reads the same at any scale. Kept in stacking order, last on top.
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct WindowState {
+    #[serde(skip)]
+    pub id: String,
+    pub x: f32,
+    pub y: f32,
+    pub w: f32,
+    pub h: f32,
+    pub open: bool,
+}
+
+/// A press on a window's move or resize handle, until release.
+struct WinDrag {
+    id: String,
+    resize: bool,
+    start: (f32, f32),
+    from: (f32, f32, f32, f32),
+}
+
+/// The smallest a window resizes to, logical pixels.
+const WIN_MIN: (f32, f32) = (120.0, 80.0);
+/// How much of a window must stay on screen when dragged.
+const WIN_KEEP: f32 = 80.0;
 
 /// A laid-out tree: its layout hash, the space it had, and its rects.
 type CachedLayout = (u64, (f32, f32), Vec<Rect>);
@@ -170,6 +198,17 @@ pub struct Ui {
     built_for: u64,
     /// Tree rebuilds so far (tests and the profiler).
     pub builds: u64,
+    /// The screen as of the last frame, for placing a window opened from a handler.
+    screen: (f32, f32),
+    /// Windows the engine manages, in stacking order (last on top).
+    windows: Vec<WindowState>,
+    win_drag: Option<WinDrag>,
+    /// Chrome trees of the open windows from the last rebuild, in stacking order.
+    built_wins: Vec<(String, Node)>,
+    /// Last frame's window rectangles (physical), in stacking order.
+    win_rects: Vec<(String, Rect)>,
+    /// A window moved, resized, opened or closed since the layout was last taken.
+    layout_dirty: bool,
 }
 
 fn total_scale(dpi: f32, user: f32) -> f32 {
@@ -237,7 +276,134 @@ impl Ui {
             built_at: f64::MIN,
             built_for: 0,
             builds: 0,
+            screen: (0.0, 0.0),
+            windows: Vec::new(),
+            win_drag: None,
+            built_wins: Vec::new(),
+            win_rects: Vec::new(),
+            layout_dirty: false,
         })
+    }
+
+    /// Open windows in stacking order, bottom first.
+    pub fn window_order(&self) -> Vec<String> {
+        self.windows.iter().filter(|w| w.open).map(|w| w.id.clone()).collect()
+    }
+
+    /// Where an open window is on screen, physical pixels.
+    pub fn window_rect(&self, id: &str) -> Option<Rect> {
+        self.win_rects.iter().find(|(w, _)| w == id).map(|(_, r)| *r)
+    }
+
+    pub fn is_open(&self, id: &str) -> bool {
+        self.windows.iter().any(|w| w.id == id && w.open)
+    }
+
+    pub fn open_window(&mut self, id: &str) {
+        self.apply_window_op(&vm::WindowOp::Open(id.to_string()));
+    }
+
+    pub fn close_window(&mut self, id: &str) {
+        self.apply_window_op(&vm::WindowOp::Close(id.to_string()));
+    }
+
+    /// The window layout as TOML: one table per window the player has
+    /// touched, keyed by id, in logical pixels. Saved beside client
+    /// settings, never in a save game.
+    pub fn layout_toml(&self) -> String {
+        let mut doc = toml::Table::new();
+        let mut wins = toml::Table::new();
+        for w in &self.windows {
+            if let Ok(toml::Value::Table(t)) = toml::Value::try_from(w) {
+                wins.insert(w.id.clone(), toml::Value::Table(t));
+            }
+        }
+        doc.insert("window".into(), toml::Value::Table(wins));
+        toml::to_string(&doc).unwrap_or_default()
+    }
+
+    /// Restore a layout from `layout_toml`. Keyed by id, so a window keeps
+    /// its place across a mod update that changes its default size; ids the
+    /// mods no longer declare are kept for when they come back.
+    pub fn restore_layout(&mut self, text: &str) -> Result<(), String> {
+        let doc: toml::Table = text.parse().map_err(|e: toml::de::Error| e.message().to_string())?;
+        let Some(toml::Value::Table(wins)) = doc.get("window") else { return Ok(()) };
+        for (id, v) in wins {
+            let mut w: WindowState =
+                v.clone().try_into().map_err(|e: toml::de::Error| format!("{id}: {}", e.message()))?;
+            w.id = id.clone();
+            w.w = w.w.max(WIN_MIN.0);
+            w.h = w.h.max(WIN_MIN.1);
+            match self.windows.iter_mut().find(|o| o.id == *id) {
+                Some(o) => *o = w,
+                None => self.windows.push(w),
+            }
+        }
+        Ok(())
+    }
+
+    /// Whether the layout changed since this was last asked, and clears it.
+    pub fn take_layout_dirty(&mut self) -> bool {
+        std::mem::take(&mut self.layout_dirty)
+    }
+
+    fn raise_window(&mut self, id: &str) {
+        if let Some(i) = self.windows.iter().position(|w| w.id == id) {
+            if i + 1 != self.windows.len() {
+                let w = self.windows.remove(i);
+                self.windows.push(w);
+                self.layout_dirty = true;
+            }
+        }
+    }
+
+    /// A window's record, made from its declaration the first time it is
+    /// needed: centred, stepped down and right of any already open.
+    fn window_state(&mut self, id: &str, screen: (f32, f32)) -> Option<usize> {
+        if let Some(i) = self.windows.iter().position(|w| w.id == id) {
+            return Some(i);
+        }
+        let decl = self.vm.windows().into_iter().find(|d| d.id == id)?;
+        let s = self.theme.scale;
+        let open = self.windows.iter().filter(|w| w.open).count() as f32;
+        let (sw, sh) = (screen.0 / s, screen.1 / s);
+        self.windows.push(WindowState {
+            id: id.to_string(),
+            x: ((sw - decl.w) / 2.0 + open * 24.0).max(0.0),
+            y: ((sh - decl.h) / 2.0 + open * 24.0).max(0.0),
+            w: decl.w,
+            h: decl.h,
+            open: false,
+        });
+        Some(self.windows.len() - 1)
+    }
+
+    fn apply_window_op(&mut self, op: &vm::WindowOp) {
+        let screen = self.screen;
+        let (id, open) = match op {
+            vm::WindowOp::Open(id) => (id, Some(true)),
+            vm::WindowOp::Close(id) => (id, Some(false)),
+            vm::WindowOp::Toggle(id) => (id, None),
+        };
+        let Some(i) = self.window_state(id, screen) else { return };
+        let open = open.unwrap_or(!self.windows[i].open);
+        if self.windows[i].open != open {
+            self.windows[i].open = open;
+            self.layout_dirty = true;
+        }
+        if open {
+            self.raise_window(id);
+        }
+        self.vm.set_window_open(id, open);
+    }
+
+    /// Keep a window's record inside the screen with its title bar reachable.
+    fn clamp_window(w: &mut WindowState, screen: (f32, f32), scale: f32) {
+        let (sw, sh) = (screen.0 / scale, screen.1 / scale);
+        w.w = w.w.max(WIN_MIN.0);
+        w.h = w.h.max(WIN_MIN.1);
+        w.x = w.x.clamp(WIN_KEEP - w.w, (sw - WIN_KEEP).max(0.0));
+        w.y = w.y.clamp(0.0, (sh - 40.0).max(0.0));
     }
 
     /// Load problems from theme and scripts, for the profiler and mod manager.
@@ -373,6 +539,50 @@ impl Ui {
             out.captured_wheel = true;
         }
 
+        // A press on a window brings it to the front, and on its move or
+        // resize handle starts a drag the engine follows until release.
+        let win_under = match &top {
+            Some((layer, h)) if *layer == "windows" => {
+                self.layers.iter().find(|l| l.name == "windows").and_then(|l| l.wins.get(h.path[0]).cloned().flatten())
+            }
+            Some(_) => None,
+            None => self.win_rects.iter().rev().find(|(_, r)| contains(*r, mx, my)).map(|(id, _)| id.clone()),
+        };
+        if input.left_pressed {
+            if let Some(id) = &win_under {
+                out.mouse_over_ui = true;
+                self.raise_window(id);
+                let handle =
+                    top.as_ref().and_then(|(l, h)| self.node_at(l, h.path[0], &h.path[1..])).and_then(|n| n.handle);
+                let resize = match handle {
+                    Some(node::Handle::Move) => Some(false),
+                    Some(node::Handle::Resize) => Some(true),
+                    _ => None,
+                };
+                if let (Some(resize), Some(w)) = (resize, self.windows.iter().find(|w| w.id == *id)) {
+                    self.win_drag =
+                        Some(WinDrag { id: id.clone(), resize, start: (mx, my), from: (w.x, w.y, w.w, w.h) });
+                }
+            }
+        }
+        if let Some(d) = &self.win_drag {
+            let s = self.theme.scale;
+            let (dx, dy) = ((mx - d.start.0) / s, (my - d.start.1) / s);
+            let screen = self.screen;
+            if let Some(w) = self.windows.iter_mut().find(|w| w.id == d.id) {
+                if d.resize {
+                    (w.w, w.h) = (d.from.2 + dx, d.from.3 + dy);
+                } else {
+                    (w.x, w.y) = (d.from.0 + dx, d.from.1 + dy);
+                }
+                Self::clamp_window(w, screen, s);
+            }
+            out.captured_left = true;
+            if input.left_released {
+                self.win_drag = None;
+                self.layout_dirty = true;
+            }
+        }
         if input.left_pressed && out.mouse_over_ui {
             out.captured_left = true;
             self.pressed = hovered;
@@ -412,6 +622,11 @@ impl Ui {
                     let root = h.path[0];
                     if let Some(f) = self.node_at(layer, root, &h.path[1..]).and_then(|n| n.on_click.clone()) {
                         handlers.push(Call::Click(f));
+                    }
+                    let closes =
+                        self.node_at(layer, root, &h.path[1..]).is_some_and(|n| n.handle == Some(node::Handle::Close));
+                    if let (true, Some(id)) = (closes, &win_under) {
+                        self.close_window(id);
                     }
                 }
             }
@@ -507,6 +722,19 @@ impl Ui {
                 }
             }
         }
+        self.screen = client.screen;
+        let ops = self.vm.take_window_ops();
+        let windows_changed = !ops.is_empty();
+        for op in &ops {
+            self.apply_window_op(op);
+        }
+        // A window declared open shows the first time it is seen; a saved
+        // layout restored before then has already said where and whether.
+        for decl in self.vm.windows() {
+            if !self.windows.iter().any(|w| w.id == decl.id) && decl.open {
+                self.apply_window_op(&vm::WindowOp::Open(decl.id.clone()));
+            }
+        }
         let mut actions = self.vm.take_actions();
         if actions.contains(&UiAction::ToggleOutlines) {
             self.info.outlines = !self.info.outlines;
@@ -522,18 +750,28 @@ impl Ui {
             || input.enter;
         let stale = input.time - self.built_at >= REBUILD_EVERY || input.time < self.built_at;
         let t0 = Instant::now();
-        let rebuilt =
-            handled || input_happened || stale || ch != self.built_for || self.built.is_empty() || self.devtools;
+        let rebuilt = handled
+            || windows_changed
+            || input_happened
+            || stale
+            || ch != self.built_for
+            || self.built.is_empty()
+            || self.devtools;
         if rebuilt {
             let lists = vm::ListEnv { scroll: &self.scroll, rects: &self.ids, keys: &self.id_keys };
             self.built = self.vm.build(world, client, &self.shown, &self.theme, &lists);
+            let open: Vec<(String, (f32, f32))> =
+                self.windows.iter().filter(|w| w.open).map(|w| (w.id.clone(), (w.w, w.h))).collect();
+            self.built_wins = self.vm.build_windows(&open, world, client, &self.shown, &self.theme, &lists);
             self.built_at = input.time;
             self.built_for = ch;
             self.builds += 1;
             self.last_trees = self.built.iter().map(|(m, n)| (m.id.clone(), n.clone())).collect();
+            self.last_trees.extend(self.built_wins.iter().map(|(id, n)| (id.clone(), n.clone())));
         }
         let build_us = t0.elapsed().as_secs_f64() * 1e6;
         let built = std::mem::take(&mut self.built);
+        let built_wins = std::mem::take(&mut self.built_wins);
 
         let (sw, sh) = client.screen;
         let mut layout_us = 0.0;
@@ -554,8 +792,14 @@ impl Ui {
         };
 
         for &layer in LAYERS {
-            let mut lo =
-                LayerOut { name: layer, roots: Vec::new(), hits: Vec::new(), solids: Vec::new(), all: Vec::new() };
+            let mut lo = LayerOut {
+                name: layer,
+                roots: Vec::new(),
+                hits: Vec::new(),
+                solids: Vec::new(),
+                all: Vec::new(),
+                wins: Vec::new(),
+            };
             // (root node, rects) for this layer.
             let mut placed: Vec<(Node, Vec<Rect>)> = Vec::new();
             let t = Instant::now();
@@ -591,6 +835,28 @@ impl Ui {
                             ((sw - w) / 2.0, top)
                         });
                         placed.push((tree.clone(), rects));
+                        lo.wins.push(None);
+                    }
+                    // Managed windows sit where their records say, in
+                    // stacking order; the layout is cached at the origin and
+                    // moved, so a drag costs no relayout.
+                    let s = self.theme.scale;
+                    let screen = (sw, sh);
+                    for w in &mut self.windows {
+                        Self::clamp_window(w, screen, s);
+                    }
+                    self.win_rects.clear();
+                    for (id, tree) in &built_wins {
+                        let Some(w) = self.windows.iter().find(|w| w.id == *id) else { continue };
+                        let (x, y, pw, ph) = (w.x * s, w.y * s, w.w * s, w.h * s);
+                        let rects: Vec<Rect> = self
+                            .layout_cached(&format!("win:{id}"), tree, (pw, ph), (0.0, 0.0), &mut layouts)
+                            .into_iter()
+                            .map(|r| [r[0] + x, r[1] + y, r[2], r[3]])
+                            .collect();
+                        self.win_rects.push((id.clone(), [x, y, pw, ph]));
+                        placed.push((tree.clone(), rects));
+                        lo.wins.push(Some(id.clone()));
                     }
                 }
                 "modal" => {
@@ -703,6 +969,7 @@ impl Ui {
         self.ids = ids;
         self.id_keys = id_keys;
         self.built = built;
+        self.built_wins = built_wins;
         actions.extend(self.vm.take_actions());
         out.actions = actions;
         out.draw = draw;
@@ -952,6 +1219,7 @@ fn plain(key: u64, style: Style, children: Vec<Node>) -> Node {
         priority: 0,
         offset_y: 0.0,
         grid: None,
+        handle: None,
         children,
     }
 }

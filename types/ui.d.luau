@@ -13,6 +13,7 @@ type Node = {
     hover: Colors?, press: Colors?, focus: Colors?, focusable: boolean?,
     on_click: (() -> ())?, on_right_click: (() -> ())?, tooltip: string?, disabled: boolean?,
     entity: number?, cell: { number }?, priority: number?, offset: number?,
+    handle: ("move" | "resize" | "close")?,
     [number]: any,
 }
 type Cell = string | number | { text: string?, bg: string?, color: string? } | nil
@@ -26,6 +27,8 @@ type ListProps = {
     id: string, count: number, row_h: Size, row: (i: number) -> Node,
     h: Size?, grow: number?, bg: string?, border: string?, pad: Size?,
 }
+type WindowOpts = { title: string?, w: number?, h: number?, resizable: boolean?, open: boolean? }
+type WindowInfo = { id: string, title: string, w: number, h: number, resizable: boolean, comp: string }
 type Layer = "top" | "bottom" | "left" | "right" | "anchored" | "cursor" | "modal" | "windows"
 type Need = { id: string, label: string, value: number, color: string, low: boolean }
 type Pawn = {
@@ -57,6 +60,8 @@ type TreeRow = { depth: number, kind: string, id: string, owner: string }
 declare ui: {
     -- A node attached to a pawn (entity) or cell, on the anchored layer.
     anchored: (node: Node?) -> Node,
+    -- Close a window.
+    close: (id: string) -> (),
     -- A column: children top to bottom.
     col: (node: Node?) -> Node,
     -- Define a component under a namespaced id.
@@ -65,10 +70,14 @@ declare ui: {
     extend: (id: string, add: any) -> (),
     -- Rows by cols of cells the engine paints as one node. cell(r, c) describes each cell at build; on_press(r, c) returns the value a drag paints and on_paint(r, c, value) runs once per cell the drag enters.
     grid: (props: GridProps) -> Node,
+    -- Whether a window is open.
+    is_open: (id: string) -> boolean,
     -- A scroll area that builds only the rows on screen. Needs an id, count, row_h and row(i); spacers stand in for the rows above and below.
     list: (props: ListProps) -> Node,
     -- Show a component on a screen layer.
     mount: (layer: Layer, id: string, opts: { order: number?, align: string? }?) -> (),
+    -- Open a window (and bring it to the front).
+    open: (id: string) -> (),
     -- Hide a node by id.
     remove: (id: string) -> (),
     -- Take over a node by id.
@@ -89,6 +98,12 @@ declare ui: {
     t: (key: string, default: string?) -> string,
     -- Text: { "words", size = ..., color = ... }.
     text: (node: Node | string) -> Node,
+    -- Open a window if closed, close it if open.
+    toggle: (id: string) -> (),
+    -- Declare a window the engine moves, sizes, stacks and remembers between runs. The component is shown inside the chrome; a function is defined under the window's id.
+    window: (id: string, opts: WindowOpts, component: ((view: any) -> Node?) | string) -> (),
+    -- The function that draws every window's chrome around ui.slot(win.comp); nodes marked handle = "move", "resize" or "close" are routed by the engine. Core sets it.
+    window_chrome: (draw: (win: WindowInfo) -> Node) -> (),
     -- Decorate a node: get its tree, return a new one.
     wrap: (id: string, wrap: (inner: Node, view: any) -> Node?) -> (),
 }
