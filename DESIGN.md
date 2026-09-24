@@ -109,6 +109,32 @@ You start as *the warrior*: a strong fighter with nothing on them.
   - Explicit roofs, if ever wanted, are a plugin that marks cells roofed and
     hooks the same question.
 
+### Tension: does a room know what it is made of?
+
+- **The question:** `leak_per_hour` is a constant on the *field* def, so every
+  room on the map loses heat at the same rate. A room ringed in stone behaves
+  exactly like the same room in wood, and a window can only be a hard-coded
+  special case. A window is not a special case; it is the first piece of wall
+  whose material is the whole point of it.
+- **Against deriving it:** rooms would have to walk their boundary, and the
+  room rebuild is already one of the few things that touches the whole map.
+- **Measured** (0211, 200×200 map, release, best of 6): a full pass over the
+  wall cells adding each wall's contribution to the rooms it touches costs
+  **0.08–0.09 ms** against a room rebuild of **0.19–0.22 ms** — about +40%,
+  flat from 16 huts to 400, because the pass scales with map area rather than
+  room count. It runs only when rooms rebuild, which is only when walls
+  change, so it is not in the per-tick path.
+- **Ruling:** a room's field behaviour **comes from its boundary**.
+  - `[[thing]]` may declare what it does to the room it helps enclose
+    (`leak`, `daylight`), scaled by its material's factors.
+  - Contributions are summed per room during the room rebuild and cached.
+  - A field def's constant is the default for a boundary that says nothing,
+    so nothing changes for a mod that does not care.
+  - This is what makes a window real, and it is the same mechanism wind
+    shelter and drafty rooms will want.
+  - The pass scans the map. Narrowing it to changed cells belongs with
+    incremental region updates (0097), not here.
+
 ---
 
 ## 4a. Field layers
