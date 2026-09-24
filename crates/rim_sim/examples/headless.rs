@@ -53,5 +53,9 @@ fn main() {
     );
     println!("tick: mean {mean:.3} ms · p99 {p99:.3} ms · max {:.3} ms", times.last().unwrap());
     println!("paths: {} searches, {} nodes expanded", w.pf.searches, w.pf.expanded);
+    let mut prof = sim.profile.entries.clone();
+    prof.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+    let top: Vec<String> = prof.iter().take(8).map(|(n, us)| format!("{n} {us:.1}")).collect();
+    println!("per call, µs (smoothed): {}", top.join(" · "));
     println!("state hash {:016x}", w.state_hash());
 }

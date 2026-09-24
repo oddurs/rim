@@ -19,15 +19,17 @@ end
 rim.register_incident({
 	id = "cold_snap",
 	kind = "neutral",
-	min_day = 3,
+	min_day = 5,
 	weight = function(ctx)
 		local s = rim.season()
 		return if s == "winter" then 1.2 elseif s == "autumn" or s == "spring" then 0.6 else 0
 	end,
 	can_fire = calm,
 	execute = function(ctx)
-		-- -12°C for two days, easing in over three hours so there's time to act.
-		rim.push_ambient("temperature", "cold_snap", -12, 48, 3)
+		-- Two days of cold, easing in over three hours so there's time to
+		-- act: -12°C in winter, -8°C in spring and autumn.
+		local drop = if rim.season() == "winter" then -12 else -8
+		rim.push_ambient("temperature", "cold_snap", drop, 48, 3)
 		rim.message("A cold snap is coming. Bring in wood and keep a fire lit.", "threat")
 	end,
 })
@@ -51,7 +53,7 @@ rim.register_incident({
 rim.register_incident({
 	id = "storm",
 	kind = "neutral",
-	min_day = 2,
+	min_day = 3,
 	weight = function(ctx)
 		return if rim.season() == "summer" or rim.season() == "autumn" then 0.25 else 0.15
 	end,

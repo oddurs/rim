@@ -179,11 +179,20 @@ local function load_queue()
 	return rim.get_data(KEY)
 end
 
+-- When the current weather ends: a cache of the queue's head, so the hook
+-- does nothing between changes. Derived from script data, never the other
+-- way round, so saves and determinism are unaffected.
+local next_change: number? = nil
+
 local function save(q)
 	rim.set_data(KEY, q)
+	next_change = q[1].ends
 end
 
 rim.every(20, function()
+	if next_change and rim.tick() < next_change then
+		return
+	end
 	local q = load_queue()
 	if q == nil then
 		q = { pick(nil, rim.tick()) }
@@ -195,6 +204,7 @@ rim.every(20, function()
 	end
 	local now = rim.tick()
 	if now < q[1].ends then
+		next_change = q[1].ends
 		return
 	end
 	local previous = q[1].id

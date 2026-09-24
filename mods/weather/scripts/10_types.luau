@@ -4,9 +4,20 @@
 -- Channel units: cloud and fog in %, precipitation in mm/h, wind in m/s,
 -- temperature as an offset in °C on top of the seasonal curve.
 
+-- The first day is clear: the first night is the shelter test core is tuned
+-- around (DESIGN.md §4a), and weather starts after it.
 local function by_season(t)
 	return function(ctx)
 		return t[ctx.season] or t.default or 1
+	end
+end
+
+local function not_first_day(weight)
+	return function(ctx)
+		if ctx.first_day then
+			return 0
+		end
+		return if type(weight) == "function" then weight(ctx) else weight
 	end
 end
 
@@ -32,7 +43,7 @@ rim.weather.register({
 	label = "overcast",
 	hours = { 4, 16 },
 	blend = 2,
-	weight = after(by_season({ spring = 2.5, summer = 2, autumn = 3, winter = 3 }), { cloudy = 0.6 }),
+	weight = not_first_day(after(by_season({ spring = 2.5, summer = 2, autumn = 3, winter = 3 }), { cloudy = 0.6 })),
 	set = { cloud = { 65, 95 }, precipitation = 0, wind = { 2, 7 }, fog = 0, temperature = { -1, 0 } },
 })
 
@@ -48,7 +59,7 @@ rim.weather.register({
 		end
 		return by_season({ spring = 2.2, summer = 1.2, autumn = 2.6, winter = 2 })(ctx)
 	end, { cloudy = 1.8, clear = 0.5, rain = 0.5 }),
-	set = { cloud = { 85, 100 }, precipitation = { 0.8, 4 }, wind = { 3, 9 }, fog = 0, temperature = { -2, -0.5 } },
+	set = { cloud = { 85, 100 }, precipitation = { 0.8, 4 }, wind = { 3, 9 }, fog = 0, temperature = { -3.5, -1.5 } },
 	message = function(label)
 		return if label == "snow" then "It's snowing." else nil
 	end,
@@ -66,7 +77,7 @@ rim.weather.register({
 		end
 		return by_season({ spring = 0.25, summer = 0.45, autumn = 0.4, winter = 0.3 })(ctx)
 	end, { rain = 1.8, cloudy = 1.2, clear = 0.3, storm = 0.1 }),
-	set = { cloud = 100, precipitation = { 5, 9 }, wind = { 12, 20 }, fog = 0, temperature = { -4, -2 } },
+	set = { cloud = 100, precipitation = { 5, 9 }, wind = { 12, 20 }, fog = 0, temperature = { -6, -3 } },
 	message = function(label)
 		return if label == "blizzard" then "A blizzard sweeps in. Get everyone inside." else "A storm breaks. Get everyone inside."
 	end,
@@ -78,7 +89,7 @@ rim.weather.register({
 	label = "fog",
 	hours = { 2, 6 },
 	blend = 1.5,
-	weight = after(by_season({ spring = 0.6, summer = 0.25, autumn = 1.1, winter = 0.7 }), { rain = 1.8, fog = 0.1 }),
+	weight = not_first_day(after(by_season({ spring = 0.6, summer = 0.25, autumn = 1.1, winter = 0.7 }), { rain = 1.8, fog = 0.1 })),
 	set = { cloud = { 40, 70 }, precipitation = 0, wind = { 0, 1 }, fog = { 60, 90 }, temperature = -0.5 },
 })
 

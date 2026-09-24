@@ -5,6 +5,12 @@
 //!
 //! The bot: designate trees and berry bushes near the start, then build a
 //! 5x5 wooden hut (walls, a door, a bed inside). Colonists defend themselves.
+//!
+//! Flags: `--nohut`, `--fire` (a campfire in the hut), `--core` (core alone,
+//! no weather plugin), `--start-day N` (start on day N of the year, by adding
+//! a patch mod to a copy of the mods folder), `--show SEED` (print that run's
+//! messages). Runs over more than one season also report each season. Seeds
+//! run in parallel.
 
 use rim_sim::world::{Blueprint, MsgKind, Pawn, NEED_MAX};
 use rim_sim::{Command, IVec, Sim, TICKS_PER_DAY};
@@ -35,6 +41,14 @@ struct Report {
     threats: Vec<(f64, String)>,
     goods: usize,
     wealth: f64,
+    /// Colonist-hours at zero warmth, per season index.
+    frozen_by_season: Vec<f64>,
+    deaths_by_season: Vec<u32>,
+    /// Colonists alive at the end of each season.
+    alive_by_season: Vec<usize>,
+    /// The founder's hours at zero warmth, per season, and whether they lived.
+    founder_frozen_by_season: Vec<f64>,
+    founder_alive: bool,
 }
 
 fn open_square(s: &Sim, c: IVec, size: i32) -> Option<IVec> {
@@ -57,7 +71,9 @@ fn open_square(s: &Sim, c: IVec, size: i32) -> Option<IVec> {
 }
 
 fn play(mods: &Path, seed: u64, days: u64) -> Report {
-    let mut s = Sim::new(mods, seed).expect("mods load");
+    let core = std::env::args().any(|a| a == "--core");
+    let mut s = Sim::with_mods(mods, seed, &|m| !core || m == "core").expect("mods load");
+    let seasons = s.world.defs.calendar.seasons.len();
     let defs = s.world.defs.clone();
     let c = s.world.colony_center().unwrap();
     let des = |id: &str| defs.lookup("designation", id).unwrap();
@@ -88,8 +104,18 @@ fn play(mods: &Path, seed: u64, days: u64) -> Report {
         }
     }
 
-    let mut r =
-        Report { seed, min_hp: 1.0, min_food: 1.0, min_warmth: 1.0, min_warmth_later: 1.0, ..Default::default() };
+    let mut r = Report {
+        seed,
+        min_hp: 1.0,
+        min_food: 1.0,
+        min_warmth: 1.0,
+        min_warmth_later: 1.0,
+        frozen_by_season: vec![0.0; seasons],
+        deaths_by_season: vec![0; seasons],
+        alive_by_season: vec![0; seasons],
+        founder_frozen_by_season: vec![0.0; seasons],
+        ..Default::default()
+    };
     let mut seen = 0;
     for _ in 0..days * TICKS_PER_DAY {
         s.step();
@@ -106,9 +132,13 @@ fn play(mods: &Path, seed: u64, days: u64) -> Report {
                         r.min_warmth_later = r.min_warmth_later.min(v as f64 / NEED_MAX as f64);
                     }
                     if v == 0 {
+                        r.frozen_by_season[w.season_index() as usize] += 60.0 * 24.0 / TICKS_PER_DAY as f64;
                         r.frozen_ticks += 60;
                         if p.founder && day >= 1.4 {
                             r.founder_frozen_later += 60;
+                        }
+                        if p.founder {
+                            r.founder_frozen_by_season[w.season_index() as usize] += 60.0 * 24.0 / TICKS_PER_DAY as f64;
                         }
                     }
                 }
@@ -129,28 +159,82 @@ fn play(mods: &Path, seed: u64, days: u64) -> Report {
             }
             match m.kind {
                 MsgKind::Threat => r.threats.push((day, m.text.clone())),
-                MsgKind::Bad if m.text.ends_with("has died.") => r.deaths.push((day, m.text.clone())),
+                MsgKind::Bad if m.text.ends_with("has died.") => {
+                    r.deaths.push((day, m.text.clone()));
+                    r.deaths_by_season[w.season_index() as usize] += 1;
+                }
                 MsgKind::Good => r.goods += 1,
                 _ => {}
             }
         }
         seen = w.messages.len();
+        let si = w.season_index() as usize;
+        r.alive_by_season[si] = w.colonists().count();
         if w.colony_lost {
             break;
         }
     }
     let w = &s.world;
     r.colonists_end = w.colonists().count();
+    r.founder_alive = w.colonists().any(|e| w.ecs.get::<&Pawn>(e).is_ok_and(|p| p.founder));
     r.survived = r.colonists_end > 0;
     r.wealth = w.wealth;
     r
 }
 
+fn copy_dir(from: &Path, to: &Path) {
+    std::fs::create_dir_all(to).unwrap();
+    for e in std::fs::read_dir(from).unwrap().flatten() {
+        let p = e.path();
+        if p.is_dir() {
+            copy_dir(&p, &to.join(e.file_name()));
+        } else {
+            std::fs::copy(&p, to.join(e.file_name())).unwrap();
+        }
+    }
+}
+
 fn main() {
     let seeds = arg("--seeds", 20);
     let days = arg("--days", 5);
-    let mods = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mods");
-    let reports: Vec<Report> = (1..=seeds).map(|seed| play(&mods, seed, days)).collect();
+    let shipped = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mods");
+    // A later start is a mod like any other: a patch to core's calendar.
+    let start = std::env::args().any(|a| a == "--start-day").then(|| arg("--start-day", 0));
+    let mods = match start {
+        Some(day) => {
+            let dir = std::env::temp_dir().join(format!("rim-balance-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&dir);
+            copy_dir(&shipped, &dir);
+            let m = dir.join("balance_start");
+            std::fs::create_dir_all(m.join("defs")).unwrap();
+            std::fs::write(
+                m.join("mod.toml"),
+                "id = \"balance_start\"\nname = \"Balance start\"\nversion = \"0.1.0\"\napi = \"0.1\"\ndepends = [\"core\"]\n",
+            )
+            .unwrap();
+            std::fs::write(
+                m.join("defs/start.toml"),
+                format!("[[patch]]\ntarget = \"calendar/core\"\nset = {{ start_day = {day} }}\n"),
+            )
+            .unwrap();
+            dir
+        }
+        None => shipped,
+    };
+    // Seeds in parallel: each run builds its own Sim on its own thread.
+    let threads = std::thread::available_parallelism().map_or(4, |n| n.get()) as u64;
+    let mut reports: Vec<Report> = std::thread::scope(|sc| {
+        let handles: Vec<_> = (0..threads)
+            .map(|t| {
+                let mods = &mods;
+                sc.spawn(move || {
+                    (1..=seeds).filter(|s| s % threads == t).map(|seed| play(mods, seed, days)).collect::<Vec<_>>()
+                })
+            })
+            .collect();
+        handles.into_iter().flat_map(|h| h.join().unwrap()).collect()
+    });
+    reports.sort_by_key(|r| r.seed);
 
     println!("seed  alive  end  min_hp  min_food  min_warm  starved_h  hut_day  threats  good  wealth  deaths");
     for r in &reports {
@@ -200,6 +284,24 @@ fn main() {
         let mean = first_threat.iter().sum::<f64>() / first_threat.len() as f64;
         let min = first_threat.iter().cloned().fold(f64::MAX, f64::min);
         println!("first threat day:         mean {mean:.2}, earliest {min:.2} ({} runs had one)", first_threat.len());
+    }
+    // Per season, over runs that reached it.
+    if days > 15 {
+        let names = {
+            let core = std::env::args().any(|a| a == "--core");
+            let s = Sim::with_mods(&mods, 1, &|m| !core || m == "core").expect("mods load");
+            s.world.defs.calendar.seasons.clone()
+        };
+        println!("\nseason    frozen colonist-h/run  founder frozen h/run  deaths  colonies alive at end");
+        for (i, name) in names.iter().enumerate() {
+            let frozen = reports.iter().map(|r| r.frozen_by_season[i]).sum::<f64>() / n;
+            let founder = reports.iter().map(|r| r.founder_frozen_by_season[i]).sum::<f64>() / n;
+            let deaths: u32 = reports.iter().map(|r| r.deaths_by_season[i]).sum();
+            let alive = reports.iter().filter(|r| r.alive_by_season[i] > 0).count();
+            println!("{name:<9} {frozen:>22.1}  {founder:>20.1}  {deaths:>6}  {alive:>6}/{n}");
+        }
+        let founders = reports.iter().filter(|r| r.founder_alive).count();
+        println!("founder alive at the end: {founders}/{n}");
     }
     let threat_kinds: Vec<&str> = reports.iter().flat_map(|r| r.threats.iter().map(|t| t.1.as_str())).collect();
     for t in threat_kinds.iter().take(12) {
