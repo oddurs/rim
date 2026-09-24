@@ -7,6 +7,11 @@
 //! does, because `view` functions come and go with every feature and a flat
 //! list here is easier to review than signatures spread through closures.
 
+/// The version of this surface, as a mod names it in `mod.toml` as
+/// `ui_api`. Before 1.0 every minor is breaking: a mod written against a
+/// newer surface names calls this engine lacks, and is refused.
+pub const UI_API_VERSION: (u32, u32) = (0, 1);
+
 /// One member of `ui`, `act` or `view`.
 pub struct UiDoc {
     /// `"view.tick"`.

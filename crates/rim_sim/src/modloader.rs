@@ -24,6 +24,10 @@ pub struct ModManifest {
     pub name: String,
     pub version: String,
     pub api: String,
+    /// The UI scripting surface the mod's `ui/` scripts were written
+    /// against, when it has any. Checked by the UI engine and `rim check`.
+    #[serde(default)]
+    pub ui_api: Option<String>,
     #[serde(default)]
     pub description: String,
     #[serde(default)]
@@ -443,17 +447,22 @@ pub(crate) fn discover(dir: &Path) -> Result<Vec<ModManifest>, String> {
     let rd = fs::read_dir(dir).map_err(|e| format!("cannot read mods dir {}: {e}", dir.display()))?;
     let mut out = Vec::new();
     for ent in rd.flatten() {
-        let mf = ent.path().join("mod.toml");
-        if !mf.is_file() {
+        if !ent.path().join("mod.toml").is_file() {
             continue;
         }
-        let text = fs::read_to_string(&mf).map_err(|e| format!("{}: {e}", mf.display()))?;
-        let mut m: ModManifest = toml::from_str(&text).map_err(|e| format!("{}: {}", mf.display(), e.message()))?;
-        check_api(&m)?;
-        m.dir = ent.path();
-        out.push(m);
+        out.push(read_manifest(&ent.path())?);
     }
     Ok(out)
+}
+
+/// One mod's `mod.toml`, checked against the sim API version.
+pub fn read_manifest(mod_dir: &Path) -> Result<ModManifest, String> {
+    let mf = mod_dir.join("mod.toml");
+    let text = fs::read_to_string(&mf).map_err(|e| format!("{}: {e}", mf.display()))?;
+    let mut m: ModManifest = toml::from_str(&text).map_err(|e| format!("{}: {}", mf.display(), e.message()))?;
+    check_api(&m)?;
+    m.dir = mod_dir.to_path_buf();
+    Ok(m)
 }
 
 fn check_api(m: &ModManifest) -> Result<(), String> {

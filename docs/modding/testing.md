@@ -49,6 +49,16 @@ rim check mods/my_mod --hours 48 # play longer before judging
 Loading with only your dependencies catches a mod that quietly relies on
 another mod being installed.
 
+A mod's UI scripts are checked too, before any of them runs: every `ui.`,
+`act.` and `view.` member they name must exist in the UI API, and a `ui_api`
+in `mod.toml` must be a version this engine provides. A missing call is an
+error with the file, the line and the nearest real name:
+
+```text
+FAIL my_mod (with core, my_mod): 0 warnings, 0 script errors, 1 UI errors
+  error: my_mod/ui/hud.luau:12: view.colonist is not in the UI API 0.1 (did you mean view.colonists?)
+```
+
 ## Worlds
 
 `t.world({ seed, mods, size })` builds a fresh world, exactly as a new game

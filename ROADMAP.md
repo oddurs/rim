@@ -232,17 +232,17 @@ rim.mood — the first first-party plugin. Proves the API: if mood cannot be a p
 
 ## sdk — Modder SDK
 
-`##········` 13% · 1 of 8 done · due 2027-03-01
+`###·······` 25% · 2 of 8 done · due 2027-03-01
 
 Making a mod feels like publishing a small open-source library: rim new, typed Luau, rim test in CI, a template repo with a GitHub Action, a compatibility report and a guide. Runs alongside Mood, which is its first customer.
 
-- [ ] `2c8ab1ef` Luau types for rim test's API, and type-check tests/ <sup>feature · p1 · s · tooling</sup>
 - [ ] `6d24a1ec` rim new: a GitHub-ready mod repo in one command <sup>chore · p0 · m · tooling</sup>
 - [ ] `9a4e2f10` Compatibility report: what a mod changes <sup>feature · p1 · s · tooling</sup>
 - [ ] `9f30ab9d` Hot reload of defs and scripts in dev mode <sup>feature · p0 · m · tooling</sup>
 - [ ] `be5845a1` rim: one binary to play, check, test and pack mods <sup>feature · p0 · m · client</sup>
 - [ ] `d26d78a0` Modding guide, tutorial and generated API reference <sup>docs · p1 · m · tooling</sup>
 - [ ] `f42fd04a` GitHub Action for mod repos: check and test against supported engine versions <sup>feature · p1 · s · tooling</sup>
+- [x] `2c8ab1ef` Luau types for rim test's API, and type-check tests/ <sup>feature · p1 · s · tooling</sup>
 - [x] `dc32fa23` Weather devtools: force weather, scrub time, channel graphs <sup>chore · p1 · s · tooling</sup>
 
 ## scale — Scale

@@ -13,6 +13,7 @@
 //! 4. lays out (cached by tree hash) and paints.
 
 pub mod api;
+pub mod check;
 pub mod edit;
 pub mod fontcache;
 pub mod image;
