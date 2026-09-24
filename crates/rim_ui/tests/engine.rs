@@ -249,6 +249,52 @@ ui.mount("top", "spin:forever", { order = 5 })
 }
 
 #[test]
+fn a_scroll_area_stops_exactly_at_its_last_row() {
+    let dir = scratch_mods(
+        "scroll",
+        &[(
+            "lister",
+            "",
+            &[(
+                "ui/list.luau",
+                r#"
+ui.define("lister:list", function(view)
+    local rows = {}
+    for i = 1, 30 do
+        table.insert(rows, ui.text({ "row " .. i, id = "lister:row" .. i }))
+    end
+    return ui.col({ id = "lister:panel", bg = "surface", pad = 0,
+        { kind = "scroll", id = "lister:scroll", h = 120, gap = 3, pad = 9, table.unpack(rows) } })
+end)
+ui.mount("windows", "lister:list")
+"#,
+            )],
+        )],
+    );
+    let sim = sim_at(&dir);
+    let mut ui = ui_for(&sim);
+    let cv = client(&sim);
+    frame(&mut ui, &sim, &cv, Default::default());
+    let area = ui.find("lister:scroll").expect("the scroll area is laid out");
+    let at = centre(area);
+    // Scroll far past the end: it must stop where the last row sits just
+    // above the bottom padding.
+    for _ in 0..200 {
+        frame(&mut ui, &sim, &cv, Input { mouse: at, wheel: -5.0, ..Default::default() });
+    }
+    frame(&mut ui, &sim, &cv, Input { mouse: at, ..Default::default() });
+    // Rects from `find` are unscrolled: the furthest scroll is where the last
+    // row's bottom, plus the bottom padding, meets the area's bottom.
+    let last = ui.find("lister:row30").expect("last row");
+    let pad = 9.0 * ui.theme.scale;
+    let want = (last[1] + last[3] + pad) - (area[1] + area[3]);
+    let got = ui.scroll_offset("lister:scroll").expect("scroll state");
+    assert!(want > 100.0, "the list overflows its area ({want} px)");
+    assert!((got - want).abs() <= 1.0, "scrolled to {got} px, the end is at {want} px");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn theme_tokens_can_be_overridden_and_conflicts_are_reported() {
     let dir = scratch_mods(
         "tokens",

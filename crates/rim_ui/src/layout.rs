@@ -85,42 +85,105 @@ fn build(taffy: &mut TaffyTree<Option<Measure>>, n: &Node) -> NodeId {
     taffy.new_with_children(style, &kids).unwrap()
 }
 
-/// Lay out `root` within `avail` (width, height) with its top-left at `origin`.
-/// Returns one rectangle per node, in pre-order.
-pub fn layout(root: &Node, avail: (f32, f32), origin: (f32, f32), text: &mut Text) -> Vec<Rect> {
-    let mut taffy: TaffyTree<Option<Measure>> = TaffyTree::new();
-    let root_id = build(&mut taffy, root);
-    taffy
-        .compute_layout_with_measure(
-            root_id,
-            Size { width: AvailableSpace::Definite(avail.0), height: AvailableSpace::Definite(avail.1) },
-            |input, _id, ctx, _style| {
-                let known = input.known_dimensions;
-                // Childless boxes (spacers) have no content of their own, but
-                // once flex has sized them the answer must be that size.
-                let Some(Some(m)) = ctx else {
-                    return taffy::LayoutOutput::from_outer_size(Size {
-                        width: known.width.unwrap_or(0.0),
-                        height: known.height.unwrap_or(0.0),
-                    });
-                };
-                let width = match (known.width, input.available_space.width) {
-                    (Some(w), _) => Some(w),
-                    (None, AvailableSpace::Definite(w)) if m.wrap => Some(w),
-                    _ => None,
-                };
-                let s = text.shape(&m.text, m.size, m.weight, if m.wrap { width } else { None });
-                let w = if m.wrap { width.unwrap_or(s.width).min(s.width.max(1.0)) } else { s.width };
-                taffy::LayoutOutput::from_outer_size(Size {
-                    width: known.width.unwrap_or(w),
-                    height: known.height.unwrap_or(s.height),
-                })
-            },
-        )
-        .unwrap();
-    let mut out = Vec::new();
-    collect(&taffy, root_id, origin, &mut out);
-    out
+/// The layout engine: one taffy tree, cleared and refilled for each call so
+/// its node storage is reused instead of reallocated every frame.
+pub struct Engine {
+    taffy: TaffyTree<Option<Measure>>,
+}
+
+impl Default for Engine {
+    fn default() -> Self {
+        Engine { taffy: TaffyTree::new() }
+    }
+}
+
+/// Measure a text leaf (or size a childless box) for taffy. `wrap_at` is the
+/// width wrapped text gets when taffy offers no definite width.
+fn measure(
+    text: &mut Text,
+    input: taffy::LayoutInput,
+    ctx: Option<&mut Option<Measure>>,
+    wrap_at: Option<f32>,
+    fit: bool,
+) -> taffy::LayoutOutput {
+    let known = input.known_dimensions;
+    // Childless boxes (spacers) have no content of their own, but once flex
+    // has sized them the answer must be that size.
+    let Some(Some(m)) = ctx else {
+        return taffy::LayoutOutput::from_outer_size(Size {
+            width: known.width.unwrap_or(0.0),
+            height: known.height.unwrap_or(0.0),
+        });
+    };
+    let width = match (known.width, input.available_space.width) {
+        (Some(w), _) => Some(w),
+        (None, AvailableSpace::Definite(w)) if m.wrap && fit => Some(w),
+        _ if m.wrap => wrap_at,
+        _ => None,
+    };
+    let s = text.shape(&m.text, m.size, m.weight, if m.wrap { width } else { None });
+    let w = if m.wrap && fit { width.unwrap_or(s.width).min(s.width.max(1.0)) } else { s.width };
+    taffy::LayoutOutput::from_outer_size(Size {
+        width: known.width.unwrap_or(w),
+        height: known.height.unwrap_or(s.height),
+    })
+}
+
+impl Engine {
+    fn fill(&mut self, root: &Node) -> NodeId {
+        self.taffy.clear();
+        build(&mut self.taffy, root)
+    }
+
+    /// Lay out `root` within `avail` (width, height) with its top-left at
+    /// `origin`. Returns one rectangle per node, in pre-order.
+    pub fn layout(&mut self, root: &Node, avail: (f32, f32), origin: (f32, f32), text: &mut Text) -> Vec<Rect> {
+        let root_id = self.fill(root);
+        self.taffy
+            .compute_layout_with_measure(
+                root_id,
+                Size { width: AvailableSpace::Definite(avail.0), height: AvailableSpace::Definite(avail.1) },
+                |input, _id, ctx, _style| measure(text, input, ctx, None, true),
+            )
+            .unwrap();
+        let mut out = Vec::with_capacity(self.taffy.total_node_count());
+        collect(&self.taffy, root_id, origin, &mut out);
+        out
+    }
+
+    /// Measure a tree's natural size without constraints (anchored labels,
+    /// tooltips, cursor labels).
+    pub fn natural_size(&mut self, root: &Node, max: (f32, f32), text: &mut Text) -> (f32, f32) {
+        let root_id = self.fill(root);
+        self.taffy
+            .compute_layout_with_measure(
+                root_id,
+                Size { width: AvailableSpace::MaxContent, height: AvailableSpace::MaxContent },
+                |input, _id, ctx, _style| measure(text, input, ctx, Some(max.0), false),
+            )
+            .unwrap();
+        let l = self.taffy.layout(root_id).unwrap();
+        (l.size.width.min(max.0), l.size.height.min(max.1))
+    }
+
+    /// How tall a scroll area's content is when the area is `size`, from
+    /// one layout of the area: the bottom of taffy's scrollable overflow
+    /// rectangle (measured from the top of the padding box).
+    pub fn content_height(&mut self, node: &Node, size: (f32, f32), text: &mut Text) -> f32 {
+        let root_id = self.fill(node);
+        let mut style = self.taffy.style(root_id).unwrap().clone();
+        style.size = Size { width: Dimension::length(size.0), height: Dimension::length(size.1) };
+        self.taffy.set_style(root_id, style).unwrap();
+        self.taffy
+            .compute_layout_with_measure(
+                root_id,
+                Size { width: AvailableSpace::Definite(size.0), height: AvailableSpace::Definite(size.1) },
+                |input, _id, ctx, _style| measure(text, input, ctx, None, true),
+            )
+            .unwrap();
+        let l = self.taffy.layout(root_id).unwrap();
+        l.scrollable_overflow_rect.bottom.max(l.size.height)
+    }
 }
 
 fn collect(taffy: &TaffyTree<Option<Measure>>, id: NodeId, origin: (f32, f32), out: &mut Vec<Rect>) {
@@ -130,34 +193,4 @@ fn collect(taffy: &TaffyTree<Option<Measure>>, id: NodeId, origin: (f32, f32), o
     for c in taffy.children(id).unwrap() {
         collect(taffy, c, (x, y), out);
     }
-}
-
-/// Measure a tree's natural size without constraints (anchored labels,
-/// tooltips, cursor labels).
-pub fn natural_size(root: &Node, max: (f32, f32), text: &mut Text) -> (f32, f32) {
-    let mut taffy: TaffyTree<Option<Measure>> = TaffyTree::new();
-    let root_id = build(&mut taffy, root);
-    taffy
-        .compute_layout_with_measure(
-            root_id,
-            Size { width: AvailableSpace::MaxContent, height: AvailableSpace::MaxContent },
-            |input, _id, ctx, _style| {
-                let known = input.known_dimensions;
-                let Some(Some(m)) = ctx else {
-                    return taffy::LayoutOutput::from_outer_size(Size {
-                        width: known.width.unwrap_or(0.0),
-                        height: known.height.unwrap_or(0.0),
-                    });
-                };
-                let width = known.width.or(if m.wrap { Some(max.0) } else { None });
-                let s = text.shape(&m.text, m.size, m.weight, width);
-                taffy::LayoutOutput::from_outer_size(Size {
-                    width: known.width.unwrap_or(s.width),
-                    height: known.height.unwrap_or(s.height),
-                })
-            },
-        )
-        .unwrap();
-    let l = taffy.layout(root_id).unwrap();
-    (l.size.width.min(max.0), l.size.height.min(max.1))
 }

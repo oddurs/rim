@@ -117,9 +117,13 @@ pub struct Ui {
     focused: Option<u64>,
     scroll: HashMap<u64, f32>,
     cache: HashMap<String, CachedLayout>,
+    /// One taffy tree, reused for every layout.
+    lay: layout::Engine,
     pub info: EngineInfo,
     pub devtools: bool,
     ids: HashMap<String, Rect>,
+    /// Node key for each id, to look up per-node state such as scroll offsets.
+    id_keys: HashMap<String, u64>,
     reload_stamp: u64,
     reload_checked: f64,
     /// A UI script or theme that failed to reload; the last good UI keeps running.
@@ -187,9 +191,11 @@ impl Ui {
             focused: None,
             scroll: HashMap::new(),
             cache: HashMap::new(),
+            lay: layout::Engine::default(),
             info,
             devtools: false,
             ids: HashMap::new(),
+            id_keys: HashMap::new(),
             reload_stamp,
             reload_checked: 0.0,
             reload_error: None,
@@ -221,6 +227,12 @@ impl Ui {
     /// Rectangle of the node with this id in the last frame (autotests, devtools).
     pub fn find(&self, id: &str) -> Option<Rect> {
         self.ids.get(id).copied()
+    }
+
+    /// How far the scroll area with this id is scrolled, in pixels.
+    pub fn scroll_offset(&self, id: &str) -> Option<f32> {
+        let key = self.id_keys.get(id)?;
+        Some(self.scroll.get(key).copied().unwrap_or(0.0))
     }
 
     /// Hot reload: if any UI script or theme changed on disk, load a fresh
@@ -448,6 +460,7 @@ impl Ui {
         let mut layers: Vec<LayerOut> = Vec::new();
         let mut draw = Vec::new();
         let mut ids = HashMap::new();
+        let mut id_keys = HashMap::new();
         let mut nodes = 0;
         let mut layouts = self.info.layouts;
         let state_scroll = std::mem::take(&mut self.scroll);
@@ -508,9 +521,9 @@ impl Ui {
                     if let Some(err) = &self.reload_error {
                         let n =
                             node::error_node(&self.theme, "rim".into(), 7, "UI reload failed (last good UI kept)", err);
-                        let (w, h) = layout::natural_size(&n, (sw * 0.8, sh * 0.5), &mut self.text);
+                        let (w, h) = self.lay.natural_size(&n, (sw * 0.8, sh * 0.5), &mut self.text);
                         let rects =
-                            layout::layout(&n, (w, h), ((sw - w) / 2.0, 40.0 * self.theme.scale), &mut self.text);
+                            self.lay.layout(&n, (w, h), ((sw - w) / 2.0, 40.0 * self.theme.scale), &mut self.text);
                         placed.push((n, rects));
                     }
                 }
@@ -547,6 +560,7 @@ impl Ui {
                     }
                     if let Some(id) = &n.id {
                         ids.insert(id.to_string(), r);
+                        id_keys.insert(id.to_string(), n.key);
                     }
                     if let Some(aka) = &n.aka {
                         ids.insert(aka.to_string(), r);
@@ -606,6 +620,7 @@ impl Ui {
         self.info.layouts = layouts;
         self.layers = layers;
         self.ids = ids;
+        self.id_keys = id_keys;
         self.built = built;
         actions.extend(self.vm.take_actions());
         out.actions = actions;
@@ -635,8 +650,8 @@ impl Ui {
             if self.small.len() > 4000 {
                 self.small.clear();
             }
-            let size = layout::natural_size(n, max, &mut self.text);
-            let rects = layout::layout(n, size, (0.0, 0.0), &mut self.text);
+            let size = self.lay.natural_size(n, max, &mut self.text);
+            let rects = self.lay.layout(n, size, (0.0, 0.0), &mut self.text);
             self.small.insert(key, (size, rects));
         }
         let (size, rects) = &self.small[&key];
@@ -661,7 +676,7 @@ impl Ui {
             }
         }
         *count += 1;
-        let rects = layout::layout(root, avail, origin, &mut self.text);
+        let rects = self.lay.layout(root, avail, origin, &mut self.text);
         self.cache.insert(name.to_string(), (hash, avail, rects.clone()));
         rects
     }
@@ -673,13 +688,9 @@ impl Ui {
                 for &i in &h.path[1..] {
                     n = &n.children[i];
                 }
-                let content: f32 = {
-                    let mut total = 0.0;
-                    for c in &n.children {
-                        total += layout::natural_size(c, (h.rect[2], f32::MAX), &mut self.text).1;
-                    }
-                    total + n.style.gap * n.children.len().saturating_sub(1) as f32 + n.style.pad[0] + n.style.pad[2]
-                };
+                // One layout of the scroll area gives taffy's content size,
+                // instead of measuring every child separately.
+                let content = self.lay.content_height(n, (h.rect[2], h.rect[3]), &mut self.text);
                 let max = (content - h.rect[3]).max(0.0);
                 if let Some(v) = self.scroll.get_mut(&h.key) {
                     *v = v.min(max);
