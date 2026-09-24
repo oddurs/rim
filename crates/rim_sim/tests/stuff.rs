@@ -28,6 +28,16 @@ fn site(s: &Sim) -> IVec {
         .expect("open ground")
 }
 
+/// `n` distinct open cells near the colony.
+fn open_cells(s: &Sim, n: usize) -> Vec<IVec> {
+    let c = s.world.colony_center().expect("a colony");
+    (1..30)
+        .flat_map(|r| (-r..=r).flat_map(move |dy| (-r..=r).map(move |dx| c.offset(dx, dy))))
+        .filter(|&p| s.world.map.passable(p) && s.world.map.fixture_at(p).is_none() && s.world.map.item_at(p).is_none())
+        .take(n)
+        .collect()
+}
+
 fn blueprint_at(s: &Sim, p: IVec) -> Option<(Entity, Blueprint, Option<MadeOf>)> {
     let e = s.world.map.fixture_at(p)?;
     let bp = (*s.world.ecs.get::<&Blueprint>(e).ok()?).clone();
@@ -57,6 +67,9 @@ fn one_wall_def_builds_in_wood_or_stone() {
     let (wall, wood, stone) = (thing(&s, "wall"), thing(&s, "wood"), thing(&s, "stone"));
     assert!(s.world.defs.thing_id("wall_wood").is_none(), "the per-material walls are gone");
     assert!(s.world.defs.thing_id("wall_stone").is_none());
+    for old in ["door_wood", "bed_wood"] {
+        assert!(s.world.defs.thing_id(old).is_none(), "{old} collapsed into its material-free def");
+    }
 
     let a = site(&s);
     build(&mut s, wall, Some(wood), a);
@@ -172,10 +185,23 @@ stuff = { categories = ["structural"], factors = { hp = 2.0, beauty = 3.0 } }
     let (wall, marble_id) = (thing(&s, "wall"), thing(&s, "marble"));
     assert!(s.world.defs.materials("structural").contains(&marble_id), "marble is structural");
 
-    let a = site(&s);
-    build(&mut s, wall, Some(marble_id), a);
-    let (_, bp, made) = blueprint_at(&s, a).expect("a marble wall, with no engine change");
-    assert_eq!(bp.cost, vec![(marble_id, 5)]);
-    assert_eq!(made, Some(MadeOf(marble_id)));
+    // Every buildable that takes stuff, and how much of it.
+    let wants: Vec<(DefId, u32, String)> = s
+        .world
+        .defs
+        .things
+        .iter()
+        .enumerate()
+        .filter_map(|(i, t)| t.build.as_ref()?.stuff.as_ref().map(|sc| (i as DefId, sc.count, t.id.clone())))
+        .collect();
+    assert!(wants.len() >= 3, "wall, door and bed at least: {wants:?}");
+    let cells = open_cells(&s, wants.len());
+    for ((def, count, id), &cell) in wants.iter().zip(&cells) {
+        build(&mut s, *def, Some(marble_id), cell);
+        let (_, bp, made) = blueprint_at(&s, cell).unwrap_or_else(|| panic!("a marble {id}, with no engine change"));
+        assert_eq!(bp.cost, vec![(marble_id, *count)], "{id}");
+        assert_eq!(made, Some(MadeOf(marble_id)), "{id}");
+    }
+    assert!(wall == wants[0].0 || wants.iter().any(|w| w.0 == wall), "the wall is among them");
     let _ = std::fs::remove_dir_all(&dir);
 }

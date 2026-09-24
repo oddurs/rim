@@ -33,7 +33,7 @@ fn ring(s: &mut Sim, o: IVec, size: i32, door: Option<IVec>, gap: Option<IVec>) 
             if !edge || Some(p) == gap {
                 continue;
             }
-            put(s, if Some(p) == door { "door_wood" } else { "wall" }, p);
+            put(s, if Some(p) == door { "door" } else { "wall" }, p);
         }
     }
 }

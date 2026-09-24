@@ -14,8 +14,8 @@ market_value = 8
 build = { menu = "structure", work = 180, stuff = { category = "structural", count = 5 } }
 
 [[thing]]
-id = "door_wood"
-label = "wooden door"
+id = "door"
+label = "door"
 color = "#b07a45"
 category = "building"
 shape = "door"
@@ -23,17 +23,17 @@ door = true
 path_cost = 60
 hp = 150
 market_value = 15
-build = { menu = "structure", work = 300, cost = [{ thing = "wood", count = 10 }] }
+build = { menu = "structure", work = 300, stuff = { category = "structural", count = 10 } }
 
 [[thing]]
-id = "bed_wood"
+id = "bed"
 label = "bed"
 color = "#8c5a3a"
 category = "building"
 shape = "bed"
 market_value = 40
 bed = { rest_rate = 1.8 }
-build = { menu = "furniture", work = 500, cost = [{ thing = "wood", count = 25 }] }
+build = { menu = "furniture", work = 500, stuff = { category = "structural", count = 25 } }
 
 [[thing]]
 id = "campfire"

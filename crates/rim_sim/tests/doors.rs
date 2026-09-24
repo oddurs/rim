@@ -44,7 +44,7 @@ fn hut(s: &mut Sim, at: IVec) -> Entity {
                 continue;
             }
             if p == door_at {
-                door = Some(build(s, "door_wood", p));
+                door = Some(build(s, "door", p));
             } else {
                 build(s, "wall", p);
             }
@@ -187,7 +187,7 @@ fn a_door_in_open_ground_blocks_nothing() {
         .flat_map(|r| [at.offset(r, 0), at.offset(-r, 0), at.offset(0, r), at.offset(0, -r)])
         .find(|&p| s.world.map.passable(p) && s.world.map.fixture_at(p).is_none())
         .expect("open ground");
-    build(&mut s, "door_wood", spot);
+    build(&mut s, "door", spot);
     s.world.map.ensure_regions();
     // Shut to a raider, but they can simply walk around it.
     assert!(!s.world.map.passable_for(spot, Faction::Hostile));

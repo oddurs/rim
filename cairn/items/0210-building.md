@@ -89,3 +89,7 @@ the thing this project is for.
 - Fire actually spreading (0200) -- flammability is declared, not burned.
 - Wind shelter (0188) and drafty rooms (0190), which want the boundary
   answer from 0211 first.
+
+## 2026-09-23
+
+Materials v1 is wood and stone, not wood, stone and metal: no metal source exists, see 0214.
