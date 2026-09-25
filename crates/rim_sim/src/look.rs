@@ -59,6 +59,10 @@ pub struct LayerDef {
     pub glyph: Option<String>,
     /// For `glyph`: its height as a fraction of the cell.
     pub size: Option<f32>,
+    /// While it is built, the stretch of the work this layer appears over:
+    /// absent before `from`, rising from the bottom (a disc from its middle)
+    /// until `to`, whole after (DESIGN.md §6b).
+    pub grow: Option<[f32; 2]>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -86,6 +90,8 @@ pub struct Layer {
     pub color: Option<[u8; 4]>,
     pub shade: f32,
     pub vary: f32,
+    /// Its `grow` window, if the def gave one.
+    pub grow: Option<[f32; 2]>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -106,7 +112,21 @@ impl Look {
 /// What a def with no look draws: its cell filled in its colour, so
 /// nothing is ever invisible.
 pub fn plain() -> Vec<Layer> {
-    vec![Layer { prim: Prim::Fill { rect: [0.0, 0.0, 1.0, 1.0], min_px: 0.0 }, color: None, shade: 1.0, vary: 0.0 }]
+    vec![Layer {
+        prim: Prim::Fill { rect: [0.0, 0.0, 1.0, 1.0], min_px: 0.0 },
+        color: None,
+        shade: 1.0,
+        vary: 0.0,
+        grow: None,
+    }]
+}
+
+impl Layer {
+    /// Layer `i` of `n`'s window: its own `grow`, or an even share of the
+    /// work in paint order, so every look builds up with no edits.
+    pub fn window(&self, i: usize, n: usize) -> [f32; 2] {
+        self.grow.unwrap_or([i as f32 / n as f32, (i + 1) as f32 / n as f32])
+    }
 }
 
 /// What the looks ask the world atlas for, in the order first used:
@@ -247,6 +267,11 @@ impl LayerDef {
             }
             _ => Prim::Edges { width: self.width.unwrap_or(1.5) },
         };
+        if let Some([from, to]) = self.grow {
+            if !(0.0..1.0).contains(&from) || to <= from || to > 1.0 {
+                return Err(format!("`grow` = [{from}, {to}] is not a window of the work (want 0 ≤ from < to ≤ 1)"));
+            }
+        }
         // A sprite draws as painted unless tinted or given a colour.
         let own = if matches!(prim, Prim::Sprite { .. }) && self.tint != Some(true) { Some([255; 4]) } else { None };
         Ok(Layer {
@@ -254,6 +279,7 @@ impl LayerDef {
             color: self.color.as_deref().map(parse_rgba).transpose()?.or(own),
             shade: self.shade.unwrap_or(1.0),
             vary: self.vary.unwrap_or(0.0),
+            grow: self.grow,
         })
     }
 }

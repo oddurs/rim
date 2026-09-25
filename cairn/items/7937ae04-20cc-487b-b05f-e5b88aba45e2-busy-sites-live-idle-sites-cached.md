@@ -2,14 +2,14 @@
 id: 7937ae04-20cc-487b-b05f-e5b88aba45e2
 title: Busy sites live, idle sites cached
 type: perf
-status: doing
+status: done
 milestone: building
 assignee: Oddur Sigurdsson
-claimed: 2026-09-25
 depends_on:
 - a14a5ff6-adad-488c-9810-8a02f6409b7c
 created: 2026-09-25
 updated: 2026-09-25
+closed_at: 2026-09-25
 priority: p1
 api: none
 effort: s

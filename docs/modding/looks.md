@@ -147,9 +147,74 @@ look.layers = [
 ## States
 
 `look.regrowing` is drawn instead of `layers` while a harvested plant grows
-back (a bush picked clean). A plan is drawn as the same ghost for every
-thing, instead of its look; designations and stack counts are drawn the
+back (a bush picked clean). Designations and stack counts are drawn the
 same way for every thing, over its look.
+
+## Being built
+
+A plan draws its own look, rising as it is built. Each layer has a
+`grow = [from, to]` window of the work: absent before `from`, clipped
+from the bottom between the two (a disc grows from its middle), whole
+after `to`. Edges, sprites and glyphs fade in over their window rather
+than being cut, so a picture is never squashed. A layer without a window
+takes an even share of the work in paint order, so every look builds up
+without edits.
+
+Until it stands, a plan draws at 55% with a blueprint hatch, because it
+doesn't block and mustn't look as if it does. Core's wall rises, then
+gets its edges:
+
+<!-- not a sample -->
+```toml
+look.layers = [
+    { draw = "fill", grow = [0.0, 0.85] },
+    { draw = "edges", width = 1.5, shade = 0.65, grow = [0.85, 1.0] },
+]
+```
+
+## Work styles
+
+How work on a cell looks is a `[[work_style]]`: what each blow does, how
+the thing wears as the work goes on, and how it leaves (DESIGN.md §6b). A
+designation names one with `style`; the one style with `builds = true` is
+how every build looks. Damage wears a thing the way taking it down would.
+
+| field | values | |
+|---|---|---|
+| `every` | work, at least 1 | work between two strikes |
+| `strike` | `shake`, `chips`, `dust`, `shed` | what each blow does |
+| `wear` | `grow`, `cracks`, `lean`, `none` | how the stage shows |
+| `exit` | `fall`, `crumble`, `pop`, `none` | how it leaves |
+
+`chips` are the colour of the first thing it yields, or of what it was
+built of; `shed` is the thing's own colour. `cracks` and `lean` start from
+the side the work came from. Every worker lunges into a blow and every
+build settles when it stands, so neither is in the list.
+
+```toml
+[[work_style]]
+id = "sawing"
+every = 15
+strike = ["chips", "dust"]
+wear = "cracks"
+exit = "pop"
+
+[[designation]]
+id = "saw"
+label = "Saw"
+color = "#c08a4a"
+work_type = "core:build"
+style = "sawing"
+```
+
+A thing that blocks keeps its outline until it is gone, so the style that
+takes it down may not use `grow`: a half-dismantled wall would look open
+while it still stops everyone. That is a load error naming the style and
+the thing.
+
+A cached thing shows one of 8 stages; a thing being worked right now is
+drawn every frame and moves smoothly. Nothing here costs a frame while
+nobody works.
 
 A fixed `color` stays fixed: a mod that patches a thing's `color` changes
 every layer that has none, and leaves the ones that name their own.

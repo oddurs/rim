@@ -2,8 +2,10 @@
 id: 74ff83ce-1d16-43f7-a49b-ca3340d509d3
 title: Work styles and staged looks
 type: feature
-status: backlog
+status: doing
 milestone: building
+assignee: Oddur Sigurdsson
+claimed: 2026-09-25
 depends_on:
 - a14a5ff6-adad-488c-9810-8a02f6409b7c
 created: 2026-09-25
@@ -32,8 +34,8 @@ Work on a cell should read at a glance: a wall rising, a rock cracking, a tree l
 
 ## Acceptance criteria
 
-- [ ] `[[work_style]]` loads, validates and patches like other defs
-- [ ] A wall rises through its grow windows and turns solid when built
-- [ ] Mining cracks from the worked side; a damaged wall cracks by hp
-- [ ] A blocking thing with a `grow` take-down is a load error naming the def
-- [ ] looks.md documents styles and `grow`
+- [x] `[[work_style]]` loads, validates and patches like other defs
+- [x] A wall rises through its grow windows and turns solid when built
+- [x] Mining cracks from the worked side; a damaged wall cracks by hp
+- [x] A blocking thing with a `grow` take-down is a load error naming the def
+- [x] looks.md documents styles and `grow`

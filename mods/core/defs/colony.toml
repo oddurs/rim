@@ -83,18 +83,21 @@ id = "chop"
 label = "Chop"
 color = "#6fbf4a"
 work_type = "chop"
+style = "chopping"
 
 [[designation]]
 id = "mine"
 label = "Mine"
 color = "#b0a89e"
 work_type = "mine"
+style = "mining"
 
 [[designation]]
 id = "harvest"
 label = "Harvest"
 color = "#d64a6a"
 work_type = "harvest"
+style = "picking"
 
 # Take what a thing gives without taking the thing: branches off a tree,
 # stones off the ground. Core's own things have no gather harvest; it's
@@ -104,6 +107,7 @@ id = "gather"
 label = "Gather"
 color = "#c9a25e"
 work_type = "harvest"
+style = "picking"
 
 [[designation]]
 id = "deconstruct"
@@ -111,6 +115,7 @@ label = "Deconstruct"
 color = "#c9a24a"
 targets = "built"
 work_type = "build"
+style = "dismantling"
 
 [[designation]]
 id = "hunt"
@@ -130,3 +135,39 @@ founder_damage_bonus = 5
 id = "core"
 names = ["Kael", "Brynja", "Oddur", "Sigrun", "Tarn", "Idris", "Maren", "Ulf", "Asha", "Corin", "Hekla", "Joren",
          "Liv", "Ragna", "Soren", "Tove", "Yrsa", "Bram", "Eira", "Gunnar", "Hallr", "Ines", "Kari", "Nyx"]
+
+# How work on a cell looks (DESIGN.md §6b, docs/modding/looks.md). `every`
+# is the work between two strikes; the rest name client mechanisms.
+[[work_style]]
+id = "chopping"
+every = 30
+strike = ["shake", "chips", "shed"]
+wear = "lean"
+exit = "fall"
+
+[[work_style]]
+id = "mining"
+every = 40
+strike = ["shake", "chips", "dust"]
+wear = "cracks"
+exit = "crumble"
+
+[[work_style]]
+id = "building"
+every = 20
+strike = ["dust", "chips"]
+wear = "grow"
+builds = true
+
+[[work_style]]
+id = "picking"
+every = 30
+strike = ["shed"]
+
+# A wall blocks until it is gone, so it cracks rather than shrinks.
+[[work_style]]
+id = "dismantling"
+every = 25
+strike = ["shake", "dust", "chips"]
+wear = "cracks"
+exit = "pop"
