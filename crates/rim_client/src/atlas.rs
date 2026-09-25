@@ -1,4 +1,4 @@
-//! Every loaded mod's sprites, packed at load into one texture (DESIGN.md
+//! Every loaded mod's sprites and glyphs, packed at load into one texture (DESIGN.md
 //! §8). A switch between two textures ends a draw call, so sprites from
 //! twenty mods side by side on screen would cost a call each; from one
 //! atlas they cost none. Each page keeps a white block, so primitives
@@ -29,6 +29,20 @@ pub struct WorldAtlas {
     white: Vec<[f32; 2]>,
     /// By sprite id (`DefDb::sprites`).
     slots: Vec<Slot>,
+    /// By glyph id (`DefDb::glyphs`); None where no font has it.
+    glyphs: Vec<Option<Glyph>>,
+}
+
+/// Glyphs are rasterised this many pixels high and scaled to the cell.
+const GLYPH_PX: f32 = 48.0;
+
+#[derive(Clone, Copy, Debug)]
+pub struct Glyph {
+    pub slot: Slot,
+    /// Width over height.
+    pub aspect: f32,
+    /// A colour glyph: draw as is rather than in the layer's colour.
+    pub painted: bool,
 }
 
 /// Where each rectangle goes: (page, x, y), and each page's side.
@@ -88,12 +102,28 @@ pub fn fits(w: u32, h: u32) -> bool {
 }
 
 impl WorldAtlas {
-    /// Decode and pack `files` (by sprite id). Errors name the file.
-    pub fn load(files: &[PathBuf]) -> Result<WorldAtlas, String> {
-        let mut images = Vec::with_capacity(files.len());
+    /// Decode and pack `files` (by sprite id), and rasterise `glyphs` with
+    /// the UI's font. Errors name the file. A glyph no font has is a
+    /// warning and draws nothing: a mod shouldn't stop the game on a
+    /// machine with fewer fonts.
+    pub fn load(files: &[PathBuf], glyphs: &[String], text: &mut rim_ui::text::Text) -> Result<WorldAtlas, String> {
+        let mut images = Vec::with_capacity(files.len() + glyphs.len());
         for f in files {
             let (w, h, rgba) = rim_ui::image::decode(f).map_err(|e| format!("sprite {}: {e}", f.display()))?;
             images.push((w, h, rgba));
+        }
+        let mut glyph_meta = Vec::with_capacity(glyphs.len());
+        for g in glyphs {
+            match text.rasterize(g, GLYPH_PX) {
+                Some(r) => {
+                    glyph_meta.push(Some((images.len(), r.w as f32 / r.h as f32, r.painted)));
+                    images.push((r.w, r.h, r.rgba));
+                }
+                None => {
+                    eprintln!("  warning: glyph {g:?} is in no font here; it draws nothing");
+                    glyph_meta.push(None);
+                }
+            }
         }
         let sizes: Vec<(u32, u32)> = images.iter().map(|i| (i.0, i.1)).collect();
         let (at, sides) = pack(&sizes, MAX_PAGE);
@@ -135,11 +165,20 @@ impl WorldAtlas {
             })
             .collect();
         let white = sides.iter().map(|&s| [WHITE as f32 / 2.0 / s as f32; 2]).collect();
-        Ok(WorldAtlas { pages, white, slots })
+        let glyphs = glyph_meta
+            .into_iter()
+            .map(|m| m.map(|(i, aspect, painted)| Glyph { slot: slots[i], aspect, painted }))
+            .collect();
+        slots.truncate(files.len());
+        Ok(WorldAtlas { pages, white, slots, glyphs })
     }
 
     pub fn slot(&self, id: u16) -> Slot {
         self.slots[id as usize]
+    }
+
+    pub fn glyph(&self, id: u16) -> Option<Glyph> {
+        self.glyphs[id as usize]
     }
 
     /// Where a primitive samples solid colour on `page`.

@@ -524,6 +524,16 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         let built = t.app.sim.world.spawn_fixture_of(lick, cell, false, stuff).is_some();
         let sprites = t.w().defs.sprites.len();
         t.check(built && sprites > 0, format!("a mod's sprite def builds ({sprites} sprites packed)"));
+        // And a glyph look beside it, from the same atlas.
+        if let Some(marker) = t.w().defs.thing_id("wildlife_plus:trail_marker") {
+            let next = (1..6i32)
+                .flat_map(|r| (-r..=r).flat_map(move |dy| (-r..=r).map(move |dx| cell.offset(dx, dy))))
+                .find(|&p| t.w().map.passable(p) && t.w().map.fixture_at(p).is_none())
+                .expect("a free cell near the salt lick");
+            let placed = t.app.sim.world.spawn_fixture_of(marker, next, false, stuff).is_some();
+            t.check(placed, "a mod's glyph def builds");
+            t.check(t.app.world_atlas.glyph(0).is_some(), "and its glyph rasterised into the world atlas");
+        }
         t.focus(cell);
         t.app.cam.zoom = 48.0;
         t.frame().await;

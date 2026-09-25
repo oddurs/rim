@@ -31,3 +31,18 @@ look.layers = [
     { draw = "disc", x = 0.54, y = 0.84, r = 0.3, color = "#00000030" },
     { draw = "sprite", sprite = "salt_lick", x = 0.1, y = 0.05, w = 0.8, h = 0.8 },
 ]
+
+# Tier 1 — a glyph. A character as a look, rasterised once at load into the
+# world atlas: legible at any zoom, and no art to ship.
+[[thing]]
+id = "trail_marker"
+label = "trail marker"
+color = "#d8b04a"
+category = "building"
+path_cost = 20
+market_value = 2
+build = { menu = "furniture", work = 40, stuff = { category = "structural", count = 1 } }
+look.layers = [
+    { draw = "disc", r = 0.3, color = "#00000040" },
+    { draw = "glyph", glyph = "▲", size = 0.6, color = "#e6c04e" },
+]

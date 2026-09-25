@@ -184,6 +184,15 @@ impl Atlas {
     }
 }
 
+/// A rasterised character (`Text::rasterize`).
+pub struct Raster {
+    pub w: u32,
+    pub h: u32,
+    pub rgba: Vec<u8>,
+    /// A colour glyph (an emoji): draw as is, not in a colour.
+    pub painted: bool,
+}
+
 pub struct Text {
     pub fonts: FontSystem,
     pub info: FontInfo,
@@ -354,6 +363,28 @@ impl Text {
             });
         }
         out
+    }
+
+    /// One character at `px` pixels as RGBA, for another atlas (the world's
+    /// glyph looks): white with coverage in alpha for an outline font, or
+    /// its own colours for a colour one (then `painted`). None when no font
+    /// has it or it draws nothing.
+    pub fn rasterize(&mut self, ch: &str, px: f32) -> Option<Raster> {
+        let key = self.shape(ch, px, 400, None).glyphs.first()?.0;
+        let img = self.swash.get_image_uncached(&mut self.fonts, key)?;
+        let (w, h) = (img.placement.width, img.placement.height);
+        if w == 0 || h == 0 {
+            return None;
+        }
+        let n = (w * h) as usize;
+        let (rgba, painted) = match img.content {
+            SwashContent::Mask => (img.data[..n].iter().flat_map(|&a| [255, 255, 255, a]).collect(), false),
+            SwashContent::Color => (img.data[..n * 4].to_vec(), true),
+            SwashContent::SubpixelMask => {
+                (img.data[..n * 4].chunks(4).flat_map(|p| [255, 255, 255, p[0].max(p[1]).max(p[2])]).collect(), false)
+            }
+        };
+        Some(Raster { w, h, rgba, painted })
     }
 
     /// Forget placed images (after a reload replaced their pixels).

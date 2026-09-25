@@ -611,6 +611,8 @@ pub struct DefDb {
     pub sprites: Vec<String>,
     /// Each sprite's PNG, parallel to `sprites`; the modloader finds them.
     pub sprite_files: Vec<std::path::PathBuf>,
+    /// Characters looks draw (`draw = "glyph"`), indexed by `Prim::Glyph::id`.
+    pub glyphs: Vec<String>,
     /// Qualified ids ("core:wall").
     index: HashMap<(&'static str, String), DefId>,
     /// Bare ids ("wall"), for tools and tests that don't care which mod.
@@ -823,8 +825,9 @@ impl DefDb {
             if d.shape.is_some() {
                 return Err(format!("{ctx}: `shape` was replaced by `look` in API 0.4; see docs/modding/looks.md"));
             }
-            let mut sprites = crate::look::Sprites { keys: &mut self.sprites, home: home_of(&d.id) };
-            d.look_r = d.look.compile(&mut self.join_groups, &mut sprites).map_err(|e| format!("{ctx}: {e}"))?;
+            let mut art =
+                crate::look::Art { sprites: &mut self.sprites, glyphs: &mut self.glyphs, home: home_of(&d.id) };
+            d.look_r = d.look.compile(&mut self.join_groups, &mut art).map_err(|e| format!("{ctx}: {e}"))?;
             if let Some(h) = &mut d.harvest {
                 h.desig_r = get("designation", &h.designation, &ctx)?;
                 h.yields_r = counts(&h.yields, &ctx)?;

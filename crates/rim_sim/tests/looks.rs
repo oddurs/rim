@@ -100,3 +100,20 @@ fn sprite_keys_find_their_files_or_fail_naming_them() {
         assert!(e.contains("a path inside the mod's sprites/"), "{bad}: {e}");
     }
 }
+
+#[test]
+fn a_glyph_that_is_not_one_character_names_the_def() {
+    let e = with_defs(
+        "looks-glyph",
+        "[[thing]]\nid = \"stone\"\nlabel = \"stone\"\ncolor = \"#888888\"\ncategory = \"building\"\nlook.layers = [{ draw = \"glyph\", glyph = \"ab\" }]\n",
+    )
+    .err()
+    .expect("a two-character glyph doesn't load");
+    assert!(e.contains("thing/probe:stone") && e.contains("one character"), "{e}");
+    let s = with_defs(
+        "looks-glyph-ok",
+        "[[thing]]\nid = \"stone\"\nlabel = \"stone\"\ncolor = \"#888888\"\ncategory = \"building\"\nlook.layers = [{ draw = \"glyph\", glyph = \"\u{16b1}\" }]\n",
+    )
+    .unwrap();
+    assert!(s.world.defs.glyphs.contains(&"\u{16b1}".to_string()));
+}

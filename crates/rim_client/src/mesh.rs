@@ -12,7 +12,7 @@
 //! Plans and animated looks change every frame, so they stay out of the
 //! buffers and are drawn by `draw::things` each frame.
 
-use crate::atlas::WorldAtlas;
+use crate::atlas::{Slot, WorldAtlas};
 use crate::draw::{self, Sink};
 use crate::Cam;
 use macroquad::miniquad::*;
@@ -100,8 +100,11 @@ impl Sink for Builder<'_> {
         self.solid([[x0 + tx, y0 + ty], [x0 - tx, y0 - ty], [x1 - tx, y1 - ty], [x1 + tx, y1 + ty]], c);
     }
 
-    fn sprite(&mut self, x: f32, y: f32, w: f32, h: f32, id: u16, c: Color) {
-        let s = self.atlas.slot(id);
+    fn atlas(&self) -> &WorldAtlas {
+        self.atlas
+    }
+
+    fn image(&mut self, x: f32, y: f32, w: f32, h: f32, s: Slot, c: Color) {
         let [u0, v0, u1, v1] = s.uv;
         self.quad(
             s.page,
