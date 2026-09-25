@@ -646,6 +646,32 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.key(KeyCode::Space).await;
     t.check(t.app.paused, "space pauses");
     t.check(t.ui_text().contains("\"paused\""), "the clock says paused");
+    // Paused, orders still land: planning while paused is how the game is
+    // played. Nothing ticks here; the frames alone must apply them.
+    let tick = t.w().tick;
+    let (marked, planned) = (t.count::<(&Thing, &Designated)>(), t.count::<&Blueprint>());
+    let oak = defs.thing_id("tree_oak").unwrap();
+    let tree = t
+        .w()
+        .ecs
+        .query::<(&Thing, Option<&Designated>)>()
+        .iter()
+        .filter(|(th, d)| th.def == oak && d.is_none())
+        .map(|(th, _)| th.pos)
+        .min_by_key(|p| (p.octile(home), p.x, p.y));
+    t.click_ui("core:toolbar.designate:core:chop").await;
+    if let Some(p) = tree {
+        t.drag(p, p).await;
+    }
+    let spot = open_square(t.w(), home.offset(10, 10), 2).unwrap_or(home.offset(10, 10));
+    t.click_ui("core:toolbar.build:core:wall").await;
+    t.drag(spot, spot).await;
+    t.frame().await;
+    t.check(t.w().tick == tick, "paused: no time passed");
+    t.check(tree.is_none() || t.count::<(&Thing, &Designated)>() > marked, "paused, a designation shows at once");
+    t.check(t.count::<&Blueprint>() > planned, "paused, a plan shows at once");
+    t.shot("paused_orders").await;
+    t.key(KeyCode::Escape).await;
     t.key(KeyCode::Space).await;
     t.check(!t.app.paused, "space resumes");
     for (k, want) in [(KeyCode::Key1, 1), (KeyCode::Key2, 3), (KeyCode::Key3, 6)] {

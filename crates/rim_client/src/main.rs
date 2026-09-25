@@ -897,6 +897,8 @@ pub fn frame(app: &mut App, raw: &RawInput) {
         apply(app, Action::RightClick(mx, my));
     }
 
+    // Orders show the frame they're given, paused or not.
+    app.sim.apply_pending();
     if raw.advance {
         step(app);
     }
