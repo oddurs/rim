@@ -7,7 +7,7 @@ milestone: plugin-api
 depends_on:
 - 0e73145a-39c4-4f1d-88a4-59d803a2f535
 created: 2026-09-22
-updated: 2026-09-24
+updated: 2026-09-25
 priority: p0
 api: additive
 effort: l
@@ -29,3 +29,7 @@ New verbs, not just new nouns.
 ## 2026-09-24
 
 Luau work givers post into the work pools (0e73145a) rather than being polled per pawn, within a per-tick budget: scripts say what work exists, the engine says who does it (DESIGN.md §4d).
+
+## 2026-09-25
+
+Work orders (74b6fa7e) cover 'bring things here, then work', which is all crafting, cooking and research need. Custom jobs stay for verbs that are not that shape.

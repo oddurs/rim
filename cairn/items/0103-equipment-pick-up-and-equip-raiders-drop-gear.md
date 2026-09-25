@@ -5,7 +5,7 @@ type: feature
 status: backlog
 milestone: defense
 created: 2026-09-22
-updated: 2026-09-22
+updated: 2026-09-25
 priority: p1
 api: none
 effort: m
@@ -23,3 +23,7 @@ Every raid is also loot.
 
 - [ ] Equip job
 - [ ] Raiders spawn with gear by threat points
+
+## 2026-09-25
+
+The hand slot comes first, from tools (7016d86b): one held thing per pawn, a Held component, and fetch-before-work. Equipment extends it: a spear is a tool that is also a weapon, and a drafted pawn fights with what it holds.

@@ -538,6 +538,85 @@ of every cell designated.
 
 ---
 
+## 4e. Hands first: gathering, tools and crafting
+
+The colonist wakes naked with nothing (§1), yet nothing in the game asks what
+they are holding: a bare-handed warrior fells an oak and quarries granite on
+the first morning. The first days should be a climb. You gather with your
+hands, knap your first edge from flint, and fell your first tree with an axe
+you made. The pacing comes from materials and tools you can see in the world,
+not from a research screen.
+
+### Tension: a research tree or a tool gate?
+
+- **For research:** a screen of goals is easy to read, and it's the genre's
+  habit.
+- **For a tool gate:** the gate is in the world. You can see the flint on
+  the riverbank, you hold the axe, and losing it matters. It explains itself
+  with no extra UI: "needs a chopping tool".
+- **Ruling:** tools gate the stone age, and research (a plugin) gates later
+  tiers. The engine knows neither: it matches tags.
+
+### Tension: tools in hand, or tools anywhere in the colony?
+
+- **Anywhere:** one check, no fetching. But one axe then lets ten colonists
+  chop, and the axe stops mattering.
+- **In hand:** each pawn holds at most one tool and fetches it before the
+  work. Three axes fell three trees at once, and wear turns tools into a loop
+  of flint, knapping and replacing.
+- **Ruling:** in hand. The fetch is a stage of the job, and the colony keeps a
+  bitset of the tags its tools cover, so work nobody could do is rejected in
+  O(1).
+
+### Mechanisms
+
+- **Several harvests on one thing.** An oak can be gathered (branches,
+  regrows) and chopped (wood, gone). A patch can add an entry to another
+  mod's thing.
+- **Tools.** An item with a `tool` block: tags, speed and wear. Its material
+  scales speed and hp, so one def makes a flint axe and a bronze one. A
+  harvest or an order `requires` tags. Held tools are a component, which is
+  the hand slot equipment reuses.
+- **Work orders.** "Bring these things, by def or by tag, to this place, then
+  work there." Blueprints become one kind of order. A mod posts the rest from
+  Luau and hears `order_done` with the inputs and their material. Recipes and
+  bills are not an engine concept (§10). Orders are the job they need.
+- **Selecting things.** Any thing can be selected and inspected, and the
+  inspector has a slot a mod fills: a station's bills, a tool's wear.
+
+### Content
+
+- **Core** owns the shared names (§5 rule 2): the `gather` designation and the
+  tool tags `cutting`, `chopping`, `pounding`, `digging` and `piercing`. Core
+  alone gates nothing, so it plays as it did.
+- **`mods/crafting`** declares the `recipe` kind, stations (a tag on a thing)
+  and bills. Its cheapest station is a free spot on the ground, so no recipe
+  needs a "no station" case.
+- **`mods/primitive`** is the stone age:
+  - branches, fibre, stones, flint, bone and clay;
+  - the flake, the hand axe, the hafted axe, the maul and the digging stick;
+  - the patches that gate chopping and mining behind tools.
+
+### The first days
+
+A target for one naked colonist, measured by a seed sweep rather than
+assumed.
+
+- **Day one:** gather branches and berries, and build a branch shelter, a
+  bed and a campfire. Branches are weak, draughty structural stuff, and
+  enough for night one.
+- **Day two:** find flint, knap a flake and a hand axe, and cut a digging
+  stick.
+- **Day three:** fell the first oak and quarry the first stone with a maul.
+  Dig clay for warm cob walls, and fire a pot at the campfire.
+
+### Cost
+
+A gate is a bitset test. An idle order costs nothing per tick. A scripted
+order costs one script call when it completes. Nothing here scans the map.
+
+---
+
 ## 5. What's in `core` and what isn't
 
 `core` is the smallest complete game. Everything else is a plugin, including
