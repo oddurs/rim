@@ -56,7 +56,7 @@ error with the file, the line and the nearest real name:
 
 ```text
 FAIL my_mod (with core, my_mod): 0 warnings, 0 script errors, 1 UI errors
-  error: my_mod/ui/hud.luau:12: view.colonist is not in the UI API 0.1 (did you mean view.colonists?)
+  error: my_mod/ui/hud.luau:12: view.colonist is not in the UI API 0.2 (did you mean view.colonists?)
 ```
 
 ## Replaying a save

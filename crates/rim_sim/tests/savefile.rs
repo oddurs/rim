@@ -509,3 +509,22 @@ fn compaction_leaves_a_damaged_save_for_the_load_to_rescue() {
     assert_eq!(std::fs::read(&path).unwrap(), bytes, "untouched");
     let _ = std::fs::remove_file(path);
 }
+
+#[test]
+fn a_summary_tells_how_far_a_colony_got_without_loading_it() {
+    let path = save_path("summary");
+    let mods = common::mods();
+    let (mut sim, mut save) = new_game(&mods, &path);
+    let mut hashes = BTreeMap::new();
+    play(&mut sim, &mut save, 1_300, &mut hashes);
+    drop(save);
+
+    let s = savefile::summary(&path).unwrap();
+    assert_eq!(s.tick, 1_200, "the last log; the 100 ticks after it were never written");
+    let w = &sim.world;
+    let pawn = |e| w.ecs.get::<&rim_sim::world::Pawn>(e).unwrap().clone();
+    let founder = w.colonists().map(pawn).find(|p| p.founder).expect("a founder");
+    assert_eq!(s.colonists.first(), Some(&founder.name));
+    assert_eq!(s.colonists.len(), w.colonists().count());
+    let _ = std::fs::remove_file(path);
+}

@@ -10,7 +10,7 @@
 /// The version of this surface, as a mod names it in `mod.toml` as
 /// `ui_api`. Before 1.0 every minor is breaking: a mod written against a
 /// newer surface names calls this engine lacks, and is refused.
-pub const UI_API_VERSION: (u32, u32) = (0, 1);
+pub const UI_API_VERSION: (u32, u32) = (0, 2);
 
 /// One member of `ui`, `act` or `view`.
 pub struct UiDoc {
@@ -55,7 +55,7 @@ type ListProps = {
 type WindowOpts = { title: string?, w: number?, h: number?, resizable: boolean?, open: boolean? }
 type WindowInfo = { id: string, title: string, w: number, h: number, resizable: boolean, comp: string }
 type Bind = { id: string, label: string, key: string, owner: string }
-type Layer = "top" | "bottom" | "left" | "right" | "anchored" | "cursor" | "modal" | "windows"
+type Layer = "top" | "bottom" | "left" | "right" | "anchored" | "cursor" | "modal" | "windows" | "title"
 type Need = { id: string, label: string, value: number, color: string, low: boolean }
 type Pawn = {
     id: number, name: string, label: string, faction: string, player: boolean, founder: boolean,
@@ -79,6 +79,7 @@ type Stuff = { id: string, label: string, color: string, have: number, active: b
 type Hover = { x: number, y: number, terrain: string, shelter: string, readings: { string }, things: { string } }
 type ProfileRow = { name: string, us: number, mod: boolean }
 type ModInfo = { id: string, version: string, name: string }
+type Save = { path: string, file: string, day: number, colonists: { string }, age: number, error: string? }
 type UiStats = { font: string, build_us: number, layout_us: number, paint_us: number, nodes: number, layouts: number }
 type Inspect = { id: string, owner: string, kind: string, path: string, x: number, y: number, w: number, h: number }
 type TreeRow = { depth: number, kind: string, id: string, owner: string }"#;
@@ -95,6 +96,8 @@ pub const UI_API: &[UiDoc] = &[
     d!("act.cycle_overlay", "() -> ()", "Show the next field overlay."),
     d!("act.draft", "(id: number, on: boolean) -> ()", "Draft or undraft a colonist."),
     d!("act.focus", "(id: number) -> ()", "Move the camera to a pawn."),
+    d!("act.load", "(path: string) -> ()", "Play a save from view.saves() (the title screen)."),
+    d!("act.new_colony", "() -> ()", "Start a new colony (the title screen)."),
     d!(
         "act.render_scale",
         "(scale: number) -> ()",
@@ -207,6 +210,7 @@ pub const UI_API: &[UiDoc] = &[
     d!("view.paused", "() -> boolean", "Whether the game is paused."),
     d!("view.pawn", "(id: number) -> Pawn?", "One pawn, or nil if it's gone."),
     d!("view.profile", "() -> { ProfileRow }", "Smoothed time per system and mod, in µs."),
+    d!("view.saves", "() -> { Save }", "The player's saves, newest first, on the title screen; empty in a game."),
     d!("view.screen", "() -> (number, number)", "Screen width and height in logical pixels."),
     d!("view.selected", "() -> number?", "The selected pawn's id."),
     d!("view.show_devtools", "() -> boolean", "Whether devtools are open."),

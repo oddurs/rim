@@ -221,6 +221,15 @@ impl Snapshot {
         Snapshot { header, sections }
     }
 
+    /// The living colonists' names, the founder first: what a list of saves
+    /// shows without loading the game.
+    pub fn colonists(&self) -> Result<Vec<String>, String> {
+        let mut pawns: Vec<(Entity, Pawn)> = dec(self, "engine:pawn")?;
+        pawns.retain(|(_, p)| p.active && !p.dead && p.faction == Faction::Player);
+        pawns.sort_by_key(|(e, p)| (!p.founder, e.id()));
+        Ok(pawns.into_iter().map(|(_, p)| p.name).collect())
+    }
+
     /// Hash of every section, in name order.
     pub fn hash(&self) -> u64 {
         self.sections.iter().fold(hash_bytes(&enc(&self.header)), |h, (name, bytes)| {
