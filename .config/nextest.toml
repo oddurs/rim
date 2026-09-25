@@ -12,3 +12,10 @@ slow-timeout = { period = "60s", terminate-after = 3 }
 
 [profile.ci.junit]
 path = "junit.xml"
+
+# The long games start first: begun last, one of them would set the end of
+# the run with every other core idle. Each already runs its independent
+# games on threads of its own.
+[[profile.default.overrides]]
+filter = 'test(a_year_of_weather_is_deterministic) | test(the_forecast_is_what_happens) | test(carrying_on_after_a_load_matches_never_saving) | test(every_drawn_change_bumps_its_chunk)'
+priority = 100

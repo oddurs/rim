@@ -98,6 +98,11 @@ jobs:
           name: junit-${{ matrix.os }}
           path: target/nextest/ci/junit.xml
           if-no-files-found: ignore
+      # The binaries and examples, built with the whole workspace's features,
+      # so they reuse what the tests just built. `cargo run -p` resolves one
+      # package's features and rebuilt the sim: a minute a step.
+      - name: Build the binaries and examples
+        run: cargo build --release --workspace --bins --examples
       # Lockstep: the Luau VM must have no fused multiply-adds (see
       # .cargo/config.toml). arm64 is where clang fuses them.
       - name: Luau has no fused multiply-add
@@ -109,9 +114,9 @@ jobs:
       # Xvfb here, and macOS runners have no OpenGL): `rim test` must never
       # open a window.
       - name: Mod tests (rim test)
-        run: cargo run --release -p rim_client -- test --junit target/rim-test.xml
+        run: target/release/rim test --junit target/rim-test.xml
       - name: Mods load clean (rim check --strict)
-        run: cargo run --release -p rim_client -- check --strict
+        run: target/release/rim check --strict
       - name: Upload the mod test report
         if: always()
         uses: actions/upload-artifact@v4
@@ -123,7 +128,7 @@ jobs:
       # `agree` compares them. Here, where the sim is already built.
       - name: Crosscheck scenario
         shell: bash
-        run: cargo run --release -p rim_sim --example crosscheck > crosscheck-${{ matrix.os }}.txt && cat crosscheck-${{ matrix.os }}.txt
+        run: target/release/examples/crosscheck > crosscheck-${{ matrix.os }}.txt && cat crosscheck-${{ matrix.os }}.txt
       - uses: actions/upload-artifact@v4
         with:
           name: crosscheck-${{ matrix.os }}
@@ -132,11 +137,11 @@ jobs:
       # platforms agree, and `sim` runs these on Linux for every PR.
       - name: Headless soak, 3 in-game days
         if: runner.os != 'Linux' && github.ref == 'refs/heads/main'
-        run: cargo run --release -p rim_sim --example headless -- --days 3 --seed 1
+        run: target/release/examples/headless --days 3 --seed 1
       - name: Climate report, one year
         if: runner.os != 'Linux' && github.ref == 'refs/heads/main'
         shell: bash
-        run: cargo run --release -p rim_sim --example year -- --seed 1
+        run: target/release/examples/year --seed 1
 
   # The fourth platform for the crosscheck: ARM Linux, which no test job is.
   crosscheck-arm:

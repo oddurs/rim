@@ -5,9 +5,9 @@ type: chore
 status: doing
 milestone: colony
 assignee: Oddur Sigurdsson
-claimed: 2026-09-24
+claimed: 2026-09-25
 created: 2026-09-24
-updated: 2026-09-24
+updated: 2026-09-25
 priority: p1
 api: none
 effort: s
