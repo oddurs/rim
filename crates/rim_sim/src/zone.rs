@@ -29,11 +29,15 @@ pub struct Zones {
     pub next_id: u32,
     /// The zone each cell belongs to; 0 for none.
     pub cells: Vec<u32>,
+    /// Each zone's cells, by map index, rebuilt whenever cells change so a
+    /// search walks a zone rather than the map. Derived, never saved.
+    #[serde(skip)]
+    members: Vec<(u32, Vec<u32>)>,
 }
 
 impl Zones {
     pub fn new(cells: usize) -> Zones {
-        Zones { list: Vec::new(), next_id: 1, cells: vec![0; cells] }
+        Zones { list: Vec::new(), next_id: 1, cells: vec![0; cells], members: Vec::new() }
     }
 
     pub fn get(&self, id: u32) -> Option<&Zone> {
@@ -84,6 +88,25 @@ impl Zones {
         }
         let cells = &self.cells;
         self.list.retain(|z| cells.contains(&z.id));
+        self.index();
+    }
+
+    /// Every zone's cells, oldest zone first, cells in map order.
+    pub fn members(&self) -> impl Iterator<Item = (&Zone, u32)> + '_ {
+        self.members.iter().flat_map(move |(id, cells)| {
+            let z = self.get(*id).expect("members follow the list");
+            cells.iter().map(move |&c| (z, c))
+        })
+    }
+
+    fn index(&mut self) {
+        let mut members: Vec<(u32, Vec<u32>)> = self.list.iter().map(|z| (z.id, Vec::new())).collect();
+        for (i, &c) in self.cells.iter().enumerate().filter(|(_, &c)| c != 0) {
+            if let Some(m) = members.iter_mut().find(|m| m.0 == c) {
+                m.1.push(i as u32);
+            }
+        }
+        self.members = members;
     }
 
     /// Let a zone take an item, or stop it.
@@ -139,6 +162,7 @@ impl Zones {
         let cells = &self.cells;
         self.list.retain(|z| cells.contains(&z.id));
         self.next_id = self.next_id.max(ids.iter().max().map_or(1, |m| m + 1));
+        self.index();
     }
 
     pub fn hash(&self, mut h: u64) -> u64 {

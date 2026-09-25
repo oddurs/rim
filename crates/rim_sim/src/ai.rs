@@ -641,6 +641,19 @@ fn find_work(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
         }
     }
 
+    // Loose items a stockpile would take, unless work at a better level
+    // was already found: hauling is the costliest search.
+    if let Some(hw) = defs.haul_work.filter(|&t| wanted(t)) {
+        let beaten = best.iter().enumerate().any(|(t, b)| b.is_some() && level[t] < level[hw as usize]);
+        if !beaten {
+            if let Some(h) = find_haul(w, e, p.pos) {
+                if nearer(&best[hw as usize], h.0, h.2) {
+                    best[hw as usize] = Some(h);
+                }
+            }
+        }
+    }
+
     // Designated creatures (hunt).
     for &o in &w.pawns {
         let Ok(des) = w.ecs.get::<&Designated>(o).map(|d| *d) else { continue };
@@ -666,6 +679,63 @@ fn find_work(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
         w.reserve(src, e);
     }
     Some(job)
+}
+
+/// The nearest stack lying where no stockpile keeps it that one would take,
+/// and the nearest cell with room for it: (the walk there and on to the
+/// cell, the job, the stack to reserve).
+fn find_haul(w: &World, e: Entity, from: IVec) -> Option<(u32, Job, Entity)> {
+    if w.zones.list.is_empty() {
+        return None;
+    }
+    // Cells other haulers are already bound for.
+    let claimed: Vec<IVec> = w
+        .pawns
+        .iter()
+        .filter(|&&o| o != e)
+        .filter_map(|&o| match w.ecs.get::<&Pawn>(o).ok()?.job {
+            Job::Haul { to, .. } => Some(to),
+            _ => None,
+        })
+        .collect();
+    let free = |def: DefId, c: IVec| !claimed.contains(&c) && w.room_for(def, c) > 0;
+    // Whether any zone has room for a def at all, worked out once per def:
+    // with every stockpile full, that's all an idle hauler has to learn.
+    let mut room: Vec<Option<bool>> = vec![None; w.defs.things.len()];
+    let mut best: Option<(u32, Entity, IVec)> = None;
+    for (te, t) in w.ecs.query::<(Entity, &Thing)>().without::<&Blueprint>().iter() {
+        if w.map.item_at(t.pos) != Some(te) || w.zones.at(&w.map, t.pos).is_some_and(|z| z.takes(t.def)) {
+            continue;
+        }
+        let any_room = *room[t.def as usize].get_or_insert_with(|| {
+            w.zones.members().any(|(z, c)| z.takes(t.def) && free(t.def, w.map.pos(c as usize)))
+        });
+        if !any_room {
+            continue;
+        }
+        let d = t.pos.octile(from);
+        if best.is_some_and(|b| (b.0, b.1.id()) <= (d, te.id()))
+            || w.reserved_by_other(te, e)
+            || !w.map.can_reach(from, Goal::Cell(t.pos))
+        {
+            continue;
+        }
+        let dest = w
+            .zones
+            .members()
+            .filter(|(z, _)| z.takes(t.def))
+            .map(|(_, c)| w.map.pos(c as usize))
+            .filter(|&c| free(t.def, c))
+            .map(|c| (c.octile(t.pos), c))
+            .filter(|&(_, c)| w.map.can_reach(t.pos, Goal::Cell(c)))
+            .min();
+        if let Some((d2, to)) = dest {
+            if best.is_none_or(|b| (d + d2, te.id()) < (b.0, b.1.id())) {
+                best = Some((d + d2, te, to));
+            }
+        }
+    }
+    best.map(|(d, src, to)| (d, Job::Haul { src, to, stage: 0 }, src))
 }
 
 /// Nearest reachable stack of `def` that nobody but `e` has claimed.
@@ -715,6 +785,7 @@ fn run_job(w: &mut World, e: Entity, p: &mut Pawn) {
         },
         Job::Harvest { target, forced, harvest } => (run_harvest(w, p, target, forced, harvest), 0),
         Job::Deliver { bp, src, want, stage } => (run_deliver(w, p, bp, src, want, stage), 0),
+        Job::Haul { src, to, stage } => (run_haul(w, p, src, to, stage), 0),
         Job::Construct { bp } => (run_construct(w, p, bp), 0),
         Job::Deconstruct { target } => (run_deconstruct(w, p, target), 0),
         Job::Eat { src, t, seat, stage } => (run_eat(w, p, src, t, seat, stage), 0),
@@ -802,6 +873,39 @@ fn run_deliver(w: &mut World, p: &mut Pawn, bp: Entity, src: Entity, want: u32, 
             // Nothing else about the map changed: tell whoever draws it
             // that the plan's materials arrived.
             w.map.touch(b.pos);
+            None
+        }
+    }
+}
+
+/// Fetch a stack (as much as the cell will take, up to a carry), then set
+/// it down on the stockpile cell. What no longer fits there is dropped
+/// when the job ends.
+fn run_haul(w: &mut World, p: &mut Pawn, src: Entity, to: IVec, stage: u8) -> Option<Job> {
+    if stage == 0 {
+        let s = w.thing(src)?;
+        return match go_to(w, p, Goal::Cell(s.pos)) {
+            Go::Failed => None,
+            Go::Moving => Some(Job::Haul { src, to, stage }),
+            Go::Arrived => {
+                let want = s.count.min(CARRY_CAPACITY).min(w.room_for(s.def, to));
+                let n = w.take_from_stack(src, want);
+                if n == 0 {
+                    return None;
+                }
+                w.reservations.remove(&src);
+                p.carry = Some((s.def, n));
+                Some(Job::Haul { src, to, stage: 1 })
+            }
+        };
+    }
+    match go_to(w, p, Goal::Cell(to)) {
+        Go::Failed => None,
+        Go::Moving => Some(Job::Haul { src, to, stage }),
+        Go::Arrived => {
+            let (def, n) = p.carry?;
+            let left = w.put_item(def, to, n);
+            p.carry = (left > 0).then_some((def, left));
             None
         }
     }

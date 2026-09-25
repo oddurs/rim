@@ -117,6 +117,12 @@ pub enum Job {
     Leave {
         to: IVec,
     },
+    /// Carry a stack to a stockpile cell: 0 to fetch it, 1 to bring it.
+    Haul {
+        src: Entity,
+        to: IVec,
+        stage: u8,
+    },
 }
 
 impl Job {
@@ -138,6 +144,7 @@ impl Job {
             Job::Breach { .. } => "breaking in",
             Job::Flee { .. } => "fleeing",
             Job::Leave { .. } => "leaving",
+            Job::Haul { .. } => "hauling",
         }
     }
 }
@@ -697,6 +704,45 @@ impl World {
 
     /// Drop items near `near`, merging into existing stacks. Returns the
     /// amount that could not be placed.
+    /// Room a cell has for `def`: a stack's worth if it holds no item, the
+    /// rest of the stack if it holds the same one, else none. A cell with a
+    /// fixture on it, even a blueprint, has none: a wall would go up over
+    /// the stack and nobody could reach it again.
+    pub fn room_for(&self, def: DefId, p: IVec) -> u32 {
+        if !self.map.inb(p) || !self.map.passable(p) || self.map.fixture_at(p).is_some() {
+            return 0;
+        }
+        let limit = self.defs.thing(def).stack_limit;
+        match self.map.item_at(p) {
+            None => limit,
+            Some(e) => self.thing(e).filter(|t| t.def == def).map_or(0, |t| limit.saturating_sub(t.count)),
+        }
+    }
+
+    /// Put up to `count` of `def` on exactly this cell, as a new stack or on
+    /// the one there. Returns what didn't fit.
+    pub fn put_item(&mut self, def: DefId, p: IVec, count: u32) -> u32 {
+        let n = count.min(self.room_for(def, p));
+        if n == 0 {
+            return count;
+        }
+        match self.map.item_at(p) {
+            Some(e) => {
+                if let Ok(mut t) = self.ecs.get::<&mut Thing>(e) {
+                    t.count += n;
+                }
+                self.map.touch(p);
+            }
+            None => {
+                let e = self.spawn((Thing { def, pos: p, count: n, hp: 100 },));
+                self.map.set_item(p, Some(e));
+                let defs = self.defs.clone();
+                self.fields.add_emitters(&defs, &self.map, e, def, p);
+            }
+        }
+        count - n
+    }
+
     pub fn place_item(&mut self, def: DefId, near: IVec, mut count: u32) -> u32 {
         let limit = self.defs.thing(def).stack_limit;
         for r in 0..=8i32 {
