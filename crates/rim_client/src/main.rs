@@ -11,6 +11,7 @@ mod bench;
 mod cli;
 mod draw;
 mod mesh;
+mod save;
 mod sky;
 
 use macroquad::prelude::*;
@@ -119,6 +120,8 @@ pub struct App {
     settings_file: Option<PathBuf>,
     /// Input subscriber for wheel events (see `Wheel`).
     wheel_sub: usize,
+    /// The save this game appends to, if it's being saved.
+    pub saver: Option<rim_sim::savefile::Writer>,
 }
 
 /// Seconds since the last frame, clamped: macroquad's value is raw, so the
@@ -362,7 +365,9 @@ async fn game() {
     let ui_scale: f32 = args.windows(2).find(|w| w[0] == "--ui-scale").and_then(|w| w[1].parse().ok()).unwrap_or(1.0);
 
     let bench = args.iter().any(|a| a == "--bench-render");
-    let sim = match find_mods().ok_or_else(|| "could not find a mods/ directory".to_string()).and_then(|d| {
+    // The autotest and the benchmark are tests: they don't touch the saves.
+    let saving = !bench && !args.iter().any(|a| a == "--autotest");
+    let opened = find_mods().ok_or_else(|| "could not find a mods/ directory".to_string()).and_then(|d| {
         if bench {
             let n = match args.iter().position(|a| a == "--sprite-mods") {
                 None => Ok(0),
@@ -371,14 +376,22 @@ async fn game() {
                     .and_then(|v| v.parse().ok())
                     .ok_or_else(|| "--sprite-mods wants a number of mods".to_string()),
             };
-            n.and_then(|n| bench::world(&d, seed, n))
+            n.and_then(|n| bench::world(&d, seed, n)).map(|s| (s, None, Vec::new()))
+        } else if saving {
+            save::open(&d, seed, save::start_of(&args)?)
         } else {
-            Sim::new(&d, seed)
+            Sim::new(&d, seed).map(|s| (s, None, Vec::new()))
         }
-    }) {
-        Ok(s) => s,
+    });
+    let (mut sim, saver, notes) = match opened {
+        Ok(x) => x,
         Err(e) => return fail(e).await,
     };
+    sim.warnings.extend(notes);
+    if saver.is_some() && args.iter().any(|a| a == "--seed") && args.iter().any(|a| a == "--load" || a == "--continue")
+    {
+        sim.warnings.push("--seed is ignored when loading a save".into());
+    }
     let mut ui = match Ui::new(rim_ui::mods_of(&sim), screen_dpi_scale(), ui_scale) {
         Ok(u) => u,
         Err(e) => return fail(format!("UI failed to start: {e}")).await,
@@ -414,7 +427,11 @@ async fn game() {
             eprintln!("  warning: keybinds file ignored: {e}");
         }
     }
-    eprintln!("rim: seed {seed}, {} mods loaded, UI font {}", sim.mods.len(), ui.info.font);
+    eprintln!("rim: seed {}, {} mods loaded, UI font {}", sim.world.seed, sim.mods.len(), ui.info.font);
+    if saver.is_some() {
+        // Closing the window takes a last snapshot first.
+        prevent_quit();
+    }
     for w in sim.warnings.iter().chain(&ui.warnings()) {
         eprintln!("  warning: {w}");
     }
@@ -459,6 +476,7 @@ async fn game() {
         blit: None,
         settings_file,
         wheel_sub: macroquad::input::utils::register_input_subscriber(),
+        saver,
     };
     app.selected = app.sim.world.colonists().next();
 
@@ -471,6 +489,12 @@ async fn game() {
     }
 
     loop {
+        if is_quit_requested() {
+            if let Some(w) = app.saver.take() {
+                save::close(w, &mut app.sim);
+            }
+            std::process::exit(0);
+        }
         let raw = RawInput::gather(&mut app);
         frame(&mut app, &raw);
         if app.ui.take_layout_dirty() {
@@ -1104,6 +1128,9 @@ fn apply_ui(app: &mut App, a: UiAction) {
             let ticks = (hours * rim_sim::TICKS_PER_DAY as f64 / 24.0) as u64;
             for _ in 0..ticks {
                 app.sim.step();
+                if let Some(w) = &app.saver {
+                    save::after_step(w, &mut app.sim);
+                }
             }
         }
     }
@@ -1118,6 +1145,9 @@ fn step(app: &mut App) {
     let budget = std::time::Instant::now();
     while app.acc >= 1.0 {
         app.sim.step();
+        if let Some(w) = &app.saver {
+            save::after_step(w, &mut app.sim);
+        }
         app.acc -= 1.0;
         if budget.elapsed().as_millis() > 12 {
             app.acc = app.acc.min(4.0);
