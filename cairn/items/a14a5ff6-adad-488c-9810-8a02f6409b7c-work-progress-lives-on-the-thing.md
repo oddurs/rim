@@ -2,8 +2,10 @@
 id: a14a5ff6-adad-488c-9810-8a02f6409b7c
 title: Work progress lives on the thing
 type: feature
-status: backlog
+status: doing
 milestone: building
+assignee: Oddur Sigurdsson
+claimed: 2026-09-25
 created: 2026-09-25
 updated: 2026-09-25
 priority: p1

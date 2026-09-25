@@ -3,7 +3,7 @@
 
 use rim_sim::defs::DefId;
 use rim_sim::hecs::Entity;
-use rim_sim::world::{Blueprint, Thing};
+use rim_sim::world::{Blueprint, Thing, Work};
 use rim_sim::{IVec, Sim};
 use std::path::{Path, PathBuf};
 
@@ -50,7 +50,7 @@ fn a_stone_wall_is_tougher_and_slower_than_a_wooden_one() {
     let w = blueprint(&mut s, wall, wood, cells[0]);
     let st = blueprint(&mut s, wall, stone, cells[1]);
     let hp = |s: &Sim, e| s.world.ecs.get::<&Thing>(e).unwrap().hp;
-    let work = |s: &Sim, e| s.world.ecs.get::<&Blueprint>(e).unwrap().work;
+    let work = |s: &Sim, e| s.world.ecs.get::<&Work>(e).unwrap().total;
     assert!(hp(&s, st) > hp(&s, w), "stone {} vs wood {} hp", hp(&s, st), hp(&s, w));
     assert!(work(&s, st) > work(&s, w), "stone {} vs wood {} work", work(&s, st), work(&s, w));
     // And the numbers come from nowhere but the defs.

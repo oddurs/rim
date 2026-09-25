@@ -434,7 +434,7 @@ fn find_food(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
     let (_, t, forage) = best?;
     w.reserve(t, e);
     if let Some(harvest) = forage {
-        return Some(Job::Harvest { target: t, work: 0, forced: true, harvest });
+        return Some(Job::Harvest { target: t, forced: true, harvest });
     }
     // Somewhere to sit and eat it, if the colony has such a thing.
     let food_at = w.thing(t).map_or(p.pos, |f| f.pos);
@@ -622,11 +622,9 @@ fn find_work(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
             continue;
         }
         let job = match w.defs.designations[des.0 as usize].targets {
-            Targets::Built => Job::Deconstruct { target: te, work: 0 },
+            Targets::Built => Job::Deconstruct { target: te },
             _ => match w.defs.thing(t.def).harvest_for(des.0) {
-                Some(h) if w.harvest_ready(te, h.key()) => {
-                    Job::Harvest { target: te, work: 0, forced: false, harvest: h.key() }
-                }
+                Some(h) if w.harvest_ready(te, h.key()) => Job::Harvest { target: te, forced: false, harvest: h.key() },
                 _ => continue,
             },
         };
@@ -700,10 +698,10 @@ fn run_job(w: &mut World, e: Entity, p: &mut Pawn) {
             Go::Moving if w.tick < until => (Some(j), 0),
             _ => (None, 30),
         },
-        Job::Harvest { target, work, forced, harvest } => (run_harvest(w, p, target, work, forced, harvest), 0),
+        Job::Harvest { target, forced, harvest } => (run_harvest(w, p, target, forced, harvest), 0),
         Job::Deliver { bp, src, want, stage } => (run_deliver(w, p, bp, src, want, stage), 0),
         Job::Construct { bp } => (run_construct(w, p, bp), 0),
-        Job::Deconstruct { target, work } => (run_deconstruct(w, p, target, work), 0),
+        Job::Deconstruct { target } => (run_deconstruct(w, p, target), 0),
         Job::Eat { src, t, seat, stage } => (run_eat(w, p, src, t, seat, stage), 0),
         Job::Sleep { bed, spot, stage } => (run_sleep(w, e, p, bed, spot, stage), 0),
         Job::Comfort { to, need, until } => (run_comfort(w, p, to, need, until), 0),
@@ -716,14 +714,7 @@ fn run_job(w: &mut World, e: Entity, p: &mut Pawn) {
     }
 }
 
-fn run_harvest(
-    w: &mut World,
-    p: &mut Pawn,
-    target: Entity,
-    work: u32,
-    forced: bool,
-    harvest: HarvestKey,
-) -> Option<Job> {
+fn run_harvest(w: &mut World, p: &mut Pawn, target: Entity, forced: bool, harvest: HarvestKey) -> Option<Job> {
     let t = w.thing(target)?;
     let defs = w.defs.clone();
     let hd = defs.thing(t.def).harvest_by_key(harvest)?;
@@ -733,9 +724,10 @@ fn run_harvest(
     }
     match go_to(w, p, Goal::Touch(t.pos)) {
         Go::Failed => None,
-        Go::Moving => Some(Job::Harvest { target, work, forced, harvest }),
+        Go::Moving => Some(Job::Harvest { target, forced, harvest }),
         Go::Arrived => {
-            if work + 1 >= hd.work {
+            let work = w.work_on(target, t.pos, p.pos, Some(hd.desig_r), |_| hd.work)?;
+            if work.finished() {
                 if marked {
                     let _ = w.ecs.remove_one::<Designated>(target);
                 }
@@ -744,6 +736,8 @@ fn run_harvest(
                 } else {
                     let ready_at = w.tick + (hd.regrow_days * crate::TICKS_PER_DAY as f64) as u64;
                     w.regrow(target, harvest, ready_at);
+                    // What grows back is harvested from scratch.
+                    let _ = w.ecs.remove_one::<Work>(target);
                     w.map.touch(t.pos);
                 }
                 for &(yd, n) in &hd.yields_r {
@@ -751,7 +745,7 @@ fn run_harvest(
                 }
                 None
             } else {
-                Some(Job::Harvest { target, work: work + 1, forced, harvest })
+                Some(Job::Harvest { target, forced, harvest })
             }
         }
     }
@@ -790,6 +784,9 @@ fn run_deliver(w: &mut World, p: &mut Pawn, bp: Entity, src: Entity, want: u32, 
                     p.carry = (cn > add).then_some((cdef, cn - add));
                 }
             }
+            // Nothing else about the map changed: tell whoever draws it
+            // that the plan's materials arrived.
+            w.map.touch(b.pos);
             None
         }
     }
@@ -797,18 +794,18 @@ fn run_deliver(w: &mut World, p: &mut Pawn, bp: Entity, src: Entity, want: u32, 
 
 /// Take a built thing down. As much work as it took to put up, and a
 /// fraction of what it was made of comes back.
-fn run_deconstruct(w: &mut World, p: &mut Pawn, target: Entity, work: u32) -> Option<Job> {
+fn run_deconstruct(w: &mut World, p: &mut Pawn, target: Entity) -> Option<Job> {
     let t = w.thing(target)?;
-    if w.ecs.get::<&Designated>(target).is_err() {
+    let Ok(desig) = w.ecs.get::<&Designated>(target).map(|d| d.0) else {
         return None; // cancelled
-    }
-    let total = w.stat(target, "work").map_or(1, |x| x.round().max(1.0) as u32);
+    };
     match go_to(w, p, Goal::Touch(t.pos)) {
         Go::Failed => None,
-        Go::Moving => Some(Job::Deconstruct { target, work }),
+        Go::Moving => Some(Job::Deconstruct { target }),
         Go::Arrived => {
-            if work + 1 < total {
-                return Some(Job::Deconstruct { target, work: work + 1 });
+            let work = w.work_on(target, t.pos, p.pos, Some(desig), |w| work_total(w, target))?;
+            if !work.finished() {
+                return Some(Job::Deconstruct { target });
             }
             let refund = w.defs.thing(t.def).build.as_ref().map_or(0.0, |b| b.refund);
             let cost = w.cost_of(target).unwrap_or_default();
@@ -836,12 +833,8 @@ fn run_construct(w: &mut World, p: &mut Pawn, bp: Entity) -> Option<Job> {
         Go::Failed => None,
         Go::Moving => Some(Job::Construct { bp }),
         Go::Arrived => {
-            let done = {
-                let mut bpc = w.ecs.get::<&mut Blueprint>(bp).ok()?;
-                bpc.work_left = bpc.work_left.saturating_sub(1);
-                bpc.work_left == 0
-            };
-            if done {
+            let work = w.work_on(bp, b.pos, p.pos, None, |w| work_total(w, bp))?;
+            if work.finished() {
                 // A pawn standing on a fresh wall steps out first.
                 if w.defs.thing(b.def).blocks && (p.pos == b.pos || p.next == Some(b.pos)) {
                     return step_off(w, p, b.pos).then_some(Job::Construct { bp });
@@ -853,6 +846,11 @@ fn run_construct(w: &mut World, p: &mut Pawn, bp: Entity) -> Option<Job> {
             }
         }
     }
+}
+
+/// What it takes to put `e` up, or to take it down again.
+fn work_total(w: &World, e: Entity) -> u32 {
+    w.stat(e, "work").map_or(1, |x| x.round().max(1.0) as u32)
 }
 
 /// Move the pawn off `cell` to an adjacent open cell. Returns false if stuck.
@@ -871,6 +869,8 @@ fn step_off(w: &mut World, p: &mut Pawn, cell: IVec) -> bool {
 pub fn complete_building(w: &mut World, bp: Entity) {
     let Some(t) = w.thing(bp) else { return };
     let _ = w.ecs.remove_one::<Blueprint>(bp);
+    // Taking it down later is work of its own, counted from zero.
+    let _ = w.ecs.remove_one::<Work>(bp);
     let td = w.defs.thing(t.def);
     // The colony built it, so the colony owns it. A door only opens for
     // its owner; everyone else has to come through it the hard way.
@@ -1120,6 +1120,9 @@ fn hit_thing(w: &mut World, p: &mut Pawn, target: Entity, tpos: IVec) {
         let label = w.thing(target).map(|t| w.defs.thing(t.def).label.clone()).unwrap_or_default();
         w.despawn_thing(target);
         w.message(format!("The {label} is broken down."), MsgKind::Threat);
+    } else {
+        // Lost hp wears it like work does; drawn live while under attack.
+        w.mark_worksite(target, tpos);
     }
     mark_hit(w, tpos);
 }

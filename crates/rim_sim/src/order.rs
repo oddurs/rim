@@ -115,7 +115,7 @@ fn fixture(w: &World, pawn: Entity, from: IVec, f: Entity) -> Option<Order> {
     if let Some(hd) = pick {
         return Some(Order {
             label: format!("{} {}", w.defs.designations[hd.desig_r as usize].label, td.label),
-            job: Job::Harvest { target: f, work: 0, forced: true, harvest: hd.key() },
+            job: Job::Harvest { target: f, forced: true, harvest: hd.key() },
             reserve: vec![f],
         });
     }
@@ -127,7 +127,7 @@ fn fixture(w: &World, pawn: Entity, from: IVec, f: Entity) -> Option<Order> {
     let take_down = w.defs.designations.iter().find(|d| d.targets == Targets::Built)?;
     (ours && td.build.is_some()).then(|| Order {
         label: format!("{} {}", take_down.label, td.label),
-        job: Job::Deconstruct { target: f, work: 0 },
+        job: Job::Deconstruct { target: f },
         reserve: vec![f],
     })
 }
