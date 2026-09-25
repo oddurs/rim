@@ -83,6 +83,27 @@ pub fn hash_bytes(bytes: &[u8]) -> u64 {
     crate::rng::mix(h)
 }
 
+fn lock_matches(saved: &[(String, String)], loaded: &[crate::modloader::ModManifest]) -> bool {
+    saved.len() == loaded.len() && saved.iter().zip(loaded).all(|(s, m)| s.0 == m.id && s.1 == m.version)
+}
+
+/// An event with its def ids mapped, or `None` if one no longer exists.
+fn remap_event(r: &Remap, e: GameEvent) -> Option<GameEvent> {
+    Some(match e {
+        GameEvent::PawnJoined { id, name, def } => GameEvent::PawnJoined { id, name, def: r.get("creature", def)? },
+        GameEvent::PawnDied { id, name, def, faction, pos, founder } => {
+            GameEvent::PawnDied { id, name, def: r.get("creature", def)?, faction, pos, founder }
+        }
+        GameEvent::PawnLeft { id, name, def, faction } => {
+            GameEvent::PawnLeft { id, name, def: r.get("creature", def)?, faction }
+        }
+        GameEvent::BuildingComplete { id, def, pos } => {
+            GameEvent::BuildingComplete { id, def: r.get("thing", def)?, pos }
+        }
+        other => other,
+    })
+}
+
 fn def_table(defs: &DefDb) -> DefsSection {
     let kind = |k: &str, n: usize| (k.to_string(), (0..n).map(|i| defs.id_of(k, i as DefId)).collect());
     BTreeMap::from([
@@ -93,6 +114,45 @@ fn def_table(defs: &DefDb) -> DefsSection {
         kind("designation", defs.designations.len()),
         kind("field", defs.fields.len()),
     ])
+}
+
+/// Saved def ids onto the loaded mods' def ids, kind by kind, by qualified
+/// id. The identity when the defs are the ones the snapshot was taken with.
+struct Remap<'a> {
+    saved: &'a DefsSection,
+    to: Option<BTreeMap<&'a str, Vec<Option<DefId>>>>,
+}
+
+impl<'a> Remap<'a> {
+    fn new(saved: &'a DefsSection, now: &DefsSection) -> Remap<'a> {
+        if saved == now {
+            return Remap { saved, to: None };
+        }
+        let to = saved
+            .iter()
+            .map(|(kind, ids)| {
+                let here = now.get(kind);
+                let map = ids
+                    .iter()
+                    .map(|id| here.and_then(|h| h.iter().position(|x| x == id)).map(|i| i as DefId))
+                    .collect();
+                (kind.as_str(), map)
+            })
+            .collect();
+        Remap { saved, to: Some(to) }
+    }
+
+    fn get(&self, kind: &str, d: DefId) -> Option<DefId> {
+        match &self.to {
+            None => Some(d),
+            Some(to) => to.get(kind)?.get(d as usize).copied().flatten(),
+        }
+    }
+
+    /// The saved qualified id, for a report.
+    fn name(&self, kind: &str, d: DefId) -> &str {
+        self.saved.get(kind).and_then(|ids| ids.get(d as usize)).map_or("?", |s| s.as_str())
+    }
 }
 
 /// Every entity's value of component `C`, in id order.
@@ -211,28 +271,43 @@ impl Snapshot {
     /// mod) loads. Deciding that a load starts a new epoch is the save
     /// file's job (DESIGN.md §7a).
     pub fn restore(&self, mods_dir: &Path, enabled: &dyn Fn(&str) -> bool) -> Result<Sim, String> {
+        let (sim, notes) = self.restore_noting(mods_dir, enabled)?;
+        match notes.is_empty() {
+            true => Ok(sim),
+            false => Err(format!("the save doesn't load as it was: {}", notes.join("; "))),
+        }
+    }
+
+    /// `restore`, across a change of defs: every def reference is mapped by
+    /// its qualified id onto the loaded mods'. What no longer exists is
+    /// dropped (an entity whose def is gone, a material, a need) and each
+    /// drop is noted. A removed mod's script data stays in the world, so it
+    /// rides along in every later snapshot until the mod comes back.
+    pub fn restore_noting(
+        &self,
+        mods_dir: &Path,
+        enabled: &dyn Fn(&str) -> bool,
+    ) -> Result<(Sim, Vec<String>), String> {
         if self.header.format != FORMAT {
             return Err(format!("save format {} (this build reads {FORMAT})", self.header.format));
         }
         let mods = Sim::load_mods(mods_dir, enabled)?;
         let defs = mods.defs.clone();
-        if dec::<DefsSection>(self, "engine:defs")? != def_table(&defs) {
-            let loaded: Vec<&str> = mods.manifests.iter().map(|m| m.id.as_str()).collect();
-            return Err(format!(
-                "the mods' defs differ from the save's (saved with {:?}, loaded {loaded:?}); \
-                 loading across a def change needs a migration",
-                self.header.mods.iter().map(|m| m.0.as_str()).collect::<Vec<_>>()
-            ));
-        }
+        let saved_defs: DefsSection = dec(self, "engine:defs")?;
+        let remap = Remap::new(&saved_defs, &def_table(&defs));
+        let mut notes: Vec<String> = Vec::new();
         let ws: WorldSection = dec(self, "engine:world")?;
         let mut w = World::new(defs.clone(), ws.width, ws.height, self.header.seed);
         w.tick = self.header.tick;
         w.rng = crate::rng::Rng::from_state(ws.rng);
         w.wealth = ws.wealth;
         w.colony_lost = ws.colony_lost;
-        w.reservations = ws.reservations.into_iter().collect();
         w.messages = ws.messages;
-        w.events = ws.events;
+        let pending = ws.events.len();
+        w.events = ws.events.into_iter().filter_map(|e| remap_event(&remap, e)).collect();
+        if w.events.len() < pending {
+            notes.push(format!("dropped {} pending events", pending - w.events.len()));
+        }
         w.recent_events = ws
             .recent_events
             .into_iter()
@@ -252,33 +327,133 @@ impl Snapshot {
         if terrain.len() != (ws.width * ws.height) as usize {
             return Err("engine:map doesn't match the map's size".into());
         }
+        let mut lost_terrain: BTreeMap<&str, u32> = BTreeMap::new();
         for (i, &t) in terrain.iter().enumerate() {
             let p = w.map.pos(i);
-            w.map.set_terrain(p, t, defs.terrain[t as usize].path_cost);
+            // Ground from a removed mod becomes the first terrain there is.
+            let now = remap.get("terrain", t).filter(|&d| (d as usize) < defs.terrain.len()).unwrap_or_else(|| {
+                *lost_terrain.entry(remap.name("terrain", t)).or_default() += 1;
+                0
+            });
+            w.map.set_terrain(p, now, defs.terrain[now as usize].path_cost);
+        }
+        for (id, n) in lost_terrain {
+            notes.push(format!("{n} cells of {id} became {}", defs.terrain[0].id));
         }
 
-        // Entities, in id order: each gets every component the save has for it.
+        // Entities, in id order: each gets every component the save has for
+        // it, with its def ids mapped. An entity whose def is gone is dropped.
         let mut builders: BTreeMap<u32, (Entity, EntityBuilder)> = BTreeMap::new();
-        fn add<C: hecs::Component + DeserializeOwned>(
-            s: &Snapshot,
-            name: &str,
-            b: &mut BTreeMap<u32, (Entity, EntityBuilder)>,
-        ) -> Result<(), String> {
-            for (e, c) in dec::<Vec<(Entity, C)>>(s, name)? {
-                b.entry(e.id()).or_insert_with(|| (e, EntityBuilder::new())).1.add(c);
+        let mut gone: std::collections::BTreeSet<u32> = std::collections::BTreeSet::new();
+        let mut dropped: BTreeMap<String, u32> = BTreeMap::new();
+        let mut add = |e: Entity, c: &dyn Fn(&mut EntityBuilder)| {
+            c(&mut builders.entry(e.id()).or_insert_with(|| (e, EntityBuilder::new())).1);
+        };
+        for (e, mut p) in dec::<Vec<(Entity, Pawn)>>(self, "engine:pawn")? {
+            let Some(def) = remap.get("creature", p.def) else {
+                gone.insert(e.id());
+                *dropped.entry(format!("{} ({})", remap.name("creature", p.def), p.name)).or_default() += 1;
+                continue;
+            };
+            p.def = def;
+            let mut needs = Vec::new();
+            for &(n, v) in &p.needs {
+                match remap.get("need", n) {
+                    Some(n) => needs.push((n, v)),
+                    None => *dropped.entry(format!("need {}", remap.name("need", n))).or_default() += 1,
+                }
             }
-            Ok(())
+            p.needs = needs;
+            if let Some((t, _)) = p.carry {
+                match remap.get("thing", t) {
+                    Some(now) => p.carry = p.carry.map(|(_, n)| (now, n)),
+                    None => {
+                        *dropped.entry(format!("carried {}", remap.name("thing", t))).or_default() += 1;
+                        p.carry = None;
+                    }
+                }
+            }
+            if let Job::Comfort { need, .. } = &mut p.job {
+                match remap.get("need", *need) {
+                    Some(n) => *need = n,
+                    None => p.job = Job::Idle,
+                }
+            }
+            add(e, &|b| {
+                b.add(p.clone());
+            });
         }
-        add::<Pawn>(self, "engine:pawn", &mut builders)?;
-        add::<Thing>(self, "engine:thing", &mut builders)?;
-        add::<Blueprint>(self, "engine:blueprint", &mut builders)?;
-        add::<MadeOf>(self, "engine:made_of", &mut builders)?;
-        add::<Owner>(self, "engine:owner", &mut builders)?;
-        add::<Designated>(self, "engine:designated", &mut builders)?;
-        add::<Regrow>(self, "engine:regrow", &mut builders)?;
-        for (_, (e, mut b)) in builders {
-            w.ecs.spawn_at(e, b.build());
+        for (e, mut t) in dec::<Vec<(Entity, Thing)>>(self, "engine:thing")? {
+            let Some(def) = remap.get("thing", t.def) else {
+                gone.insert(e.id());
+                *dropped.entry(remap.name("thing", t.def).to_string()).or_default() += 1;
+                continue;
+            };
+            t.def = def;
+            add(e, &|b| {
+                b.add(t.clone());
+            });
         }
+        for (e, mut bp) in dec::<Vec<(Entity, Blueprint)>>(self, "engine:blueprint")? {
+            let cost: Option<Vec<(DefId, u32)>> =
+                bp.cost.iter().map(|&(t, n)| Some((remap.get("thing", t)?, n))).collect();
+            match cost {
+                Some(c) if !gone.contains(&e.id()) => {
+                    bp.cost = c;
+                    add(e, &|b| {
+                        b.add(bp.clone());
+                    });
+                }
+                _ => {
+                    // A plan for something that needs a removed material.
+                    gone.insert(e.id());
+                    *dropped.entry("a blueprint".into()).or_default() += 1;
+                }
+            }
+        }
+        for (e, m) in dec::<Vec<(Entity, MadeOf)>>(self, "engine:made_of")? {
+            match remap.get("thing", m.0) {
+                Some(d) => add(e, &|b| {
+                    b.add(MadeOf(d));
+                }),
+                // The thing stays, built of nothing in particular now.
+                None if !gone.contains(&e.id()) => {
+                    *dropped.entry(format!("material {}", remap.name("thing", m.0))).or_default() += 1
+                }
+                None => {}
+            }
+        }
+        for (e, d) in dec::<Vec<(Entity, Designated)>>(self, "engine:designated")? {
+            match remap.get("designation", d.0) {
+                Some(d) => add(e, &|b| {
+                    b.add(Designated(d));
+                }),
+                None if !gone.contains(&e.id()) => {
+                    *dropped.entry(format!("designation {}", remap.name("designation", d.0))).or_default() += 1
+                }
+                None => {}
+            }
+        }
+        for (e, o) in dec::<Vec<(Entity, Owner)>>(self, "engine:owner")? {
+            add(e, &|b| {
+                b.add(o);
+            });
+        }
+        for (e, r) in dec::<Vec<(Entity, Regrow)>>(self, "engine:regrow")? {
+            add(e, &|b| {
+                b.add(r);
+            });
+        }
+        for (id, n) in dropped {
+            notes.push(if n == 1 { format!("dropped {id}") } else { format!("dropped {n} × {id}") });
+        }
+        for (id, (e, mut b)) in builders {
+            if !gone.contains(&id) {
+                w.ecs.spawn_at(e, b.build());
+            }
+        }
+        w.reservations =
+            ws.reservations.into_iter().filter(|(t, h)| !gone.contains(&t.id()) && !gone.contains(&h.id())).collect();
         w.next_entity = ws.next_entity;
         w.pawns = w.ecs.query::<(Entity, &Pawn)>().iter().map(|(e, _)| e).collect();
         w.pawns.sort_unstable_by_key(|e| e.id());
@@ -313,8 +488,25 @@ impl Snapshot {
         }
         // Stamps were made against the finished map: nothing to redo.
         w.map.take_changed_cells();
-        let fields: SavedFields = dec(self, "engine:fields")?;
-        w.fields.restore(&mut w.map, fields);
+        let mut fields: SavedFields = dec(self, "engine:fields")?;
+        if remap.to.is_some() {
+            // Field state is kept per field: take each loaded field's from the
+            // save by its id, and start one the save didn't have fresh.
+            let fresh = w.fields.saved(&w.map);
+            let old = fields.clone();
+            let saved_fields = remap.saved.get("field").map_or(&[][..], |v| v.as_slice());
+            let pick = |j: usize| {
+                let i = saved_fields.iter().position(|id| *id == defs.fields[j].id);
+                i.filter(|&i| i < old.atmos.len() && i < old.ambient.len() && i < old.rooms.len())
+            };
+            let n = defs.fields.len();
+            fields.atmos = (0..n).map(|j| pick(j).map_or(fresh.atmos[j].clone(), |i| old.atmos[i].clone())).collect();
+            fields.ambient = (0..n).map(|j| pick(j).map_or(fresh.ambient[j], |i| old.ambient[i])).collect();
+            fields.rooms = (0..n).map(|j| pick(j).map_or(fresh.rooms[j].clone(), |i| old.rooms[i].clone())).collect();
+        }
+        // Under other defs the map itself may differ (a removed mod's walls
+        // are gone), so room values are carried over cell by cell.
+        w.fields.restore(&mut w.map, fields, remap.to.is_some());
         w.refresh_boundaries();
 
         for (name, bytes) in &self.sections {
@@ -323,7 +515,10 @@ impl Snapshot {
             w.data.extend(data.into_iter().map(|(k, v)| (if m.is_empty() { k } else { format!("{m}:{k}") }, v)));
         }
         let sc: ScriptsSection = dec(self, "engine:scripts")?;
-        mods.scripts.set_disabled(&sc.disabled_hooks, &sc.disabled_handlers);
-        Ok(Sim::assemble(mods, w))
+        // Hook indices only mean the same hooks under the same scripts.
+        if remap.to.is_none() && lock_matches(&self.header.mods, &mods.manifests) {
+            mods.scripts.set_disabled(&sc.disabled_hooks, &sc.disabled_handlers);
+        }
+        Ok((Sim::assemble(mods, w), notes))
     }
 }

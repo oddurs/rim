@@ -82,6 +82,8 @@ pub struct LoadReport {
     pub diverged_at: Option<u64>,
     /// Ticks of log that couldn't be replayed because the code changed.
     pub lost: u64,
+    /// What a change of mods took out of the world: "dropped 3 × boars:boar".
+    pub dropped: Vec<String>,
     /// Bytes at the end of the file that didn't make a whole chunk.
     pub cut: u64,
     /// Where the file was copied before a damaged tail was cut off.
@@ -278,7 +280,8 @@ impl SaveFile {
         let last = epochs.last().ok_or("a save with no epoch")?;
         let snap = last.snapshots.last().ok_or("an epoch with no snapshot")?;
         let mut report = LoadReport { cut, from_snapshot: snap.header.tick, ..Default::default() };
-        let mut sim = snap.restore(mods_dir, enabled)?;
+        let (mut sim, dropped) = snap.restore_noting(mods_dir, enabled)?;
+        report.dropped = dropped;
         let start = sim.world.tick;
         let same_code = lock_of(&sim) == last.epoch.mods && last.epoch.engine == env!("CARGO_PKG_VERSION");
         if !same_code {

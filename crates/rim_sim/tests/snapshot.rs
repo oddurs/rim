@@ -94,11 +94,14 @@ fn carrying_on_after_a_load_matches_never_saving() {
 }
 
 #[test]
-fn a_save_from_other_mods_is_refused() {
+fn a_plain_restore_never_drops_anything_quietly() {
     let sim = colony(1);
     let s = Snapshot::capture(&sim);
-    let err = s.restore(&mods(), &|m| m == "core").err().expect("core alone isn't the same mods");
-    assert!(err.contains("defs differ"), "{err}");
+    // Without wildlife_plus its boars would go; only restore_noting may do that.
+    let err = s.restore(&mods(), &|m| m != "wildlife_plus").err().expect("refused");
+    assert!(err.contains("wildlife_plus:boar"), "{err}");
+    let (_, notes) = s.restore_noting(&mods(), &|m| m != "wildlife_plus").expect("loads, noting");
+    assert!(notes.iter().any(|n| n.contains("wildlife_plus:boar")), "{notes:?}");
 }
 
 const PROBE_SCRIPT: &str = r#"
@@ -191,4 +194,76 @@ fn script_data_keys_come_back_as_they_were() {
     live.world.data.insert("unprefixed".into(), rim_sim::data::Data::Int(7));
     let loaded = load(&Snapshot::capture(&live));
     assert_eq!(live.world.data, loaded.world.data);
+}
+
+const STONES_DEFS: &str = r##"
+[[thing]]
+id = "marble"
+label = "marble"
+color = "#e8e4dc"
+category = "item"
+market_value = 2
+stack_limit = 75
+stuff = { categories = ["structural"], factors = { hp = 3.0 } }
+
+[[thing]]
+id = "fence"
+label = "stone fence"
+color = "#9a948a"
+category = "building"
+blocks = true
+hp = 300
+market_value = 6
+boundary = [{ field = "core:temperature", leak = 1.0 }]
+"##;
+
+#[test]
+fn a_removed_mods_materials_and_walls_are_noted_and_rooms_keep_their_values() {
+    let with =
+        common::test_mods("snap-stones", &["core", "weather"], &[("stones", &[("defs/things.toml", STONES_DEFS)])]);
+    let without = common::test_mods("snap-nostones", &["core", "weather"], &[]);
+    let mut sim = Sim::new(&with, 2).expect("loads");
+    let defs = sim.world.defs.clone();
+    let (fence, wall, marble) = (
+        defs.thing_id("stones:fence").unwrap(),
+        defs.thing_id("wall").unwrap(),
+        defs.thing_id("stones:marble").unwrap(),
+    );
+    // Two 5x5 rings side by side on open ground: the first of the mod's
+    // fences, the second of core walls built of the mod's marble.
+    let w = &sim.world;
+    let open = |p: rim_sim::IVec| w.map.passable(p) && w.map.fixture_at(p).is_none() && w.map.item_at(p).is_none();
+    let c = w.colony_center().unwrap();
+    let origin = (10..60)
+        .flat_map(|r| (-r..=r).flat_map(move |dy| (-r..=r).map(move |dx| c.offset(dx, dy))))
+        .find(|&o| (-1..12).all(|x| (-1..6).all(|y| open(o.offset(x, y)))))
+        .expect("open ground");
+    for (k, (thing, stuff)) in [(fence, None), (wall, Some(marble))].into_iter().enumerate() {
+        let o = origin.offset(6 * k as i32, 0);
+        for y in 0..5 {
+            for x in 0..5 {
+                if x == 0 || y == 0 || x == 4 || y == 4 {
+                    sim.world.spawn_fixture_of(thing, o.offset(x, y), false, stuff).expect("placed");
+                }
+            }
+        }
+    }
+    sim.step();
+    let f = defs.lookup("field", "core:temperature").unwrap() as usize;
+    let inside = |k: i32| origin.offset(6 * k + 2, 2);
+    for (k, v) in [(0, -5_000), (1, 5_000)] {
+        let id = sim.world.map.room_at(inside(k)).expect("a room").id;
+        sim.world.fields.layers[f].rooms[id as usize - 1] = v;
+    }
+    let (mut loaded, notes) = Snapshot::capture(&sim).restore_noting(&without, &|_| true).expect("loads");
+    assert!(notes.iter().any(|n| n.contains("stones:fence")), "{notes:?}");
+    assert!(notes.iter().any(|n| n.contains("material stones:marble")), "{notes:?}");
+    // The marble room is still a room, and still hot.
+    loaded.step();
+    let id = loaded.world.map.room_at(inside(1)).expect("still a room").id;
+    let v = loaded.world.fields.layers[f].rooms[id as usize - 1];
+    assert!((v - 5_000).abs() < 200, "the room kept its value: {v}");
+    for d in [with, without] {
+        let _ = std::fs::remove_dir_all(d);
+    }
 }

@@ -513,14 +513,16 @@ impl Fields {
     }
 
     /// Put back what `saved` kept, once the map has its things and rooms.
-    pub fn restore(&mut self, map: &mut Map, s: SavedFields) {
+    /// `map_changed`: the map isn't the one the values were saved on, so
+    /// they are carried over to its rooms cell by cell.
+    pub fn restore(&mut self, map: &mut Map, s: SavedFields, map_changed: bool) {
         self.atmos = s.atmos;
         for (l, (ambient, rooms)) in self.layers.iter_mut().zip(s.ambient.into_iter().zip(s.rooms)) {
             l.ambient = ambient;
             l.rooms = rooms;
         }
         self.last_clock = s.last_clock;
-        if s.pending_carry {
+        if s.pending_carry || map_changed {
             // The live game carries room values over to the new rooms on its
             // next update, from these ids; so will this one.
             map.set_prev_rooms(s.room_ids);
