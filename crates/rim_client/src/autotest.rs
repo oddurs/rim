@@ -398,8 +398,10 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
                 t.w().map.fixture_at(o.offset(i, -1)).is_none() && t.w().map.fixture_at(o.offset(i, 1)).is_none()
             }) && t.w().map.fixture_at(o.offset(-1, 0)).is_none()
                 && t.w().map.fixture_at(o.offset(3, 0)).is_none()
+                // A pawn's token and name label would cover the seam.
+                && t.w().pawns.iter().filter_map(|&e| t.w().pawn_pos(e)).all(|p| p.chebyshev(o.offset(1, 0)) > 4)
         })
-        .expect("a free row for three walls, with nothing at either end");
+        .expect("a free row for three walls, with nothing at either end and no pawn near");
     for (i, m) in [wood, wood, stone].into_iter().enumerate() {
         t.app.sim.world.spawn_fixture_of(wall, row.offset(i as i32, 0), false, Some(m)).expect("a wall");
     }

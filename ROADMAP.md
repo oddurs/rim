@@ -369,3 +369,9 @@ The world beyond the map: factions, traders drawn by wealth, quests, taming.
 - [ ] `a27e294c` Factions with relations <sup>feature · p0 · l · engine</sup>
 - [ ] `e2cae1b2` Biomes: other climates as a plugin <sup>content · p2 · m · plugin</sup>
 
+## Unscheduled
+
+`##########` 100% · 1 of 1 done
+
+- [x] `cc6ac1c3` Autotest: the wall-seam check picks a row a pawn is standing on <sup>bug · p1 · s · client</sup>
+
