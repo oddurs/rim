@@ -21,9 +21,14 @@ fn the_founder_swings_harder_by_the_starts_bonus() {
     let bonus = defs.start.as_ref().unwrap().founder_damage_bonus;
     assert!(bonus > 0, "core's start gives the founder a bonus");
     let founder = s.world.colonists().next().unwrap();
-    let p = s.world.ecs.get::<&Pawn>(founder).unwrap();
+    let mut p: Pawn = (*s.world.ecs.get::<&Pawn>(founder).unwrap()).clone();
     assert!(p.founder);
-    let plain = Pawn { founder: false, ..(*p).clone() };
+    // At melee level 5 a swing is worth its creature's damage: pin it, so
+    // the random starting level doesn't decide the test.
+    let melee = defs.melee_skill.unwrap();
+    p.skills.retain(|k| k.0 != melee);
+    p.learn(melee, rim_sim::world::skill_xp(5));
+    let plain = Pawn { founder: false, ..p.clone() };
     let base = defs.creature(p.def).melee_damage;
     assert_eq!(ai::melee_base(defs, &plain), base);
     assert_eq!(ai::melee_base(defs, &p), base + bonus);

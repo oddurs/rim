@@ -916,7 +916,9 @@ fn run_harvest(
                 None => 1.0,
             };
             let total = |_: &World| (hd.work as f64 / speed.max(0.01)).ceil() as u32;
-            let work = w.work_on(target, t.pos, p.pos, Some(hd.desig_r), total)?;
+            let skill = defs.work_types[defs.designations[hd.desig_r as usize].work_r as usize].skill_r;
+            let amount = p.work_amount(skill);
+            let work = w.work_on(target, t.pos, p.pos, Some(hd.desig_r), amount, total)?;
             if work.finished() {
                 if marked {
                     let _ = w.ecs.remove_one::<Designated>(target);
@@ -1151,7 +1153,9 @@ fn run_deconstruct(w: &mut World, p: &mut Pawn, target: Entity) -> Option<Job> {
         Go::Failed => None,
         Go::Moving => Some(Job::Deconstruct { target }),
         Go::Arrived => {
-            let work = w.work_on(target, t.pos, p.pos, Some(desig), |w| work_total(w, target))?;
+            let defs = w.defs.clone();
+            let amount = p.work_amount(defs.work_types[defs.designations[desig as usize].work_r as usize].skill_r);
+            let work = w.work_on(target, t.pos, p.pos, Some(desig), amount, |w| work_total(w, target))?;
             if !work.finished() {
                 return Some(Job::Deconstruct { target });
             }
@@ -1181,7 +1185,9 @@ fn run_construct(w: &mut World, p: &mut Pawn, bp: Entity) -> Option<Job> {
         Go::Failed => None,
         Go::Moving => Some(Job::Construct { bp }),
         Go::Arrived => {
-            let work = w.work_on(bp, b.pos, p.pos, None, |w| work_total(w, bp))?;
+            let skill = w.defs.build_work.and_then(|t| w.defs.work_types[t as usize].skill_r);
+            let amount = p.work_amount(skill);
+            let work = w.work_on(bp, b.pos, p.pos, None, amount, |w| work_total(w, bp))?;
             if work.finished() {
                 // A pawn standing on a fresh wall steps out first.
                 if w.defs.thing(b.def).blocks && (p.pos == b.pos || p.next == Some(b.pos)) {
@@ -1428,11 +1434,21 @@ fn run_breach(w: &mut World, p: &mut Pawn, target: Entity) -> Option<Job> {
 }
 
 /// What a pawn's swing is worth before the roll: its creature's melee
-/// damage, plus the start's founder bonus when this is the founder. The
-/// founder matters most when alone, and this is where it shows.
+/// damage scaled by its melee skill, plus the start's founder bonus when
+/// this is the founder. The founder matters most when alone, and this is
+/// where it shows; the bonus is flat, whatever the founder's skill.
 pub fn melee_base(defs: &crate::defs::DefDb, p: &Pawn) -> i32 {
     let bonus = if p.founder { defs.start.as_ref().map_or(0, |s| s.founder_damage_bonus) } else { 0 };
-    defs.creature(p.def).melee_damage + bonus
+    defs.creature(p.def).melee_damage * melee_skill_pct(defs, p) / 100 + bonus
+}
+
+/// A person's melee skill as a damage percentage: 80 untrained, 160 at the
+/// top. 100 for an animal, and wherever no skill says `melee`.
+fn melee_skill_pct(defs: &crate::defs::DefDb, p: &Pawn) -> i32 {
+    match defs.melee_skill.filter(|_| defs.creature(p.def).intelligent) {
+        Some(s) => 80 + 4 * p.skill(s) as i32,
+        None => 100,
+    }
 }
 
 /// The least and most a swing can do: the base rolled at 70% to 130%.
@@ -1441,11 +1457,19 @@ pub fn melee_bounds(defs: &crate::defs::DefDb, p: &Pawn) -> (i32, i32) {
     ((base * 70 / 100).max(1), (base * 130 / 100).max(1))
 }
 
-/// One melee swing, before it is applied to anything.
+/// Experience a melee swing is worth.
+const SWING_XP: u32 = 20;
+
+/// One melee swing, before it is applied to anything. It trains a person's
+/// melee skill.
 fn swing(w: &mut World, p: &mut Pawn) -> i32 {
     let defs = w.defs.clone();
     p.cooldown = defs.creature(p.def).melee_cooldown;
-    (melee_base(&defs, p) * (70 + w.rng.below(61) as i32) / 100).max(1)
+    let dmg = (melee_base(&defs, p) * (70 + w.rng.below(61) as i32) / 100).max(1);
+    if let Some(s) = defs.melee_skill.filter(|_| defs.creature(p.def).intelligent) {
+        p.learn(s, SWING_XP);
+    }
+    dmg
 }
 
 fn mark_hit(w: &mut World, tpos: IVec) {

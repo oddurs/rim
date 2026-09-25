@@ -212,6 +212,22 @@ pub struct Pawn {
     /// The tool it holds, off the map while it's held (DESIGN.md §4e).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hand: Option<Entity>,
+    /// Experience per skill, by skill def, sorted; a level follows from it.
+    #[serde(default)]
+    pub skills: Vec<(DefId, u32)>,
+    /// Work carried over between ticks, in hundredths of a unit, so a
+    /// colonist at 150% does three units every two ticks.
+    #[serde(default)]
+    pub work_frac: u32,
+}
+
+/// The highest skill level.
+pub const SKILL_MAX: u32 = 20;
+
+/// Experience a skill level takes: 2000 for the first, each level a
+/// thousand more than the last, so level 20 is about six weeks of work.
+pub fn skill_xp(level: u32) -> u32 {
+    1000 * level * (level + 1)
 }
 
 impl Pawn {
@@ -227,6 +243,30 @@ impl Pawn {
     pub fn priority(&self, defs: &DefDb, work: DefId) -> u8 {
         let set = self.priorities.iter().find(|p| p.0 == work).map(|p| p.1);
         set.unwrap_or(defs.work_types[work as usize].priority).min(defs.priority_scale.levels)
+    }
+
+    /// A skill's level, 0 to `SKILL_MAX`.
+    pub fn skill(&self, skill: DefId) -> u32 {
+        let xp = self.skills.iter().find(|s| s.0 == skill).map_or(0, |s| s.1);
+        (1..=SKILL_MAX).take_while(|&l| skill_xp(l) <= xp).last().unwrap_or(0)
+    }
+
+    /// Learn by doing.
+    pub fn learn(&mut self, skill: DefId, xp: u32) {
+        match self.skills.binary_search_by_key(&skill, |s| s.0) {
+            Ok(i) => self.skills[i].1 = self.skills[i].1.saturating_add(xp).min(skill_xp(SKILL_MAX)),
+            Err(i) => self.skills.insert(i, (skill, xp.min(skill_xp(SKILL_MAX)))),
+        }
+    }
+
+    /// This tick's units of work at a skill, and the experience for it:
+    /// 60% of normal speed untrained, normal at level 4, up to 260% at 20.
+    pub fn work_amount(&mut self, skill: Option<DefId>) -> u32 {
+        let Some(s) = skill else { return 1 };
+        let pct = self.work_frac + 60 + 10 * self.skill(s);
+        self.work_frac = pct % 100;
+        self.learn(s, 1);
+        pct / 100
     }
 
     /// Set a priority, keeping the list in work-type order so the state
@@ -708,6 +748,11 @@ impl World {
             }
             None => cd.label.clone(),
         };
+        // People arrive knowing a little of everything, some more than others.
+        let skills = match cd.intelligent {
+            true => (0..defs.skills.len() as DefId).map(|s| (s, skill_xp(self.rng.below(7)))).collect(),
+            false => Vec::new(),
+        };
         let p = Pawn {
             active: true,
             def,
@@ -717,6 +762,7 @@ impl World {
             hp: cd.max_hp,
             needs: cd.needs_r.iter().map(|&n| (n, NEED_MAX * 8 / 10)).collect(),
             next_think: self.tick + self.rng.below(30) as u64,
+            skills,
             ..Default::default()
         };
         let e = self.spawn((p,));
@@ -1081,18 +1127,21 @@ impl World {
     /// One unit of work on `e`, which stands at `at`, by a worker at `from`.
     /// `total` is asked for only when the work starts, or when it was for
     /// another designation. Returns the work after this unit.
+    /// `amount` is how many units the worker managed this tick (skill,
+    /// `Pawn::work_amount`); it can be 0.
     pub fn work_on(
         &mut self,
         e: Entity,
         at: IVec,
         from: IVec,
         designation: Option<DefId>,
+        amount: u32,
         total: impl FnOnce(&World) -> u32,
     ) -> Option<Work> {
         let side = Side::of(at, from);
         let same = match self.ecs.get::<&mut Work>(e) {
             Ok(mut w) if w.designation == designation => {
-                w.done = (w.done + 1).min(w.total);
+                w.done = (w.done + amount).min(w.total);
                 w.side = side;
                 Some(*w)
             }
@@ -1102,7 +1151,7 @@ impl World {
             Some(w) => w,
             None => {
                 let total = total(self).max(1);
-                let w = Work { done: 1.min(total), total, designation, side };
+                let w = Work { done: amount.min(total), total, designation, side };
                 self.ecs.insert_one(e, w).ok()?;
                 w
             }
@@ -1294,6 +1343,10 @@ impl World {
                 for &(w, l) in &p.priorities {
                     h = crate::rng::mix(h ^ (w as u64) << 8 ^ l as u64);
                 }
+                for &(s, xp) in &p.skills {
+                    h = crate::rng::mix(h ^ (s as u64) << 40 ^ xp as u64);
+                }
+                h = crate::rng::mix(h ^ p.work_frac as u64);
             }
         }
         for t in self.ecs.query::<&Thing>().iter() {

@@ -153,6 +153,7 @@ fn def_table(defs: &DefDb) -> DefsSection {
         kind("need", defs.needs.len()),
         kind("designation", defs.designations.len()),
         kind("work_type", defs.work_types.len()),
+        kind("skill", defs.skills.len()),
         kind("field", defs.fields.len()),
     ])
 }
@@ -429,6 +430,25 @@ impl Snapshot {
             }
             priorities.sort_unstable_by_key(|p| p.0);
             p.priorities = priorities;
+            let mut skills = Vec::new();
+            for &(s, xp) in &p.skills {
+                match remap.get("skill", s) {
+                    Some(s) => skills.push((s, xp)),
+                    None => *dropped.entry(format!("skill {}", remap.name("skill", s))).or_default() += 1,
+                }
+            }
+            // A person from before skills, or without a skill a mod has
+            // since added, knows the middle of what people arrive knowing,
+            // rather than nothing: no dice, so a load draws no randomness.
+            if defs.creature(p.def).intelligent {
+                for s in 0..defs.skills.len() as DefId {
+                    if !skills.iter().any(|k| k.0 == s) {
+                        skills.push((s, crate::world::skill_xp(3)));
+                    }
+                }
+            }
+            skills.sort_unstable_by_key(|s| s.0);
+            p.skills = skills;
             if let Some((t, _)) = p.carry {
                 match remap.get("thing", t) {
                     Some(now) => p.carry = p.carry.map(|(_, n)| (now, n)),

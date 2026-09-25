@@ -37,6 +37,7 @@ const DEF_REFS: &[(&str, &str, &str)] = &[
     ("engine:pawn", "*.1.carry.0", "thing"),
     ("engine:pawn", "*.1.job.Comfort.need", "need"),
     ("engine:pawn", "*.1.priorities.*.0", "work_type"),
+    ("engine:pawn", "*.1.skills.*.0", "skill"),
     ("engine:thing", "*.1.def", "thing"),
     ("engine:blueprint", "*.1.cost.*.0", "thing"),
     ("engine:made_of", "*.1", "thing"),

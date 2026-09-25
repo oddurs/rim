@@ -727,9 +727,11 @@ pub struct WorkTypeDef {
     /// A short glyph or sprite key for the column header.
     #[serde(default)]
     pub icon: String,
-    /// The skill this work trains and is done better with, when skills exist.
+    /// The skill this work trains and is done faster with; empty for none.
     #[serde(default)]
     pub skill: String,
+    #[serde(skip)]
+    pub skill_r: Option<DefId>,
     /// The level a colonist starts at: 1 is first, `levels` last, 0 never.
     #[serde(default = "d3")]
     pub priority: u8,
@@ -744,6 +746,17 @@ pub struct WorkTypeDef {
 
 fn d4() -> u8 {
     4
+}
+
+/// Something a colonist gets better at by doing it: work of the work types
+/// that name it goes faster, and the skill that says `melee` hits harder.
+#[derive(Deserialize, Clone, Debug)]
+pub struct SkillDef {
+    pub id: String,
+    pub label: String,
+    /// This is the skill fighting hand to hand trains and uses.
+    #[serde(default)]
+    pub melee: bool,
 }
 
 /// How many priority levels there are. Core says 4; a mod patches it to 9.
@@ -796,6 +809,9 @@ pub struct DefDb {
     pub work_styles: Vec<WorkStyleDef>,
     /// The style builds use (`builds = true`).
     pub build_style: Option<DefId>,
+    pub skills: Vec<SkillDef>,
+    /// The skill that says `melee`, if any.
+    pub melee_skill: Option<DefId>,
     /// Work types in load order; `work_order` has them in `order` order.
     pub work_types: Vec<WorkTypeDef>,
     pub work_order: Vec<DefId>,
@@ -900,6 +916,7 @@ pub const KINDS: &[&str] = &[
     "work_type",
     "priority_scale",
     "work_style",
+    "skill",
     "field",
     "calendar",
     "sky",
@@ -937,6 +954,7 @@ impl DefDb {
             "designation" => self.designations[i].id.clone(),
             "work_type" => self.work_types[i].id.clone(),
             "work_style" => self.work_styles[i].id.clone(),
+            "skill" => self.skills[i].id.clone(),
             "field" => self.fields[i].id.clone(),
             _ => String::new(),
         }
@@ -989,6 +1007,9 @@ impl DefDb {
         }
         for (i, d) in self.work_styles.iter().enumerate() {
             index.insert(("work_style", d.id.clone()), i as DefId);
+        }
+        for (i, d) in self.skills.iter().enumerate() {
+            index.insert(("skill", d.id.clone()), i as DefId);
         }
         for (i, d) in self.fields.iter().enumerate() {
             index.insert(("field", d.id.clone()), i as DefId);
@@ -1103,6 +1124,16 @@ impl DefDb {
             |job: &str| claims[ENGINE_JOBS.iter().position(|e| *e == job).expect("an engine job")].map(|i| i as DefId);
         self.build_work = claim("build");
         self.haul_work = claim("haul");
+        for d in &mut self.work_types {
+            if !d.skill.is_empty() {
+                d.skill_r = Some(get("skill", &d.skill, &format!("work_type/{}", d.id))?);
+            }
+        }
+        let melee: Vec<usize> = (0..self.skills.len()).filter(|&i| self.skills[i].melee).collect();
+        if melee.len() > 1 {
+            return Err(format!("skill/{}: only one skill can be the melee skill", self.skills[melee[1]].id));
+        }
+        self.melee_skill = melee.first().map(|&i| i as DefId);
         let mut order: Vec<DefId> = (0..self.work_types.len() as DefId).collect();
         order.sort_by_key(|&w| (self.work_types[w as usize].order, w));
         self.work_order = order;
