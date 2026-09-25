@@ -166,7 +166,7 @@ The log is the save and snapshots are a cache (DESIGN.md §7a): a colony is alwa
 
 ## colony — Colony
 
-`###·······` 27% · 6 of 22 done · due 2026-12-15
+`#####·····` 41% · 9 of 22 done · due 2026-12-15
 
 Running more than one person: stockpiles, hauling, work priorities, skills, colonist panels.
 
@@ -183,12 +183,12 @@ Running more than one person: stockpiles, hauling, work priorities, skills, colo
 - [ ] `f1924f03` Why a colonist is doing that, and who will take a job <sup>feature · p1 · m · client</sup>
 - [ ] `f1b96df4` The Work Board: a painted priority grid with live demand <sup>feature · p0 · l · core</sup>
 - [ ] `fa0de3f5` Wind shelter: the lee of walls, rock and trees <sup>feature · p1 · m · engine</sup>
-- [ ] `46416c29` Orders apply while paused <sup>feature · p1 · s · engine</sup>
-- [ ] `87d9849d` Inter as the UI font, shipped by core <sup>feature · p1 · s · core</sup>
-- [ ] `99bbff49` CI in half the time <sup>chore · p1 · s · tooling</sup>
 - [x] `1e977052` Floating windows and a saved UI layout <sup>feature · p0 · m · engine</sup>
 - [x] `3ab05834` Floors: built ground that remembers what it is made of <sup>feature · p1 · m · engine</sup>
+- [x] `46416c29` Orders apply while paused <sup>feature · p1 · s · engine</sup>
 - [x] `69494df0` Strings through one door <sup>chore · p2 · s · core</sup>
+- [x] `87d9849d` Inter as the UI font, shipped by core <sup>feature · p1 · s · core</sup>
+- [x] `99bbff49` CI in half the time <sup>chore · p1 · s · tooling</sup>
 - [x] `a7da68e2` Component kit v2: slider, text input and tables <sup>feature · p1 · m · core</sup>
 - [x] `c3c4d136` Grid node and virtual list <sup>feature · p0 · m · engine</sup>
 - [x] `fcb28d0c` Refresh tiers: a node says how often it may change <sup>feature · p1 · m · engine</sup>
