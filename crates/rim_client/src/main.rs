@@ -15,6 +15,7 @@ mod save;
 mod sky;
 mod title;
 mod wear;
+mod worksite;
 
 use macroquad::prelude::*;
 use rim_sim::defs::{DefId, Targets};
@@ -111,6 +112,8 @@ pub struct App {
     pub render_us: RenderTimes,
     /// Floors, items and fixtures, cached per chunk on the GPU.
     pub meshes: mesh::Meshes,
+    /// Blows and finishes on the sites being worked, followed frame to frame.
+    pub worksites: worksite::Worksites,
     /// Every mod's sprites, packed at load.
     pub world_atlas: atlas::WorldAtlas,
     /// The world's resolution as a fraction of the screen's pixels, if
@@ -505,6 +508,7 @@ async fn game() {
         ground: draw::Ground::default(),
         render_us: RenderTimes::default(),
         meshes: mesh::Meshes::default(),
+        worksites: worksite::Worksites::default(),
         world_atlas,
         render_scale,
         world_target: None,
@@ -1104,6 +1108,7 @@ pub fn render(app: &mut App) {
     }
     app.ground.update(&app.sim.world);
     t.ground = lap();
+    app.worksites.update(&app.sim.world, app.cam.zoom >= worksite::DETAIL_ZOOM);
     let counts = draw::things(app);
     t.gl = app.meshes.submit_us;
     t.things = lap() - t.gl;
@@ -1130,10 +1135,17 @@ pub fn render(app: &mut App) {
         t.gl += lap();
     }
     draw::world_ui(app);
+    let readouts = draw::readouts(app);
     // Stack counts, in the UI's text: shaped into the same atlas, drawn in
     // the same batch as the UI. After lighting, so they read at night.
     let dpi = screen_dpi_scale();
-    let mut labels = Vec::with_capacity(counts.len() * 2);
+    let mut labels = Vec::with_capacity(counts.len() * 2 + readouts.len() * 2);
+    for (x, y, text) in readouts {
+        for (dx, color) in [(1.0, [0.0, 0.0, 0.0, 0.7]), (0.0, [0.91, 0.93, 0.9, 1.0])] {
+            let quads = app.ui.text.quads(&text, 12.0 * dpi, 600, None, (x + dx) * dpi, (y + dx) * dpi);
+            labels.push(rim_ui::paint::Draw::Glyphs { quads, color });
+        }
+    }
     for (x, y, n) in counts {
         let text = n.to_string();
         for (dx, color) in [(1.0, [0.0, 0.0, 0.0, 0.6]), (0.0, [1.0, 1.0, 1.0, 1.0])] {

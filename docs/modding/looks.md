@@ -216,6 +216,13 @@ A cached thing shows one of 8 stages; a thing being worked right now is
 drawn every frame and moves smoothly. Nothing here costs a frame while
 nobody works.
 
+A strike lands each time the work done crosses a multiple of `every`, so a
+faster worker strikes faster and a paused game holds still. Its chips,
+dust and leaves come from one fixed pool and are the same in every replay
+of a game. Zoomed out, where they would be specks, a strike is a brief
+flash of the cell's outline instead. Close enough to read, a site being
+worked shows a bar and a line such as `Chop · 62% · 3 s`.
+
 A fixed `color` stays fixed: a mod that patches a thing's `color` changes
 every layer that has none, and leaves the ones that name their own.
 

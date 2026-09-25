@@ -145,16 +145,16 @@ Exposure makes shelter matter: warmth, enclosed rooms, day/night, weather. Get f
 
 ## building — Building
 
-`#########·` 87% · 13 of 15 done · due 2026-11-15
+`##########` 93% · 14 of 15 done · due 2026-11-15
 
 A one-week sprint inside Colony. Building stops being a fixed list of defs
 
 - [ ] `cf55217a` Strikes and exits on worksites <sup>feature · p2 · m · client</sup>
-- [ ] `74ff83ce` Work styles and staged looks <sup>feature · p1 · m · client</sup>
 - [x] `3f4c257d` Rooms made of something: leak and daylight from the boundary <sup>feature · p0 · l · engine</sup>
 - [x] `419a24ab` Interaction spots: furniture a pawn uses <sup>feature · p1 · m · engine</sup>
 - [x] `49e5e583` Walls that look joined, in the colour of what they are made of <sup>feature · p1 · m · client</sup>
 - [x] `579f8374` Furniture: table, chair, stove <sup>content · p2 · s · core</sup>
+- [x] `74ff83ce` Work styles and staged looks <sup>feature · p1 · m · client</sup>
 - [x] `763d8d64` Stuff: one buildable, many materials <sup>feature · p0 · m · engine</sup>
 - [x] `7937ae04` Busy sites live, idle sites cached <sup>perf · p1 · s · client</sup>
 - [x] `82bc6c98` Material factors on built things <sup>feature · p0 · m · engine</sup>

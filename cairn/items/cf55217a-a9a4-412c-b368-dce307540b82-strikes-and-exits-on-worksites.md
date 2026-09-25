@@ -2,8 +2,10 @@
 id: cf55217a-a9a4-412c-b368-dce307540b82
 title: Strikes and exits on worksites
 type: feature
-status: backlog
+status: doing
 milestone: building
+assignee: Oddur Sigurdsson
+claimed: 2026-09-25
 depends_on:
 - 74ff83ce-1d16-43f7-a49b-ca3340d509d3
 created: 2026-09-25
@@ -31,7 +33,7 @@ Each blow and each finish should feel physical, without the sim sending events f
 
 ## Acceptance criteria
 
-- [ ] Strikes key off work done, so a faster worker strikes faster
-- [ ] A felled tree falls away from the cutter, or to an open side
-- [ ] No allocation per strike; the particle pool is fixed
-- [ ] Zoomed out, strikes show as a flash and nothing else
+- [x] Strikes key off work done, so a faster worker strikes faster
+- [x] A felled tree falls away from the cutter, or to an open side
+- [x] No allocation per strike; the particle pool is fixed
+- [x] Zoomed out, strikes show as a flash and nothing else

@@ -2,8 +2,10 @@
 
 use crate::atlas::{Slot, WorldAtlas};
 use crate::wear;
+use crate::worksite::{Kind, Tone, DETAIL_ZOOM};
 use crate::{rgb, App, Tool};
 use macroquad::prelude::*;
+use rim_sim::defs::Exit;
 use rim_sim::defs::Wear;
 use rim_sim::hecs::Entity;
 use rim_sim::look::{Layer, Prim};
@@ -170,8 +172,21 @@ pub type Counts = Vec<(f32, f32, u32)>;
 
 /// Paint thing `e`, which stands in `cell`, with the cell's top-left at
 /// `at` and `z` points a side. Returns its count if it has a stack to label.
+///
+/// `tone` moves a live worksite this frame (DESIGN.md §6b): the shake and
+/// flash of a blow, the settle of a build that just stood. The chunk cache
+/// draws everything with the default, which changes nothing.
 #[allow(clippy::too_many_arguments)]
-pub fn thing(s: &mut impl Sink, w: &World, e: Entity, cell: IVec, at: (f32, f32), z: f32, t: f32) -> Option<u32> {
+pub fn thing(
+    s: &mut impl Sink,
+    w: &World,
+    e: Entity,
+    cell: IVec,
+    at: (f32, f32),
+    z: f32,
+    t: f32,
+    tone: Tone,
+) -> Option<u32> {
     let defs = &w.defs;
     let th = w.ecs.get::<&Thing>(e).ok()?;
     let td = defs.thing(th.def);
@@ -182,6 +197,11 @@ pub fn thing(s: &mut impl Sink, w: &World, e: Entity, cell: IVec, at: (f32, f32)
         Ok(m) => rgb(defs.thing(m.0).rgb),
         Err(_) => rgb(td.rgb),
     };
+    let c = shade(c, tone.bright);
+    // Scaled about the middle of the bottom edge, where it stands.
+    let zt = z * tone.scale;
+    let at = (at.0 + tone.shift.0 * z - (zt - z) / 2.0, at.1 + tone.shift.1 * z - (zt - z));
+    let z = zt;
     let (sx, sy) = at;
     let look = &td.look_r;
     if let Ok(bp) = w.ecs.get::<&Blueprint>(e) {
@@ -193,12 +213,20 @@ pub fn thing(s: &mut impl Sink, w: &World, e: Entity, cell: IVec, at: (f32, f32)
         _ => &look.layers,
     };
     let f = wear::progress(w, e);
-    match (f > 0.0).then(|| wear::style(w, e, &th)).flatten().map(|st| st.wear) {
+    let style = (f > 0.0).then(|| wear::style(w, e, &th)).flatten();
+    match style.map(|st| st.wear) {
         Some(Wear::Lean) => {
             // Away from the axe, more as the cut deepens.
             let (tx, ty) = wear::toward(w, e);
             let k = 0.1 * f * f * z;
             wear::draw_chips(s, cell, (tx, ty), f, at, z, chip_color(w, e, td, c));
+            // In the last eighth, where it will come down.
+            if f >= 7.0 / 8.0 && style.is_some_and(|st| st.exit == rim_sim::defs::Exit::Fall) {
+                let (fx, fy) = wear::fall_way(w, cell, (tx, ty));
+                for (k, a) in [(1.0, 0.16), (2.0, 0.1)] {
+                    s.rect(sx + fx * k * z, sy + fy * k * z, z, z, Color::new(1.0, 0.84, 0.47, a));
+                }
+            }
             paint(s, w, layers, look.join, c, cell, (sx - tx * k, sy - ty * k), z, t);
         }
         Some(Wear::Cracks) => {
@@ -301,6 +329,7 @@ pub fn things(app: &mut App) -> Counts {
     app.meshes.prepare(w, &app.world_atlas, cam, t);
     let (tx0, ty0, tx1, ty1) = visible(app);
     let on_screen = |c: IVec| (tx0..=tx1).contains(&c.x) && (ty0..=ty1).contains(&c.y);
+    let detail = z >= DETAIL_ZOOM;
     let mut counts = Counts::new();
     let mut label = |cell: IVec, n: u32| {
         if z >= LABEL_ZOOM && on_screen(cell) {
@@ -314,7 +343,8 @@ pub fn things(app: &mut App) -> Counts {
         for cell in app.meshes.live(layer) {
             let Some(e) = w.map.layers_at(w.map.idx(cell))[layer] else { continue };
             let at = cam.to_screen(cell.x as f32, cell.y as f32);
-            if let Some(n) = thing(&mut Immediate(&app.world_atlas), w, e, cell, at, z, t) {
+            let tone = app.worksites.tone(w, e, detail);
+            if let Some(n) = thing(&mut Immediate(&app.world_atlas), w, e, cell, at, z, t, tone) {
                 label(cell, n);
             }
         }
@@ -322,7 +352,126 @@ pub fn things(app: &mut App) -> Counts {
     for (cell, n) in app.meshes.counts() {
         label(cell, n);
     }
+    worksite_motion(app, t);
     counts
+}
+
+/// Worksite motion over the things (DESIGN.md §6b): what is leaving, and
+/// what the blows throw. Zoomed out, a blow is a brief flash of the cell's
+/// outline instead, so a busy colony still reads as busy.
+fn worksite_motion(app: &App, t: f32) {
+    let (w, cam, ws) = (&app.sim.world, &app.cam, &app.worksites);
+    let z = cam.zoom;
+    let s = &mut Immediate(&app.world_atlas);
+    for l in &ws.leaving {
+        let p = ws.exit_age(l);
+        if p >= 1.0 {
+            continue;
+        }
+        match l.kind {
+            // Accelerating away, a little smaller as it goes down, gone at the end.
+            Exit::Fall => {
+                let e = p * p;
+                let d = 0.1 + 0.95 * e;
+                let zt = z * (1.0 - 0.12 * e);
+                let (x, y) = cam.to_screen(l.cell.x as f32 + l.way.0 * d, l.cell.y as f32 + l.way.1 * d);
+                let alpha = if p < 0.8 { 1.0 } else { (1.0 - p) / 0.2 };
+                let (layers, _) = wear::grown(&w.defs.thing(l.def).look_r.layers, 1.0, l.own, alpha);
+                let o = (z - zt) / 2.0;
+                paint(s, w, &layers, None, l.own, l.cell, (x + o, y + o), zt, t);
+            }
+            // Nine pieces hop away from the worked side, shrinking.
+            Exit::Crumble => {
+                let e = 1.0 - (1.0 - p) * (1.0 - p);
+                let hop = 0.22 * (p * std::f32::consts::PI).sin() * (1.0 - p);
+                for i in 0..9 {
+                    let (cx, cy) = ((i % 3) as f32 / 3.0 + 1.0 / 6.0, (i / 3) as f32 / 3.0 + 1.0 / 6.0);
+                    let (dx, dy) = (cx - 0.5 + l.way.0 * 0.5, cy - 0.5 + l.way.1 * 0.5);
+                    let n = (dx * dx + dy * dy).sqrt().max(0.01);
+                    let k = hash2_f(l.cell.x as i64 + i, l.cell.y as i64, 81) as f32;
+                    let size = z / 3.0 * (1.0 - 0.7 * p);
+                    let (x, y) = cam.to_screen(
+                        l.cell.x as f32 + cx + dx / n * 0.45 * e,
+                        l.cell.y as f32 + cy + dy / n * 0.45 * e - hop * (0.6 + k),
+                    );
+                    let c = shade(l.own, 0.75 + k * 0.4);
+                    s.rect(x - size / 2.0, y - size / 2.0, size, size, alpha(c, 1.0 - p * p));
+                }
+            }
+            Exit::Pop | Exit::None => {}
+        }
+    }
+    if z >= DETAIL_ZOOM {
+        for p in &ws.parts {
+            let life = p.age as f32 / p.life as f32;
+            if p.kind == Kind::Dust {
+                let (x, y) = cam.to_screen(p.x, p.y);
+                disc(s, x, y, p.size * z * (0.6 + life * 0.8), Color::new(0.84, 0.8, 0.73, 0.32 * (1.0 - life)));
+                continue;
+            }
+            let a = if life > 0.75 { (1.0 - life) / 0.25 } else { 1.0 };
+            let size = (p.size * z).max(1.5);
+            if p.h > 0.0 {
+                let (x, y) = cam.to_screen(p.x + 0.03, p.y + 0.03);
+                s.rect(x - size / 2.0, y - size / 2.0, size, size, Color::new(0.0, 0.0, 0.0, 0.25 * a));
+            }
+            let (x, y) = cam.to_screen(p.x, p.y - p.h);
+            s.rect(x - size / 2.0, y - size / 2.0, size, size, alpha(p.color, p.color.a * a));
+        }
+    } else {
+        for e in ws.sites() {
+            let (Some(a), Some(&(cell, _))) = (ws.since_strike(e), w.worksites.get(&e)) else { continue };
+            if a < 8 {
+                let (x, y) = cam.to_screen(cell.x as f32, cell.y as f32);
+                let c = alpha(site_color(w, e), 1.0 - a as f32 / 8.0);
+                outline(s, x - 1.0, y - 1.0, z + 2.0, z + 2.0, 2.0, c);
+            }
+        }
+    }
+}
+
+/// The colour a worksite is marked in: its designation's, blueprint blue
+/// for a build, or the raiders' red for damage.
+fn site_color(w: &World, e: Entity) -> Color {
+    match w.ecs.get::<&Work>(e).ok().map(|k| k.designation) {
+        Some(Some(d)) => rgb(w.defs.designations[d as usize].rgb),
+        Some(None) => Color::new(0.55, 0.8, 1.0, 1.0),
+        None => HOSTILE,
+    }
+}
+
+/// Worksite readouts, zoomed in: a bar under each site being worked, and
+/// the text under that for the UI to draw (`Chop · 62% · 3 s`, or hp).
+pub fn readouts(app: &App) -> Vec<(f32, f32, String)> {
+    let (w, cam, ws) = (&app.sim.world, &app.cam, &app.worksites);
+    let z = cam.zoom;
+    let mut out = Vec::new();
+    if z < LABEL_ZOOM {
+        return out;
+    }
+    for e in ws.sites() {
+        let Some((cell, f, hurt)) = ws.readout(w, e) else { continue };
+        let Some(th) = w.thing(e) else { continue };
+        let (x, y) = cam.to_screen(cell.x as f32, cell.y as f32);
+        let bar = z * 0.8;
+        draw_rectangle(x + z * 0.1, y + z + 3.0, bar, 3.0, Color::new(0.0, 0.0, 0.0, 0.55));
+        draw_rectangle(x + z * 0.1, y + z + 3.0, bar * f, 3.0, site_color(w, e));
+        let text = if hurt {
+            let max = w.stat(e, "hp").unwrap_or(1.0).round() as i64;
+            format!("{} · {}/{max} hp", w.defs.thing(th.def).label, th.hp.max(0))
+        } else {
+            let k = w.ecs.get::<&Work>(e).map(|k| *k).ok();
+            let verb = match k.and_then(|k| k.designation) {
+                Some(d) => w.defs.designations[d as usize].label.clone(),
+                None => "Build".to_string(),
+            };
+            let secs = k.map_or(0, |k| (k.total - k.done).div_ceil(60));
+            format!("{verb} · {}% · {secs} s", (f * 100.0).round())
+        };
+        // Under the bar: above the cell is where a worker's speech goes.
+        out.push((x + z * 0.1, y + z + 9.0, text));
+    }
+    out
 }
 
 /// Pawns, hit flashes and the field overlay.
@@ -339,7 +488,11 @@ pub fn pawns(app: &App) {
             continue;
         }
         let cd = defs.creature(p.def);
-        let (px, py) = pawn_pos(&p);
+        let (mut px, mut py) = pawn_pos(&p);
+        if z >= DETAIL_ZOOM {
+            let (lx, ly) = app.worksites.lunge(w, &p);
+            (px, py) = (px + lx, py + ly);
+        }
         if px < x0 - 1.0 || px > x1 + 1.0 || py < y0 - 1.0 || py > y1 + 1.0 {
             continue;
         }

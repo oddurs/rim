@@ -327,6 +327,22 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         "right-click sends an undrafted colonist to chop",
     );
     t.check(t.app.order_flash.is_some(), "the order is acknowledged on the map");
+    // The chop itself: blows throw chips once the axe lands (DESIGN.md §6b).
+    let zoom = t.app.cam.zoom;
+    t.app.cam.zoom = 48.0;
+    let mut thrown = false;
+    for _ in 0..600 {
+        t.ticks(2);
+        t.frame().await;
+        if !t.app.worksites.parts.is_empty() {
+            thrown = true;
+            break;
+        }
+    }
+    t.check(thrown, "chopping throws chips toward the colonist");
+    t.frame().await;
+    t.shot("chopping").await;
+    t.app.cam.zoom = zoom;
     for _ in 0..3000 {
         t.ticks(1);
         if t.w().thing(tree.1).is_none() {
