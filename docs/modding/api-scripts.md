@@ -33,6 +33,7 @@ are in [Scripting rules](scripting.md).
 | `rim.message` | `(text: string, kind: MessageKind?) -> ()` | Post a message to the feed (default kind "info"). |
 | `rim.near_cell` | `(x: number, y: number, r: number) -> (number?, number?)` | A random open cell within r of (x, y). |
 | `rim.on` | `(event: string, fn: (event: {[string]: any}) -> ()) -> ()` | Handle an engine event (`pawn_died`, `season_changed`, ...) or a mod event (`weather:changed`). |
+| `rim.on_migrate` | `(fn: (from_version: string, data: {[string]: any}) -> {[string]: any}) -> ()` | Upgrade your script data from a save made with a different version of your mod: fn gets that version and your data (bare keys) and returns the data to keep. It sees no world: only your data. Runs on load, before any hook. Register at load time. |
 | `rim.push_ambient` | `(field: string, key: string, value: number, hours: number?, ease_hours: number?) -> ()` | Add a named contribution to a field's outdoor value, easing in over ease_hours and expiring after hours (nil: until cleared). |
 | `rim.random` | `() -> number` | A number in [0, 1) from the world's random numbers: the same on every machine. |
 | `rim.random_int` | `(lo: number, hi: number) -> number` | A whole number from lo to hi inclusive, from the world's random numbers. |

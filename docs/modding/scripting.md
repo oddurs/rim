@@ -125,6 +125,30 @@ weather's `force`, it's the weather plugin that emits `weather:changed`.
 Handlers run in load order, then registration order, and payloads are plain
 data.
 
+## Upgrading saved data
+
+A save records your mod's version. When a player loads it with a different
+version, and you've changed what your script data looks like, register a
+migration at load time:
+
+<!-- not a sample -->
+```lua
+rim.on_migrate(function(from_version, data)
+    if from_version == "0.1.0" then
+        data.tally = data.count   -- renamed in 0.2.0
+        data.count = nil
+    end
+    return data
+end)
+```
+
+`data` is your mod's script data only, by bare key, and what you return
+replaces it. It sees nothing else: no world, no random numbers, so it gives
+the same answer on every machine. It runs once, on load, before any hook,
+and also when a player puts your mod back into a game that ran without it
+for a while. If it errors, the save doesn't load at all, with your mod
+named, rather than loading half-upgraded.
+
 ## Limits
 
 - **An endless loop is stopped.** A single hook or handler call may run 100

@@ -255,3 +255,133 @@ fn a_removed_mods_data_waits_for_it_and_its_things_are_dropped() {
     }
     let _ = std::fs::remove_file(path);
 }
+
+/// A fixture mod at `version`, with `script`.
+fn fixture(name: &str, version: &str, script: &str) -> PathBuf {
+    let dir = common::test_mods(name, &["core", "weather"], &[("fix", &[("scripts/fix.luau", script)])]);
+    let toml = dir.join("fix/mod.toml");
+    let text =
+        std::fs::read_to_string(&toml).unwrap().replace("version = \"0.1.0\"", &format!("version = \"{version}\""));
+    std::fs::write(toml, text).unwrap();
+    dir
+}
+
+const FIX_V1: &str = r#"
+rim.every(10, function()
+    if rim.get_data("count") == nil then rim.set_data("count", 5) end
+end)
+"#;
+
+const FIX_V2: &str = r#"
+rim.on_migrate(function(from, data)
+    if from == "0.1.0" then
+        data.tally = data.count
+        data.count = nil
+    end
+    return data
+end)
+"#;
+
+#[test]
+fn a_mod_upgrades_its_data_when_its_version_changes() {
+    let path = save_path("migrate");
+    let v1 = fixture("migrate-v1", "0.1.0", FIX_V1);
+    let (mut sim, mut save) = new_game(&v1, &path);
+    let mut hashes = BTreeMap::new();
+    play(&mut sim, &mut save, 60, &mut hashes);
+    sim.world.data.insert("weather:untouched".into(), rim_sim::data::Data::Int(1));
+    save.snapshot(&mut sim).unwrap();
+    assert_eq!(sim.world.data.get("fix:count"), Some(&rim_sim::data::Data::Int(5)));
+    drop(save);
+
+    let v2 = fixture("migrate-v2", "0.2.0", FIX_V2);
+    let (sim, _, report) = SaveFile::load(&path, &v2, &|_| true).unwrap_or_else(|e| panic!("{e}"));
+    assert!(report.new_epoch.is_some());
+    assert_eq!(sim.world.data.get("fix:tally"), Some(&rim_sim::data::Data::Int(5)), "migrated");
+    assert_eq!(sim.world.data.get("fix:count"), None);
+    assert_eq!(sim.world.data.get("weather:untouched"), Some(&rim_sim::data::Data::Int(1)), "only fix's data");
+    for d in [v1, v2] {
+        let _ = std::fs::remove_dir_all(d);
+    }
+    let _ = std::fs::remove_file(path);
+}
+
+#[test]
+fn a_failed_migration_fails_the_load_and_leaves_the_save_alone() {
+    let path = save_path("migrate-fail");
+    let v1 = fixture("migrate-fail-v1", "0.1.0", FIX_V1);
+    let (mut sim, mut save) = new_game(&v1, &path);
+    let mut hashes = BTreeMap::new();
+    play(&mut sim, &mut save, 60, &mut hashes);
+    save.snapshot(&mut sim).unwrap();
+    drop(save);
+    let before = std::fs::read(&path).unwrap();
+
+    let broken = "rim.on_migrate(function(from, data) error(\"can't read \" .. from) end)\n";
+    let v2 = fixture("migrate-fail-v2", "0.2.0", broken);
+    let err = SaveFile::load(&path, &v2, &|_| true).err().expect("the load fails");
+    assert!(err.contains("mod 'fix'") && err.contains("can't read 0.1.0"), "{err}");
+    assert_eq!(std::fs::read(&path).unwrap(), before, "no new epoch was written");
+    for d in [v1, v2] {
+        let _ = std::fs::remove_dir_all(d);
+    }
+    let _ = std::fs::remove_file(path);
+}
+
+#[test]
+fn a_mod_that_comes_back_migrates_from_the_version_its_data_was_written_with() {
+    let path = save_path("migrate-return");
+    let v1 = fixture("migrate-return-v1", "0.1.0", FIX_V1);
+    let gone = common::test_mods("migrate-return-gone", &["core", "weather"], &[]);
+    let v2 = fixture("migrate-return-v2", "0.2.0", FIX_V2);
+    let (mut sim, mut save) = new_game(&v1, &path);
+    let mut hashes = BTreeMap::new();
+    play(&mut sim, &mut save, 60, &mut hashes);
+    save.snapshot(&mut sim).unwrap();
+    drop(save);
+    // Played a while without the mod: its data waits, and so does its version.
+    let (mut sim, mut save, _) = SaveFile::load(&path, &gone, &|_| true).unwrap();
+    play(&mut sim, &mut save, 60, &mut hashes);
+    save.snapshot(&mut sim).unwrap();
+    drop(save);
+    let (sim, _, _) = SaveFile::load(&path, &v2, &|_| true).unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(sim.world.data.get("fix:tally"), Some(&rim_sim::data::Data::Int(5)), "migrated from 0.1.0");
+    for d in [v1, gone, v2] {
+        let _ = std::fs::remove_dir_all(d);
+    }
+    let _ = std::fs::remove_file(path);
+}
+
+#[test]
+fn a_migration_sees_only_its_data_and_is_registered_at_load() {
+    let path = save_path("migrate-pure");
+    let v1 = fixture("migrate-pure-v1", "0.1.0", FIX_V1);
+    let (mut sim, mut save) = new_game(&v1, &path);
+    let mut hashes = BTreeMap::new();
+    play(&mut sim, &mut save, 60, &mut hashes);
+    save.snapshot(&mut sim).unwrap();
+    drop(save);
+    let pure = r#"
+rim.on_migrate(function(from, data)
+    data.had_world = (pcall(rim.random))
+    return data
+end)
+rim.every(5, function()
+    rim.set_data("late", (pcall(rim.on_migrate, function(f, d) return d end)))
+end)
+"#;
+    let v2 = fixture("migrate-pure-v2", "0.2.0", pure);
+    let (mut sim, mut save, _) = SaveFile::load(&path, &v2, &|_| true).unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(sim.world.data.get("fix:had_world"), Some(&rim_sim::data::Data::Bool(false)), "no world in a migration");
+    play(&mut sim, &mut save, 10, &mut hashes);
+    assert_eq!(sim.world.data.get("fix:late"), Some(&rim_sim::data::Data::Bool(false)), "not from a hook");
+    drop(save);
+    let empty = "rim.on_migrate(function(from, data) return { [\"\"] = 1 } end)\n";
+    let v3 = fixture("migrate-pure-v3", "0.3.0", empty);
+    let err = SaveFile::load(&path, &v3, &|_| true).err().expect("an empty key fails the load");
+    assert!(err.contains("non-empty"), "{err}");
+    for d in [v1, v2, v3] {
+        let _ = std::fs::remove_dir_all(d);
+    }
+    let _ = std::fs::remove_file(path);
+}

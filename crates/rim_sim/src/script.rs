@@ -88,6 +88,8 @@ struct Registry {
     disabled: std::collections::HashSet<usize>,
     hooks: Vec<Hook>,
     handlers: Vec<Handler>,
+    /// Each mod's `rim.on_migrate` function.
+    migrators: BTreeMap<String, Function>,
 }
 
 /// Most memory the sim VM may hold. Hitting it fails the allocating script
@@ -665,6 +667,29 @@ impl ScriptHost {
         );
         let reg = self.reg.clone();
         rim.set(
+            "on_migrate",
+            lua.create_function(move |_, func: Function| {
+                let mut r = reg.borrow_mut();
+                let mod_id = r.current_mod.clone();
+                if r.loaded {
+                    return Err(mlua::Error::runtime(format!("mod '{mod_id}': register on_migrate at load time")));
+                }
+                if r.migrators.contains_key(&mod_id) {
+                    return Err(mlua::Error::runtime(format!("mod '{mod_id}' registered on_migrate twice")));
+                }
+                r.migrators.insert(mod_id, func);
+                Ok(())
+            })?,
+        )?;
+        self.declare(
+            "on_migrate",
+            "(fn: (from_version: string, data: {[string]: any}) -> {[string]: any}) -> ()",
+            "Upgrade your script data from a save made with a different version of your mod: fn gets that version and \
+             your data (bare keys) and returns the data to keep. It sees no world: only your data. Runs on load, \
+             before any hook. Register at load time.",
+        );
+        let reg = self.reg.clone();
+        rim.set(
             "log",
             lua.create_function(move |_, msg: String| {
                 eprintln!("[{}] {msg}", reg.borrow().current_mod);
@@ -1164,6 +1189,39 @@ impl ScriptHost {
                 );
             }
         }
+    }
+
+    /// Run `mod_id`'s migrator, if it has one, over its script data in `w`:
+    /// the save was made with version `from`. Only that mod's keys go in,
+    /// and what comes back replaces them. The migrator gets no world: a
+    /// migration is a function of the mod's data, nothing else.
+    pub fn migrate(&self, w: &mut World, mod_id: &str, from: &str) -> Result<(), String> {
+        let Some(f) = self.reg.borrow().migrators.get(mod_id).cloned() else { return Ok(()) };
+        let prefix = format!("{mod_id}:");
+        let mine: BTreeMap<crate::data::Key, crate::data::Data> = w
+            .data
+            .iter()
+            .filter_map(|(k, v)| Some((crate::data::Key::Str(k.strip_prefix(&prefix)?.to_string()), v.clone())))
+            .collect();
+        let data = crate::data::to_lua(&self.lua, &crate::data::Data::Table(mine)).map_err(|e| e.to_string())?;
+        self.steps.set(STEP_BUDGET);
+        self.reg.borrow_mut().current_mod = mod_id.to_string();
+        let r = f.call::<Value>((from, data));
+        self.reg.borrow_mut().current_mod.clear();
+        let out = r.map_err(|e| e.to_string())?;
+        let Some(crate::data::Data::Table(out)) = crate::data::from_lua(&out, "migrate", 0)? else {
+            return Err("on_migrate must return a table of your data".into());
+        };
+        let mut keep = Vec::new();
+        for (k, v) in out {
+            match k {
+                crate::data::Key::Str(k) if !k.is_empty() => keep.push((format!("{prefix}{k}"), v)),
+                _ => return Err("on_migrate must return your data by non-empty string keys".into()),
+            }
+        }
+        w.data.retain(|k, _| !k.starts_with(&prefix));
+        w.data.extend(keep);
+        Ok(())
     }
 
     /// Hooks and handlers switched off for running away, by registration
