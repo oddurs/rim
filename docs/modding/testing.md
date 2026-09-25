@@ -73,6 +73,32 @@ It prints how many checkpoints agreed, and exits 1 at the first one that
 doesn't, naming the sections that differ (`engine:world`, `weather:data`).
 A mod that keeps state in a Luau local instead of script data shows up here.
 
+## Reading a save
+
+A save is binary, but it can be turned into text and back:
+
+```sh
+rim save unpack colony.rim colony/    # one JSON file per section
+rim save pack colony/ colony.rim      # and back
+rim save diff mine.rim theirs.rim     # the first difference in each section
+```
+
+`colony/epoch-0/tick-43200/` is a snapshot. `engine/pawn.json` holds every
+pawn, `weather/data.json` is the weather mod's script data, and
+`engine/map.json` draws the map, one line per row. Defs are named by
+qualified id (`"core:wall"`), and entities by the id the world gave them.
+Edit a snapshot and pack it, and the game loads from your edit: it becomes
+the start of a new epoch, and the history before it stays in the file. Edit
+one snapshot at a time.
+
+`diff` compares the newest snapshot of each save and names the section, the
+entity and the field that first differ:
+
+```text
+engine:pawn: entity 4294973382.hp: 100 ≠ 64
+weather:data: forecast[0].ends: 21362 ≠ 21400
+```
+
 ## Worlds
 
 `t.world({ seed, mods, size })` builds a fresh world, exactly as a new game

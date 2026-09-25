@@ -209,6 +209,43 @@ pub fn read(path: &Path) -> Result<(Vec<EpochRead>, u64), String> {
     Ok((epochs, (bytes.len() - good) as u64))
 }
 
+/// Write epochs as a new file, the inverse of `read`: each epoch, then its
+/// logs and snapshots in tick order, a log before the snapshot at its tick.
+/// It's written beside `path` and renamed over it, so a failure leaves
+/// whatever was there.
+pub fn write(path: &Path, epochs: &[EpochRead]) -> std::io::Result<()> {
+    let mut name = path.as_os_str().to_owned();
+    name.push(".new");
+    let tmp = PathBuf::from(name);
+    let written = (|| {
+        let mut file = File::create(&tmp)?;
+        file.write_all(MAGIC)?;
+        let len = MAGIC.len() as u64;
+        let mut s = SaveFile { path: path.to_path_buf(), file, len, broken: false, stored: HashSet::new() };
+        for e in epochs {
+            s.put(EPOCH, &msgpack(&e.epoch))?;
+            let (mut snaps, mut logs) = (e.snapshots.iter().peekable(), e.logs.iter().peekable());
+            loop {
+                if let Some(log) = logs.next_if(|l| snaps.peek().is_none_or(|s| l.tick <= s.header.tick)) {
+                    s.put(LOG, &msgpack(log))?;
+                } else if let Some(snap) = snaps.next() {
+                    s.write_snapshot(snap)?;
+                } else {
+                    break;
+                }
+            }
+        }
+        s.sync()
+    })();
+    match written {
+        Ok(()) => std::fs::rename(&tmp, path),
+        Err(e) => {
+            let _ = std::fs::remove_file(&tmp);
+            Err(e)
+        }
+    }
+}
+
 fn lock_of(sim: &Sim) -> Vec<(String, String)> {
     sim.mods.iter().map(|m| (m.id.clone(), m.version.clone())).collect()
 }

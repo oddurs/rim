@@ -42,7 +42,7 @@ pub struct Snapshot {
 
 /// The world's own state: everything outside the map, fields and entities.
 #[derive(Serialize, Deserialize)]
-struct WorldSection {
+pub(crate) struct WorldSection {
     width: i32,
     height: i32,
     rng: u64,
@@ -62,10 +62,10 @@ struct WorldSection {
 
 /// Each def kind's qualified ids, in `DefId` order: the table the raw ids in
 /// every other section index into.
-type DefsSection = BTreeMap<String, Vec<String>>;
+pub(crate) type DefsSection = BTreeMap<String, Vec<String>>;
 
 #[derive(Serialize, Deserialize)]
-struct ScriptsSection {
+pub(crate) struct ScriptsSection {
     disabled_hooks: Vec<usize>,
     disabled_handlers: Vec<usize>,
 }

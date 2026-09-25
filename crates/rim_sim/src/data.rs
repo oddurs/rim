@@ -7,7 +7,7 @@
 use crate::rng::mix;
 use std::collections::BTreeMap;
 
-#[derive(Clone, Debug, PartialEq, PartialOrd, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, PartialEq, PartialOrd)]
 pub enum Data {
     Bool(bool),
     Int(i64),
@@ -20,6 +20,126 @@ pub enum Data {
 pub enum Key {
     Int(i64),
     Str(String),
+}
+
+/// The binary form: tagged, so it reads back without a schema.
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(remote = "Data", rename = "Data")]
+enum Tagged {
+    Bool(bool),
+    Int(i64),
+    Num(f64),
+    Str(String),
+    Table(BTreeMap<Key, Data>),
+}
+
+/// The text form (`rim save unpack`) is data as a script wrote it: `true`,
+/// `3`, `0.5`, `"x"`, a list, or a record. A table that is neither, or a
+/// record whose only key is `#`, is `{"#": [[key, value], ...]}`.
+impl serde::Serialize for Data {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        if !s.is_human_readable() {
+            return Tagged::serialize(self, s);
+        }
+        match self {
+            Data::Bool(b) => s.serialize_bool(*b),
+            Data::Int(i) => s.serialize_i64(*i),
+            Data::Num(n) if n.is_finite() => s.serialize_f64(*n),
+            Data::Num(n) => Err(serde::ser::Error::custom(format!("{n} has no text form"))),
+            Data::Str(v) => s.serialize_str(v),
+            Data::Table(t) if is_list(t) => s.collect_seq(t.values()),
+            Data::Table(t) if t.keys().all(|k| matches!(k, Key::Str(_))) && !is_pairs(t) => {
+                s.collect_map(t.iter().filter_map(|(k, v)| match k {
+                    Key::Str(k) => Some((k, v)),
+                    Key::Int(_) => None,
+                }))
+            }
+            Data::Table(t) => {
+                let key = |k: &Key| match k {
+                    Key::Int(i) => Data::Int(*i),
+                    Key::Str(s) => Data::Str(s.clone()),
+                };
+                let pairs: Vec<(Data, &Data)> = t.iter().map(|(k, v)| (key(k), v)).collect();
+                s.collect_map([("#", pairs)])
+            }
+        }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Data {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Data, D::Error> {
+        if d.is_human_readable() {
+            d.deserialize_any(TextVisitor)
+        } else {
+            Tagged::deserialize(d)
+        }
+    }
+}
+
+/// Keys 1..=n, the way Luau lays out a list.
+fn is_list(t: &BTreeMap<Key, Data>) -> bool {
+    !t.is_empty() && t.keys().zip(1..).all(|(k, i)| *k == Key::Int(i))
+}
+
+/// A record whose only key is `#` reads as the pairs form.
+fn is_pairs(t: &BTreeMap<Key, Data>) -> bool {
+    t.len() == 1 && t.contains_key(&Key::Str("#".into()))
+}
+
+struct TextVisitor;
+
+impl<'de> serde::de::Visitor<'de> for TextVisitor {
+    type Value = Data;
+
+    fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.write_str("a boolean, number, string, list or record")
+    }
+    fn visit_bool<E>(self, b: bool) -> Result<Data, E> {
+        Ok(Data::Bool(b))
+    }
+    fn visit_i64<E>(self, i: i64) -> Result<Data, E> {
+        Ok(Data::Int(i))
+    }
+    fn visit_u64<E: serde::de::Error>(self, i: u64) -> Result<Data, E> {
+        i64::try_from(i).map(Data::Int).map_err(|_| E::custom(format!("{i} is too big for an integer")))
+    }
+    fn visit_f64<E>(self, n: f64) -> Result<Data, E> {
+        Ok(Data::Num(n))
+    }
+    fn visit_str<E>(self, s: &str) -> Result<Data, E> {
+        Ok(Data::Str(s.to_string()))
+    }
+    fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut seq: A) -> Result<Data, A::Error> {
+        let mut t = BTreeMap::new();
+        while let Some(v) = seq.next_element()? {
+            t.insert(Key::Int(t.len() as i64 + 1), v);
+        }
+        Ok(Data::Table(t))
+    }
+    fn visit_map<A: serde::de::MapAccess<'de>>(self, mut map: A) -> Result<Data, A::Error> {
+        let mut t = BTreeMap::new();
+        while let Some((k, v)) = map.next_entry::<String, Data>()? {
+            t.insert(Key::Str(k), v);
+        }
+        if !is_pairs(&t) {
+            return Ok(Data::Table(t));
+        }
+        let bad = || serde::de::Error::custom("\"#\" holds a list of [key, value] pairs");
+        let Some(Data::Table(pairs)) = t.remove(&Key::Str("#".into())) else { return Err(bad()) };
+        let mut out = BTreeMap::new();
+        for pair in pairs.into_values() {
+            let Data::Table(kv) = pair else { return Err(bad()) };
+            if !is_list(&kv) {
+                return Err(bad());
+            }
+            match kv.into_values().collect::<Vec<_>>().as_slice() {
+                [Data::Int(i), v] => out.insert(Key::Int(*i), v.clone()),
+                [Data::Str(s), v] => out.insert(Key::Str(s.clone()), v.clone()),
+                _ => return Err(bad()),
+            };
+        }
+        Ok(Data::Table(out))
+    }
 }
 
 impl Data {

@@ -147,14 +147,14 @@ A one-week sprint inside Colony. Building stops being a fixed list of defs
 
 ## persistence — Persistence
 
-`#########·` 83% · 10 of 12 done · due 2026-11-20
+`##########` 92% · 11 of 12 done · due 2026-11-20
 
 The log is the save and snapshots are a cache (DESIGN.md §7a): a colony is always saved, loads fast, survives mod changes, and replays exactly.
 
-- [ ] `47dbb393` rim save unpack, pack and diff <sup>feature · p1 · m · tooling</sup>
 - [ ] `af316e9d` Main menu: continue, load a colony, or start a new one <sup>feature · p1 · m · client</sup>
 - [x] `01e86e7b` Always saved: the client logs and snapshots off the sim thread <sup>feature · p1 · m · client</sup>
 - [x] `38722b6e` Replays: run an epoch from its root, checked at every checkpoint <sup>feature · p1 · m · engine</sup>
+- [x] `47dbb393` rim save unpack, pack and diff <sup>feature · p1 · m · tooling</sup>
 - [x] `65f0b723` Script data belongs to its mod: set_data namespaced by the engine <sup>feature · p0 · m · engine</sup>
 - [x] `70edf863` Save format: component-keyed, versioned, mod-aware <sup>spike · p0 · s · engine</sup>
 - [x] `b04a908e` Stable entity ids: the world hands them out, and ties are broken by them <sup>feature · p0 · m · engine</sup>

@@ -18,6 +18,7 @@ Measured on the reference machine (Apple Silicon, macOS), release builds.
 | libm | 0.2 | no default features (deterministic transcendentals for scripts) |
 | rmp-serde | 1.3 | default (save sections, `to_vec_named`) |
 | zstd | 0.14 | default (save sections, level 3) |
+| serde_json | 1 | `float_roundtrip` (`rim save`: saves as text) |
 | taffy | 0.14 | `std`, `taffy_tree`, `flexbox`, `content_size` |
 | cosmic-text | 0.19 | default (`std`, `swash`, `fontconfig`) + `shape-run-cache` |
 | macroquad | 0.4.16 | default |
@@ -164,6 +165,15 @@ build:
 
 Same size once compressed; MessagePack decodes 2.6× faster. zstd is a C
 library (zstd-sys); nothing pure-Rust compresses as well.
+
+`rim save unpack` writes the same sections as JSON (serde_json), each
+through its Rust type, so an untouched section packs back to the same
+bytes. JSON because a bug report or a test fixture is read with anything,
+and jq works on it. `float_roundtrip` makes parsing exact: without it a
+float can come back one bit off, and the section's hash changes. Script
+data has its own text form (`Data` asks `is_human_readable`): a list, a
+record, or `{"#": [[key, value], ...]}` for a table that is neither, since
+JSON keys are strings and Luau's aren't. MessagePack keeps the tagged form.
 
 ## toml and error messages
 
