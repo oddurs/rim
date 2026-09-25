@@ -335,6 +335,10 @@ pub struct World {
     seen_room_rebuilds: u64,
     /// State that scripts keep in the world (`rim.set_data`), by key.
     pub data: BTreeMap<String, Data>,
+    /// For each mod whose script data is here but which isn't loaded, the
+    /// version it wrote that data with: when it comes back, it migrates
+    /// from there (0139).
+    pub data_versions: BTreeMap<String, String>,
 }
 
 impl World {
@@ -360,6 +364,7 @@ impl World {
             colony_lost: false,
             seen_room_rebuilds: u64::MAX,
             data: BTreeMap::new(),
+            data_versions: BTreeMap::new(),
         }
     }
 

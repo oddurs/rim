@@ -855,8 +855,10 @@ cache: it's lost on load, and invisible to the desync check.
   sections, each with a checksum. A crash can only cut the tail, which
   costs the last few commands. Compaction rewrites it without old snapshots.
 - **Versioned twice:** the format has a version, and so does each mod. A mod
-  whose recorded version differs from the installed one gets its migrate
-  hook, with its sections, when the next epoch begins.
+  whose recorded version differs from the installed one gets its
+  `rim.on_migrate` function called with that version and its script data,
+  when the next epoch begins and before any hook runs. If any mod's
+  migration fails, the load fails and the save is left as it was.
 
 ### Readable on request
 

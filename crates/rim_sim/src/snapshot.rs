@@ -56,6 +56,8 @@ struct WorldSection {
     /// Events raised after the last dispatch (a handler's `rim.emit`),
     /// delivered on the next tick.
     events: Vec<GameEvent>,
+    /// `World::data_versions`: removed mods' data and its version.
+    data_versions: BTreeMap<String, String>,
 }
 
 /// Each def kind's qualified ids, in `DefId` order: the table the raw ids in
@@ -187,6 +189,7 @@ impl Snapshot {
             messages: w.messages.clone(),
             recent_events: w.recent_events.iter().map(|(t, k, e, n)| (*t, k.to_string(), *e, n.clone())).collect(),
             events: w.events.clone(),
+            data_versions: w.data_versions.clone(),
         };
         let (disabled_hooks, disabled_handlers) = sim.scripts.disabled();
         let mut sections = BTreeMap::from([
@@ -513,6 +516,27 @@ impl Snapshot {
             let Some(m) = name.strip_suffix(":data") else { continue };
             let data: BTreeMap<String, Data> = rmp_serde::from_slice(bytes).map_err(|e| format!("{name}: {e}"))?;
             w.data.extend(data.into_iter().map(|(k, v)| (if m.is_empty() { k } else { format!("{m}:{k}") }, v)));
+        }
+        // A mod whose version changed upgrades its data before anything runs
+        // (0139); so does one coming back with a different version than its
+        // parked data. Any failure fails the load: nothing is half-migrated.
+        let mut written_by = ws.data_versions;
+        written_by.extend(self.header.mods.iter().cloned());
+        for m in &mods.manifests {
+            let Some(from) = written_by.get(&m.id) else { continue };
+            if *from != m.version {
+                mods.scripts.migrate(&mut w, &m.id, from).map_err(|e| {
+                    format!("mod '{}' couldn't upgrade its data from {from} to {}: {e}", m.id, m.version)
+                })?;
+            }
+        }
+        // Remember the version of every mod whose data is parked here.
+        let loaded: std::collections::BTreeSet<&str> = mods.manifests.iter().map(|m| m.id.as_str()).collect();
+        for k in w.data.keys() {
+            let Some((m, _)) = k.split_once(':') else { continue };
+            if let (false, Some(v)) = (loaded.contains(m), written_by.get(m)) {
+                w.data_versions.insert(m.to_string(), v.clone());
+            }
         }
         let sc: ScriptsSection = dec(self, "engine:scripts")?;
         // Hook indices only mean the same hooks under the same scripts.
