@@ -48,7 +48,7 @@ fn a_bad_patch_names_the_mod_that_made_it() {
 /// none of its own things can be gathered: core alone is unchanged.
 #[test]
 fn core_names_gather_and_uses_it_nowhere() {
-    let s = Sim::new(&common::mods(), 1).unwrap();
+    let s = Sim::with_mods(&common::mods(), 1, &|m| m == "core").unwrap();
     let gather = s.world.defs.lookup("designation", "core:gather").expect("core offers gather");
     assert_eq!(s.world.defs.designations[gather as usize].label, "Gather");
     let gathered: Vec<&str> =

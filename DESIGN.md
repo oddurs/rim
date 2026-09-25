@@ -602,6 +602,11 @@ not from a research screen.
   - the flake, the hand axe, the hafted axe, the maul and the digging stick;
   - the patches that gate chopping and mining behind tools.
 
+  It lands in tiers. The first is gathering by hand: the materials, the wild
+  things they come from, oak branches, and a shelter and campfire of
+  branches. It gates nothing, so bare-handed felling still works until
+  tools arrive.
+
 ### The first days
 
 A target for one naked colonist, measured by a seed sweep rather than
@@ -632,7 +637,8 @@ things we build ourselves.
 | Terrain, plants, rocks, map generation        | Seasons and weather (`mods/weather`)    |
 | Needs: food, rest, warmth                     | Mood, mental breaks, relationships      |
 | Calendar, day and night, the atmosphere names | Other biomes, water flow, fire spread   |
-| Harvest, mine, build, haul (via delivery)     | Crafting benches, bills, research       |
+| Harvest, mine, build, haul (via delivery)     | The stone age (`mods/primitive`)        |
+|                                               | Crafting benches, bills, research       |
 | Melee combat, health, death                   | Ranged weapons, armour, medicine        |
 | Wild animals, predators, hunting              | Taming, farming animals                 |
 | Storyteller, wealth, eras                     | Trade, factions, diplomacy              |

@@ -11,8 +11,9 @@ fn mods() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mods")
 }
 
+/// Core's own recipes: plugins patch some (mods/primitive's campfire).
 fn sim() -> Sim {
-    Sim::new(&mods(), 21).expect("mods load")
+    Sim::with_mods(&mods(), 21, &|m| m == "core").expect("mods load")
 }
 
 fn thing(s: &Sim, id: &str) -> DefId {

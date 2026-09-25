@@ -104,13 +104,15 @@ fn fixture(w: &World, pawn: Entity, from: IVec, f: Entity) -> Option<Order> {
             }
         });
     }
-    // The harvest it's designated for, and only that. Otherwise the
-    // gentlest one that's ready, so a click gathers from a tree rather than
-    // felling it.
+    // The harvest it's designated for, and only that. Otherwise a gentle
+    // one (the thing stays), so a click gathers from a tree rather than
+    // felling it, even while those branches grow back. Something with no
+    // gentle harvest is taken as the click says.
     let ready = |h: &&HarvestDef| w.harvest_ready(f, h.key());
+    let gentle = td.harvest.iter().any(|h| !h.destroy);
     let pick = match w.ecs.get::<&Designated>(f).ok().and_then(|d| td.harvest_for(d.0)) {
         Some(h) => Some(h).filter(ready),
-        None => td.harvest.iter().filter(ready).min_by_key(|h| h.destroy),
+        None => td.harvest.iter().filter(|h| !gentle || !h.destroy).find(ready),
     };
     if let Some(hd) = pick {
         return Some(Order {

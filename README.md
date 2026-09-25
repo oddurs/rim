@@ -28,6 +28,10 @@ temperature around the calendar, runs a forecast of rain, storms, fog and snow,
 and adds cold snaps and heat waves, using only the public API. Remove it and
 core's mild climate remains. See [Modding climate and weather](docs/modding/weather.md).
 
+The stone age is another: `mods/primitive` has you gather branches, fibre,
+stones and flint with your hands, and build a first shelter and campfire out
+of branches. Remove it and core's bare-handed felling and quarrying remain.
+
 The interface is a mod too. The whole HUD lives in `mods/core/ui/`, written in
 Luau on a small UI engine (`crates/rim_ui`), and any mod can extend, replace,
 wrap or remove any part of it. See [Modding the interface](docs/modding/ui.md).

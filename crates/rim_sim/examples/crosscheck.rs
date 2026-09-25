@@ -33,6 +33,9 @@ fn main() {
     let wood = Some(thing("wood"));
     let c = s.world.colony_center().expect("a colony");
 
+    // Branches for the campfire, which the stone age builds out of them.
+    // First, so chop (one designation a thing) keeps the trees for wood.
+    s.push(Command::Designate { designation: des("gather"), a: c.offset(-20, -20), b: c.offset(20, 20) });
     s.push(Command::Designate { designation: des("chop"), a: c.offset(-14, -14), b: c.offset(14, 14) });
     s.push(Command::Designate { designation: des("harvest"), a: c.offset(-20, -20), b: c.offset(20, 20) });
     // A 5x5 hut: walls, a door on the south side, a bed and a campfire.
@@ -59,7 +62,14 @@ fn main() {
         "crosscheck seed {seed}, {days} days, mods: {}",
         s.mods.iter().map(|m| m.id.as_str()).collect::<Vec<_>>().join(", ")
     );
+    let campfire = thing("campfire");
     for day in 1..=days {
+        // Like a player, mark what has regrown to be gathered again.
+        if day > 1 {
+            for g in [&mut s, &mut twin] {
+                g.push(Command::Designate { designation: des("gather"), a: c.offset(-20, -20), b: c.offset(20, 20) });
+            }
+        }
         let ticks = if day == 1 { TICKS_PER_DAY - 1 } else { TICKS_PER_DAY };
         for _ in 0..ticks {
             s.step();
@@ -75,6 +85,20 @@ fn main() {
             twin = Snapshot::from_bytes(&bytes).and_then(|b| b.restore(&mods, &|_| true)).expect("the twin reloads");
         }
         let w = &s.world;
+        // The scenario means to build its hut: a blueprint still waiting by
+        // day 5 is a lost material or a lost job, not a determinism result.
+        if day == 5 {
+            use rim_sim::world::{Blueprint, Thing};
+            let unbuilt = w.ecs.query::<&Thing>().with::<&Blueprint>().iter().count();
+            let fires = w.ecs.query::<&Thing>().without::<&Blueprint>().iter().filter(|t| t.def == campfire).count();
+            if unbuilt > 0 || fires == 0 {
+                eprintln!("day 5: {unbuilt} blueprints still waiting, or no campfire built");
+                for t in w.ecs.query::<&Thing>().with::<&Blueprint>().iter() {
+                    eprintln!("  waiting: {} at ({}, {})", w.defs.thing(t.def).id, t.pos.x, t.pos.y);
+                }
+                std::process::exit(1);
+            }
+        }
         println!(
             "day {day:>3}  hash {:016x}  snapshot {:016x}  pawns {:>3}  messages {:>4}",
             w.state_hash(),

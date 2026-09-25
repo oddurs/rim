@@ -8,7 +8,9 @@ use rim_sim::{Command, IVec, Sim};
 use std::path::Path;
 
 fn sim(seed: u64) -> (Sim, Entity) {
-    let mut s = Sim::new(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mods"), seed).expect("mods load");
+    // Core's own orders: plugins may add harvests a click prefers (mods/primitive).
+    let mods = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mods");
+    let mut s = Sim::with_mods(&mods, seed, &|m| m == "core").expect("mods load");
     s.step();
     let founder = s.world.colonists().next().unwrap();
     (s, founder)

@@ -86,7 +86,7 @@ fn run_until(s: &mut Sim, ticks: u32, done: impl Fn(&Sim) -> bool) -> bool {
 
 #[test]
 fn harvest_is_one_table_or_a_list() {
-    let s = Sim::new(&common::mods(), 1).unwrap();
+    let s = Sim::with_mods(&common::mods(), 1, &|m| m == "core").unwrap();
     assert_eq!(s.world.defs.thing(s.world.defs.thing_id("tree_oak").unwrap()).harvest.len(), 1, "core is unchanged");
 
     let (s, _) = alone(&orchard("harvest-list"));
