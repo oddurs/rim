@@ -2,12 +2,12 @@
 id: a14a5ff6-adad-488c-9810-8a02f6409b7c
 title: Work progress lives on the thing
 type: feature
-status: doing
+status: done
 milestone: building
 assignee: Oddur Sigurdsson
-claimed: 2026-09-25
 created: 2026-09-25
 updated: 2026-09-25
+closed_at: 2026-09-25
 priority: p1
 api: additive
 effort: m
@@ -35,9 +35,9 @@ No new per-tick work: the same integer is incremented, on the thing instead of t
 
 ## Acceptance criteria
 
-- [ ] An interrupted chop resumes where it stopped, with another pawn
-- [ ] Take-down progress survives the job ending
-- [ ] Blueprint progress lives in `Work`, and an old save's plan keeps its progress
-- [ ] `Work` survives a save and load, and the determinism test passes
-- [ ] The map is touched when a site starts and stops being worked, and not on progress
-- [ ] `stage()` reads work and hp
+- [x] An interrupted chop resumes where it stopped, with another pawn
+- [x] Take-down progress survives the job ending
+- [x] Blueprint progress lives in `Work`, and an old save's plan keeps its progress
+- [x] `Work` survives a save and load, and the determinism test passes
+- [x] The map is touched when a site starts and stops being worked, and not on progress
+- [x] `stage()` reads work and hp

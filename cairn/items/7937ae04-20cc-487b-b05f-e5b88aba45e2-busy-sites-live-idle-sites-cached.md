@@ -2,8 +2,10 @@
 id: 7937ae04-20cc-487b-b05f-e5b88aba45e2
 title: Busy sites live, idle sites cached
 type: perf
-status: backlog
+status: doing
 milestone: building
+assignee: Oddur Sigurdsson
+claimed: 2026-09-25
 depends_on:
 - a14a5ff6-adad-488c-9810-8a02f6409b7c
 created: 2026-09-25
@@ -32,6 +34,6 @@ Worksite drawing under 0.3 ms a frame with 200 pawns on 200 sites; 0 live draws 
 
 ## Acceptance criteria
 
-- [ ] Idle plans are drawn from the chunk cache
-- [ ] A plan being built is drawn live and shows its progress
-- [ ] A bench case records worksite cost before and after
+- [x] Idle plans are drawn from the chunk cache
+- [x] A plan being built is drawn live and shows its progress
+- [x] A bench case records worksite cost before and after
