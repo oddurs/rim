@@ -8,8 +8,10 @@ depends on, or loads after.
 ## Ids
 
 Every def id belongs to the mod that defines it: core's `wall` is
-`core:wall`. Inside your own mod a bare id means your own def, and another
-mod's def needs its prefix. That applies to patch targets, references in your
+`core:wall`. The names plugins share through core (designations like
+`core:gather`, tool tags like `chopping`) are listed in [Core's shared
+names](vocabulary.md). Inside your own mod a bare id means your own def, and
+another mod's def needs its prefix. That applies to patch targets, references in your
 defs, and ids your scripts pass to `rim`:
 
 <!-- not a sample -->

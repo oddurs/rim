@@ -2,10 +2,12 @@
 id: ccd44902-24d5-4855-9def-406d1ed39f4a
 title: 'Core vocabulary: the gather designation and tool tag names'
 type: content
-status: backlog
+status: done
 milestone: stone-age
+assignee: Oddur Sigurdsson
 created: 2026-09-25
 updated: 2026-09-25
+closed_at: 2026-09-25
 priority: p0
 api: additive
 effort: s
@@ -25,6 +27,10 @@ DESIGN.md §5 rule 2: when two plugins must agree on a name, core defines it. Th
 
 ## Acceptance criteria
 
-- [ ] `core:gather` exists and shows in the toolbar
-- [ ] The tool tag names are documented as core's vocabulary
-- [ ] Core alone plays unchanged: the smoke test passes
+- [x] `core:gather` exists and shows in the toolbar
+- [x] The tool tag names are documented as core's vocabulary
+- [x] Core alone plays unchanged: the smoke test passes
+
+## 2026-09-25
+
+The toolbar now shows only designations something loaded can be marked for (rim_client markable): with core alone, gather would be a button that does nothing.

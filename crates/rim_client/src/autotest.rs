@@ -240,8 +240,9 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     // ---------------------------------------------------------- 0046 toolbar
     println!("\n# toolbar (0046)");
     let keys: Vec<String> = t.app.tools.iter().map(|b| b.key.clone()).collect();
-    let n_expected = 2 + defs.designations.len() + defs.things.iter().filter(|d| d.build.is_some()).count();
-    t.check(keys.len() == n_expected, format!("one tool per designation and buildable def ({})", keys.len()));
+    let markable = (0..defs.designations.len()).filter(|&d| crate::markable(&defs, d as rim_sim::defs::DefId)).count();
+    let n_expected = 2 + markable + defs.things.iter().filter(|d| d.build.is_some()).count();
+    t.check(keys.len() == n_expected, format!("one tool per markable designation and buildable def ({})", keys.len()));
     for k in &keys {
         let found = t.app.ui.find(&format!("core:toolbar.{k}")).is_some();
         t.check(found, format!("toolbar button for '{k}'"));
