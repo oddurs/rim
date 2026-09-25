@@ -817,6 +817,57 @@ it, is data.
 
 ---
 
+## 6b. Worksites: work shows on the thing
+
+A tree looks the same at the first swing and the last, a plan is the same
+blue box for every building, and a wall at 10 hp looks like one at 200.
+Chop and take-down progress lived in the pawn's job, so an interrupted
+chop started over and nothing could draw it. Every plan was drawn every
+frame whether or not anyone was building it.
+
+Three rules, in this order:
+
+- **Idle costs nothing.** A worked thing is drawn live only while a worker
+  is on it. Idle, half-done or planned, it sits in its chunk's cached mesh
+  at one of 8 stages. The sim touches the map when a site starts or stops
+  being worked, and at no other time, so progress never rebuilds a chunk.
+- **Progress lives on the thing.** `Work { done, total, .. }` is on the
+  tree, rock, plan or wall. It survives the worker leaving, a second
+  worker and a save. The renderer reads one number, the stage from 0 to 8:
+  the larger of the work done and the hp lost, so a raider's club wears a
+  wall the way a hammer does, and a repair runs it back.
+- **The look never lies about the grid.** A thing looks solid exactly when
+  it blocks. A rising wall is see-through until it stands, and a wall
+  being taken down keeps its outline until it is gone.
+
+What is drawn falls into three channels on the cell: the **stage** (baked
+when idle), the **strike** (each blow, derived by the client when `done`
+crosses a multiple of the style's `every`, so a skilled worker looks
+faster and a replay throws the same chips) and the **exit** (a tree falls,
+a rock crumbles, a wall settles, once). How a job looks is a
+`[[work_style]]` def from a small fixed vocabulary, like the look
+primitives: a mod picks and colours effects and never draws per frame.
+
+### Tension: when does a worked thing leave the chunk cache?
+
+- **On every stage change:** 8 rebuilds of a 32×32 chunk per job, for a
+  picture that only changes in steps.
+- **Always, as plans were:** a big build plan costs frame time while
+  nobody builds it.
+- **Ruling:** while a worker is on it, and nothing else. Two touches per
+  work session; a chop rebuilds its chunk twice, once when the cutter
+  arrives and once when the tree is gone.
+
+### Tension: should a half-dismantled wall look lower?
+
+- **For:** it is the obvious picture of "half gone".
+- **Against:** it still blocks, and the player would plan a path through a
+  wall that stops every pawn.
+- **Ruling:** no. Wear on a blocking thing cracks and darkens it and never
+  shrinks it, and a load check holds mods to the same rule.
+
+---
+
 ## 7. Determinism is non-negotiable
 
 - All player input becomes a `Command` that is applied at a tick boundary.
