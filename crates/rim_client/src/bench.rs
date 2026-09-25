@@ -9,7 +9,8 @@
 //! storm again at half render scale. Per view: each pass's CPU time, the time macroquad
 //! takes to hand the frame to GL ("submit"), the time the GPU takes to
 //! finish it (Linux only, where macroquad calls glFinish under telemetry),
-//! and one frame's draw calls and indices.
+//! one frame's draw calls and indices, and how many things it draws live
+//! rather than from the chunk meshes.
 //!
 //! `--check` exits 1 when the world's CPU time on the whole map (clear, in
 //! a storm, or zooming through it) is over budget. `--sprite-mods N` adds N
@@ -232,6 +233,8 @@ struct Run {
     calls: usize,
     indices: usize,
     particles: usize,
+    /// Things drawn live, outside the chunk meshes, on the last frame.
+    live: usize,
     /// Chunk meshes rebuilt over the measured frames.
     rebuilt: usize,
     /// Held to the budget: the whole map, and a zoom gesture through it.
@@ -354,6 +357,7 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
         r.calls = calls.len() + app.meshes.calls;
         r.indices = calls.iter().map(|c| c.indices_count).sum::<usize>() + app.meshes.indices;
         r.particles = app.sky.particles();
+        r.live = app.meshes.live_count();
         results.push(r);
     }
 
@@ -365,7 +369,7 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
         screen_height()
     );
     println!(
-        "{:<10} {:>5} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7} {:>6} {:>8} {:>7}",
+        "{:<10} {:>5} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7} {:>6} {:>8} {:>7} {:>6}",
         "view",
         "zoom",
         "world",
@@ -380,12 +384,13 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
         "gpu",
         "calls",
         "indices",
-        "rebuilt"
+        "rebuilt",
+        "live"
     );
     for r in &results {
         let sorted = r.world_ms();
         println!(
-            "{:<10} {:>5.0} {:>7.3} {:>7.3} {:>7.3} {:>7.3} {:>7.3} {:>7.3} {:>7.3} {:>7.3} {:>7.3} {:>7} {:>6} {:>8} {:>7}",
+            "{:<10} {:>5.0} {:>7.3} {:>7.3} {:>7.3} {:>7.3} {:>7.3} {:>7.3} {:>7.3} {:>7.3} {:>7.3} {:>7} {:>6} {:>8} {:>7} {:>6}",
             r.name,
             r.zoom,
             r.mean(|f| f.0.world()),
@@ -400,7 +405,8 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
             r.gpu_ms().map_or("-".into(), |g| format!("{g:.3}")),
             r.calls,
             r.indices,
-            r.rebuilt
+            r.rebuilt,
+            r.live
         );
     }
     println!("ms per frame, CPU unless named; world = every pass but the UI; budget {BUDGET_MS} ms on the whole map");
@@ -411,7 +417,7 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
             .map(|r| {
                 let sorted = r.world_ms();
                 format!(
-                    "    {{\"view\": \"{}\", \"zoom\": {}, \"world_ms\": {:.4}, \"world_p50_ms\": {:.4}, \"world_p99_ms\": {:.4}, \"ground_ms\": {:.4}, \"things_ms\": {:.4}, \"pawns_ms\": {:.4}, \"weather_ms\": {:.4}, \"light_ms\": {:.4}, \"ui_ms\": {:.4}, \"submit_ms\": {:.4}, \"gpu_ms\": {}, \"draw_calls\": {}, \"indices\": {}, \"particles\": {}, \"rebuilt\": {}}}",
+                    "    {{\"view\": \"{}\", \"zoom\": {}, \"world_ms\": {:.4}, \"world_p50_ms\": {:.4}, \"world_p99_ms\": {:.4}, \"ground_ms\": {:.4}, \"things_ms\": {:.4}, \"pawns_ms\": {:.4}, \"weather_ms\": {:.4}, \"light_ms\": {:.4}, \"ui_ms\": {:.4}, \"submit_ms\": {:.4}, \"gpu_ms\": {}, \"draw_calls\": {}, \"indices\": {}, \"particles\": {}, \"rebuilt\": {}, \"live\": {}}}",
                     r.name,
                     r.zoom,
                     r.mean(|f| f.0.world()),
@@ -428,7 +434,8 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
                     r.calls,
                     r.indices,
                     r.particles,
-                    r.rebuilt
+                    r.rebuilt,
+                    r.live
                 )
             })
             .collect();

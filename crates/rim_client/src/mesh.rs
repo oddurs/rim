@@ -9,8 +9,11 @@
 //! scaled from the zoom they were built at, and rebuilt, a few a frame,
 //! once it settles or has drifted too far to pass for the same picture.
 //!
-//! Plans and animated looks change every frame, so they stay out of the
-//! buffers and are drawn by `draw::things` each frame.
+//! Worksites (things being worked right now, DESIGN.md §6b) and animated
+//! looks change every frame, so they stay out of the buffers and are drawn
+//! by `draw::things` each frame. A plan nobody is building is as still as a
+//! rock and is cached with it; the sim touches the map when work on a site
+//! starts or stops, which moves it between the two.
 
 use crate::atlas::{Slot, WorldAtlas};
 use crate::draw::{self, Sink};
@@ -18,7 +21,7 @@ use crate::Cam;
 use macroquad::miniquad::*;
 use macroquad::prelude::{get_internal_gl, screen_height, screen_width, Color};
 use rim_sim::map::CHUNK;
-use rim_sim::world::{Blueprint, Thing, World};
+use rim_sim::world::{Thing, World};
 use rim_sim::IVec;
 
 #[repr(C)]
@@ -135,7 +138,7 @@ struct Chunk {
     built: Option<(u64, f32)>,
     /// Per layer: floors, items, fixtures.
     parts: [Vec<Part>; 3],
-    /// Cells drawn each frame instead (plans, animated looks), by layer.
+    /// Cells drawn each frame instead (worksites, animated looks), by layer.
     live: [Vec<IVec>; 3],
     /// Stack counts to label: cell and count.
     counts: Vec<(IVec, u32)>,
@@ -227,10 +230,7 @@ const ZOOM_BUDGET_US: f64 = 1500.0;
 
 /// Should this thing be drawn each frame rather than cached?
 fn live(w: &World, e: rim_sim::hecs::Entity) -> bool {
-    if w.ecs.get::<&Blueprint>(e).is_ok() {
-        return true;
-    }
-    w.ecs.get::<&Thing>(e).is_ok_and(|t| w.defs.thing(t.def).look_r.animated())
+    w.is_worksite(e) || w.ecs.get::<&Thing>(e).is_ok_and(|t| w.defs.thing(t.def).look_r.animated())
 }
 
 impl Meshes {
@@ -409,6 +409,11 @@ impl Meshes {
     /// Cells of `layer` in the visible chunks to draw live this frame.
     pub fn live(&self, layer: usize) -> impl Iterator<Item = IVec> + '_ {
         self.visible.iter().flat_map(move |&c| self.chunks[c].live[layer].iter().copied())
+    }
+
+    /// How many things the visible chunks leave to be drawn live.
+    pub fn live_count(&self) -> usize {
+        self.visible.iter().map(|&c| self.chunks[c].live.iter().map(Vec::len).sum::<usize>()).sum()
     }
 
     /// Stacks to label in the visible chunks: cell and count.
