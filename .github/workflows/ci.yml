@@ -89,8 +89,17 @@ jobs:
       # nextest runs every test binary's tests in parallel, each in its own
       # process: half the time of `cargo test` locally. The crate has no
       # doctests; if it gains some, add `cargo test --doc`.
+      # Off Linux, PRs leave out the two year-long weather games: they test
+      # platform-independent logic, and the crosscheck proves the platforms
+      # agree. Linux runs them for every PR, and every platform on main.
       - name: Test (includes the determinism test)
-        run: cargo nextest run --release --workspace --profile ci
+        shell: bash
+        run: |
+          filter=()
+          if [ "$RUNNER_OS" != Linux ] && [ "$GITHUB_REF" != refs/heads/main ]; then
+            filter=(-E 'not (test(a_year_of_weather_is_deterministic) | test(the_forecast_is_what_happens))')
+          fi
+          cargo nextest run --release --workspace --profile ci "${filter[@]}"
       - name: Upload the test report
         if: always()
         uses: actions/upload-artifact@v4
