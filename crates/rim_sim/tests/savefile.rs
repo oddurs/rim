@@ -185,3 +185,73 @@ fn a_malformed_chunk_is_an_error_not_a_crash() {
     assert!(savefile::read(&path).is_err());
     let _ = std::fs::remove_file(path);
 }
+
+const BOAR_DEFS: &str = r##"
+[[thing]]
+id = "hide"
+label = "boar hide"
+color = "#7a5a3a"
+category = "item"
+market_value = 3
+stack_limit = 20
+"##;
+
+/// Remembers a herd in script data, and says so whenever it can see it.
+const BOAR_SCRIPT: &str = r#"
+rim.every(10, function()
+    local herd = rim.get_data("boars:herd")
+    if herd == nil then
+        rim.set_data("boars:herd", { size = 3 })
+    else
+        rim.set_data("boars:seen", herd.size)
+    end
+end)
+"#;
+
+#[test]
+fn a_removed_mods_data_waits_for_it_and_its_things_are_dropped() {
+    let path = save_path("park");
+    let with = common::test_mods(
+        "park-with",
+        &["core", "weather"],
+        &[("boars", &[("defs/items.toml", BOAR_DEFS), ("scripts/boars.luau", BOAR_SCRIPT)])],
+    );
+    let without = common::test_mods("park-without", &["core", "weather"], &[]);
+
+    let (mut sim, mut save) = new_game(&with, &path);
+    let hide = sim.world.defs.thing_id("boars:hide").unwrap();
+    let c = sim.world.colony_center().unwrap();
+    sim.world.place_item(hide, c.offset(-6, -6), 25);
+    let mut hashes = BTreeMap::new();
+    play(&mut sim, &mut save, 600, &mut hashes);
+    save.snapshot(&mut sim).unwrap();
+    assert!(sim.world.data.contains_key("boars:herd"));
+    drop(save);
+
+    // The player removes the mod.
+    let (mut sim, mut save, report) = SaveFile::load(&path, &without, &|_| true).unwrap_or_else(|e| panic!("{e}"));
+    assert!(report.new_epoch.is_some());
+    assert_eq!(report.dropped, ["dropped 2 × boars:hide"], "25 hides in stacks of 20");
+    assert!(sim
+        .world
+        .ecs
+        .query::<&rim_sim::world::Thing>()
+        .iter()
+        .all(|t| sim.world.defs.thing(t.def).id != "boars:hide"));
+    assert!(sim.world.data.contains_key("boars:herd"), "the mod's data is parked in the world");
+    play(&mut sim, &mut save, 600, &mut hashes);
+    save.snapshot(&mut sim).unwrap();
+    drop(save);
+
+    // And puts it back: its data is there for it.
+    let (mut sim, mut save, report) = SaveFile::load(&path, &with, &|_| true).unwrap();
+    assert!(report.new_epoch.is_some());
+    assert!(report.dropped.is_empty(), "{report:?}");
+    play(&mut sim, &mut save, 50, &mut hashes);
+    assert_eq!(sim.world.data.get("boars:seen"), Some(&rim_sim::data::Data::Int(3)), "the mod reads its herd again");
+    drop(save);
+    for d in [with, without] {
+        let _ = std::fs::remove_dir_all(d);
+    }
+    let _ = std::fs::remove_file(path);
+}

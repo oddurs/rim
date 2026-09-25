@@ -819,7 +819,12 @@ version of the code.
   the order hecs happens to iterate in, and sums floats in id order.
 - **Def references are qualified ids** (`core:wall`, 0138), never `DefId`
   indices, which change whenever the mod list does. A string table keeps
-  the repeated ids small.
+  the repeated ids small: the snapshot stores ids as indices into its own
+  table of qualified ids, and a load under different defs maps each by
+  name. What no longer exists is dropped and listed in the load report: an
+  entity whose def is gone, a material, a need.
+- **A removed mod's data waits for it.** Its script data stays in the world
+  and in every later snapshot, and is there again when the mod returns.
 - **Nothing derived.** Paths, reachability regions, rooms, the wealth cache
   and def indices are rebuilt on load. If it can be computed, it isn't saved.
 
