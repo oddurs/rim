@@ -10,7 +10,7 @@
 /// The version of this surface, as a mod names it in `mod.toml` as
 /// `ui_api`. Before 1.0 every minor is breaking: a mod written against a
 /// newer surface names calls this engine lacks, and is refused.
-pub const UI_API_VERSION: (u32, u32) = (0, 4);
+pub const UI_API_VERSION: (u32, u32) = (0, 5);
 
 /// One member of `ui`, `act` or `view`.
 pub struct UiDoc {
@@ -75,6 +75,8 @@ type FieldInfo = {
 type UiDate = { year: number, season: string, season_index: number, day: number, day_of_year: number, year_days: number }
 type Part = { label: string, value: number }
 type Tool = { key: string, label: string, color: string, active: boolean }
+type Zone = { id: number, name: string, cells: number, allows: { [string]: boolean } }
+type Item = { id: string, label: string, color: string }
 type WorkType = { id: string, label: string, icon: string, order: number, default: number }
 type Stuff = { id: string, label: string, color: string, have: number, active: boolean, hp: number, work: number }
 type Hover = { x: number, y: number, terrain: string, shelter: string, readings: { string }, things: { string } }
@@ -123,6 +125,7 @@ pub const UI_API: &[UiDoc] = &[
     d!("act.toggle_pause", "() -> ()", "Pause or resume."),
     d!("act.toggle_profiler", "() -> ()", "Show or hide the profiler."),
     d!("act.tool", "(key: string) -> ()", "Pick a toolbar tool (\"designate:core:chop\", \"build:core:wall\")."),
+    d!("act.zone_allow", "(zone: number, item: string, on: boolean) -> ()", "Let a stockpile take an item, or stop it."),
     d!("ui.anchored", "(node: Node?) -> Node", "A node attached to a pawn (entity) or cell, on the anchored layer."),
     d!(
         "ui.bind",
@@ -209,6 +212,7 @@ pub const UI_API: &[UiDoc] = &[
     d!("view.hour", "() -> number", "Hour of the day, 0 to 24."),
     d!("view.hover", "() -> Hover?", "What's under the cursor."),
     d!("view.inspect", "() -> Inspect?", "The node under the cursor (devtools)."),
+    d!("view.items", "() -> { Item }", "Every item def, which a stockpile can take or refuse."),
     d!("view.messages", "(max: number) -> { Message }", "The newest messages, newest first."),
     d!("view.mods", "() -> { ModInfo }", "Loaded mods, in load order."),
     d!("view.outlines", "() -> boolean", "Whether layout outlines are on."),
@@ -241,6 +245,7 @@ pub const UI_API: &[UiDoc] = &[
     d!("view.warnings", "() -> { string }", "Load warnings."),
     d!("view.wealth", "() -> number", "The colony's wealth."),
     d!("view.work_types", "() -> { WorkType }", "The work types, in tie-break order."),
+    d!("view.zones", "() -> { Zone }", "The stockpiles, oldest first, with how many cells each has and which items it takes."),
 ];
 
 /// `types/ui.d.luau`.

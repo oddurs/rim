@@ -25,6 +25,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `act.toggle_pause` | `() -> ()` | Pause or resume. |
 | `act.toggle_profiler` | `() -> ()` | Show or hide the profiler. |
 | `act.tool` | `(key: string) -> ()` | Pick a toolbar tool ("designate:core:chop", "build:core:wall"). |
+| `act.zone_allow` | `(zone: number, item: string, on: boolean) -> ()` | Let a stockpile take an item, or stop it. |
 | `ui.anchored` | `(node: Node?) -> Node` | A node attached to a pawn (entity) or cell, on the anchored layer. |
 | `ui.bind` | `(id: string, opts: { key: string?, label: string? }, run: () -> ()) -> ()` | A named action with a default key ("space", "f3", "ctrl+k"): it fires from the key when no text input is typing, and from the command palette. With no key it is in the palette alone. The player's keybinds file overrides the key. Two mods binding one id or one key is reported. |
 | `ui.close` | `(id: string) -> ()` | Close a window. |
@@ -71,6 +72,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `view.hour` | `() -> number` | Hour of the day, 0 to 24. |
 | `view.hover` | `() -> Hover?` | What's under the cursor. |
 | `view.inspect` | `() -> Inspect?` | The node under the cursor (devtools). |
+| `view.items` | `() -> { Item }` | Every item def, which a stockpile can take or refuse. |
 | `view.messages` | `(max: number) -> { Message }` | The newest messages, newest first. |
 | `view.mods` | `() -> { ModInfo }` | Loaded mods, in load order. |
 | `view.outlines` | `() -> boolean` | Whether layout outlines are on. |
@@ -99,3 +101,4 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `view.warnings` | `() -> { string }` | Load warnings. |
 | `view.wealth` | `() -> number` | The colony's wealth. |
 | `view.work_types` | `() -> { WorkType }` | The work types, in tie-break order. |
+| `view.zones` | `() -> { Zone }` | The stockpiles, oldest first, with how many cells each has and which items it takes. |

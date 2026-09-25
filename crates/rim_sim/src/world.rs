@@ -452,6 +452,8 @@ pub struct World {
     seen_room_rebuilds: u64,
     /// State that scripts keep in the world (`rim.set_data`), by key.
     pub data: BTreeMap<String, Data>,
+    /// Stockpile zones the player painted.
+    pub zones: crate::zone::Zones,
     /// For each mod whose script data is here but which isn't loaded, the
     /// version it wrote that data with: when it comes back, it migrates
     /// from there (0139).
@@ -482,6 +484,7 @@ impl World {
             colony_lost: false,
             seen_room_rebuilds: u64::MAX,
             data: BTreeMap::new(),
+            zones: crate::zone::Zones::new((w * h) as usize),
             data_versions: BTreeMap::new(),
         }
     }
@@ -1006,6 +1009,7 @@ impl World {
                 h = p.key.bytes().fold(h, |h, b| crate::rng::mix(h ^ b as u64));
             }
         }
+        h = self.zones.hash(h);
         for (k, v) in &self.data {
             h = v.hash(k.bytes().fold(h, |h, b| crate::rng::mix(h ^ b as u64)));
         }

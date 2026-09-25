@@ -682,6 +682,7 @@ impl UiVm {
             Some(e) => UiAction::SetPriority(e, work, level),
             None => return Err(rt("bad entity id")),
         });
+        act!("zone_allow", (u32, String, bool), |(zone, item, on)| UiAction::ZoneAllow(zone, item, on));
         act!("cycle_overlay", (), |_a| UiAction::CycleOverlay);
         act!("set_overlay", Option<usize>, |i| UiAction::SetOverlay(i.map(|i| i.saturating_sub(1))));
         act!("toggle_profiler", (), |_a| UiAction::ToggleProfiler);
@@ -934,6 +935,34 @@ impl UiVm {
             Ok(t)
         });
         view!("priority_levels", (), |_lua, l, _a| Ok(l.world.defs.priority_scale.levels));
+        view!("items", (), |lua, l, _a| {
+            let t = lua.create_table()?;
+            for d in l.world.defs.things.iter().filter(|d| d.category == rim_sim::defs::Category::Item) {
+                let row = lua.create_table()?;
+                row.set("id", d.id.as_str())?;
+                row.set("label", d.label.as_str())?;
+                row.set("color", format!("#{:02x}{:02x}{:02x}", d.rgb[0], d.rgb[1], d.rgb[2]))?;
+                t.push(row)?;
+            }
+            Ok(t)
+        });
+        view!("zones", (), |lua, l, _a| {
+            let t = lua.create_table()?;
+            let zones = &l.world.zones;
+            for z in &zones.list {
+                let row = lua.create_table()?;
+                row.set("id", z.id)?;
+                row.set("name", z.name.as_str())?;
+                row.set("cells", zones.cells.iter().filter(|&&c| c == z.id).count())?;
+                let allows = lua.create_table()?;
+                for &d in &z.allows {
+                    allows.set(l.world.defs.thing(d).id.as_str(), true)?;
+                }
+                row.set("allows", allows)?;
+                t.push(row)?;
+            }
+            Ok(t)
+        });
         view!("priorities", u64, |lua, l, id| {
             let Some(p) = Entity::from_bits(id).and_then(|e| l.world.ecs.get::<&Pawn>(e).ok()) else {
                 return Ok(None);

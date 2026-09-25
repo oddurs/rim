@@ -1904,3 +1904,24 @@ fn a_work_grid_cell_steps_a_priority() {
     let actions = click(&mut ui, &sim, &mut cv, centre(cell));
     assert_eq!(actions, vec![UiAction::SetPriority(pawn, "core:build".into(), 4)], "core's default is 3, of 4 levels");
 }
+
+/// The stockpiles panel: a toggle per item turns a zone's filter on or off.
+#[test]
+fn a_stockpile_toggle_changes_what_it_takes() {
+    let mut sim = sim_at(&mods());
+    let c = sim.world.colony_center().unwrap();
+    sim.push(rim_sim::Command::Stockpile { a: c, b: c.offset(2, 2), zone: None });
+    sim.step();
+    let mut ui = ui_for(&sim);
+    let mut cv = client(&sim);
+    ui.open_window("core:zones");
+    frame(&mut ui, &sim, &cv, Default::default());
+    frame(&mut ui, &sim, &cv, Default::default());
+    let wood = ui.find("core:zones.1.core:wood").expect("a toggle per item");
+    let actions = click(&mut ui, &sim, &mut cv, centre(wood));
+    assert_eq!(
+        actions,
+        vec![UiAction::ZoneAllow(1, "core:wood".into(), false)],
+        "a new zone takes wood; the click stops it"
+    );
+}

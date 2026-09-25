@@ -49,6 +49,8 @@ const DEF_REFS: &[(&str, &str, &str)] = &[
     ("log", "*.commands.*.1.Build.thing", "thing"),
     ("log", "*.commands.*.1.Build.stuff", "thing"),
     ("log", "*.commands.*.1.SetPriority.work", "work_type"),
+    ("engine:zones", "list.*.allows.*", "thing"),
+    ("log", "*.commands.*.1.ZoneAllow.thing", "thing"),
 ];
 
 /// A section's bytes as JSON and back, through the type it holds.
@@ -75,6 +77,7 @@ fn codec_of(section: &str) -> Result<Codec, String> {
         "engine:defs" => codec::<DefsSection>(),
         "engine:world" => codec::<WorldSection>(),
         "engine:map" => codec::<Vec<DefId>>(),
+        "engine:zones" => codec::<crate::zone::Zones>(),
         "engine:fields" => codec::<SavedFields>(),
         "engine:scripts" => codec::<ScriptsSection>(),
         "engine:pawn" => codec::<Vec<(Entity, Pawn)>>(),

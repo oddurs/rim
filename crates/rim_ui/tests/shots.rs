@@ -29,6 +29,11 @@ fn shots() {
             sim.world.spawn_pawn(human, rim_sim::world::Faction::Player, p, None);
         }
     }
+    // A stockpile that turned stone away, for the zones panel.
+    let stone = sim.world.defs.thing_id("stone").unwrap();
+    sim.push(rim_sim::Command::Stockpile { a: c.offset(3, 3), b: c.offset(6, 5), zone: None });
+    sim.push(rim_sim::Command::ZoneAllow { zone: 1, thing: stone, on: false });
+    sim.step();
     let mut ui = ui_for(&sim);
     let mut cv = client(&sim);
     cv.hover_cell = Some(c);
@@ -57,6 +62,9 @@ fn shots() {
     ui.open_window("core:work");
     shot(&mut ui, &cv, "work", None);
     ui.close_window("core:work");
+    ui.open_window("core:zones");
+    shot(&mut ui, &cv, "zones", None);
+    ui.close_window("core:zones");
     // Devtools and the gallery.
     cv.show_devtools = true;
     shot(&mut ui, &cv, "devtools", None);

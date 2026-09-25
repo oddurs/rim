@@ -2,7 +2,7 @@
 //! boundary; this is what makes replays and lockstep multiplayer possible.
 
 use crate::ai;
-use crate::defs::{DefId, Targets};
+use crate::defs::{Category, DefId, Targets};
 use crate::order;
 use crate::world::*;
 use crate::IVec;
@@ -41,6 +41,24 @@ pub enum Command {
         pawn: Entity,
         cell: IVec,
         on: Option<Entity>,
+    },
+    /// Paint cells into a stockpile: into `zone`, or a new zone taking every
+    /// item when it's `None`.
+    Stockpile {
+        a: IVec,
+        b: IVec,
+        zone: Option<u32>,
+    },
+    /// Take cells out of whatever zone they're in.
+    ClearZone {
+        a: IVec,
+        b: IVec,
+    },
+    /// Let a zone take an item, or stop it.
+    ZoneAllow {
+        zone: u32,
+        thing: DefId,
+        on: bool,
     },
     /// Set how much a colonist wants to do a kind of work: 1 first, 0 never,
     /// up to the priority scale's `levels` (DESIGN.md §4d).
@@ -158,6 +176,16 @@ pub fn apply(w: &mut World, c: Command) {
             }
         }
         Command::ModEvent { name, data } => w.events.push(GameEvent::Script { name, data }),
+        Command::Stockpile { a, b, zone: None } => {
+            w.zones.create(&defs, &w.map, a, b);
+        }
+        Command::Stockpile { a, b, zone: Some(id) } => w.zones.paint(&w.map, a, b, Some(id)),
+        Command::ClearZone { a, b } => w.zones.paint(&w.map, a, b, None),
+        Command::ZoneAllow { zone, thing, on } => {
+            if (thing as usize) < defs.things.len() && defs.thing(thing).category == Category::Item {
+                w.zones.allow(zone, thing, on);
+            }
+        }
         Command::SetPriority { pawn, work, level } => {
             if !is_colonist(w, pawn) || work as usize >= defs.work_types.len() {
                 return;

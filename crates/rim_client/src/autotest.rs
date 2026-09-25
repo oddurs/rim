@@ -242,7 +242,8 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     println!("\n# toolbar (0046)");
     let keys: Vec<String> = t.app.tools.iter().map(|b| b.key.clone()).collect();
     let markable = (0..defs.designations.len()).filter(|&d| crate::markable(&defs, d as rim_sim::defs::DefId)).count();
-    let n_expected = 2 + markable + defs.things.iter().filter(|d| d.build.is_some()).count();
+    // Select, cancel, stockpile and clear zone, besides one per def.
+    let n_expected = 4 + markable + defs.things.iter().filter(|d| d.build.is_some()).count();
     t.check(keys.len() == n_expected, format!("one tool per markable designation and buildable def ({})", keys.len()));
     for k in &keys {
         let found = t.app.ui.find(&format!("core:toolbar.{k}")).is_some();
@@ -722,6 +723,44 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.key(KeyCode::Tab).await;
     t.check(t.app.selected.is_some_and(|s| cols.contains(&s)), "tab cycles colonists");
     t.shot("messages").await;
+
+    // ---------------------------------------------------------- ecd54de8 stockpiles
+    println!("\n# stockpiles (ecd54de8)");
+    let spot = (4..30i32)
+        .flat_map(|r| [home.offset(r, r), home.offset(-r, r), home.offset(r, -r), home.offset(-r, -r)])
+        .find(|&o| {
+            (0..4).all(|x| {
+                (0..3)
+                    .all(|y| t.w().map.passable(o.offset(x, y)) && t.w().zones.at(&t.w().map, o.offset(x, y)).is_none())
+            })
+        })
+        .expect("open ground for a stockpile");
+    t.click_ui("core:toolbar.stockpile").await;
+    t.check(t.app.tool == Tool::Stockpile, "clicking Stockpile selects the stockpile tool");
+    t.drag(spot, spot.offset(3, 2)).await;
+    t.ticks(1);
+    let zone = t.w().zones.at(&t.w().map, spot).map(|z| z.id);
+    t.check(zone.is_some(), "dragging paints a stockpile");
+    // A drag touching it grows the same zone rather than making another.
+    t.drag(spot.offset(3, 0), spot.offset(5, 0)).await;
+    t.ticks(1);
+    t.check(
+        t.w().zones.list.len() == 1 && t.w().zones.at(&t.w().map, spot.offset(5, 0)).map(|z| z.id) == zone,
+        "a touching drag extends it",
+    );
+    t.key(KeyCode::Escape).await;
+    t.focus(spot);
+    t.shot("stockpile").await;
+    t.key(KeyCode::Z).await;
+    t.check(t.app.ui.find("core:zones.1.core:wood").is_some(), "Z opens the stockpiles panel, a toggle per item");
+    t.click_ui("core:zones.1.core:wood").await;
+    t.ticks(1);
+    let wood = defs.thing_id("wood").unwrap();
+    t.check(
+        zone.and_then(|z| t.w().zones.get(z)).is_some_and(|z| !z.takes(wood)),
+        "a toggle stops the zone taking wood",
+    );
+    t.key(KeyCode::Z).await;
 
     // ---------------------------------------------------------- 0049 profiler
     println!("\n# profiler (0049)");
