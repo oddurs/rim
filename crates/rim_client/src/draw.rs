@@ -1,6 +1,6 @@
 //! Rendering. Read-only access to the simulation.
 
-use crate::atlas::WorldAtlas;
+use crate::atlas::{Slot, WorldAtlas};
 use crate::{rgb, App, Tool};
 use macroquad::prelude::*;
 use rim_sim::hecs::Entity;
@@ -96,8 +96,9 @@ pub trait Sink {
     fn rect(&mut self, x: f32, y: f32, w: f32, h: f32, c: Color);
     fn poly(&mut self, x: f32, y: f32, sides: u8, r: f32, c: Color);
     fn line(&mut self, x0: f32, y0: f32, x1: f32, y1: f32, t: f32, c: Color);
-    /// Sprite `id` (`DefDb::sprites`) stretched over a rectangle.
-    fn sprite(&mut self, x: f32, y: f32, w: f32, h: f32, id: u16, c: Color);
+    /// A world atlas slot (a sprite, a glyph) stretched over a rectangle.
+    fn image(&mut self, x: f32, y: f32, w: f32, h: f32, slot: Slot, c: Color);
+    fn atlas(&self) -> &WorldAtlas;
 }
 
 /// Macroquad's batch, this frame.
@@ -113,8 +114,10 @@ impl Sink for Immediate<'_> {
     fn line(&mut self, x0: f32, y0: f32, x1: f32, y1: f32, t: f32, c: Color) {
         draw_line(x0, y0, x1, y1, t, c);
     }
-    fn sprite(&mut self, x: f32, y: f32, w: f32, h: f32, id: u16, c: Color) {
-        let slot = self.0.slot(id);
+    fn atlas(&self) -> &WorldAtlas {
+        self.0
+    }
+    fn image(&mut self, x: f32, y: f32, w: f32, h: f32, slot: Slot, c: Color) {
         let tex = &self.0.pages[slot.page];
         let (tw, th) = (tex.width(), tex.height());
         let [u0, v0, u1, v1] = slot.uv;
@@ -424,7 +427,18 @@ fn paint(
             Prim::Edges { width } => edges(s, w, cell, join, (sx, sy), z, width, c),
             Prim::Sprite { rect, id } => {
                 let (x, y, rw, rh) = px(rect);
-                s.sprite(x, y, rw, rh, id, c);
+                let slot = s.atlas().slot(id);
+                s.image(x, y, rw, rh, slot, c);
+            }
+            Prim::Glyph { at: [x, y], size, id } => {
+                let Some(g) = s.atlas().glyph(id) else { continue };
+                // `size` is the em: glyphs keep their proportions and share
+                // a baseline, the line's middle on the point.
+                let k = size * z / crate::atlas::GLYPH_PX;
+                let (gw, gh) = (g.w * k, g.h * k);
+                // A colour glyph keeps its colours; shade and vary dim it.
+                let c = if g.painted { shade(Color::new(1.0, 1.0, 1.0, c.a), f) } else { c };
+                s.image(sx + x * z - gw / 2.0, sy + y * z + g.top * k, gw, gh, g.slot, c);
             }
         }
     }

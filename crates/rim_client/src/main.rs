@@ -450,7 +450,8 @@ async fn game() {
         eprintln!("  warning: {w}");
     }
 
-    let world_atlas = match atlas::WorldAtlas::load(&sim.world.defs.sprite_files) {
+    let world_atlas = match atlas::WorldAtlas::load(&sim.world.defs.sprite_files, &sim.world.defs.glyphs, &mut ui.text)
+    {
         Ok(a) => a,
         Err(e) => return fail(e).await,
     };

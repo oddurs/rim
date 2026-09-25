@@ -55,6 +55,10 @@ pub struct LayerDef {
     /// For `sprite`: multiply it by the thing's colour (or its material's),
     /// so one grey plank serves every wood. Unset, it draws as painted.
     pub tint: Option<bool>,
+    /// For `glyph`: one character, drawn in the layer's colour.
+    pub glyph: Option<String>,
+    /// For `glyph`: its height as a fraction of the cell.
+    pub size: Option<f32>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -70,6 +74,9 @@ pub enum Prim {
     /// A mod's picture over a rectangle in cell units. `id` indexes
     /// `DefDb::sprites`.
     Sprite { rect: [f32; 4], id: u16 },
+    /// A character centred on a point, `size` of the cell high. `id`
+    /// indexes `DefDb::glyphs`.
+    Glyph { at: [f32; 2], size: f32, id: u16 },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -102,24 +109,51 @@ pub fn plain() -> Vec<Layer> {
     vec![Layer { prim: Prim::Fill { rect: [0.0, 0.0, 1.0, 1.0], min_px: 0.0 }, color: None, shade: 1.0, vary: 0.0 }]
 }
 
-/// Sprite keys the looks use, qualified (`mod:name`), in the order first
-/// used. The modloader checks each has a file; the client packs them.
-pub struct Sprites<'a> {
-    pub keys: &'a mut Vec<String>,
+/// What the looks ask the world atlas for, in the order first used:
+/// sprite keys, qualified (`mod:name`), which the modloader checks have a
+/// file, and glyphs, which the client rasterises. The client packs both.
+pub struct Art<'a> {
+    pub sprites: &'a mut Vec<String>,
+    pub glyphs: &'a mut Vec<String>,
     /// The mod whose def is compiling: a bare name is its sprite.
     pub home: &'a str,
 }
 
-impl Sprites<'_> {
-    fn intern(&mut self, key: &str) -> u16 {
-        let full = if key.contains(':') { key.to_string() } else { format!("{}:{key}", self.home) };
-        match self.keys.iter().position(|k| *k == full) {
-            Some(i) => i as u16,
-            None => {
-                self.keys.push(full);
-                (self.keys.len() - 1) as u16
-            }
+/// One character as a player sees it: a base that draws something, and
+/// only what extends it (variation selectors, joiners and what they join,
+/// skin tones, keycaps, a flag's second letter). "ab" is two.
+fn one_character(g: &str) -> bool {
+    let mut cs = g.chars();
+    let Some(base) = cs.next() else { return false };
+    if base.is_whitespace() || base.is_control() || ('\u{200B}'..='\u{200F}').contains(&base) {
+        return false;
+    }
+    let flag = |c: char| ('\u{1F1E6}'..='\u{1F1FF}').contains(&c);
+    let mut joined = false;
+    cs.all(|c| {
+        let extends = matches!(c, '\u{FE00}'..='\u{FE0F}' | '\u{20E3}' | '\u{1F3FB}'..='\u{1F3FF}' | '\u{E0020}'..='\u{E007F}')
+            || c == '\u{200D}'
+            || joined
+            || (flag(base) && flag(c));
+        joined = c == '\u{200D}';
+        extends
+    })
+}
+
+fn intern(list: &mut Vec<String>, item: String) -> u16 {
+    match list.iter().position(|k| *k == item) {
+        Some(i) => i as u16,
+        None => {
+            list.push(item);
+            (list.len() - 1) as u16
         }
+    }
+}
+
+impl Art<'_> {
+    fn sprite(&mut self, key: &str) -> u16 {
+        let full = if key.contains(':') { key.to_string() } else { format!("{}:{key}", self.home) };
+        intern(self.sprites, full)
     }
 }
 
@@ -134,14 +168,15 @@ pub fn parse_rgba(s: &str) -> Result<[u8; 4], String> {
 }
 
 impl LayerDef {
-    fn compile(&self, sprites: &mut Sprites) -> Result<Layer, String> {
+    fn compile(&self, art: &mut Art) -> Result<Layer, String> {
         let allowed: &[&str] = match self.draw.as_str() {
             "fill" => &["x", "y", "w", "h", "min_px"],
             "outline" => &["x", "y", "w", "h", "width"],
             "disc" => &["x", "y", "r", "min_px", "pulse"],
             "edges" => &["width"],
             "sprite" => &["x", "y", "w", "h", "sprite", "tint"],
-            other => return Err(format!("unknown draw '{other}' (want fill, outline, disc, edges or sprite)")),
+            "glyph" => &["x", "y", "glyph", "size"],
+            other => return Err(format!("unknown draw '{other}' (want fill, outline, disc, edges, sprite or glyph)")),
         };
         let given = [
             ("x", self.x.is_some()),
@@ -154,13 +189,15 @@ impl LayerDef {
             ("pulse", self.pulse.is_some()),
             ("sprite", self.sprite.is_some()),
             ("tint", self.tint.is_some()),
+            ("glyph", self.glyph.is_some()),
+            ("size", self.size.is_some()),
         ];
         if let Some((name, _)) = given.iter().find(|(n, set)| *set && !allowed.contains(n)) {
             return Err(format!("`{name}` does not apply to draw = \"{}\"", self.draw));
         }
         // Numbers that would draw nothing, or something inside out, are
         // refused rather than drawn wrong.
-        let checks: [(&str, Option<f32>, f32, f32); 10] = [
+        let checks: [(&str, Option<f32>, f32, f32); 11] = [
             ("x", self.x, f32::MIN, f32::MAX),
             ("y", self.y, f32::MIN, f32::MAX),
             ("w", self.w, 0.0, f32::MAX),
@@ -171,6 +208,7 @@ impl LayerDef {
             ("shade", self.shade, 0.0, f32::MAX),
             ("vary", self.vary, 0.0, 1.0),
             ("pulse", self.pulse, 0.0, 0.99),
+            ("size", self.size, f32::MIN_POSITIVE, 4.0),
         ];
         for (name, v, lo, hi) in checks {
             if let Some(v) = v {
@@ -178,6 +216,7 @@ impl LayerDef {
                     let range = match (lo, hi) {
                         (_, f32::MAX) if lo > 0.0 => "above 0".to_string(),
                         (_, f32::MAX) => format!("at least {lo}"),
+                        _ if lo > 0.0 && lo < 1e-6 => format!("above 0, at most {hi}"),
                         _ => format!("from {lo} to {hi}"),
                     };
                     return Err(format!("`{name}` = {v} is out of range (want {range})"));
@@ -196,7 +235,15 @@ impl LayerDef {
             },
             "sprite" => {
                 let key = self.sprite.as_deref().ok_or("draw = \"sprite\" needs `sprite`, the picture's name")?;
-                Prim::Sprite { rect, id: sprites.intern(key) }
+                Prim::Sprite { rect, id: art.sprite(key) }
+            }
+            "glyph" => {
+                let g = self.glyph.as_deref().unwrap_or_default();
+                if !one_character(g) {
+                    return Err(format!("`glyph` is one character that draws something (got {g:?})"));
+                }
+                let at = [self.x.unwrap_or(0.5), self.y.unwrap_or(0.5)];
+                Prim::Glyph { at, size: self.size.unwrap_or(0.8), id: intern(art.glyphs, g.to_string()) }
             }
             _ => Prim::Edges { width: self.width.unwrap_or(1.5) },
         };
@@ -212,12 +259,13 @@ impl LayerDef {
 }
 
 impl LookDef {
-    /// `groups` interns join labels across all defs, `sprites` sprite keys.
-    pub fn compile(&self, groups: &mut Vec<String>, sprites: &mut Sprites) -> Result<Look, String> {
+    /// `groups` interns join labels across all defs, `art` sprite keys and
+    /// glyphs.
+    pub fn compile(&self, groups: &mut Vec<String>, art: &mut Art) -> Result<Look, String> {
         let mut layers = |v: &[LayerDef], what: &str| {
             v.iter()
                 .enumerate()
-                .map(|(i, l)| l.compile(sprites).map_err(|e| format!("look.{what}[{}]: {e}", i + 1)))
+                .map(|(i, l)| l.compile(art).map_err(|e| format!("look.{what}[{}]: {e}", i + 1)))
                 .collect::<Result<Vec<_>, _>>()
         };
         let join = self.join.as_ref().map(|j| match groups.iter().position(|g| g == j) {
@@ -241,16 +289,15 @@ mod tests {
     use super::*;
 
     fn layer(toml: &str) -> Result<Layer, String> {
-        let mut keys = Vec::new();
-        toml::from_str::<LayerDef>(toml)
-            .map_err(|e| e.to_string())?
-            .compile(&mut Sprites { keys: &mut keys, home: "m" })
+        let (mut sprites, mut glyphs) = (Vec::new(), Vec::new());
+        let mut art = Art { sprites: &mut sprites, glyphs: &mut glyphs, home: "m" };
+        toml::from_str::<LayerDef>(toml).map_err(|e| e.to_string())?.compile(&mut art)
     }
 
     #[test]
     fn sprites_qualify_to_their_mod_and_draw_as_painted_unless_tinted() {
-        let mut keys = Vec::new();
-        let mut sp = Sprites { keys: &mut keys, home: "loom" };
+        let (mut keys, mut glyphs) = (Vec::new(), Vec::new());
+        let mut sp = Art { sprites: &mut keys, glyphs: &mut glyphs, home: "loom" };
         let a = toml::from_str::<LayerDef>("draw = \"sprite\"\nsprite = \"frame\"").unwrap().compile(&mut sp).unwrap();
         let b = toml::from_str::<LayerDef>("draw = \"sprite\"\nsprite = \"loom:frame\"\ntint = true")
             .unwrap()
@@ -300,6 +347,26 @@ mod tests {
     }
 
     #[test]
+    fn a_glyph_is_one_character_centred_by_default() {
+        let l = layer("draw = \"glyph\"\nglyph = \"\u{25b2}\"").unwrap();
+        assert_eq!(l.prim, Prim::Glyph { at: [0.5, 0.5], size: 0.8, id: 0 });
+        assert!(layer("draw = \"glyph\"").unwrap_err().contains("one character"));
+        assert!(layer("draw = \"glyph\"\nglyph = \"ab\"").unwrap_err().contains("one character"));
+        assert!(layer("draw = \"glyph\"\nglyph = \" \"").unwrap_err().contains("draws something"));
+        for emoji in [
+            "\u{2764}\u{FE0F}",
+            "\u{1F1EE}\u{1F1F8}",
+            "\u{1F44D}\u{1F3FD}",
+            "1\u{FE0F}\u{20E3}",
+            "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}",
+        ] {
+            assert!(layer(&format!("draw = \"glyph\"\nglyph = \"{emoji}\"")).is_ok(), "{emoji:?} is one character");
+        }
+        let e = layer("draw = \"glyph\"\nglyph = \"a\"\nsize = 0").unwrap_err();
+        assert!(e.contains("above 0, at most 4"), "{e}");
+    }
+
+    #[test]
     fn colours_take_an_alpha() {
         assert_eq!(layer("draw = \"fill\"\ncolor = \"#00000040\"").unwrap().color, Some([0, 0, 0, 0x40]));
         assert_eq!(layer("draw = \"fill\"\ncolor = \"#ff8000\"").unwrap().color, Some([255, 128, 0, 255]));
@@ -310,8 +377,8 @@ mod tests {
     #[test]
     fn no_layers_draws_a_plain_fill_and_joins_intern() {
         let mut groups = Vec::new();
-        let mut keys = Vec::new();
-        let mut sp = Sprites { keys: &mut keys, home: "m" };
+        let (mut keys, mut glyphs) = (Vec::new(), Vec::new());
+        let mut sp = Art { sprites: &mut keys, glyphs: &mut glyphs, home: "m" };
         let a = LookDef { join: Some("wall".into()), ..Default::default() }.compile(&mut groups, &mut sp).unwrap();
         let b = LookDef { join: Some("wall".into()), ..Default::default() }.compile(&mut groups, &mut sp).unwrap();
         assert_eq!(a.layers, plain());

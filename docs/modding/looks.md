@@ -22,6 +22,7 @@ is the middle. Line widths are in screen points.
 | `disc` | `x`, `y` (0.5, 0.5), `r` (0.4), `min_px`, `pulse` | a disc |
 | `edges` | `width` (1.5) | the cell's border, left open toward joined neighbours |
 | `sprite` | see [Sprites](#sprites) | a mod's picture |
+| `glyph` | see [Glyphs](#glyphs) | one character |
 
 Every layer also takes:
 
@@ -89,6 +90,38 @@ look.layers = [
 ```
 
 This is wildlife_plus's salt lick (`mods/wildlife_plus`).
+
+## Glyphs
+
+A `glyph` layer draws one character on `x`, `y` (the middle of the cell by
+default) at a font size of `size` cells (0.8): glyphs keep their
+proportions and share a baseline, so a dash is short and a dot small. It
+is rasterised once at load, in the UI's font, into the world atlas, so it
+draws with everything else: a letter, a symbol or an emoji as a look, with
+no art to ship. An outline glyph draws in the layer's colour; a colour one
+(an emoji) as it is, dimmed by `shade` and `vary`.
+
+| `draw` | fields | draws |
+|---|---|---|
+| `glyph` | `glyph`, `x`, `y`, `size` | one character |
+
+```toml
+[[thing]]
+id = "waystone"
+label = "waystone"
+color = "#8a8a9a"
+category = "building"
+look.layers = [
+    { draw = "fill", x = 0.2, y = 0.2, w = 0.6, h = 0.6 },
+    { draw = "glyph", glyph = "◆", size = 0.6, color = "#f0f0ff" },
+]
+```
+
+A glyph is one character as a player sees it, an emoji with its modifiers
+included; two characters, or one that draws nothing (a space), is a load
+error naming the def. A character no installed font has draws nothing,
+with a warning: a mod shouldn't stop the game on a machine with fewer
+fonts, so prefer characters every font has.
 
 ## Joining
 
