@@ -856,9 +856,10 @@ pub struct RenderTimes {
     pub ground: f64,
     /// Painting, excluding `gl`.
     pub things: f64,
-    /// Handing the chunk meshes (and the batch before each layer) to GL
-    /// mid-frame. Submission, like macroquad's end of frame: a software
-    /// rasteriser does its drawing here, a GPU driver only queues.
+    /// Handing work to GL mid-frame: the chunk meshes, the batch before
+    /// each layer, and a scaled world's target to the screen. Submission,
+    /// like macroquad's end of frame: a software rasteriser does its
+    /// drawing here, a GPU driver only queues.
     pub gl: f64,
     pub pawns: f64,
     pub weather: f64,
@@ -1017,6 +1018,7 @@ pub fn render(app: &mut App) {
     app.sky.weather(&app.sim.world, &app.cam, &air);
     t.weather = lap();
     app.sky.light(&app.sim.world, &app.cam, &air);
+    t.light = lap();
     if let Some(rt) = &app.world_target {
         set_default_camera();
         if app.blit.is_none() {
@@ -1028,9 +1030,10 @@ pub fn render(app: &mut App) {
         let size = DrawTextureParams { dest_size: Some(vec2(sw, sh)), ..Default::default() };
         draw_texture_ex(&rt.texture, 0.0, 0.0, WHITE, size);
         gl_use_default_material();
+        // Switching cameras hands the target's batch to GL: submission,
+        // like the meshes'.
+        t.gl += lap();
     }
-    // Includes putting a scaled world on the screen: one quad.
-    t.light = lap();
     draw::world_ui(app);
     // Stack counts, in the UI's text: shaped into the same atlas, drawn in
     // the same batch as the UI. After lighting, so they read at night.

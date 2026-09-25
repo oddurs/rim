@@ -38,9 +38,13 @@ four times the pixels, and pixels are where an integrated GPU runs out.
 
 - [x] World renders at a chosen scale while UI text stays at native resolution
 - [x] The setting persists and applies without a restart
-- [ ] Bench shows the GPU pass cost at 50 % vs 100 %
+- [x] Bench shows the GPU pass cost at 50 % vs 100 %
 - [x] Autotest screenshots at 50 % reviewed
 
 ## 2026-09-24
 
 The world (ground, meshes, pawns, weather, light) draws into a render target at the scale and is blitted with one quad before tool previews and the UI, which stay native. The chunk shader flips y into a target, as macroquad's camera does. At 100% there is no target. The default is 1/DPI above 1.5x (logical pixels); the autotest and bench pin 100% unless a view asks. Palette-only binds (no key) came with it: rim_ui's ui.bind accepts an empty key, which never matches a press or conflicts. settings.toml holds render_scale; a value that doesn't parse is a warning, not a silent default.
+
+## 2026-09-24
+
+CI, llvmpipe, storm view at 100% vs 50%: glFinish 69.4 → 15.7 ms, submit 45.7 → 68.5, so GPU plus submit 115 → 84 ms; world CPU the same once the camera switch and blit count as GL submission (they flush the target's batch, where a software rasteriser draws).
