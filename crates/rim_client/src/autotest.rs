@@ -173,6 +173,34 @@ impl T {
 }
 
 /// An open, empty square of `size` cells near `c`.
+/// Mean difference of two screenshots over 32×20 blocks, per channel, 0 to
+/// 255: small for the same picture at two resolutions, large for a flip
+/// or a colour shift.
+fn block_diff(a: &Image, b: &Image) -> f32 {
+    let (w, h) = (a.width as usize, a.height as usize);
+    if (w, h) != (b.width as usize, b.height as usize) {
+        return f32::MAX;
+    }
+    let (bx, by) = (32, 20);
+    let mut total = 0.0;
+    for j in 0..by {
+        for i in 0..bx {
+            let mut sum = [0.0f32; 2];
+            for (k, img) in [a, b].iter().enumerate() {
+                for y in (j * h / by..(j + 1) * h / by).step_by(4) {
+                    for x in (i * w / bx..(i + 1) * w / bx).step_by(4) {
+                        let o = (y * w + x) * 4;
+                        sum[k] += img.bytes[o..o + 3].iter().map(|&c| c as f32).sum::<f32>();
+                    }
+                }
+            }
+            let n = ((h / by).div_ceil(4) * (w / bx).div_ceil(4) * 3) as f32;
+            total += (sum[0] - sum[1]).abs() / n;
+        }
+    }
+    total / (bx * by) as f32
+}
+
 fn open_square(w: &World, c: IVec, size: i32) -> Option<IVec> {
     let free = |p: IVec| w.map.passable(p) && w.map.fixture_at(p).is_none() && w.map.item_at(p).is_none();
     (2..30i32)
@@ -503,10 +531,28 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         t.app.cam.zoom = 28.0;
     }
 
-    // Render scale: the world at half the pixels, the UI still full.
+    // Render scale: the world at half the pixels, the UI still full. The
+    // same frame at both scales must look alike: a flipped or darkened
+    // world (translucent plans are on screen) would not.
     let native = screen_width() * screen_dpi_scale();
+    // Fog: a translucent veil over the whole world.
+    let fog = t.w().defs.lookup("field", "fog").map(|f| f as usize);
+    if let Some(f) = fog {
+        t.app.sim.world.fields.set_ambient(f, Some(90.0));
+        t.ticks(2);
+    }
+    let full = t.grab().await;
     crate::apply_ui(&mut t.app, rim_ui::view::UiAction::RenderScale(0.5));
     t.frame().await;
+    let scaled = t.grab().await;
+    let diff = block_diff(&full, &scaled);
+    t.check(
+        diff < 4.0,
+        format!("half render scale looks like full, only softer (mean block difference {diff:.1} of 255)"),
+    );
+    if let Some(f) = fog {
+        t.app.sim.world.fields.set_ambient(f, None);
+    }
     let half = t.app.world_target.as_ref().map(|rt| rt.texture.width());
     t.check(
         half.is_some_and(|w| (w - native / 2.0).abs() <= 1.0),

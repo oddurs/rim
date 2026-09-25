@@ -326,6 +326,9 @@ component, and the later mod wins. The player's own keys live in
 "my_mod:muster" = "ctrl+m"
 ```
 
+A binding with no `key` is in the palette alone, until the player gives it
+one in `keybinds.toml`: core's render scale commands are.
+
 Core's own keys (pause, speed, overlay, draft, devtools) are bindings too,
 so they can be rebound the same way. `ui.run(id)` runs a binding from a
 script, and `ui.focus(id)` hands a text input the keyboard.

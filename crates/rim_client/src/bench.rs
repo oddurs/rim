@@ -318,7 +318,7 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
         app.cam.x = x;
         app.cam.y = y;
         app.cam.zoom = v.zoom.unwrap_or(MIN_ZOOM);
-        app.render_scale = v.scale;
+        app.render_scale = Some(v.scale);
         // A gesture warms up on the gesture, so measuring doesn't start
         // with a jump from wherever the last view left the zoom.
         const WARM: usize = 30;

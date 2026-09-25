@@ -682,7 +682,10 @@ impl UiVm {
         act!("toggle_profiler", (), |_a| UiAction::ToggleProfiler);
         act!("toggle_devtools", (), |_a| UiAction::ToggleDevtools);
         act!("toggle_outlines", (), |_a| UiAction::ToggleOutlines);
-        act!("render_scale", f32, |s| UiAction::RenderScale(s.clamp(0.25, 1.0)));
+        act!("render_scale", f32, |s| match s.is_finite() {
+            true => UiAction::RenderScale(s.clamp(0.25, 1.0)),
+            false => return Err(rt("act.render_scale: wants a number from 0.25 to 1")),
+        });
         // Devtools: run the sim forward (hours of game time).
         act!("advance", f64, |h| UiAction::Advance(h.clamp(0.0, 24.0 * 60.0)));
         // Send an event to this mod's own sim scripts: "<mod>:<name>". The mod

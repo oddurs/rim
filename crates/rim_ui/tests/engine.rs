@@ -1824,3 +1824,37 @@ fn no_bare_literals_in_core_ui() {
     }
     assert!(hits.is_empty(), "bare strings a player would read:\n{}", hits.join("\n"));
 }
+
+const KEYLESS_MOD: &str = r#"
+ui.bind("probe:one", { label = "Palette only" }, function()
+    ui.set_state("probe:fired", ui.state("probe:fired", 0) + 1)
+end)
+ui.bind("probe:two", { label = "Palette only too" }, function() end)
+ui.define("probe:count", function(view)
+    return ui.text({ "fired=" .. ui.state("probe:fired", 0), id = "probe:count" })
+end)
+ui.mount("top", "probe:count", { order = 90 })
+"#;
+
+/// A bind with no key is the palette's alone: two of them don't conflict,
+/// nothing fires them from the keyboard, and a player can give one a key.
+#[test]
+fn a_bind_without_a_key_is_palette_only_until_given_one() {
+    let dir = scratch_mods("keyless", &[("probe", "", &[("ui/bind.luau", KEYLESS_MOD)])]);
+    let sim = sim_at(&dir);
+    let mut ui = ui_for(&sim);
+    let cv = client(&sim);
+    frame(&mut ui, &sim, &cv, Default::default());
+    assert!(
+        ui.warnings().iter().all(|w| !w.contains("probe:")),
+        "no conflict between keyless binds: {:?}",
+        ui.warnings()
+    );
+    let mut t = 1.0;
+    ui.rebind("probe:one", Some("g"));
+    press(&mut ui, &sim, &cv, &mut t, "g");
+    assert!(ui.snapshot().contains("fired=1"), "the player's key fires it: {}", ui.snapshot());
+    press(&mut ui, &sim, &cv, &mut t, "ctrl+k");
+    assert!(ui.find("core:palette.probe:two").is_some(), "a keyless bind is in the palette");
+    let _ = std::fs::remove_dir_all(&dir);
+}
