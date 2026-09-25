@@ -4,7 +4,9 @@
 # Sizes are logical pixels; the engine multiplies by DPI and UI scale.
 
 [font]
-family = ""        # empty: the operating system's UI font
+# Inter, shipped in ui/fonts (SIL OFL 1.1, Inter-LICENSE.txt): the same
+# letters on every platform. Empty would be the operating system's UI font.
+family = "Inter"
 
 [space]            # a 4 px grid
 xxs = 1

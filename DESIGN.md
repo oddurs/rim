@@ -1147,9 +1147,13 @@ another mod.
   defs, with the same conflict reporting.
 - Translucent dark surfaces, 1 px hairlines, one accent colour, no textures.
   Emphasis comes from weight and colour, not size.
-- **The system UI font**, found at runtime and never shipped: San Francisco
-  on macOS, Segoe UI on Windows, `sans-serif` from fontconfig on Linux, with
-  fallbacks for other scripts. A theme can name another font.
+- **Inter, shipped by core** (SIL OFL 1.1, `mods/core/ui/fonts`): the same
+  letters and measurements on every platform, CI included, so a layout that
+  fits on one machine fits on all. The system UI font drew badly (the text
+  stack applies a variable font's weight but not San Francisco's optical
+  size, so small text came out in its narrow Display cut) and differed by
+  machine. System fonts remain the fallback for other scripts, and a mod
+  can ship fonts under `ui/fonts/` for a theme to name.
 - One **UI scale** multiplies every token and follows the display's DPI.
 
 ### Tension: stable ids or free-form trees?

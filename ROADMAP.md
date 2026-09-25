@@ -166,7 +166,7 @@ The log is the save and snapshots are a cache (DESIGN.md §7a): a colony is alwa
 
 ## colony — Colony
 
-`###·······` 29% · 6 of 21 done · due 2026-12-15
+`###·······` 27% · 6 of 22 done · due 2026-12-15
 
 Running more than one person: stockpiles, hauling, work priorities, skills, colonist panels.
 
@@ -184,6 +184,7 @@ Running more than one person: stockpiles, hauling, work priorities, skills, colo
 - [ ] `f1b96df4` The Work Board: a painted priority grid with live demand <sup>feature · p0 · l · core</sup>
 - [ ] `fa0de3f5` Wind shelter: the lee of walls, rock and trees <sup>feature · p1 · m · engine</sup>
 - [ ] `46416c29` Orders apply while paused <sup>feature · p1 · s · engine</sup>
+- [ ] `87d9849d` Inter as the UI font, shipped by core <sup>feature · p1 · s · core</sup>
 - [ ] `99bbff49` CI in half the time <sup>chore · p1 · s · tooling</sup>
 - [x] `1e977052` Floating windows and a saved UI layout <sup>feature · p0 · m · engine</sup>
 - [x] `3ab05834` Floors: built ground that remembers what it is made of <sup>feature · p1 · m · engine</sup>

@@ -384,10 +384,14 @@ accent = "#ff9f43"
 m = 10
 
 [font]
-family = "Inter"    # empty uses the system UI font
+family = "My Serif"   # empty uses the system UI font
 ```
 
-Sections are `space`, `text`, `weight`, `shape`, `color` and `font`. Sizes are
+Sections are `space`, `text`, `weight`, `shape`, `color` and `font`. Core
+names Inter, which it ships. A mod can ship fonts too: TrueType, OpenType
+or collections under its `ui/fonts/`, loaded before any theme is read, so
+its theme (or another mod's) can name the family. A family that isn't
+there falls back to the system UI font, with a warning. Sizes are
 logical pixels: the engine multiplies them by the display's DPI and the
 player's UI scale (`--ui-scale`). If two mods override the same token, it's
 reported as a conflict and load order decides.

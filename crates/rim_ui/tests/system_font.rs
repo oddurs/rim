@@ -12,7 +12,7 @@ fn the_system_ui_font_is_found_and_shapes_text() {
     // other thread reads it.
     unsafe { std::env::set_var("RIM_CACHE_DIR", &dir) };
 
-    let mut text = Text::new(None).expect("a font");
+    let mut text = Text::new(None, &[]).expect("a font");
     let info = text.info.clone();
     println!("UI font: {} from {} ({} faces)", info.family, info.source, info.fallback_faces);
     assert_ne!(info.source, "first installed font", "a platform UI font, not a guess");

@@ -62,6 +62,8 @@ pub struct FontInfo {
     pub missing: Option<String>,
     /// The font list came from the disk cache rather than a scan.
     pub cached: bool,
+    /// Mod font files that didn't load, with why.
+    pub load_errors: Vec<String>,
 }
 
 /// Where a glyph sits in the atlas, and where to draw it relative to the pen.
@@ -218,9 +220,22 @@ pub struct Text {
 impl Text {
     /// Load the system UI font (or `family`, if the theme names one) and
     /// every installed font as a fallback.
-    pub fn new(family: Option<&str>) -> Result<Text, String> {
+    /// `files` are fonts mods ship (`ui/fonts/`), loaded before `family` is
+    /// looked up so a theme can name one.
+    pub fn new(family: Option<&str>, files: &[PathBuf]) -> Result<Text, String> {
         // From the disk cache, or scanned (maybe already, on the preload thread).
         let (mut db, from) = crate::fontcache::take();
+        let mut load_errors = Vec::new();
+        for f in files {
+            // fontdb takes a file with no font in it without complaint: count
+            // the faces it added instead.
+            let before = db.len();
+            match db.load_font_file(f) {
+                Err(e) => load_errors.push(format!("{}: {e}", f.display())),
+                Ok(()) if db.len() == before => load_errors.push(format!("{}: no font in it", f.display())),
+                Ok(()) => {}
+            }
+        }
         let fallback_faces = db.len();
 
         let mut chosen: Option<(String, String)> = None;
@@ -269,6 +284,7 @@ impl Text {
                 fallback_faces,
                 missing,
                 cached: from == crate::fontcache::FontsFrom::Cache,
+                load_errors,
             },
             family,
             swash: SwashCache::new(),
