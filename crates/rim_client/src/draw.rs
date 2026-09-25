@@ -1,5 +1,6 @@
 //! Rendering. Read-only access to the simulation.
 
+use crate::atlas::WorldAtlas;
 use crate::{rgb, App, Tool};
 use macroquad::prelude::*;
 use rim_sim::hecs::Entity;
@@ -95,12 +96,14 @@ pub trait Sink {
     fn rect(&mut self, x: f32, y: f32, w: f32, h: f32, c: Color);
     fn poly(&mut self, x: f32, y: f32, sides: u8, r: f32, c: Color);
     fn line(&mut self, x0: f32, y0: f32, x1: f32, y1: f32, t: f32, c: Color);
+    /// Sprite `id` (`DefDb::sprites`) stretched over a rectangle.
+    fn sprite(&mut self, x: f32, y: f32, w: f32, h: f32, id: u16, c: Color);
 }
 
 /// Macroquad's batch, this frame.
-pub struct Immediate;
+pub struct Immediate<'a>(pub &'a WorldAtlas);
 
-impl Sink for Immediate {
+impl Sink for Immediate<'_> {
     fn rect(&mut self, x: f32, y: f32, w: f32, h: f32, c: Color) {
         draw_rectangle(x, y, w, h, c);
     }
@@ -109,6 +112,20 @@ impl Sink for Immediate {
     }
     fn line(&mut self, x0: f32, y0: f32, x1: f32, y1: f32, t: f32, c: Color) {
         draw_line(x0, y0, x1, y1, t, c);
+    }
+    fn sprite(&mut self, x: f32, y: f32, w: f32, h: f32, id: u16, c: Color) {
+        let slot = self.0.slot(id);
+        let tex = &self.0.pages[slot.page];
+        let (tw, th) = (tex.width(), tex.height());
+        let [u0, v0, u1, v1] = slot.uv;
+        let source = Rect::new(u0 * tw, v0 * th, (u1 - u0) * tw, (v1 - v0) * th);
+        draw_texture_ex(
+            tex,
+            x,
+            y,
+            c,
+            DrawTextureParams { dest_size: Some(vec2(w, h)), source: Some(source), ..Default::default() },
+        );
     }
 }
 
@@ -213,7 +230,7 @@ pub fn things(app: &mut App) -> Counts {
     }
 
     let t = get_time() as f32;
-    app.meshes.prepare(w, cam, t);
+    app.meshes.prepare(w, &app.world_atlas, cam, t);
     let (tx0, ty0, tx1, ty1) = visible(app);
     let on_screen = |c: IVec| (tx0..=tx1).contains(&c.x) && (ty0..=ty1).contains(&c.y);
     let mut counts = Counts::new();
@@ -229,7 +246,7 @@ pub fn things(app: &mut App) -> Counts {
         for cell in app.meshes.live(layer) {
             let Some(e) = w.map.layers_at(w.map.idx(cell))[layer] else { continue };
             let at = cam.to_screen(cell.x as f32, cell.y as f32);
-            if let Some(n) = thing(&mut Immediate, w, e, cell, at, z, t) {
+            if let Some(n) = thing(&mut Immediate(&app.world_atlas), w, e, cell, at, z, t) {
                 label(cell, n);
             }
         }
@@ -260,8 +277,8 @@ pub fn pawns(app: &App) {
         }
         let (sx, sy) = cam.to_screen(px, py);
         let r = cd.size * z;
-        disc(&mut Immediate, sx + 1.5, sy + 2.0, r, Color::new(0.0, 0.0, 0.0, 0.3));
-        disc(&mut Immediate, sx, sy, r, rgb(cd.rgb));
+        disc(&mut Immediate(&app.world_atlas), sx + 1.5, sy + 2.0, r, Color::new(0.0, 0.0, 0.0, 0.3));
+        disc(&mut Immediate(&app.world_atlas), sx, sy, r, rgb(cd.rgb));
         let ring = match p.faction {
             Faction::Player => Some(PLAYER),
             Faction::Hostile => Some(HOSTILE),
@@ -405,6 +422,7 @@ fn paint(
                 disc(s, sx + x * z, sy + y * z, (r * z).max(min_px) * f, c);
             }
             Prim::Edges { width } => edges(s, w, cell, join, (sx, sy), z, width, c),
+            Prim::Sprite { rect: [x, y, rw, rh], id } => s.sprite(sx + x * z, sy + y * z, rw * z, rh * z, id, c),
         }
     }
 }

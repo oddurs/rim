@@ -16,3 +16,18 @@ spawn = { terrain = ["core:dirt", "core:grass"], groups = 2, group = [1, 3] }
 [[patch]]
 target = "thing/core:berry_bush"
 set = { harvest = { regrow_days = 1.5 } }
+
+# Tier 1 — art. A mod's sprite: sprites/salt_lick.png, packed into the one
+# world atlas with every other mod's, drawn as painted over a shadow.
+[[thing]]
+id = "salt_lick"
+label = "salt lick"
+color = "#e8e2d6"
+category = "building"
+path_cost = 60
+market_value = 12
+build = { menu = "furniture", work = 120, stuff = { category = "structural", count = 6 } }
+look.layers = [
+    { draw = "disc", x = 0.54, y = 0.84, r = 0.3, color = "#00000030" },
+    { draw = "sprite", sprite = "salt_lick", x = 0.1, y = 0.05, w = 0.8, h = 0.8 },
+]

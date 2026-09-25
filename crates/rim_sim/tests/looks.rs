@@ -15,7 +15,14 @@ fn with_defs(name: &str, defs: &str) -> Result<Sim, String> {
 #[test]
 fn guide_samples_load() {
     let guide = fs::read_to_string(common::mods().join("../docs/modding/looks.md")).unwrap().replace("\r\n", "\n");
-    let samples: Vec<&str> = guide.split("```toml\n").skip(1).map(|b| b.split("```").next().unwrap()).collect();
+    // Blocks after `<!-- not a sample -->` are fragments, not whole defs.
+    let samples: Vec<&str> = guide
+        .split("```toml\n")
+        .collect::<Vec<_>>()
+        .windows(2)
+        .filter(|w| !w[0].trim_end().ends_with("<!-- not a sample -->"))
+        .map(|w| w[1].split("```").next().unwrap())
+        .collect();
     assert!(samples.len() >= 2, "found {} samples", samples.len());
     let s =
         with_defs("looks-guide", &samples.join("\n")).unwrap_or_else(|e| panic!("the guide's samples don't load: {e}"));
@@ -57,4 +64,35 @@ fn core_wall_runs_join() {
     assert_eq!(group("wall"), group("window"));
     assert_eq!(group("wall"), group("door"));
     assert_eq!(group("table"), None);
+}
+
+/// A sprite key names a PNG in a mod's `sprites/`: bare for the def's own
+/// mod, prefixed for another's. One that has no file doesn't load.
+#[test]
+fn sprite_keys_find_their_files_or_fail_naming_them() {
+    let def = |sprite: &str| {
+        format!(
+            "[[thing]]\nid = \"loom\"\nlabel = \"loom\"\ncolor = \"#886644\"\ncategory = \"building\"\nlook.layers = [{{ draw = \"sprite\", sprite = \"{sprite}\" }}]\n"
+        )
+    };
+    // test_mods writes text files, so the PNG is copied in after.
+    let dir = common::test_mods("looks-sprite", &["core"], &[("probe", &[("defs/probe.toml", &def("loom"))])]);
+    std::fs::create_dir_all(dir.join("probe/sprites")).unwrap();
+    std::fs::copy(common::mods().join("wildlife_plus/sprites/salt_lick.png"), dir.join("probe/sprites/loom.png"))
+        .unwrap();
+    let s = Sim::new(&dir, 1).expect("a sprite with a file loads");
+    let d = &s.world.defs;
+    assert_eq!(d.sprites, ["probe:loom"]);
+    assert!(d.sprite_files[0].ends_with("probe/sprites/loom.png"), "{:?}", d.sprite_files);
+
+    let e = with_defs("looks-sprite-missing", &def("core:nothing")).err().expect("a missing sprite doesn't load");
+    assert!(
+        e.contains("thing/probe:loom")
+            && e.contains("unknown sprite 'core:nothing'")
+            && e.contains("core/sprites/nothing.png"),
+        "{e}"
+    );
+    let e =
+        with_defs("looks-sprite-nomod", &def("elsewhere:x")).err().expect("a sprite from no loaded mod doesn't load");
+    assert!(e.contains("no mod 'elsewhere' is loaded"), "{e}");
 }

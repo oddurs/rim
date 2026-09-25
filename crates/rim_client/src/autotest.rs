@@ -484,6 +484,24 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     let made = t.w().map.fixture_at(spot).and_then(|e| t.w().ecs.get::<&rim_sim::world::MadeOf>(e).ok().map(|m| m.0));
     t.check(made == Some(stone), format!("the blueprint is made of the chosen material ({made:?})"));
     t.shot("materials").await;
+
+    // A mod's sprite: wildlife_plus ships a salt lick drawn from the world
+    // atlas, built beside the material test and seen up close.
+    if let Some(lick) = t.w().defs.thing_id("wildlife_plus:salt_lick") {
+        let cell = (2..30i32)
+            .flat_map(|r| (-r..=r).flat_map(move |dy| (-r..=r).map(move |dx| home.offset(dx, dy))))
+            .find(|&p| t.w().map.passable(p) && t.w().map.fixture_at(p).is_none() && t.w().map.item_at(p).is_none())
+            .expect("a free cell");
+        let stuff = t.w().defs.materials("structural").first().copied();
+        let built = t.app.sim.world.spawn_fixture_of(lick, cell, false, stuff).is_some();
+        let sprites = t.w().defs.sprites.len();
+        t.check(built && sprites > 0, format!("a mod's sprite def builds ({sprites} sprites packed)"));
+        t.focus(cell);
+        t.app.cam.zoom = 48.0;
+        t.frame().await;
+        t.shot("sprite").await;
+        t.app.cam.zoom = 28.0;
+    }
     t.click_ui("core:toolbar.cancel").await;
     t.drag(spot, spot).await;
     t.ticks(1);

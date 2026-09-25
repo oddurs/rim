@@ -286,8 +286,42 @@ pub fn load_only(mods_dir: &Path, enabled: &dyn Fn(&str) -> bool) -> Result<Load
         defs.mod_defs.entry(k.clone()).or_default();
     }
     defs.finalize()?;
+    defs.sprite_files = sprite_files(&order, &defs)?;
     warnings.extend(log.warnings);
     Ok(LoadedMods { mods: order, defs, scripts, warnings })
+}
+
+/// The PNG behind each sprite key: `<mod>/sprites/<name>.png`. A key with
+/// no file is a load error naming the def that asked for it.
+fn sprite_files(mods: &[ModManifest], defs: &DefDb) -> Result<Vec<PathBuf>, String> {
+    defs.sprites
+        .iter()
+        .enumerate()
+        .map(|(id, key)| {
+            let (m, name) = key.split_once(':').unwrap_or(("", key));
+            let file = mods.iter().find(|x| x.id == m).map(|x| x.dir.join("sprites").join(format!("{name}.png")));
+            match file {
+                Some(f) if f.is_file() => Ok(f),
+                _ => {
+                    let user =
+                        defs.things
+                            .iter()
+                            .find(|t| {
+                                t.look_r.layers.iter().chain(&t.look_r.regrowing).any(
+                                    |l| matches!(l.prim, crate::look::Prim::Sprite { id: i, .. } if i as usize == id),
+                                )
+                            })
+                            .map_or(String::new(), |t| format!("thing/{}: ", t.id));
+                    let wanted = if mods.iter().any(|x| x.id == m) {
+                        format!("{m}/sprites/{name}.png")
+                    } else {
+                        format!("no mod '{m}' is loaded")
+                    };
+                    Err(format!("{user}unknown sprite '{key}' ({wanted})"))
+                }
+            }
+        })
+        .collect()
 }
 
 /// Deserialize one def, and on failure say exactly where: the key path

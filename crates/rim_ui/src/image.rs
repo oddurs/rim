@@ -72,7 +72,7 @@ impl Images {
 }
 
 /// Decode a PNG to RGBA8, whatever its colour type or depth.
-fn decode(path: &Path) -> Result<(u32, u32, Vec<u8>), String> {
+pub fn decode(path: &Path) -> Result<(u32, u32, Vec<u8>), String> {
     let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
     let mut decoder = png::Decoder::new(std::io::BufReader::new(file));
     decoder.set_transformations(png::Transformations::EXPAND | png::Transformations::STRIP_16);

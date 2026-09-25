@@ -12,6 +12,7 @@
 //! Plans and animated looks change every frame, so they stay out of the
 //! buffers and are drawn by `draw::things` each frame.
 
+use crate::atlas::WorldAtlas;
 use crate::draw::{self, Sink};
 use crate::Cam;
 use macroquad::miniquad::*;
@@ -24,49 +25,66 @@ use rim_sim::IVec;
 #[derive(Clone, Copy)]
 struct Vert {
     pos: [f32; 2],
+    uv: [f32; 2],
     color: [u8; 4],
 }
 
 /// u16 indices: a buffer holds at most this many vertices.
 const MAX_VERTS: usize = u16::MAX as usize;
 
-/// Geometry in screen points relative to the chunk's top-left corner.
-#[derive(Default)]
-pub struct Builder {
-    parts: Vec<(Vec<Vert>, Vec<u16>)>,
+/// Geometry in screen points relative to the chunk's top-left corner, by
+/// atlas page. Primitives sample page 0's white block.
+pub struct Builder<'a> {
+    atlas: &'a WorldAtlas,
+    parts: Vec<(usize, Vec<Vert>, Vec<u16>)>,
 }
 
-impl Builder {
-    fn room(&mut self, verts: usize) -> &mut (Vec<Vert>, Vec<u16>) {
-        if self.parts.last().is_none_or(|p| p.0.len() + verts > MAX_VERTS) {
-            self.parts.push((Vec::new(), Vec::new()));
-        }
-        self.parts.last_mut().expect("just pushed")
+impl<'a> Builder<'a> {
+    fn new(atlas: &'a WorldAtlas) -> Self {
+        Builder { atlas, parts: Vec::new() }
     }
 
-    fn quad(&mut self, p: [[f32; 2]; 4], c: Color) {
+    fn room(&mut self, page: usize, verts: usize) -> (&mut Vec<Vert>, &mut Vec<u16>) {
+        let k = match self.parts.iter().rposition(|p| p.0 == page) {
+            Some(k) if self.parts[k].1.len() + verts <= MAX_VERTS => k,
+            _ => {
+                self.parts.push((page, Vec::new(), Vec::new()));
+                self.parts.len() - 1
+            }
+        };
+        let (_, v, i) = &mut self.parts[k];
+        (v, i)
+    }
+
+    fn quad(&mut self, page: usize, p: [[f32; 2]; 4], uv: [[f32; 2]; 4], c: Color) {
         let color: [u8; 4] = c.into();
-        let (v, i) = self.room(4);
+        let (v, i) = self.room(page, 4);
         let n = v.len() as u16;
-        v.extend(p.map(|pos| Vert { pos, color }));
+        v.extend((0..4).map(|k| Vert { pos: p[k], uv: uv[k], color }));
         i.extend([n, n + 1, n + 2, n, n + 2, n + 3]);
     }
+
+    fn solid(&mut self, p: [[f32; 2]; 4], c: Color) {
+        let w = self.atlas.white(0);
+        self.quad(0, p, [w; 4], c);
+    }
 }
 
-impl Sink for Builder {
+impl Sink for Builder<'_> {
     fn rect(&mut self, x: f32, y: f32, w: f32, h: f32, c: Color) {
-        self.quad([[x, y], [x + w, y], [x + w, y + h], [x, y + h]], c);
+        self.solid([[x, y], [x + w, y], [x + w, y + h], [x, y + h]], c);
     }
 
     /// Like macroquad's `draw_poly`: a fan of `sides` triangles.
     fn poly(&mut self, x: f32, y: f32, sides: u8, r: f32, c: Color) {
         let color: [u8; 4] = c.into();
-        let (v, i) = self.room(sides as usize + 2);
+        let uv = self.atlas.white(0);
+        let (v, i) = self.room(0, sides as usize + 2);
         let n = v.len() as u16;
-        v.push(Vert { pos: [x, y], color });
+        v.push(Vert { pos: [x, y], uv, color });
         for k in 0..=sides {
             let a = k as f32 / sides as f32 * std::f32::consts::TAU;
-            v.push(Vert { pos: [x + r * a.cos(), y + r * a.sin()], color });
+            v.push(Vert { pos: [x + r * a.cos(), y + r * a.sin()], uv, color });
             if k != sides {
                 i.extend([n, n + k as u16 + 1, n + k as u16 + 2]);
             }
@@ -81,7 +99,18 @@ impl Sink for Builder {
             return;
         }
         let (tx, ty) = (-dy / len, dx / len);
-        self.quad([[x0 + tx, y0 + ty], [x0 - tx, y0 - ty], [x1 - tx, y1 - ty], [x1 + tx, y1 + ty]], c);
+        self.solid([[x0 + tx, y0 + ty], [x0 - tx, y0 - ty], [x1 - tx, y1 - ty], [x1 + tx, y1 + ty]], c);
+    }
+
+    fn sprite(&mut self, x: f32, y: f32, w: f32, h: f32, id: u16, c: Color) {
+        let s = self.atlas.slot(id);
+        let [u0, v0, u1, v1] = s.uv;
+        self.quad(
+            s.page,
+            [[x, y], [x + w, y], [x + w, y + h], [x, y + h]],
+            [[u0, v0], [u1, v0], [u1, v1], [u0, v1]],
+            c,
+        );
     }
 }
 
@@ -143,8 +172,10 @@ impl Default for Meshes {
 
 const VERTEX: &str = "#version 100
 attribute vec2 pos;
+attribute vec2 uv0;
 attribute vec4 color0;
 varying lowp vec4 color;
+varying mediump vec2 uv;
 uniform vec2 origin;
 uniform vec2 screen;
 uniform float scale;
@@ -152,12 +183,15 @@ void main() {
     vec2 p = (pos * scale + origin) / screen * 2.0 - 1.0;
     gl_Position = vec4(p.x, -p.y, 0.0, 1.0);
     color = color0 / 255.0;
+    uv = uv0;
 }";
 
 const FRAGMENT: &str = "#version 100
 varying lowp vec4 color;
+varying mediump vec2 uv;
+uniform sampler2D tex;
 void main() {
-    gl_FragColor = color;
+    gl_FragColor = texture2D(tex, uv) * color;
 }";
 
 #[repr(C)]
@@ -192,7 +226,7 @@ impl Meshes {
             .new_shader(
                 ShaderSource::Glsl { vertex: VERTEX, fragment: FRAGMENT },
                 ShaderMeta {
-                    images: vec![],
+                    images: vec!["tex".to_string()],
                     uniforms: UniformBlockLayout {
                         uniforms: vec![
                             UniformDesc::new("origin", UniformType::Float2),
@@ -206,7 +240,11 @@ impl Meshes {
             .expect("the chunk shader compiles");
         ctx.new_pipeline(
             &[BufferLayout::default()],
-            &[VertexAttribute::new("pos", VertexFormat::Float2), VertexAttribute::new("color0", VertexFormat::Byte4)],
+            &[
+                VertexAttribute::new("pos", VertexFormat::Float2),
+                VertexAttribute::new("uv0", VertexFormat::Float2),
+                VertexAttribute::new("color0", VertexFormat::Byte4),
+            ],
             shader,
             PipelineParams {
                 color_blend: Some(BlendState::new(
@@ -220,14 +258,15 @@ impl Meshes {
     }
 
     /// Paint chunk `c` into fresh buffers.
-    fn build(&mut self, ctx: &mut dyn RenderingBackend, w: &World, c: usize, z: f32, t: f32) {
+    #[allow(clippy::too_many_arguments)]
+    fn build(&mut self, ctx: &mut dyn RenderingBackend, w: &World, atlas: &WorldAtlas, c: usize, z: f32, t: f32) {
         let IVec { x: x0, y: y0 } = w.map.chunk_origin(c);
         let chunk = &mut self.chunks[c];
         chunk.free(ctx);
         chunk.live = Default::default();
         chunk.counts.clear();
         for layer in 0..3 {
-            let mut b = Builder::default();
+            let mut b = Builder::new(atlas);
             for y in y0..(y0 + CHUNK).min(w.map.h) {
                 for x in x0..(x0 + CHUNK).min(w.map.w) {
                     let cell = IVec::new(x, y);
@@ -246,8 +285,8 @@ impl Meshes {
             chunk.parts[layer] = b
                 .parts
                 .into_iter()
-                .filter(|(_, i)| !i.is_empty())
-                .map(|(v, i)| Part {
+                .filter(|(_, _, i)| !i.is_empty())
+                .map(|(page, v, i)| Part {
                     indices: i.len() as i32,
                     bindings: Bindings {
                         vertex_buffers: vec![ctx.new_buffer(
@@ -260,7 +299,7 @@ impl Meshes {
                             BufferUsage::Immutable,
                             BufferSource::slice(&i),
                         ),
-                        images: vec![],
+                        images: vec![atlas.pages[page].raw_miniquad_id()],
                     },
                 })
                 .collect();
@@ -270,7 +309,7 @@ impl Meshes {
     }
 
     /// Find this frame's visible chunks and rebuild the stale ones.
-    pub fn prepare(&mut self, w: &World, cam: &Cam, t: f32) {
+    pub fn prepare(&mut self, w: &World, atlas: &WorldAtlas, cam: &Cam, t: f32) {
         // SAFETY: macroquad's context outlives the frame, and nothing else
         // holds it while the world draws.
         let gl = unsafe { get_internal_gl() };
@@ -310,7 +349,7 @@ impl Meshes {
                 }
             };
             if stale {
-                self.build(ctx, w, c, cam.zoom, t);
+                self.build(ctx, w, atlas, c, cam.zoom, t);
             }
         }
     }

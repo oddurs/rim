@@ -49,6 +49,12 @@ pub struct LayerDef {
     pub vary: Option<f32>,
     /// A disc's radius flickers by up to this fraction.
     pub pulse: Option<f32>,
+    /// For `sprite`: a PNG the mod ships under `sprites/`, as `name` (this
+    /// mod's) or `mod:name`.
+    pub sprite: Option<String>,
+    /// For `sprite`: multiply it by the thing's colour (or its material's),
+    /// so one grey plank serves every wood. Unset, it draws as painted.
+    pub tint: Option<bool>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -61,6 +67,9 @@ pub enum Prim {
     Disc { at: [f32; 2], r: f32, min_px: f32, pulse: f32 },
     /// The cell's border on the sides that don't face a joined neighbour.
     Edges { width: f32 },
+    /// A mod's picture over a rectangle in cell units. `id` indexes
+    /// `DefDb::sprites`.
+    Sprite { rect: [f32; 4], id: u16 },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -93,6 +102,27 @@ pub fn plain() -> Vec<Layer> {
     vec![Layer { prim: Prim::Fill { rect: [0.0, 0.0, 1.0, 1.0], min_px: 0.0 }, color: None, shade: 1.0, vary: 0.0 }]
 }
 
+/// Sprite keys the looks use, qualified (`mod:name`), in the order first
+/// used. The modloader checks each has a file; the client packs them.
+pub struct Sprites<'a> {
+    pub keys: &'a mut Vec<String>,
+    /// The mod whose def is compiling: a bare name is its sprite.
+    pub home: &'a str,
+}
+
+impl Sprites<'_> {
+    fn intern(&mut self, key: &str) -> u16 {
+        let full = if key.contains(':') { key.to_string() } else { format!("{}:{key}", self.home) };
+        match self.keys.iter().position(|k| *k == full) {
+            Some(i) => i as u16,
+            None => {
+                self.keys.push(full);
+                (self.keys.len() - 1) as u16
+            }
+        }
+    }
+}
+
 pub fn parse_rgba(s: &str) -> Result<[u8; 4], String> {
     let h = s.trim_start_matches('#');
     // Checked as hex digits first, so slicing by byte can't cut a character.
@@ -104,13 +134,14 @@ pub fn parse_rgba(s: &str) -> Result<[u8; 4], String> {
 }
 
 impl LayerDef {
-    fn compile(&self) -> Result<Layer, String> {
+    fn compile(&self, sprites: &mut Sprites) -> Result<Layer, String> {
         let allowed: &[&str] = match self.draw.as_str() {
             "fill" => &["x", "y", "w", "h", "min_px"],
             "outline" => &["x", "y", "w", "h", "width"],
             "disc" => &["x", "y", "r", "min_px", "pulse"],
             "edges" => &["width"],
-            other => return Err(format!("unknown draw '{other}' (want fill, outline, disc or edges)")),
+            "sprite" => &["x", "y", "w", "h", "sprite", "tint"],
+            other => return Err(format!("unknown draw '{other}' (want fill, outline, disc, edges or sprite)")),
         };
         let given = [
             ("x", self.x.is_some()),
@@ -121,6 +152,8 @@ impl LayerDef {
             ("width", self.width.is_some()),
             ("min_px", self.min_px.is_some()),
             ("pulse", self.pulse.is_some()),
+            ("sprite", self.sprite.is_some()),
+            ("tint", self.tint.is_some()),
         ];
         if let Some((name, _)) = given.iter().find(|(n, set)| *set && !allowed.contains(n)) {
             return Err(format!("`{name}` does not apply to draw = \"{}\"", self.draw));
@@ -161,11 +194,17 @@ impl LayerDef {
                 min_px: self.min_px.unwrap_or(0.0),
                 pulse: self.pulse.unwrap_or(0.0),
             },
+            "sprite" => {
+                let key = self.sprite.as_deref().ok_or("draw = \"sprite\" needs `sprite`, the picture's name")?;
+                Prim::Sprite { rect, id: sprites.intern(key) }
+            }
             _ => Prim::Edges { width: self.width.unwrap_or(1.5) },
         };
+        // A sprite draws as painted unless tinted or given a colour.
+        let own = if matches!(prim, Prim::Sprite { .. }) && self.tint != Some(true) { Some([255; 4]) } else { None };
         Ok(Layer {
             prim,
-            color: self.color.as_deref().map(parse_rgba).transpose()?,
+            color: self.color.as_deref().map(parse_rgba).transpose()?.or(own),
             shade: self.shade.unwrap_or(1.0),
             vary: self.vary.unwrap_or(0.0),
         })
@@ -173,12 +212,12 @@ impl LayerDef {
 }
 
 impl LookDef {
-    /// `groups` interns join labels across all defs.
-    pub fn compile(&self, groups: &mut Vec<String>) -> Result<Look, String> {
-        let layers = |v: &[LayerDef], what: &str| {
+    /// `groups` interns join labels across all defs, `sprites` sprite keys.
+    pub fn compile(&self, groups: &mut Vec<String>, sprites: &mut Sprites) -> Result<Look, String> {
+        let mut layers = |v: &[LayerDef], what: &str| {
             v.iter()
                 .enumerate()
-                .map(|(i, l)| l.compile().map_err(|e| format!("look.{what}[{}]: {e}", i + 1)))
+                .map(|(i, l)| l.compile(sprites).map_err(|e| format!("look.{what}[{}]: {e}", i + 1)))
                 .collect::<Result<Vec<_>, _>>()
         };
         let join = self.join.as_ref().map(|j| match groups.iter().position(|g| g == j) {
@@ -202,7 +241,29 @@ mod tests {
     use super::*;
 
     fn layer(toml: &str) -> Result<Layer, String> {
-        toml::from_str::<LayerDef>(toml).map_err(|e| e.to_string())?.compile()
+        let mut keys = Vec::new();
+        toml::from_str::<LayerDef>(toml)
+            .map_err(|e| e.to_string())?
+            .compile(&mut Sprites { keys: &mut keys, home: "m" })
+    }
+
+    #[test]
+    fn sprites_qualify_to_their_mod_and_draw_as_painted_unless_tinted() {
+        let mut keys = Vec::new();
+        let mut sp = Sprites { keys: &mut keys, home: "loom" };
+        let a = toml::from_str::<LayerDef>("draw = \"sprite\"\nsprite = \"frame\"").unwrap().compile(&mut sp).unwrap();
+        let b = toml::from_str::<LayerDef>("draw = \"sprite\"\nsprite = \"loom:frame\"\ntint = true")
+            .unwrap()
+            .compile(&mut sp)
+            .unwrap();
+        let c =
+            toml::from_str::<LayerDef>("draw = \"sprite\"\nsprite = \"core:plank\"").unwrap().compile(&mut sp).unwrap();
+        assert_eq!((a.prim, a.color), (Prim::Sprite { rect: [0.0, 0.0, 1.0, 1.0], id: 0 }, Some([255; 4])));
+        assert_eq!((b.prim, b.color), (Prim::Sprite { rect: [0.0, 0.0, 1.0, 1.0], id: 0 }, None));
+        assert_eq!(c.prim, Prim::Sprite { rect: [0.0, 0.0, 1.0, 1.0], id: 1 });
+        assert_eq!(keys, ["loom:frame", "core:plank"]);
+        assert!(layer("draw = \"sprite\"").unwrap_err().contains("needs `sprite`"));
+        assert!(layer("draw = \"fill\"\nsprite = \"x\"").unwrap_err().contains("does not apply"));
     }
 
     #[test]
@@ -249,8 +310,10 @@ mod tests {
     #[test]
     fn no_layers_draws_a_plain_fill_and_joins_intern() {
         let mut groups = Vec::new();
-        let a = LookDef { join: Some("wall".into()), ..Default::default() }.compile(&mut groups).unwrap();
-        let b = LookDef { join: Some("wall".into()), ..Default::default() }.compile(&mut groups).unwrap();
+        let mut keys = Vec::new();
+        let mut sp = Sprites { keys: &mut keys, home: "m" };
+        let a = LookDef { join: Some("wall".into()), ..Default::default() }.compile(&mut groups, &mut sp).unwrap();
+        let b = LookDef { join: Some("wall".into()), ..Default::default() }.compile(&mut groups, &mut sp).unwrap();
         assert_eq!(a.layers, plain());
         assert_eq!((a.join, b.join, groups.len()), (Some(0), Some(0), 1));
     }
