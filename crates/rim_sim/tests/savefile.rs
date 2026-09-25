@@ -385,3 +385,59 @@ end)
     }
     let _ = std::fs::remove_file(path);
 }
+
+#[test]
+fn a_replay_from_the_seed_reaches_every_checkpoint() {
+    let path = save_path("replay-ok");
+    let mods = common::mods();
+    let (mut sim, mut save) = new_game(&mods, &path);
+    let mut hashes = BTreeMap::new();
+    play(&mut sim, &mut save, 3_000, &mut hashes);
+    save.snapshot(&mut sim).unwrap();
+    play(&mut sim, &mut save, 1_200, &mut hashes);
+    drop(save);
+    let r = savefile::replay(&path, &mods, None).unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(r.root, savefile::Root::Seed { seed: 3, size: sim.world.map.w });
+    assert_eq!((r.from_tick, r.diverged), (0, None));
+    assert_eq!(r.checked.last(), Some(&4_200), "every log, snapshot or not");
+    let _ = std::fs::remove_file(path);
+}
+
+#[test]
+fn a_replay_that_diverges_names_the_tick_and_the_sections() {
+    let path = save_path("replay-bad");
+    let mods = common::mods();
+    let (mut sim, mut save) = new_game(&mods, &path);
+    let mut hashes = BTreeMap::new();
+    play(&mut sim, &mut save, 1_800, &mut hashes);
+    // A bug the log can't know about: the RNG jumps.
+    sim.world.rng = rim_sim::rng::Rng::from_state(99);
+    play(&mut sim, &mut save, 600, &mut hashes);
+    drop(save);
+    let r = savefile::replay(&path, &mods, Some(0)).unwrap();
+    let (tick, sections) = r.diverged.expect("diverges");
+    assert_eq!(tick, 2_400);
+    assert!(sections.contains(&"engine:world".to_string()), "the RNG lives in engine:world: {sections:?}");
+    assert_eq!(r.checked.last(), Some(&1_800));
+    let _ = std::fs::remove_file(path);
+}
+
+#[test]
+fn a_save_begun_mid_game_is_rooted_at_its_snapshot() {
+    let path = save_path("replay-late");
+    let mods = common::mods();
+    let mut sim = Sim::new(&mods, 3).unwrap();
+    let chop = sim.world.defs.lookup("designation", "chop").unwrap();
+    let c = sim.world.colony_center().unwrap();
+    sim.push(Command::Designate { designation: chop, a: c.offset(-5, -5), b: c.offset(5, 5) });
+    for _ in 0..100 {
+        sim.step();
+    }
+    let mut save = SaveFile::create(&path, &mut sim).unwrap();
+    let mut hashes = BTreeMap::new();
+    play(&mut sim, &mut save, 1_200, &mut hashes);
+    drop(save);
+    let r = savefile::replay(&path, &mods, None).unwrap();
+    assert_eq!((r.root, r.from_tick, r.diverged), (savefile::Root::Snapshot, 100, None));
+    let _ = std::fs::remove_file(path);
+}
