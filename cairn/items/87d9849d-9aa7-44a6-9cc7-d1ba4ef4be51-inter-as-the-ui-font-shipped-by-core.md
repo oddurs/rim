@@ -2,12 +2,12 @@
 id: 87d9849d-9aa7-44a6-9cc7-d1ba4ef4be51
 title: Inter as the UI font, shipped by core
 type: feature
-status: doing
+status: done
 milestone: colony
 assignee: Oddur Sigurdsson
-claimed: 2026-09-24
 created: 2026-09-24
-updated: 2026-09-24
+updated: 2026-09-25
+closed_at: 2026-09-25
 priority: p1
 api: additive
 effort: s

@@ -2,12 +2,12 @@
 id: ee5c5cc6-8f4f-4b08-8e59-3a4ba7602c3b
 title: Glyph primitive drawn from the world atlas
 type: feature
-status: doing
+status: done
 milestone: graphics
 assignee: Oddur Sigurdsson
-claimed: 2026-09-24
 created: 2026-09-24
-updated: 2026-09-24
+updated: 2026-09-25
+closed_at: 2026-09-25
 priority: p3
 api: additive
 effort: m

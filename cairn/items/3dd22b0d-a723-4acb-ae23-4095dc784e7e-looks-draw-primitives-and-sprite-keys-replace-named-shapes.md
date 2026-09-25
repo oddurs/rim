@@ -2,14 +2,14 @@
 id: 3dd22b0d-a723-4acb-ae23-4095dc784e7e
 title: 'Looks: draw primitives and sprite keys replace named shapes'
 type: feature
-status: doing
+status: done
 milestone: graphics
 assignee: Oddur Sigurdsson
-claimed: 2026-09-24
 depends_on:
 - 4376f91e-f671-4ca5-9a6a-8c42848043eb
 created: 2026-09-24
-updated: 2026-09-24
+updated: 2026-09-25
+closed_at: 2026-09-25
 priority: p0
 api: breaking
 effort: l
