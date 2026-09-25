@@ -1,7 +1,9 @@
 //! Entity ids are the world's, not hecs's: a save, the command log and a
 //! script can name an entity, and a load must not change what happens next.
 
-use rim_sim::hecs::{self, Entity};
+mod common;
+
+use common::respawn_reversed;
 use rim_sim::{Command, Sim};
 use std::path::Path;
 
@@ -15,20 +17,6 @@ fn sim(seed: u64) -> Sim {
     sim.push(Command::Designate { designation: chop, a: c.offset(-12, -12), b: c.offset(12, 12) });
     sim.push(Command::Build { stuff: Some(wood), thing: wall, a: c.offset(2, 2), b: c.offset(6, 2) });
     sim
-}
-
-/// Move every entity into a fresh hecs world, last spawned first, keeping
-/// its id. This is the worst a load can do to hecs's internal order.
-fn respawn_reversed(sim: &mut Sim) {
-    let mut old = std::mem::take(&mut sim.world.ecs);
-    let mut ids: Vec<Entity> = old.iter().map(|e| e.entity()).collect();
-    ids.sort_by_key(|e| std::cmp::Reverse(e.id()));
-    let mut new = hecs::World::new();
-    for e in ids {
-        let taken = old.take(e).expect("live entity");
-        new.spawn_at(e, taken);
-    }
-    sim.world.ecs = new;
 }
 
 /// Seeds 3 and 5 diverged within 1,300 ticks of the reorder when AI loops

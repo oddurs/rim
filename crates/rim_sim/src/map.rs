@@ -437,6 +437,28 @@ impl Map {
         self.rooms[id as usize - 1]
     }
 
+    /// Rooms need rebuilding: something changed since the last `ensure_rooms`.
+    pub fn rooms_dirty(&self) -> bool {
+        self.rooms_dirty
+    }
+
+    /// The room ids the next carry-over of room values will read: the
+    /// current grid if the fields have seen the last rebuild (or one is
+    /// still to come), else the grid from before it.
+    pub fn carry_from(&self, seen_rebuilds: u64) -> &[u32] {
+        if self.rooms_dirty || self.room_rebuilds == seen_rebuilds {
+            &self.room
+        } else {
+            &self.prev_room
+        }
+    }
+
+    /// After a load: the rooms as the saved room values knew them, so the
+    /// fields carry values over from them as the live game would have.
+    pub fn set_prev_rooms(&mut self, ids: Vec<u32>) {
+        self.prev_room = ids;
+    }
+
     /// (current, previous) room id of a cell; previous is from before the last rebuild.
     pub fn room_ids(&self, i: usize) -> (u32, u32) {
         (self.room[i], self.prev_room[i])

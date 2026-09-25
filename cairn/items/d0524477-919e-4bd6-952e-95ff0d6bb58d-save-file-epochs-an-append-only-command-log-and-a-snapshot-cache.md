@@ -42,3 +42,7 @@ starts when the code changes. This is the file that holds all three.
 - [ ] Unchanged sections are shared between snapshots (test: second snapshot of an idle map is small)
 - [ ] A changed engine or mod list starts a new epoch rooted at the migrated snapshot
 - [ ] Test: a truncated file loads up to its last whole chunk
+
+## 2026-09-24
+
+From c5d185be: snapshots store DefIds raw, indexing engine:defs (each kind's qualified ids in DefId order). Snapshot::restore refuses a different def table. The epoch boundary must build a per-kind remap from those tables and apply it to every DefId field (Pawn.def/needs/carry, Job::Comfort.need, Thing.def, Blueprint.cost, MadeOf, Designated, map terrain, fields by index), or drop what no longer resolves (b4ad855e).

@@ -37,7 +37,7 @@ pub const AMBIENT_INTERVAL: u64 = 20;
 /// A named contribution to a field's outdoor value (`rim.push_ambient`).
 /// It eases from `from` to `to` over `ease` ticks starting at `start`, and
 /// after `until` it eases back out to zero and disappears.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Push {
     pub key: String,
     pub from: i64,
@@ -61,7 +61,7 @@ impl Push {
 }
 
 /// Outdoor-value state for one field.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct Atmos {
     /// Set by `rim.set_ambient`: overrides terms and pushes (tests, tools).
     pub pin: Option<i64>,
@@ -98,7 +98,7 @@ impl Env for AmbEnv<'_> {
 }
 
 /// The clock, as terms see it.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Clock {
     pub tick: u64,
     /// Fraction of the year, 0..Q.
@@ -119,6 +119,20 @@ struct Emitter {
     cap: Option<i32>,
     /// The contribution this emitter made to each cell, so it can be undone exactly.
     cells: Vec<(u32, i32)>,
+}
+
+/// The part of `Fields` a save keeps.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct SavedFields {
+    pub atmos: Vec<Atmos>,
+    pub ambient: Vec<i32>,
+    /// Per field, each room's value, indexed by `room_ids`.
+    pub rooms: Vec<Vec<i32>>,
+    pub last_clock: Option<Clock>,
+    /// Rooms were rebuilt (or are about to be) since the values were carried.
+    pub pending_carry: bool,
+    /// Each cell's room id, as the room values know it.
+    pub room_ids: Vec<u32>,
 }
 
 pub struct Layer {
@@ -457,14 +471,16 @@ impl Fields {
             let n = map.room_count();
             let layer = &mut self.layers[fi];
             layer.rooms.resize(n, layer.ambient);
-            let mut heat = vec![0f64; n];
+            // Summed as integers: the emitter list is in the order things were
+            // built, which a load can't reproduce, and float sums depend on it.
+            let mut heat = vec![0i64; n];
             for e in self.emitters.iter().filter(|e| e.field == fi) {
                 let Some(r) = map.room_at(e.pos) else { continue };
                 let now = layer.rooms[r.id as usize - 1];
                 // A capped emitter stops pushing once the room reaches its cap.
                 let spent = e.cap.is_some_and(|c| if e.amount >= 0 { now >= c } else { now <= c });
                 if !spent {
-                    heat[r.id as usize - 1] += e.amount as f64 * fd.room_gain;
+                    heat[r.id as usize - 1] += e.amount as i64;
                 }
             }
             let ambient = layer.ambient;
@@ -476,9 +492,40 @@ impl Fields {
                 }
                 let v = *value as f64;
                 let leak = fd.leak_per_hour * layer.leak_mult.get(r).copied().unwrap_or(1.0);
-                let change = (ambient as f64 - v) * leak + heat / room.cells as f64;
+                let change = (ambient as f64 - v) * leak + *heat as f64 * fd.room_gain / room.cells as f64;
                 *value = (v + change * hours).round() as i32;
             }
+        }
+    }
+
+    /// What a save keeps (DESIGN.md §7a). Stamps and room boundaries are
+    /// rebuilt from the map. Room values are indexed by room id, so the save
+    /// keeps the grid of ids they belong to (`Map::carry_from`).
+    pub fn saved(&self, map: &Map) -> SavedFields {
+        SavedFields {
+            atmos: self.atmos.clone(),
+            ambient: self.layers.iter().map(|l| l.ambient).collect(),
+            rooms: self.layers.iter().map(|l| l.rooms.clone()).collect(),
+            last_clock: self.last_clock,
+            pending_carry: map.room_rebuilds != self.seen_rebuilds || map.rooms_dirty(),
+            room_ids: map.carry_from(self.seen_rebuilds).to_vec(),
+        }
+    }
+
+    /// Put back what `saved` kept, once the map has its things and rooms.
+    pub fn restore(&mut self, map: &mut Map, s: SavedFields) {
+        self.atmos = s.atmos;
+        for (l, (ambient, rooms)) in self.layers.iter_mut().zip(s.ambient.into_iter().zip(s.rooms)) {
+            l.ambient = ambient;
+            l.rooms = rooms;
+        }
+        self.last_clock = s.last_clock;
+        if s.pending_carry {
+            // The live game carries room values over to the new rooms on its
+            // next update, from these ids; so will this one.
+            map.set_prev_rooms(s.room_ids);
+        } else {
+            self.seen_rebuilds = map.room_rebuilds;
         }
     }
 

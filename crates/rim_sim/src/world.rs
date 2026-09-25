@@ -9,6 +9,7 @@ use crate::rng::Rng;
 use crate::terms::Q;
 use crate::{IVec, TICKS_PER_DAY};
 use hecs::Entity;
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
@@ -16,7 +17,7 @@ use std::sync::Arc;
 pub const NEED_MAX: i32 = 10_000;
 pub const CARRY_CAPACITY: u32 = 75;
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
 pub enum Faction {
     #[default]
     Wild,
@@ -46,7 +47,7 @@ impl Faction {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub enum Job {
     #[default]
     Idle,
@@ -142,7 +143,7 @@ impl Job {
 
 /// A creature. One component holds everything the AI touches each tick,
 /// so the hot loop does one lookup per pawn.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Pawn {
     /// False for the placeholder left behind while the AI works on a pawn.
     pub active: bool,
@@ -187,7 +188,7 @@ impl Pawn {
 }
 
 /// A plant, rock, building, blueprint or item stack.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Thing {
     pub def: DefId,
     pub pos: IVec,
@@ -196,7 +197,7 @@ pub struct Thing {
 }
 
 /// Present on a fixture that is still under construction.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Blueprint {
     /// What this one costs, resolved when it was placed. A fixed recipe and
     /// a material choice both land here, so nothing downstream has to know
@@ -211,25 +212,25 @@ pub struct Blueprint {
 
 /// What a built thing is made of. Survives construction, so a finished
 /// wall still knows it is stone.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MadeOf(pub DefId);
 
 /// Which faction built this fixture. Doors read it: a door opens for its
 /// owner and stands in everyone else's way.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Owner(pub Faction);
 
 /// Player has marked this thing or creature for work.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct Designated(pub DefId);
 
 /// Harvested; will be harvestable again at `ready_at`.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct Regrow {
     pub ready_at: u64,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MsgKind {
     Info,
     Good,
@@ -248,7 +249,7 @@ impl MsgKind {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Message {
     pub tick: u64,
     pub text: String,
@@ -256,7 +257,7 @@ pub struct Message {
 }
 
 /// Things scripts can listen to with `rim.on(name, fn)`.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum GameEvent {
     PawnJoined {
         id: Entity,
@@ -309,7 +310,7 @@ pub struct World {
     /// The id the next entity gets. The world hands out entity ids itself
     /// and never reuses one, so an id means the same entity in a save, the
     /// command log and a script, whatever hecs would have allocated.
-    next_entity: u32,
+    pub(crate) next_entity: u32,
     pub map: Map,
     /// Temperature, light and other field layers over the map.
     pub fields: Fields,
@@ -591,6 +592,8 @@ impl World {
                             let n = count.min(limit);
                             let e = self.spawn((Thing { def, pos: p, count: n, hp: 100 },));
                             self.map.set_item(p, Some(e));
+                            let defs = self.defs.clone();
+                            self.fields.add_emitters(&defs, &self.map, e, def, p);
                             count -= n;
                         }
                         Some(e) => {

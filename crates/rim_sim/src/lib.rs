@@ -19,6 +19,7 @@ pub mod profile;
 pub mod rng;
 pub mod script;
 pub mod sim;
+pub mod snapshot;
 pub mod systems;
 pub mod terms;
 pub mod world;
@@ -33,7 +34,7 @@ pub const TICKS_PER_DAY: u64 = 20_000;
 /// Plugin API version. Mods declare `api = "MAJOR.MINOR"` in `mod.toml`.
 pub const API_VERSION: (u32, u32) = (0, 4);
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default, PartialOrd, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 pub struct IVec {
     pub x: i32,
     pub y: i32,

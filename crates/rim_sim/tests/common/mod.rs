@@ -46,3 +46,17 @@ pub fn test_mods(name: &str, ship: &[&str], extra: &[(&str, &[(&str, &str)])]) -
     }
     dir
 }
+
+/// Move every entity into a fresh hecs world, last spawned first, keeping
+/// its id. This is the worst a load can do to hecs's internal order.
+pub fn respawn_reversed(sim: &mut rim_sim::Sim) {
+    let mut old = std::mem::take(&mut sim.world.ecs);
+    let mut ids: Vec<rim_sim::hecs::Entity> = old.iter().map(|e| e.entity()).collect();
+    ids.sort_by_key(|e| std::cmp::Reverse(e.id()));
+    let mut new = rim_sim::hecs::World::new();
+    for e in ids {
+        let taken = old.take(e).expect("live entity");
+        new.spawn_at(e, taken);
+    }
+    sim.world.ecs = new;
+}

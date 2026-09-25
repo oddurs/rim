@@ -1166,6 +1166,28 @@ impl ScriptHost {
         }
     }
 
+    /// Hooks and handlers switched off for running away, by registration
+    /// index: function pointers don't survive a load, the order does.
+    pub fn disabled(&self) -> (Vec<usize>, Vec<usize>) {
+        let r = self.reg.borrow();
+        let off = |f: &Function| r.disabled.contains(&(f.to_pointer() as usize));
+        (
+            r.hooks.iter().enumerate().filter(|(_, h)| off(&h.func)).map(|(i, _)| i).collect(),
+            r.handlers.iter().enumerate().filter(|(_, h)| off(&h.func)).map(|(i, _)| i).collect(),
+        )
+    }
+
+    /// Switch off what `disabled` reported, after a load.
+    pub fn set_disabled(&self, hooks: &[usize], handlers: &[usize]) {
+        let mut r = self.reg.borrow_mut();
+        let fs: Vec<usize> = hooks
+            .iter()
+            .filter_map(|&i| r.hooks.get(i).map(|h| h.func.to_pointer() as usize))
+            .chain(handlers.iter().filter_map(|&i| r.handlers.get(i).map(|h| h.func.to_pointer() as usize)))
+            .collect();
+        r.disabled.extend(fs);
+    }
+
     pub fn run_hooks(&self, w: &mut World, prof: &mut Profile) {
         let due: Vec<(Function, String)> = {
             let r = self.reg.borrow();

@@ -834,8 +834,9 @@ cache: it's lost on load, and invisible to the desync check.
 
 ### Encoding
 
-- **Self-describing:** serde into a self-describing binary (CBOR or
-  MessagePack; measured when the format is built, 0061), each section
+- **Self-describing:** serde into MessagePack with named fields (it decodes
+  2.6× faster than CBOR at the same size; numbers in
+  [dependencies.md](docs/engineering/dependencies.md)), each section
   compressed with zstd. Self-describing because two jobs need to read data
   without its type:
   - components of a removed mod ride along untouched until it comes back
