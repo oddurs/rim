@@ -36,6 +36,7 @@ const DEF_REFS: &[(&str, &str, &str)] = &[
     ("engine:pawn", "*.1.needs.*.0", "need"),
     ("engine:pawn", "*.1.carry.0", "thing"),
     ("engine:pawn", "*.1.job.Comfort.need", "need"),
+    ("engine:pawn", "*.1.priorities.*.0", "work_type"),
     ("engine:thing", "*.1.def", "thing"),
     ("engine:blueprint", "*.1.cost.*.0", "thing"),
     ("engine:made_of", "*.1", "thing"),
@@ -47,6 +48,7 @@ const DEF_REFS: &[(&str, &str, &str)] = &[
     ("log", "*.commands.*.1.Designate.designation", "designation"),
     ("log", "*.commands.*.1.Build.thing", "thing"),
     ("log", "*.commands.*.1.Build.stuff", "thing"),
+    ("log", "*.commands.*.1.SetPriority.work", "work_type"),
 ];
 
 /// A section's bytes as JSON and back, through the type it holds.

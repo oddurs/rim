@@ -65,7 +65,7 @@ fn main() {
     fs::create_dir_all(m.join("scripts")).unwrap();
     fs::write(
         m.join("mod.toml"),
-        "id = \"bench\"\nname = \"bench\"\nversion = \"0.1.0\"\napi = \"0.4\"\ndepends = [\"core\"]\n",
+        "id = \"bench\"\nname = \"bench\"\nversion = \"0.1.0\"\napi = \"0.5\"\ndepends = [\"core\"]\n",
     )
     .unwrap();
     fs::write(m.join("scripts/bench.luau"), BENCH).unwrap();

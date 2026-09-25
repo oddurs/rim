@@ -177,6 +177,10 @@ pub struct Pawn {
     pub left: bool,
     /// Hostiles give up and head for the map edge at this tick.
     pub leave_at: Option<u64>,
+    /// Work priorities the player set, by work type: 1 first, 0 never. A
+    /// work type not here is at its def's default (DESIGN.md §4d).
+    #[serde(default)]
+    pub priorities: Vec<(DefId, u8)>,
 }
 
 impl Pawn {
@@ -185,6 +189,22 @@ impl Pawn {
     }
     pub fn need(&self, need: DefId) -> Option<i32> {
         self.needs.iter().find(|n| n.0 == need).map(|n| n.1)
+    }
+
+    /// This pawn's priority for a work type: 1 first, 0 never. A level
+    /// saved above a scale a mod has since shrunk counts as the last level.
+    pub fn priority(&self, defs: &DefDb, work: DefId) -> u8 {
+        let set = self.priorities.iter().find(|p| p.0 == work).map(|p| p.1);
+        set.unwrap_or(defs.work_types[work as usize].priority).min(defs.priority_scale.levels)
+    }
+
+    /// Set a priority, keeping the list in work-type order so the state
+    /// doesn't depend on the order changes were made in.
+    pub fn set_priority(&mut self, work: DefId, level: u8) {
+        match self.priorities.binary_search_by_key(&work, |p| p.0) {
+            Ok(i) => self.priorities[i].1 = level,
+            Err(i) => self.priorities.insert(i, (work, level)),
+        }
     }
 }
 
@@ -968,6 +988,9 @@ impl World {
         for &e in &self.pawns {
             if let Ok(p) = self.ecs.get::<&Pawn>(e) {
                 h = crate::rng::mix(h ^ ((p.pos.x as u64) << 32 | p.pos.y as u32 as u64) ^ (p.hp as u64) << 48);
+                for &(w, l) in &p.priorities {
+                    h = crate::rng::mix(h ^ (w as u64) << 8 ^ l as u64);
+                }
             }
         }
         for t in self.ecs.query::<&Thing>().iter() {

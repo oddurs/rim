@@ -10,7 +10,7 @@
 /// The version of this surface, as a mod names it in `mod.toml` as
 /// `ui_api`. Before 1.0 every minor is breaking: a mod written against a
 /// newer surface names calls this engine lacks, and is refused.
-pub const UI_API_VERSION: (u32, u32) = (0, 3);
+pub const UI_API_VERSION: (u32, u32) = (0, 4);
 
 /// One member of `ui`, `act` or `view`.
 pub struct UiDoc {
@@ -75,6 +75,7 @@ type FieldInfo = {
 type UiDate = { year: number, season: string, season_index: number, day: number, day_of_year: number, year_days: number }
 type Part = { label: string, value: number }
 type Tool = { key: string, label: string, color: string, active: boolean }
+type WorkType = { id: string, label: string, icon: string, order: number, default: number }
 type Stuff = { id: string, label: string, color: string, have: number, active: boolean, hp: number, work: number }
 type Hover = { x: number, y: number, terrain: string, shelter: string, readings: { string }, things: { string } }
 type ProfileRow = { name: string, us: number, mod: boolean }
@@ -114,6 +115,7 @@ pub const UI_API: &[UiDoc] = &[
         "Send an event to your mod's own sim scripts (\"your_mod:event\"), as a player command."
     ),
     d!("act.set_overlay", "(index: number?) -> ()", "Show a field overlay by its index in view.fields(), or none."),
+    d!("act.set_priority", "(id: number, work: string, level: number) -> ()", "Set a colonist's priority for a work type: 1 first, 0 never."),
     d!("act.speed", "(speed: number) -> ()", "Set the game speed."),
     d!("act.stuff", "(id: string) -> ()", "Choose the material for the active build tool."),
     d!("act.toggle_devtools", "() -> ()", "Show or hide devtools."),
@@ -213,6 +215,8 @@ pub const UI_API: &[UiDoc] = &[
     d!("view.overlay", "() -> string?", "The label of the field overlay shown, if any."),
     d!("view.paused", "() -> boolean", "Whether the game is paused."),
     d!("view.pawn", "(id: number) -> Pawn?", "One pawn, or nil if it's gone."),
+    d!("view.priorities", "(id: number) -> { [string]: number }?", "A colonist's priority per work type, by work type id: 1 first, 0 never. Nil if it isn't a pawn."),
+    d!("view.priority_levels", "() -> number", "How many priority levels there are; 0 means never."),
     d!("view.profile", "() -> { ProfileRow }", "Smoothed time per system and mod, in µs."),
     d!("view.saves", "() -> { Save }", "The player's saves, newest first, on the title screen; empty in a game."),
     d!("view.screen", "() -> (number, number)", "Screen width and height in logical pixels."),
@@ -236,6 +240,7 @@ pub const UI_API: &[UiDoc] = &[
     d!("view.visible_pawns", "() -> { VisiblePawn }", "Pawns on screen, for anchored labels."),
     d!("view.warnings", "() -> { string }", "Load warnings."),
     d!("view.wealth", "() -> number", "The colony's wealth."),
+    d!("view.work_types", "() -> { WorkType }", "The work types, in tie-break order."),
 ];
 
 /// `types/ui.d.luau`.

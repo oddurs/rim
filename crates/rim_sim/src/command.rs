@@ -42,6 +42,13 @@ pub enum Command {
         cell: IVec,
         on: Option<Entity>,
     },
+    /// Set how much a colonist wants to do a kind of work: 1 first, 0 never,
+    /// up to the priority scale's `levels` (DESIGN.md §4d).
+    SetPriority {
+        pawn: Entity,
+        work: DefId,
+        level: u8,
+    },
     /// A mod's interface asks its own sim scripts to do something: delivered
     /// as the script event `name` (namespaced by the mod, "weather:force")
     /// at the tick boundary, like any other input, so it replays and stays
@@ -151,6 +158,15 @@ pub fn apply(w: &mut World, c: Command) {
             }
         }
         Command::ModEvent { name, data } => w.events.push(GameEvent::Script { name, data }),
+        Command::SetPriority { pawn, work, level } => {
+            if !is_colonist(w, pawn) || work as usize >= defs.work_types.len() {
+                return;
+            }
+            let level = level.min(defs.priority_scale.levels);
+            if let Ok(mut p) = w.ecs.get::<&mut Pawn>(pawn) {
+                p.set_priority(work, level);
+            }
+        }
         Command::Order { pawn, cell, on } => {
             if !is_colonist(w, pawn) {
                 return;

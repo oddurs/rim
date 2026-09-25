@@ -11,6 +11,9 @@ fn run(seed: u64, ticks: u64) -> u64 {
     // Commands must replay identically too.
     sim.push(Command::Designate { designation: chop, a: c.offset(-12, -12), b: c.offset(12, 12) });
     sim.push(Command::Build { stuff: Some(wood), thing: wall, a: c.offset(2, 2), b: c.offset(6, 2) });
+    let pawn = sim.world.colonists().next().unwrap();
+    let chop_first = sim.world.defs.lookup("work_type", "chop").unwrap();
+    sim.push(Command::SetPriority { pawn, work: chop_first, level: 1 });
     for _ in 0..ticks {
         sim.step();
     }

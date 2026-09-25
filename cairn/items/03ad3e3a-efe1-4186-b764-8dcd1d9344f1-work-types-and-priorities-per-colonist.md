@@ -2,12 +2,14 @@
 id: 03ad3e3a-efe1-4186-b764-8dcd1d9344f1
 title: Work types and priorities per colonist
 type: feature
-status: backlog
+status: done
 milestone: colony
+assignee: Oddur Sigurdsson
 created: 2026-09-22
 updated: 2026-09-25
+closed_at: 2026-09-25
 priority: p0
-api: additive
+api: breaking
 effort: m
 layer: engine
 area: ai
@@ -30,10 +32,10 @@ With several colonists, who does what must be the player's choice. This is the c
 
 ## Acceptance criteria
 
-- [ ] Work types and levels load from core and can be patched
-- [ ] A colonist with Build 1 and Haul 2 builds while any build work is reachable (test)
-- [ ] Priority 0 is never chosen, including by right-click fallbacks that aren't forced
-- [ ] Determinism test passes with priority changes in the command log
+- [x] Work types and levels load from core and can be patched
+- [x] A colonist with Build 1 and Haul 2 builds while any build work is reachable (test)
+- [x] Priority 0 is never chosen, including by right-click fallbacks that aren't forced
+- [x] Determinism test passes with priority changes in the command log
 
 ## 2026-09-24
 
@@ -42,3 +44,11 @@ Split on 2026-09-23 per DESIGN.md §4d: work pools (0e73145a), the Work Board (f
 ## 2026-09-25
 
 The stone age adds work that needs a work type: gathering (the gather designation) and crafting (orders posted by the crafting plugin, 049e2f73). Orders name their work type, so the Work Board gets a crafting column with no special case.
+
+## 2026-09-25
+
+Built. Designations now require work_type; the engine's own jobs are claimed by a work type's jobs list (only 'build': construct and deliver), so no content id sits in the engine. Pawn.priorities holds only what the player changed, sorted by work type; anything else is the def's default, so a mod's new work type appears on every colonist at its default. find_work keeps its scans (the pools item replaces them) but gathers the nearest job per work type, skipping types at 0, then picks by (level, distance, order, id): within a level the nearest wins and order only breaks ties, per DESIGN.md §4d's criticism of leftmost-wins. Right-click orders stay forced and ignore priorities (DESIGN.md: a right-click order still forces it); nothing the AI picks for itself runs at 0. rim.priority(id, work) for scripts; view.work_types/priorities/priority_levels and act.set_priority for the UI, so the UI API goes to 0.3 (additions are breaking before 1.0). Temporary grid: mods/core/ui/work.luau, key P. The strings-through-one-door test now scans every core UI script rather than a fixed list, which had missed title.luau too.
+
+## 2026-09-25
+
+Review: text saves (savetext, from rim save) wrote work types as raw indices; DEF_REFS now maps pawn priorities and SetPriority to ids. A saved level above a scale a mod has since shrunk now counts as the last level. And a required work_type on designations breaks existing mods, so the sim API goes to 0.5 as well as the UI API to 0.3.

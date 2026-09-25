@@ -1161,6 +1161,11 @@ fn apply_ui(app: &mut App, a: UiAction) {
         UiAction::Speed(s) => apply(app, Action::Speed(s)),
         UiAction::TogglePause => apply(app, Action::TogglePause),
         UiAction::Draft(e, on) => app.sim.push(Command::Draft { pawn: e, on }),
+        UiAction::SetPriority(e, work, level) => {
+            if let Some(w) = app.sim.world.defs.lookup("work_type", &work) {
+                app.sim.push(Command::SetPriority { pawn: e, work: w, level });
+            }
+        }
         UiAction::CycleOverlay => apply(app, Action::CycleOverlay),
         UiAction::SetOverlay(o) => app.overlay = o.filter(|i| *i < app.sim.world.defs.fields.len()),
         UiAction::ToggleProfiler => apply(app, Action::ToggleProfiler),

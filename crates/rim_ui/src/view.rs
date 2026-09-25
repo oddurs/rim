@@ -98,6 +98,8 @@ pub enum UiAction {
     Speed(u32),
     TogglePause,
     Draft(Entity, bool),
+    /// A colonist's priority for a work type, by its qualified id.
+    SetPriority(Entity, String, u8),
     CycleOverlay,
     SetOverlay(Option<usize>),
     ToggleProfiler,

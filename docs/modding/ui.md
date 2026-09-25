@@ -402,7 +402,7 @@ reported as a conflict and load order decides.
 The UI surface is versioned apart from the sim API: `types/ui.d.luau` and
 `docs/modding/api-ui.md` are generated from the engine's registrations and
 checked against them in CI, so neither can drift. A mod says which surface
-its UI scripts were written against with `ui_api = "0.3"` in `mod.toml`;
+its UI scripts were written against with `ui_api = "0.4"` in `mod.toml`;
 before 1.0 every minor is breaking, and `rim check` refuses a mod targeting
 a version the engine does not provide. It also refuses one naming a `ui.`,
 `act.` or `view.` member that does not exist, by file and line.

@@ -18,6 +18,7 @@ const ORCHARD: &str = r##"
 id = "gather"
 label = "Gather"
 color = "#c8a060"
+work_type = "core:harvest"
 
 [[patch]]
 target = "thing/core:tree_oak"
@@ -188,6 +189,7 @@ fn regrowth_follows_its_designation_across_a_change_of_mods() {
 id = "aardvark"
 label = "Aardvark"
 color = "#808080"
+work_type = "core:harvest"
 "##;
     let moved = common::test_mods(
         "harvest-remap-b",

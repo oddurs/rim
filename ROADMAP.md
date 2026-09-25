@@ -185,11 +185,10 @@ The log is the save and snapshots are a cache (DESIGN.md §7a): a colony is alwa
 
 ## colony — Colony
 
-`#####·····` 43% · 10 of 23 done · due 2026-12-15
+`#####·····` 48% · 11 of 23 done · due 2026-12-15
 
 Running more than one person: stockpiles, hauling, work priorities, skills, colonist panels.
 
-- [ ] `03ad3e3a` Work types and priorities per colonist <sup>feature · p0 · m · engine</sup>
 - [ ] `03b9b791` Derived fields and feels-like temperature <sup>feature · p1 · s · engine</sup>
 - [ ] `0cb48faf` Priority rules and colony stances <sup>feature · p1 · m · engine</sup>
 - [ ] `0e73145a` Work pools: work givers post work, pawns stop scanning <sup>perf · p0 · m · engine</sup>
@@ -202,6 +201,7 @@ Running more than one person: stockpiles, hauling, work priorities, skills, colo
 - [ ] `f1924f03` Why a colonist is doing that, and who will take a job <sup>feature · p1 · m · client</sup>
 - [ ] `f1b96df4` The Work Board: a painted priority grid with live demand <sup>feature · p0 · l · core</sup>
 - [ ] `fa0de3f5` Wind shelter: the lee of walls, rock and trees <sup>feature · p1 · m · engine</sup>
+- [x] `03ad3e3a` Work types and priorities per colonist <sup>feature · p0 · m · engine</sup>
 - [x] `1e977052` Floating windows and a saved UI layout <sup>feature · p0 · m · engine</sup>
 - [x] `3ab05834` Floors: built ground that remembers what it is made of <sup>feature · p1 · m · engine</sup>
 - [x] `46416c29` Orders apply while paused <sup>feature · p1 · s · engine</sup>

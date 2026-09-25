@@ -235,6 +235,7 @@ pub fn load_only(mods_dir: &Path, enabled: &dyn Fn(&str) -> bool) -> Result<Load
     let mut defs = DefDb::default();
     let mut calendars = 0;
     let mut skies = 0;
+    let mut scales = 0;
     for e in entries.into_iter().filter(|e| !e.removed) {
         let ctx = format!("{}/{} (from {})", e.kind, e.id, e.origin);
         let v = toml::Value::Table(e.value);
@@ -251,6 +252,17 @@ pub fn load_only(mods_dir: &Path, enabled: &dyn Fn(&str) -> bool) -> Result<Load
             "creature" => defs.creatures.push(de!(v)?),
             "need" => defs.needs.push(de!(v)?),
             "designation" => defs.designations.push(de!(v)?),
+            "work_type" => defs.work_types.push(de!(v)?),
+            "priority_scale" => {
+                if scales > 0 {
+                    return Err(format!(
+                        "{ctx}: only one [[priority_scale]] may exist; patch priority_scale/{} instead",
+                        defs.priority_scale.id
+                    ));
+                }
+                scales += 1;
+                defs.priority_scale = de!(v)?;
+            }
             "field" => defs.fields.push(de!(v)?),
             "calendar" => {
                 if calendars > 0 {

@@ -1,7 +1,7 @@
 id = "weather"
 name = "Weather"
 version = "0.1.0"
-api = "0.4"
-ui_api = "0.3"
+api = "0.5"
+ui_api = "0.4"
 description = "Seasons, weather and a forecast: rain, storms, fog and snow, cold snaps and heat waves. Built only on the public API; remove it for core's mild, unchanging climate."
 depends = ["core"]
