@@ -40,3 +40,45 @@ fn shipped_mods_check_clean() {
         assert!(r.warnings.is_empty() && r.errors.is_empty(), "{m}: {:?} {:?}", r.warnings, r.errors);
     }
 }
+
+/// A mod slow on this machine is reported apart from its warnings: the
+/// time depends on the machine, and a slow CI runner failed a clean mod.
+#[test]
+fn a_slow_mod_is_a_note_not_a_warning() {
+    let dir = std::env::temp_dir().join(format!("rim-check-slow-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let core = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mods/core");
+    copy(&core, &dir.join("core"));
+    let m = dir.join("slowpoke");
+    std::fs::create_dir_all(m.join("scripts")).unwrap();
+    std::fs::write(
+        m.join("mod.toml"),
+        format!(
+            "id = \"slowpoke\"\nname = \"s\"\nversion = \"0.1.0\"\napi = \"{}.{}\"\ndepends = [\"core\"]\n",
+            rim_sim::API_VERSION.0,
+            rim_sim::API_VERSION.1
+        ),
+    )
+    .unwrap();
+    std::fs::write(
+        m.join("scripts/slow.luau"),
+        "rim.every(1, function() local t = {} for i = 1, 20000 do t[i % 64 + 1] = tostring(i) end end)\n",
+    )
+    .unwrap();
+    let r = modtest::check_mod(&m, 1.0).unwrap();
+    assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    assert!(r.slow.iter().any(|s| s.contains("slowpoke")), "{:?}", r.slow);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+fn copy(from: &Path, to: &Path) {
+    std::fs::create_dir_all(to).unwrap();
+    for e in std::fs::read_dir(from).unwrap().flatten() {
+        let p = e.path();
+        if p.is_dir() {
+            copy(&p, &to.join(e.file_name()));
+        } else {
+            std::fs::copy(&p, to.join(e.file_name())).unwrap();
+        }
+    }
+}

@@ -273,6 +273,10 @@ pub struct CheckReport {
     pub mods: Vec<String>,
     /// Load warnings: patch conflicts, skipped patches, determinism hazards.
     pub warnings: Vec<String>,
+    /// Mods whose scripts ran over their time budget on this machine. Wall
+    /// clock, so it says as much about the machine as the mod: reported,
+    /// never a failure.
+    pub slow: Vec<String>,
     /// Script errors from its first in-game hours.
     pub errors: Vec<String>,
 }
@@ -292,16 +296,25 @@ pub fn check_mod(mod_dir: &Path, hours: f64) -> Result<CheckReport, String> {
     let mut sim = Sim::build(&mods_dir, 1, &|id| mods.contains(id), 96)?;
     sim.scripts.echo_errors = false;
     let ticks = (hours * TICKS_PER_DAY as f64 / 24.0) as u64;
+    // Anything warned while running is the time budget (Sim::step).
+    let loaded = sim.warnings.len();
     for _ in 0..ticks {
         sim.step();
     }
+    let slow = sim.warnings.split_off(loaded);
     let mut errors: Vec<String> = Vec::new();
     for m in sim.world.messages.iter().filter(|m| m.text.contains("script error")) {
         if !errors.contains(&m.text) {
             errors.push(m.text.clone());
         }
     }
-    Ok(CheckReport { mod_id: me.id.clone(), mods: mods.into_iter().collect(), warnings: sim.warnings.clone(), errors })
+    Ok(CheckReport {
+        mod_id: me.id.clone(),
+        mods: mods.into_iter().collect(),
+        warnings: sim.warnings.clone(),
+        slow,
+        errors,
+    })
 }
 
 /// Run every `tests/*.luau` in the mod at `mod_dir`. Worlds load mods from

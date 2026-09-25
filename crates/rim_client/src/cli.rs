@@ -77,6 +77,8 @@ and script errors. Its sprites must decode and fit the world atlas. Its UI
 scripts are checked against the UI API: a ui_api
 the engine lacks, or a ui., act. or view. member that does not exist, is an
 error naming the file and line. With no MOD_DIR, checks every mod in ./mods.
+Scripts slower than their time budget on this machine are noted, never
+failed: the time is the machine's as much as the mod's.
 Exits 1 on an error, or on a warning with --strict.";
 
 /// Each PNG under the mod's `sprites/`, at any depth, must decode and fit
@@ -162,6 +164,9 @@ pub fn check(args: &[String]) -> i32 {
                 );
                 for w in &r.warnings {
                     println!("  warning: {w}");
+                }
+                for s in &r.slow {
+                    println!("  note: {s} (on this machine)");
                 }
                 for e in &r.errors {
                     println!("  error: {}", e.lines().next().unwrap_or_default());

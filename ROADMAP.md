@@ -181,7 +181,7 @@ The log is the save and snapshots are a cache (DESIGN.md §7a): a colony is alwa
 
 ## colony — Colony
 
-`#####·····` 41% · 9 of 22 done · due 2026-12-15
+`#####·····` 43% · 10 of 23 done · due 2026-12-15
 
 Running more than one person: stockpiles, hauling, work priorities, skills, colonist panels.
 
@@ -206,6 +206,7 @@ Running more than one person: stockpiles, hauling, work priorities, skills, colo
 - [x] `99bbff49` CI in half the time <sup>chore · p1 · s · tooling</sup>
 - [x] `a7da68e2` Component kit v2: slider, text input and tables <sup>feature · p1 · m · core</sup>
 - [x] `c3c4d136` Grid node and virtual list <sup>feature · p0 · m · engine</sup>
+- [x] `f802c0b4` rim check fails a mod for being slow on a slow machine <sup>bug · p1 · s · tooling</sup>
 - [x] `fcb28d0c` Refresh tiers: a node says how often it may change <sup>feature · p1 · m · engine</sup>
 
 ## eras — Eras
