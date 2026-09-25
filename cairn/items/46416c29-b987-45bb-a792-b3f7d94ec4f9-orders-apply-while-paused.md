@@ -31,5 +31,5 @@ next tick. Planning while paused is how a colony sim is played.
 
 ## Acceptance criteria
 
-- [ ] Paused, a designation, a plan and an order show in the world and the UI
-- [ ] Commands applied early give the same state hash as applied in `step`
+- [x] Paused, a designation, a plan and an order show in the world and the UI
+- [x] Commands applied early give the same state hash as applied in `step`
