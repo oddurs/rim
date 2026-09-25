@@ -1,4 +1,5 @@
-//! Commands that run without a window: `rim test`, `rim check`, `rim replay`.
+//! Commands that run without a window: `rim test`, `rim check`, `rim replay`,
+//! `rim save`.
 
 use rim_sim::modtest;
 use std::path::PathBuf;
@@ -232,6 +233,67 @@ pub fn replay(args: &[String]) -> i32 {
                     1
                 }
             }
+        }
+    }
+}
+
+const SAVE_USAGE: &str = "usage: rim save unpack SAVE DIR
+       rim save pack DIR SAVE
+       rim save diff A B
+
+unpack writes a save as a directory of JSON, one file per section, with
+defs named (\"core:wall\") and the map drawn. pack turns it back into a
+save; a snapshot you edited becomes the start of a new epoch, with the old
+log kept behind it. diff compares the newest snapshot of two saves and
+names the first difference in each section, and the entity it's on. Exits
+1 when they differ.";
+
+/// `rim save`: returns the process exit code.
+pub fn save(args: &[String]) -> i32 {
+    let paths: Vec<PathBuf> = args.iter().skip(1).map(PathBuf::from).collect();
+    let fail = |e: String| {
+        eprintln!("rim save: {e}");
+        2
+    };
+    match (args.first().map(String::as_str), paths.as_slice()) {
+        (Some("unpack"), [save, dir]) => match rim_sim::savetext::unpack(save, dir) {
+            Err(e) => fail(e),
+            Ok(u) => {
+                println!("{}: {} epochs, {} snapshots", dir.display(), u.epochs, u.snapshots);
+                if u.cut > 0 {
+                    println!("the last {} bytes of {} weren't a whole chunk, and were left out", u.cut, save.display());
+                }
+                0
+            }
+        },
+        (Some("pack"), [dir, save]) => match rim_sim::savetext::pack(dir, save) {
+            Err(e) => fail(e),
+            Ok(root) => {
+                println!("{}: packed", save.display());
+                if let Some(tick) = root {
+                    println!("the edited snapshot at tick {tick} starts a new epoch");
+                }
+                0
+            }
+        },
+        (Some("diff"), [a, b]) => match rim_sim::savetext::diff(a, b) {
+            Err(e) => fail(e),
+            Ok(found) if found.is_empty() => {
+                println!("the same");
+                0
+            }
+            Ok(found) => {
+                found.iter().for_each(|l| println!("{l}"));
+                1
+            }
+        },
+        (Some("-h" | "--help"), _) => {
+            println!("{SAVE_USAGE}");
+            0
+        }
+        _ => {
+            eprintln!("{SAVE_USAGE}");
+            2
         }
     }
 }
