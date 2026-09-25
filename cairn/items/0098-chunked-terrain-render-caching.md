@@ -53,3 +53,7 @@ World renderer fully zoomed out on the bench map ≤ 4 ms CPU at reference
 ## 2026-09-24
 
 Graphics milestone: no longer waits on the ground shader (da558444, still in Scale), which is about drawing wetness and snow; caching things per chunk doesn't need it. Retitled from 'Chunked terrain render caching': terrain is already one texture.
+
+## 2026-09-24
+
+When this lands, drop the render bench's CI slack from 3x toward 1x (bench.rs, --check): the gate only holds the 4 ms budget once things are cached.

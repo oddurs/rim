@@ -85,7 +85,21 @@ fn disc(x: f32, y: f32, r: f32, c: Color) {
 /// batch (macroquad's `draw_text` broke the world's batch twice per label).
 pub type Counts = Vec<(f32, f32, u32)>;
 
-pub fn world(app: &App) -> Counts {
+/// The part of the viewport that holds map cells, in tiles, inclusive.
+fn visible(app: &App) -> (i32, i32, i32, i32) {
+    let (w, cam) = (&app.sim.world, &app.cam);
+    let (x0, y0) = cam.to_world(0.0, 0.0);
+    let (x1, y1) = cam.to_world(screen_width(), screen_height());
+    (
+        (x0.floor() as i32).max(0),
+        (y0.floor() as i32).max(0),
+        (x1.ceil() as i32).min(w.map.w - 1),
+        (y1.ceil() as i32).min(w.map.h - 1),
+    )
+}
+
+/// The ground, then floors, items and fixtures.
+pub fn things(app: &App) -> Counts {
     let mut counts = Counts::new();
     let w = &app.sim.world;
     let defs = &w.defs;
@@ -93,10 +107,7 @@ pub fn world(app: &App) -> Counts {
     let z = cam.zoom;
     clear_background(Color::from_rgba(12, 14, 16, 255));
 
-    let (x0, y0) = cam.to_world(0.0, 0.0);
-    let (x1, y1) = cam.to_world(screen_width(), screen_height());
-    let (tx0, ty0) = ((x0.floor() as i32).max(0), (y0.floor() as i32).max(0));
-    let (tx1, ty1) = ((x1.ceil() as i32).min(w.map.w - 1), (y1.ceil() as i32).min(w.map.h - 1));
+    let (tx0, ty0, tx1, ty1) = visible(app);
 
     // Terrain: one quad from the baked ground texture.
     if let Some(tex) = &app.ground.tex {
@@ -254,8 +265,17 @@ pub fn world(app: &App) -> Counts {
             }
         }
     }
+    counts
+}
 
-    // Pawns.
+/// Pawns, hit flashes and the field overlay.
+pub fn pawns(app: &App) {
+    let w = &app.sim.world;
+    let defs = &w.defs;
+    let cam = &app.cam;
+    let z = cam.zoom;
+    let (x0, y0) = cam.to_world(0.0, 0.0);
+    let (x1, y1) = cam.to_world(screen_width(), screen_height());
     for &e in &w.pawns {
         let Ok(p) = w.ecs.get::<&Pawn>(e) else { continue };
         if !p.active {
@@ -314,6 +334,7 @@ pub fn world(app: &App) -> Counts {
 
     // Field overlay, lit like the world so it reads the same way.
     if let Some(fi) = app.overlay {
+        let (tx0, ty0, tx1, ty1) = visible(app);
         let fd = &defs.fields[fi];
         let (lo, hi) = (rgb(fd.rgb_low), rgb(fd.rgb_high));
         for ty in ty0..=ty1 {
@@ -326,7 +347,6 @@ pub fn world(app: &App) -> Counts {
             }
         }
     }
-    counts
 }
 
 /// Tool previews and markers, drawn after lighting so they stay readable.

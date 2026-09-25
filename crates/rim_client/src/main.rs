@@ -6,6 +6,7 @@
 //! UI didn't take drives the world. The HUD itself is core's UI mod.
 
 mod autotest;
+mod bench;
 mod cli;
 mod draw;
 mod sky;
@@ -36,6 +37,9 @@ pub struct ToolDef {
     pub tool: Tool,
     pub color: Color,
 }
+
+/// The lowest zoom, in points per tile: a 250-cell map fits a 1080p screen.
+pub const MIN_ZOOM: f32 = 4.0;
 
 pub struct Cam {
     /// Center of the view, in tiles.
@@ -94,6 +98,8 @@ pub struct App {
     pub sky: sky::Sky,
     /// The terrain, baked into a texture.
     pub ground: draw::Ground,
+    /// What each render pass cost last frame.
+    pub render_us: RenderTimes,
     /// Input subscriber for wheel events (see `Wheel`).
     wheel_sub: usize,
 }
@@ -307,10 +313,14 @@ async fn game() {
     });
     let ui_scale: f32 = args.windows(2).find(|w| w[0] == "--ui-scale").and_then(|w| w[1].parse().ok()).unwrap_or(1.0);
 
-    let sim = match find_mods()
-        .ok_or_else(|| "could not find a mods/ directory".to_string())
-        .and_then(|d| Sim::new(&d, seed))
-    {
+    let bench = args.iter().any(|a| a == "--bench-render");
+    let sim = match find_mods().ok_or_else(|| "could not find a mods/ directory".to_string()).and_then(|d| {
+        if bench {
+            bench::world(&d, seed)
+        } else {
+            Sim::new(&d, seed)
+        }
+    }) {
         Ok(s) => s,
         Err(e) => return fail(e).await,
     };
@@ -365,6 +375,7 @@ async fn game() {
         pan_anchor: None,
         sky: sky::Sky::default(),
         ground: draw::Ground::default(),
+        render_us: RenderTimes::default(),
         wheel_sub: macroquad::input::utils::register_input_subscriber(),
     };
     app.selected = app.sim.world.colonists().next();
@@ -372,6 +383,9 @@ async fn game() {
     if let Some(i) = args.iter().position(|a| a == "--autotest") {
         let dir = args.get(i + 1).filter(|a| !a.starts_with("--")).map_or("target/autotest".into(), PathBuf::from);
         autotest::run(app, dir).await;
+    }
+    if bench {
+        bench::run(app, &args).await;
     }
 
     loop {
@@ -611,6 +625,9 @@ pub fn client_view(app: &mut App, mouse: (f32, f32), time: f64) -> ClientView {
         for (m, us) in &app.ui.vm.mod_time {
             rows.push((format!("ui:{m}"), *us));
         }
+        for (pass, us) in app.render_us.rows() {
+            rows.push((format!("draw:{pass}"), us));
+        }
         app.profile = (
             rows,
             vec![
@@ -745,10 +762,55 @@ pub fn frame(app: &mut App, raw: &RawInput) {
     hint(app, raw.mouse);
 }
 
+/// CPU time of each render pass last frame, in µs. This is building the
+/// batches; the GL work happens when the frame ends.
+#[derive(Clone, Copy, Default, Debug)]
+pub struct RenderTimes {
+    pub ground: f64,
+    pub things: f64,
+    pub pawns: f64,
+    pub weather: f64,
+    pub light: f64,
+    pub ui: f64,
+}
+
+impl RenderTimes {
+    pub fn rows(&self) -> [(&'static str, f64); 6] {
+        [
+            ("ground", self.ground),
+            ("things", self.things),
+            ("pawns", self.pawns),
+            ("weather", self.weather),
+            ("light", self.light),
+            ("ui", self.ui),
+        ]
+    }
+
+    /// Everything but the UI, which has its own budget (DESIGN.md §11).
+    pub fn world(&self) -> f64 {
+        self.ground + self.things + self.pawns + self.weather + self.light
+    }
+}
+
 pub fn render(app: &mut App) {
+    let mut clock = std::time::Instant::now();
+    let mut lap = || {
+        let us = clock.elapsed().as_secs_f64() * 1e6;
+        clock = std::time::Instant::now();
+        us
+    };
+    let mut t = RenderTimes::default();
     app.ground.update(&app.sim.world);
-    let counts = draw::world(app);
-    sky::draw(app);
+    t.ground = lap();
+    let counts = draw::things(app);
+    t.things = lap();
+    draw::pawns(app);
+    t.pawns = lap();
+    let air = sky::Air::read(&app.sim.world);
+    app.sky.weather(&app.sim.world, &app.cam, &air);
+    t.weather = lap();
+    app.sky.light(&app.sim.world, &app.cam, &air);
+    t.light = lap();
     draw::world_ui(app);
     // Stack counts, in the UI's text: shaped into the same atlas, drawn in
     // the same batch as the UI. After lighting, so they read at night.
@@ -769,6 +831,8 @@ pub fn render(app: &mut App) {
     let white = app.ui.text.atlas.white_texel();
     draw::ui(&labels, &app.atlas, white, dpi);
     draw::ui(&app.last_draw, &app.atlas, white, dpi);
+    t.ui = lap();
+    app.render_us = t;
 }
 
 fn apply_ui(app: &mut App, a: UiAction) {
@@ -940,7 +1004,7 @@ pub fn apply(app: &mut App, action: Action) {
         }
         Action::Zoom(f, x, y) => {
             let before = app.cam.to_world(x, y);
-            app.cam.zoom = (app.cam.zoom * f).clamp(4.0, 80.0);
+            app.cam.zoom = (app.cam.zoom * f).clamp(MIN_ZOOM, 80.0);
             let after = app.cam.to_world(x, y);
             app.cam.x += before.0 - after.0;
             app.cam.y += before.1 - after.1;
