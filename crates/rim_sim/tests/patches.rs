@@ -184,5 +184,5 @@ fn guide_samples_load() {
     assert!(conflicts(&s).is_empty(), "{:?}", s.warnings);
     let d = &s.world.defs;
     let bush = d.thing(d.thing_id("berry_bush").unwrap());
-    assert_eq!(bush.harvest.as_ref().unwrap().regrow_days, 1.5);
+    assert_eq!(bush.harvest[0].regrow_days, 1.5);
 }

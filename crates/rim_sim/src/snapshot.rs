@@ -391,6 +391,12 @@ impl Snapshot {
                     None => p.job = Job::Idle,
                 }
             }
+            if let Job::Harvest { harvest: Some(d), .. } = &mut p.job {
+                match remap.get("designation", *d) {
+                    Some(n) => *d = n,
+                    None => p.job = Job::Idle,
+                }
+            }
             add(e, &|b| {
                 b.add(p.clone());
             });
@@ -451,10 +457,17 @@ impl Snapshot {
                 b.add(o);
             });
         }
-        for (e, r) in dec::<Vec<(Entity, Regrow)>>(self, "engine:regrow")? {
-            add(e, &|b| {
-                b.add(r);
-            });
+        for (e, mut r) in dec::<Vec<(Entity, Regrow)>>(self, "engine:regrow")? {
+            // Harvests are named by designation: map them like any def id,
+            // and forget one whose designation is gone.
+            if r.retain(|h, _| match h {
+                None => Some(None),
+                Some(d) => remap.get("designation", d).map(Some),
+            }) {
+                add(e, &|b| {
+                    b.add(r.clone());
+                });
+            }
         }
         for (id, n) in dropped {
             notes.push(if n == 1 { format!("dropped {id}") } else { format!("dropped {n} × {id}") });

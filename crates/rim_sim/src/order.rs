@@ -9,7 +9,7 @@
 //! buildable thing gets a working right-click without touching the engine.
 
 use crate::ai;
-use crate::defs::Targets;
+use crate::defs::{HarvestDef, Targets};
 use crate::path::Goal;
 use crate::world::*;
 use crate::IVec;
@@ -104,15 +104,23 @@ fn fixture(w: &World, pawn: Entity, from: IVec, f: Entity) -> Option<Order> {
             }
         });
     }
-    if w.ecs.get::<&Regrow>(f).is_ok() {
-        return None;
-    }
-    if let Some(hd) = td.harvest.as_ref() {
+    // The harvest it's designated for, and only that. Otherwise the
+    // gentlest one that's ready, so a click gathers from a tree rather than
+    // felling it.
+    let ready = |h: &&HarvestDef| w.harvest_ready(f, h.key());
+    let pick = match w.ecs.get::<&Designated>(f).ok().and_then(|d| td.harvest_for(d.0)) {
+        Some(h) => Some(h).filter(ready),
+        None => td.harvest.iter().filter(ready).min_by_key(|h| h.destroy),
+    };
+    if let Some(hd) = pick {
         return Some(Order {
             label: format!("{} {}", w.defs.designations[hd.desig_r as usize].label, td.label),
-            job: Job::Harvest { target: f, work: 0, forced: true },
+            job: Job::Harvest { target: f, work: 0, forced: true, harvest: hd.key() },
             reserve: vec![f],
         });
+    }
+    if !td.harvest.is_empty() {
+        return None;
     }
     // Something the colony built, if any mod offers a way to take it down.
     let ours = w.ecs.get::<&Owner>(f).is_ok_and(|o| o.0 == Faction::Player);
@@ -141,9 +149,9 @@ fn item(w: &World, from: IVec, i: Entity) -> Option<Order> {
 pub fn job_text(w: &World, p: &Pawn) -> String {
     let thing_label = |e: Entity| w.thing(e).map(|t| w.defs.thing(t.def).label.clone());
     let named = match &p.job {
-        Job::Harvest { target, .. } => w.thing(*target).and_then(|t| {
+        Job::Harvest { target, harvest, .. } => w.thing(*target).and_then(|t| {
             let td = w.defs.thing(t.def);
-            let hd = td.harvest.as_ref()?;
+            let hd = td.harvest_by_key(*harvest)?;
             Some(format!("{} {}", w.defs.designations[hd.desig_r as usize].label, td.label))
         }),
         Job::Construct { bp } => thing_label(*bp).map(|l| format!("Build {l}")),

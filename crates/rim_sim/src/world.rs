@@ -64,6 +64,9 @@ pub enum Job {
         /// Work the thing even though nobody designated it: foraging for
         /// food, or a job the player pointed at directly.
         forced: bool,
+        /// Which of the thing's harvests.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        harvest: HarvestKey,
     },
     Deliver {
         bp: Entity,
@@ -224,10 +227,49 @@ pub struct Owner(pub Faction);
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct Designated(pub DefId);
 
-/// Harvested; will be harvestable again at `ready_at`.
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+/// Harvests growing back, each named by its key:
+/// `harvest` is ready again at `ready_at`, and any others are in `also`.
+/// Nearly every regrowing thing has one, its first harvest, which saves
+/// exactly as it did before a thing could have several.
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Regrow {
     pub ready_at: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub harvest: HarvestKey,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub also: Vec<(HarvestKey, u64)>,
+}
+
+impl Regrow {
+    pub fn new(harvest: HarvestKey, ready_at: u64) -> Regrow {
+        Regrow { ready_at, harvest, also: Vec::new() }
+    }
+
+    /// Every harvest growing back, and when it's ready.
+    pub fn entries(&self) -> impl Iterator<Item = (HarvestKey, u64)> + '_ {
+        std::iter::once((self.harvest, self.ready_at)).chain(self.also.iter().copied())
+    }
+
+    /// Whether this harvest is still growing back.
+    pub fn growing(&self, harvest: HarvestKey) -> bool {
+        self.entries().any(|(h, _)| h == harvest)
+    }
+
+    /// Keep the entries `keep` accepts, renamed as it says. False when
+    /// none is left growing.
+    pub fn retain(&mut self, mut keep: impl FnMut(HarvestKey, u64) -> Option<HarvestKey>) -> bool {
+        let mut left: Vec<(HarvestKey, u64)> =
+            self.entries().filter_map(|(h, at)| keep(h, at).map(|h| (h, at))).collect();
+        let Some(first) = left.first().copied() else { return false };
+        left.remove(0);
+        (self.harvest, self.ready_at, self.also) = (first.0, first.1, left);
+        true
+    }
+
+    /// Drop the harvests ready by `tick`. False when none is left growing.
+    pub fn ripen(&mut self, tick: u64) -> bool {
+        self.retain(|h, at| (at > tick).then_some(h))
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -617,6 +659,21 @@ impl World {
             }
         }
         count
+    }
+
+    /// Whether a harvest of thing `e`, by key, can be worked: it isn't
+    /// growing back.
+    pub fn harvest_ready(&self, e: Entity, harvest: HarvestKey) -> bool {
+        self.ecs.get::<&Regrow>(e).map_or(true, |r| !r.growing(harvest))
+    }
+
+    /// A harvest of thing `e`, by key, grows back until `ready_at`.
+    pub fn regrow(&mut self, e: Entity, harvest: HarvestKey, ready_at: u64) {
+        if let Ok(mut r) = self.ecs.get::<&mut Regrow>(e) {
+            r.also.push((harvest, ready_at));
+            return;
+        }
+        let _ = self.ecs.insert_one(e, Regrow::new(harvest, ready_at));
     }
 
     pub fn despawn_thing(&mut self, e: Entity) {

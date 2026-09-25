@@ -1714,8 +1714,18 @@ fn hover_table(lua: &Lua, w: &World, client: &ClientView) -> mlua::Result<Value>
         } else if th.count > 1 {
             s = format!("{s} x{}", th.count);
         }
-        if w.ecs.get::<&Regrow>(e).is_ok() {
-            s.push_str(" (regrowing)");
+        if let Ok(r) = w.ecs.get::<&Regrow>(e) {
+            // With several harvests, say which: a gathered oak can still be chopped.
+            if td.harvest.len() > 1 {
+                let named: Vec<String> = r
+                    .entries()
+                    .filter_map(|(h, _)| td.harvest_by_key(h))
+                    .map(|h| w.defs.designations[h.desig_r as usize].label.to_lowercase())
+                    .collect();
+                s = format!("{s} ({} regrowing)", named.join(", "));
+            } else {
+                s.push_str(" (regrowing)");
+            }
         }
         if let Ok(m) = w.ecs.get::<&rim_sim::world::MadeOf>(e) {
             s = format!("{s} · {}", w.defs.thing(m.0).label);

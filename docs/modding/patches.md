@@ -53,6 +53,29 @@ set = { harvest = { regrow_days = 1.5 } }
 the rest of `harvest` stays. A list given to `set` replaces the whole list;
 to change part of one, use the list operations below.
 
+Some fields take one table or a list of them. `harvest` is one: an oak has
+a single harvest, but a mod can give it a second, one per designation.
+List operations treat a single table as a list of one, so a mod can add a
+harvest to a thing that had one:
+
+```toml
+[[patch]]
+target = "thing/core:tree_oak"
+append = { harvest = [{ designation = "harvest", work = 60, destroy = false,
+                        regrow_days = 3.0, yields = [{ thing = "wood", count = 2 }] }] }
+
+[[patch]]
+target = "thing/core:tree_oak"
+[[patch.edit]]
+list = "harvest"
+match = { designation = "chop" }
+set = { work = 200 }
+```
+
+Once a thing has several harvests, `set = { harvest = { ... } }` can't say
+which one it means: it's reported and skipped. Use `edit` to change one of
+them. With one harvest, `set` still merges into it.
+
 ## Lists
 
 `append` and `remove` take tables shaped like the def, down to the lists:

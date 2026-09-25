@@ -127,8 +127,12 @@ pub fn deaths(w: &mut World) {
 
 pub fn regrow(w: &mut World) {
     let tick = w.tick;
-    let ready: Vec<_> =
-        w.ecs.query::<(hecs::Entity, &Regrow)>().iter().filter(|(_, r)| r.ready_at <= tick).map(|(e, _)| e).collect();
+    let mut ready = Vec::new();
+    for (e, r) in w.ecs.query_mut::<(hecs::Entity, &mut Regrow)>() {
+        if !r.ripen(tick) {
+            ready.push(e);
+        }
+    }
     for e in ready {
         let _ = w.ecs.remove_one::<Regrow>(e);
         w.touch(e);

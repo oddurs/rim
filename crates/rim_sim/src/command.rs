@@ -70,7 +70,7 @@ pub fn apply(w: &mut World, c: Command) {
                 for p in cells(w, a, b).collect::<Vec<_>>() {
                     let Some(f) = w.map.fixture_at(p) else { continue };
                     let Some(t) = w.thing(f) else { continue };
-                    if defs.thing(t.def).harvest.as_ref().is_some_and(|h| h.desig_r == designation) {
+                    if defs.thing(t.def).harvest_for(designation).is_some() {
                         let _ = w.ecs.insert_one(f, Designated(designation));
                         w.map.touch(p);
                     }

@@ -40,6 +40,6 @@ fn shipped_mods_load_and_patch_applies() {
     let d = &s.world.defs;
     assert!(d.creature_id("boar").is_some(), "plugin creature missing");
     let bush = d.thing(d.thing_id("berry_bush").unwrap());
-    assert_eq!(bush.harvest.as_ref().unwrap().regrow_days, 1.5, "plugin patch not applied");
+    assert_eq!(bush.harvest[0].regrow_days, 1.5, "plugin patch not applied");
     assert!(s.warnings.is_empty(), "unexpected warnings: {:?}", s.warnings);
 }
