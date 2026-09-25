@@ -59,6 +59,20 @@ FAIL my_mod (with core, my_mod): 0 warnings, 0 script errors, 1 UI errors
   error: my_mod/ui/hud.luau:12: view.colonist is not in the UI API 0.1 (did you mean view.colonists?)
 ```
 
+## Replaying a save
+
+A save is the game's seed and every command the player gave (DESIGN.md
+§7a), so a save that shows a bug is also its reproduction:
+
+```sh
+rim replay colony.rim                 # the last epoch, from its root
+rim replay colony.rim --epoch 0       # the first: a new game from the seed
+```
+
+It prints how many checkpoints agreed, and exits 1 at the first one that
+doesn't, naming the sections that differ (`engine:world`, `weather:data`).
+A mod that keeps state in a Luau local instead of script data shows up here.
+
 ## Worlds
 
 `t.world({ seed, mods, size })` builds a fresh world, exactly as a new game

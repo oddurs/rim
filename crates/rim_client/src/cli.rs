@@ -1,4 +1,4 @@
-//! Commands that run without a window: `rim test`, `rim check`.
+//! Commands that run without a window: `rim test`, `rim check`, `rim replay`.
 
 use rim_sim::modtest;
 use std::path::PathBuf;
@@ -173,6 +173,67 @@ pub fn check(args: &[String]) -> i32 {
         }
     }
     i32::from(failed)
+}
+
+const REPLAY_USAGE: &str = "usage: rim replay SAVE [--epoch N] [--mods DIR]
+
+Replays one epoch of a save from its root (the seed, or the snapshot it
+began with), applying every command at its tick and checking the state at
+each log. Uses the last epoch unless --epoch says otherwise, and ./mods
+unless --mods does. Exits 1 at the first tick that disagrees, naming the
+sections that differ.";
+
+/// `rim replay`: returns the process exit code.
+pub fn replay(args: &[String]) -> i32 {
+    let (mut save, mut epoch, mut mods) = (None, None, PathBuf::from("mods"));
+    let mut it = args.iter();
+    let usage = |e: &str| {
+        eprintln!("rim replay: {e}\n\n{REPLAY_USAGE}");
+        2
+    };
+    while let Some(a) = it.next() {
+        match a.as_str() {
+            "--epoch" => match it.next().and_then(|n| n.parse().ok()) {
+                Some(n) => epoch = Some(n),
+                None => return usage("--epoch takes a number"),
+            },
+            "--mods" => match it.next() {
+                Some(d) => mods = PathBuf::from(d),
+                None => return usage("--mods takes a directory"),
+            },
+            "-h" | "--help" => {
+                println!("{REPLAY_USAGE}");
+                return 0;
+            }
+            s if s.starts_with('-') => return usage(&format!("unknown option {s}")),
+            s if save.is_some() => return usage(&format!("one save at a time ({s}?)")),
+            s => save = Some(PathBuf::from(s)),
+        }
+    }
+    let Some(save) = save else { return usage("which save?") };
+    match rim_sim::savefile::replay(&save, &mods, epoch) {
+        Err(e) => {
+            eprintln!("rim replay: {e}");
+            2
+        }
+        Ok(r) => {
+            let root = match r.root {
+                rim_sim::savefile::Root::Seed { seed, size } => format!("seed {seed}, {size}x{size}"),
+                rim_sim::savefile::Root::Snapshot => format!("the snapshot at tick {}", r.from_tick),
+            };
+            println!("epoch {} from {root}: {} logs agree", r.epoch, r.checked.len());
+            match r.diverged {
+                None => {
+                    println!("ok, through tick {}", r.checked.last().copied().unwrap_or(r.from_tick));
+                    0
+                }
+                Some((tick, sections)) => {
+                    println!("DIVERGED at tick {tick}: {}", sections.join(", "));
+                    1
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]

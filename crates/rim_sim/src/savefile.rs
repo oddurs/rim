@@ -51,12 +51,36 @@ struct SnapshotRecord {
 }
 
 /// The commands applied before `tick` (since the previous log), and the
-/// snapshot hash at `tick`.
+/// hash of each snapshot section at `tick`, so a replay that disagrees can
+/// say where.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Log {
     pub tick: u64,
     pub commands: Vec<(u64, Command)>,
-    pub hash: u64,
+    pub hashes: BTreeMap<String, u64>,
+}
+
+fn section_hashes(sim: &Sim) -> BTreeMap<String, u64> {
+    Snapshot::capture(sim).sections.iter().map(|(n, b)| (n.clone(), hash_bytes(b))).collect()
+}
+
+/// The sections whose hashes differ between two logs' worth of hashes.
+fn differing(a: &BTreeMap<String, u64>, b: &BTreeMap<String, u64>) -> Vec<String> {
+    let names: std::collections::BTreeSet<&String> = a.keys().chain(b.keys()).collect();
+    names.into_iter().filter(|n| a.get(*n) != b.get(*n)).cloned().collect()
+}
+
+/// What replaying an epoch found.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ReplayReport {
+    pub epoch: usize,
+    /// Where it started: the seed, or the tick of the epoch's first snapshot.
+    pub root: Root,
+    pub from_tick: u64,
+    /// Log ticks whose hashes matched.
+    pub checked: Vec<u64>,
+    /// The first log that disagreed, and the sections that differ there.
+    pub diverged: Option<(u64, Vec<String>)>,
 }
 
 /// One epoch as read back.
@@ -183,14 +207,18 @@ fn lock_of(sim: &Sim) -> Vec<(String, String)> {
 }
 
 impl SaveFile {
-    /// Start a save for a game just built by `Sim::build`, and start
-    /// recording its commands.
+    /// Start a save for a game, and start recording its commands. A game
+    /// that hasn't run yet is rooted at its seed, so it replays from there;
+    /// one that has is rooted at its snapshot.
     pub fn create(path: &Path, sim: &mut Sim) -> std::io::Result<SaveFile> {
         let mut file = File::create(path)?;
         file.write_all(MAGIC)?;
         let len = MAGIC.len() as u64;
         let mut s = SaveFile { path: path.to_path_buf(), file, len, broken: false, stored: HashSet::new() };
-        let root = Root::Seed { seed: sim.world.seed, size: sim.world.map.w };
+        let root = match sim.world.tick {
+            0 => Root::Seed { seed: sim.world.seed, size: sim.world.map.w },
+            _ => Root::Snapshot,
+        };
         s.epoch(sim, root)?;
         Ok(s)
     }
@@ -229,7 +257,7 @@ impl SaveFile {
     /// state they led to. Call it as often as losing the tail would hurt; if
     /// it fails, the commands are kept for the next try.
     pub fn log(&mut self, sim: &mut Sim) -> std::io::Result<()> {
-        let log = Log { tick: sim.world.tick, commands: sim.applied().to_vec(), hash: Snapshot::capture(sim).hash() };
+        let log = Log { tick: sim.world.tick, commands: sim.applied().to_vec(), hashes: section_hashes(sim) };
         self.put(LOG, &msgpack(&log))?;
         sim.clear_applied();
         Ok(())
@@ -286,12 +314,13 @@ impl SaveFile {
         let same_code = lock_of(&sim) == last.epoch.mods && last.epoch.engine == env!("CARGO_PKG_VERSION");
         if !same_code {
             report.lost = last.logs.iter().map(|l| l.tick).max().unwrap_or(start).saturating_sub(start);
-        } else if let Err(at) = replay(&mut sim, &last.logs, None) {
+        } else if let Err((at, _)) = replay_logs(&mut sim, &last.logs, None, &mut |_| {}) {
             // Start over, and stop at the last tick the log vouched for.
             report.diverged_at = Some(at);
             let good = last.logs.iter().map(|l| l.tick).filter(|&t| t < at).max().unwrap_or(start).max(start);
             sim = snap.restore(mods_dir, enabled)?;
-            replay(&mut sim, &last.logs, Some(good)).map_err(|t| format!("the log diverged again at tick {t}"))?;
+            replay_logs(&mut sim, &last.logs, Some(good), &mut |_| {})
+                .map_err(|(t, _)| format!("the log diverged again at tick {t}"))?;
         }
         report.replayed = sim.world.tick - start;
         report.tick = sim.world.tick;
@@ -327,8 +356,14 @@ impl SaveFile {
 }
 
 /// Run `sim` through the logs after its tick, up to `until` (or the last
-/// log), each command at its tick. Err is the first log whose hash disagrees.
-fn replay(sim: &mut Sim, logs: &[Log], until: Option<u64>) -> Result<(), u64> {
+/// log), each command at its tick, calling `checked` with each log tick that
+/// agreed. Err is the first log that disagreed, and the sections that differ.
+fn replay_logs(
+    sim: &mut Sim,
+    logs: &[Log],
+    until: Option<u64>,
+    checked: &mut dyn FnMut(u64),
+) -> Result<(), (u64, Vec<String>)> {
     let from = sim.world.tick;
     for log in logs.iter().filter(|l| l.tick > from && until.is_none_or(|u| l.tick <= u)) {
         let mut cmds = log.commands.iter().filter(|c| c.0 >= from).peekable();
@@ -338,9 +373,55 @@ fn replay(sim: &mut Sim, logs: &[Log], until: Option<u64>) -> Result<(), u64> {
             }
             sim.step();
         }
-        if Snapshot::capture(sim).hash() != log.hash {
-            return Err(log.tick);
+        let diff = differing(&section_hashes(sim), &log.hashes);
+        if !diff.is_empty() {
+            return Err((log.tick, diff));
         }
+        checked(log.tick);
     }
     Ok(())
+}
+
+/// Replay one epoch of a save from its root, the way a bug report is
+/// reproduced: a new game from the seed (or the epoch's first snapshot),
+/// then every command at its tick, checking each log's hashes. The mods
+/// must be the ones the epoch ran under. `epoch` defaults to the last.
+pub fn replay(path: &Path, mods_dir: &Path, epoch: Option<usize>) -> Result<ReplayReport, String> {
+    let (epochs, _) = read(path)?;
+    let n = epoch.unwrap_or(epochs.len().saturating_sub(1));
+    let e = epochs.get(n).ok_or_else(|| format!("the save has {} epochs; there's no epoch {n}", epochs.len()))?;
+    if e.epoch.engine != env!("CARGO_PKG_VERSION") {
+        return Err(format!(
+            "epoch {n} ran under engine {}; this is {}, and a log only replays under the code that wrote it",
+            e.epoch.engine,
+            env!("CARGO_PKG_VERSION")
+        ));
+    }
+    let ids: Vec<&str> = e.epoch.mods.iter().map(|m| m.0.as_str()).collect();
+    let enabled = |m: &str| ids.contains(&m);
+    let mut sim = match e.epoch.root {
+        Root::Seed { seed, size } => Sim::build(mods_dir, seed, &enabled, size)?,
+        Root::Snapshot => e.snapshots.first().ok_or("an epoch with no snapshot")?.restore(mods_dir, &enabled)?,
+    };
+    if lock_of(&sim) != e.epoch.mods {
+        return Err(format!("epoch {n} ran under mods {:?}; installed: {:?}", e.epoch.mods, lock_of(&sim)));
+    }
+    let from_tick = sim.world.tick;
+    // A new game from the seed must be the one the save began with.
+    if let Some(first) = e.snapshots.first().filter(|s| s.header.tick == from_tick) {
+        let saved = first.sections.iter().map(|(n, b)| (n.clone(), hash_bytes(b))).collect();
+        let diff = differing(&section_hashes(&sim), &saved);
+        if !diff.is_empty() {
+            return Ok(ReplayReport {
+                epoch: n,
+                root: e.epoch.root.clone(),
+                from_tick,
+                checked: Vec::new(),
+                diverged: Some((from_tick, diff)),
+            });
+        }
+    }
+    let mut checked = Vec::new();
+    let diverged = replay_logs(&mut sim, &e.logs, None, &mut |t| checked.push(t)).err();
+    Ok(ReplayReport { epoch: n, root: e.epoch.root.clone(), from_tick, checked, diverged })
 }
