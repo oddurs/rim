@@ -89,6 +89,9 @@ pub enum UiAction {
     Send(String, Option<rim_sim::data::Data>),
     /// Devtools: run the simulation forward this many game hours now.
     Advance(f64),
+    /// Draw the world at this fraction of the screen's pixels (0.25 to 1);
+    /// the UI stays at full resolution.
+    RenderScale(f32),
 }
 
 /// Screen position of a pawn (physical pixels), interpolated between cells

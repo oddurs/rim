@@ -11,6 +11,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `act.cycle_overlay` | `() -> ()` | Show the next field overlay. |
 | `act.draft` | `(id: number, on: boolean) -> ()` | Draft or undraft a colonist. |
 | `act.focus` | `(id: number) -> ()` | Move the camera to a pawn. |
+| `act.render_scale` | `(scale: number) -> ()` | Draw the world at this fraction of the screen's pixels, 0.25 to 1; the UI stays sharp. Saved for the player. |
 | `act.select` | `(id: number?) -> ()` | Select a pawn, or nothing. |
 | `act.send` | `(name: string, data: {[string]: any}?) -> ()` | Send an event to your mod's own sim scripts ("your_mod:event"), as a player command. |
 | `act.set_overlay` | `(index: number?) -> ()` | Show a field overlay by its index in view.fields(), or none. |
@@ -22,7 +23,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `act.toggle_profiler` | `() -> ()` | Show or hide the profiler. |
 | `act.tool` | `(key: string) -> ()` | Pick a toolbar tool ("designate:core:chop", "build:core:wall"). |
 | `ui.anchored` | `(node: Node?) -> Node` | A node attached to a pawn (entity) or cell, on the anchored layer. |
-| `ui.bind` | `(id: string, opts: { key: string, label: string? }, run: () -> ()) -> ()` | A named action with a default key ("space", "f3", "ctrl+k"): it fires from the key when no text input is typing, and from the command palette. The player's keybinds file overrides the key. Two mods binding one id or one key is reported. |
+| `ui.bind` | `(id: string, opts: { key: string?, label: string? }, run: () -> ()) -> ()` | A named action with a default key ("space", "f3", "ctrl+k"): it fires from the key when no text input is typing, and from the command palette. With no key it is in the palette alone. The player's keybinds file overrides the key. Two mods binding one id or one key is reported. |
 | `ui.close` | `(id: string) -> ()` | Close a window. |
 | `ui.col` | `(node: Node?) -> Node` | A column: children top to bottom. |
 | `ui.define` | `(id: string, build: (view: any) -> Node?) -> ()` | Define a component under a namespaced id. |

@@ -2,8 +2,10 @@
 id: 30760c07-752c-4165-a36d-73a23bd98105
 title: 'Render scale: the world at a fraction of the screen''s pixels'
 type: feature
-status: backlog
+status: doing
 milestone: graphics
+assignee: Oddur Sigurdsson
+claimed: 2026-09-24
 depends_on:
 - 4376f91e-f671-4ca5-9a6a-8c42848043eb
 created: 2026-09-24

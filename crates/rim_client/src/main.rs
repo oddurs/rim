@@ -106,6 +106,12 @@ pub struct App {
     pub meshes: mesh::Meshes,
     /// Every mod's sprites, packed at load.
     pub world_atlas: atlas::WorldAtlas,
+    /// The world's resolution as a fraction of the screen's pixels; the
+    /// UI is always full. Below 1 the world draws into `world_target`.
+    pub render_scale: f32,
+    pub world_target: Option<RenderTarget>,
+    /// Where the player's settings are saved; none in the autotest.
+    settings_file: Option<PathBuf>,
     /// Input subscriber for wheel events (see `Wheel`).
     wheel_sub: usize,
 }
@@ -356,6 +362,17 @@ async fn game() {
         }
     }
     let keys_file = if args.iter().any(|a| a == "--autotest") { None } else { player_file("keybinds.toml") };
+    let settings_file = if args.iter().any(|a| a == "--autotest" || a == "--bench-render") {
+        None
+    } else {
+        player_file("settings.toml")
+    };
+    let render_scale = settings_file
+        .as_ref()
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .and_then(|t| toml::from_str::<toml::Table>(&t).ok())
+        .and_then(|t| t.get("render_scale").and_then(|v| v.as_float().or(v.as_integer().map(|i| i as f64))))
+        .map_or_else(default_render_scale, |v| (v as f32).clamp(0.25, 1.0));
     if let Some(text) = keys_file.as_ref().and_then(|p| std::fs::read_to_string(p).ok()) {
         if let Err(e) = ui.restore_keybinds(&text) {
             eprintln!("  warning: keybinds file ignored: {e}");
@@ -401,6 +418,9 @@ async fn game() {
         render_us: RenderTimes::default(),
         meshes: mesh::Meshes::default(),
         world_atlas,
+        render_scale,
+        world_target: None,
+        settings_file,
         wheel_sub: macroquad::input::utils::register_input_subscriber(),
     };
     app.selected = app.sim.world.colonists().next();
@@ -830,6 +850,36 @@ impl RenderTimes {
     }
 }
 
+/// A high-DPI screen gets the world at its logical resolution: a quarter
+/// of the pixels at 2x, which is the difference for an integrated GPU.
+fn default_render_scale() -> f32 {
+    let dpi = screen_dpi_scale();
+    if dpi > 1.5 {
+        1.0 / dpi
+    } else {
+        1.0
+    }
+}
+
+/// Make `world_target` match the screen at the render scale, or drop it
+/// at full scale, where the world draws straight to the screen.
+fn update_world_target(app: &mut App) {
+    let dpi = screen_dpi_scale();
+    let (w, h) =
+        ((screen_width() * dpi * app.render_scale).round(), (screen_height() * dpi * app.render_scale).round());
+    let full = (screen_width() * dpi).round();
+    if w >= full || w < 1.0 || h < 1.0 {
+        app.world_target = None;
+        return;
+    }
+    let fits = app.world_target.as_ref().is_some_and(|t| t.texture.width() == w && t.texture.height() == h);
+    if !fits {
+        let t = render_target(w as u32, h as u32);
+        t.texture.set_filter(FilterMode::Linear);
+        app.world_target = Some(t);
+    }
+}
+
 pub fn render(app: &mut App) {
     let mut clock = std::time::Instant::now();
     let mut lap = || {
@@ -838,6 +888,17 @@ pub fn render(app: &mut App) {
         us
     };
     let mut t = RenderTimes::default();
+    update_world_target(app);
+    let (sw, sh) = (screen_width(), screen_height());
+    if let Some(rt) = &app.world_target {
+        // The same screen points, into fewer pixels.
+        set_camera(&Camera2D {
+            zoom: vec2(2.0 / sw, 2.0 / sh),
+            target: vec2(sw / 2.0, sh / 2.0),
+            render_target: Some(rt.clone()),
+            ..Default::default()
+        });
+    }
     app.ground.update(&app.sim.world);
     t.ground = lap();
     let counts = draw::things(app);
@@ -849,6 +910,12 @@ pub fn render(app: &mut App) {
     app.sky.weather(&app.sim.world, &app.cam, &air);
     t.weather = lap();
     app.sky.light(&app.sim.world, &app.cam, &air);
+    if let Some(rt) = &app.world_target {
+        set_default_camera();
+        let size = DrawTextureParams { dest_size: Some(vec2(sw, sh)), ..Default::default() };
+        draw_texture_ex(&rt.texture, 0.0, 0.0, WHITE, size);
+    }
+    // Includes putting a scaled world on the screen: one quad.
     t.light = lap();
     draw::world_ui(app);
     // Stack counts, in the UI's text: shaped into the same atlas, drawn in
@@ -901,6 +968,15 @@ fn apply_ui(app: &mut App, a: UiAction) {
         UiAction::ToggleProfiler => apply(app, Action::ToggleProfiler),
         UiAction::ToggleDevtools => apply(app, Action::ToggleDevtools),
         UiAction::ToggleOutlines => app.ui.toggle_outlines(),
+        UiAction::RenderScale(s) => {
+            app.render_scale = s;
+            if let Some(p) = &app.settings_file {
+                let _ = p.parent().map(std::fs::create_dir_all);
+                if let Err(e) = std::fs::write(p, format!("render_scale = {s}\n")) {
+                    eprintln!("rim: could not save settings to {}: {e}", p.display());
+                }
+            }
+        }
         UiAction::Send(name, data) => app.sim.push(Command::ModEvent { name, data }),
         UiAction::Advance(hours) => {
             // Devtools only: step the sim now, as fast as it goes.

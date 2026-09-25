@@ -502,6 +502,20 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         t.shot("sprite").await;
         t.app.cam.zoom = 28.0;
     }
+
+    // Render scale: the world at half the pixels, the UI still full.
+    let native = screen_width() * screen_dpi_scale();
+    crate::apply_ui(&mut t.app, rim_ui::view::UiAction::RenderScale(0.5));
+    t.frame().await;
+    let half = t.app.world_target.as_ref().map(|rt| rt.texture.width());
+    t.check(
+        half.is_some_and(|w| (w - native / 2.0).abs() <= 1.0),
+        format!("half render scale draws the world at half the width ({half:?} of {native})"),
+    );
+    t.shot("render_scale_50").await;
+    crate::apply_ui(&mut t.app, rim_ui::view::UiAction::RenderScale(1.0));
+    t.frame().await;
+    t.check(t.app.world_target.is_none(), "full render scale draws straight to the screen");
     t.click_ui("core:toolbar.cancel").await;
     t.drag(spot, spot).await;
     t.ticks(1);

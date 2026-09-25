@@ -65,8 +65,8 @@ type TreeRow = { depth: number, kind: string, id: string, owner: string }
 declare ui: {
     -- A node attached to a pawn (entity) or cell, on the anchored layer.
     anchored: (node: Node?) -> Node,
-    -- A named action with a default key ("space", "f3", "ctrl+k"): it fires from the key when no text input is typing, and from the command palette. The player's keybinds file overrides the key. Two mods binding one id or one key is reported.
-    bind: (id: string, opts: { key: string, label: string? }, run: () -> ()) -> (),
+    -- A named action with a default key ("space", "f3", "ctrl+k"): it fires from the key when no text input is typing, and from the command palette. With no key it is in the palette alone. The player's keybinds file overrides the key. Two mods binding one id or one key is reported.
+    bind: (id: string, opts: { key: string?, label: string? }, run: () -> ()) -> (),
     -- Close a window.
     close: (id: string) -> (),
     -- A column: children top to bottom.
@@ -134,6 +134,8 @@ declare act: {
     draft: (id: number, on: boolean) -> (),
     -- Move the camera to a pawn.
     focus: (id: number) -> (),
+    -- Draw the world at this fraction of the screen's pixels, 0.25 to 1; the UI stays sharp. Saved for the player.
+    render_scale: (scale: number) -> (),
     -- Select a pawn, or nothing.
     select: (id: number?) -> (),
     -- Send an event to your mod's own sim scripts ("your_mod:event"), as a player command.

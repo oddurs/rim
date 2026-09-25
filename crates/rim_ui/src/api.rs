@@ -95,6 +95,11 @@ pub const UI_API: &[UiDoc] = &[
     d!("act.cycle_overlay", "() -> ()", "Show the next field overlay."),
     d!("act.draft", "(id: number, on: boolean) -> ()", "Draft or undraft a colonist."),
     d!("act.focus", "(id: number) -> ()", "Move the camera to a pawn."),
+    d!(
+        "act.render_scale",
+        "(scale: number) -> ()",
+        "Draw the world at this fraction of the screen's pixels, 0.25 to 1; the UI stays sharp. Saved for the player."
+    ),
     d!("act.select", "(id: number?) -> ()", "Select a pawn, or nothing."),
     d!(
         "act.send",
@@ -112,8 +117,8 @@ pub const UI_API: &[UiDoc] = &[
     d!("ui.anchored", "(node: Node?) -> Node", "A node attached to a pawn (entity) or cell, on the anchored layer."),
     d!(
         "ui.bind",
-        "(id: string, opts: { key: string, label: string? }, run: () -> ()) -> ()",
-        "A named action with a default key (\"space\", \"f3\", \"ctrl+k\"): it fires from the key when no text input is typing, and from the command palette. The player's keybinds file overrides the key. Two mods binding one id or one key is reported."
+        "(id: string, opts: { key: string?, label: string? }, run: () -> ()) -> ()",
+        "A named action with a default key (\"space\", \"f3\", \"ctrl+k\"): it fires from the key when no text input is typing, and from the command palette. With no key it is in the palette alone. The player's keybinds file overrides the key. Two mods binding one id or one key is reported."
     ),
     d!("ui.close", "(id: string) -> ()", "Close a window."),
     d!("ui.col", "(node: Node?) -> Node", "A column: children top to bottom."),

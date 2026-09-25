@@ -23,6 +23,14 @@ end)
 ui.bind("core:devtools", { key = "f12", label = t("core:keys.devtools", "Devtools") }, function()
 	act.toggle_devtools()
 end)
+-- Render scale: the world at fewer pixels than the screen has, for a
+-- laptop whose integrated GPU can't fill a high-DPI screen. No keys; the
+-- palette finds them.
+for _, pct in { 100, 75, 50 } do
+	ui.bind(`core:render_scale_{pct}`, { label = t(`core:keys.render_scale_{pct}`, `Render scale {pct}%`) }, function()
+		act.render_scale(pct / 100)
+	end)
+end
 ui.bind("core:overlay", { key = "o", label = t("core:keys.overlay", "Next overlay") }, function()
 	act.cycle_overlay()
 end)
