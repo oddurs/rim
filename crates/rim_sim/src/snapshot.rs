@@ -7,7 +7,7 @@
 //! pawn list are rebuilt on load, from the things in the world.
 
 use crate::data::Data;
-use crate::defs::{Category, DefDb, DefId};
+use crate::defs::{Category, DefDb, DefId, HarvestKey};
 use crate::field::SavedFields;
 use crate::sim::Sim;
 use crate::world::*;
@@ -17,8 +17,37 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::Path;
 
-/// Bumped whenever an `engine:` section changes shape.
-pub const FORMAT: u32 = 1;
+/// Bumped whenever an `engine:` section changes shape. A build reads its own
+/// format and every older one it knows how to carry forward.
+/// 2: a thing's progress moved to `engine:work`; Blueprint lost `work` and
+/// `work_left`.
+pub const FORMAT: u32 = 2;
+
+/// Where a format-1 plan kept its progress.
+#[derive(Deserialize)]
+struct PlanProgress {
+    work: u32,
+    work_left: u32,
+}
+
+/// Where format 1 kept a chop's or a take-down's progress: on the job of
+/// the pawn doing it. Each (target, work done, and for a harvest, which of
+/// the thing's harvests as saved) found; no harvest means a take-down.
+#[allow(clippy::type_complexity)]
+fn job_progress(s: &Snapshot) -> Result<Vec<(Entity, u32, Option<HarvestKey>)>, String> {
+    let rows: Vec<(Entity, serde_json::Value)> = dec(s, "engine:pawn")?;
+    Ok(rows
+        .iter()
+        .filter_map(|(_, p)| {
+            let job = p.get("job")?.as_object()?;
+            let (kind, v) = job.iter().find(|(k, _)| *k == "Harvest" || *k == "Deconstruct")?;
+            let target = serde_json::from_value(v.get("target")?.clone()).ok()?;
+            let harvest = (kind == "Harvest")
+                .then(|| v.get("harvest").and_then(|h| h.as_u64()).and_then(|d| DefId::try_from(d).ok()));
+            Some((target, v.get("work")?.as_u64()?.try_into().ok()?, harvest))
+        })
+        .collect())
+}
 
 const MAGIC: &[u8; 8] = b"rimsnap1";
 
@@ -205,6 +234,7 @@ impl Snapshot {
             ("engine:owner".to_string(), component::<Owner>(w)),
             ("engine:designated".to_string(), component::<Designated>(w)),
             ("engine:regrow".to_string(), component::<Regrow>(w)),
+            ("engine:work".to_string(), component::<Work>(w)),
         ]);
         // Script data, one section per mod: every key is "mod:key" (0062).
         let mut by_mod: BTreeMap<&str, BTreeMap<&str, &Data>> = BTreeMap::new();
@@ -300,8 +330,8 @@ impl Snapshot {
         mods_dir: &Path,
         enabled: &dyn Fn(&str) -> bool,
     ) -> Result<(Sim, Vec<String>), String> {
-        if self.header.format != FORMAT {
-            return Err(format!("save format {} (this build reads {FORMAT})", self.header.format));
+        if self.header.format == 0 || self.header.format > FORMAT {
+            return Err(format!("save format {} (this build reads 1 to {FORMAT})", self.header.format));
         }
         let mods = Sim::load_mods(mods_dir, enabled)?;
         let defs = mods.defs.clone();
@@ -358,6 +388,7 @@ impl Snapshot {
         let mut builders: BTreeMap<u32, (Entity, EntityBuilder)> = BTreeMap::new();
         let mut gone: std::collections::BTreeSet<u32> = std::collections::BTreeSet::new();
         let mut dropped: BTreeMap<String, u32> = BTreeMap::new();
+        let old_jobs = if self.header.format < 2 { job_progress(self)? } else { Vec::new() };
         let mut add = |e: Entity, c: &dyn Fn(&mut EntityBuilder)| {
             c(&mut builders.entry(e.id()).or_insert_with(|| (e, EntityBuilder::new())).1);
         };
@@ -469,6 +500,27 @@ impl Snapshot {
                 });
             }
         }
+        if self.header.format >= 2 {
+            for (e, mut k) in dec::<Vec<(Entity, Work)>>(self, "engine:work")? {
+                if let Some(d) = k.designation {
+                    // Progress toward a designation that is gone starts over.
+                    let Some(d) = remap.get("designation", d) else { continue };
+                    k.designation = Some(d);
+                }
+                add(e, &|b| {
+                    b.add(k);
+                });
+            }
+        } else {
+            for (e, old) in dec::<Vec<(Entity, PlanProgress)>>(self, "engine:blueprint")? {
+                let total = old.work.max(1);
+                let k =
+                    Work { done: total.saturating_sub(old.work_left), total, designation: None, side: Side::default() };
+                add(e, &|b| {
+                    b.add(k);
+                });
+            }
+        }
         for (id, n) in dropped {
             notes.push(if n == 1 { format!("dropped {id}") } else { format!("dropped {n} × {id}") });
         }
@@ -482,6 +534,33 @@ impl Snapshot {
         w.next_entity = ws.next_entity;
         w.pawns = w.ecs.query::<(Entity, &Pawn)>().iter().map(|(e, _)| e).collect();
         w.pawns.sort_unstable_by_key(|e| e.id());
+        for (target, done, harvest) in old_jobs {
+            let Some(t) = w.thing(target).filter(|_| done > 0 && w.ecs.get::<&Work>(target).is_err()) else {
+                continue;
+            };
+            let found = match harvest {
+                Some(key) => {
+                    let key = match key {
+                        None => Some(None),
+                        Some(d) => remap.get("designation", d).map(Some),
+                    };
+                    key.and_then(|k| defs.thing(t.def).harvest_by_key(k)).map(|h| (h.desig_r, h.work))
+                }
+                None => w
+                    .ecs
+                    .get::<&Designated>(target)
+                    .ok()
+                    .map(|d| (d.0, w.stat(target, "work").map_or(1, |x| x.round().max(1.0) as u32))),
+            };
+            let Some((designation, total)) = found else { continue };
+            let k = Work {
+                done: done.min(total),
+                total: total.max(1),
+                designation: Some(designation),
+                side: Side::default(),
+            };
+            let _ = w.ecs.insert_one(target, k);
+        }
 
         // The map's entity layers, then field stamps once every wall is up.
         let mut things: Vec<(Entity, Thing, bool, Option<Faction>)> = w

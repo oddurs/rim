@@ -160,6 +160,7 @@ impl Sim {
         let clock = w.clock();
         prof.time("fields", || w.fields.update(&defs, &mut w.map, clock));
         prof.time("pawns", || ai::tick_pawns(w));
+        prof.time("worksites", || w.sweep_worksites());
         prof.time("deaths", || systems::deaths(w));
         if w.tick.is_multiple_of(systems::NEEDS_INTERVAL) {
             prof.time("needs", || systems::needs(w));

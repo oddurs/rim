@@ -187,11 +187,8 @@ pub fn thing(s: &mut impl Sink, w: &World, e: Entity, cell: IVec, at: (f32, f32)
         let ghost = Color::new(0.45, 0.7, 1.0, 0.35);
         s.rect(sx + 1.0, sy + 1.0, z - 2.0, z - 2.0, ghost);
         outline(s, sx + 1.0, sy + 1.0, z - 2.0, z - 2.0, 1.5, Color::new(0.55, 0.8, 1.0, 0.8));
-        let frac = if have < need {
-            have as f32 / need.max(1) as f32 * 0.5
-        } else {
-            0.5 + 0.5 * (1.0 - bp.work_left as f32 / bp.work.max(1) as f32)
-        };
+        let built = w.ecs.get::<&Work>(e).map_or(0.0, |k| k.done as f32 / k.total.max(1) as f32);
+        let frac = if have < need { have as f32 / need.max(1) as f32 * 0.5 } else { 0.5 + 0.5 * built };
         s.rect(sx + 2.0, sy + z - 4.0, (z - 4.0) * frac, 2.5, Color::new(0.6, 0.9, 1.0, 0.9));
         return None;
     }

@@ -60,7 +60,6 @@ pub enum Job {
     },
     Harvest {
         target: Entity,
-        work: u32,
         /// Work the thing even though nobody designated it: foraging for
         /// food, or a job the player pointed at directly.
         forced: bool,
@@ -80,7 +79,6 @@ pub enum Job {
     /// Take a built thing down and get some of it back.
     Deconstruct {
         target: Entity,
-        work: u32,
     },
     Eat {
         src: Entity,
@@ -207,11 +205,63 @@ pub struct Blueprint {
     /// which it was.
     pub cost: Vec<(DefId, u32)>,
     pub delivered: Vec<u32>,
-    /// Total work, already scaled by the material, so a progress bar has a
-    /// denominator that matches what `work_left` counts down from.
-    pub work: u32,
-    pub work_left: u32,
 }
+
+/// Progress on a thing someone has started working: chopping, mining,
+/// building or taking it down (DESIGN.md §6b). It lives on the thing, not
+/// the job, so it survives the worker leaving, a second worker and a save,
+/// and a renderer can draw it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Work {
+    pub done: u32,
+    /// Resolved when work starts, already scaled by the material.
+    pub total: u32,
+    /// The designation this work is for; None for a build. A different
+    /// designation starts over rather than inheriting another job's count.
+    pub designation: Option<DefId>,
+    /// Which side the last unit of work came from.
+    pub side: Side,
+}
+
+impl Work {
+    pub fn finished(&self) -> bool {
+        self.done >= self.total
+    }
+}
+
+/// One of the four sides of a cell.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Side {
+    North,
+    East,
+    South,
+    #[default]
+    West,
+}
+
+impl Side {
+    /// The side of `at` that `from` stands on. A diagonal neighbour counts
+    /// as the side along its longer axis, and as east or west on a tie.
+    pub fn of(at: IVec, from: IVec) -> Side {
+        let (dx, dy) = (from.x - at.x, from.y - at.y);
+        if dx.abs() >= dy.abs() && dx != 0 {
+            if dx > 0 {
+                Side::East
+            } else {
+                Side::West
+            }
+        } else if dy > 0 {
+            Side::South
+        } else {
+            Side::North
+        }
+    }
+}
+
+/// How long a site stays a worksite after its last unit of work, so a pawn
+/// stepping aside or a raider between swings (core's slowest melee
+/// cooldown is 90 ticks) doesn't flicker it in and out of the cache.
+pub const WORKSITE_GRACE: u64 = 120;
 
 /// What a built thing is made of. Survives construction, so a finished
 /// wall still knows it is stone.
@@ -369,6 +419,11 @@ pub struct World {
     pub wealth: f64,
     /// Recent melee hits (pos, tick) for renderers.
     pub hits: Vec<(IVec, u64)>,
+    /// Things being worked right now, with where they are and the last tick
+    /// they were worked. Renderers draw these live and cache everything
+    /// else, so the map is touched when one joins or leaves and at no other
+    /// time. Derived: not saved, rebuilt by the next unit of work.
+    pub worksites: BTreeMap<Entity, (IVec, u64)>,
     /// The last few notable events (tick, kind, pawn, name) for the UI:
     /// "joined", "died", "left". Not part of the simulation state.
     pub recent_events: Vec<(u64, &'static str, Entity, String)>,
@@ -402,6 +457,7 @@ impl World {
             pf: Pathfinder::default(),
             wealth: 0.0,
             hits: Vec::new(),
+            worksites: BTreeMap::new(),
             recent_events: Vec::new(),
             colony_lost: false,
             seen_room_rebuilds: u64::MAX,
@@ -595,9 +651,9 @@ impl World {
                 (Some(_), None) => return None, // needs a material and was given none
                 (None, _) => b.cost_r.clone(),
             };
-            let work = (b.work as f64 * defs.factor(made_of, "work")).round().max(1.0) as u32;
-            let bp = Blueprint { delivered: vec![0; cost.len()], cost, work, work_left: work };
-            self.spawn((t, bp))
+            let total = (b.work as f64 * defs.factor(made_of, "work")).round().max(1.0) as u32;
+            let bp = Blueprint { delivered: vec![0; cost.len()], cost };
+            self.spawn((t, bp, Work { done: 0, total, designation: None, side: Side::default() }))
         } else {
             self.spawn((t,))
         };
@@ -692,8 +748,85 @@ impl World {
             }
         }
         self.reservations.remove(&e);
+        self.worksites.remove(&e);
         self.fields.remove_emitters(e);
         let _ = self.ecs.despawn(e);
+    }
+
+    // ------------------------------------------------------------ work
+
+    /// One unit of work on `e`, which stands at `at`, by a worker at `from`.
+    /// `total` is asked for only when the work starts, or when it was for
+    /// another designation. Returns the work after this unit.
+    pub fn work_on(
+        &mut self,
+        e: Entity,
+        at: IVec,
+        from: IVec,
+        designation: Option<DefId>,
+        total: impl FnOnce(&World) -> u32,
+    ) -> Option<Work> {
+        let side = Side::of(at, from);
+        let same = match self.ecs.get::<&mut Work>(e) {
+            Ok(mut w) if w.designation == designation => {
+                w.done = (w.done + 1).min(w.total);
+                w.side = side;
+                Some(*w)
+            }
+            _ => None,
+        };
+        let w = match same {
+            Some(w) => w,
+            None => {
+                let total = total(self).max(1);
+                let w = Work { done: 1.min(total), total, designation, side };
+                self.ecs.insert_one(e, w).ok()?;
+                w
+            }
+        };
+        self.mark_worksite(e, at);
+        Some(w)
+    }
+
+    /// `e`, at `at`, is being worked this tick. The map is touched only when
+    /// it becomes a worksite, so a renderer moves it from its cache to the
+    /// live list once, not on every unit of progress.
+    pub fn mark_worksite(&mut self, e: Entity, at: IVec) {
+        if self.worksites.insert(e, (at, self.tick)).is_none() {
+            self.map.touch(at);
+        }
+    }
+
+    /// Forget sites nobody has worked for `WORKSITE_GRACE` ticks, touching
+    /// the map so a renderer caches them again at their current stage.
+    pub fn sweep_worksites(&mut self) {
+        let (tick, map) = (self.tick, &mut self.map);
+        self.worksites.retain(|_, &mut (at, last)| {
+            let keep = tick.saturating_sub(last) <= WORKSITE_GRACE;
+            if !keep {
+                map.touch(at);
+            }
+            keep
+        });
+    }
+
+    pub fn is_worksite(&self, e: Entity) -> bool {
+        self.worksites.contains_key(&e)
+    }
+
+    /// How far along `e` looks, 0..=8: the larger of the work done on it and
+    /// the hp it has lost (DESIGN.md §6b). Renderers read this and nothing
+    /// finer, so a cached thing is right until the next touch.
+    pub fn stage(&self, e: Entity) -> u8 {
+        let worked = self.ecs.get::<&Work>(e).map_or(0, |w| (w.done as u64 * 8 / w.total.max(1) as u64) as u8);
+        let hurt = match (self.ecs.get::<&Thing>(e), self.stat(e, "hp")) {
+            (Ok(t), Some(max)) if max >= 1.0 => {
+                let max = max.round() as i64;
+                ((max - t.hp as i64).clamp(0, max) * 8 / max) as u8
+            }
+            _ => 0,
+        };
+        worked.max(hurt)
     }
 
     /// Take up to `n` from a stack, despawning it when empty.

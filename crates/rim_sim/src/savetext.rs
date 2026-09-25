@@ -20,7 +20,7 @@ use crate::defs::DefId;
 use crate::field::SavedFields;
 use crate::savefile::{self, Epoch, EpochRead, Log, Root};
 use crate::snapshot::{DefsSection, Header, ScriptsSection, Snapshot, WorldSection};
-use crate::world::{Blueprint, Designated, MadeOf, Owner, Pawn, Regrow, Thing};
+use crate::world::{Blueprint, Designated, MadeOf, Owner, Pawn, Regrow, Thing, Work};
 use hecs::Entity;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -82,6 +82,7 @@ fn codec_of(section: &str) -> Result<Codec, String> {
         "engine:owner" => codec::<Vec<(Entity, Owner)>>(),
         "engine:designated" => codec::<Vec<(Entity, Designated)>>(),
         "engine:regrow" => codec::<Vec<(Entity, Regrow)>>(),
+        "engine:work" => codec::<Vec<(Entity, Work)>>(),
         "log" => codec::<Vec<Log>>(),
         s if s.ends_with(":data") => codec::<BTreeMap<String, Data>>(),
         s => return Err(format!("{s}: this version has no text form for it")),
