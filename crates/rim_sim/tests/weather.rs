@@ -27,39 +27,47 @@ fn queue(s: &Sim) -> Vec<(String, i64, i64)> {
 fn the_forecast_is_what_happens() {
     // A year in release (CI); a few days in debug.
     let days = if cfg!(debug_assertions) { 4 } else { 60 };
-    for seed in [1, 2, 3] {
-        let mut s = Sim::new(&mods(), seed).expect("mods load");
-        let mut before: Vec<(String, i64, i64)> = Vec::new();
-        let mut changes = 0;
-        let mut forced = 0;
-        for _ in 0..TICKS_PER_DAY * days {
-            s.step();
-            let now = queue(&s);
-            if before.is_empty() {
-                before = now;
-                continue;
-            }
-            if now[0] != before[0] {
-                changes += 1;
-                let ids = |q: &[(String, i64, i64)]| q.iter().map(|e| e.0.clone()).collect::<Vec<_>>();
-                if now[0].1 == s.world.tick as i64 - 1 && ids(&now[1..3]) == ids(&before[1..3]) {
-                    // Forced by an incident: the current weather was replaced
-                    // and what was forecast after it still comes, later.
-                    forced += 1;
-                } else {
-                    // Everything that was forecast moved up one place, unchanged.
-                    assert_eq!(now[..3], before[1..], "seed {seed}: the forecast was wrong at tick {}", s.world.tick);
-                    assert!(now[0].1 <= s.world.tick as i64, "it started on time");
-                }
-            }
-            before = now;
+    // Three independent games: one thread each, so the test takes one
+    // game's time rather than three.
+    std::thread::scope(|scope| {
+        for seed in [1, 2, 3] {
+            scope.spawn(move || forecast_holds(seed, days));
         }
-        assert!(changes >= days, "seed {seed}: the weather changed {changes} times in {days} days");
-        // "Under a fifth forced" is a claim about a year, not about the
-        // five changes a debug run sees: one cold snap in four days is not
-        // a broken forecast. Hold the ratio only once there is a sample.
-        assert!(changes < 20 || forced * 5 < changes, "seed {seed}: {forced} of {changes} changes were forced");
+    });
+}
+
+fn forecast_holds(seed: u64, days: u64) {
+    let mut s = Sim::new(&mods(), seed).expect("mods load");
+    let mut before: Vec<(String, i64, i64)> = Vec::new();
+    let mut changes = 0;
+    let mut forced = 0;
+    for _ in 0..TICKS_PER_DAY * days {
+        s.step();
+        let now = queue(&s);
+        if before.is_empty() {
+            before = now;
+            continue;
+        }
+        if now[0] != before[0] {
+            changes += 1;
+            let ids = |q: &[(String, i64, i64)]| q.iter().map(|e| e.0.clone()).collect::<Vec<_>>();
+            if now[0].1 == s.world.tick as i64 - 1 && ids(&now[1..3]) == ids(&before[1..3]) {
+                // Forced by an incident: the current weather was replaced
+                // and what was forecast after it still comes, later.
+                forced += 1;
+            } else {
+                // Everything that was forecast moved up one place, unchanged.
+                assert_eq!(now[..3], before[1..], "seed {seed}: the forecast was wrong at tick {}", s.world.tick);
+                assert!(now[0].1 <= s.world.tick as i64, "it started on time");
+            }
+        }
+        before = now;
     }
+    assert!(changes >= days, "seed {seed}: the weather changed {changes} times in {days} days");
+    // "Under a fifth forced" is a claim about a year, not about the
+    // five changes a debug run sees: one cold snap in four days is not
+    // a broken forecast. Hold the ratio only once there is a sample.
+    assert!(changes < 20 || forced * 5 < changes, "seed {seed}: {forced} of {changes} changes were forced");
 }
 
 #[test]
@@ -189,10 +197,15 @@ fn a_year_of_weather_is_deterministic() {
         }
         (s.world.state_hash(), s.world.year(), queue(&s))
     };
-    let (a, year, q) = run();
+    // The two games are independent: run them side by side.
+    let ((a, year, q), (b, _, _)) = std::thread::scope(|scope| {
+        let first = scope.spawn(run);
+        let second = scope.spawn(run);
+        (first.join().expect("the first year ran"), second.join().expect("the second year ran"))
+    });
     assert_eq!(year, 1, "a full year went by");
     assert!(!q.is_empty());
-    assert_eq!(a, run().0);
+    assert_eq!(a, b);
 }
 
 #[test]
