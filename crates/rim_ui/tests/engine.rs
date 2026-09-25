@@ -808,8 +808,15 @@ fn a_mods_bound_action_fires_from_its_key_and_from_the_palette() {
     frame(&mut ui, &sim, &cv, Input { time: t, ..Default::default() });
     assert!(ui.snapshot().contains("fired=2"), "Enter ran the first match: {}", ui.snapshot());
     assert!(!ui.is_open("core:palette"), "and closed the palette");
-    // Clicking a row runs it too.
+    // Clicking a row runs it too, once filtered into view: the full list
+    // is longer than the palette.
     press(&mut ui, &sim, &cv, &mut t, "ctrl+k");
+    for c in "hello".chars() {
+        t += 0.1;
+        frame(&mut ui, &sim, &cv, Input { keys: vec![rim_ui::Key::Char(c)], time: t, ..Default::default() });
+    }
+    t += 0.1;
+    frame(&mut ui, &sim, &cv, Input { time: t, ..Default::default() });
     let row = ui.find("core:palette.probe:hello").unwrap();
     click(&mut ui, &sim, &mut cv, centre(row));
     t += 0.1;

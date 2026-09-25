@@ -212,6 +212,17 @@ fn typed_char(c: char) -> Option<char> {
 
 #[cfg(test)]
 mod tests {
+    use super::saved_render_scale;
+
+    #[test]
+    fn the_render_scale_round_trips_and_a_bad_one_is_reported() {
+        assert_eq!(saved_render_scale(&format!("render_scale = {}\n", 0.75f32)), Ok(0.75));
+        assert_eq!(saved_render_scale("render_scale = 1"), Ok(1.0));
+        assert_eq!(saved_render_scale("render_scale = 0.1"), Ok(0.25), "clamped to what draws");
+        assert!(saved_render_scale("render_scale = \"half\"").is_err());
+        assert!(saved_render_scale("render_scale = ").is_err());
+    }
+
     #[test]
     fn function_keys_are_not_text() {
         assert_eq!(super::typed_char('a'), Some('a'));
@@ -367,12 +378,15 @@ async fn game() {
     } else {
         player_file("settings.toml")
     };
-    let render_scale = settings_file
-        .as_ref()
-        .and_then(|p| std::fs::read_to_string(p).ok())
-        .and_then(|t| toml::from_str::<toml::Table>(&t).ok())
-        .and_then(|t| t.get("render_scale").and_then(|v| v.as_float().or(v.as_integer().map(|i| i as f64))))
-        .map_or_else(default_render_scale, |v| (v as f32).clamp(0.25, 1.0));
+    let render_scale = match settings_file.as_ref().and_then(|p| std::fs::read_to_string(p).ok()) {
+        Some(text) => saved_render_scale(&text).unwrap_or_else(|e| {
+            eprintln!("  warning: settings file: {e}");
+            default_render_scale()
+        }),
+        None => default_render_scale(),
+    };
+    // The autotest and the bench measure full resolution unless they ask.
+    let render_scale = if settings_file.is_none() { 1.0 } else { render_scale };
     if let Some(text) = keys_file.as_ref().and_then(|p| std::fs::read_to_string(p).ok()) {
         if let Err(e) = ui.restore_keybinds(&text) {
             eprintln!("  warning: keybinds file ignored: {e}");
@@ -847,6 +861,20 @@ impl RenderTimes {
     /// (DESIGN.md §11), and GL submission, which is the driver's.
     pub fn world(&self) -> f64 {
         self.ground + self.things + self.pawns + self.weather + self.light
+    }
+}
+
+/// The render scale a settings file holds, or the default if it holds
+/// none. A file that doesn't parse is an error to report, not a default.
+fn saved_render_scale(text: &str) -> Result<f32, String> {
+    let t: toml::Table = toml::from_str(text).map_err(|e| e.to_string())?;
+    match t.get("render_scale") {
+        None => Ok(default_render_scale()),
+        Some(v) => v
+            .as_float()
+            .or(v.as_integer().map(|i| i as f64))
+            .map(|v| (v as f32).clamp(0.25, 1.0))
+            .ok_or_else(|| format!("render_scale should be a number, not {v}")),
     }
 }
 

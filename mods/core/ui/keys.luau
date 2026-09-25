@@ -26,11 +26,15 @@ end)
 -- Render scale: the world at fewer pixels than the screen has, for a
 -- laptop whose integrated GPU can't fill a high-DPI screen. No keys; the
 -- palette finds them.
-for _, pct in { 100, 75, 50 } do
-	ui.bind(`core:render_scale_{pct}`, { label = t(`core:keys.render_scale_{pct}`, `Render scale {pct}%`) }, function()
-		act.render_scale(pct / 100)
-	end)
-end
+ui.bind("core:render_scale_100", { label = t("core:keys.render_scale_100", "Render scale 100%") }, function()
+	act.render_scale(1)
+end)
+ui.bind("core:render_scale_75", { label = t("core:keys.render_scale_75", "Render scale 75%") }, function()
+	act.render_scale(0.75)
+end)
+ui.bind("core:render_scale_50", { label = t("core:keys.render_scale_50", "Render scale 50%") }, function()
+	act.render_scale(0.5)
+end)
 ui.bind("core:overlay", { key = "o", label = t("core:keys.overlay", "Next overlay") }, function()
 	act.cycle_overlay()
 end)

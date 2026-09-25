@@ -4,8 +4,9 @@
 //! in around the start: rooms of walls, doors, floors, furniture and
 //! stacks, some walls still planned, and every designation over the rest
 //! of the map. It is drawn through the game's own `frame` and `render` in
-//! five views: the whole map at the lowest zoom, mid, close, the whole map
-//! in a storm, and a zoom gesture from the whole map to close and back. Per view: each pass's CPU time, the time macroquad
+//! six views: the whole map at the lowest zoom, mid, close, the whole map
+//! in a storm, a zoom gesture from the whole map to close and back, and the
+//! storm again at half render scale. Per view: each pass's CPU time, the time macroquad
 //! takes to hand the frame to GL ("submit"), the time the GPU takes to
 //! finish it (Linux only, where macroquad calls glFinish under telemetry),
 //! and one frame's draw calls and indices.
@@ -193,14 +194,18 @@ struct View {
     storm: bool,
     /// Zoom in and out through the measured frames, as a player does.
     zooming: bool,
+    /// The world's resolution (render scale).
+    scale: f32,
 }
 
-const VIEWS: [View; 5] = [
-    View { name: "whole map", zoom: None, storm: false, zooming: false },
-    View { name: "mid", zoom: Some(12.0), storm: false, zooming: false },
-    View { name: "close", zoom: Some(28.0), storm: false, zooming: false },
-    View { name: "storm", zoom: None, storm: true, zooming: false },
-    View { name: "zooming", zoom: Some(12.0), storm: false, zooming: true },
+const VIEWS: [View; 6] = [
+    View { name: "whole map", zoom: None, storm: false, zooming: false, scale: 1.0 },
+    View { name: "mid", zoom: Some(12.0), storm: false, zooming: false, scale: 1.0 },
+    View { name: "close", zoom: Some(28.0), storm: false, zooming: false, scale: 1.0 },
+    View { name: "storm", zoom: None, storm: true, zooming: false, scale: 1.0 },
+    View { name: "zooming", zoom: Some(12.0), storm: false, zooming: true, scale: 1.0 },
+    // The storm at half the pixels: what render scale saves the GPU.
+    View { name: "storm 50%", zoom: None, storm: true, zooming: false, scale: 0.5 },
 ];
 
 /// Frames in one zoom gesture, lowest zoom to close and back.
@@ -313,6 +318,7 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
         app.cam.x = x;
         app.cam.y = y;
         app.cam.zoom = v.zoom.unwrap_or(MIN_ZOOM);
+        app.render_scale = v.scale;
         // A gesture warms up on the gesture, so measuring doesn't start
         // with a jump from wherever the last view left the zoom.
         const WARM: usize = 30;
@@ -340,7 +346,7 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
         // The capture is taken on the frame after the one that asks.
         telemetry::capture_frame();
         draw_one(&mut app, &mut time, None).await;
-        let shot = shots.as_ref().map(|d| d.join(format!("{}.png", v.name.replace(' ', "_"))));
+        let shot = shots.as_ref().map(|d| d.join(format!("{}.png", v.name.replace(' ', "_").replace('%', ""))));
         draw_one(&mut app, &mut time, shot.as_deref()).await;
         // Macroquad's capture sees its own batches; the chunk meshes are
         // drawn past it and count themselves.
