@@ -27,6 +27,9 @@ pub struct Sim {
     pub warnings: Vec<String>,
     pub profile: Profile,
     queue: Vec<Command>,
+    /// Commands as they were applied, with the tick, while recording: the
+    /// log a save file appends (DESIGN.md §7a).
+    applied: Option<Vec<(u64, Command)>>,
     /// Mods already warned about for going over their time budget.
     over_budget: Vec<String>,
 }
@@ -96,6 +99,7 @@ impl Sim {
             warnings: m.warnings,
             profile: Profile::default(),
             queue: Vec::new(),
+            applied: None,
             over_budget: Vec::new(),
         }
     }
@@ -103,6 +107,24 @@ impl Sim {
     /// Queue a player command; it applies at the start of the next tick.
     pub fn push(&mut self, c: Command) {
         self.queue.push(c);
+    }
+
+    /// Keep every applied command for `take_applied`.
+    pub fn record(&mut self) {
+        self.applied.get_or_insert_with(Vec::new);
+    }
+
+    /// The commands applied since the last `clear_applied`, with the tick
+    /// each was applied at.
+    pub fn applied(&self) -> &[(u64, Command)] {
+        self.applied.as_deref().unwrap_or_default()
+    }
+
+    /// Forget the applied commands, once they are safely written.
+    pub fn clear_applied(&mut self) {
+        if let Some(a) = &mut self.applied {
+            a.clear();
+        }
     }
 
     pub fn step(&mut self) {
@@ -116,6 +138,9 @@ impl Sim {
             w.map.ensure_regions();
         }
         for c in self.queue.drain(..) {
+            if let Some(log) = &mut self.applied {
+                log.push((w.tick, c.clone()));
+            }
             command::apply(w, c);
         }
         prof.time("regions", || w.map.ensure_regions());

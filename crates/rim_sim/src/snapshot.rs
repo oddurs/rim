@@ -205,21 +205,24 @@ impl Snapshot {
         Ok(Snapshot { header, sections })
     }
 
-    /// Load the mods and rebuild the world this snapshot holds. The mods and
-    /// their defs must be the ones it was taken with: loading across a mod
-    /// change is an epoch boundary (DESIGN.md §7a), not a plain load.
+    /// Load the mods and rebuild the world this snapshot holds. The defs must
+    /// be the ones it was taken with, since its def ids index them; a mod
+    /// list that differs without changing any def (a new engine, a script-only
+    /// mod) loads. Deciding that a load starts a new epoch is the save
+    /// file's job (DESIGN.md §7a).
     pub fn restore(&self, mods_dir: &Path, enabled: &dyn Fn(&str) -> bool) -> Result<Sim, String> {
         if self.header.format != FORMAT {
             return Err(format!("save format {} (this build reads {FORMAT})", self.header.format));
         }
         let mods = Sim::load_mods(mods_dir, enabled)?;
         let defs = mods.defs.clone();
-        let loaded: Vec<(String, String)> = mods.manifests.iter().map(|m| (m.id.clone(), m.version.clone())).collect();
-        if loaded != self.header.mods {
-            return Err(format!("the save was made with mods {:?}; loaded {:?}", self.header.mods, loaded));
-        }
         if dec::<DefsSection>(self, "engine:defs")? != def_table(&defs) {
-            return Err("the mods' defs changed since this save, under the same versions".into());
+            let loaded: Vec<&str> = mods.manifests.iter().map(|m| m.id.as_str()).collect();
+            return Err(format!(
+                "the mods' defs differ from the save's (saved with {:?}, loaded {loaded:?}); \
+                 loading across a def change needs a migration",
+                self.header.mods.iter().map(|m| m.0.as_str()).collect::<Vec<_>>()
+            ));
         }
         let ws: WorldSection = dec(self, "engine:world")?;
         let mut w = World::new(defs.clone(), ws.width, ws.height, self.header.seed);
