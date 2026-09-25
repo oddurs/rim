@@ -286,7 +286,8 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
             draw_one(&mut app, &mut time, None).await;
             r.rebuilt += app.meshes.rebuilt;
             let zones = telemetry::frame().zones;
-            let submit = zone(&zones, "Event::draw end_frame").unwrap_or(0.0);
+            // Submit: macroquad's end of frame, and the meshes' mid-frame.
+            let submit = zone(&zones, "Event::draw end_frame").unwrap_or(0.0) + app.render_us.gl;
             r.frames.push((app.render_us, submit, zone(&zones, "glFinish/glFLush")));
         }
         // A gesture's numbers are for the zoom it ended on.

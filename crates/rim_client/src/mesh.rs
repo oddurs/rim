@@ -122,6 +122,8 @@ pub struct Meshes {
     pub calls: usize,
     pub indices: usize,
     pub rebuilt: usize,
+    /// Time in `draw_layer` handing buffers to GL (µs).
+    pub submit_us: f64,
 }
 
 impl Default for Meshes {
@@ -134,6 +136,7 @@ impl Default for Meshes {
             calls: 0,
             indices: 0,
             rebuilt: 0,
+            submit_us: 0.0,
         }
     }
 }
@@ -291,7 +294,7 @@ impl Meshes {
             self.pipeline = Some(Self::pipeline(ctx));
         }
         self.rebuilt = 0;
-        (self.calls, self.indices) = (0, 0);
+        (self.calls, self.indices, self.submit_us) = (0, 0, 0.0);
         self.zoom = if self.zoom.0 == cam.zoom { (cam.zoom, self.zoom.1 + 1) } else { (cam.zoom, 0) };
         let settled = self.zoom.1 >= SETTLE_FRAMES;
         let start = std::time::Instant::now();
@@ -316,6 +319,7 @@ impl Meshes {
     /// its buffers. Whatever macroquad has batched so far goes first, so
     /// the layers below stay below.
     pub fn draw_layer(&mut self, w: &World, cam: &Cam, layer: usize) {
+        let start = std::time::Instant::now();
         // SAFETY: as in `prepare`.
         let mut gl = unsafe { get_internal_gl() };
         gl.flush();
@@ -337,6 +341,7 @@ impl Meshes {
             }
         }
         ctx.end_render_pass();
+        self.submit_us += start.elapsed().as_secs_f64() * 1e6;
     }
 
     /// Cells of `layer` in the visible chunks to draw live this frame.

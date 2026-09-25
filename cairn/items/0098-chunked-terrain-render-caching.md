@@ -84,3 +84,7 @@ Buffers are raw miniquad (Immutable vertex/index buffers, a GLSL 100 pipeline), 
 ## 2026-09-24
 
 Order swapped with the atlas (e2ce89c3): meshes first, since they are the frame; the atlas then adds texture coordinates to the chunk vertex format.
+
+## 2026-09-24
+
+CI's first run failed the gate at 37 ms of 'things': under llvmpipe the chunk draw calls rasterise in the calling thread, so the GPU's work landed in the CPU column (before, the same work was counted in submit and glFinish, 30 + 27 ms). Mesh submission is now timed apart (RenderTimes.gl) and reported with submit, outside the world's CPU budget, which is what the budget always excluded for macroquad's end of frame.
