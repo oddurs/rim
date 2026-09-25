@@ -72,6 +72,7 @@ pub fn apply(w: &mut World, c: Command) {
                     let Some(t) = w.thing(f) else { continue };
                     if defs.thing(t.def).harvest.as_ref().is_some_and(|h| h.desig_r == designation) {
                         let _ = w.ecs.insert_one(f, Designated(designation));
+                        w.map.touch(p);
                     }
                 }
             }
@@ -83,6 +84,7 @@ pub fn apply(w: &mut World, c: Command) {
                         // A blueprint is cancelled, not deconstructed.
                         if ours && built && w.ecs.get::<&Blueprint>(f).is_err() {
                             let _ = w.ecs.insert_one(f, Designated(designation));
+                            w.map.touch(p);
                         }
                     }
                 }
@@ -117,7 +119,9 @@ pub fn apply(w: &mut World, c: Command) {
             let targets: Vec<Entity> =
                 cells(w, a, b).flat_map(|p| [w.map.fixture_at(p), w.map.floor_at(p)]).flatten().collect();
             for f in targets {
-                let _ = w.ecs.remove_one::<Designated>(f);
+                if w.ecs.remove_one::<Designated>(f).is_ok() {
+                    w.touch(f);
+                }
                 // Refund what was actually delivered, of whatever it was
                 // made of -- not what the def says it costs.
                 let refund = w.ecs.get::<&Blueprint>(f).ok().map(|bp| (bp.cost.clone(), bp.delivered.clone()));
@@ -163,6 +167,7 @@ pub fn apply(w: &mut World, c: Command) {
             if let Job::Deconstruct { target, .. } = o.job {
                 if let Some(d) = defs.designations.iter().position(|d| d.targets == Targets::Built) {
                     let _ = w.ecs.insert_one(target, Designated(d as DefId));
+                    w.touch(target);
                 }
             }
             // set_job drops the pawn's own claims, so take the new ones after.

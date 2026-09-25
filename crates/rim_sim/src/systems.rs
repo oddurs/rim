@@ -131,6 +131,7 @@ pub fn regrow(w: &mut World) {
         w.ecs.query::<(hecs::Entity, &Regrow)>().iter().filter(|(_, r)| r.ready_at <= tick).map(|(e, _)| e).collect();
     for e in ready {
         let _ = w.ecs.remove_one::<Regrow>(e);
+        w.touch(e);
     }
 }
 

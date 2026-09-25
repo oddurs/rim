@@ -50,7 +50,21 @@ pub struct Map {
     regions_dirty: bool,
     /// Bumped whenever passability changes; renderers can use it to cache.
     pub revision: u64,
+    /// Chunks across (see `CHUNK`).
+    chunks_w: i32,
+    /// Per chunk: bumped when a cell's terrain changes.
+    terrain_rev: Vec<u64>,
+    /// Per chunk: bumped when anything drawn in a cell changes (what is on
+    /// it, or how it looks), and at a chunk's border when a neighbour's does,
+    /// since joined walls look at their neighbours. Not a plan's progress:
+    /// that moves every tick of work, so renderers draw plans each frame.
+    things_rev: Vec<u64>,
 }
+
+/// Side of a chunk, in cells: the one unit caches and incremental updates
+/// key on (DESIGN.md §6a). Consumers remember the revision they last saw;
+/// the sim never reads them, so they are not world state.
+pub const CHUNK: i32 = 32;
 
 /// Enclosed areas larger than this count as outdoors: a valley ringed by
 /// mountains is not a house.
@@ -100,7 +114,55 @@ impl Map {
             regions: std::array::from_fn(|_| vec![0; n]),
             regions_dirty: true,
             revision: 0,
+            chunks_w: (w + CHUNK - 1) / CHUNK,
+            terrain_rev: vec![0; Self::chunk_count(w, h)],
+            things_rev: vec![0; Self::chunk_count(w, h)],
         }
+    }
+
+    fn chunk_count(w: i32, h: i32) -> usize {
+        (((w + CHUNK - 1) / CHUNK) * ((h + CHUNK - 1) / CHUNK)) as usize
+    }
+
+    /// Chunks across and down.
+    pub fn chunks(&self) -> (i32, i32) {
+        (self.chunks_w, (self.h + CHUNK - 1) / CHUNK)
+    }
+
+    pub fn chunk_of(&self, p: IVec) -> usize {
+        ((p.y / CHUNK) * self.chunks_w + p.x / CHUNK) as usize
+    }
+
+    pub fn terrain_rev(&self, chunk: usize) -> u64 {
+        self.terrain_rev[chunk]
+    }
+
+    pub fn things_rev(&self, chunk: usize) -> u64 {
+        self.things_rev[chunk]
+    }
+
+    /// Something drawn at `p` changed. Call it for changes the map can't
+    /// see: a stack's count, a designation, a plant picked clean.
+    pub fn touch(&mut self, p: IVec) {
+        if !self.inb(p) {
+            return;
+        }
+        let c = self.chunk_of(p);
+        self.things_rev[c] += 1;
+        for (dx, dy) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
+            let q = p.offset(dx, dy);
+            if self.inb(q) && self.chunk_of(q) != c {
+                let d = self.chunk_of(q);
+                self.things_rev[d] += 1;
+            }
+        }
+    }
+
+    /// Put `e` in the item slot at `p`.
+    pub fn set_item(&mut self, p: IVec, e: Option<Entity>) {
+        let i = self.idx(p);
+        self.item[i] = e;
+        self.touch(p);
     }
 
     #[inline]
@@ -139,6 +201,8 @@ impl Map {
         self.rooms_dirty = true;
         self.changed.push(i as u32);
         self.revision += 1;
+        let c = self.chunk_of(p);
+        self.terrain_rev[c] += 1;
     }
 
     pub fn set_fixture(&mut self, p: IVec, e: Option<Entity>, blocks: bool, cost: u32, door: bool) {
@@ -161,6 +225,7 @@ impl Map {
         self.fix_door[i] = door;
         self.fix_cost[i] = cost.min(u16::MAX as u32) as u16;
         self.revision += 1;
+        self.touch(p);
     }
 
     pub fn fixture_at(&self, p: IVec) -> Option<Entity> {
@@ -192,6 +257,7 @@ impl Map {
         self.floor[i] = e;
         self.floor_cost[i] = if e.is_some() { cost.min(u16::MAX as u32) as u16 } else { 0 };
         self.revision += 1;
+        self.touch(p);
     }
 
     pub fn ensure_regions(&mut self) {

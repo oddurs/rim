@@ -35,10 +35,10 @@ A sprint: fast on a little old laptop with mods loaded. The reference machine is
 
 - [ ] `30760c07` Render scale: the world at a fraction of the screen's pixels <sup>feature · p1 · m · client</sup>
 - [ ] `3dd22b0d` Looks: draw primitives and sprite keys replace named shapes <sup>feature · p0 · l · engine</sup>
-- [ ] `96d2dac9` Chunks: one dirty unit for regions, fields and the renderer <sup>perf · p0 · m · engine</sup>
 - [ ] `e2ce89c3` Sprites from mods, packed into one world atlas at load <sup>feature · p0 · m · client</sup>
 - [ ] `e3c1f87b` Chunked meshes: what does not move is drawn from the GPU <sup>perf · p0 · m · client</sup>
 - [ ] `4376f91e` Render benchmark and a frame budget CI holds <sup>perf · p0 · m · client</sup>
+- [ ] `96d2dac9` Chunks: one dirty unit for regions, fields and the renderer <sup>perf · p0 · m · engine</sup>
 
 ## castaway — Castaway
 

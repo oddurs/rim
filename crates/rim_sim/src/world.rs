@@ -572,7 +572,7 @@ impl World {
                         None => {
                             let n = count.min(limit);
                             let e = self.ecs.spawn((Thing { def, pos: p, count: n, hp: 100 },));
-                            self.map.item[i] = Some(e);
+                            self.map.set_item(p, Some(e));
                             count -= n;
                         }
                         Some(e) => {
@@ -581,6 +581,8 @@ impl World {
                                     let n = count.min(limit - t.count);
                                     t.count += n;
                                     count -= n;
+                                    drop(t);
+                                    self.map.touch(p);
                                 }
                             }
                         }
@@ -596,7 +598,7 @@ impl World {
         if self.map.inb(t.pos) {
             let i = self.map.idx(t.pos);
             if self.map.item[i] == Some(e) {
-                self.map.item[i] = None;
+                self.map.set_item(t.pos, None);
             }
             if self.map.fixture[i] == Some(e) {
                 self.map.set_fixture(t.pos, None, false, 0, false);
@@ -613,18 +615,26 @@ impl World {
 
     /// Take up to `n` from a stack, despawning it when empty.
     pub fn take_from_stack(&mut self, e: Entity, n: u32) -> u32 {
-        let (taken, empty) = match self.ecs.get::<&mut Thing>(e) {
+        let (taken, empty, pos) = match self.ecs.get::<&mut Thing>(e) {
             Ok(mut t) => {
                 let k = n.min(t.count);
                 t.count -= k;
-                (k, t.count == 0)
+                (k, t.count == 0, t.pos)
             }
             Err(_) => return 0,
         };
+        self.map.touch(pos);
         if empty {
             self.despawn_thing(e);
         }
         taken
+    }
+
+    /// Something about how `e` is drawn changed (see `Map::touch`).
+    pub fn touch(&mut self, e: Entity) {
+        if let Some(t) = self.thing(e) {
+            self.map.touch(t.pos);
+        }
     }
 
     pub fn thing(&self, e: Entity) -> Option<Thing> {
