@@ -1212,7 +1212,8 @@ fn step(app: &mut App) {
             break;
         }
     }
-    if app.selected.is_some_and(|e| !app.sim.world.pawn_alive(e)) {
+    let w = &app.sim.world;
+    if app.selected.is_some_and(|e| !w.pawn_alive(e) && w.thing(e).is_none()) {
         app.selected = None;
     }
 }
@@ -1248,6 +1249,14 @@ pub fn pawn_under(app: &App, sx: f32, sy: f32) -> Option<Entity> {
         }
     }
     best.map(|b| b.1)
+}
+
+/// The thing in the cell under the cursor, topmost first: an item stack
+/// lying there, the fixture, then the floor.
+pub fn thing_under(app: &App, sx: f32, sy: f32) -> Option<Entity> {
+    let cell = app.cam.tile_at(sx, sy);
+    let map = &app.sim.world.map;
+    map.item_at(cell).or_else(|| map.fixture_at(cell)).or_else(|| map.floor_at(cell))
 }
 
 /// Everything the player can do to the world, independent of which key or
@@ -1334,7 +1343,7 @@ pub fn apply(app: &mut App, action: Action) {
             app.cam.y += before.1 - after.1;
         }
         Action::LeftDown(x, y) => match app.tool {
-            Tool::Select => app.selected = pawn_under(app, x, y),
+            Tool::Select => app.selected = pawn_under(app, x, y).or_else(|| thing_under(app, x, y)),
             _ => app.drag_start = Some(app.cam.tile_at(x, y)),
         },
         Action::LeftUp(x, y) => {
@@ -1451,8 +1460,10 @@ pub fn build_rects(blocks: bool, a: IVec, b: IVec) -> Vec<(IVec, IVec)> {
 }
 
 fn focus(app: &mut App, e: Entity) {
-    if let Ok(p) = app.sim.world.ecs.get::<&Pawn>(e) {
-        app.cam.x = p.pos.x as f32 + 0.5;
-        app.cam.y = p.pos.y as f32 + 0.5;
+    let w = &app.sim.world;
+    let at = w.ecs.get::<&Pawn>(e).map(|p| p.pos).ok().or_else(|| w.thing(e).map(|t| t.pos));
+    if let Some(p) = at {
+        app.cam.x = p.x as f32 + 0.5;
+        app.cam.y = p.y as f32 + 0.5;
     }
 }

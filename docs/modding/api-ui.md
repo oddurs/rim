@@ -10,11 +10,11 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `act.advance` | `(hours: number) -> ()` | Run the game forward (devtools). |
 | `act.cycle_overlay` | `() -> ()` | Show the next field overlay. |
 | `act.draft` | `(id: number, on: boolean) -> ()` | Draft or undraft a colonist. |
-| `act.focus` | `(id: number) -> ()` | Move the camera to a pawn. |
+| `act.focus` | `(id: number) -> ()` | Move the camera to a pawn or thing. |
 | `act.load` | `(path: string) -> ()` | Play a save from view.saves() (the title screen). |
 | `act.new_colony` | `() -> ()` | Start a new colony (the title screen). |
 | `act.render_scale` | `(scale: number) -> ()` | Draw the world at this fraction of the screen's pixels, 0.25 to 1; the UI stays sharp. Saved for the player. |
-| `act.select` | `(id: number?) -> ()` | Select a pawn, or nothing. |
+| `act.select` | `(id: number?) -> ()` | Select a pawn or thing, or nothing. |
 | `act.send` | `(name: string, data: {[string]: any}?) -> ()` | Send an event to your mod's own sim scripts ("your_mod:event"), as a player command. |
 | `act.set_overlay` | `(index: number?) -> ()` | Show a field overlay by its index in view.fields(), or none. |
 | `act.speed` | `(speed: number) -> ()` | Set the game speed. |
@@ -79,12 +79,13 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `view.profile` | `() -> { ProfileRow }` | Smoothed time per system and mod, in µs. |
 | `view.saves` | `() -> { Save }` | The player's saves, newest first, on the title screen; empty in a game. |
 | `view.screen` | `() -> (number, number)` | Screen width and height in logical pixels. |
-| `view.selected` | `() -> number?` | The selected pawn's id. |
+| `view.selected` | `() -> number?` | The selected pawn or thing's id: view.pawn or view.thing says which. |
 | `view.show_devtools` | `() -> boolean` | Whether devtools are open. |
 | `view.show_profiler` | `() -> boolean` | Whether the profiler is open. |
 | `view.speed` | `() -> number` | The game speed. |
 | `view.stats` | `() -> { string }` | Client statistics lines. |
 | `view.stuff` | `() -> { Stuff }` | Materials for the active build tool: what you have, what you'd get. |
+| `view.thing` | `(id: number) -> ThingInfo?` | A thing on the map: a building, plant, rock or item stack, or nil. why says what stops its designated work. |
 | `view.tick` | `() -> number` | The current tick. |
 | `view.ticks_per_day` | `() -> number` | Ticks in a game day. |
 | `view.time` | `() -> number` | Wall-clock seconds, for animation. |

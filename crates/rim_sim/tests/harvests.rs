@@ -249,3 +249,17 @@ set = { harvest = { regrow_days = 9.0 } }
     assert_eq!(bush.harvest[0].regrow_days, 2.0, "unchanged");
     assert!(s.warnings.iter().any(|w| w.contains("can't say which")), "{:?}", s.warnings);
 }
+
+/// A designated harvest that's growing back says so, for the inspector.
+#[test]
+fn a_regrowing_designation_says_why() {
+    let (mut s, _) = alone(&orchard("harvest-why"));
+    let (tree, at) = an_oak(&s);
+    let gather = designation(&s, "orchard:gather");
+    assert_eq!(rim_sim::ai::work_blocked(&s.world, tree), None, "not designated");
+    s.push(Command::Designate { designation: gather, a: at, b: at });
+    assert!(run_until(&mut s, 3_000, |s| s.world.ecs.get::<&Regrow>(tree).is_ok()), "gathered");
+    s.push(Command::Designate { designation: gather, a: at, b: at });
+    s.step();
+    assert_eq!(rim_sim::ai::work_blocked(&s.world, tree).as_deref(), Some("Growing back."));
+}

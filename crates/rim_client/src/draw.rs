@@ -347,6 +347,12 @@ pub fn world_ui(app: &App) {
     let cam = &app.cam;
     let z = cam.zoom;
 
+    // The selected thing: pawns draw their own ring.
+    if let Some(t) = app.selected.and_then(|e| w.thing(e)) {
+        let (sx, sy) = cam.to_screen(t.pos.x as f32, t.pos.y as f32);
+        draw_rectangle_lines(sx - 1.0, sy - 1.0, z + 2.0, z + 2.0, 2.0, YELLOW);
+    }
+
     // Drag rectangle preview.
     if let Some(a) = app.drag_start {
         let (mx, my) = mouse_position();

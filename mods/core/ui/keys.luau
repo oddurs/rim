@@ -45,7 +45,7 @@ ui.bind("core:draft", { key = "r", label = t("core:keys.draft", "Draft or undraf
 		act.draft(id, not p.drafted)
 	end
 end)
-ui.bind("core:center", { key = "c", label = t("core:keys.center", "Centre on the selected pawn") }, function()
+ui.bind("core:center", { key = "c", label = t("core:keys.center", "Centre on the selection") }, function()
 	local id = view.selected()
 	if id then
 		act.focus(id)

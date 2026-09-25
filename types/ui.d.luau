@@ -58,6 +58,10 @@ type Stuff = { id: string, label: string, color: string, have: number, active: b
 type Hover = { x: number, y: number, terrain: string, shelter: string, readings: { string }, things: { string } }
 type ProfileRow = { name: string, us: number, mod: boolean }
 type ModInfo = { id: string, version: string, name: string }
+type ThingInfo = {
+    id: number, def: string, label: string, count: number, hp: number, max_hp: number,
+    made_of: string?, blueprint: boolean, designated: string?, why: string?,
+}
 type Save = { path: string, file: string, day: number, colonists: { string }, age: number, error: string? }
 type UiStats = { font: string, build_us: number, layout_us: number, paint_us: number, nodes: number, layouts: number }
 type Inspect = { id: string, owner: string, kind: string, path: string, x: number, y: number, w: number, h: number }
@@ -133,7 +137,7 @@ declare act: {
     cycle_overlay: () -> (),
     -- Draft or undraft a colonist.
     draft: (id: number, on: boolean) -> (),
-    -- Move the camera to a pawn.
+    -- Move the camera to a pawn or thing.
     focus: (id: number) -> (),
     -- Play a save from view.saves() (the title screen).
     load: (path: string) -> (),
@@ -141,7 +145,7 @@ declare act: {
     new_colony: () -> (),
     -- Draw the world at this fraction of the screen's pixels, 0.25 to 1; the UI stays sharp. Saved for the player.
     render_scale: (scale: number) -> (),
-    -- Select a pawn, or nothing.
+    -- Select a pawn or thing, or nothing.
     select: (id: number?) -> (),
     -- Send an event to your mod's own sim scripts ("your_mod:event"), as a player command.
     send: (name: string, data: {[string]: any}?) -> (),
@@ -214,7 +218,7 @@ declare view: {
     saves: () -> { Save },
     -- Screen width and height in logical pixels.
     screen: () -> (number, number),
-    -- The selected pawn's id.
+    -- The selected pawn or thing's id: view.pawn or view.thing says which.
     selected: () -> number?,
     -- Whether devtools are open.
     show_devtools: () -> boolean,
@@ -226,6 +230,8 @@ declare view: {
     stats: () -> { string },
     -- Materials for the active build tool: what you have, what you'd get.
     stuff: () -> { Stuff },
+    -- A thing on the map: a building, plant, rock or item stack, or nil. why says what stops its designated work.
+    thing: (id: number) -> ThingInfo?,
     -- The current tick.
     tick: () -> number,
     -- Ticks in a game day.

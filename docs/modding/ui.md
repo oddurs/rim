@@ -150,7 +150,7 @@ Every function in `ui`, `act` and `view`, with its types, is in the
 | `view.day()`, `view.clock()`, `view.tick()`, `view.hour()` | Game time |
 | `view.paused()`, `view.speed()`, `view.wealth()` | Colony state |
 | `view.colonists()` | Pawn tables: `id`, `name`, `label`, `health`, `job`, `drafted`, `needs`... |
-| `view.pawn(id)`, `view.selected()` | One pawn; the selected pawn's id |
+| `view.pawn(id)`, `view.thing(id)`, `view.selected()` | One pawn; one thing (label, count, hp, material, what stops its work); the selection, a pawn or a thing |
 | `view.count_pawns(faction)` | Living pawns of `"player"`, `"hostile"` or `"wild"` |
 | `view.visible_pawns()` | Pawns on screen, for anchored labels |
 | `view.messages(n)`, `view.events(since_tick)` | The message feed; recent joins, deaths and departures |
@@ -213,8 +213,9 @@ ui.remove("core:messages")
 
 The first example is the shipped [`wildlife_plus`](../../mods/wildlife_plus/ui/wildlife.luau)
 plugin. Core's extension points include `core:topbar.right` (top-bar
-readouts) and `core:inspector.sections` (sections in the colonist
-inspector).
+readouts), `core:inspector.sections` (sections in the colonist
+inspector) and `core:inspector.thing` (sections in the inspector of a
+selected thing: a station's bills, a tool's wear).
 
 If two mods replace or remove the same id, that's reported as a conflict
 naming both, and load order decides which wins. Operating on an id nobody
@@ -401,7 +402,7 @@ reported as a conflict and load order decides.
 The UI surface is versioned apart from the sim API: `types/ui.d.luau` and
 `docs/modding/api-ui.md` are generated from the engine's registrations and
 checked against them in CI, so neither can drift. A mod says which surface
-its UI scripts were written against with `ui_api = "0.2"` in `mod.toml`;
+its UI scripts were written against with `ui_api = "0.3"` in `mod.toml`;
 before 1.0 every minor is breaking, and `rim check` refuses a mod targeting
 a version the engine does not provide. It also refuses one naming a `ui.`,
 `act.` or `view.` member that does not exist, by file and line.
