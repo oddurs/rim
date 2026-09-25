@@ -104,9 +104,30 @@ impl Sim {
         }
     }
 
-    /// Queue a player command; it applies at the start of the next tick.
+    /// Queue a player command; it applies at the start of the next tick,
+    /// or at `apply_pending`.
     pub fn push(&mut self, c: Command) {
         self.queue.push(c);
+    }
+
+    /// Apply queued commands now, at the current tick boundary, without
+    /// advancing time. It is the point `step` would apply them at, and they
+    /// are logged at the same tick, so a replay can't tell: a paused game
+    /// takes orders.
+    pub fn apply_pending(&mut self) {
+        if self.queue.is_empty() {
+            return;
+        }
+        let w = &mut self.world;
+        // A command sees the map as it is, not as the regions last saw it:
+        // a load can't reproduce out-of-date regions.
+        w.map.ensure_regions();
+        for c in self.queue.drain(..) {
+            if let Some(log) = &mut self.applied {
+                log.push((w.tick, c.clone()));
+            }
+            command::apply(w, c);
+        }
     }
 
     /// Keep every applied command for `take_applied`.
@@ -129,20 +150,9 @@ impl Sim {
 
     pub fn step(&mut self) {
         let t0 = Instant::now();
+        self.apply_pending();
         let w = &mut self.world;
         let prof = &mut self.profile;
-
-        // A command sees the map as it is, not as the regions last saw it:
-        // a load can't reproduce out-of-date regions.
-        if !self.queue.is_empty() {
-            w.map.ensure_regions();
-        }
-        for c in self.queue.drain(..) {
-            if let Some(log) = &mut self.applied {
-                log.push((w.tick, c.clone()));
-            }
-            command::apply(w, c);
-        }
         prof.time("regions", || w.map.ensure_regions());
         prof.time("rooms", || w.map.ensure_rooms());
         prof.time("boundary", || w.refresh_boundaries());
