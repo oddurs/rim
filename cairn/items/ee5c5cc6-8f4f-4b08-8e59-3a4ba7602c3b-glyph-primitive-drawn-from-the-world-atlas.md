@@ -29,9 +29,13 @@ without one because text isn't in the world batch.
 
 ## Acceptance criteria
 
-- [x] A def with a glyph look draws in the chunk meshes, one call per chunk layer
+- [x] A def with a glyph look draws in the chunk meshes, at most one more call per chunk layer that shows glyphs
 - [x] An empty or multi-character glyph is a load error naming the def
 
 ## 2026-09-24
 
 Glyphs are interned at load like sprite keys (Art { sprites, glyphs }), rasterised at 48 px with the UI's font through rim_ui's new Text::rasterize, and packed with the sprites; the Sink now takes an atlas slot, so sprites and glyphs share one path. A glyph no font has is a warning and draws nothing, rather than a load error: fonts differ between machines. Bench with --sprite-mods 20 and trail markers stamped in: calls 99/60/24, unchanged. Atlas pages are Nearest-filtered for pixel art, so a glyph scaled well below 48 px can alias; not seen at the zooms tested.
+
+## 2026-09-24
+
+Review: glyph 0 (a font's missing-glyph box, what shaping keeps when no font has it) now counts as missing, so the warning path is real; 'one character' is a base plus what extends it (variation selectors, ZWJ sequences, skin tones, keycaps, flags), and one that draws nothing is a load error; size is the em, glyphs keep their proportions and share a baseline; colour glyphs take shade and vary. Glyphs moved to their own Linear-filtered atlas pages: Nearest aliased them. That costs a texture switch in each chunk layer that shows both: the bench (a marker in almost every room) goes from 99 to 123 calls on the whole map. Criterion 1 reworded to say so.

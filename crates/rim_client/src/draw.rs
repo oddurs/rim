@@ -432,10 +432,13 @@ fn paint(
             }
             Prim::Glyph { at: [x, y], size, id } => {
                 let Some(g) = s.atlas().glyph(id) else { continue };
-                let (gh, gw) = (size * z, size * z * g.aspect);
-                // A colour glyph keeps its colours; only the alpha applies.
-                let c = if g.painted { Color::new(1.0, 1.0, 1.0, c.a) } else { c };
-                s.image(sx + x * z - gw / 2.0, sy + y * z - gh / 2.0, gw, gh, g.slot, c);
+                // `size` is the em: glyphs keep their proportions and share
+                // a baseline, the line's middle on the point.
+                let k = size * z / crate::atlas::GLYPH_PX;
+                let (gw, gh) = (g.w * k, g.h * k);
+                // A colour glyph keeps its colours; shade and vary dim it.
+                let c = if g.painted { shade(Color::new(1.0, 1.0, 1.0, c.a), f) } else { c };
+                s.image(sx + x * z - gw / 2.0, sy + y * z + g.top * k, gw, gh, g.slot, c);
             }
         }
     }

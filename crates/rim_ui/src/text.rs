@@ -191,6 +191,8 @@ pub struct Raster {
     pub rgba: Vec<u8>,
     /// A colour glyph (an emoji): draw as is, not in a colour.
     pub painted: bool,
+    /// Where the ink starts, in pixels below the middle of the line.
+    pub top: f32,
 }
 
 pub struct Text {
@@ -370,7 +372,12 @@ impl Text {
     /// its own colours for a colour one (then `painted`). None when no font
     /// has it or it draws nothing.
     pub fn rasterize(&mut self, ch: &str, px: f32) -> Option<Raster> {
-        let key = self.shape(ch, px, 400, None).glyphs.first()?.0;
+        // One glyph, and a real one: glyph 0 is the font's missing-glyph
+        // box, which is what shaping keeps when no font has the character.
+        let (key, _, baseline) = match self.shape(ch, px, 400, None).glyphs.as_slice() {
+            [one] if one.0.glyph_id != 0 => *one,
+            _ => return None,
+        };
         let img = self.swash.get_image_uncached(&mut self.fonts, key)?;
         let (w, h) = (img.placement.width, img.placement.height);
         if w == 0 || h == 0 {
@@ -384,7 +391,9 @@ impl Text {
                 (img.data[..n * 4].chunks(4).flat_map(|p| [255, 255, 255, p[0].max(p[1]).max(p[2])]).collect(), false)
             }
         };
-        Some(Raster { w, h, rgba, painted })
+        // The ink's top below the line's middle, so glyphs share a baseline.
+        let top = baseline as f32 - img.placement.top as f32 - (px * 1.3).ceil() / 2.0;
+        Some(Raster { w, h, rgba, painted, top })
     }
 
     /// Forget placed images (after a reload replaced their pixels).

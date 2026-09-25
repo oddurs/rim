@@ -33,14 +33,18 @@ pub struct WorldAtlas {
     glyphs: Vec<Option<Glyph>>,
 }
 
-/// Glyphs are rasterised this many pixels high and scaled to the cell.
-const GLYPH_PX: f32 = 48.0;
+/// Glyphs are rasterised at this many pixels to the em and scaled to the
+/// cell.
+pub const GLYPH_PX: f32 = 48.0;
 
+/// A rasterised glyph, in pixels at `GLYPH_PX`.
 #[derive(Clone, Copy, Debug)]
 pub struct Glyph {
     pub slot: Slot,
-    /// Width over height.
-    pub aspect: f32,
+    pub w: f32,
+    pub h: f32,
+    /// Where the ink starts below the middle of the line.
+    pub top: f32,
     /// A colour glyph: draw as is rather than in the layer's colour.
     pub painted: bool,
 }
@@ -103,36 +107,59 @@ pub fn fits(w: u32, h: u32) -> bool {
 
 impl WorldAtlas {
     /// Decode and pack `files` (by sprite id), and rasterise `glyphs` with
-    /// the UI's font. Errors name the file. A glyph no font has is a
-    /// warning and draws nothing: a mod shouldn't stop the game on a
-    /// machine with fewer fonts.
+    /// the UI's font onto pages of their own. Errors name the file. A glyph
+    /// no font has is a warning and draws nothing: a mod shouldn't stop the
+    /// game on a machine with fewer fonts.
     pub fn load(files: &[PathBuf], glyphs: &[String], text: &mut rim_ui::text::Text) -> Result<WorldAtlas, String> {
-        let mut images = Vec::with_capacity(files.len() + glyphs.len());
+        let mut images = Vec::with_capacity(files.len());
         for f in files {
             let (w, h, rgba) = rim_ui::image::decode(f).map_err(|e| format!("sprite {}: {e}", f.display()))?;
             images.push((w, h, rgba));
         }
-        let mut glyph_meta = Vec::with_capacity(glyphs.len());
-        for g in glyphs {
-            match text.rasterize(g, GLYPH_PX) {
-                Some(r) => {
-                    glyph_meta.push(Some((images.len(), r.w as f32 / r.h as f32, r.painted)));
-                    images.push((r.w, r.h, r.rgba));
+        let mut atlas = WorldAtlas { pages: Vec::new(), white: Vec::new(), slots: Vec::new(), glyphs: Vec::new() };
+        // Sprites are pixel art, drawn crisp; glyphs are anti-aliased and
+        // scale smoothly, so they get pages of their own. A chunk that
+        // shows both costs a texture switch.
+        let placed = atlas.add_pages(&images, FilterMode::Nearest);
+        if let Some(i) = placed.iter().position(Option::is_none) {
+            return Err(format!("sprite {}: larger than {MAX_PAGE}×{MAX_PAGE}", files[i].display()));
+        }
+        atlas.slots = placed.into_iter().flatten().collect();
+        let rasters: Vec<Option<rim_ui::text::Raster>> = glyphs
+            .iter()
+            .map(|g| {
+                let r = text.rasterize(g, GLYPH_PX);
+                if r.is_none() {
+                    eprintln!("  warning: glyph {g:?} is in no font here, as one glyph; it draws nothing");
                 }
-                None => {
-                    eprintln!("  warning: glyph {g:?} is in no font here; it draws nothing");
-                    glyph_meta.push(None);
-                }
-            }
+                r
+            })
+            .collect();
+        let found: Vec<(u32, u32, Vec<u8>)> = rasters.iter().flatten().map(|r| (r.w, r.h, r.rgba.clone())).collect();
+        let mut slots = atlas.add_pages(&found, FilterMode::Linear).into_iter();
+        atlas.glyphs = rasters
+            .iter()
+            .map(|r| {
+                let r = r.as_ref()?;
+                let slot = slots.next().flatten()?;
+                Some(Glyph { slot, w: r.w as f32, h: r.h as f32, top: r.top, painted: r.painted })
+            })
+            .collect();
+        Ok(atlas)
+    }
+
+    /// Pack `images` onto new pages; a slot for each, or None for one no
+    /// page can hold.
+    fn add_pages(&mut self, images: &[(u32, u32, Vec<u8>)], filter: FilterMode) -> Vec<Option<Slot>> {
+        if images.is_empty() && !self.pages.is_empty() {
+            return Vec::new();
         }
         let sizes: Vec<(u32, u32)> = images.iter().map(|i| (i.0, i.1)).collect();
         let (at, sides) = pack(&sizes, MAX_PAGE);
-        if let Some(i) = at.iter().position(|a| a.0 == usize::MAX) {
-            return Err(format!("sprite {}: larger than {MAX_PAGE}×{MAX_PAGE}", files[i].display()));
-        }
         if sides.len() > 1 {
-            eprintln!("  world atlas: {} sprites need {} pages of up to {MAX_PAGE}²", files.len(), sides.len());
+            eprintln!("  world atlas: {} pictures need {} pages of up to {MAX_PAGE}²", images.len(), sides.len());
         }
+        let first = self.pages.len();
         let mut pixels: Vec<Vec<u8>> = sides.iter().map(|&s| vec![0; (s * s * 4) as usize]).collect();
         for (p, &side) in pixels.iter_mut().zip(&sides) {
             for y in 0..WHITE {
@@ -144,6 +171,10 @@ impl WorldAtlas {
         }
         let mut slots = Vec::with_capacity(images.len());
         for ((w, h, rgba), &(page, x, y)) in images.iter().zip(&at) {
+            if page == usize::MAX {
+                slots.push(None);
+                continue;
+            }
             let side = sides[page];
             for row in 0..*h {
                 let src = (row * w * 4) as usize;
@@ -151,26 +182,16 @@ impl WorldAtlas {
                 pixels[page][dst..dst + (w * 4) as usize].copy_from_slice(&rgba[src..src + (w * 4) as usize]);
             }
             let s = side as f32;
-            slots.push(Slot { page, uv: [x as f32 / s, y as f32 / s, (x + w) as f32 / s, (y + h) as f32 / s] });
+            let uv = [x as f32 / s, y as f32 / s, (x + w) as f32 / s, (y + h) as f32 / s];
+            slots.push(Some(Slot { page: first + page, uv }));
         }
-        let pages = pixels
-            .into_iter()
-            .zip(&sides)
-            .map(|(p, &side)| {
-                let t = Texture2D::from_rgba8(side as u16, side as u16, &p);
-                // Crisp, like the ground: sprites are pixel art until a mod
-                // says otherwise.
-                t.set_filter(FilterMode::Nearest);
-                t
-            })
-            .collect();
-        let white = sides.iter().map(|&s| [WHITE as f32 / 2.0 / s as f32; 2]).collect();
-        let glyphs = glyph_meta
-            .into_iter()
-            .map(|m| m.map(|(i, aspect, painted)| Glyph { slot: slots[i], aspect, painted }))
-            .collect();
-        slots.truncate(files.len());
-        Ok(WorldAtlas { pages, white, slots, glyphs })
+        for (p, &side) in pixels.into_iter().zip(&sides) {
+            let t = Texture2D::from_rgba8(side as u16, side as u16, &p);
+            t.set_filter(filter);
+            self.pages.push(t);
+            self.white.push([WHITE as f32 / 2.0 / side as f32; 2]);
+        }
+        slots
     }
 
     pub fn slot(&self, id: u16) -> Slot {

@@ -119,6 +119,27 @@ pub struct Art<'a> {
     pub home: &'a str,
 }
 
+/// One character as a player sees it: a base that draws something, and
+/// only what extends it (variation selectors, joiners and what they join,
+/// skin tones, keycaps, a flag's second letter). "ab" is two.
+fn one_character(g: &str) -> bool {
+    let mut cs = g.chars();
+    let Some(base) = cs.next() else { return false };
+    if base.is_whitespace() || base.is_control() || ('\u{200B}'..='\u{200F}').contains(&base) {
+        return false;
+    }
+    let flag = |c: char| ('\u{1F1E6}'..='\u{1F1FF}').contains(&c);
+    let mut joined = false;
+    cs.all(|c| {
+        let extends = matches!(c, '\u{FE00}'..='\u{FE0F}' | '\u{20E3}' | '\u{1F3FB}'..='\u{1F3FF}' | '\u{E0020}'..='\u{E007F}')
+            || c == '\u{200D}'
+            || joined
+            || (flag(base) && flag(c));
+        joined = c == '\u{200D}';
+        extends
+    })
+}
+
 fn intern(list: &mut Vec<String>, item: String) -> u16 {
     match list.iter().position(|k| *k == item) {
         Some(i) => i as u16,
@@ -195,6 +216,7 @@ impl LayerDef {
                     let range = match (lo, hi) {
                         (_, f32::MAX) if lo > 0.0 => "above 0".to_string(),
                         (_, f32::MAX) => format!("at least {lo}"),
+                        _ if lo > 0.0 && lo < 1e-6 => format!("above 0, at most {hi}"),
                         _ => format!("from {lo} to {hi}"),
                     };
                     return Err(format!("`{name}` = {v} is out of range (want {range})"));
@@ -217,8 +239,8 @@ impl LayerDef {
             }
             "glyph" => {
                 let g = self.glyph.as_deref().unwrap_or_default();
-                if g.chars().count() != 1 {
-                    return Err(format!("`glyph` is one character (got {g:?})"));
+                if !one_character(g) {
+                    return Err(format!("`glyph` is one character that draws something (got {g:?})"));
                 }
                 let at = [self.x.unwrap_or(0.5), self.y.unwrap_or(0.5)];
                 Prim::Glyph { at, size: self.size.unwrap_or(0.8), id: intern(art.glyphs, g.to_string()) }
@@ -237,7 +259,8 @@ impl LayerDef {
 }
 
 impl LookDef {
-    /// `groups` interns join labels across all defs, `sprites` sprite keys.
+    /// `groups` interns join labels across all defs, `art` sprite keys and
+    /// glyphs.
     pub fn compile(&self, groups: &mut Vec<String>, art: &mut Art) -> Result<Look, String> {
         let mut layers = |v: &[LayerDef], what: &str| {
             v.iter()
@@ -329,7 +352,18 @@ mod tests {
         assert_eq!(l.prim, Prim::Glyph { at: [0.5, 0.5], size: 0.8, id: 0 });
         assert!(layer("draw = \"glyph\"").unwrap_err().contains("one character"));
         assert!(layer("draw = \"glyph\"\nglyph = \"ab\"").unwrap_err().contains("one character"));
-        assert!(layer("draw = \"glyph\"\nglyph = \"a\"\nsize = 0").unwrap_err().contains("out of range"));
+        assert!(layer("draw = \"glyph\"\nglyph = \" \"").unwrap_err().contains("draws something"));
+        for emoji in [
+            "\u{2764}\u{FE0F}",
+            "\u{1F1EE}\u{1F1F8}",
+            "\u{1F44D}\u{1F3FD}",
+            "1\u{FE0F}\u{20E3}",
+            "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}",
+        ] {
+            assert!(layer(&format!("draw = \"glyph\"\nglyph = \"{emoji}\"")).is_ok(), "{emoji:?} is one character");
+        }
+        let e = layer("draw = \"glyph\"\nglyph = \"a\"\nsize = 0").unwrap_err();
+        assert!(e.contains("above 0, at most 4"), "{e}");
     }
 
     #[test]
