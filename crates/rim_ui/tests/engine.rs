@@ -1642,24 +1642,41 @@ fn guide_samples_run() {
 
 #[test]
 fn a_theme_can_name_a_font_and_a_missing_one_falls_back() {
-    // Ask for whatever family the system UI font resolved to: it exists here.
+    // Core names Inter, which it ships in ui/fonts.
     let sim = sim_at(&mods());
-    let system = ui_for(&sim).text.info.family.clone();
-    let dir =
-        scratch_mods("font", &[("typeface", "", &[("ui/theme.toml", &format!("[font]\nfamily = \"{system}\"\n"))])]);
-    let ui = ui_for(&sim_at(&dir));
-    assert_eq!(ui.text.info.family, system);
-    assert!(ui.text.info.source.starts_with("family"), "the theme's family should be used: {}", ui.text.info.source);
+    let ui = ui_for(&sim);
+    assert_eq!(ui.text.info.family, "Inter");
+    assert!(ui.text.info.source.starts_with("family"), "the theme's family is used: {}", ui.text.info.source);
     assert!(ui.warnings().is_empty(), "{:#?}", ui.warnings());
-    let _ = std::fs::remove_dir_all(&dir);
 
     let dir =
         scratch_mods("nofont", &[("typeface", "", &[("ui/theme.toml", "[font]\nfamily = \"No Such Font 9000\"\n")])]);
     let ui = ui_for(&sim_at(&dir));
-    assert_eq!(ui.text.info.family, system, "falls back to the system UI font");
+    assert_ne!(ui.text.info.family, "No Such Font 9000");
+    assert!(!ui.text.info.source.starts_with("family"), "falls back to the system UI font: {}", ui.text.info.source);
     assert!(
         ui.warnings().iter().any(|w| w.contains("typeface") && w.contains("No Such Font 9000")),
         "{:#?}",
+        ui.warnings()
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A mod's own font, shipped under ui/fonts, is one a theme can name: here
+/// core ships none, so Inter can only come from the mod.
+#[test]
+fn a_mod_ships_a_font_under_ui_fonts() {
+    let dir = scratch_mods("modfont", &[("typeface", "", &[("ui/theme.toml", "[font]\nfamily = \"Inter\"\n")])]);
+    std::fs::remove_dir_all(dir.join("core/ui/fonts")).unwrap();
+    std::fs::create_dir_all(dir.join("typeface/ui/fonts")).unwrap();
+    std::fs::copy(mods().join("core/ui/fonts/Inter-Regular.ttf"), dir.join("typeface/ui/fonts/Inter-Regular.ttf"))
+        .unwrap();
+    std::fs::write(dir.join("typeface/ui/fonts/broken.ttf"), b"not a font").unwrap();
+    let ui = ui_for(&sim_at(&dir));
+    assert_eq!(ui.text.info.family, "Inter", "{}", ui.text.info.source);
+    assert!(
+        ui.warnings().iter().any(|w| w.contains("broken.ttf")),
+        "a font that doesn't load says so: {:#?}",
         ui.warnings()
     );
     let _ = std::fs::remove_dir_all(&dir);

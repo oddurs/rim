@@ -286,7 +286,8 @@ impl Ui {
     pub fn new(mods: Vec<ModDir>, dpi: f32, user_scale: f32) -> Result<Ui, String> {
         let dirs: Vec<(String, &std::path::Path)> = mods.iter().map(|m| (m.id.clone(), m.dir.as_path())).collect();
         let mut theme = Theme::load(&dirs, total_scale(dpi, user_scale));
-        let text = Text::new(if theme.font.is_empty() { None } else { Some(theme.font.as_str()) })?;
+        let text = Text::new(if theme.font.is_empty() { None } else { Some(theme.font.as_str()) }, &mod_fonts(&dirs))?;
+        theme.warnings.extend(text.info.load_errors.iter().map(|e| format!("font file ignored: {e}")));
         let mut images = image::Images::load(&dirs);
         theme.warnings.append(&mut images.warnings);
         if let Some(want) = &text.info.missing {
@@ -1563,4 +1564,25 @@ fn flatten(n: &Node, depth: usize, out: &mut Vec<(usize, String, String, String)
 /// The UI directories of loaded mods (for `Ui::new`).
 pub fn mods_of(sim: &rim_sim::Sim) -> Vec<ModDir> {
     vm::mod_dirs(&sim.mods)
+}
+
+/// Every font a mod ships under `ui/fonts/` (TrueType, OpenType or a
+/// collection), in mod load order, then by name.
+pub fn mod_fonts(mods: &[(String, &std::path::Path)]) -> Vec<std::path::PathBuf> {
+    let mut out = Vec::new();
+    for (_, dir) in mods {
+        let Ok(rd) = std::fs::read_dir(dir.join("ui").join("fonts")) else { continue };
+        let mut files: Vec<std::path::PathBuf> = rd
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| {
+                p.extension()
+                    .and_then(|e| e.to_str())
+                    .is_some_and(|e| ["ttf", "otf", "ttc"].iter().any(|x| e.eq_ignore_ascii_case(x)))
+            })
+            .collect();
+        files.sort();
+        out.extend(files);
+    }
+    out
 }

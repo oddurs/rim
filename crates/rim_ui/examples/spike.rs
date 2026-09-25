@@ -11,7 +11,7 @@ fn ms(t: Instant) -> f64 {
 
 fn main() {
     let t = Instant::now();
-    let mut text = Text::new(None).expect("fonts");
+    let mut text = Text::new(None, &[]).expect("fonts");
     println!(
         "font load: {:.1} ms  ({} from {}, {} fallback faces)",
         ms(t),
