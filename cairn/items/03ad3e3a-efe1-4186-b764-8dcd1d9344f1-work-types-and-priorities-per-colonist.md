@@ -5,7 +5,7 @@ type: feature
 status: backlog
 milestone: colony
 created: 2026-09-22
-updated: 2026-09-24
+updated: 2026-09-25
 priority: p0
 api: additive
 effort: m
@@ -38,3 +38,7 @@ With several colonists, who does what must be the player's choice. This is the c
 ## 2026-09-24
 
 Split on 2026-09-23 per DESIGN.md §4d: work pools (0e73145a), the Work Board (f1b96df4), the why panel (f1924f03), rules and stances (0cb48faf).
+
+## 2026-09-25
+
+The stone age adds work that needs a work type: gathering (the gather designation) and crafting (orders posted by the crafting plugin, 049e2f73). Orders name their work type, so the Work Board gets a crafting column with no special case.

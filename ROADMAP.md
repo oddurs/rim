@@ -41,6 +41,21 @@ A sprint: fast on a little old laptop with mods loaded. The reference machine is
 - [x] `e3c1f87b` Chunked meshes: what does not move is drawn from the GPU <sup>perf · p0 · m · client</sup>
 - [x] `ee5c5cc6` Glyph primitive drawn from the world atlas <sup>feature · p3 · m · client</sup>
 
+## stone-age — Stone age
+
+`··········` 0% · 0 of 8 done
+
+Hands first. The colonist wakes with nothing (pillar 93f291d5), and today nothing asks what they hold: a naked warrior fells an oak and quarries granite bare-handed. This milestone makes the first days a climb. You gather branches, fibre, stones and berries with your hands. You find flint and knap it into a flake and a hand axe on the ground. Branch walls and a campfire see you through the first night. A digging stick opens the clay banks, for warm cob walls and fired pots. Then the axe fells trees and a stone maul quarries rock.
+
+- [ ] `049e2f73` Crafting as a plugin: recipes, stations and bills <sup>feature · p0 · l · plugin</sup>
+- [ ] `4bd94457` Balance: the first three days with only your hands <sup>chore · p0 · m · plugin</sup>
+- [ ] `4e9d5a12` Several harvests on one thing: gather without felling <sup>feature · p0 · s · engine</sup>
+- [ ] `5305a161` Select and inspect things, with a slot for mods <sup>feature · p0 · m · client</sup>
+- [ ] `7016d86b` Tools in hand: work that needs a tool <sup>feature · p0 · l · engine</sup>
+- [ ] `74b6fa7e` Work orders: bring things to a place, then work there <sup>feature · p0 · l · engine</sup>
+- [ ] `ccd44902` Core vocabulary: the gather designation and tool tag names <sup>content · p0 · s · core</sup>
+- [ ] `e3846c47` mods/primitive: the stone age as a plugin <sup>content · p0 · l · plugin</sup>
+
 ## castaway — Castaway
 
 `##########` 100% · 17 of 17 done · due 2026-10-15
@@ -333,7 +348,6 @@ Lockstep co-op on top of determinism: command broadcast, desync detection, mod-l
 
 Production chains: workbenches and bills, cooking, farming, tailoring, research as a plugin.
 
-- [ ] `049e2f73` Workbenches and bills <sup>feature · p0 · l · engine</sup>
 - [ ] `0927f0af` Tailoring: make apparel <sup>content · p2 · s · core</sup>
 - [ ] `2c03427e` Cooking: raw food into meals <sup>content · p1 · s · core</sup>
 - [ ] `308074c6` Getting wet: pawn wetness and clothing insulation <sup>feature · p2 · m · engine</sup>
@@ -343,6 +357,7 @@ Production chains: workbenches and bills, cooking, farming, tailoring, research 
 - [ ] `9b569a33` Terrain properties, tags and distance-to inputs <sup>feature · p0 · s · engine</sup>
 - [ ] `b1444a26` Farming: growing zones and crops <sup>feature · p0 · l · engine</sup>
 - [ ] `d77d9e1f` Stock fields: per-cell state with staggered updates <sup>feature · p0 · l · engine</sup>
+- [ ] `db7f1e06` Mining that rewards looking: rock kinds, veins and prospecting <sup>content · p1 · m · core</sup>
 - [ ] `e1be8ebd` Plants grow in the weather <sup>feature · p0 · m · engine</sup>
 
 ## 1.0 — 1.0
