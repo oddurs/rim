@@ -62,6 +62,8 @@ declare rim: {
     on: (event: string, fn: (event: {[string]: any}) -> ()) -> (),
     -- Upgrade your script data from a save made with a different version of your mod: fn gets that version and your data (bare keys) and returns the data to keep. It sees no world: only your data. Runs on load, before any hook. Register at load time.
     on_migrate: (fn: (from_version: string, data: {[string]: any}) -> {[string]: any}) -> (),
+    -- A colonist's priority for a work type: 1 first, 0 never. Nil if it isn't a pawn.
+    priority: (id: number, work: string) -> number?,
     -- Add a named contribution to a field's outdoor value, easing in over ease_hours and expiring after hours (nil: until cleared).
     push_ambient: (field: string, key: string, value: number, hours: number?, ease_hours: number?) -> (),
     -- A number in [0, 1) from the world's random numbers: the same on every machine.

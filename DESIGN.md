@@ -487,6 +487,11 @@ with winter or a siege, and it doesn't show how much work is waiting.
   and `order`, the tie-break, which the UI shows and lets you drag.
 - **`[[priority_scale]]`:** `levels = 4` in core. A mod that wants 9 changes
   one line and the UI follows. 0 means never.
+- **Work finds its type from data.** A designation names its work type
+  (`work_type = "chop"`); work the engine hands out itself, like raising
+  blueprints, is claimed by the work type that lists it (`jobs = ["build"]`).
+  A colonist without a setting for a work type is at its default, so a
+  mod's new work type shows up on every colonist.
 - **Effective priority = base + rules.** A `[[priority_rule]]` shifts or
   sets work types while its `when` holds: an hour range, a season, an alert,
   a need, or a stance. Anything a curve can't say is a Luau predicate, cached

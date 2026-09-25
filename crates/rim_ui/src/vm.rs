@@ -678,6 +678,10 @@ impl UiVm {
             Some(e) => UiAction::Draft(e, on),
             None => return Err(rt("bad entity id")),
         });
+        act!("set_priority", (u64, String, u8), |(id, work, level)| match Entity::from_bits(id) {
+            Some(e) => UiAction::SetPriority(e, work, level),
+            None => return Err(rt("bad entity id")),
+        });
         act!("cycle_overlay", (), |_a| UiAction::CycleOverlay);
         act!("set_overlay", Option<usize>, |i| UiAction::SetOverlay(i.map(|i| i.saturating_sub(1))));
         act!("toggle_profiler", (), |_a| UiAction::ToggleProfiler);
@@ -913,6 +917,33 @@ impl UiVm {
         view!("data", String, |lua, l, key| match l.world.data.get(&key) {
             Some(d) => rim_sim::data::to_lua(lua, d),
             None => Ok(Value::Nil),
+        });
+        view!("work_types", (), |lua, l, _a| {
+            let t = lua.create_table()?;
+            let defs = &l.world.defs;
+            for &w in &defs.work_order {
+                let d = &defs.work_types[w as usize];
+                let row = lua.create_table()?;
+                row.set("id", d.id.as_str())?;
+                row.set("label", d.label.as_str())?;
+                row.set("icon", d.icon.as_str())?;
+                row.set("order", d.order)?;
+                row.set("default", d.priority)?;
+                t.push(row)?;
+            }
+            Ok(t)
+        });
+        view!("priority_levels", (), |_lua, l, _a| Ok(l.world.defs.priority_scale.levels));
+        view!("priorities", u64, |lua, l, id| {
+            let Some(p) = Entity::from_bits(id).and_then(|e| l.world.ecs.get::<&Pawn>(e).ok()) else {
+                return Ok(None);
+            };
+            let t = lua.create_table()?;
+            let defs = &l.world.defs;
+            for (w, d) in defs.work_types.iter().enumerate() {
+                t.set(d.id.as_str(), p.priority(defs, w as rim_sim::defs::DefId))?;
+            }
+            Ok(Some(t))
         });
         view!("tools", (), |lua, l, _a| {
             let t = lua.create_table()?;

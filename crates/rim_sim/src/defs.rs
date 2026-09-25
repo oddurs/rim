@@ -608,8 +608,64 @@ pub struct DesignationDef {
     pub color: String,
     #[serde(default)]
     pub targets: Targets,
+    /// The work type whose priority decides who does it (DESIGN.md §4d).
+    pub work_type: String,
     #[serde(skip)]
     pub rgb: [u8; 3],
+    #[serde(skip)]
+    pub work_r: DefId,
+}
+
+// ---------------------------------------------------------------- work
+
+/// Kinds of work the engine itself hands out, which a work type claims by
+/// name. Designations name their work type; this is for the rest.
+pub const ENGINE_JOBS: &[&str] = &["build"];
+
+fn d3() -> u8 {
+    3
+}
+
+/// A column of the priority grid: a kind of work a colonist can be told to
+/// do more or less of (DESIGN.md §4d).
+#[derive(Deserialize, Clone, Debug)]
+pub struct WorkTypeDef {
+    pub id: String,
+    pub label: String,
+    /// A short glyph or sprite key for the column header.
+    #[serde(default)]
+    pub icon: String,
+    /// The skill this work trains and is done better with, when skills exist.
+    #[serde(default)]
+    pub skill: String,
+    /// The level a colonist starts at: 1 is first, `levels` last, 0 never.
+    #[serde(default = "d3")]
+    pub priority: u8,
+    /// Breaks a tie between work types at the same level: lower first.
+    #[serde(default)]
+    pub order: i32,
+    /// Engine jobs this work type covers, from `ENGINE_JOBS`: "build" is
+    /// raising blueprints and bringing them materials.
+    #[serde(default)]
+    pub jobs: Vec<String>,
+}
+
+fn d4() -> u8 {
+    4
+}
+
+/// How many priority levels there are. Core says 4; a mod patches it to 9.
+#[derive(Deserialize, Clone, Debug)]
+pub struct PriorityScaleDef {
+    pub id: String,
+    #[serde(default = "d4")]
+    pub levels: u8,
+}
+
+impl Default for PriorityScaleDef {
+    fn default() -> Self {
+        PriorityScaleDef { id: "default".into(), levels: 4 }
+    }
 }
 
 // ---------------------------------------------------------------- start / names
@@ -645,6 +701,12 @@ pub struct DefDb {
     pub creatures: Vec<CreatureDef>,
     pub needs: Vec<NeedDef>,
     pub designations: Vec<DesignationDef>,
+    /// Work types in load order; `work_order` has them in `order` order.
+    pub work_types: Vec<WorkTypeDef>,
+    pub work_order: Vec<DefId>,
+    pub priority_scale: PriorityScaleDef,
+    /// The work type that raises blueprints, if any claims "build".
+    pub build_work: Option<DefId>,
     pub fields: Vec<FieldDef>,
     /// Fields in the order their ambient terms must be evaluated.
     pub ambient_order: Vec<usize>,
@@ -730,8 +792,20 @@ impl DefDb {
     }
 }
 
-pub const KINDS: &[&str] =
-    &["terrain", "thing", "creature", "need", "designation", "field", "calendar", "sky", "start", "names"];
+pub const KINDS: &[&str] = &[
+    "terrain",
+    "thing",
+    "creature",
+    "need",
+    "designation",
+    "work_type",
+    "priority_scale",
+    "field",
+    "calendar",
+    "sky",
+    "start",
+    "names",
+];
 
 impl DefDb {
     /// A def by qualified id ("core:wall"), or by a bare id ("wall") that
@@ -761,6 +835,7 @@ impl DefDb {
             "creature" => self.creatures[i].id.clone(),
             "need" => self.needs[i].id.clone(),
             "designation" => self.designations[i].id.clone(),
+            "work_type" => self.work_types[i].id.clone(),
             "field" => self.fields[i].id.clone(),
             _ => String::new(),
         }
@@ -798,6 +873,9 @@ impl DefDb {
         }
         for (i, d) in self.designations.iter().enumerate() {
             index.insert(("designation", d.id.clone()), i as DefId);
+        }
+        for (i, d) in self.work_types.iter().enumerate() {
+            index.insert(("work_type", d.id.clone()), i as DefId);
         }
         for (i, d) in self.fields.iter().enumerate() {
             index.insert(("field", d.id.clone()), i as DefId);
@@ -867,8 +945,38 @@ impl DefDb {
             }
         }
         for d in &mut self.designations {
-            d.rgb = parse_color(&d.color).map_err(|e| format!("designation/{}: {e}", d.id))?;
+            let ctx = format!("designation/{}", d.id);
+            d.rgb = parse_color(&d.color).map_err(|e| format!("{ctx}: {e}"))?;
+            d.work_r = get("work_type", &d.work_type, &ctx)?;
         }
+        let levels = self.priority_scale.levels;
+        if !(1..=9).contains(&levels) {
+            return Err(format!("priority_scale/{}: levels must be 1 to 9, not {levels}", self.priority_scale.id));
+        }
+        let mut build: Option<usize> = None;
+        for (i, d) in self.work_types.iter_mut().enumerate() {
+            d.priority = d.priority.min(levels);
+            for j in &d.jobs {
+                if !ENGINE_JOBS.contains(&j.as_str()) {
+                    return Err(format!(
+                        "work_type/{}: no engine job '{j}' (there are: {})",
+                        d.id,
+                        ENGINE_JOBS.join(", ")
+                    ));
+                }
+                match build {
+                    Some(_) if j == "build" => {
+                        return Err(format!("work_type/{}: another work type already covers 'build'", d.id))
+                    }
+                    _ if j == "build" => build = Some(i),
+                    _ => {}
+                }
+            }
+        }
+        self.build_work = build.map(|i| i as DefId);
+        let mut order: Vec<DefId> = (0..self.work_types.len() as DefId).collect();
+        order.sort_by_key(|&w| (self.work_types[w as usize].order, w));
+        self.work_order = order;
         for d in &mut self.things {
             let ctx = format!("thing/{}", d.id);
             d.rgb = parse_color(&d.color).map_err(|e| format!("{ctx}: {e}"))?;

@@ -95,7 +95,13 @@ fn image_free_mods(name: &str, ui: &str) -> std::path::PathBuf {
     std::fs::create_dir_all(m.join("ui")).unwrap();
     std::fs::write(
         m.join("mod.toml"),
-        "id = \"probe\"\nname = \"probe\"\nversion = \"0.1.0\"\napi = \"0.4\"\nui_api = \"0.3\"\ndepends = [\"core\"]\n",
+        format!(
+            "id = \"probe\"\nname = \"probe\"\nversion = \"0.1.0\"\napi = \"{}.{}\"\nui_api = \"{}.{}\"\ndepends = [\"core\"]\n",
+            rim_sim::API_VERSION.0,
+            rim_sim::API_VERSION.1,
+            rim_ui::api::UI_API_VERSION.0,
+            rim_ui::api::UI_API_VERSION.1
+        ),
     )
     .unwrap();
     std::fs::write(m.join("ui/probe.luau"), ui).unwrap();

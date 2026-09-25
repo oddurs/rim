@@ -143,6 +143,7 @@ fn def_table(defs: &DefDb) -> DefsSection {
         kind("creature", defs.creatures.len()),
         kind("need", defs.needs.len()),
         kind("designation", defs.designations.len()),
+        kind("work_type", defs.work_types.len()),
         kind("field", defs.fields.len()),
     ])
 }
@@ -407,6 +408,15 @@ impl Snapshot {
                 }
             }
             p.needs = needs;
+            let mut priorities = Vec::new();
+            for &(t, l) in &p.priorities {
+                match remap.get("work_type", t) {
+                    Some(t) => priorities.push((t, l)),
+                    None => *dropped.entry(format!("priority for {}", remap.name("work_type", t))).or_default() += 1,
+                }
+            }
+            priorities.sort_unstable_by_key(|p| p.0);
+            p.priorities = priorities;
             if let Some((t, _)) = p.carry {
                 match remap.get("thing", t) {
                     Some(now) => p.carry = p.carry.map(|(_, n)| (now, n)),

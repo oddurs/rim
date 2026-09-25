@@ -67,7 +67,7 @@ fn with_sprite_mods(mods: &Path, n: usize) -> Result<PathBuf, String> {
         std::fs::create_dir_all(m.join("defs")).map_err(err)?;
         std::fs::copy(&art, m.join("sprites/piece.png")).map_err(err)?;
         let manifest = format!(
-            "id = \"art{k:02}\"\nname = \"Art {k}\"\nversion = \"0.0.0\"\napi = \"0.4\"\ndepends = [\"core\"]\n"
+            "id = \"art{k:02}\"\nname = \"Art {k}\"\nversion = \"0.0.0\"\napi = \"0.5\"\ndepends = [\"core\"]\n"
         );
         std::fs::write(m.join("mod.toml"), manifest).map_err(err)?;
         let def = "[[thing]]\nid = \"piece\"\nlabel = \"piece\"\ncolor = \"#a08060\"\ncategory = \"building\"\n\

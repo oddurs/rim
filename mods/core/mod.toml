@@ -1,6 +1,6 @@
 id = "core"
 name = "Core"
 version = "0.1.0"
-api = "0.4"
-ui_api = "0.3"
+api = "0.5"
+ui_api = "0.4"
 description = "The base game: one naked warrior, a world that notices you."

@@ -53,6 +53,10 @@ fn shots() {
     frame(&mut ui, &sim, &cv, Input { pressed: vec!["ctrl+k".into()], time: tick(), ..Default::default() });
     shot(&mut ui, &cv, "palette", Some([540.0, 260.0, 520.0, 440.0]));
     ui.close_window("core:palette");
+    // Work priorities.
+    ui.open_window("core:work");
+    shot(&mut ui, &cv, "work", None);
+    ui.close_window("core:work");
     // Devtools and the gallery.
     cv.show_devtools = true;
     shot(&mut ui, &cv, "devtools", None);

@@ -29,20 +29,72 @@ recover_days = 0.1
 seek_below = 0.35
 empty_damage_per_day = 40
 
+# Work types: the columns of the priority grid (DESIGN.md §4d). A colonist
+# does the work at its lowest priority level that has something reachable;
+# 1 is first, 0 never. `order` breaks ties; `jobs = ["build"]` is the work
+# type that raises blueprints and brings them materials.
+[[priority_scale]]
+id = "core"
+levels = 4
+
+[[work_type]]
+id = "build"
+label = "Build"
+icon = "B"
+skill = "construction"
+priority = 3
+order = 10
+jobs = ["build"]
+
+[[work_type]]
+id = "mine"
+label = "Mine"
+icon = "M"
+skill = "mining"
+priority = 3
+order = 20
+
+[[work_type]]
+id = "chop"
+label = "Chop"
+icon = "C"
+skill = "plants"
+priority = 3
+order = 30
+
+[[work_type]]
+id = "harvest"
+label = "Harvest"
+icon = "H"
+skill = "plants"
+priority = 3
+order = 40
+
+[[work_type]]
+id = "hunt"
+label = "Hunt"
+icon = "U"
+skill = "shooting"
+priority = 3
+order = 50
+
 [[designation]]
 id = "chop"
 label = "Chop"
 color = "#6fbf4a"
+work_type = "chop"
 
 [[designation]]
 id = "mine"
 label = "Mine"
 color = "#b0a89e"
+work_type = "mine"
 
 [[designation]]
 id = "harvest"
 label = "Harvest"
 color = "#d64a6a"
+work_type = "harvest"
 
 # Take what a thing gives without taking the thing: branches off a tree,
 # stones off the ground. Core's own things have no gather harvest; it's
@@ -51,18 +103,21 @@ color = "#d64a6a"
 id = "gather"
 label = "Gather"
 color = "#c9a25e"
+work_type = "harvest"
 
 [[designation]]
 id = "deconstruct"
 label = "Deconstruct"
 color = "#c9a24a"
 targets = "built"
+work_type = "build"
 
 [[designation]]
 id = "hunt"
 label = "Hunt"
 color = "#e05030"
 targets = "creature"
+work_type = "hunt"
 
 # The one and only start: a lone naked warrior with nothing.
 [[start]]

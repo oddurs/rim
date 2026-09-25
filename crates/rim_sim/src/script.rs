@@ -1071,6 +1071,18 @@ impl ScriptHost {
             (u64, String),
             |w, (id, name)| Ok(w.stat(rim_sim_entity(id)?, &name))
         );
+        // A colonist's work priority: 1 first, up to the scale's levels; 0 never.
+        api!(
+            "priority",
+            "(id: number, work: string) -> number?",
+            "A colonist's priority for a work type: 1 first, 0 never. Nil if it isn't a pawn.",
+            (u64, String),
+            |w, from, (id, work)| {
+                let t = def_id(w, "work_type", &work, &from)?;
+                let e = rim_sim_entity(id)?;
+                Ok(w.ecs.get::<&Pawn>(e).ok().map(|p| p.priority(&w.defs, t)))
+            }
+        );
         // Make a pawn give up and walk off the map after `ticks`.
         api!(
             "leave_after",

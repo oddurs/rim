@@ -17,6 +17,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `act.select` | `(id: number?) -> ()` | Select a pawn or thing, or nothing. |
 | `act.send` | `(name: string, data: {[string]: any}?) -> ()` | Send an event to your mod's own sim scripts ("your_mod:event"), as a player command. |
 | `act.set_overlay` | `(index: number?) -> ()` | Show a field overlay by its index in view.fields(), or none. |
+| `act.set_priority` | `(id: number, work: string, level: number) -> ()` | Set a colonist's priority for a work type: 1 first, 0 never. |
 | `act.speed` | `(speed: number) -> ()` | Set the game speed. |
 | `act.stuff` | `(id: string) -> ()` | Choose the material for the active build tool. |
 | `act.toggle_devtools` | `() -> ()` | Show or hide devtools. |
@@ -76,6 +77,8 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `view.overlay` | `() -> string?` | The label of the field overlay shown, if any. |
 | `view.paused` | `() -> boolean` | Whether the game is paused. |
 | `view.pawn` | `(id: number) -> Pawn?` | One pawn, or nil if it's gone. |
+| `view.priorities` | `(id: number) -> { [string]: number }?` | A colonist's priority per work type, by work type id: 1 first, 0 never. Nil if it isn't a pawn. |
+| `view.priority_levels` | `() -> number` | How many priority levels there are; 0 means never. |
 | `view.profile` | `() -> { ProfileRow }` | Smoothed time per system and mod, in µs. |
 | `view.saves` | `() -> { Save }` | The player's saves, newest first, on the title screen; empty in a game. |
 | `view.screen` | `() -> (number, number)` | Screen width and height in logical pixels. |
@@ -95,3 +98,4 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `view.visible_pawns` | `() -> { VisiblePawn }` | Pawns on screen, for anchored labels. |
 | `view.warnings` | `() -> { string }` | Load warnings. |
 | `view.wealth` | `() -> number` | The colony's wealth. |
+| `view.work_types` | `() -> { WorkType }` | The work types, in tie-break order. |

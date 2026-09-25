@@ -575,41 +575,48 @@ pub fn comfortable_spot(w: &World, p: &Pawn) -> Option<IVec> {
     (best.0 + COMFORT_GAIN < here).then_some(best.1)
 }
 
-/// Nearest job among: construct, deliver materials, designated harvest, hunt.
+/// The work a colonist should do next (DESIGN.md §4d): of the work types it
+/// hasn't set to 0, those at its lowest priority level that have reachable
+/// work, and of those the nearest job; `order` breaks a tie. Work comes from
+/// blueprints (the work type that covers "build"), designated things and
+/// designated creatures, each designation naming its work type.
 fn find_work(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
     w.map.ensure_regions();
-    let mut best: Option<(u32, Job, Entity)> = None;
-    let consider = |best: &mut Option<(u32, Job, Entity)>, d: u32, job: Job, reserve: Entity| {
-        if best.as_ref().is_none_or(|b| (d, reserve.id()) < (b.0, b.2.id())) {
-            *best = Some((d, job, reserve));
-        }
-    };
+    let defs = w.defs.clone();
+    let level: Vec<u8> = (0..defs.work_types.len() as DefId).map(|t| p.priority(&defs, t)).collect();
+    let wanted = |t: DefId| level[t as usize] > 0;
+    // The nearest job of each work type: (distance, job, what to reserve).
+    let mut best: Vec<Option<(u32, Job, Entity)>> = vec![None; defs.work_types.len()];
+    let nearer =
+        |b: &Option<(u32, Job, Entity)>, d: u32, r: Entity| b.as_ref().is_none_or(|b| (d, r.id()) < (b.0, b.2.id()));
 
     // Blueprints, nearest first; stop at the first that yields a job.
-    /// (distance, blueprint, position, first missing material and how many)
-    type Candidate = (u32, Entity, IVec, Option<(DefId, u32)>);
-    let mut bps: Vec<Candidate> = Vec::new();
-    for (be, t, bp) in w.ecs.query::<(Entity, &Thing, &Blueprint)>().iter() {
-        if w.reserved_by_other(be, e) {
-            continue;
-        }
-        let missing = bp.cost.iter().zip(&bp.delivered).find(|(c, d)| **d < c.1).map(|(c, d)| (c.0, c.1 - d));
-        bps.push((t.pos.octile(p.pos), be, t.pos, missing));
-    }
-    bps.sort_by_key(|b| (b.0, b.1.id()));
-    for (d, be, bpos, missing) in bps {
-        if !w.map.can_reach(p.pos, Goal::Touch(bpos)) {
-            continue;
-        }
-        match missing {
-            None => {
-                consider(&mut best, d, Job::Construct { bp: be }, be);
-                break;
+    if let Some(bw) = defs.build_work.filter(|&t| wanted(t)) {
+        /// (distance, blueprint, position, first missing material and how many)
+        type Candidate = (u32, Entity, IVec, Option<(DefId, u32)>);
+        let mut bps: Vec<Candidate> = Vec::new();
+        for (be, t, bp) in w.ecs.query::<(Entity, &Thing, &Blueprint)>().iter() {
+            if w.reserved_by_other(be, e) {
+                continue;
             }
-            Some((mdef, want)) => {
-                if let Some((sd, src)) = nearest_item(w, e, p.pos, mdef) {
-                    consider(&mut best, sd + d, Job::Deliver { bp: be, src, want, stage: 0 }, be);
+            let missing = bp.cost.iter().zip(&bp.delivered).find(|(c, d)| **d < c.1).map(|(c, d)| (c.0, c.1 - d));
+            bps.push((t.pos.octile(p.pos), be, t.pos, missing));
+        }
+        bps.sort_by_key(|b| (b.0, b.1.id()));
+        for (d, be, bpos, missing) in bps {
+            if !w.map.can_reach(p.pos, Goal::Touch(bpos)) {
+                continue;
+            }
+            match missing {
+                None => {
+                    best[bw as usize] = Some((d, Job::Construct { bp: be }, be));
                     break;
+                }
+                Some((mdef, want)) => {
+                    if let Some((sd, src)) = nearest_item(w, e, p.pos, mdef) {
+                        best[bw as usize] = Some((sd + d, Job::Deliver { bp: be, src, want, stage: 0 }, be));
+                        break;
+                    }
                 }
             }
         }
@@ -617,35 +624,43 @@ fn find_work(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
 
     // Designated fixtures: harvest the natural ones, take down the built ones.
     for (te, t, des) in w.ecs.query::<(Entity, &Thing, &Designated)>().without::<&Blueprint>().iter() {
+        let dd = &defs.designations[des.0 as usize];
         let d = t.pos.octile(p.pos);
-        if best.as_ref().is_some_and(|b| (b.0, b.2.id()) <= (d, te.id())) || w.reserved_by_other(te, e) {
+        if !wanted(dd.work_r) || !nearer(&best[dd.work_r as usize], d, te) || w.reserved_by_other(te, e) {
             continue;
         }
-        let job = match w.defs.designations[des.0 as usize].targets {
+        let job = match dd.targets {
             Targets::Built => Job::Deconstruct { target: te },
-            _ => match w.defs.thing(t.def).harvest_for(des.0) {
+            _ => match defs.thing(t.def).harvest_for(des.0) {
                 Some(h) if w.harvest_ready(te, h.key()) => Job::Harvest { target: te, forced: false, harvest: h.key() },
                 _ => continue,
             },
         };
         if w.map.can_reach(p.pos, Goal::Touch(t.pos)) {
-            consider(&mut best, d, job, te);
+            best[dd.work_r as usize] = Some((d, job, te));
         }
     }
 
     // Designated creatures (hunt).
     for &o in &w.pawns {
-        if w.ecs.get::<&Designated>(o).is_err() || w.reserved_by_other(o, e) {
+        let Ok(des) = w.ecs.get::<&Designated>(o).map(|d| *d) else { continue };
+        let wt = defs.designations[des.0 as usize].work_r;
+        if !wanted(wt) || w.reserved_by_other(o, e) {
             continue;
         }
         let Some(op) = w.pawn_pos(o) else { continue };
         let d = op.octile(p.pos);
-        if best.as_ref().is_none_or(|b| (d, o.id()) < (b.0, b.2.id())) && w.map.can_reach(p.pos, Goal::Touch(op)) {
-            consider(&mut best, d, Job::Attack { target: o, until: w.tick + 2400 }, o);
+        if nearer(&best[wt as usize], d, o) && w.map.can_reach(p.pos, Goal::Touch(op)) {
+            best[wt as usize] = Some((d, Job::Attack { target: o, until: w.tick + 2400 }, o));
         }
     }
 
-    let (_, job, res) = best?;
+    let rank = |t: DefId| defs.work_order.iter().position(|&o| o == t).unwrap_or(usize::MAX);
+    let (_, (_, job, res)) = best
+        .into_iter()
+        .enumerate()
+        .filter_map(|(t, b)| Some((t as DefId, b?)))
+        .min_by_key(|(t, b)| (level[*t as usize], b.0, rank(*t), b.2.id()))?;
     w.reserve(res, e);
     if let Job::Deliver { src, .. } = job {
         w.reserve(src, e);

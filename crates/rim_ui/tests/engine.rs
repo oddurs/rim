@@ -1727,6 +1727,18 @@ fn the_material_row_renders_beside_the_toolbar() {
     assert!(ui.find("core:stuff").is_none(), "no row with nothing to choose for");
 }
 
+/// Every script in core's UI, so a new one can't be left out of a scan.
+fn core_ui_scripts() -> Vec<String> {
+    let mut files: Vec<String> = std::fs::read_dir(mods().join("core").join("ui"))
+        .unwrap()
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|n| n.ends_with(".luau"))
+        .collect();
+    files.sort();
+    files
+}
+
 /// Every user-visible string in core's UI goes through `ui.t`, so a language
 /// file can back it later without a hunt. The static scan is the criterion;
 /// the runtime set is what a frame actually asked for.
@@ -1735,8 +1747,8 @@ fn strings_go_through_one_door() {
     let dir = mods().join("core").join("ui");
     // Every `t("<key>", ...)` call, by hand: a regex crate is not worth it.
     let mut keys = Vec::new();
-    for f in ["hud.luau", "devtools.luau", "labels.luau", "keys.luau", "window.luau"] {
-        let src = std::fs::read_to_string(dir.join(f)).unwrap();
+    for f in core_ui_scripts() {
+        let src = std::fs::read_to_string(dir.join(&f)).unwrap();
         let mut rest = src.as_str();
         while let Some(i) = rest.find("t(\"") {
             // `slot("core:x")` and `mount("top", ...)` also end in `t("`:
@@ -1828,8 +1840,8 @@ fn no_bare_literals_in_core_ui() {
         })
     };
     let mut hits = Vec::new();
-    for f in ["hud.luau", "devtools.luau", "labels.luau", "keys.luau", "window.luau"] {
-        let src = std::fs::read_to_string(dir.join(f)).unwrap();
+    for f in core_ui_scripts() {
+        let src = std::fs::read_to_string(dir.join(&f)).unwrap();
         for (n, line) in src.lines().enumerate() {
             if line.trim_start().starts_with("--") {
                 continue;
@@ -1874,4 +1886,21 @@ fn a_bind_without_a_key_is_palette_only_until_given_one() {
     press(&mut ui, &sim, &cv, &mut t, "ctrl+k");
     assert!(ui.find("core:palette.probe:two").is_some(), "a keyless bind is in the palette");
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The work grid: a cell steps a colonist's priority, 3 → 4 → 0 (never) →
+/// 1, each step a `SetPriority` action the client turns into a command.
+#[test]
+fn a_work_grid_cell_steps_a_priority() {
+    let sim = sim_at(&mods());
+    let mut ui = ui_for(&sim);
+    let mut cv = client(&sim);
+    ui.open_window("core:work");
+    frame(&mut ui, &sim, &cv, Default::default());
+    frame(&mut ui, &sim, &cv, Default::default());
+    let pawn = sim.world.colonists().next().unwrap();
+    let name = sim.world.ecs.get::<&rim_sim::world::Pawn>(pawn).unwrap().name.clone();
+    let cell = ui.find(&format!("core:work.{name}.core:build")).expect("a cell per colonist and work type");
+    let actions = click(&mut ui, &sim, &mut cv, centre(cell));
+    assert_eq!(actions, vec![UiAction::SetPriority(pawn, "core:build".into(), 4)], "core's default is 3, of 4 levels");
 }

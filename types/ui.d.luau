@@ -54,6 +54,7 @@ type FieldInfo = {
 type UiDate = { year: number, season: string, season_index: number, day: number, day_of_year: number, year_days: number }
 type Part = { label: string, value: number }
 type Tool = { key: string, label: string, color: string, active: boolean }
+type WorkType = { id: string, label: string, icon: string, order: number, default: number }
 type Stuff = { id: string, label: string, color: string, have: number, active: boolean, hp: number, work: number }
 type Hover = { x: number, y: number, terrain: string, shelter: string, readings: { string }, things: { string } }
 type ProfileRow = { name: string, us: number, mod: boolean }
@@ -151,6 +152,8 @@ declare act: {
     send: (name: string, data: {[string]: any}?) -> (),
     -- Show a field overlay by its index in view.fields(), or none.
     set_overlay: (index: number?) -> (),
+    -- Set a colonist's priority for a work type: 1 first, 0 never.
+    set_priority: (id: number, work: string, level: number) -> (),
     -- Set the game speed.
     speed: (speed: number) -> (),
     -- Choose the material for the active build tool.
@@ -212,6 +215,10 @@ declare view: {
     paused: () -> boolean,
     -- One pawn, or nil if it's gone.
     pawn: (id: number) -> Pawn?,
+    -- A colonist's priority per work type, by work type id: 1 first, 0 never. Nil if it isn't a pawn.
+    priorities: (id: number) -> { [string]: number }?,
+    -- How many priority levels there are; 0 means never.
+    priority_levels: () -> number,
     -- Smoothed time per system and mod, in µs.
     profile: () -> { ProfileRow },
     -- The player's saves, newest first, on the title screen; empty in a game.
@@ -250,4 +257,6 @@ declare view: {
     warnings: () -> { string },
     -- The colony's wealth.
     wealth: () -> number,
+    -- The work types, in tie-break order.
+    work_types: () -> { WorkType },
 }

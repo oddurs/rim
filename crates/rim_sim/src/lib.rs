@@ -34,7 +34,7 @@ pub use sim::Sim;
 pub const TICKS_PER_DAY: u64 = 20_000;
 
 /// Plugin API version. Mods declare `api = "MAJOR.MINOR"` in `mod.toml`.
-pub const API_VERSION: (u32, u32) = (0, 4);
+pub const API_VERSION: (u32, u32) = (0, 5);
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 pub struct IVec {
