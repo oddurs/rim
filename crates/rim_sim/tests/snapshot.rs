@@ -98,7 +98,7 @@ fn a_save_from_other_mods_is_refused() {
     let sim = colony(1);
     let s = Snapshot::capture(&sim);
     let err = s.restore(&mods(), &|m| m == "core").err().expect("core alone isn't the same mods");
-    assert!(err.contains("mods"), "{err}");
+    assert!(err.contains("defs differ"), "{err}");
 }
 
 const PROBE_SCRIPT: &str = r#"

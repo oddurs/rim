@@ -8,7 +8,7 @@ use crate::world::*;
 use crate::IVec;
 use hecs::Entity;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum Command {
     /// Mark things (or creatures) in a rectangle with a designation.
     Designate {

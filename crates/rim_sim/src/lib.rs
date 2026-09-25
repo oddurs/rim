@@ -17,6 +17,7 @@ pub mod order;
 pub mod path;
 pub mod profile;
 pub mod rng;
+pub mod savefile;
 pub mod script;
 pub mod sim;
 pub mod snapshot;
