@@ -88,7 +88,8 @@ pub fn plain() -> Vec<Layer> {
 
 pub fn parse_rgba(s: &str) -> Result<[u8; 4], String> {
     let h = s.trim_start_matches('#');
-    if h.len() != 6 && h.len() != 8 {
+    // Checked as hex digits first, so slicing by byte can't cut a character.
+    if (h.len() != 6 && h.len() != 8) || !h.bytes().all(|b| b.is_ascii_hexdigit()) {
         return Err(format!("bad color '{s}' (want #rrggbb or #rrggbbaa)"));
     }
     let p = |i: usize| u8::from_str_radix(&h[i..i + 2], 16).map_err(|_| format!("bad color '{s}'"));
@@ -116,6 +117,32 @@ impl LayerDef {
         ];
         if let Some((name, _)) = given.iter().find(|(n, set)| *set && !allowed.contains(n)) {
             return Err(format!("`{name}` does not apply to draw = \"{}\"", self.draw));
+        }
+        // Numbers that would draw nothing, or something inside out, are
+        // refused rather than drawn wrong.
+        let checks: [(&str, Option<f32>, f32, f32); 10] = [
+            ("x", self.x, f32::MIN, f32::MAX),
+            ("y", self.y, f32::MIN, f32::MAX),
+            ("w", self.w, 0.0, f32::MAX),
+            ("h", self.h, 0.0, f32::MAX),
+            ("r", self.r, 0.0, f32::MAX),
+            ("width", self.width, f32::MIN_POSITIVE, f32::MAX),
+            ("min_px", self.min_px, 0.0, f32::MAX),
+            ("shade", self.shade, 0.0, f32::MAX),
+            ("vary", self.vary, 0.0, 1.0),
+            ("pulse", self.pulse, 0.0, 0.99),
+        ];
+        for (name, v, lo, hi) in checks {
+            if let Some(v) = v {
+                if !(lo..=hi).contains(&v) {
+                    let range = match (lo, hi) {
+                        (_, f32::MAX) if lo > 0.0 => "above 0".to_string(),
+                        (_, f32::MAX) => format!("at least {lo}"),
+                        _ => format!("from {lo} to {hi}"),
+                    };
+                    return Err(format!("`{name}` = {v} is out of range (want {range})"));
+                }
+            }
         }
         let rect = [self.x.unwrap_or(0.0), self.y.unwrap_or(0.0), self.w.unwrap_or(1.0), self.h.unwrap_or(1.0)];
         let prim = match self.draw.as_str() {
@@ -189,10 +216,27 @@ mod tests {
     }
 
     #[test]
+    fn numbers_that_draw_nothing_or_inside_out_are_refused() {
+        for bad in [
+            "draw = \"fill\"\nw = -0.5",
+            "draw = \"disc\"\nr = -0.3",
+            "draw = \"edges\"\nwidth = 0",
+            "draw = \"fill\"\nvary = 2.5",
+            "draw = \"disc\"\npulse = 1.0",
+            "draw = \"fill\"\nshade = nan",
+        ] {
+            let e = layer(bad).unwrap_err();
+            assert!(e.contains("out of range"), "{bad}: {e}");
+        }
+        assert!(layer("draw = \"fill\"\nh = 0.0\nmin_px = 1.0").is_ok(), "a seam is zero high and min_px tall");
+    }
+
+    #[test]
     fn colours_take_an_alpha() {
         assert_eq!(layer("draw = \"fill\"\ncolor = \"#00000040\"").unwrap().color, Some([0, 0, 0, 0x40]));
         assert_eq!(layer("draw = \"fill\"\ncolor = \"#ff8000\"").unwrap().color, Some([255, 128, 0, 255]));
         assert!(layer("draw = \"fill\"\ncolor = \"red\"").is_err());
+        assert!(layer("draw = \"fill\"\ncolor = \"#ff0\u{e9}0\"").is_err(), "six bytes, not six digits");
     }
 
     #[test]

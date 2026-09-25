@@ -322,10 +322,11 @@ pub fn world_ui(app: &App) {
 #[allow(clippy::too_many_arguments)]
 fn paint(w: &World, layers: &[Layer], join: Option<u16>, own: Color, cell: IVec, at: (f32, f32), z: f32, t: f32) {
     let (sx, sy) = at;
-    // A rectangle reaching the cell's far edge overlaps the next cell by
-    // half a point, so neighbours don't show a hairline seam between them.
+    // A fill spanning the whole cell overlaps the next one by half a point,
+    // so neighbours don't show a hairline seam between them. Only a whole
+    // span: a strip along the bottom edge would spill onto the cell below.
     let px = |[x, y, rw, rh]: [f32; 4]| {
-        let pad = |a: f32, len: f32| if a + len >= 1.0 { 0.5 } else { 0.0 };
+        let pad = |a: f32, len: f32| if a == 0.0 && len == 1.0 { 0.5 } else { 0.0 };
         (sx + x * z, sy + y * z, rw * z + pad(x, rw), rh * z + pad(y, rh))
     };
     for l in layers {

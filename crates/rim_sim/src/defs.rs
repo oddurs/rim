@@ -872,7 +872,7 @@ impl DefDb {
 
 pub fn parse_color(s: &str) -> Result<[u8; 3], String> {
     let h = s.trim_start_matches('#');
-    if h.len() != 6 {
+    if h.len() != 6 || !h.bytes().all(|b| b.is_ascii_hexdigit()) {
         return Err(format!("bad color '{s}' (want #rrggbb)"));
     }
     let p = |i: usize| u8::from_str_radix(&h[i..i + 2], 16).map_err(|_| format!("bad color '{s}'"));

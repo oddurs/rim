@@ -995,8 +995,8 @@ PR to the index. If that loop is good, content follows.
   scripts. The weather plugin's types are the first. Extension tables and
   references to other kinds come with 0143.
 - Content enums in the engine (`Faction`, `Satisfier`) become registries fed
-  by defs. Draw primitives (`Shape`) and broad categories stay in code:
-  those are mechanisms, not content.
+  by defs. Draw primitives (a look's fill, outline, disc and edges, §6a)
+  and broad categories stay in code: those are mechanisms, not content.
 
 ### Tension: declarative patches or scripted defs?
 

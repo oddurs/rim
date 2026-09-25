@@ -36,7 +36,8 @@ radius, or a width and height, in points. `pulse` makes a disc's radius
 flicker by up to that fraction.
 
 A field that doesn't apply to the layer's `draw` is an error, and so is an
-unknown one, so a typo can't pass for a default.
+unknown one or a number out of range (a negative size, `vary` above 1, a
+`pulse` of 1 or more), so a typo can't pass for a default.
 
 ```toml
 [[thing]]
@@ -76,8 +77,12 @@ look.layers = [
 ## States
 
 `look.regrowing` is drawn instead of `layers` while a harvested plant grows
-back (a bush picked clean). Blueprints, designations and stack counts are
-drawn the same way for every thing, over its look.
+back (a bush picked clean). A plan is drawn as the same ghost for every
+thing, instead of its look; designations and stack counts are drawn the
+same way for every thing, over its look.
+
+A fixed `color` stays fixed: a mod that patches a thing's `color` changes
+every layer that has none, and leaves the ones that name their own.
 
 ## From API 0.3
 
