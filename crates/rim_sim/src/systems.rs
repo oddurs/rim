@@ -138,13 +138,20 @@ pub fn regrow(w: &mut World) {
 /// Colony wealth: player-made things and items, plus colonists.
 pub fn wealth(w: &mut World) {
     let defs = w.defs.clone();
-    let mut total = 0.0;
-    for (t, made_of) in w.ecs.query::<(&Thing, Option<&MadeOf>)>().without::<&Blueprint>().iter() {
-        let td = defs.thing(t.def);
-        if !td.natural {
-            total += td.market_value * defs.factor(made_of.map(|m| m.0), "value") * t.count as f64;
-        }
-    }
+    // Summed in id order: float addition isn't associative, and hecs's
+    // iteration order isn't something a load reproduces.
+    let mut values: Vec<(hecs::Entity, f64)> = w
+        .ecs
+        .query::<(hecs::Entity, &Thing, Option<&MadeOf>)>()
+        .without::<&Blueprint>()
+        .iter()
+        .filter(|(_, t, _)| !defs.thing(t.def).natural)
+        .map(|(e, t, made_of)| {
+            (e, defs.thing(t.def).market_value * defs.factor(made_of.map(|m| m.0), "value") * t.count as f64)
+        })
+        .collect();
+    values.sort_unstable_by_key(|v| v.0.id());
+    let mut total: f64 = values.iter().map(|v| v.1).sum();
     for e in w.colonists() {
         if let Ok(p) = w.ecs.get::<&Pawn>(e) {
             total += defs.creature(p.def).market_value;

@@ -811,11 +811,12 @@ version of the code.
   keyed by entity id. Grouping by component, not by entity, is what lets
   a removed mod's data be parked whole, lets a migration see exactly one
   mod's data, and lets an unchanged section be shared between snapshots.
-- **Stable entity ids.** Each entity has a `Uid`, from a counter the world
-  owns and saves. Commands, the log and the save refer to `Uid`s; hecs
-  handles are only an in-memory lookup and never reach a file. Where the
-  sim picks between equals (the nearest food, the weakest door), it breaks
-  the tie by `Uid`, never by the order hecs happens to iterate in.
+- **Stable entity ids.** The world hands out entity ids from a counter it
+  owns and saves, and never reuses one (hecs's `spawn_at`), so a hecs
+  handle *is* the stable id: commands, the log, scripts and the save all
+  use it, with nothing to translate. Where the sim picks between equals
+  (the nearest food, the weakest door), it breaks the tie by id, never by
+  the order hecs happens to iterate in, and sums floats in id order.
 - **Def references are qualified ids** (`core:wall`, 0138), never `DefId`
   indices, which change whenever the mod list does. A string table keeps
   the repeated ids small.

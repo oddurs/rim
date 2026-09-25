@@ -243,12 +243,12 @@ fn nearest_breach(w: &World, from: IVec, who: Faction, to: IVec) -> Option<Entit
     let touches = |p: IVec, r: u32| {
         crate::map::NEIGHBORS8.iter().any(|(dx, dy)| w.map.region_at_for(p.offset(*dx, *dy), who) == r)
     };
-    let mut best: Option<((i32, u32), Entity)> = None;
+    let mut best: Option<((i32, u32, u32), Entity)> = None;
     for (de, t, owner) in w.ecs.query::<(Entity, &Thing, &Owner)>().without::<&Blueprint>().iter() {
         if owner.0 == who || !w.map.blocks_fields(w.map.idx(t.pos)) {
             continue;
         }
-        let key = (t.hp, t.pos.octile(from));
+        let key = (t.hp, t.pos.octile(from), de.id());
         if best.is_some_and(|b| b.0 <= key) {
             continue;
         }
@@ -377,7 +377,7 @@ fn flee(w: &mut World, p: &mut Pawn, from: IVec) -> Option<Job> {
 fn find_food(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
     let defs = w.defs.clone();
     w.map.ensure_regions();
-    let mut best: Option<(u32, Entity, bool)> = None;
+    let mut best: Option<((u32, u32), Entity, bool)> = None;
     for (te, t) in w.ecs.query::<(Entity, &Thing)>().without::<&Blueprint>().without::<&Regrow>().iter() {
         let td = defs.thing(t.def);
         let is_item = td.category == Category::Item && td.food.is_some();
@@ -387,7 +387,7 @@ fn find_food(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
             continue;
         }
         // Prefer ready food over foraging.
-        let d = t.pos.octile(p.pos) + if is_plant { 150 } else { 0 };
+        let d = (t.pos.octile(p.pos) + if is_plant { 150 } else { 0 }, te.id());
         if best.is_some_and(|b| b.0 <= d) || w.reserved_by_other(te, e) {
             continue;
         }
@@ -437,14 +437,14 @@ fn beside(w: &World, cell: IVec, tag: &str) -> bool {
 /// The nearest free, reachable spot on a thing `pick` accepts, from `from`.
 /// A thing is one reservation: two pawns never share it.
 fn nearest_spot(w: &World, e: Entity, from: IVec, pick: impl Fn(&ThingDef) -> bool) -> Option<(Entity, IVec)> {
-    let mut best: Option<(u32, Entity, IVec)> = None;
+    let mut best: Option<((u32, u32), Entity, IVec)> = None;
     for (te, t) in w.ecs.query::<(Entity, &Thing)>().without::<&Blueprint>().iter() {
         let td = w.defs.thing(t.def);
         if td.spots.is_empty() || !pick(td) || w.reserved_by_other(te, e) {
             continue;
         }
         for cell in spots_of(w, te) {
-            let d = cell.octile(from);
+            let d = (cell.octile(from), te.id());
             if best.is_some_and(|b| b.0 <= d) {
                 continue;
             }
@@ -546,7 +546,7 @@ fn find_work(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
     w.map.ensure_regions();
     let mut best: Option<(u32, Job, Entity)> = None;
     let consider = |best: &mut Option<(u32, Job, Entity)>, d: u32, job: Job, reserve: Entity| {
-        if best.as_ref().is_none_or(|b| d < b.0) {
+        if best.as_ref().is_none_or(|b| (d, reserve.id()) < (b.0, b.2.id())) {
             *best = Some((d, job, reserve));
         }
     };
@@ -586,7 +586,7 @@ fn find_work(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
         w.ecs.query::<(Entity, &Thing, &Designated)>().without::<&Regrow>().without::<&Blueprint>().iter()
     {
         let d = t.pos.octile(p.pos);
-        if best.as_ref().is_some_and(|b| b.0 <= d) || w.reserved_by_other(te, e) {
+        if best.as_ref().is_some_and(|b| (b.0, b.2.id()) <= (d, te.id())) || w.reserved_by_other(te, e) {
             continue;
         }
         if w.map.can_reach(p.pos, Goal::Touch(t.pos)) {
@@ -605,7 +605,7 @@ fn find_work(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
         }
         let Some(op) = w.pawn_pos(o) else { continue };
         let d = op.octile(p.pos);
-        if best.as_ref().is_none_or(|b| d < b.0) && w.map.can_reach(p.pos, Goal::Touch(op)) {
+        if best.as_ref().is_none_or(|b| (d, o.id()) < (b.0, b.2.id())) && w.map.can_reach(p.pos, Goal::Touch(op)) {
             consider(&mut best, d, Job::Attack { target: o, until: w.tick + 2400 }, o);
         }
     }
@@ -626,7 +626,10 @@ pub fn nearest_item(w: &World, e: Entity, from: IVec, def: DefId) -> Option<(u32
             continue;
         }
         let d = t.pos.octile(from);
-        if best.is_some_and(|b| b.0 <= d) || w.reserved_by_other(te, e) || !w.map.can_reach(from, Goal::Cell(t.pos)) {
+        if best.is_some_and(|b| (b.0, b.1.id()) <= (d, te.id()))
+            || w.reserved_by_other(te, e)
+            || !w.map.can_reach(from, Goal::Cell(t.pos))
+        {
             continue;
         }
         best = Some((d, te));
