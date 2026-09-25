@@ -167,7 +167,7 @@ const WIN_KEEP: f32 = 80.0;
 type CachedLayout = (u64, (f32, f32), Vec<Rect>);
 
 /// Layers bottom to top.
-const LAYERS: &[&str] = &["anchored", "docked", "windows", "cursor", "modal", "tooltip"];
+const LAYERS: &[&str] = &["anchored", "docked", "title", "windows", "cursor", "modal", "tooltip"];
 const TOOLTIP_DELAY: f64 = 0.45;
 /// How many slots away from its anchor a label may move to avoid overlap.
 const ANCHOR_SLOTS: usize = 12;
@@ -194,6 +194,10 @@ fn client_hash(c: &ClientView) -> u64 {
         (&t.key, t.active).hash(&mut h);
     }
     (c.screen.0.to_bits(), c.screen.1.to_bits(), c.scale.to_bits()).hash(&mut h);
+    c.title.hash(&mut h);
+    for s in &c.saves {
+        (&s.path, &s.error).hash(&mut h);
+    }
     h.finish()
 }
 
@@ -960,7 +964,10 @@ impl Ui {
         let now = input.time;
         let stale = |built_at: f64, every: f64| now - built_at >= every || now < built_at;
         let fast_due = force || stale(self.built_at, REBUILD_EVERY);
-        let mounts = self.vm.mounts();
+        // The title screen is its own layer: before a colony exists nothing
+        // else is built, and in a game it isn't.
+        let mounts: Vec<vm::Mount> =
+            self.vm.mounts().into_iter().filter(|m| (m.layer == "title") == client.title).collect();
         let due: Vec<vm::Mount> = mounts
             .iter()
             .filter(|m| {
@@ -1001,8 +1008,12 @@ impl Ui {
                 })
                 .collect();
             if fast_due {
-                let open: Vec<(String, (f32, f32))> =
-                    self.windows.iter().filter(|w| w.open).map(|w| (w.id.clone(), (w.w, w.h))).collect();
+                let open: Vec<(String, (f32, f32))> = self
+                    .windows
+                    .iter()
+                    .filter(|w| w.open && !client.title)
+                    .map(|w| (w.id.clone(), (w.w, w.h)))
+                    .collect();
                 self.built_wins = self.vm.build_windows(&open, world, client, &self.shown, &self.theme, &lists);
                 self.built_at = now;
             }
@@ -1122,6 +1133,12 @@ impl Ui {
                         lo.wins.push(Some(id.clone()));
                     }
                 }
+                "title" => {
+                    for (_, tree) in built.iter().filter(|(m, _)| m.layer == "title") {
+                        let rects = self.place_small(tree, (sw, sh), |(w, h)| ((sw - w) / 2.0, (sh - h) / 2.0));
+                        placed.push((tree.clone(), rects));
+                    }
+                }
                 "modal" => {
                     for (_, tree) in built.iter().filter(|(m, _)| m.layer == "modal") {
                         let rects =
@@ -1160,7 +1177,7 @@ impl Ui {
                     h.path.insert(0, ri);
                     lo.hits.push(h);
                 }
-                let solid_layer = matches!(layer, "docked" | "windows" | "modal");
+                let solid_layer = matches!(layer, "docked" | "title" | "windows" | "modal");
                 let mut i = 0;
                 let mut path = vec![ri];
                 collect_nodes(&root, &rects, &mut i, &mut path, &mut |n, r, p| {

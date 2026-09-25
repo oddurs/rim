@@ -246,6 +246,24 @@ pub fn write(path: &Path, epochs: &[EpochRead]) -> std::io::Result<()> {
     }
 }
 
+/// A save as a list of saves shows it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Summary {
+    /// How far the colony got: its newest log or snapshot.
+    pub tick: u64,
+    /// The living colonists at the newest snapshot, the founder first.
+    pub colonists: Vec<String>,
+}
+
+/// What a save holds, read without loading the game.
+pub fn summary(path: &Path) -> Result<Summary, String> {
+    let (epochs, _) = read(path)?;
+    let e = epochs.last().ok_or("a save with no epoch")?;
+    let snap = e.snapshots.last().ok_or("an epoch with no snapshot")?;
+    let tick = e.logs.last().map_or(0, |l| l.tick).max(snap.header.tick);
+    Ok(Summary { tick, colonists: snap.colonists()? })
+}
+
 fn lock_of(sim: &Sim) -> Vec<(String, String)> {
     sim.mods.iter().map(|m| (m.id.clone(), m.version.clone())).collect()
 }

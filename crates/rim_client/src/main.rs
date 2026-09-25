@@ -13,6 +13,7 @@ mod draw;
 mod mesh;
 mod save;
 mod sky;
+mod title;
 
 use macroquad::prelude::*;
 use rim_sim::defs::{DefId, Targets};
@@ -368,32 +369,13 @@ async fn game() {
     let bench = args.iter().any(|a| a == "--bench-render");
     // The autotest and the benchmark are tests: they don't touch the saves.
     let saving = !bench && !args.iter().any(|a| a == "--autotest");
-    let opened = find_mods().ok_or_else(|| "could not find a mods/ directory".to_string()).and_then(|d| {
-        if bench {
-            let n = match args.iter().position(|a| a == "--sprite-mods") {
-                None => Ok(0),
-                Some(i) => args
-                    .get(i + 1)
-                    .and_then(|v| v.parse().ok())
-                    .ok_or_else(|| "--sprite-mods wants a number of mods".to_string()),
-            };
-            n.and_then(|n| bench::world(&d, seed, n)).map(|s| (s, None, Vec::new()))
-        } else if saving {
-            save::open(&d, seed, save::start_of(&args)?)
-        } else {
-            Sim::new(&d, seed).map(|s| (s, None, Vec::new()))
-        }
-    });
-    let (mut sim, saver, notes) = match opened {
-        Ok(x) => x,
+    let Some(mods) = find_mods() else { return fail("could not find a mods/ directory".into()).await };
+    // The UI comes up before any game, since the title screen is UI.
+    let loaded = match rim_sim::modloader::load(&mods) {
+        Ok(l) => l,
         Err(e) => return fail(e).await,
     };
-    sim.warnings.extend(notes);
-    if saver.is_some() && args.iter().any(|a| a == "--seed") && args.iter().any(|a| a == "--load" || a == "--continue")
-    {
-        sim.warnings.push("--seed is ignored when loading a save".into());
-    }
-    let mut ui = match Ui::new(rim_ui::mods_of(&sim), screen_dpi_scale(), ui_scale) {
+    let mut ui = match Ui::new(rim_ui::vm::mod_dirs(&loaded.mods), screen_dpi_scale(), ui_scale) {
         Ok(u) => u,
         Err(e) => return fail(format!("UI failed to start: {e}")).await,
     };
@@ -428,6 +410,37 @@ async fn game() {
             eprintln!("  warning: keybinds file ignored: {e}");
         }
     }
+    let atlas = Texture2D::from_rgba8(ui.text.atlas.size as u16, ui.text.atlas.size as u16, &ui.text.atlas.pixels);
+    atlas.set_filter(FilterMode::Linear);
+    let wheel_sub = macroquad::input::utils::register_input_subscriber();
+
+    // The command line can name the game; otherwise the player picks one.
+    let named = |a: &String| matches!(a.as_str(), "--seed" | "--load" | "--continue");
+    let opened = if bench {
+        let n = match args.iter().position(|a| a == "--sprite-mods") {
+            None => Ok(0),
+            Some(i) => args
+                .get(i + 1)
+                .and_then(|v| v.parse().ok())
+                .ok_or_else(|| "--sprite-mods wants a number of mods".to_string()),
+        };
+        n.and_then(|n| bench::world(&mods, seed, n)).map(|s| (s, None, Vec::new()))
+    } else if !saving {
+        Sim::new(&mods, seed).map(|s| (s, None, Vec::new()))
+    } else if args.iter().any(named) {
+        save::start_of(&args).and_then(|start| save::open(&mods, seed, start))
+    } else {
+        title::run(&mut ui, &atlas, wheel_sub, &mods, loaded.defs, seed).await
+    };
+    let (mut sim, saver, notes) = match opened {
+        Ok(x) => x,
+        Err(e) => return fail(e).await,
+    };
+    sim.warnings.extend(notes);
+    if saver.is_some() && args.iter().any(|a| a == "--seed") && args.iter().any(|a| a == "--load" || a == "--continue")
+    {
+        sim.warnings.push("--seed is ignored when loading a save".into());
+    }
     eprintln!("rim: seed {}, {} mods loaded, UI font {}", sim.world.seed, sim.mods.len(), ui.info.font);
     if saver.is_some() {
         // Closing the window takes a last snapshot first.
@@ -441,8 +454,6 @@ async fn game() {
         Ok(a) => a,
         Err(e) => return fail(e).await,
     };
-    let atlas = Texture2D::from_rgba8(ui.text.atlas.size as u16, ui.text.atlas.size as u16, &ui.text.atlas.pixels);
-    atlas.set_filter(FilterMode::Linear);
     let center = sim.world.colony_center().unwrap_or(IVec::new(100, 100));
     let mut app = App {
         tools: toolbar(&sim),
@@ -476,7 +487,7 @@ async fn game() {
         world_target: None,
         blit: None,
         settings_file,
-        wheel_sub: macroquad::input::utils::register_input_subscriber(),
+        wheel_sub,
         saver,
     };
     app.selected = app.sim.world.colonists().next();
@@ -632,7 +643,43 @@ pub struct RawInput {
 }
 
 impl RawInput {
+    /// This frame's input, with the camera's pan.
     fn gather(app: &mut App) -> RawInput {
+        let mut raw = RawInput::gather_ui(app.wheel_sub);
+        let (mx, my) = raw.mouse;
+        let speed = 18.0 * frame_time() * 40.0 / app.cam.zoom;
+        let (mut dx, mut dy) = (0.0, 0.0);
+        if is_key_down(KeyCode::W) || is_key_down(KeyCode::Up) {
+            dy -= speed;
+        }
+        if is_key_down(KeyCode::S) || is_key_down(KeyCode::Down) {
+            dy += speed;
+        }
+        if is_key_down(KeyCode::A) || is_key_down(KeyCode::Left) {
+            dx -= speed;
+        }
+        if is_key_down(KeyCode::D) || is_key_down(KeyCode::Right) {
+            dx += speed;
+        }
+        // Middle-drag pans: the grabbed world point follows the mouse.
+        if is_mouse_button_pressed(MouseButton::Middle) {
+            app.pan_anchor = Some((mx, my));
+        }
+        if let Some((ax, ay)) = app.pan_anchor {
+            if is_mouse_button_down(MouseButton::Middle) {
+                dx -= (mx - ax) / app.cam.zoom;
+                dy -= (my - ay) / app.cam.zoom;
+                app.pan_anchor = Some((mx, my));
+            } else {
+                app.pan_anchor = None;
+            }
+        }
+        raw.pan = (dx, dy);
+        raw
+    }
+
+    /// The mouse, keys and text: everything but the camera.
+    fn gather_ui(wheel_sub: usize) -> RawInput {
         let (mx, my) = mouse_position();
         let keys = [
             KeyCode::Escape,
@@ -674,34 +721,7 @@ impl RawInput {
             }
         }
 
-        let speed = 18.0 * frame_time() * 40.0 / app.cam.zoom;
-        let (mut dx, mut dy) = (0.0, 0.0);
-        if is_key_down(KeyCode::W) || is_key_down(KeyCode::Up) {
-            dy -= speed;
-        }
-        if is_key_down(KeyCode::S) || is_key_down(KeyCode::Down) {
-            dy += speed;
-        }
-        if is_key_down(KeyCode::A) || is_key_down(KeyCode::Left) {
-            dx -= speed;
-        }
-        if is_key_down(KeyCode::D) || is_key_down(KeyCode::Right) {
-            dx += speed;
-        }
-        // Middle-drag pans: the grabbed world point follows the mouse.
-        if is_mouse_button_pressed(MouseButton::Middle) {
-            app.pan_anchor = Some((mx, my));
-        }
-        if let Some((ax, ay)) = app.pan_anchor {
-            if is_mouse_button_down(MouseButton::Middle) {
-                dx -= (mx - ax) / app.cam.zoom;
-                dy -= (my - ay) / app.cam.zoom;
-                app.pan_anchor = Some((mx, my));
-            } else {
-                app.pan_anchor = None;
-            }
-        }
-        let wheel = Wheel::gather(app.wheel_sub);
+        let wheel = Wheel::gather(wheel_sub);
         RawInput {
             mouse: (mx, my),
             left_pressed: is_mouse_button_pressed(MouseButton::Left),
@@ -712,7 +732,7 @@ impl RawInput {
             chars,
             pressed,
             shift: is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift),
-            pan: (dx, dy),
+            pan: (0.0, 0.0),
             time: get_time(),
             advance: true,
         }
@@ -787,17 +807,15 @@ pub fn client_view(app: &mut App, mouse: (f32, f32), time: f64) -> ClientView {
         stats: app.profile.1.clone(),
         mods: s.mods.iter().map(|m| (m.id.clone(), m.version.clone(), m.name.clone())).collect(),
         warnings: s.warnings.iter().cloned().chain(app.ui.warnings()).collect(),
+        title: false,
+        saves: Vec::new(),
     }
 }
 
-/// One frame of input: UI first, then the world gets what the UI didn't take.
-pub fn frame(app: &mut App, raw: &RawInput) {
-    let dpi = screen_dpi_scale();
-    app.ui.set_dpi(dpi);
-    app.ui.check_reload(raw.time);
-    let cv = client_view(app, raw.mouse, raw.time);
+/// Raw input as the UI takes it, in physical pixels.
+fn ui_input(raw: &RawInput, dpi: f32) -> rim_ui::Input {
     let has = |k: KeyCode| raw.keys.contains(&k);
-    let input = rim_ui::Input {
+    rim_ui::Input {
         mouse: (raw.mouse.0 * dpi, raw.mouse.1 * dpi),
         left_pressed: raw.left_pressed,
         left_released: raw.left_released,
@@ -828,7 +846,16 @@ pub fn frame(app: &mut App, raw: &RawInput) {
             keys
         },
         time: raw.time,
-    };
+    }
+}
+
+/// One frame of input: UI first, then the world gets what the UI didn't take.
+pub fn frame(app: &mut App, raw: &RawInput) {
+    let dpi = screen_dpi_scale();
+    app.ui.set_dpi(dpi);
+    app.ui.check_reload(raw.time);
+    let cv = client_view(app, raw.mouse, raw.time);
+    let input = ui_input(raw, dpi);
     let out = app.ui.frame(&app.sim.world, &cv, &input);
     app.last_draw = out.draw;
     app.mouse_over_ui = out.mouse_over_ui;
@@ -1072,16 +1099,21 @@ pub fn render(app: &mut App) {
             labels.push(rim_ui::paint::Draw::Glyphs { quads, color });
         }
     }
-    if app.ui.text.atlas.dirty {
-        let a = &app.ui.text.atlas;
-        app.atlas.update(&Image { bytes: a.pixels.clone(), width: a.size as u16, height: a.size as u16 });
-        app.ui.text.atlas.dirty = false;
-    }
+    upload_atlas(&mut app.ui, &app.atlas);
     let white = app.ui.text.atlas.white_texel();
     draw::ui(&labels, &app.atlas, white, dpi);
     draw::ui(&app.last_draw, &app.atlas, white, dpi);
     t.ui = lap();
     app.render_us = t;
+}
+
+/// Glyphs shaped since the last frame go to the GPU.
+fn upload_atlas(ui: &mut Ui, atlas: &Texture2D) {
+    if ui.text.atlas.dirty {
+        let a = &ui.text.atlas;
+        atlas.update(&Image { bytes: a.pixels.clone(), width: a.size as u16, height: a.size as u16 });
+        ui.text.atlas.dirty = false;
+    }
 }
 
 fn apply_ui(app: &mut App, a: UiAction) {
@@ -1124,6 +1156,8 @@ fn apply_ui(app: &mut App, a: UiAction) {
             }
         }
         UiAction::Send(name, data) => app.sim.push(Command::ModEvent { name, data }),
+        // The title screen's; a game is already chosen.
+        UiAction::Load(_) | UiAction::NewColony => {}
         UiAction::Advance(hours) => {
             // Devtools only: step the sim now, as fast as it goes.
             let ticks = (hours * rim_sim::TICKS_PER_DAY as f64 / 24.0) as u64;

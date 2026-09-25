@@ -452,7 +452,8 @@ impl UiVm {
         ui.set(
             "mount",
             lua.create_function(move |_, (layer, id, opts): (String, String, Option<Table>)| {
-                const LAYERS: &[&str] = &["top", "bottom", "left", "right", "anchored", "cursor", "modal", "windows"];
+                const LAYERS: &[&str] =
+                    &["top", "bottom", "left", "right", "anchored", "cursor", "modal", "windows", "title"];
                 if !LAYERS.contains(&layer.as_str()) {
                     return Err(rt(format!("unknown layer '{layer}' (one of {})", LAYERS.join(", "))));
                 }
@@ -688,6 +689,8 @@ impl UiVm {
         });
         // Devtools: run the sim forward (hours of game time).
         act!("advance", f64, |h| UiAction::Advance(h.clamp(0.0, 24.0 * 60.0)));
+        act!("load", String, |path| UiAction::Load(path));
+        act!("new_colony", (), |_a| UiAction::NewColony);
         // Send an event to this mod's own sim scripts: "<mod>:<name>". The mod
         // is the one whose UI code calls it (from its chunk name), so a mod
         // can't speak for another.
@@ -961,6 +964,20 @@ impl UiVm {
             Ok(t)
         });
         view!("warnings", (), |lua, l, _a| lua.create_sequence_from(l.client.warnings.iter().cloned()));
+        view!("saves", (), |lua, l, _a| {
+            let t = lua.create_table()?;
+            for s in &l.client.saves {
+                let row = lua.create_table()?;
+                row.set("path", s.path.as_str())?;
+                row.set("file", s.file.as_str())?;
+                row.set("day", s.day)?;
+                row.set("colonists", lua.create_sequence_from(s.colonists.iter().map(String::as_str))?)?;
+                row.set("age", s.age)?;
+                row.set("error", s.error.as_deref())?;
+                t.push(row)?;
+            }
+            Ok(t)
+        });
         view!("ui_stats", (), |lua, l, _a| {
             let t = lua.create_table()?;
             let e = l.engine;

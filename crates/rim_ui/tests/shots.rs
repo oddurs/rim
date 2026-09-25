@@ -62,4 +62,25 @@ fn shots() {
     cv.show_devtools = false;
     cv.show_profiler = true;
     shot(&mut ui, &cv, "profiler", None);
+    // The title screen, before a colony.
+    let save = |file: &str, day, colonists: &[&str], age, error: Option<&str>| rim_ui::view::SaveView {
+        path: file.into(),
+        file: file.into(),
+        day,
+        colonists: colonists.iter().map(|c| c.to_string()).collect(),
+        age,
+        error: error.map(Into::into),
+    };
+    let title = rim_ui::view::ClientView {
+        screen: cv.screen,
+        scale: 1.0,
+        title: true,
+        saves: vec![
+            save("colony-17.rim", 23, &["Tarn", "Mira", "Oskar", "Wen", "Ilse"], 540.0, None),
+            save("colony-9.rim", 4, &["Brannoc"], 7_200.0, None),
+            save("colony-3.rim", 1, &[], 260_000.0, Some("the snapshot at tick 0 has no section engine:pawn")),
+        ],
+        ..Default::default()
+    };
+    shot(&mut ui, &title, "title", None);
 }

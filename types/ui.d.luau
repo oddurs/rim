@@ -34,7 +34,7 @@ type ListProps = {
 type WindowOpts = { title: string?, w: number?, h: number?, resizable: boolean?, open: boolean? }
 type WindowInfo = { id: string, title: string, w: number, h: number, resizable: boolean, comp: string }
 type Bind = { id: string, label: string, key: string, owner: string }
-type Layer = "top" | "bottom" | "left" | "right" | "anchored" | "cursor" | "modal" | "windows"
+type Layer = "top" | "bottom" | "left" | "right" | "anchored" | "cursor" | "modal" | "windows" | "title"
 type Need = { id: string, label: string, value: number, color: string, low: boolean }
 type Pawn = {
     id: number, name: string, label: string, faction: string, player: boolean, founder: boolean,
@@ -58,6 +58,7 @@ type Stuff = { id: string, label: string, color: string, have: number, active: b
 type Hover = { x: number, y: number, terrain: string, shelter: string, readings: { string }, things: { string } }
 type ProfileRow = { name: string, us: number, mod: boolean }
 type ModInfo = { id: string, version: string, name: string }
+type Save = { path: string, file: string, day: number, colonists: { string }, age: number, error: string? }
 type UiStats = { font: string, build_us: number, layout_us: number, paint_us: number, nodes: number, layouts: number }
 type Inspect = { id: string, owner: string, kind: string, path: string, x: number, y: number, w: number, h: number }
 type TreeRow = { depth: number, kind: string, id: string, owner: string }
@@ -134,6 +135,10 @@ declare act: {
     draft: (id: number, on: boolean) -> (),
     -- Move the camera to a pawn.
     focus: (id: number) -> (),
+    -- Play a save from view.saves() (the title screen).
+    load: (path: string) -> (),
+    -- Start a new colony (the title screen).
+    new_colony: () -> (),
     -- Draw the world at this fraction of the screen's pixels, 0.25 to 1; the UI stays sharp. Saved for the player.
     render_scale: (scale: number) -> (),
     -- Select a pawn, or nothing.
@@ -205,6 +210,8 @@ declare view: {
     pawn: (id: number) -> Pawn?,
     -- Smoothed time per system and mod, in µs.
     profile: () -> { ProfileRow },
+    -- The player's saves, newest first, on the title screen; empty in a game.
+    saves: () -> { Save },
     -- Screen width and height in logical pixels.
     screen: () -> (number, number),
     -- The selected pawn's id.

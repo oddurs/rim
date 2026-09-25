@@ -63,6 +63,26 @@ pub struct ClientView {
     /// (id, version, name) in load order.
     pub mods: Vec<(String, String, String)>,
     pub warnings: Vec<String>,
+    /// No colony yet: only the `title` layer is built, over an empty world.
+    pub title: bool,
+    /// The player's saves, newest first, for the title screen.
+    pub saves: Vec<SaveView>,
+}
+
+/// A save, as the title screen lists it.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct SaveView {
+    pub path: String,
+    /// The file's name, without its folder.
+    pub file: String,
+    /// The day the colony reached, counted from 1.
+    pub day: u64,
+    /// The living colonists, the founder first.
+    pub colonists: Vec<String>,
+    /// Seconds since it was last played.
+    pub age: f64,
+    /// Why it can't be read, or why loading it failed.
+    pub error: Option<String>,
 }
 
 /// Everything a UI script can ask the client to do.
@@ -92,6 +112,10 @@ pub enum UiAction {
     /// Draw the world at this fraction of the screen's pixels (0.25 to 1);
     /// the UI stays at full resolution.
     RenderScale(f32),
+    /// The title screen: play the save at this path.
+    Load(String),
+    /// The title screen: start a new colony.
+    NewColony,
 }
 
 /// Screen position of a pawn (physical pixels), interpolated between cells

@@ -64,6 +64,7 @@ To use the kit from your own mod, list `core` in `depends` in your
 | `cursor` | A small label that follows the mouse | |
 | `windows` | Panels in the middle of the screen | |
 | `modal` | One centred panel above everything | |
+| `title` | The title screen, before a colony exists (see below) | |
 
 Panels in a region stack by `order` and never overlap. `refresh` says how
 often a mounted component is rebuilt when no input or game change forces
@@ -127,6 +128,17 @@ click on a header sorts by that column; give it `count` and `row(i)` to
 build cells by hand. `kit.input` and `kit.slider` are the text and drag
 controls; their state is the engine's (see Text input and sliders).
 
+### The title screen
+
+Before the player picks a colony there is no game, and the only layer built
+is `title`. In a game it is never built. Core's title screen
+(`mods/core/ui/title.luau`) is a component like any other, and a mod can
+replace it. It reads `view.saves()`, the player's saves newest first:
+`path`, `file`, `day`, `colonists` (founder first), `age` (seconds since it
+was played) and `error`, which says why the save can't be read or why
+loading it failed. `act.load(path)` plays one and `act.new_colony()` starts
+a new one. The world views see an empty world here: no colonists, tick 0.
+
 ## Reading the game: `view`
 
 Every function in `ui`, `act` and `view`, with its types, is in the
@@ -150,13 +162,15 @@ Every function in `ui`, `act` and `view`, with its types, is in the
 | `view.data(key)` | Data a sim script stored with `rim.set_data`, by its full key: the weather plugin's forecast is `"weather:forecast"` |
 | `view.ticks_per_day()` | For turning ticks into hours |
 | `view.time()` | Wall-clock seconds, for animation |
+| `view.saves()` | The player's saves, on the title screen |
 
 ## Doing things: `act`
 
 `act.select(id)`, `act.focus(id)`, `act.tool(key)`, `act.speed(n)`,
 `act.toggle_pause()`, `act.draft(id, on)`, `act.cycle_overlay()`,
 `act.set_overlay(index)`, `act.toggle_profiler()`, `act.toggle_devtools()`,
-`act.send(name, table)`, `act.advance(hours)`.
+`act.send(name, table)`, `act.advance(hours)`, and on the title screen
+`act.load(path)` and `act.new_colony()`.
 
 `act.send(name, table)` sends an event to your mod's own sim scripts
 (`"my_mod:do_thing"`, heard with `rim.on` there). It travels as a player
@@ -383,7 +397,7 @@ reported as a conflict and load order decides.
 The UI surface is versioned apart from the sim API: `types/ui.d.luau` and
 `docs/modding/api-ui.md` are generated from the engine's registrations and
 checked against them in CI, so neither can drift. A mod says which surface
-its UI scripts were written against with `ui_api = "0.1"` in `mod.toml`;
+its UI scripts were written against with `ui_api = "0.2"` in `mod.toml`;
 before 1.0 every minor is breaking, and `rim check` refuses a mod targeting
 a version the engine does not provide. It also refuses one naming a `ui.`,
 `act.` or `view.` member that does not exist, by file and line.
