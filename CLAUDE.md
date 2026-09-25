@@ -64,7 +64,7 @@ Item identities are immutable UUIDv4 strings. Use full `id` values from JSON for
 - **`area`**: one of sim, ai, pathing, map, modding, scripting, storyteller, combat, needs, building, save, net, render, ui, audio, perf, tests, docs — Subsystem this touches
 - **`api`**: one of none, additive, breaking — Effect on the plugin API (defs schema, Luau surface, events). Breaking needs an api version bump.
 - **`due`**: date, YYYY-MM-DD — When a milestone is meant to land — **you may read this and not set it**
-- **Milestones**: `foundations` (due 2026-09-30), `castaway` (due 2026-10-15), `interface` (due 2026-10-09), `weather` (due 2026-10-01), `shelter` (due 2026-11-01), `building` (due 2026-11-15), `persistence` (due 2026-11-20), `colony` (due 2026-12-15), `eras` (due 2027-01-10), `plugin-api` (due 2027-02-01), `mood` (due 2027-02-20), `sdk` (due 2027-03-01), `scale` (due 2027-03-15), `platform` (due 2027-07-01), `defense` (due 2027-04-10), `co-op` (due 2027-08-15), `crafting` (due 2027-05-01), `1.0` (due 2027-10-01), `world` (due 2027-06-01)
+- **Milestones**: `foundations` (due 2026-09-30), `graphics`, `castaway` (due 2026-10-15), `interface` (due 2026-10-09), `weather` (due 2026-10-01), `shelter` (due 2026-11-01), `building` (due 2026-11-15), `persistence` (due 2026-11-20), `colony` (due 2026-12-15), `eras` (due 2027-01-10), `plugin-api` (due 2027-02-01), `mood` (due 2027-02-20), `sdk` (due 2027-03-01), `scale` (due 2027-03-15), `platform` (due 2027-07-01), `defense` (due 2027-04-10), `co-op` (due 2027-08-15), `crafting` (due 2027-05-01), `1.0` (due 2027-10-01), `world` (due 2027-06-01)
 - **Saved views** (`cairn list --view NAME`): `now`, `next`, `api`, `engine`, `plugins`, `perf`, `decisions`, `triage`
 
 ### Rules
