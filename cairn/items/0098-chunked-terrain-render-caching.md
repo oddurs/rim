@@ -9,7 +9,6 @@ claimed: 2026-09-24
 depends_on:
 - 96d2dac9-cf4e-409a-a028-f49902c8d7d9
 - 3dd22b0d-a723-4acb-ae23-4095dc784e7e
-- e2ce89c3-de39-43ac-a302-d2dcc325aedf
 created: 2026-09-22
 updated: 2026-09-24
 priority: p0
@@ -81,3 +80,7 @@ When this lands, drop the render bench's CI slack from 3x toward 1x (bench.rs, -
 ## 2026-09-24
 
 Buffers are raw miniquad (Immutable vertex/index buffers, a GLSL 100 pipeline), not macroquad's draw_mesh, which would copy and re-upload every vertex each frame. Painting goes through a Sink shared with the immediate path, so the two can't drift. Line widths and min sizes are in points, so a chunk also depends on the zoom: while it moves, chunks draw scaled from the zoom they were built at and rebuild once it holds for 8 frames (or drifts past 2x), within 1.5 ms a frame. Plans and animated looks (pulse) are drawn live each frame. Chunk-border draw order differs from row order, which can only matter where an overhang crosses a chunk edge; screenshots show no difference. CI slack drops from 3x to 1.5x.
+
+## 2026-09-24
+
+Order swapped with the atlas (e2ce89c3): meshes first, since they are the frame; the atlas then adds texture coordinates to the chunk vertex format.
