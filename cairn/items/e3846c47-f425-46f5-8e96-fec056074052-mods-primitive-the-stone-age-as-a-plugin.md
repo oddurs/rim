@@ -78,11 +78,15 @@ Hunting stays barehanded (a spear waits for equipment, d5d0ea1f).
 
 ## Acceptance criteria
 
-- [ ] Branches, fibre and stones are gatherable by hand, and oak branches regrow
+- [x] Branches, fibre and stones are gatherable by hand, and oak branches regrow
 - [ ] A flint flake and a hand axe are made at a free ground station
 - [ ] Chopping and mining are gated behind the tools, and say why when blocked
 - [ ] Tool quality comes from material, not duplicate defs
-- [ ] A branch shelter and campfire are buildable with no tools
+- [x] A branch shelter and campfire are buildable with no tools
 - [ ] Clay is dug with a digging stick, builds cob walls, and fires into a pot at a campfire
 - [ ] A `rim test` scene goes from bare hands to a felled tree
 - [ ] Core alone still plays with the plugin removed (§5 CI smoke test)
+
+## 2026-09-25
+
+First tier landed as mods/primitive (gather by hand): branches, fibre, loose stones and flint as items; deadfall, tall grass, loose stones and flint nodules as wild things with core:gather harvests and spawns; oak branches that regrow; branches as structural stuff; a campfire of 10 branches. Nothing is gated yet, so core's bare-hand chop and mine still work until tools (7016d86b). With the plugin on, an unmarked oak's right-click gathers (the gentlest harvest), so tests of core's own rules now load core alone. Loose stones spawn on dirt and sand only: rock_floor is all granite.

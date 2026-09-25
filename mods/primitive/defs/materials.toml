@@ -1,0 +1,61 @@
+# What you can gather with your hands. The stone age starts here
+# (DESIGN.md §4e): branches, fibre, loose stones and, if you find it, flint.
+
+# Weak, draughty and quick to put up: enough for a first night.
+[[thing]]
+id = "branches"
+label = "branches"
+color = "#7a5a36"
+category = "item"
+look.layers = [
+    { draw = "fill", x = 0.18, y = 0.42, w = 0.64, h = 0.1, shade = 1.1 },
+    { draw = "fill", x = 0.22, y = 0.58, w = 0.56, h = 0.1 },
+    { draw = "fill", x = 0.3, y = 0.3, w = 0.44, h = 0.08, shade = 0.85 },
+]
+market_value = 0.4
+stack_limit = 75
+tags = ["branch", "fuel"]
+stuff = { categories = ["structural"], factors = { hp = 0.4, work = 0.5, insulation = 0.6, flammability = 3.0, beauty = 0.8 } }
+
+[[thing]]
+id = "fibre"
+label = "plant fibre"
+color = "#a8a85a"
+category = "item"
+look.layers = [
+    { draw = "fill", x = 0.3, y = 0.2, w = 0.08, h = 0.6 },
+    { draw = "fill", x = 0.46, y = 0.18, w = 0.08, h = 0.64, shade = 1.1 },
+    { draw = "fill", x = 0.62, y = 0.22, w = 0.08, h = 0.58, shade = 0.9 },
+]
+market_value = 0.3
+stack_limit = 75
+tags = ["fibre"]
+
+# A hammerstone, once tools exist.
+[[thing]]
+id = "stones"
+label = "stones"
+color = "#8f8a82"
+category = "item"
+look.layers = [
+    { draw = "disc", x = 0.36, y = 0.58, r = 0.16 },
+    { draw = "disc", x = 0.62, y = 0.52, r = 0.13, shade = 1.15 },
+    { draw = "disc", x = 0.5, y = 0.34, r = 0.11, shade = 0.9 },
+]
+market_value = 0.2
+stack_limit = 50
+tags = ["stone_raw"]
+
+# What every stone-age edge is knapped from. Scarce on the surface.
+[[thing]]
+id = "flint"
+label = "flint"
+color = "#44505e"
+category = "item"
+look.layers = [
+    { draw = "disc", x = 0.42, y = 0.55, r = 0.18 },
+    { draw = "disc", x = 0.58, y = 0.45, r = 0.14, shade = 1.3 },
+]
+market_value = 1.5
+stack_limit = 50
+tags = ["knappable"]

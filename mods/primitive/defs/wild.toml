@@ -1,0 +1,66 @@
+# Wild things you gather from with bare hands (core:gather). All natural,
+# so none counts toward colony wealth.
+
+[[thing]]
+id = "deadfall"
+label = "deadfall"
+color = "#6b4f33"
+category = "plant"
+look.layers = [
+    { draw = "fill", x = 0.15, y = 0.46, w = 0.7, h = 0.12, shade = 0.9 },
+    { draw = "fill", x = 0.3, y = 0.34, w = 0.45, h = 0.09 },
+    { draw = "fill", x = 0.24, y = 0.6, w = 0.5, h = 0.08, shade = 1.1 },
+]
+natural = true
+harvest = { designation = "core:gather", work = 40, yields = [{ thing = "branches", count = 4 }] }
+spawn = { terrain = ["core:grass", "core:dirt"], density = 0.02 }
+
+[[thing]]
+id = "tall_grass"
+label = "tall grass"
+color = "#8a9a3e"
+category = "plant"
+look.layers = [
+    { draw = "fill", x = 0.28, y = 0.25, w = 0.07, h = 0.55 },
+    { draw = "fill", x = 0.46, y = 0.18, w = 0.07, h = 0.62, shade = 1.15 },
+    { draw = "fill", x = 0.64, y = 0.28, w = 0.07, h = 0.52, shade = 0.9 },
+]
+natural = true
+harvest = { designation = "core:gather", work = 30, yields = [{ thing = "fibre", count = 3 }] }
+# It doesn't spread: a plant in a cell refuses a blueprint there, and grass
+# creeping into a planned wall would leave gaps nobody sees.
+spawn = { terrain = ["core:grass", "core:marsh"], density = 0.03 }
+
+[[thing]]
+id = "loose_stones"
+label = "loose stones"
+color = "#8f8a82"
+category = "rock"
+look.layers = [
+    { draw = "disc", x = 0.34, y = 0.6, r = 0.13 },
+    { draw = "disc", x = 0.62, y = 0.56, r = 0.1, shade = 1.15 },
+    { draw = "disc", x = 0.52, y = 0.36, r = 0.09, shade = 0.9 },
+]
+natural = true
+harvest = { designation = "core:gather", work = 40, yields = [{ thing = "stones", count = 3 }] }
+spawn = { terrain = ["core:dirt", "core:sand"], density = 0.015 }
+
+# Flint turns up on sand, where rivers have washed it out of the rock.
+[[thing]]
+id = "flint_nodule"
+label = "flint nodule"
+color = "#44505e"
+category = "rock"
+look.layers = [
+    { draw = "disc", x = 0.5, y = 0.55, r = 0.2, color = "#b8b2a4" },
+    { draw = "disc", x = 0.5, y = 0.55, r = 0.12 },
+]
+natural = true
+harvest = { designation = "core:gather", work = 50, yields = [{ thing = "flint", count = 2 }] }
+spawn = { terrain = ["core:sand"], density = 0.006 }
+
+# Branches off a standing oak: they grow back, and the oak can still be felled.
+[[patch]]
+target = "thing/core:tree_oak"
+append = { harvest = [{ designation = "core:gather", work = 60, destroy = false, regrow_days = 3.0,
+                        yields = [{ thing = "primitive:branches", count = 3 }] }] }

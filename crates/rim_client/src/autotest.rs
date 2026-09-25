@@ -14,6 +14,7 @@ use rim_sim::hecs::Entity;
 use rim_sim::order;
 use rim_sim::path::Goal;
 use rim_sim::world::*;
+use rim_sim::Command;
 use rim_sim::IVec;
 use std::path::PathBuf;
 
@@ -293,6 +294,11 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         }
         best.expect("a reachable oak")
     };
+    // Marked for chopping, so a click chops it: unmarked, a click prefers
+    // the gentlest harvest, and the stone age lets you gather an oak.
+    let chop = defs.lookup("designation", "chop").unwrap();
+    t.app.sim.push(Command::Designate { designation: chop, a: tree.2, b: tree.2 });
+    t.ticks(1);
     t.focus(tree.2);
     let (tx, ty) = t.screen(tree.2);
     t.input(RawInput { mouse: (tx, ty), ..Default::default() }).await;

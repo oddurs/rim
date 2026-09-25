@@ -1,0 +1,4 @@
+# A campfire of branches: the first night needs no axe.
+[[patch]]
+target = "thing/core:campfire"
+set = { build = { cost = [{ thing = "primitive:branches", count = 10 }] } }

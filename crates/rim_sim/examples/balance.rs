@@ -81,6 +81,9 @@ fn play(mods: &Path, seed: u64, days: u64) -> Report {
     let food = defs.lookup("need", "food").unwrap();
     let warmth = defs.lookup("need", "warmth");
 
+    // Branches, which the stone age's campfire is built of. First, so
+    // chop (one designation a thing) keeps the trees for wood.
+    s.push(Command::Designate { designation: des("gather"), a: c.offset(-20, -20), b: c.offset(20, 20) });
     s.push(Command::Designate { designation: des("chop"), a: c.offset(-14, -14), b: c.offset(14, 14) });
     s.push(Command::Designate { designation: des("harvest"), a: c.offset(-20, -20), b: c.offset(20, 20) });
     let hut = if std::env::args().any(|a| a == "--nohut") { None } else { open_square(&s, c, 5) };
@@ -122,6 +125,11 @@ fn play(mods: &Path, seed: u64, days: u64) -> Report {
     // two days), pushed directly so every run gets one.
     let snap = std::env::args().any(|a| a == "--cold-snap").then(|| arg("--cold-snap", 5) * TICKS_PER_DAY);
     for _ in 0..days * TICKS_PER_DAY {
+        // Like a player, mark what has regrown to be gathered again.
+        if s.world.tick > 0 && s.world.tick.is_multiple_of(TICKS_PER_DAY) {
+            let c = s.world.colony_center().unwrap_or(IVec::new(0, 0));
+            s.push(Command::Designate { designation: des("gather"), a: c.offset(-20, -20), b: c.offset(20, 20) });
+        }
         if snap == Some(s.world.tick) {
             let t = defs.lookup("field", "temperature").unwrap() as usize;
             let now = s.world.tick;

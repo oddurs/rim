@@ -36,7 +36,10 @@ fn warrior_chops_and_builds() {
 #[test]
 fn shipped_mods_load_and_patch_applies() {
     let s = sim(1);
-    assert_eq!(s.mods.iter().map(|m| m.id.as_str()).collect::<Vec<_>>(), ["core", "weather", "wildlife_plus"]);
+    assert_eq!(
+        s.mods.iter().map(|m| m.id.as_str()).collect::<Vec<_>>(),
+        ["core", "primitive", "weather", "wildlife_plus"]
+    );
     let d = &s.world.defs;
     assert!(d.creature_id("boar").is_some(), "plugin creature missing");
     let bush = d.thing(d.thing_id("berry_bush").unwrap());

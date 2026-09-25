@@ -228,12 +228,16 @@ mod tests {
     #[test]
     fn a_designation_nothing_can_be_marked_for_has_no_button() {
         let mods = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mods");
-        let s = rim_sim::Sim::new(&mods, 1).unwrap();
+        let s = rim_sim::Sim::with_mods(&mods, 1, &|m| m == "core").unwrap();
         let d = |id: &str| s.world.defs.lookup("designation", id).unwrap();
         assert!(!markable(&s.world.defs, d("core:gather")));
         for id in ["core:chop", "core:mine", "core:harvest", "core:hunt", "core:deconstruct"] {
             assert!(markable(&s.world.defs, d(id)), "{id}");
         }
+        // With the stone age, there's something to gather.
+        let s = rim_sim::Sim::new(&mods, 1).unwrap();
+        let gather = s.world.defs.lookup("designation", "core:gather").unwrap();
+        assert!(markable(&s.world.defs, gather));
     }
 
     #[test]
