@@ -31,6 +31,10 @@ pub enum Tool {
     Select,
     Designate(DefId),
     Build(DefId),
+    /// Paint a stockpile: extends the one zone a drag touches, else a new one.
+    Stockpile,
+    /// Take cells out of their zone.
+    ClearZone,
     Cancel,
 }
 
@@ -597,6 +601,13 @@ fn toolbar(sim: &Sim) -> Vec<ToolDef> {
             color: rgb(t.rgb),
         });
     }
+    items.push(ToolDef { key: "stockpile".into(), label: "Stockpile".into(), tool: Tool::Stockpile, color: ZONE });
+    items.push(ToolDef {
+        key: "clear_zone".into(),
+        label: "Clear zone".into(),
+        tool: Tool::ClearZone,
+        color: Color::from_rgba(150, 150, 170, 255),
+    });
     items.push(ToolDef {
         key: "cancel".into(),
         label: "Cancel".into(),
@@ -605,6 +616,9 @@ fn toolbar(sim: &Sim) -> Vec<ToolDef> {
     });
     items
 }
+
+/// Stockpiles, on the map and in the toolbar.
+pub const ZONE: Color = Color::new(0.45, 0.65, 0.95, 1.0);
 
 pub fn rgb(c: [u8; 3]) -> Color {
     Color::from_rgba(c[0], c[1], c[2], 255)
@@ -1166,6 +1180,11 @@ fn apply_ui(app: &mut App, a: UiAction) {
         UiAction::Speed(s) => apply(app, Action::Speed(s)),
         UiAction::TogglePause => apply(app, Action::TogglePause),
         UiAction::Draft(e, on) => app.sim.push(Command::Draft { pawn: e, on }),
+        UiAction::ZoneAllow(zone, item, on) => {
+            if let Some(thing) = app.sim.world.defs.thing_id(&item) {
+                app.sim.push(Command::ZoneAllow { zone, thing, on });
+            }
+        }
         UiAction::SetPriority(e, work, level) => {
             if let Some(w) = app.sim.world.defs.lookup("work_type", &work) {
                 app.sim.push(Command::SetPriority { pawn: e, work: w, level });
@@ -1376,6 +1395,11 @@ pub fn apply(app: &mut App, action: Action) {
                         app.sim.push(Command::Build { stuff, thing: t, a, b });
                     }
                 }
+                Tool::Stockpile => {
+                    let zone = app.sim.world.zones.touched(&app.sim.world.map, a, b);
+                    app.sim.push(Command::Stockpile { a, b, zone });
+                }
+                Tool::ClearZone => app.sim.push(Command::ClearZone { a, b }),
                 Tool::Cancel => app.sim.push(Command::Cancel { a, b }),
                 Tool::Select => {}
             }

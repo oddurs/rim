@@ -25,6 +25,7 @@ pub mod snapshot;
 pub mod systems;
 pub mod terms;
 pub mod world;
+pub mod zone;
 
 pub use command::Command;
 pub use hecs;

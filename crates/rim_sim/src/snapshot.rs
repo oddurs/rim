@@ -226,6 +226,7 @@ impl Snapshot {
             ("engine:defs".to_string(), enc(&def_table(&w.defs))),
             ("engine:world".to_string(), enc(&world)),
             ("engine:map".to_string(), enc(&w.map.terrain)),
+            ("engine:zones".to_string(), enc(&w.zones)),
             ("engine:fields".to_string(), enc(&w.fields.saved(&w.map))),
             ("engine:scripts".to_string(), enc(&ScriptsSection { disabled_hooks, disabled_handlers })),
             ("engine:pawn".to_string(), component::<Pawn>(w)),
@@ -648,6 +649,30 @@ impl Snapshot {
             if let (false, Some(v)) = (loaded.contains(m), written_by.get(m)) {
                 w.data_versions.insert(m.to_string(), v.clone());
             }
+        }
+        // Stockpiles, their filters mapped like any def reference.
+        if self.sections.contains_key("engine:zones") {
+            let mut zones: crate::zone::Zones = dec(self, "engine:zones")?;
+            if zones.cells.len() != w.zones.cells.len() {
+                return Err("engine:zones doesn't match the map's size".into());
+            }
+            let mut lost: BTreeMap<String, u32> = BTreeMap::new();
+            for z in &mut zones.list {
+                let mut allows = Vec::new();
+                for &d in &z.allows {
+                    match remap.get("thing", d) {
+                        Some(d) => allows.push(d),
+                        None => *lost.entry(remap.name("thing", d).to_string()).or_default() += 1,
+                    }
+                }
+                allows.sort_unstable();
+                z.allows = allows;
+            }
+            for (id, n) in lost {
+                notes.push(format!("{n} stockpiles no longer take {id}"));
+            }
+            zones.tidy();
+            w.zones = zones;
         }
         let sc: ScriptsSection = dec(self, "engine:scripts")?;
         // Hook indices only mean the same hooks under the same scripts.

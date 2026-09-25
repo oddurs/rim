@@ -14,6 +14,8 @@ fn run(seed: u64, ticks: u64) -> u64 {
     let pawn = sim.world.colonists().next().unwrap();
     let chop_first = sim.world.defs.lookup("work_type", "chop").unwrap();
     sim.push(Command::SetPriority { pawn, work: chop_first, level: 1 });
+    sim.push(Command::Stockpile { a: c.offset(-4, -4), b: c.offset(-1, -1), zone: None });
+    sim.push(Command::ZoneAllow { zone: 1, thing: wood, on: false });
     for _ in 0..ticks {
         sim.step();
     }

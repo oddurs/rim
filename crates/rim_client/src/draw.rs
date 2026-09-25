@@ -412,12 +412,12 @@ pub fn world_ui(app: &App) {
     let cam = &app.cam;
     let z = cam.zoom;
 
+    zones(app);
     // The selected thing: pawns draw their own ring.
     if let Some(t) = app.selected.and_then(|e| w.thing(e)) {
         let (sx, sy) = cam.to_screen(t.pos.x as f32, t.pos.y as f32);
         draw_rectangle_lines(sx - 1.0, sy - 1.0, z + 2.0, z + 2.0, 2.0, YELLOW);
     }
-
     // Drag rectangle preview.
     if let Some(a) = app.drag_start {
         let (mx, my) = mouse_position();
@@ -449,6 +449,36 @@ pub fn world_ui(app: &App) {
         draw_rectangle_lines(sx, sy, z, z, 2.0, tool_color(app));
     }
     order_flash(app);
+}
+
+/// Stockpiles: a light wash over each cell, and a line where a zone ends.
+fn zones(app: &App) {
+    let (w, cam) = (&app.sim.world, &app.cam);
+    let z = cam.zoom;
+    let (x0, y0, x1, y1) = visible(app);
+    let zone =
+        |x: i32, y: i32| w.zones.cells.get(w.map.idx(IVec::new(x, y))).copied().filter(|_| w.map.inb(IVec::new(x, y)));
+    let (fill, line) = (alpha(crate::ZONE, 0.13), alpha(crate::ZONE, 0.7));
+    for y in y0..=y1 {
+        for x in x0..=x1 {
+            let Some(id) = zone(x, y).filter(|&id| id != 0) else { continue };
+            let (sx, sy) = cam.to_screen(x as f32, y as f32);
+            draw_rectangle(sx, sy, z, z, fill);
+            let t = (z * 0.06).clamp(1.0, 2.0);
+            if zone(x, y - 1) != Some(id) {
+                draw_rectangle(sx, sy, z, t, line);
+            }
+            if zone(x, y + 1) != Some(id) {
+                draw_rectangle(sx, sy + z - t, z, t, line);
+            }
+            if zone(x - 1, y) != Some(id) {
+                draw_rectangle(sx, sy, t, z, line);
+            }
+            if zone(x + 1, y) != Some(id) {
+                draw_rectangle(sx + z - t, sy, t, z, line);
+            }
+        }
+    }
 }
 
 /// Paint a look's layers over the cell whose top-left is at `at`, `z`

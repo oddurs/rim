@@ -54,6 +54,8 @@ type FieldInfo = {
 type UiDate = { year: number, season: string, season_index: number, day: number, day_of_year: number, year_days: number }
 type Part = { label: string, value: number }
 type Tool = { key: string, label: string, color: string, active: boolean }
+type Zone = { id: number, name: string, cells: number, allows: { [string]: boolean } }
+type Item = { id: string, label: string, color: string }
 type WorkType = { id: string, label: string, icon: string, order: number, default: number }
 type Stuff = { id: string, label: string, color: string, have: number, active: boolean, hp: number, work: number }
 type Hover = { x: number, y: number, terrain: string, shelter: string, readings: { string }, things: { string } }
@@ -168,6 +170,8 @@ declare act: {
     toggle_profiler: () -> (),
     -- Pick a toolbar tool ("designate:core:chop", "build:core:wall").
     tool: (key: string) -> (),
+    -- Let a stockpile take an item, or stop it.
+    zone_allow: (zone: number, item: string, on: boolean) -> (),
 }
 
 declare view: {
@@ -203,6 +207,8 @@ declare view: {
     hover: () -> Hover?,
     -- The node under the cursor (devtools).
     inspect: () -> Inspect?,
+    -- Every item def, which a stockpile can take or refuse.
+    items: () -> { Item },
     -- The newest messages, newest first.
     messages: (max: number) -> { Message },
     -- Loaded mods, in load order.
@@ -259,4 +265,6 @@ declare view: {
     wealth: () -> number,
     -- The work types, in tie-break order.
     work_types: () -> { WorkType },
+    -- The stockpiles, oldest first, with how many cells each has and which items it takes.
+    zones: () -> { Zone },
 }
