@@ -1,11 +1,14 @@
 name: CI
 
+# PRs run once, on pull_request. `push` is for main alone: on a PR branch it
+# ran the whole workflow a second time, in another concurrency group.
 on:
   push:
+    branches: [main]
   pull_request:
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 env:
@@ -13,11 +16,19 @@ env:
   RUSTFLAGS: -D warnings
   # CI needs backtraces, not a debugger: smaller caches and faster links.
   CARGO_PROFILE_RELEASE_DEBUG: 0
+  # Linking is most of a warm build: 32 integration-test binaries each link
+  # the sim and Luau. Rust's own lld links Windows several times faster than
+  # link.exe (Linux gets mold from setup-mold; macOS's ld is already fast).
+  CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER: rust-lld.exe
 
 jobs:
-  fmt:
-    name: Format
+  # The quick ones, on one runner: formatting, mod scripts against the
+  # declared API, and the backlog.
+  checks:
+    name: Format, types, roadmap
     runs-on: ubuntu-latest
+    env:
+      LUAU_LSP_VERSION: 1.70.0
     steps:
       - uses: actions/checkout@v5
       # rust-toolchain.toml pins the version; install that one, not stable.
@@ -26,6 +37,25 @@ jobs:
           toolchain: 1.98.1
           components: rustfmt
       - run: cargo fmt --all -- --check
+      - name: Install luau-lsp
+        run: |
+          curl -fsSL -o luau-lsp.zip "https://github.com/JohnnyMorganz/luau-lsp/releases/download/$LUAU_LSP_VERSION/luau-lsp-linux-x86_64.zip"
+          unzip -q luau-lsp.zip -d "$RUNNER_TEMP/luau-lsp"
+          echo "LUAU_LSP=$RUNNER_TEMP/luau-lsp/luau-lsp" >> "$GITHUB_ENV"
+      # `cargo test` (api_types) keeps the declarations in step with the host.
+      - name: Mod scripts type-check
+        run: ./scripts/check-luau.sh
+      # Format 4 (UUID identities) is not in a tagged release yet, so build the
+      # commit that introduced it. Go back to install.sh with
+      # CAIRN_VERSION=1.0.0-alpha.1 once that is tagged.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cairn
+          key: cairn-c7d4230
+      - name: Install cairn
+        run: command -v cairn || cargo install --locked --git https://github.com/oddurs/cairn --rev c7d4230 cairn-md
+      - name: Items match the schema and ROADMAP.md is up to date
+        run: cairn check --render --strict
 
   test:
     name: Test (${{ matrix.os }})
@@ -40,14 +70,34 @@ jobs:
         with:
           toolchain: 1.98.1
           components: clippy
+      - uses: rui314/setup-mold@v1
+        if: runner.os == 'Linux'
       - uses: Swatinem/rust-cache@v2
+        with:
+          # One dependency cache per OS, shared with the Linux sim and client
+          # jobs; this job builds every target, so it is the one that saves.
+          shared-key: release
+          # Only main saves: a cache per PR branch filled the 10 GB limit and
+          # evicted main's, and the next PR built cold.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: taiki-e/install-action@nextest
       - name: Install client system libraries
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libx11-dev libxi-dev libgl1-mesa-dev libasound2-dev xvfb libgl1-mesa-dri fontconfig fonts-dejavu-core
+        run: sudo apt-get update && sudo apt-get install -y libx11-dev libxi-dev libgl1-mesa-dev libasound2-dev
       - name: Clippy
         run: cargo clippy --release --workspace --all-targets
+      # nextest runs every test binary's tests in parallel, each in its own
+      # process: half the time of `cargo test` locally. The crate has no
+      # doctests; if it gains some, add `cargo test --doc`.
       - name: Test (includes the determinism test)
-        run: cargo test --release --workspace
+        run: cargo nextest run --release --workspace --profile ci
+      - name: Upload the test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-${{ matrix.os }}
+          path: target/nextest/ci/junit.xml
+          if-no-files-found: ignore
       # Lockstep: the Luau VM must have no fused multiply-adds (see
       # .cargo/config.toml). arm64 is where clang fuses them.
       - name: Luau has no fused multiply-add
@@ -69,79 +119,48 @@ jobs:
           name: rim-test-${{ matrix.os }}
           path: target/rim-test.xml
           if-no-files-found: ignore
-      - name: Headless soak, 3 in-game days
-        run: cargo run --release -p rim_sim --example headless -- --days 3 --seed 1
-      # The base game must stand without any plugin (DESIGN.md §5).
-      - name: Core alone, 3 in-game days
-        run: cargo run --release -p rim_sim --example headless -- --days 3 --seed 1 --core
-      - name: Climate report, one year
-        shell: bash
-        run: cargo run --release -p rim_sim --example year -- --seed 1 | tee climate-report-${{ matrix.os }}.txt
-      - name: Upload the climate report
-        if: runner.os == 'Linux'
-        uses: actions/upload-artifact@v4
-        with:
-          name: climate-report
-          path: climate-report-*.txt
-      # DESIGN.md §8: 250x250, 30 colonists, 200 pawns. Fails if the mean tick
-      # is over the 2 ms budget (3x slack on shared runners).
-      - name: Benchmark, with a regression threshold
-        if: runner.os == 'Linux'
-        run: cargo run --release -p rim_sim --example bench -- --days 0.25 --check
-      # macOS runners have no OpenGL; Linux renders in software under Xvfb.
-      - name: Client autotest (drives every control, takes screenshots)
-        if: runner.os == 'Linux'
-        run: xvfb-run -a -s "-screen 0 1600x960x24" cargo run --release -p rim_client -- --seed 7 --autotest target/autotest
-      - name: Upload autotest screenshots
-        if: runner.os == 'Linux' && always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: autotest-screenshots
-          path: target/autotest/*.png
-          if-no-files-found: ignore
-      # DESIGN.md §8: the world renderer's CPU time on the whole bench map, with
-      # twenty mods' sprites in it, against its budget (1.5x slack on shared runners).
-      - name: Render benchmark, with a budget
-        if: runner.os == 'Linux'
-        run: xvfb-run -a -s "-screen 0 1920x1080x24" cargo run --release -p rim_client -- --seed 1 --bench-render --sprite-mods 20 --check --json target/render-bench.json --shots target/render-bench
-      - name: Upload the render benchmark
-        if: runner.os == 'Linux' && always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: render-bench
-          path: target/render-bench*
-          if-no-files-found: ignore
-
-  # Lockstep needs every platform to reach the same state from the same seed
-  # and commands (DESIGN.md §7). Each runs the same scenario; `agree` fails if
-  # any output differs, and shows them all.
-  crosscheck:
-    name: Crosscheck (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        # x86-64 and ARM Linux, ARM macOS, x86-64 Windows.
-        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: 1.98.1
-      - uses: Swatinem/rust-cache@v2
-        with:
-          key: crosscheck
-      - name: Run the scenario
+      # Lockstep needs every platform to reach the same state (DESIGN.md §7);
+      # `agree` compares them. Here, where the sim is already built.
+      - name: Crosscheck scenario
         shell: bash
         run: cargo run --release -p rim_sim --example crosscheck > crosscheck-${{ matrix.os }}.txt && cat crosscheck-${{ matrix.os }}.txt
       - uses: actions/upload-artifact@v4
         with:
           name: crosscheck-${{ matrix.os }}
           path: crosscheck-${{ matrix.os }}.txt
+      # Long sim runs off Linux only on main: the crosscheck proves the
+      # platforms agree, and `sim` runs these on Linux for every PR.
+      - name: Headless soak, 3 in-game days
+        if: runner.os != 'Linux' && github.ref == 'refs/heads/main'
+        run: cargo run --release -p rim_sim --example headless -- --days 3 --seed 1
+      - name: Climate report, one year
+        if: runner.os != 'Linux' && github.ref == 'refs/heads/main'
+        shell: bash
+        run: cargo run --release -p rim_sim --example year -- --seed 1
+
+  # The fourth platform for the crosscheck: ARM Linux, which no test job is.
+  crosscheck-arm:
+    name: Crosscheck (ubuntu-24.04-arm)
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.98.1
+      - uses: rui314/setup-mold@v1
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Run the scenario
+        run: cargo run --release -p rim_sim --example crosscheck > crosscheck-ubuntu-24.04-arm.txt && cat crosscheck-ubuntu-24.04-arm.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: crosscheck-ubuntu-24.04-arm
+          path: crosscheck-ubuntu-24.04-arm.txt
 
   agree:
     name: Every platform reaches the same state
-    needs: crosscheck
+    needs: [test, crosscheck-arm]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -169,36 +188,75 @@ jobs:
           echo "All $(ls crosscheck-*.txt | wc -l) platforms agree:"
           tail -n 1 "$first"
 
-  # Mod scripts against the declared API; `cargo test` (api_types) keeps the
-  # declaration itself in step with the host.
-  luau:
-    name: Mod scripts type-check
-    runs-on: ubuntu-latest
-    env:
-      LUAU_LSP_VERSION: 1.70.0
-    steps:
-      - uses: actions/checkout@v5
-      - name: Install luau-lsp
-        run: |
-          curl -fsSL -o luau-lsp.zip "https://github.com/JohnnyMorganz/luau-lsp/releases/download/$LUAU_LSP_VERSION/luau-lsp-linux-x86_64.zip"
-          unzip -q luau-lsp.zip -d "$RUNNER_TEMP/luau-lsp"
-          echo "LUAU_LSP=$RUNNER_TEMP/luau-lsp/luau-lsp" >> "$GITHUB_ENV"
-      - run: ./scripts/check-luau.sh
-
-  roadmap:
-    name: Roadmap
+  # The long sim runs, beside the tests rather than after them.
+  sim:
+    name: Sim runs (soak, climate, benchmark)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      # Format 4 (UUID identities) is not in a tagged release yet, so build the
-      # commit that introduced it. Go back to install.sh with
-      # CAIRN_VERSION=1.0.0-alpha.1 once that is tagged.
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: actions/cache@v4
+      - uses: dtolnay/rust-toolchain@master
         with:
-          path: ~/.cargo/bin/cairn
-          key: cairn-c7d4230
-      - name: Install cairn
-        run: command -v cairn || cargo install --locked --git https://github.com/oddurs/cairn --rev c7d4230 cairn-md
-      - name: Items match the schema and ROADMAP.md is up to date
-        run: cairn check --render --strict
+          toolchain: 1.98.1
+      - uses: rui314/setup-mold@v1
+      - uses: Swatinem/rust-cache@v2
+        with:
+          # The test job's: it built these dependencies and saves them.
+          shared-key: release
+          save-if: false
+      - name: Headless soak, 3 in-game days
+        run: cargo run --release -p rim_sim --example headless -- --days 3 --seed 1
+      # The base game must stand without any plugin (DESIGN.md §5).
+      - name: Core alone, 3 in-game days
+        run: cargo run --release -p rim_sim --example headless -- --days 3 --seed 1 --core
+      - name: Climate report, one year
+        run: cargo run --release -p rim_sim --example year -- --seed 1 | tee climate-report.txt
+      - name: Upload the climate report
+        uses: actions/upload-artifact@v4
+        with:
+          name: climate-report
+          path: climate-report.txt
+      # DESIGN.md §8: 250x250, 30 colonists, 200 pawns. Fails if the mean tick
+      # is over the 2 ms budget (3x slack on shared runners).
+      - name: Benchmark, with a regression threshold
+        run: cargo run --release -p rim_sim --example bench -- --days 0.25 --check
+
+  # The client, drawn: Linux renders in software under Xvfb (macOS runners
+  # have no OpenGL).
+  client:
+    name: Client (autotest, render benchmark)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.98.1
+      - uses: rui314/setup-mold@v1
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release
+          save-if: false
+      - name: Install client system libraries
+        run: sudo apt-get update && sudo apt-get install -y libx11-dev libxi-dev libgl1-mesa-dev libasound2-dev xvfb libgl1-mesa-dri fontconfig fonts-dejavu-core
+      - name: Build the client
+        run: cargo build --release -p rim_client
+      - name: Client autotest (drives every control, takes screenshots)
+        run: xvfb-run -a -s "-screen 0 1600x960x24" target/release/rim --seed 7 --autotest target/autotest
+      - name: Upload autotest screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: autotest-screenshots
+          path: target/autotest/*.png
+          if-no-files-found: ignore
+      # DESIGN.md §8: the world renderer's CPU time on the whole bench map, with
+      # twenty mods' sprites in it, against its budget (1.5x slack on shared
+      # runners). The gate compares means; 100 frames a view holds them.
+      - name: Render benchmark, with a budget
+        run: xvfb-run -a -s "-screen 0 1920x1080x24" target/release/rim --seed 1 --bench-render --frames 100 --sprite-mods 20 --check --json target/render-bench.json --shots target/render-bench
+      - name: Upload the render benchmark
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: render-bench
+          path: target/render-bench*
+          if-no-files-found: ignore
