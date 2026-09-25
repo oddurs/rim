@@ -74,6 +74,9 @@ jobs:
         if: runner.os == 'Linux'
       - uses: Swatinem/rust-cache@v2
         with:
+          # One dependency cache per OS, shared with the Linux sim and client
+          # jobs; this job builds every target, so it is the one that saves.
+          shared-key: release
           # Only main saves: a cache per PR branch filled the 10 GB limit and
           # evicted main's, and the next PR built cold.
           save-if: ${{ github.ref == 'refs/heads/main' }}
@@ -197,7 +200,9 @@ jobs:
       - uses: rui314/setup-mold@v1
       - uses: Swatinem/rust-cache@v2
         with:
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          # The test job's: it built these dependencies and saves them.
+          shared-key: release
+          save-if: false
       - name: Headless soak, 3 in-game days
         run: cargo run --release -p rim_sim --example headless -- --days 3 --seed 1
       # The base game must stand without any plugin (DESIGN.md §5).
@@ -228,7 +233,8 @@ jobs:
       - uses: rui314/setup-mold@v1
       - uses: Swatinem/rust-cache@v2
         with:
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          shared-key: release
+          save-if: false
       - name: Install client system libraries
         run: sudo apt-get update && sudo apt-get install -y libx11-dev libxi-dev libgl1-mesa-dev libasound2-dev xvfb libgl1-mesa-dri fontconfig fonts-dejavu-core
       - name: Build the client
