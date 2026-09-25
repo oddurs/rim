@@ -9,6 +9,7 @@ mod autotest;
 mod bench;
 mod cli;
 mod draw;
+mod mesh;
 mod sky;
 
 use macroquad::prelude::*;
@@ -100,6 +101,8 @@ pub struct App {
     pub ground: draw::Ground,
     /// What each render pass cost last frame.
     pub render_us: RenderTimes,
+    /// Floors, items and fixtures, cached per chunk on the GPU.
+    pub meshes: mesh::Meshes,
     /// Input subscriber for wheel events (see `Wheel`).
     wheel_sub: usize,
 }
@@ -376,6 +379,7 @@ async fn game() {
         sky: sky::Sky::default(),
         ground: draw::Ground::default(),
         render_us: RenderTimes::default(),
+        meshes: mesh::Meshes::default(),
         wheel_sub: macroquad::input::utils::register_input_subscriber(),
     };
     app.selected = app.sim.world.colonists().next();
@@ -634,6 +638,12 @@ pub fn client_view(app: &mut App, mouse: (f32, f32), time: f64) -> ClientView {
                 format!("tick {} · pawns {} · entities {}", w.tick, w.pawns.len(), w.ecs.len()),
                 format!("paths {} · nodes {} · reservations {}", w.pf.searches, w.pf.expanded, w.reservations.len()),
                 format!("script hooks {hooks} · handlers {handlers} · emitters {}", w.fields.emitter_count()),
+                format!(
+                    "chunk meshes: {} calls · {}k indices · {} rebuilt",
+                    app.meshes.calls,
+                    app.meshes.indices / 1000,
+                    app.meshes.rebuilt
+                ),
             ],
             time,
         );
