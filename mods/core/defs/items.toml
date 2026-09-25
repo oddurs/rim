@@ -3,7 +3,10 @@ id = "wood"
 label = "wood"
 color = "#9c6b3c"
 category = "item"
-shape = "item"
+look.layers = [
+    { draw = "fill", x = 0.2, y = 0.2, w = 0.6, h = 0.6 },
+    { draw = "outline", x = 0.2, y = 0.2, w = 0.6, h = 0.6, width = 1.0, shade = 0.6 },
+]
 market_value = 1.2
 stack_limit = 75
 stuff = { categories = ["structural"], factors = { hp = 0.7, work = 0.8, insulation = 1.0, flammability = 3.0, beauty = 1.0 } }
@@ -13,7 +16,10 @@ id = "stone"
 label = "stone blocks"
 color = "#a9a39a"
 category = "item"
-shape = "item"
+look.layers = [
+    { draw = "fill", x = 0.2, y = 0.2, w = 0.6, h = 0.6 },
+    { draw = "outline", x = 0.2, y = 0.2, w = 0.6, h = 0.6, width = 1.0, shade = 0.6 },
+]
 market_value = 1.0
 stack_limit = 75
 stuff = { categories = ["structural"], factors = { hp = 1.6, work = 1.8, insulation = 1.5, flammability = 0.0, beauty = 1.1 } }
@@ -23,7 +29,10 @@ id = "berries"
 label = "berries"
 color = "#b0304a"
 category = "item"
-shape = "item"
+look.layers = [
+    { draw = "fill", x = 0.2, y = 0.2, w = 0.6, h = 0.6 },
+    { draw = "outline", x = 0.2, y = 0.2, w = 0.6, h = 0.6, width = 1.0, shade = 0.6 },
+]
 market_value = 1.5
 stack_limit = 50
 food = { nutrition = 0.12 }
@@ -33,7 +42,10 @@ id = "raw_meat"
 label = "raw meat"
 color = "#c0504d"
 category = "item"
-shape = "item"
+look.layers = [
+    { draw = "fill", x = 0.2, y = 0.2, w = 0.6, h = 0.6 },
+    { draw = "outline", x = 0.2, y = 0.2, w = 0.6, h = 0.6, width = 1.0, shade = 0.6 },
+]
 market_value = 2.0
 stack_limit = 75
 food = { nutrition = 0.08 }

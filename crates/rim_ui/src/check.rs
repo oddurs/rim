@@ -225,7 +225,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("rim-uicheck-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join("ui")).unwrap();
-        std::fs::write(dir.join("mod.toml"), "id = \"probe\"\nname = \"p\"\nversion = \"0\"\napi = \"0.3\"\n").unwrap();
+        std::fs::write(dir.join("mod.toml"), "id = \"probe\"\nname = \"p\"\nversion = \"0\"\napi = \"0.4\"\n").unwrap();
         std::fs::write(dir.join("ui/a.luau"), "local n = view.tick()\nlocal m = view.tikc()\nact.selct(1)\n").unwrap();
         let problems = check_mod_ui(&dir);
         assert_eq!(problems.len(), 2, "{problems:?}");
@@ -235,7 +235,7 @@ mod tests {
         // The version the mod targets must be one this engine provides.
         std::fs::write(
             dir.join("mod.toml"),
-            "id = \"probe\"\nname = \"p\"\nversion = \"0\"\napi = \"0.3\"\nui_api = \"0.9\"\n",
+            "id = \"probe\"\nname = \"p\"\nversion = \"0\"\napi = \"0.4\"\nui_api = \"0.9\"\n",
         )
         .unwrap();
         let problems = check_mod_ui(&dir);

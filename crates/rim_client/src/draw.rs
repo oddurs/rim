@@ -2,7 +2,7 @@
 
 use crate::{rgb, App, Tool};
 use macroquad::prelude::*;
-use rim_sim::defs::Shape;
+use rim_sim::look::{Layer, Prim};
 use rim_sim::map::CHUNK;
 use rim_sim::rng::hash2_f;
 use rim_sim::world::*;
@@ -162,7 +162,6 @@ pub fn things(app: &App) -> Counts {
                     Err(_) => rgb(td.rgb),
                 };
                 let (sx, sy) = cam.to_screen(tx as f32, ty as f32);
-                let (cx, cy) = (sx + z / 2.0, sy + z / 2.0);
                 let bp = w.ecs.get::<&Blueprint>(e).ok();
                 if let Some(bp) = &bp {
                     let need: u32 = bp.cost.iter().map(|c| c.1).sum();
@@ -178,102 +177,14 @@ pub fn things(app: &App) -> Counts {
                     draw_rectangle(sx + 2.0, sy + z - 4.0, (z - 4.0) * frac, 2.5, Color::new(0.6, 0.9, 1.0, 0.9));
                     continue;
                 }
-                let regrowing = w.ecs.get::<&Regrow>(e).is_ok();
-                match td.shape {
-                    Shape::Tree => {
-                        disc(cx + z * 0.06, cy + z * 0.08, z * 0.44, Color::new(0.0, 0.0, 0.0, 0.25));
-                        disc(cx, cy, z * 0.42, c);
-                        disc(cx - z * 0.1, cy - z * 0.1, z * 0.22, shade(c, 1.25));
-                    }
-                    Shape::Bush => {
-                        if regrowing {
-                            // Picked clean: small, dry and berry-less, so it
-                            // doesn't read as food.
-                            disc(cx, cy, z * 0.24, Color::new(c.r * 0.9 + 0.12, c.g * 0.75, c.b * 0.6, 1.0));
-                        } else {
-                            disc(cx, cy, z * 0.36, c);
-                            for (dx, dy) in [(-0.14, -0.1), (0.13, -0.12), (0.0, 0.14), (0.16, 0.1), (-0.15, 0.1)] {
-                                disc(
-                                    cx + dx * z,
-                                    cy + dy * z,
-                                    (z * 0.085).max(2.0),
-                                    Color::from_rgba(235, 45, 85, 255),
-                                );
-                            }
-                        }
-                    }
-                    Shape::Rock => {
-                        let v = 0.9 + hash2_f(tx as i64, ty as i64, 7) as f32 * 0.2;
-                        draw_rectangle(sx, sy, z + 0.5, z + 0.5, shade(c, v));
-                        draw_rectangle(sx, sy + z * 0.8, z + 0.5, z * 0.2, shade(c, v * 0.8));
-                    }
-                    Shape::Wall => {
-                        draw_rectangle(sx, sy, z + 0.5, z + 0.5, c);
-                        wall_edges(w, IVec::new(tx, ty), sx, sy, z, shade(c, 0.65));
-                    }
-                    Shape::Window => {
-                        draw_rectangle(sx, sy, z + 0.5, z + 0.5, c);
-                        draw_rectangle(sx + z * 0.2, sy + z * 0.2, z * 0.6, z * 0.6, Color::new(0.75, 0.88, 1.0, 0.9));
-                        wall_edges(w, IVec::new(tx, ty), sx, sy, z, shade(c, 0.65));
-                    }
-                    Shape::Door => {
-                        draw_rectangle(sx + z * 0.08, sy + z * 0.08, z * 0.84, z * 0.84, c);
-                        draw_rectangle(sx + z * 0.45, sy + z * 0.1, z * 0.1, z * 0.8, shade(c, 0.6));
-                    }
-                    Shape::Bed => {
-                        draw_rectangle(sx + z * 0.12, sy + z * 0.05, z * 0.76, z * 0.9, c);
-                        draw_rectangle(
-                            sx + z * 0.18,
-                            sy + z * 0.1,
-                            z * 0.64,
-                            z * 0.22,
-                            Color::from_rgba(230, 225, 210, 255),
-                        );
-                    }
-                    Shape::Floor => {
-                        // Flat, in the material's colour, with a faint tile seam.
-                        draw_rectangle(sx, sy, z + 0.5, z + 0.5, shade(c, 0.92));
-                        draw_line(sx, sy + z / 2.0, sx + z, sy + z / 2.0, 1.0, shade(c, 0.82));
-                        draw_line(sx + z / 2.0, sy, sx + z / 2.0, sy + z, 1.0, shade(c, 0.82));
-                    }
-                    Shape::Table => {
-                        // A slab on two legs.
-                        draw_rectangle(sx + z * 0.14, sy + z * 0.55, z * 0.1, z * 0.35, shade(c, 0.6));
-                        draw_rectangle(sx + z * 0.76, sy + z * 0.55, z * 0.1, z * 0.35, shade(c, 0.6));
-                        draw_rectangle(sx + z * 0.06, sy + z * 0.3, z * 0.88, z * 0.28, c);
-                    }
-                    Shape::Chair => {
-                        // A seat with a back.
-                        draw_rectangle(sx + z * 0.28, sy + z * 0.15, z * 0.44, z * 0.18, shade(c, 0.7));
-                        draw_rectangle(sx + z * 0.25, sy + z * 0.4, z * 0.5, z * 0.3, c);
-                        draw_rectangle(sx + z * 0.3, sy + z * 0.7, z * 0.08, z * 0.22, shade(c, 0.6));
-                        draw_rectangle(sx + z * 0.62, sy + z * 0.7, z * 0.08, z * 0.22, shade(c, 0.6));
-                    }
-                    Shape::Stove => {
-                        // A box with a warm mouth; steady, unlike a fire.
-                        draw_rectangle(sx + z * 0.12, sy + z * 0.12, z * 0.76, z * 0.76, shade(c, 0.85));
-                        draw_rectangle_lines(sx + z * 0.12, sy + z * 0.12, z * 0.76, z * 0.76, 1.5, shade(c, 0.5));
-                        draw_rectangle(
-                            sx + z * 0.3,
-                            sy + z * 0.45,
-                            z * 0.4,
-                            z * 0.3,
-                            Color::from_rgba(255, 150, 60, 255),
-                        );
-                    }
-                    Shape::Fire => {
-                        disc(cx, cy, z * 0.38, Color::from_rgba(70, 60, 55, 255));
-                        let f = 1.0 + (t * 9.0 + tx as f32).sin() * 0.08;
-                        disc(cx, cy, z * 0.24 * f, c);
-                        disc(cx, cy, z * 0.12 * f, Color::from_rgba(255, 220, 120, 255));
-                    }
-                    Shape::Item | Shape::Blob => {
-                        draw_rectangle(sx + z * 0.2, sy + z * 0.2, z * 0.6, z * 0.6, c);
-                        draw_rectangle_lines(sx + z * 0.2, sy + z * 0.2, z * 0.6, z * 0.6, 1.0, shade(c, 0.6));
-                        if z >= 22.0 && th.count > 1 {
-                            counts.push((sx + z * 0.22, sy + z * 0.95 - 12.0, th.count));
-                        }
-                    }
+                let look = &td.look_r;
+                let layers = match w.ecs.get::<&Regrow>(e) {
+                    Ok(_) if !look.regrowing.is_empty() => &look.regrowing,
+                    _ => &look.layers,
+                };
+                paint(w, layers, look.join, c, IVec::new(tx, ty), (sx, sy), z, t);
+                if z >= 22.0 && th.count > 1 {
+                    counts.push((sx + z * 0.22, sy + z * 0.95 - 12.0, th.count));
                 }
                 if let Ok(d) = w.ecs.get::<&Designated>(e) {
                     let dc = rgb(defs.designations[d.0 as usize].rgb);
@@ -406,33 +317,70 @@ pub fn world_ui(app: &App) {
     order_flash(app);
 }
 
-/// Is the fixture at `p` part of a wall run: a wall, a window or a door,
-/// and built rather than planned? Walls join to these and draw no edge
-/// between, so a run reads as one wall with openings in it.
-fn joins_wall(w: &World, p: IVec) -> bool {
+/// Paint a look's layers over the cell whose top-left is at `at`, `z`
+/// points a side. `own` is the thing's colour (or its material's).
+#[allow(clippy::too_many_arguments)]
+fn paint(w: &World, layers: &[Layer], join: Option<u16>, own: Color, cell: IVec, at: (f32, f32), z: f32, t: f32) {
+    let (sx, sy) = at;
+    // A rectangle reaching the cell's far edge overlaps the next cell by
+    // half a point, so neighbours don't show a hairline seam between them.
+    let px = |[x, y, rw, rh]: [f32; 4]| {
+        let pad = |a: f32, len: f32| if a + len >= 1.0 { 0.5 } else { 0.0 };
+        (sx + x * z, sy + y * z, rw * z + pad(x, rw), rh * z + pad(y, rh))
+    };
+    for l in layers {
+        let base = l.color.map_or(own, |[r, g, b, a]| Color::from_rgba(r, g, b, a));
+        let mut f = l.shade;
+        if l.vary > 0.0 {
+            f *= 1.0 - l.vary / 2.0 + hash2_f(cell.x as i64, cell.y as i64, 7) as f32 * l.vary;
+        }
+        let c = shade(base, f);
+        match l.prim {
+            Prim::Fill { rect, min_px } => {
+                // Grown to `min_px` about its middle, so a seam stays centred.
+                let (x, y, rw, rh) = px(rect);
+                let (gw, gh) = ((min_px - rw).max(0.0), (min_px - rh).max(0.0));
+                draw_rectangle(x - gw / 2.0, y - gh / 2.0, rw + gw, rh + gh, c);
+            }
+            Prim::Outline { rect, width } => {
+                let [x, y, rw, rh] = rect;
+                draw_rectangle_lines(sx + x * z, sy + y * z, rw * z, rh * z, width, c);
+            }
+            Prim::Disc { at: [x, y], r, min_px, pulse } => {
+                let f = if pulse > 0.0 { 1.0 + (t * 9.0 + cell.x as f32).sin() * pulse } else { 1.0 };
+                disc(sx + x * z, sy + y * z, (r * z).max(min_px) * f, c);
+            }
+            Prim::Edges { width } => edges(w, cell, join, (sx, sy), z, width, c),
+        }
+    }
+}
+
+/// Does the built fixture at `p` join group `join`? Plans don't: a wall
+/// planned next to one doesn't open it up until it stands.
+fn joins(w: &World, p: IVec, join: Option<u16>) -> bool {
+    let Some(g) = join else { return false };
     let Some(e) = w.map.fixture_at(p) else { return false };
     if w.ecs.get::<&Blueprint>(e).is_ok() {
         return false;
     }
-    w.ecs.get::<&Thing>(e).is_ok_and(|t| matches!(w.defs.thing(t.def).shape, Shape::Wall | Shape::Window | Shape::Door))
+    w.ecs.get::<&Thing>(e).is_ok_and(|t| w.defs.thing(t.def).look_r.join == Some(g))
 }
 
-/// The outline of a wall cell, drawn only on the sides that face something
-/// that is not wall. Corners and junctions come out joined for free.
-fn wall_edges(w: &World, p: IVec, sx: f32, sy: f32, z: f32, edge: Color) {
+/// The cell's border on the sides that don't face a joined neighbour.
+/// Corners and junctions come out joined for free.
+fn edges(w: &World, p: IVec, join: Option<u16>, (sx, sy): (f32, f32), z: f32, t: f32, c: Color) {
     let (x0, y0, x1, y1) = (sx + 0.5, sy + 0.5, sx + z - 0.5, sy + z - 0.5);
-    let t = 1.5;
-    if !joins_wall(w, p.offset(0, -1)) {
-        draw_line(x0, y0, x1, y0, t, edge);
+    if !joins(w, p.offset(0, -1), join) {
+        draw_line(x0, y0, x1, y0, t, c);
     }
-    if !joins_wall(w, p.offset(0, 1)) {
-        draw_line(x0, y1, x1, y1, t, edge);
+    if !joins(w, p.offset(0, 1), join) {
+        draw_line(x0, y1, x1, y1, t, c);
     }
-    if !joins_wall(w, p.offset(-1, 0)) {
-        draw_line(x0, y0, x0, y1, t, edge);
+    if !joins(w, p.offset(-1, 0), join) {
+        draw_line(x0, y0, x0, y1, t, c);
     }
-    if !joins_wall(w, p.offset(1, 0)) {
-        draw_line(x1, y0, x1, y1, t, edge);
+    if !joins(w, p.offset(1, 0), join) {
+        draw_line(x1, y0, x1, y1, t, c);
     }
 }
 

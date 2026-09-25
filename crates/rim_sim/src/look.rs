@@ -1,0 +1,206 @@
+//! How a thing is drawn, as data (DESIGN.md §6a). A look is layers of a
+//! few primitives painted in order over the thing's cell. The renderer
+//! knows the primitives and nothing about what the thing is, so a loom, a
+//! fence or a hedge needs no renderer change.
+//!
+//! The sim never reads a look; it is here so it loads, patches and fails
+//! validation with every other def.
+
+use serde::Deserialize;
+
+/// A def's `look` as written.
+#[derive(Deserialize, Clone, Debug, Default)]
+#[serde(deny_unknown_fields)]
+pub struct LookDef {
+    #[serde(default)]
+    pub layers: Vec<LayerDef>,
+    /// Drawn instead of `layers` while a harvested plant grows back.
+    #[serde(default)]
+    pub regrowing: Vec<LayerDef>,
+    /// A free label. Built things with the same `join` join up: an
+    /// `edges` layer leaves out the sides that face one.
+    #[serde(default)]
+    pub join: Option<String>,
+}
+
+/// One layer as written. Which fields apply depends on `draw`; the rest
+/// are refused so a typo can't pass for a default.
+#[derive(Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct LayerDef {
+    pub draw: String,
+    pub x: Option<f32>,
+    pub y: Option<f32>,
+    pub w: Option<f32>,
+    pub h: Option<f32>,
+    pub r: Option<f32>,
+    /// Line width in screen points, for `outline` and `edges`.
+    pub width: Option<f32>,
+    /// Smallest radius (disc) or width and height (fill) in points, so a
+    /// berry or a seam still shows zoomed out.
+    pub min_px: Option<f32>,
+    /// A fixed colour, "#rrggbb" or "#rrggbbaa". Unset: the thing's colour,
+    /// or its material's when it is made of one.
+    pub color: Option<String>,
+    /// Multiplies the colour's brightness.
+    pub shade: Option<f32>,
+    /// Brightness varies per cell by up to this much, so a field of rock
+    /// isn't one flat colour.
+    pub vary: Option<f32>,
+    /// A disc's radius flickers by up to this fraction.
+    pub pulse: Option<f32>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Prim {
+    /// A rectangle in cell units, from the cell's top-left.
+    Fill { rect: [f32; 4], min_px: f32 },
+    /// A rectangle's outline, `width` points thick.
+    Outline { rect: [f32; 4], width: f32 },
+    /// A disc around a point in cell units.
+    Disc { at: [f32; 2], r: f32, min_px: f32, pulse: f32 },
+    /// The cell's border on the sides that don't face a joined neighbour.
+    Edges { width: f32 },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Layer {
+    pub prim: Prim,
+    /// Fixed RGBA, or None for the thing's own colour.
+    pub color: Option<[u8; 4]>,
+    pub shade: f32,
+    pub vary: f32,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct Look {
+    pub layers: Vec<Layer>,
+    pub regrowing: Vec<Layer>,
+    /// Index into `DefDb::join_groups`.
+    pub join: Option<u16>,
+}
+
+/// What a def with no look draws: its cell filled in its colour, so
+/// nothing is ever invisible.
+pub fn plain() -> Vec<Layer> {
+    vec![Layer { prim: Prim::Fill { rect: [0.0, 0.0, 1.0, 1.0], min_px: 0.0 }, color: None, shade: 1.0, vary: 0.0 }]
+}
+
+pub fn parse_rgba(s: &str) -> Result<[u8; 4], String> {
+    let h = s.trim_start_matches('#');
+    if h.len() != 6 && h.len() != 8 {
+        return Err(format!("bad color '{s}' (want #rrggbb or #rrggbbaa)"));
+    }
+    let p = |i: usize| u8::from_str_radix(&h[i..i + 2], 16).map_err(|_| format!("bad color '{s}'"));
+    Ok([p(0)?, p(2)?, p(4)?, if h.len() == 8 { p(6)? } else { 255 }])
+}
+
+impl LayerDef {
+    fn compile(&self) -> Result<Layer, String> {
+        let allowed: &[&str] = match self.draw.as_str() {
+            "fill" => &["x", "y", "w", "h", "min_px"],
+            "outline" => &["x", "y", "w", "h", "width"],
+            "disc" => &["x", "y", "r", "min_px", "pulse"],
+            "edges" => &["width"],
+            other => return Err(format!("unknown draw '{other}' (want fill, outline, disc or edges)")),
+        };
+        let given = [
+            ("x", self.x.is_some()),
+            ("y", self.y.is_some()),
+            ("w", self.w.is_some()),
+            ("h", self.h.is_some()),
+            ("r", self.r.is_some()),
+            ("width", self.width.is_some()),
+            ("min_px", self.min_px.is_some()),
+            ("pulse", self.pulse.is_some()),
+        ];
+        if let Some((name, _)) = given.iter().find(|(n, set)| *set && !allowed.contains(n)) {
+            return Err(format!("`{name}` does not apply to draw = \"{}\"", self.draw));
+        }
+        let rect = [self.x.unwrap_or(0.0), self.y.unwrap_or(0.0), self.w.unwrap_or(1.0), self.h.unwrap_or(1.0)];
+        let prim = match self.draw.as_str() {
+            "fill" => Prim::Fill { rect, min_px: self.min_px.unwrap_or(0.0) },
+            "outline" => Prim::Outline { rect, width: self.width.unwrap_or(1.0) },
+            "disc" => Prim::Disc {
+                at: [self.x.unwrap_or(0.5), self.y.unwrap_or(0.5)],
+                r: self.r.unwrap_or(0.4),
+                min_px: self.min_px.unwrap_or(0.0),
+                pulse: self.pulse.unwrap_or(0.0),
+            },
+            _ => Prim::Edges { width: self.width.unwrap_or(1.5) },
+        };
+        Ok(Layer {
+            prim,
+            color: self.color.as_deref().map(parse_rgba).transpose()?,
+            shade: self.shade.unwrap_or(1.0),
+            vary: self.vary.unwrap_or(0.0),
+        })
+    }
+}
+
+impl LookDef {
+    /// `groups` interns join labels across all defs.
+    pub fn compile(&self, groups: &mut Vec<String>) -> Result<Look, String> {
+        let layers = |v: &[LayerDef], what: &str| {
+            v.iter()
+                .enumerate()
+                .map(|(i, l)| l.compile().map_err(|e| format!("look.{what}[{}]: {e}", i + 1)))
+                .collect::<Result<Vec<_>, _>>()
+        };
+        let join = self.join.as_ref().map(|j| match groups.iter().position(|g| g == j) {
+            Some(i) => i as u16,
+            None => {
+                groups.push(j.clone());
+                (groups.len() - 1) as u16
+            }
+        });
+        let mut look =
+            Look { layers: layers(&self.layers, "layers")?, regrowing: layers(&self.regrowing, "regrowing")?, join };
+        if look.layers.is_empty() {
+            look.layers = plain();
+        }
+        Ok(look)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn layer(toml: &str) -> Result<Layer, String> {
+        toml::from_str::<LayerDef>(toml).map_err(|e| e.to_string())?.compile()
+    }
+
+    #[test]
+    fn defaults_fill_the_cell_and_centre_the_disc() {
+        assert_eq!(layer("draw = \"fill\"").unwrap().prim, Prim::Fill { rect: [0.0, 0.0, 1.0, 1.0], min_px: 0.0 });
+        assert_eq!(
+            layer("draw = \"disc\"\nr = 0.3").unwrap().prim,
+            Prim::Disc { at: [0.5, 0.5], r: 0.3, min_px: 0.0, pulse: 0.0 }
+        );
+    }
+
+    #[test]
+    fn a_field_that_does_not_apply_is_an_error() {
+        let e = layer("draw = \"fill\"\nr = 0.3").unwrap_err();
+        assert!(e.contains("`r` does not apply"), "{e}");
+        assert!(layer("draw = \"blob\"").unwrap_err().contains("unknown draw"));
+        assert!(layer("draw = \"fill\"\nradius = 1").is_err(), "unknown keys are refused");
+    }
+
+    #[test]
+    fn colours_take_an_alpha() {
+        assert_eq!(layer("draw = \"fill\"\ncolor = \"#00000040\"").unwrap().color, Some([0, 0, 0, 0x40]));
+        assert_eq!(layer("draw = \"fill\"\ncolor = \"#ff8000\"").unwrap().color, Some([255, 128, 0, 255]));
+        assert!(layer("draw = \"fill\"\ncolor = \"red\"").is_err());
+    }
+
+    #[test]
+    fn no_layers_draws_a_plain_fill_and_joins_intern() {
+        let mut groups = Vec::new();
+        let a = LookDef { join: Some("wall".into()), ..Default::default() }.compile(&mut groups).unwrap();
+        let b = LookDef { join: Some("wall".into()), ..Default::default() }.compile(&mut groups).unwrap();
+        assert_eq!(a.layers, plain());
+        assert_eq!((a.join, b.join, groups.len()), (Some(0), Some(0), 1));
+    }
+}

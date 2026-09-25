@@ -140,7 +140,7 @@ fn with_furniture(who: &str) -> PathBuf {
     std::fs::create_dir_all(m.join("defs")).unwrap();
     std::fs::write(
         m.join("mod.toml"),
-        "id = \"seats\"\nname = \"Seats\"\nversion = \"0.0.0\"\napi = \"0.3\"\ndepends = [\"core\"]\n",
+        "id = \"seats\"\nname = \"Seats\"\nversion = \"0.0.0\"\napi = \"0.4\"\ndepends = [\"core\"]\n",
     )
     .unwrap();
     std::fs::write(
@@ -151,7 +151,6 @@ id = "bench"
 label = "bench"
 color = "#8c6a48"
 category = "building"
-shape = "bed"
 tags = ["bench"]
 build = { menu = "furniture", work = 200, stuff = { category = "structural", count = 10 } }
 
@@ -160,7 +159,6 @@ id = "stool"
 label = "stool"
 color = "#a07a50"
 category = "building"
-shape = "bed"
 spots = [{ dx = 0, dy = 0, beside = "bench" }]
 build = { menu = "furniture", work = 100, stuff = { category = "structural", count = 4 } }
 "##,

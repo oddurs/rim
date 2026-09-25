@@ -192,7 +192,7 @@ fn a_pane_lets_daylight_in() {
     std::fs::create_dir_all(m.join("defs")).unwrap();
     std::fs::write(
         m.join("mod.toml"),
-        "id = \"panes\"\nname = \"Panes\"\nversion = \"0.0.0\"\napi = \"0.3\"\ndepends = [\"core\"]\n",
+        "id = \"panes\"\nname = \"Panes\"\nversion = \"0.0.0\"\napi = \"0.4\"\ndepends = [\"core\"]\n",
     )
     .unwrap();
     std::fs::write(
@@ -203,7 +203,6 @@ id = "pane"
 label = "pane"
 color = "#cfe8ff"
 category = "building"
-shape = "wall"
 blocks = true
 hp = 60
 boundary = [{ field = "core:light", pass = 0.5 }, { field = "core:temperature", leak = 3.0 }]
