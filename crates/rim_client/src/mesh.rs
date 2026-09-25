@@ -45,7 +45,7 @@ impl Builder {
     }
 
     fn quad(&mut self, p: [[f32; 2]; 4], c: Color) {
-        let color = [(c.r * 255.0) as u8, (c.g * 255.0) as u8, (c.b * 255.0) as u8, (c.a * 255.0) as u8];
+        let color: [u8; 4] = c.into();
         let (v, i) = self.room(4);
         let n = v.len() as u16;
         v.extend(p.map(|pos| Vert { pos, color }));
@@ -60,7 +60,7 @@ impl Sink for Builder {
 
     /// Like macroquad's `draw_poly`: a fan of `sides` triangles.
     fn poly(&mut self, x: f32, y: f32, sides: u8, r: f32, c: Color) {
-        let color = [(c.r * 255.0) as u8, (c.g * 255.0) as u8, (c.b * 255.0) as u8, (c.a * 255.0) as u8];
+        let color: [u8; 4] = c.into();
         let (v, i) = self.room(sides as usize + 2);
         let n = v.len() as u16;
         v.push(Vert { pos: [x, y], color });
@@ -90,6 +90,15 @@ struct Part {
     indices: i32,
 }
 
+impl Chunk {
+    fn free(&mut self, ctx: &mut dyn RenderingBackend) {
+        for p in self.parts.iter_mut().flat_map(std::mem::take) {
+            ctx.delete_buffer(p.bindings.vertex_buffers[0]);
+            ctx.delete_buffer(p.bindings.index_buffer);
+        }
+    }
+}
+
 #[derive(Default)]
 struct Chunk {
     /// The things revision and zoom the buffers were built at.
@@ -105,6 +114,8 @@ struct Chunk {
 pub struct Meshes {
     pipeline: Option<Pipeline>,
     chunks: Vec<Chunk>,
+    /// Chunks on screen this frame (from `prepare`).
+    visible: Vec<usize>,
     /// The zoom last frame, and how many frames it has held.
     zoom: (f32, u32),
     /// Last frame, for the render bench and the profiler.
@@ -115,7 +126,15 @@ pub struct Meshes {
 
 impl Default for Meshes {
     fn default() -> Self {
-        Meshes { pipeline: None, chunks: Vec::new(), zoom: (0.0, 0), calls: 0, indices: 0, rebuilt: 0 }
+        Meshes {
+            pipeline: None,
+            chunks: Vec::new(),
+            visible: Vec::new(),
+            zoom: (0.0, 0),
+            calls: 0,
+            indices: 0,
+            rebuilt: 0,
+        }
     }
 }
 
@@ -152,7 +171,8 @@ const SETTLE_FRAMES: u32 = 8;
 /// as thick), so it is rebuilt even mid-gesture.
 const MAX_SCALE: f32 = 2.0;
 /// Rebuilding for the zoom stops for the frame after this long; the rest
-/// wait, drawn scaled. Content changes always rebuild.
+/// wait, drawn scaled. Content changes always rebuild, and so does a chunk
+/// scaled past `MAX_SCALE` once the budget allows.
 const ZOOM_BUDGET_US: f64 = 1500.0;
 
 /// Should this thing be drawn each frame rather than cached?
@@ -198,13 +218,9 @@ impl Meshes {
 
     /// Paint chunk `c` into fresh buffers.
     fn build(&mut self, ctx: &mut dyn RenderingBackend, w: &World, c: usize, z: f32, t: f32) {
-        let (cx, _) = w.map.chunks();
-        let (x0, y0) = ((c as i32 % cx) * CHUNK, (c as i32 / cx) * CHUNK);
+        let IVec { x: x0, y: y0 } = w.map.chunk_origin(c);
         let chunk = &mut self.chunks[c];
-        for p in chunk.parts.iter_mut().flatten() {
-            ctx.delete_buffer(p.bindings.vertex_buffers[0]);
-            ctx.delete_buffer(p.bindings.index_buffer);
-        }
+        chunk.free(ctx);
         chunk.live = Default::default();
         chunk.counts.clear();
         for layer in 0..3 {
@@ -213,7 +229,7 @@ impl Meshes {
                 for x in x0..(x0 + CHUNK).min(w.map.w) {
                     let cell = IVec::new(x, y);
                     let i = w.map.idx(cell);
-                    let Some(e) = [w.map.floor[i], w.map.item[i], w.map.fixture[i]][layer] else { continue };
+                    let Some(e) = w.map.layers_at(i)[layer] else { continue };
                     if live(w, e) {
                         chunk.live[layer].push(cell);
                         continue;
@@ -250,86 +266,86 @@ impl Meshes {
         self.rebuilt += 1;
     }
 
-    /// Draw the cached layers of every visible chunk, rebuilding stale
-    /// ones first. Returns, per layer, the cells to draw live this frame,
-    /// and the stack counts to label.
-    pub fn draw(&mut self, w: &World, cam: &Cam, t: f32) -> ([Vec<IVec>; 3], Vec<(IVec, u32)>) {
+    /// Find this frame's visible chunks and rebuild the stale ones.
+    pub fn prepare(&mut self, w: &World, cam: &Cam, t: f32) {
+        // SAFETY: macroquad's context outlives the frame, and nothing else
+        // holds it while the world draws.
+        let gl = unsafe { get_internal_gl() };
+        let ctx = gl.quad_context;
         let (cx, cy) = w.map.chunks();
         if self.chunks.len() != (cx * cy) as usize {
+            for ch in &mut self.chunks {
+                ch.free(ctx);
+            }
             self.chunks = (0..cx * cy).map(|_| Chunk::default()).collect();
         }
-        let (sw, sh) = (screen_width(), screen_height());
         let (wx0, wy0) = cam.to_world(0.0, 0.0);
-        let (wx1, wy1) = cam.to_world(sw, sh);
+        let (wx1, wy1) = cam.to_world(screen_width(), screen_height());
         let span = |a: f32, b: f32, n: i32| {
             ((a / CHUNK as f32).floor().max(0.0) as i32, ((b / CHUNK as f32).floor() as i32).min(n - 1))
         };
         let ((c0x, c1x), (c0y, c1y)) = (span(wx0, wx1, cx), span(wy0, wy1, cy));
-        let visible: Vec<usize> = (c0y..=c1y).flat_map(|y| (c0x..=c1x).map(move |x| (y * cx + x) as usize)).collect();
+        self.visible = (c0y..=c1y).flat_map(|y| (c0x..=c1x).map(move |x| (y * cx + x) as usize)).collect();
 
-        // SAFETY: macroquad's context outlives the frame, and nothing else holds
-        // it while the world draws.
-        let mut gl = unsafe { get_internal_gl() };
-        // What macroquad has batched so far (the ground) goes first.
-        gl.flush();
-        let ctx = gl.quad_context;
         if self.pipeline.is_none() {
             self.pipeline = Some(Self::pipeline(ctx));
         }
         self.rebuilt = 0;
+        (self.calls, self.indices) = (0, 0);
         self.zoom = if self.zoom.0 == cam.zoom { (cam.zoom, self.zoom.1 + 1) } else { (cam.zoom, 0) };
         let settled = self.zoom.1 >= SETTLE_FRAMES;
         let start = std::time::Instant::now();
-        for &c in &visible {
-            let rev = w.map.things_rev(c);
+        for k in 0..self.visible.len() {
+            let c = self.visible[k];
             let stale = match self.chunks[c].built {
                 None => true,
-                Some((r, _)) if r != rev => true,
+                Some((r, _)) if r != w.map.things_rev(c) => true,
                 Some((_, z)) if z == cam.zoom => false,
                 Some((_, z)) => {
-                    let ratio = (cam.zoom / z).max(z / cam.zoom);
-                    let in_budget = start.elapsed().as_secs_f64() * 1e6 < ZOOM_BUDGET_US;
-                    ratio > MAX_SCALE || (settled && in_budget)
+                    let far = (cam.zoom / z).max(z / cam.zoom) > MAX_SCALE;
+                    (settled || far) && start.elapsed().as_secs_f64() * 1e6 < ZOOM_BUDGET_US
                 }
             };
             if stale {
                 self.build(ctx, w, c, cam.zoom, t);
             }
         }
+    }
 
-        let (mut calls, mut indices) = (0, 0);
+    /// Draw one layer (floors, items, fixtures) of every visible chunk from
+    /// its buffers. Whatever macroquad has batched so far goes first, so
+    /// the layers below stay below.
+    pub fn draw_layer(&mut self, w: &World, cam: &Cam, layer: usize) {
+        // SAFETY: as in `prepare`.
+        let mut gl = unsafe { get_internal_gl() };
+        gl.flush();
+        let ctx = gl.quad_context;
+        let Some(pipeline) = &self.pipeline else { return };
+        let screen = [screen_width(), screen_height()];
         ctx.begin_default_pass(PassAction::Nothing);
-        ctx.apply_pipeline(self.pipeline.as_ref().expect("made above"));
-        for layer in 0..3 {
-            for &c in &visible {
-                let (x0, y0) = ((c as i32 % cx) * CHUNK, (c as i32 / cx) * CHUNK);
-                let origin = cam.to_screen(x0 as f32, y0 as f32);
-                let scale = self.chunks[c].built.map_or(1.0, |(_, z)| cam.zoom / z);
-                for p in &self.chunks[c].parts[layer] {
-                    ctx.apply_bindings(&p.bindings);
-                    ctx.apply_uniforms(UniformsSource::table(&Uniforms {
-                        origin: [origin.0, origin.1],
-                        screen: [sw, sh],
-                        scale,
-                    }));
-                    ctx.draw(0, p.indices, 1);
-                    calls += 1;
-                    indices += p.indices as usize;
-                }
+        ctx.apply_pipeline(pipeline);
+        for &c in &self.visible {
+            let o = w.map.chunk_origin(c);
+            let origin = cam.to_screen(o.x as f32, o.y as f32);
+            let scale = self.chunks[c].built.map_or(1.0, |(_, z)| cam.zoom / z);
+            for p in &self.chunks[c].parts[layer] {
+                ctx.apply_bindings(&p.bindings);
+                ctx.apply_uniforms(UniformsSource::table(&Uniforms { origin: [origin.0, origin.1], screen, scale }));
+                ctx.draw(0, p.indices, 1);
+                self.calls += 1;
+                self.indices += p.indices as usize;
             }
         }
         ctx.end_render_pass();
-        (self.calls, self.indices) = (calls, indices);
+    }
 
-        let mut live: [Vec<IVec>; 3] = Default::default();
-        let mut counts = Vec::new();
-        for &c in &visible {
-            let ch = &self.chunks[c];
-            for (l, cells) in ch.live.iter().enumerate() {
-                live[l].extend(cells);
-            }
-            counts.extend(&ch.counts);
-        }
-        (live, counts)
+    /// Cells of `layer` in the visible chunks to draw live this frame.
+    pub fn live(&self, layer: usize) -> impl Iterator<Item = IVec> + '_ {
+        self.visible.iter().flat_map(move |&c| self.chunks[c].live[layer].iter().copied())
+    }
+
+    /// Stacks to label in the visible chunks: cell and count.
+    pub fn counts(&self) -> impl Iterator<Item = (IVec, u32)> + '_ {
+        self.visible.iter().flat_map(|&c| self.chunks[c].counts.iter().copied())
     }
 }

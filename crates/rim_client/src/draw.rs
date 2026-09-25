@@ -82,7 +82,7 @@ impl Ground {
                 continue;
             }
             *seen = now;
-            let (x0, y0) = ((c as i32 % cx) * CHUNK, (c as i32 / cx) * CHUNK);
+            let IVec { x: x0, y: y0 } = w.map.chunk_origin(c);
             let (cw, ch) = (CHUNK.min(mw - x0), CHUNK.min(mh - y0));
             tex.update_part(&Self::texels(w, x0, y0, cw, ch), x0, y0, cw, ch);
         }
@@ -213,26 +213,29 @@ pub fn things(app: &mut App) -> Counts {
     }
 
     let t = get_time() as f32;
-    let (live, cached) = app.meshes.draw(w, cam, t);
+    app.meshes.prepare(w, cam, t);
+    let (tx0, ty0, tx1, ty1) = visible(app);
+    let on_screen = |c: IVec| (tx0..=tx1).contains(&c.x) && (ty0..=ty1).contains(&c.y);
     let mut counts = Counts::new();
     let mut label = |cell: IVec, n: u32| {
-        if z >= LABEL_ZOOM {
+        if z >= LABEL_ZOOM && on_screen(cell) {
             let (sx, sy) = cam.to_screen(cell.x as f32, cell.y as f32);
             counts.push((sx + z * 0.22, sy + z * 0.95 - 12.0, n));
         }
     };
-    for (cell, n) in cached {
-        label(cell, n);
-    }
-    for (layer, cells) in live.iter().enumerate() {
-        for &cell in cells {
-            let i = w.map.idx(cell);
-            let Some(e) = [w.map.floor[i], w.map.item[i], w.map.fixture[i]][layer] else { continue };
+    // Per layer, cached then live, so a plan never covers what stands on it.
+    for layer in 0..3 {
+        app.meshes.draw_layer(w, cam, layer);
+        for cell in app.meshes.live(layer) {
+            let Some(e) = w.map.layers_at(w.map.idx(cell))[layer] else { continue };
             let at = cam.to_screen(cell.x as f32, cell.y as f32);
             if let Some(n) = thing(&mut Immediate, w, e, cell, at, z, t) {
                 label(cell, n);
             }
         }
+    }
+    for (cell, n) in app.meshes.counts() {
+        label(cell, n);
     }
     counts
 }
