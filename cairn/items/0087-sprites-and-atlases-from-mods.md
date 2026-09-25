@@ -7,6 +7,7 @@ milestone: graphics
 depends_on:
 - b25b27e0-b43b-478f-b50b-825fedbf62e3
 - 3dd22b0d-a723-4acb-ae23-4095dc784e7e
+- e3c1f87b-12e7-4112-ad0e-028f9284e86a
 created: 2026-09-22
 updated: 2026-09-24
 priority: p0

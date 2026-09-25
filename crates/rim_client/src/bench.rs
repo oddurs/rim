@@ -4,14 +4,14 @@
 //! in around the start: rooms of walls, doors, floors, furniture and
 //! stacks, some walls still planned, and every designation over the rest
 //! of the map. It is drawn through the game's own `frame` and `render` in
-//! four views: the whole map at the lowest zoom, mid, close, and the whole
-//! map in a storm. Per view: each pass's CPU time, the time macroquad
+//! five views: the whole map at the lowest zoom, mid, close, the whole map
+//! in a storm, and a zoom gesture from the whole map to close and back. Per view: each pass's CPU time, the time macroquad
 //! takes to hand the frame to GL ("submit"), the time the GPU takes to
 //! finish it (Linux only, where macroquad calls glFinish under telemetry),
 //! and one frame's draw calls and indices.
 //!
-//! `--check` exits 1 when the world's CPU time on the whole map, clear or
-//! in a storm, is over budget. `--json FILE` writes the numbers, `--shots DIR` saves a
+//! `--check` exits 1 when the world's CPU time on the whole map (clear, in
+//! a storm, or zooming through it) is over budget. `--json FILE` writes the numbers, `--shots DIR` saves a
 //! screenshot of each view, and `--frames N` sets the frames per view.
 
 use crate::{frame, render, App, RawInput, RenderTimes, MIN_ZOOM};
@@ -146,14 +146,27 @@ struct View {
     /// None: the lowest zoom, centred on the map.
     zoom: Option<f32>,
     storm: bool,
+    /// Zoom in and out through the measured frames, as a player does.
+    zooming: bool,
 }
 
-const VIEWS: [View; 4] = [
-    View { name: "whole map", zoom: None, storm: false },
-    View { name: "mid", zoom: Some(12.0), storm: false },
-    View { name: "close", zoom: Some(28.0), storm: false },
-    View { name: "storm", zoom: None, storm: true },
+const VIEWS: [View; 5] = [
+    View { name: "whole map", zoom: None, storm: false, zooming: false },
+    View { name: "mid", zoom: Some(12.0), storm: false, zooming: false },
+    View { name: "close", zoom: Some(28.0), storm: false, zooming: false },
+    View { name: "storm", zoom: None, storm: true, zooming: false },
+    View { name: "zooming", zoom: Some(12.0), storm: false, zooming: true },
 ];
+
+/// Frames in one zoom gesture, lowest zoom to close and back.
+const GESTURE: usize = 120;
+
+/// The zoom `k` frames into a gesture: geometric, like the wheel.
+fn gesture_zoom(k: usize) -> f32 {
+    let t = (k % GESTURE) as f32 / GESTURE as f32;
+    let tri = 1.0 - (2.0 * t - 1.0).abs();
+    MIN_ZOOM * (28.0 / MIN_ZOOM).powf(tri)
+}
 
 /// The weather channels the renderer reads, pinned: clear, or a storm.
 const CHANNELS: [&str; 6] = ["precipitation", "temperature", "wind", "wind_dir", "cloud", "fog"];
@@ -169,6 +182,10 @@ struct Run {
     calls: usize,
     indices: usize,
     particles: usize,
+    /// Chunk meshes rebuilt over the measured frames.
+    rebuilt: usize,
+    /// Held to the budget: the whole map, and a zoom gesture through it.
+    gated: bool,
 }
 
 impl Run {
@@ -251,24 +268,40 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
         app.cam.x = x;
         app.cam.y = y;
         app.cam.zoom = v.zoom.unwrap_or(MIN_ZOOM);
-        for _ in 0..30 {
+        // A gesture warms up on the gesture, so measuring doesn't start
+        // with a jump from wherever the last view left the zoom.
+        const WARM: usize = 30;
+        for k in 0..WARM {
+            if v.zooming {
+                app.cam.zoom = gesture_zoom(k);
+            }
             draw_one(&mut app, &mut time, None).await;
         }
-        let mut r = Run { name: v.name, zoom: app.cam.zoom, ..Default::default() };
-        for _ in 0..frames {
+        let mut r =
+            Run { name: v.name, zoom: app.cam.zoom, gated: v.zoom.is_none() || v.zooming, ..Default::default() };
+        for k in WARM..WARM + frames {
+            if v.zooming {
+                app.cam.zoom = gesture_zoom(k);
+            }
             draw_one(&mut app, &mut time, None).await;
+            r.rebuilt += app.meshes.rebuilt;
             let zones = telemetry::frame().zones;
-            let submit = zone(&zones, "Event::draw end_frame").unwrap_or(0.0);
+            // Submit: macroquad's end of frame, and the meshes' mid-frame.
+            let submit = zone(&zones, "Event::draw end_frame").unwrap_or(0.0) + app.render_us.gl;
             r.frames.push((app.render_us, submit, zone(&zones, "glFinish/glFLush")));
         }
+        // A gesture's numbers are for the zoom it ended on.
+        r.zoom = app.cam.zoom;
         // The capture is taken on the frame after the one that asks.
         telemetry::capture_frame();
         draw_one(&mut app, &mut time, None).await;
         let shot = shots.as_ref().map(|d| d.join(format!("{}.png", v.name.replace(' ', "_"))));
         draw_one(&mut app, &mut time, shot.as_deref()).await;
+        // Macroquad's capture sees its own batches; the chunk meshes are
+        // drawn past it and count themselves.
         let calls = telemetry::drawcalls();
-        r.calls = calls.len();
-        r.indices = calls.iter().map(|c| c.indices_count).sum();
+        r.calls = calls.len() + app.meshes.calls;
+        r.indices = calls.iter().map(|c| c.indices_count).sum::<usize>() + app.meshes.indices;
         r.particles = app.sky.particles();
         results.push(r);
     }
@@ -281,7 +314,7 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
         screen_height()
     );
     println!(
-        "{:<10} {:>5} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7} {:>6} {:>8}",
+        "{:<10} {:>5} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7} {:>6} {:>8} {:>7}",
         "view",
         "zoom",
         "world",
@@ -295,12 +328,13 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
         "submit",
         "gpu",
         "calls",
-        "indices"
+        "indices",
+        "rebuilt"
     );
     for r in &results {
         let sorted = r.world_ms();
         println!(
-            "{:<10} {:>5.0} {:>7.3} {:>7.3} {:>7.3} {:>7.3} {:>7.3} {:>7.3} {:>7.3} {:>7.3} {:>7.3} {:>7} {:>6} {:>8}",
+            "{:<10} {:>5.0} {:>7.3} {:>7.3} {:>7.3} {:>7.3} {:>7.3} {:>7.3} {:>7.3} {:>7.3} {:>7.3} {:>7} {:>6} {:>8} {:>7}",
             r.name,
             r.zoom,
             r.mean(|f| f.0.world()),
@@ -314,7 +348,8 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
             r.mean(|f| f.1),
             r.gpu_ms().map_or("-".into(), |g| format!("{g:.3}")),
             r.calls,
-            r.indices
+            r.indices,
+            r.rebuilt
         );
     }
     println!("ms per frame, CPU unless named; world = every pass but the UI; budget {BUDGET_MS} ms on the whole map");
@@ -325,7 +360,7 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
             .map(|r| {
                 let sorted = r.world_ms();
                 format!(
-                    "    {{\"view\": \"{}\", \"zoom\": {}, \"world_ms\": {:.4}, \"world_p50_ms\": {:.4}, \"world_p99_ms\": {:.4}, \"ground_ms\": {:.4}, \"things_ms\": {:.4}, \"pawns_ms\": {:.4}, \"weather_ms\": {:.4}, \"light_ms\": {:.4}, \"ui_ms\": {:.4}, \"submit_ms\": {:.4}, \"gpu_ms\": {}, \"draw_calls\": {}, \"indices\": {}, \"particles\": {}}}",
+                    "    {{\"view\": \"{}\", \"zoom\": {}, \"world_ms\": {:.4}, \"world_p50_ms\": {:.4}, \"world_p99_ms\": {:.4}, \"ground_ms\": {:.4}, \"things_ms\": {:.4}, \"pawns_ms\": {:.4}, \"weather_ms\": {:.4}, \"light_ms\": {:.4}, \"ui_ms\": {:.4}, \"submit_ms\": {:.4}, \"gpu_ms\": {}, \"draw_calls\": {}, \"indices\": {}, \"particles\": {}, \"rebuilt\": {}}}",
                     r.name,
                     r.zoom,
                     r.mean(|f| f.0.world()),
@@ -341,7 +376,8 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
                     r.gpu_ms().map_or("null".into(), |g| format!("{g:.4}")),
                     r.calls,
                     r.indices,
-                    r.particles
+                    r.particles,
+                    r.rebuilt
                 )
             })
             .collect();
@@ -358,15 +394,14 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
     }
 
     if check {
-        // Shared CI runners are noisy and draw in software, and the
-        // renderer is over budget until things are cached per chunk: 3x
-        // until then, as the sim bench has, so the gate catches regressions.
-        let slack = if std::env::var_os("CI").is_some() { 3.0 } else { 1.0 };
+        // Shared CI runners are noisy and draw in software; the slack is
+        // for that, not for the renderer.
+        let slack = if std::env::var_os("CI").is_some() { 1.5 } else { 1.0 };
         let limit = BUDGET_MS * slack;
-        // The worst of the views that show the whole map: clear or storm.
+        // The worst of the gated views.
         let (name, mean) = results
             .iter()
-            .filter(|r| r.zoom == MIN_ZOOM)
+            .filter(|r| r.gated)
             .map(|r| (r.name, r.mean(|f| f.0.world())))
             .fold(("", 0.0), |a, b| if b.1 > a.1 { b } else { a });
         if mean > limit {

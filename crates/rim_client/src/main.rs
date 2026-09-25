@@ -9,6 +9,7 @@ mod autotest;
 mod bench;
 mod cli;
 mod draw;
+mod mesh;
 mod sky;
 
 use macroquad::prelude::*;
@@ -100,6 +101,8 @@ pub struct App {
     pub ground: draw::Ground,
     /// What each render pass cost last frame.
     pub render_us: RenderTimes,
+    /// Floors, items and fixtures, cached per chunk on the GPU.
+    pub meshes: mesh::Meshes,
     /// Input subscriber for wheel events (see `Wheel`).
     wheel_sub: usize,
 }
@@ -376,6 +379,7 @@ async fn game() {
         sky: sky::Sky::default(),
         ground: draw::Ground::default(),
         render_us: RenderTimes::default(),
+        meshes: mesh::Meshes::default(),
         wheel_sub: macroquad::input::utils::register_input_subscriber(),
     };
     app.selected = app.sim.world.colonists().next();
@@ -634,6 +638,12 @@ pub fn client_view(app: &mut App, mouse: (f32, f32), time: f64) -> ClientView {
                 format!("tick {} · pawns {} · entities {}", w.tick, w.pawns.len(), w.ecs.len()),
                 format!("paths {} · nodes {} · reservations {}", w.pf.searches, w.pf.expanded, w.reservations.len()),
                 format!("script hooks {hooks} · handlers {handlers} · emitters {}", w.fields.emitter_count()),
+                format!(
+                    "chunk meshes: {} calls · {}k indices · {} rebuilt",
+                    app.meshes.calls,
+                    app.meshes.indices / 1000,
+                    app.meshes.rebuilt
+                ),
             ],
             time,
         );
@@ -767,7 +777,12 @@ pub fn frame(app: &mut App, raw: &RawInput) {
 #[derive(Clone, Copy, Default, Debug)]
 pub struct RenderTimes {
     pub ground: f64,
+    /// Painting, excluding `gl`.
     pub things: f64,
+    /// Handing the chunk meshes (and the batch before each layer) to GL
+    /// mid-frame. Submission, like macroquad's end of frame: a software
+    /// rasteriser does its drawing here, a GPU driver only queues.
+    pub gl: f64,
     pub pawns: f64,
     pub weather: f64,
     pub light: f64,
@@ -775,10 +790,11 @@ pub struct RenderTimes {
 }
 
 impl RenderTimes {
-    pub fn rows(&self) -> [(&'static str, f64); 6] {
+    pub fn rows(&self) -> [(&'static str, f64); 7] {
         [
             ("ground", self.ground),
             ("things", self.things),
+            ("gl", self.gl),
             ("pawns", self.pawns),
             ("weather", self.weather),
             ("light", self.light),
@@ -786,7 +802,8 @@ impl RenderTimes {
         ]
     }
 
-    /// Everything but the UI, which has its own budget (DESIGN.md §11).
+    /// The world's CPU: everything but the UI, which has its own budget
+    /// (DESIGN.md §11), and GL submission, which is the driver's.
     pub fn world(&self) -> f64 {
         self.ground + self.things + self.pawns + self.weather + self.light
     }
@@ -803,7 +820,8 @@ pub fn render(app: &mut App) {
     app.ground.update(&app.sim.world);
     t.ground = lap();
     let counts = draw::things(app);
-    t.things = lap();
+    t.gl = app.meshes.submit_us;
+    t.things = lap() - t.gl;
     draw::pawns(app);
     t.pawns = lap();
     let air = sky::Air::read(&app.sim.world);

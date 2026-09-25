@@ -80,6 +80,13 @@ pub struct Look {
     pub join: Option<u16>,
 }
 
+impl Look {
+    /// Does it change from frame to frame? Then it can't be cached.
+    pub fn animated(&self) -> bool {
+        self.layers.iter().chain(&self.regrowing).any(|l| matches!(l.prim, Prim::Disc { pulse, .. } if pulse > 0.0))
+    }
+}
+
 /// What a def with no look draws: its cell filled in its colour, so
 /// nothing is ever invisible.
 pub fn plain() -> Vec<Layer> {

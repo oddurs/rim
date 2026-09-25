@@ -2,6 +2,7 @@
 
 use crate::{rgb, App, Tool};
 use macroquad::prelude::*;
+use rim_sim::hecs::Entity;
 use rim_sim::look::{Layer, Prim};
 use rim_sim::map::CHUNK;
 use rim_sim::rng::hash2_f;
@@ -81,27 +82,51 @@ impl Ground {
                 continue;
             }
             *seen = now;
-            let (x0, y0) = ((c as i32 % cx) * CHUNK, (c as i32 / cx) * CHUNK);
+            let IVec { x: x0, y: y0 } = w.map.chunk_origin(c);
             let (cw, ch) = (CHUNK.min(mw - x0), CHUNK.min(mh - y0));
             tex.update_part(&Self::texels(w, x0, y0, cw, ch), x0, y0, cw, ch);
         }
     }
 }
 
-/// A filled circle, cheaper when small: under 6 px across a 20-sided circle
-/// looks the same as an 8-sided one, at 24 indices instead of 60.
-fn disc(x: f32, y: f32, r: f32, c: Color) {
-    if r < 6.0 {
-        draw_poly(x, y, 8, r, 0.0, c);
-    } else {
-        draw_circle(x, y, r, c);
+/// Where painting goes: straight to macroquad's batch each frame, or into
+/// a chunk's cached buffers (mesh.rs). Both draw the same pixels.
+pub trait Sink {
+    fn rect(&mut self, x: f32, y: f32, w: f32, h: f32, c: Color);
+    fn poly(&mut self, x: f32, y: f32, sides: u8, r: f32, c: Color);
+    fn line(&mut self, x0: f32, y0: f32, x1: f32, y1: f32, t: f32, c: Color);
+}
+
+/// Macroquad's batch, this frame.
+pub struct Immediate;
+
+impl Sink for Immediate {
+    fn rect(&mut self, x: f32, y: f32, w: f32, h: f32, c: Color) {
+        draw_rectangle(x, y, w, h, c);
+    }
+    fn poly(&mut self, x: f32, y: f32, sides: u8, r: f32, c: Color) {
+        draw_poly(x, y, sides, r, 0.0, c);
+    }
+    fn line(&mut self, x0: f32, y0: f32, x1: f32, y1: f32, t: f32, c: Color) {
+        draw_line(x0, y0, x1, y1, t, c);
     }
 }
 
-/// Stack counts to label, in screen points: (top-left x, y, count). The
-/// client draws them with the UI's own text so they share its atlas and
-/// batch (macroquad's `draw_text` broke the world's batch twice per label).
-pub type Counts = Vec<(f32, f32, u32)>;
+/// A filled circle, cheaper when small: under 6 px across a 20-sided circle
+/// looks the same as an 8-sided one, at 24 indices instead of 60.
+fn disc(s: &mut impl Sink, x: f32, y: f32, r: f32, c: Color) {
+    s.poly(x, y, if r < 6.0 { 8 } else { 20 }, r, c);
+}
+
+/// A rectangle's outline, `t / 2` thick inside it, as macroquad's
+/// `draw_rectangle_lines` draws it, from four strips that don't overlap.
+fn outline(s: &mut impl Sink, x: f32, y: f32, w: f32, h: f32, t: f32, c: Color) {
+    let b = t / 2.0;
+    s.rect(x, y, w, b, c);
+    s.rect(x, y + h - b, w, b, c);
+    s.rect(x, y + b, b, h - t, c);
+    s.rect(x + w - b, y + b, b, h - t, c);
+}
 
 /// The part of the viewport that holds map cells, in tiles, inclusive.
 fn visible(app: &App) -> (i32, i32, i32, i32) {
@@ -116,16 +141,64 @@ fn visible(app: &App) -> (i32, i32, i32, i32) {
     )
 }
 
-/// The ground, then floors, items and fixtures.
-pub fn things(app: &App) -> Counts {
-    let mut counts = Counts::new();
-    let w = &app.sim.world;
+/// Stack counts to label, in screen points: (top-left x, y, count). The
+/// client draws them with the UI's own text so they share its atlas and
+/// batch (macroquad's `draw_text` broke the world's batch twice per label).
+pub type Counts = Vec<(f32, f32, u32)>;
+
+/// Paint thing `e`, which stands in `cell`, with the cell's top-left at
+/// `at` and `z` points a side. Returns its count if it has a stack to label.
+#[allow(clippy::too_many_arguments)]
+pub fn thing(s: &mut impl Sink, w: &World, e: Entity, cell: IVec, at: (f32, f32), z: f32, t: f32) -> Option<u32> {
     let defs = &w.defs;
+    let th = w.ecs.get::<&Thing>(e).ok()?;
+    let td = defs.thing(th.def);
+    // A thing built of something is drawn in that something's colour, so
+    // marble arrives looking like marble with no change here. Anything
+    // else keeps its def's colour.
+    let c = match w.ecs.get::<&MadeOf>(e) {
+        Ok(m) => rgb(defs.thing(m.0).rgb),
+        Err(_) => rgb(td.rgb),
+    };
+    let (sx, sy) = at;
+    if let Ok(bp) = w.ecs.get::<&Blueprint>(e) {
+        let need: u32 = bp.cost.iter().map(|c| c.1).sum();
+        let have: u32 = bp.delivered.iter().sum();
+        let ghost = Color::new(0.45, 0.7, 1.0, 0.35);
+        s.rect(sx + 1.0, sy + 1.0, z - 2.0, z - 2.0, ghost);
+        outline(s, sx + 1.0, sy + 1.0, z - 2.0, z - 2.0, 1.5, Color::new(0.55, 0.8, 1.0, 0.8));
+        let frac = if have < need {
+            have as f32 / need.max(1) as f32 * 0.5
+        } else {
+            0.5 + 0.5 * (1.0 - bp.work_left as f32 / bp.work.max(1) as f32)
+        };
+        s.rect(sx + 2.0, sy + z - 4.0, (z - 4.0) * frac, 2.5, Color::new(0.6, 0.9, 1.0, 0.9));
+        return None;
+    }
+    let look = &td.look_r;
+    let layers = match w.ecs.get::<&Regrow>(e) {
+        Ok(_) if !look.regrowing.is_empty() => &look.regrowing,
+        _ => &look.layers,
+    };
+    paint(s, w, layers, look.join, c, cell, at, z, t);
+    if let Ok(d) = w.ecs.get::<&Designated>(e) {
+        let dc = rgb(defs.designations[d.0 as usize].rgb);
+        disc(s, sx + z * 0.82, sy + z * 0.18, z * 0.13 + 1.0, BLACK);
+        disc(s, sx + z * 0.82, sy + z * 0.18, z * 0.13, dc);
+    }
+    (th.count > 1).then_some(th.count)
+}
+
+/// Stacks show their count once a cell is big enough to read one.
+const LABEL_ZOOM: f32 = 22.0;
+
+/// The ground, then floors, items and fixtures: cached per chunk where
+/// they don't change (mesh.rs), live where they do.
+pub fn things(app: &mut App) -> Counts {
+    let w = &app.sim.world;
     let cam = &app.cam;
     let z = cam.zoom;
     clear_background(Color::from_rgba(12, 14, 16, 255));
-
-    let (tx0, ty0, tx1, ty1) = visible(app);
 
     // Terrain: one quad from the baked ground texture.
     if let Some(tex) = &app.ground.tex {
@@ -140,59 +213,29 @@ pub fn things(app: &App) -> Counts {
     }
 
     let t = get_time() as f32;
-    // Floors, then items, then fixtures on top.
+    app.meshes.prepare(w, cam, t);
+    let (tx0, ty0, tx1, ty1) = visible(app);
+    let on_screen = |c: IVec| (tx0..=tx1).contains(&c.x) && (ty0..=ty1).contains(&c.y);
+    let mut counts = Counts::new();
+    let mut label = |cell: IVec, n: u32| {
+        if z >= LABEL_ZOOM && on_screen(cell) {
+            let (sx, sy) = cam.to_screen(cell.x as f32, cell.y as f32);
+            counts.push((sx + z * 0.22, sy + z * 0.95 - 12.0, n));
+        }
+    };
+    // Per layer, cached then live, so a plan never covers what stands on it.
     for layer in 0..3 {
-        for ty in ty0..=ty1 {
-            for tx in tx0..=tx1 {
-                let i = (ty * w.map.w + tx) as usize;
-                let Some(e) = (match layer {
-                    0 => w.map.floor[i],
-                    1 => w.map.item[i],
-                    _ => w.map.fixture[i],
-                }) else {
-                    continue;
-                };
-                let Ok(th) = w.ecs.get::<&Thing>(e) else { continue };
-                let td = defs.thing(th.def);
-                // A thing built of something is drawn in that something's
-                // colour, so marble arrives looking like marble with no
-                // change here. Anything else keeps its def's colour.
-                let c = match w.ecs.get::<&MadeOf>(e) {
-                    Ok(m) => rgb(defs.thing(m.0).rgb),
-                    Err(_) => rgb(td.rgb),
-                };
-                let (sx, sy) = cam.to_screen(tx as f32, ty as f32);
-                let bp = w.ecs.get::<&Blueprint>(e).ok();
-                if let Some(bp) = &bp {
-                    let need: u32 = bp.cost.iter().map(|c| c.1).sum();
-                    let have: u32 = bp.delivered.iter().sum();
-                    let ghost = Color::new(0.45, 0.7, 1.0, 0.35);
-                    draw_rectangle(sx + 1.0, sy + 1.0, z - 2.0, z - 2.0, ghost);
-                    draw_rectangle_lines(sx + 1.0, sy + 1.0, z - 2.0, z - 2.0, 1.5, Color::new(0.55, 0.8, 1.0, 0.8));
-                    let frac = if have < need {
-                        have as f32 / need.max(1) as f32 * 0.5
-                    } else {
-                        0.5 + 0.5 * (1.0 - bp.work_left as f32 / bp.work.max(1) as f32)
-                    };
-                    draw_rectangle(sx + 2.0, sy + z - 4.0, (z - 4.0) * frac, 2.5, Color::new(0.6, 0.9, 1.0, 0.9));
-                    continue;
-                }
-                let look = &td.look_r;
-                let layers = match w.ecs.get::<&Regrow>(e) {
-                    Ok(_) if !look.regrowing.is_empty() => &look.regrowing,
-                    _ => &look.layers,
-                };
-                paint(w, layers, look.join, c, IVec::new(tx, ty), (sx, sy), z, t);
-                if z >= 22.0 && th.count > 1 {
-                    counts.push((sx + z * 0.22, sy + z * 0.95 - 12.0, th.count));
-                }
-                if let Ok(d) = w.ecs.get::<&Designated>(e) {
-                    let dc = rgb(defs.designations[d.0 as usize].rgb);
-                    disc(sx + z * 0.82, sy + z * 0.18, z * 0.13 + 1.0, BLACK);
-                    disc(sx + z * 0.82, sy + z * 0.18, z * 0.13, dc);
-                }
+        app.meshes.draw_layer(w, cam, layer);
+        for cell in app.meshes.live(layer) {
+            let Some(e) = w.map.layers_at(w.map.idx(cell))[layer] else { continue };
+            let at = cam.to_screen(cell.x as f32, cell.y as f32);
+            if let Some(n) = thing(&mut Immediate, w, e, cell, at, z, t) {
+                label(cell, n);
             }
         }
+    }
+    for (cell, n) in app.meshes.counts() {
+        label(cell, n);
     }
     counts
 }
@@ -217,8 +260,8 @@ pub fn pawns(app: &App) {
         }
         let (sx, sy) = cam.to_screen(px, py);
         let r = cd.size * z;
-        disc(sx + 1.5, sy + 2.0, r, Color::new(0.0, 0.0, 0.0, 0.3));
-        disc(sx, sy, r, rgb(cd.rgb));
+        disc(&mut Immediate, sx + 1.5, sy + 2.0, r, Color::new(0.0, 0.0, 0.0, 0.3));
+        disc(&mut Immediate, sx, sy, r, rgb(cd.rgb));
         let ring = match p.faction {
             Faction::Player => Some(PLAYER),
             Faction::Hostile => Some(HOSTILE),
@@ -320,7 +363,17 @@ pub fn world_ui(app: &App) {
 /// Paint a look's layers over the cell whose top-left is at `at`, `z`
 /// points a side. `own` is the thing's colour (or its material's).
 #[allow(clippy::too_many_arguments)]
-fn paint(w: &World, layers: &[Layer], join: Option<u16>, own: Color, cell: IVec, at: (f32, f32), z: f32, t: f32) {
+fn paint(
+    s: &mut impl Sink,
+    w: &World,
+    layers: &[Layer],
+    join: Option<u16>,
+    own: Color,
+    cell: IVec,
+    at: (f32, f32),
+    z: f32,
+    t: f32,
+) {
     let (sx, sy) = at;
     // A fill spanning the whole cell overlaps the next one by half a point,
     // so neighbours don't show a hairline seam between them. Only a whole
@@ -341,17 +394,17 @@ fn paint(w: &World, layers: &[Layer], join: Option<u16>, own: Color, cell: IVec,
                 // Grown to `min_px` about its middle, so a seam stays centred.
                 let (x, y, rw, rh) = px(rect);
                 let (gw, gh) = ((min_px - rw).max(0.0), (min_px - rh).max(0.0));
-                draw_rectangle(x - gw / 2.0, y - gh / 2.0, rw + gw, rh + gh, c);
+                s.rect(x - gw / 2.0, y - gh / 2.0, rw + gw, rh + gh, c);
             }
             Prim::Outline { rect, width } => {
                 let [x, y, rw, rh] = rect;
-                draw_rectangle_lines(sx + x * z, sy + y * z, rw * z, rh * z, width, c);
+                outline(s, sx + x * z, sy + y * z, rw * z, rh * z, width, c);
             }
             Prim::Disc { at: [x, y], r, min_px, pulse } => {
                 let f = if pulse > 0.0 { 1.0 + (t * 9.0 + cell.x as f32).sin() * pulse } else { 1.0 };
-                disc(sx + x * z, sy + y * z, (r * z).max(min_px) * f, c);
+                disc(s, sx + x * z, sy + y * z, (r * z).max(min_px) * f, c);
             }
-            Prim::Edges { width } => edges(w, cell, join, (sx, sy), z, width, c),
+            Prim::Edges { width } => edges(s, w, cell, join, (sx, sy), z, width, c),
         }
     }
 }
@@ -369,19 +422,20 @@ fn joins(w: &World, p: IVec, join: Option<u16>) -> bool {
 
 /// The cell's border on the sides that don't face a joined neighbour.
 /// Corners and junctions come out joined for free.
-fn edges(w: &World, p: IVec, join: Option<u16>, (sx, sy): (f32, f32), z: f32, t: f32, c: Color) {
+#[allow(clippy::too_many_arguments)]
+fn edges(s: &mut impl Sink, w: &World, p: IVec, join: Option<u16>, (sx, sy): (f32, f32), z: f32, t: f32, c: Color) {
     let (x0, y0, x1, y1) = (sx + 0.5, sy + 0.5, sx + z - 0.5, sy + z - 0.5);
     if !joins(w, p.offset(0, -1), join) {
-        draw_line(x0, y0, x1, y0, t, c);
+        s.line(x0, y0, x1, y0, t, c);
     }
     if !joins(w, p.offset(0, 1), join) {
-        draw_line(x0, y1, x1, y1, t, c);
+        s.line(x0, y1, x1, y1, t, c);
     }
     if !joins(w, p.offset(-1, 0), join) {
-        draw_line(x0, y0, x0, y1, t, c);
+        s.line(x0, y0, x0, y1, t, c);
     }
     if !joins(w, p.offset(1, 0), join) {
-        draw_line(x1, y0, x1, y1, t, c);
+        s.line(x1, y0, x1, y1, t, c);
     }
 }
 

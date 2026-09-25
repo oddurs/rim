@@ -129,6 +129,16 @@ impl Map {
         (self.chunks_w, (self.h + CHUNK - 1) / CHUNK)
     }
 
+    /// The top-left cell of chunk `c`.
+    pub fn chunk_origin(&self, c: usize) -> IVec {
+        IVec::new((c as i32 % self.chunks_w) * CHUNK, (c as i32 / self.chunks_w) * CHUNK)
+    }
+
+    /// What stands in cell `i`, in the order it is drawn: floor, item, fixture.
+    pub fn layers_at(&self, i: usize) -> [Option<Entity>; 3] {
+        [self.floor[i], self.item[i], self.fixture[i]]
+    }
+
     pub fn chunk_of(&self, p: IVec) -> usize {
         ((p.y / CHUNK) * self.chunks_w + p.x / CHUNK) as usize
     }
