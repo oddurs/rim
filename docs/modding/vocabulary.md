@@ -42,6 +42,28 @@ requires none, so with no plugins every job is bare-handed.
 | `digging` | Breaks and lifts earth | a digging stick, a spade |
 | `piercing` | A point that pierces | a spear, an awl |
 
+A tool is an item with a `tool` block, and a harvest names what it needs:
+
+```toml
+[[thing]]
+id = "hand_axe"
+label = "hand axe"
+category = "item"
+hp = 60
+tool = { tags = ["chopping", "cutting"], speed = 0.6, wear = 3 }
+
+[[patch]]
+target = "thing/core:tree_oak"
+set = { harvest = { requires = ["chopping"] } }
+```
+
+A pawn holds one tool at a time. Given work that needs one it doesn't
+hold, it fetches the nearest free tool that covers it and puts down what it
+had. `speed` is work per tick against bare hands' 1, times the `tool_speed`
+factor of what the tool is made of. `wear` is the hp a finished job costs
+it, and at none left it breaks. Work no tool in the colony can do waits,
+and a selected thing says so: "Needs a chopping tool."
+
 ## Thing tags
 
 | Tag | Means |

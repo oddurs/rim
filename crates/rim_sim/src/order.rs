@@ -107,18 +107,25 @@ fn fixture(w: &World, pawn: Entity, from: IVec, f: Entity) -> Option<Order> {
     // The harvest it's designated for, and only that. Otherwise a gentle
     // one (the thing stays), so a click gathers from a tree rather than
     // felling it, even while those branches grow back. Something with no
-    // gentle harvest is taken as the click says.
-    let ready = |h: &&HarvestDef| w.harvest_ready(f, h.key());
+    // gentle harvest is taken as the click says. Either way it must be
+    // ready, and a harvest that needs a tool this pawn can't get isn't on
+    // offer.
+    let p = w.ecs.get::<&Pawn>(pawn).ok()?;
+    let have = w.colony_tools();
+    // The tool to fetch for a harvest on offer: Some(None) when none is needed.
+    let offer = |h: &HarvestDef| {
+        w.harvest_ready(f, h.key()).then(|| ai::tool_for(w, pawn, &p, h.requires_r, have)).flatten().map(|t| t.1)
+    };
     let gentle = td.harvest.iter().any(|h| !h.destroy);
     let pick = match w.ecs.get::<&Designated>(f).ok().and_then(|d| td.harvest_for(d.0)) {
-        Some(h) => Some(h).filter(ready),
-        None => td.harvest.iter().filter(|h| !gentle || !h.destroy).find(ready),
+        Some(h) => offer(h).map(|t| (h, t)),
+        None => td.harvest.iter().filter(|h| !gentle || !h.destroy).find_map(|h| offer(h).map(|t| (h, t))),
     };
-    if let Some(hd) = pick {
+    if let Some((hd, tool)) = pick {
         return Some(Order {
             label: format!("{} {}", w.defs.designations[hd.desig_r as usize].label, td.label),
-            job: Job::Harvest { target: f, forced: true, harvest: hd.key() },
-            reserve: vec![f],
+            job: Job::Harvest { target: f, forced: true, harvest: hd.key(), tool },
+            reserve: std::iter::once(f).chain(tool).collect(),
         });
     }
     if !td.harvest.is_empty() {

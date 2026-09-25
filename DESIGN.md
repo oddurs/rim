@@ -569,9 +569,9 @@ not from a research screen.
 - **In hand:** each pawn holds at most one tool and fetches it before the
   work. Three axes fell three trees at once, and wear turns tools into a loop
   of flint, knapping and replacing.
-- **Ruling:** in hand. The fetch is a stage of the job, and the colony keeps a
-  bitset of the tags its tools cover, so work nobody could do is rejected in
-  O(1).
+- **Ruling:** in hand. The fetch is a stage of the job. Tags are bits, and
+  the tags the colony's tools cover are gathered once per search from the
+  few tools there are, so work nobody could do costs a mask test.
 
 ### Mechanisms
 

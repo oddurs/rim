@@ -21,7 +21,8 @@ use std::path::Path;
 /// format and every older one it knows how to carry forward.
 /// 2: a thing's progress moved to `engine:work`; Blueprint lost `work` and
 /// `work_left`.
-pub const FORMAT: u32 = 2;
+/// 3: `engine:held`, the tools in pawns' hands.
+pub const FORMAT: u32 = 3;
 
 /// Where a format-1 plan kept its progress.
 #[derive(Deserialize)]
@@ -237,6 +238,7 @@ impl Snapshot {
             ("engine:designated".to_string(), component::<Designated>(w)),
             ("engine:regrow".to_string(), component::<Regrow>(w)),
             ("engine:work".to_string(), component::<Work>(w)),
+            ("engine:held".to_string(), component::<Held>(w)),
         ]);
         // Script data, one section per mod: every key is "mod:key" (0062).
         let mut by_mod: BTreeMap<&str, BTreeMap<&str, &Data>> = BTreeMap::new();
@@ -535,6 +537,13 @@ impl Snapshot {
         for (id, n) in dropped {
             notes.push(if n == 1 { format!("dropped {id}") } else { format!("dropped {n} × {id}") });
         }
+        if self.header.format >= 3 {
+            for (e, h) in dec::<Vec<(Entity, Held)>>(self, "engine:held")? {
+                add(e, &|b| {
+                    b.add(h);
+                });
+            }
+        }
         for (id, (e, mut b)) in builders {
             if !gone.contains(&id) {
                 w.ecs.spawn_at(e, b.build());
@@ -545,6 +554,34 @@ impl Snapshot {
         w.next_entity = ws.next_entity;
         w.pawns = w.ecs.query::<(Entity, &Pawn)>().iter().map(|(e, _)| e).collect();
         w.pawns.sort_unstable_by_key(|e| e.id());
+        w.tools = w
+            .ecs
+            .query::<(Entity, &Thing)>()
+            .iter()
+            .filter(|(_, t)| defs.thing(t.def).tool.is_some())
+            .map(|(e, _)| e)
+            .collect();
+        // A hand holds a tool that is still a tool: one whose def went with
+        // a removed mod is gone.
+        let tools = &w.tools;
+        for p in w.ecs.query_mut::<&mut Pawn>() {
+            if p.hand.is_some_and(|t| !tools.contains(&t)) {
+                p.hand = None;
+            }
+        }
+        // And a tool marked held is in its holder's hand, or it lies where
+        // it was: a holder whose creature went with a removed mod, or a
+        // tool that stopped being one, leaves it on the map.
+        let loose: Vec<Entity> = w
+            .ecs
+            .query::<(Entity, &Held)>()
+            .iter()
+            .filter(|(t, h)| w.ecs.get::<&Pawn>(h.by).map_or(true, |p| p.hand != Some(*t)))
+            .map(|(t, _)| t)
+            .collect();
+        for t in loose {
+            let _ = w.ecs.remove_one::<Held>(t);
+        }
         for (target, done, harvest) in old_jobs {
             let Some(t) = w.thing(target).filter(|_| done > 0 && w.ecs.get::<&Work>(target).is_err()) else {
                 continue;
@@ -577,6 +614,7 @@ impl Snapshot {
         let mut things: Vec<(Entity, Thing, bool, Option<Faction>)> = w
             .ecs
             .query::<(Entity, &Thing, Option<&Blueprint>, Option<&Owner>)>()
+            .without::<&Held>()
             .iter()
             .map(|(e, t, bp, o)| (e, t.clone(), bp.is_some(), o.map(|o| o.0)))
             .collect();

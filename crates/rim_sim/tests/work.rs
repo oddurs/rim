@@ -209,7 +209,8 @@ fn a_format_1_chop_keeps_its_progress() {
     let (mut s, founder) = sim();
     let (tree, _) = nearest_oak(&mut s, founder);
     let hd = felling(&s);
-    s.world.ecs.get::<&mut Pawn>(founder).unwrap().job = Job::Harvest { target: tree, forced: true, harvest: hd.key() };
+    s.world.ecs.get::<&mut Pawn>(founder).unwrap().job =
+        Job::Harvest { target: tree, forced: true, harvest: hd.key(), tool: None };
     let mut snap = Snapshot::capture(&s);
 
     // Format 1 counted a chop on the pawn's job, and plans on the Blueprint.

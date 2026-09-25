@@ -72,6 +72,10 @@ pub fn deaths(w: &mut World) {
             let _ = w.ecs.despawn(e);
             w.release_all(e);
             w.reservations.remove(&e);
+            // Whoever walks off the map takes what they hold with them.
+            if let Some(t) = p.hand {
+                w.despawn_thing(t);
+            }
             let cd = w.defs.creature(p.def);
             if p.faction == Faction::Hostile {
                 let who = if cd.intelligent { format!("Raider {}", p.name) } else { format!("The {}", cd.label) };
@@ -94,6 +98,9 @@ pub fn deaths(w: &mut World) {
         let cd = defs.creature(p.def);
         if let Some((d, n)) = p.carry {
             w.place_item(d, p.pos, n);
+        }
+        if let Some(t) = p.hand {
+            w.put_down(t, p.pos);
         }
         for &(d, n) in &cd.butcher_r {
             w.place_item(d, p.pos, n);

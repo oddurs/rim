@@ -388,16 +388,50 @@ pub fn work_blocked(w: &World, e: Entity) -> Option<String> {
         }
     }
     // Drafted colonists take no work.
-    let free: Vec<IVec> = w
-        .colonists()
-        .filter(|&c| w.ecs.get::<&Pawn>(c).is_ok_and(|p| !p.drafted))
-        .filter_map(|c| w.pawn_pos(c))
-        .collect();
+    let free: Vec<Entity> =
+        w.colonists().filter(|&c| w.ecs.get::<&Pawn>(c).is_ok_and(|p| !p.drafted && p.active)).collect();
     if free.is_empty() && w.colonists().next().is_some() {
         return Some("Everyone is drafted.".into());
     }
-    let reachable = free.iter().any(|&p| w.map.can_reach(p, Goal::Touch(t.pos)));
-    (!reachable).then(|| "No colonist can reach it.".into())
+    let reachable = free.iter().filter_map(|&c| w.pawn_pos(c)).any(|p| w.map.can_reach(p, Goal::Touch(t.pos)));
+    if !reachable {
+        return Some("No colonist can reach it.".into());
+    }
+    let need = w.defs.thing(t.def).harvest_for(d).map_or(0, |h| h.requires_r);
+    if need == 0 {
+        return None;
+    }
+    let tags = |m: ToolMask| w.defs.tool_tag_names(m).join(" and ");
+    let missing = need & !w.colony_tools();
+    if missing != 0 {
+        return Some(format!("Needs a {} tool.", tags(missing)));
+    }
+    // The colony has one, but it's in other hands, claimed or out of reach.
+    let can = free.iter().any(|&c| {
+        let Ok(p) = w.ecs.get::<&Pawn>(c) else { return false };
+        w.hand_covers(&p, need) || w.nearest_tool(c, p.pos, need).is_some()
+    });
+    (!can).then(|| format!("Needs a free {} tool.", tags(need)))
+}
+
+/// What pawn `e` must do to hold a tool covering `need`, given the tags
+/// the colony's tools cover (`have`): nothing (`Some((0, None))`), walk
+/// this far to fetch one (`Some((d, Some(tool)))`), or it can't (`None`).
+/// A tag nobody has is refused with a mask test, before looking for tools.
+pub(crate) fn tool_for(
+    w: &World,
+    e: Entity,
+    p: &Pawn,
+    need: ToolMask,
+    have: ToolMask,
+) -> Option<(u32, Option<Entity>)> {
+    if w.hand_covers(p, need) {
+        return Some((0, None));
+    }
+    if have & need != need {
+        return None;
+    }
+    w.nearest_tool(e, p.pos, need).map(|(d, t)| (d, Some(t)))
 }
 
 fn find_food(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
@@ -411,9 +445,11 @@ fn find_food(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
         let is_item = td.category == Category::Item && td.food.is_some();
         let forage = (!is_item)
             .then(|| {
-                td.harvest
-                    .iter()
-                    .find(|h| h.yields_r.iter().any(|y| defs.thing(y.0).food.is_some()) && w.harvest_ready(te, h.key()))
+                td.harvest.iter().find(|h| {
+                    h.yields_r.iter().any(|y| defs.thing(y.0).food.is_some())
+                        && w.harvest_ready(te, h.key())
+                        && w.hand_covers(p, h.requires_r)
+                })
             })
             .flatten();
         let is_plant = forage.is_some();
@@ -434,7 +470,7 @@ fn find_food(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
     let (_, t, forage) = best?;
     w.reserve(t, e);
     if let Some(harvest) = forage {
-        return Some(Job::Harvest { target: t, forced: true, harvest });
+        return Some(Job::Harvest { target: t, forced: true, harvest, tool: None });
     }
     // Somewhere to sit and eat it, if the colony has such a thing.
     let food_at = w.thing(t).map_or(p.pos, |f| f.pos);
@@ -623,21 +659,29 @@ fn find_work(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
     }
 
     // Designated fixtures: harvest the natural ones, take down the built ones.
+    // Gated harvests need a tool: what the colony's tools cover is worked
+    // out once, so one nobody could do costs a mask test.
+    let have = w.colony_tools();
     for (te, t, des) in w.ecs.query::<(Entity, &Thing, &Designated)>().without::<&Blueprint>().iter() {
         let dd = &defs.designations[des.0 as usize];
         let d = t.pos.octile(p.pos);
         if !wanted(dd.work_r) || !nearer(&best[dd.work_r as usize], d, te) || w.reserved_by_other(te, e) {
             continue;
         }
-        let job = match dd.targets {
-            Targets::Built => Job::Deconstruct { target: te },
+        // The walk to fetch a tool counts, as the walk to a material does.
+        let (job, detour) = match dd.targets {
+            Targets::Built => (Job::Deconstruct { target: te }, 0),
             _ => match defs.thing(t.def).harvest_for(des.0) {
-                Some(h) if w.harvest_ready(te, h.key()) => Job::Harvest { target: te, forced: false, harvest: h.key() },
+                Some(h) if w.harvest_ready(te, h.key()) => match tool_for(w, e, p, h.requires_r, have) {
+                    Some((extra, tool)) => (Job::Harvest { target: te, forced: false, harvest: h.key(), tool }, extra),
+                    None => continue,
+                },
                 _ => continue,
             },
         };
-        if w.map.can_reach(p.pos, Goal::Touch(t.pos)) {
-            best[dd.work_r as usize] = Some((d, job, te));
+        let nearest = detour == 0 || nearer(&best[dd.work_r as usize], d + detour, te);
+        if nearest && w.map.can_reach(p.pos, Goal::Touch(t.pos)) {
+            best[dd.work_r as usize] = Some((d + detour, job, te));
         }
     }
 
@@ -662,7 +706,7 @@ fn find_work(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
         .filter_map(|(t, b)| Some((t as DefId, b?)))
         .min_by_key(|(t, b)| (level[*t as usize], b.0, rank(*t), b.2.id()))?;
     w.reserve(res, e);
-    if let Job::Deliver { src, .. } = job {
+    if let Job::Deliver { src, .. } | Job::Harvest { tool: Some(src), .. } = job {
         w.reserve(src, e);
     }
     Some(job)
@@ -713,7 +757,7 @@ fn run_job(w: &mut World, e: Entity, p: &mut Pawn) {
             Go::Moving if w.tick < until => (Some(j), 0),
             _ => (None, 30),
         },
-        Job::Harvest { target, forced, harvest } => (run_harvest(w, p, target, forced, harvest), 0),
+        Job::Harvest { target, forced, harvest, tool } => (run_harvest(w, e, p, target, forced, harvest, tool), 0),
         Job::Deliver { bp, src, want, stage } => (run_deliver(w, p, bp, src, want, stage), 0),
         Job::Construct { bp } => (run_construct(w, p, bp), 0),
         Job::Deconstruct { target } => (run_deconstruct(w, p, target), 0),
@@ -729,7 +773,16 @@ fn run_job(w: &mut World, e: Entity, p: &mut Pawn) {
     }
 }
 
-fn run_harvest(w: &mut World, p: &mut Pawn, target: Entity, forced: bool, harvest: HarvestKey) -> Option<Job> {
+#[allow(clippy::too_many_arguments)]
+fn run_harvest(
+    w: &mut World,
+    e: Entity,
+    p: &mut Pawn,
+    target: Entity,
+    forced: bool,
+    harvest: HarvestKey,
+    tool: Option<Entity>,
+) -> Option<Job> {
     let t = w.thing(target)?;
     let defs = w.defs.clone();
     let hd = defs.thing(t.def).harvest_by_key(harvest)?;
@@ -737,11 +790,33 @@ fn run_harvest(w: &mut World, p: &mut Pawn, target: Entity, forced: bool, harves
     if !w.harvest_ready(target, harvest) || (!forced && !marked) {
         return None;
     }
+    // First the tool, if it needs one this pawn doesn't hold.
+    if let Some(tl) = tool {
+        let lying = w.ecs.get::<&Held>(tl).is_err();
+        let at = w.thing(tl).map(|t| t.pos).filter(|_| lying)?;
+        return match go_to(w, p, Goal::Cell(at)) {
+            Go::Failed => None,
+            Go::Moving => Some(Job::Harvest { target, forced, harvest, tool }),
+            Go::Arrived => {
+                w.take_tool(e, p, tl);
+                Some(Job::Harvest { target, forced, harvest, tool: None })
+            }
+        };
+    }
+    if !w.hand_covers(p, hd.requires_r) {
+        return None;
+    }
     match go_to(w, p, Goal::Touch(t.pos)) {
         Go::Failed => None,
-        Go::Moving => Some(Job::Harvest { target, forced, harvest }),
+        Go::Moving => Some(Job::Harvest { target, forced, harvest, tool }),
         Go::Arrived => {
-            let work = w.work_on(target, t.pos, p.pos, Some(hd.desig_r), |_| hd.work)?;
+            // A tool sets the pace for the whole job, when it starts.
+            let speed = match p.hand.filter(|_| hd.requires_r != 0) {
+                Some(tl) => w.tool_speed(tl),
+                None => 1.0,
+            };
+            let total = |_: &World| (hd.work as f64 / speed.max(0.01)).ceil() as u32;
+            let work = w.work_on(target, t.pos, p.pos, Some(hd.desig_r), total)?;
             if work.finished() {
                 if marked {
                     let _ = w.ecs.remove_one::<Designated>(target);
@@ -758,9 +833,12 @@ fn run_harvest(w: &mut World, p: &mut Pawn, target: Entity, forced: bool, harves
                 for &(yd, n) in &hd.yields_r {
                     w.place_item(yd, t.pos, n);
                 }
+                if hd.requires_r != 0 {
+                    w.wear_tool(p);
+                }
                 None
             } else {
-                Some(Job::Harvest { target, forced, harvest })
+                Some(Job::Harvest { target, forced, harvest, tool })
             }
         }
     }
