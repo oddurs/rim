@@ -4,6 +4,7 @@
 //! Unknown fields are ignored on purpose: a plugin may annotate another
 //! mod's defs with data that only it understands.
 
+use crate::look::{Look, LookDef};
 use crate::terms::{InputDef, TermDef, Terms, TermsDef};
 use serde::Deserialize;
 use std::collections::{BTreeMap, HashMap};
@@ -83,34 +84,18 @@ pub enum Category {
     Floor,
 }
 
-#[derive(Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
-#[serde(rename_all = "lowercase")]
-pub enum Shape {
-    #[default]
-    Blob,
-    Tree,
-    Bush,
-    Rock,
-    Wall,
-    Door,
-    Window,
-    Bed,
-    Floor,
-    Table,
-    Chair,
-    Stove,
-    Fire,
-    Item,
-}
-
 #[derive(Deserialize, Clone, Debug)]
 pub struct ThingDef {
     pub id: String,
     pub label: String,
     pub color: String,
     pub category: Category,
+    /// How it is drawn (look.rs).
     #[serde(default)]
-    pub shape: Shape,
+    pub look: LookDef,
+    /// Gone in API 0.4, for `look`. Read only to say so.
+    #[serde(default)]
+    shape: Option<String>,
     #[serde(default)]
     pub market_value: f64,
     /// Blocks movement (walls, rocks).
@@ -155,6 +140,8 @@ pub struct ThingDef {
     pub boundary: Vec<BoundaryDef>,
     #[serde(skip)]
     pub rgb: [u8; 3],
+    #[serde(skip)]
+    pub look_r: Look,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -618,6 +605,8 @@ pub struct DefDb {
     /// Entries of the kinds mods declare (`[[kind]]`), by qualified kind
     /// ("weather:type"), in load order: plain data for scripts.
     pub mod_defs: BTreeMap<String, Vec<crate::data::Data>>,
+    /// Labels things join up by (`look.join`), indexed by `Look::join`.
+    pub join_groups: Vec<String>,
     /// Qualified ids ("core:wall").
     index: HashMap<(&'static str, String), DefId>,
     /// Bare ids ("wall"), for tools and tests that don't care which mod.
@@ -827,6 +816,10 @@ impl DefDb {
         for d in &mut self.things {
             let ctx = format!("thing/{}", d.id);
             d.rgb = parse_color(&d.color).map_err(|e| format!("{ctx}: {e}"))?;
+            if d.shape.is_some() {
+                return Err(format!("{ctx}: `shape` was replaced by `look` in API 0.4; see docs/modding/looks.md"));
+            }
+            d.look_r = d.look.compile(&mut self.join_groups).map_err(|e| format!("{ctx}: {e}"))?;
             if let Some(h) = &mut d.harvest {
                 h.desig_r = get("designation", &h.designation, &ctx)?;
                 h.yields_r = counts(&h.yields, &ctx)?;
@@ -879,7 +872,7 @@ impl DefDb {
 
 pub fn parse_color(s: &str) -> Result<[u8; 3], String> {
     let h = s.trim_start_matches('#');
-    if h.len() != 6 {
+    if h.len() != 6 || !h.bytes().all(|b| b.is_ascii_hexdigit()) {
         return Err(format!("bad color '{s}' (want #rrggbb)"));
     }
     let p = |i: usize| u8::from_str_radix(&h[i..i + 2], 16).map_err(|_| format!("bad color '{s}'"));

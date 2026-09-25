@@ -8,6 +8,7 @@ pub mod command;
 pub mod data;
 pub mod defs;
 pub mod field;
+pub mod look;
 pub mod map;
 pub mod mapgen;
 pub mod modloader;
@@ -30,7 +31,7 @@ pub use sim::Sim;
 pub const TICKS_PER_DAY: u64 = 20_000;
 
 /// Plugin API version. Mods declare `api = "MAJOR.MINOR"` in `mod.toml`.
-pub const API_VERSION: (u32, u32) = (0, 3);
+pub const API_VERSION: (u32, u32) = (0, 4);
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default, PartialOrd, Ord)]
 pub struct IVec {

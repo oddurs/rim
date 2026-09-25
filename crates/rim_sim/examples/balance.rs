@@ -218,7 +218,7 @@ fn main() {
             std::fs::create_dir_all(m.join("defs")).unwrap();
             std::fs::write(
                 m.join("mod.toml"),
-                "id = \"balance_start\"\nname = \"Balance start\"\nversion = \"0.1.0\"\napi = \"0.3\"\ndepends = [\"core\"]\n",
+                "id = \"balance_start\"\nname = \"Balance start\"\nversion = \"0.1.0\"\napi = \"0.4\"\ndepends = [\"core\"]\n",
             )
             .unwrap();
             std::fs::write(

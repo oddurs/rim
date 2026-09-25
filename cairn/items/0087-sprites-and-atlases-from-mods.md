@@ -51,3 +51,7 @@ a frame. The number of mods must not change the number of draw calls.
 ## 2026-09-24
 
 Graphics milestone: rewritten from a two-line stub. The per-mod atlas in the Looks item becomes one shared atlas packed at load, since per-mod textures would break batching.
+
+## 2026-09-24
+
+From the Looks item: sprite keys, their validation (unknown key is a load error naming the mod) and a glyph primitive all land here, drawn from the world atlas.

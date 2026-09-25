@@ -160,7 +160,7 @@ fn a_factor_nobody_in_the_engine_knows_reaches_a_script() {
     std::fs::create_dir_all(m.join("scripts")).unwrap();
     std::fs::write(
         m.join("mod.toml"),
-        "id = \"glitter\"\nname = \"Glitter\"\nversion = \"0.0.0\"\napi = \"0.3\"\ndepends = [\"core\"]\n",
+        "id = \"glitter\"\nname = \"Glitter\"\nversion = \"0.0.0\"\napi = \"0.4\"\ndepends = [\"core\"]\n",
     )
     .unwrap();
     std::fs::write(
@@ -171,7 +171,6 @@ id = "glitter"
 label = "glitter"
 color = "#f0e0ff"
 category = "item"
-shape = "item"
 market_value = 5.0
 stack_limit = 75
 stuff = { categories = ["structural"], factors = { sparkle = 7.0, hp = 2.0 } }

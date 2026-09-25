@@ -7,7 +7,10 @@ id = "wall"
 label = "wall"
 color = "#7a5230"
 category = "building"
-shape = "wall"
+# Walls, windows and doors join up: a run reads as one wall with
+# openings in it, outlined only where it faces something else.
+look.join = "wall"
+look.layers = [{ draw = "fill" }, { draw = "edges", width = 1.5, shade = 0.65 }]
 blocks = true
 hp = 200
 market_value = 8
@@ -19,7 +22,11 @@ id = "door"
 label = "door"
 color = "#b07a45"
 category = "building"
-shape = "door"
+look.join = "wall"
+look.layers = [
+    { draw = "fill", x = 0.08, y = 0.08, w = 0.84, h = 0.84 },
+    { draw = "fill", x = 0.45, y = 0.1, w = 0.1, h = 0.8, shade = 0.6 },
+]
 door = true
 path_cost = 60
 hp = 150
@@ -36,7 +43,12 @@ id = "window"
 label = "window"
 color = "#9a7b58"
 category = "building"
-shape = "window"
+look.join = "wall"
+look.layers = [
+    { draw = "fill" },
+    { draw = "fill", x = 0.2, y = 0.2, w = 0.6, h = 0.6, color = "#bfe0ffe6" },
+    { draw = "edges", width = 1.5, shade = 0.65 },
+]
 blocks = true
 hp = 60
 market_value = 12
@@ -48,7 +60,10 @@ id = "bed"
 label = "bed"
 color = "#8c5a3a"
 category = "building"
-shape = "bed"
+look.layers = [
+    { draw = "fill", x = 0.12, y = 0.05, w = 0.76, h = 0.9 },
+    { draw = "fill", x = 0.18, y = 0.1, w = 0.64, h = 0.22, color = "#e6e1d2" },
+]
 market_value = 40
 bed = { rest_rate = 1.8 }
 spots = [{ dx = 0, dy = 0 }]
@@ -61,7 +76,12 @@ id = "floor"
 label = "floor"
 color = "#a08a6a"
 category = "floor"
-shape = "floor"
+# Flat, in the material's colour, with a faint tile seam.
+look.layers = [
+    { draw = "fill", shade = 0.92 },
+    { draw = "fill", y = 0.5, h = 0.0, min_px = 1.0, shade = 0.82 },
+    { draw = "fill", x = 0.5, w = 0.0, min_px = 1.0, shade = 0.82 },
+]
 path_cost = 70
 hp = 60
 market_value = 3
@@ -76,7 +96,12 @@ id = "table"
 label = "table"
 color = "#8c6a48"
 category = "building"
-shape = "table"
+# A slab on two legs.
+look.layers = [
+    { draw = "fill", x = 0.14, y = 0.55, w = 0.1, h = 0.35, shade = 0.6 },
+    { draw = "fill", x = 0.76, y = 0.55, w = 0.1, h = 0.35, shade = 0.6 },
+    { draw = "fill", x = 0.06, y = 0.3, w = 0.88, h = 0.28 },
+]
 path_cost = 80
 hp = 120
 market_value = 25
@@ -89,7 +114,13 @@ id = "chair"
 label = "chair"
 color = "#a07a50"
 category = "building"
-shape = "chair"
+# A seat with a back.
+look.layers = [
+    { draw = "fill", x = 0.28, y = 0.15, w = 0.44, h = 0.18, shade = 0.7 },
+    { draw = "fill", x = 0.25, y = 0.4, w = 0.5, h = 0.3 },
+    { draw = "fill", x = 0.3, y = 0.7, w = 0.08, h = 0.22, shade = 0.6 },
+    { draw = "fill", x = 0.62, y = 0.7, w = 0.08, h = 0.22, shade = 0.6 },
+]
 path_cost = 40
 hp = 80
 market_value = 10
@@ -104,7 +135,12 @@ id = "stove"
 label = "stove"
 color = "#5a534d"
 category = "building"
-shape = "stove"
+# A box with a warm mouth; steady, unlike a fire.
+look.layers = [
+    { draw = "fill", x = 0.12, y = 0.12, w = 0.76, h = 0.76, shade = 0.85 },
+    { draw = "outline", x = 0.12, y = 0.12, w = 0.76, h = 0.76, width = 1.5, shade = 0.5 },
+    { draw = "fill", x = 0.3, y = 0.45, w = 0.4, h = 0.3, color = "#ff963c" },
+]
 path_cost = 90
 hp = 150
 market_value = 35
@@ -119,7 +155,11 @@ id = "campfire"
 label = "campfire"
 color = "#e07b2a"
 category = "building"
-shape = "fire"
+look.layers = [
+    { draw = "disc", r = 0.38, color = "#463c37" },
+    { draw = "disc", r = 0.24, pulse = 0.08 },
+    { draw = "disc", r = 0.12, pulse = 0.08, color = "#ffdc78" },
+]
 market_value = 20
 build = { menu = "furniture", work = 150, cost = [{ thing = "wood", count = 15 }] }
 emit = [

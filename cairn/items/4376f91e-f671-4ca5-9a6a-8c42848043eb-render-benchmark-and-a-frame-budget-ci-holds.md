@@ -2,12 +2,12 @@
 id: 4376f91e-f671-4ca5-9a6a-8c42848043eb
 title: Render benchmark and a frame budget CI holds
 type: perf
-status: doing
+status: done
 milestone: graphics
 assignee: Oddur Sigurdsson
-claimed: 2026-09-24
 created: 2026-09-24
 updated: 2026-09-24
+closed_at: 2026-09-24
 priority: p0
 api: none
 effort: m

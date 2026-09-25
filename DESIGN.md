@@ -703,18 +703,18 @@ it, is data.
   looks like a prototype.
 - **Against:** every sprite core ships is a sprite a mod has to match or
   replace, and the renderer that draws it grows a special case per kind of
-  thing. Today `Shape` names content: `tree`, `bed`, `stove`, `chair`, and
-  the renderer decides what joins to a wall by matching on `wall`, `window`
-  and `door`. A mod that adds a loom picks the least wrong of those, a mod
-  that adds a fence cannot make it join, and a mod that ships a tileset
-  cannot use it at all.
+  thing. Until API 0.4 `Shape` named content: `tree`, `bed`, `stove`,
+  `chair`, and the renderer decided what joins to a wall by matching on
+  `wall`, `window` and `door`. A mod that adds a loom picks the least wrong of those, a mod
+  that adds a fence couldn't make it join, and a mod that ships a tileset
+  couldn't use it at all.
 - **Ruling:** **core is plain, and the look is data.**
-  - A def declares a `look`: a colour plus one **primitive** from a small
-    fixed set (fill, outline, disc, glyph) or a **sprite key** into an atlas
-    the mod ships. Primitives stay in code because they are mechanisms
+  - A def declares a `look`: layers of **primitives** from a small fixed
+    set (fill, outline, disc, edges) or **sprite keys** into the world
+    atlas every mod's sprites pack into ([docs/modding/looks.md](docs/modding/looks.md)). Primitives stay in code because they are mechanisms
     (§10); the named content shapes go.
-  - Core ships no sprites. Out of the box the game is coloured rectangles,
-    discs and glyphs, which is the fastest thing to draw and the easiest
+  - Core ships no sprites. Out of the box the game is coloured rectangles
+    and discs, which is the fastest thing to draw and the easiest
     thing to read.
   - The renderer never matches on a def id. It reads the look, the material
     tint, and the cell's neighbours. **Autotiling is a data rule**: a def
@@ -995,8 +995,8 @@ PR to the index. If that loop is good, content follows.
   scripts. The weather plugin's types are the first. Extension tables and
   references to other kinds come with 0143.
 - Content enums in the engine (`Faction`, `Satisfier`) become registries fed
-  by defs. Draw primitives (`Shape`) and broad categories stay in code:
-  those are mechanisms, not content.
+  by defs. Draw primitives (a look's fill, outline, disc and edges, §6a)
+  and broad categories stay in code: those are mechanisms, not content.
 
 ### Tension: declarative patches or scripted defs?
 

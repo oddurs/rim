@@ -5,7 +5,11 @@ id = "tree_oak"
 label = "oak tree"
 color = "#2c5a26"
 category = "plant"
-shape = "tree"
+look.layers = [
+    { draw = "disc", x = 0.56, y = 0.58, r = 0.44, color = "#00000040" },
+    { draw = "disc", r = 0.42 },
+    { draw = "disc", x = 0.4, y = 0.4, r = 0.22, shade = 1.25 },
+]
 natural = true
 path_cost = 60
 harvest = { designation = "chop", work = 280, yields = [{ thing = "wood", count = 20 }] }
@@ -16,7 +20,17 @@ id = "berry_bush"
 label = "berry bush"
 color = "#3f7a35"
 category = "plant"
-shape = "bush"
+# Berries while it has them; small, dry and bare once picked, so it
+# doesn't read as food.
+look.layers = [
+    { draw = "disc", r = 0.36 },
+    { draw = "disc", x = 0.36, y = 0.4, r = 0.085, min_px = 2.0, color = "#eb2d55" },
+    { draw = "disc", x = 0.63, y = 0.38, r = 0.085, min_px = 2.0, color = "#eb2d55" },
+    { draw = "disc", x = 0.5, y = 0.64, r = 0.085, min_px = 2.0, color = "#eb2d55" },
+    { draw = "disc", x = 0.66, y = 0.6, r = 0.085, min_px = 2.0, color = "#eb2d55" },
+    { draw = "disc", x = 0.35, y = 0.6, r = 0.085, min_px = 2.0, color = "#eb2d55" },
+]
+look.regrowing = [{ draw = "disc", r = 0.24, color = "#575b20" }]
 natural = true
 harvest = { designation = "harvest", work = 180, destroy = false, regrow_days = 2.0, yields = [{ thing = "berries", count = 8 }] }
 spawn = { terrain = ["grass", "rich_soil"], density = 0.008, spread = true }
@@ -26,7 +40,10 @@ id = "granite"
 label = "granite"
 color = "#7d776f"
 category = "rock"
-shape = "rock"
+look.layers = [
+    { draw = "fill", vary = 0.2 },
+    { draw = "fill", y = 0.8, h = 0.2, shade = 0.8, vary = 0.2 },
+]
 natural = true
 blocks = true
 hp = 500
