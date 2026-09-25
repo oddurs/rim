@@ -528,15 +528,13 @@ impl UiVm {
             lua.create_function(move |_, id: String| Ok(r.borrow().window_open.get(&id).copied().unwrap_or(false)))?,
         )?;
         // ui.bind(id, { key, label }, fn): a named action reachable from
-        // its key and from the command palette.
+        // its key and from the command palette. With no key it is the
+        // palette's alone, until the player gives it one.
         let r = self.reg.clone();
         ui.set(
             "bind",
             lua.create_function(move |_, (id, opts, func): (String, Table, Function)| {
                 let key: String = opts.get::<Option<String>>("key")?.unwrap_or_default();
-                if key.trim().is_empty() {
-                    return Err(rt(format!("ui.bind('{id}'): needs a key")));
-                }
                 let label: String = opts.get::<Option<String>>("label")?.unwrap_or_else(|| id.clone());
                 let mut reg = r.borrow_mut();
                 let owner: Rc<str> = reg.current.as_str().into();
@@ -684,6 +682,10 @@ impl UiVm {
         act!("toggle_profiler", (), |_a| UiAction::ToggleProfiler);
         act!("toggle_devtools", (), |_a| UiAction::ToggleDevtools);
         act!("toggle_outlines", (), |_a| UiAction::ToggleOutlines);
+        act!("render_scale", f32, |s| match s.is_finite() {
+            true => UiAction::RenderScale(s.clamp(0.25, 1.0)),
+            false => return Err(rt("act.render_scale: wants a number from 0.25 to 1")),
+        });
         // Devtools: run the sim forward (hours of game time).
         act!("advance", f64, |h| UiAction::Advance(h.clamp(0.0, 24.0 * 60.0)));
         // Send an event to this mod's own sim scripts: "<mod>:<name>". The mod
@@ -1050,6 +1052,9 @@ impl UiVm {
         let mut by_key: Vec<(&str, &str)> = Vec::new();
         for b in reg.binds.iter().filter(|b| seen_ids.contains(&b.id.as_str())) {
             let key = reg.key_overrides.get(&b.id).map(String::as_str).unwrap_or(&b.key);
+            if key.is_empty() {
+                continue;
+            }
             if let Some((_, other)) = by_key.iter().find(|(k, id)| *k == key && *id != b.id) {
                 self.warnings
                     .push(format!("UI conflict: key '{key}' bound by '{other}' and '{}' ('{}' wins)", b.id, b.id));
@@ -1115,6 +1120,9 @@ impl UiVm {
 
     /// The action bound to a key, by its current key (overrides applied).
     pub fn bind_for_key(&self, key: &str) -> Option<Function> {
+        if key.is_empty() {
+            return None;
+        }
         let reg = self.reg.borrow();
         let mut seen: Vec<&str> = Vec::new();
         for b in reg.binds.iter().rev() {

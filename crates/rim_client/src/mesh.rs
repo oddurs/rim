@@ -182,9 +182,10 @@ varying mediump vec2 uv;
 uniform vec2 origin;
 uniform vec2 screen;
 uniform float scale;
+uniform float flip;
 void main() {
     vec2 p = (pos * scale + origin) / screen * 2.0 - 1.0;
-    gl_Position = vec4(p.x, -p.y, 0.0, 1.0);
+    gl_Position = vec4(p.x, p.y * flip, 0.0, 1.0);
     color = color0 / 255.0;
     uv = uv0;
 }";
@@ -207,6 +208,8 @@ struct Uniforms {
     screen: [f32; 2],
     /// The zoom now over the zoom the chunk was built at.
     scale: f32,
+    /// -1 to the screen, 1 into a render target (GL's rows run upward).
+    flip: f32,
 }
 
 /// Frames the zoom must hold before stale chunks are rebuilt at it.
@@ -239,6 +242,7 @@ impl Meshes {
                             UniformDesc::new("origin", UniformType::Float2),
                             UniformDesc::new("screen", UniformType::Float2),
                             UniformDesc::new("scale", UniformType::Float1),
+                            UniformDesc::new("flip", UniformType::Float1),
                         ],
                     },
                 },
@@ -364,7 +368,7 @@ impl Meshes {
     /// Draw one layer (floors, items, fixtures) of every visible chunk from
     /// its buffers. Whatever macroquad has batched so far goes first, so
     /// the layers below stay below.
-    pub fn draw_layer(&mut self, w: &World, cam: &Cam, layer: usize) {
+    pub fn draw_layer(&mut self, w: &World, cam: &Cam, layer: usize, target: Option<RenderPass>) {
         let start = std::time::Instant::now();
         // SAFETY: as in `prepare`.
         let mut gl = unsafe { get_internal_gl() };
@@ -372,7 +376,11 @@ impl Meshes {
         let ctx = gl.quad_context;
         let Some(pipeline) = &self.pipeline else { return };
         let screen = [screen_width(), screen_height()];
-        ctx.begin_default_pass(PassAction::Nothing);
+        match target {
+            Some(pass) => ctx.begin_pass(Some(pass), PassAction::Nothing),
+            None => ctx.begin_default_pass(PassAction::Nothing),
+        }
+        let flip = if target.is_some() { 1.0 } else { -1.0 };
         ctx.apply_pipeline(pipeline);
         for &c in &self.visible {
             let o = w.map.chunk_origin(c);
@@ -380,7 +388,12 @@ impl Meshes {
             let scale = self.chunks[c].built.map_or(1.0, |(_, z)| cam.zoom / z);
             for p in &self.chunks[c].parts[layer] {
                 ctx.apply_bindings(&p.bindings);
-                ctx.apply_uniforms(UniformsSource::table(&Uniforms { origin: [origin.0, origin.1], screen, scale }));
+                ctx.apply_uniforms(UniformsSource::table(&Uniforms {
+                    origin: [origin.0, origin.1],
+                    screen,
+                    scale,
+                    flip,
+                }));
                 ctx.draw(0, p.indices, 1);
                 self.calls += 1;
                 self.indices += p.indices as usize;

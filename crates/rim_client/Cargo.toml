@@ -13,3 +13,5 @@ path = "src/main.rs"
 rim_sim = { path = "../rim_sim" }
 rim_ui = { path = "../rim_ui" }
 macroquad = "0.4"
+# The player's settings file; already built for the sim and the UI.
+toml = "1"

@@ -910,6 +910,10 @@ dense colony, per pass, with draw calls; CI fails over budget.
   per-chunk meshes, rebuilt when the chunk changes; every mod's sprites
   share one atlas, so the number of mods doesn't change the number of
   draw calls.
+- Pixels have a budget too. The world can draw at a fraction of the
+  screen's resolution (render scale, the command palette), the UI always
+  at full; a high-DPI screen defaults to its logical resolution, a quarter
+  of the pixels at 2x.
 - Per-system and per-mod profiler overlay from day one.
 
 ---

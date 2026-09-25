@@ -242,7 +242,7 @@ pub fn things(app: &mut App) -> Counts {
     };
     // Per layer, cached then live, so a plan never covers what stands on it.
     for layer in 0..3 {
-        app.meshes.draw_layer(w, cam, layer);
+        app.meshes.draw_layer(w, cam, layer, app.world_target.as_ref().map(|t| t.render_pass.raw_miniquad_id()));
         for cell in app.meshes.live(layer) {
             let Some(e) = w.map.layers_at(w.map.idx(cell))[layer] else { continue };
             let at = cam.to_screen(cell.x as f32, cell.y as f32);

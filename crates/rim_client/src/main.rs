@@ -106,6 +106,17 @@ pub struct App {
     pub meshes: mesh::Meshes,
     /// Every mod's sprites, packed at load.
     pub world_atlas: atlas::WorldAtlas,
+    /// The world's resolution as a fraction of the screen's pixels, if
+    /// the player chose one; unset follows the screen (see
+    /// `default_render_scale`). The UI is always full. Below 1 the world
+    /// draws into `world_target`.
+    pub render_scale: Option<f32>,
+    pub world_target: Option<RenderTarget>,
+    /// Puts `world_target` on the screen without blending: what the world
+    /// left in its alpha is not transparency.
+    blit: Option<Material>,
+    /// Where the player's settings are saved; none in the autotest.
+    settings_file: Option<PathBuf>,
     /// Input subscriber for wheel events (see `Wheel`).
     wheel_sub: usize,
 }
@@ -206,6 +217,30 @@ fn typed_char(c: char) -> Option<char> {
 
 #[cfg(test)]
 mod tests {
+    use super::{save_setting, saved_render_scale};
+
+    #[test]
+    fn the_render_scale_round_trips_and_a_bad_one_is_reported() {
+        assert_eq!(saved_render_scale(&format!("render_scale = {}\n", 0.75f32)), Ok(Some(0.75)));
+        assert_eq!(saved_render_scale("render_scale = 1"), Ok(Some(1.0)));
+        assert_eq!(saved_render_scale("render_scale = 0.1"), Ok(Some(0.25)), "clamped to what draws");
+        assert_eq!(saved_render_scale("vsync = true"), Ok(None), "unset follows the screen");
+        assert!(saved_render_scale("render_scale = \"half\"").is_err());
+        assert!(saved_render_scale("render_scale = nan").is_err());
+        assert!(saved_render_scale("render_scale = ").is_err());
+    }
+
+    #[test]
+    fn saving_a_setting_keeps_the_others() {
+        let p = std::env::temp_dir().join(format!("rim-settings-{}.toml", std::process::id()));
+        std::fs::write(&p, "# mine\nvsync = true\n").unwrap();
+        save_setting(&p, "render_scale", toml::Value::Float(0.5)).unwrap();
+        let text = std::fs::read_to_string(&p).unwrap();
+        assert!(text.contains("vsync = true") && text.contains("render_scale = 0.5"), "{text}");
+        assert_eq!(saved_render_scale(&text), Ok(Some(0.5)));
+        let _ = std::fs::remove_file(&p);
+    }
+
     #[test]
     fn function_keys_are_not_text() {
         assert_eq!(super::typed_char('a'), Some('a'));
@@ -356,6 +391,23 @@ async fn game() {
         }
     }
     let keys_file = if args.iter().any(|a| a == "--autotest") { None } else { player_file("keybinds.toml") };
+    let settings_file = if args.iter().any(|a| a == "--autotest" || a == "--bench-render") {
+        None
+    } else {
+        player_file("settings.toml")
+    };
+    let render_scale = if args.iter().any(|a| a == "--autotest" || a == "--bench-render") {
+        // They measure full resolution unless they ask.
+        Some(1.0)
+    } else {
+        match settings_file.as_ref().and_then(|p| std::fs::read_to_string(p).ok()) {
+            Some(text) => saved_render_scale(&text).unwrap_or_else(|e| {
+                eprintln!("  warning: settings file: {e}");
+                None
+            }),
+            None => None,
+        }
+    };
     if let Some(text) = keys_file.as_ref().and_then(|p| std::fs::read_to_string(p).ok()) {
         if let Err(e) = ui.restore_keybinds(&text) {
             eprintln!("  warning: keybinds file ignored: {e}");
@@ -401,6 +453,10 @@ async fn game() {
         render_us: RenderTimes::default(),
         meshes: mesh::Meshes::default(),
         world_atlas,
+        render_scale,
+        world_target: None,
+        blit: None,
+        settings_file,
         wheel_sub: macroquad::input::utils::register_input_subscriber(),
     };
     app.selected = app.sim.world.colonists().next();
@@ -800,9 +856,10 @@ pub struct RenderTimes {
     pub ground: f64,
     /// Painting, excluding `gl`.
     pub things: f64,
-    /// Handing the chunk meshes (and the batch before each layer) to GL
-    /// mid-frame. Submission, like macroquad's end of frame: a software
-    /// rasteriser does its drawing here, a GPU driver only queues.
+    /// Handing work to GL mid-frame: the chunk meshes, the batch before
+    /// each layer, and a scaled world's target to the screen. Submission,
+    /// like macroquad's end of frame: a software rasteriser does its
+    /// drawing here, a GPU driver only queues.
     pub gl: f64,
     pub pawns: f64,
     pub weather: f64,
@@ -830,6 +887,107 @@ impl RenderTimes {
     }
 }
 
+/// A render scale the world can draw at: 0.25 to 1, or nothing.
+pub fn valid_render_scale(s: f64) -> Option<f32> {
+    s.is_finite().then(|| (s as f32).clamp(0.25, 1.0))
+}
+
+/// The render scale a settings file holds, if any. A file or value that
+/// doesn't parse is an error to report, not a default.
+fn saved_render_scale(text: &str) -> Result<Option<f32>, String> {
+    let t: toml::Table = toml::from_str(text).map_err(|e| e.to_string())?;
+    match t.get("render_scale") {
+        None => Ok(None),
+        Some(v) => v
+            .as_float()
+            .or(v.as_integer().map(|i| i as f64))
+            .and_then(valid_render_scale)
+            .map(Some)
+            .ok_or_else(|| format!("render_scale should be a number from 0.25 to 1, not {v}")),
+    }
+}
+
+/// Set one key in the settings file, keeping the rest, through a
+/// temporary file so a crash mid-write can't leave half a file.
+fn save_setting(path: &std::path::Path, key: &str, value: toml::Value) -> Result<(), String> {
+    let mut t: toml::Table = match std::fs::read_to_string(path) {
+        Ok(text) => toml::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => toml::Table::new(),
+        Err(e) => return Err(format!("{}: {e}", path.display())),
+    };
+    t.insert(key.to_string(), value);
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    }
+    let tmp = path.with_extension("toml.tmp");
+    std::fs::write(&tmp, toml::to_string(&t).map_err(|e| e.to_string())?)
+        .and_then(|_| std::fs::rename(&tmp, path))
+        .map_err(|e| format!("{}: {e}", path.display()))
+}
+
+/// A high-DPI screen gets the world at its logical resolution: a quarter
+/// of the pixels at 2x, which is the difference for an integrated GPU.
+fn default_render_scale() -> f32 {
+    let dpi = screen_dpi_scale();
+    if dpi > 1.5 {
+        1.0 / dpi
+    } else {
+        1.0
+    }
+}
+
+/// Make `world_target` match the screen at the render scale, or drop it
+/// at full scale, where the world draws straight to the screen.
+fn update_world_target(app: &mut App) {
+    let dpi = screen_dpi_scale();
+    // Unset follows the screen, so a window dragged between a Retina and
+    // an ordinary display gets each one's default.
+    let scale = app.render_scale.unwrap_or_else(default_render_scale);
+    let (w, h) = ((screen_width() * dpi * scale).round(), (screen_height() * dpi * scale).round());
+    let full = (screen_width() * dpi).round();
+    if w >= full || w < 1.0 || h < 1.0 {
+        app.world_target = None;
+        return;
+    }
+    let fits = app.world_target.as_ref().is_some_and(|t| t.texture.width() == w && t.texture.height() == h);
+    if !fits {
+        let t = render_target(w as u32, h as u32);
+        t.texture.set_filter(FilterMode::Linear);
+        app.world_target = Some(t);
+    }
+}
+
+/// Copy a texture as it is: no blending, alpha forced to 1. Translucent
+/// things drawn into the world's target (fog, plans, rain) leave its alpha
+/// below 1, and blending that over the cleared screen would darken them.
+fn blit_material() -> Option<Material> {
+    const VERTEX: &str = "#version 100
+attribute vec3 position;
+attribute vec2 texcoord;
+varying lowp vec2 uv;
+uniform mat4 Model;
+uniform mat4 Projection;
+void main() {
+    gl_Position = Projection * Model * vec4(position, 1);
+    uv = texcoord;
+}";
+    const FRAGMENT: &str = "#version 100
+varying lowp vec2 uv;
+uniform sampler2D Texture;
+void main() {
+    gl_FragColor = vec4(texture2D(Texture, uv).rgb, 1.0);
+}";
+    let m = load_material(
+        ShaderSource::Glsl { vertex: VERTEX, fragment: FRAGMENT },
+        MaterialParams {
+            pipeline_params: PipelineParams { color_blend: None, ..Default::default() },
+            ..Default::default()
+        },
+    );
+    // Without it the world still shows, darkened under translucency; say so.
+    m.map_err(|e| eprintln!("render scale blit shader failed, blending instead: {e}")).ok()
+}
+
 pub fn render(app: &mut App) {
     let mut clock = std::time::Instant::now();
     let mut lap = || {
@@ -838,6 +996,17 @@ pub fn render(app: &mut App) {
         us
     };
     let mut t = RenderTimes::default();
+    update_world_target(app);
+    let (sw, sh) = (screen_width(), screen_height());
+    if let Some(rt) = &app.world_target {
+        // The same screen points, into fewer pixels.
+        set_camera(&Camera2D {
+            zoom: vec2(2.0 / sw, 2.0 / sh),
+            target: vec2(sw / 2.0, sh / 2.0),
+            render_target: Some(rt.clone()),
+            ..Default::default()
+        });
+    }
     app.ground.update(&app.sim.world);
     t.ground = lap();
     let counts = draw::things(app);
@@ -850,6 +1019,21 @@ pub fn render(app: &mut App) {
     t.weather = lap();
     app.sky.light(&app.sim.world, &app.cam, &air);
     t.light = lap();
+    if let Some(rt) = &app.world_target {
+        set_default_camera();
+        if app.blit.is_none() {
+            app.blit = blit_material();
+        }
+        if let Some(m) = &app.blit {
+            gl_use_material(m);
+        }
+        let size = DrawTextureParams { dest_size: Some(vec2(sw, sh)), ..Default::default() };
+        draw_texture_ex(&rt.texture, 0.0, 0.0, WHITE, size);
+        gl_use_default_material();
+        // Switching cameras hands the target's batch to GL: submission,
+        // like the meshes'.
+        t.gl += lap();
+    }
     draw::world_ui(app);
     // Stack counts, in the UI's text: shaped into the same atlas, drawn in
     // the same batch as the UI. After lighting, so they read at night.
@@ -901,6 +1085,18 @@ fn apply_ui(app: &mut App, a: UiAction) {
         UiAction::ToggleProfiler => apply(app, Action::ToggleProfiler),
         UiAction::ToggleDevtools => apply(app, Action::ToggleDevtools),
         UiAction::ToggleOutlines => app.ui.toggle_outlines(),
+        UiAction::RenderScale(s) => {
+            let Some(s) = valid_render_scale(s as f64) else { return };
+            if app.render_scale == Some(s) {
+                return;
+            }
+            app.render_scale = Some(s);
+            if let Some(p) = &app.settings_file {
+                if let Err(e) = save_setting(p, "render_scale", toml::Value::Float(s as f64)) {
+                    eprintln!("rim: could not save settings: {e}");
+                }
+            }
+        }
         UiAction::Send(name, data) => app.sim.push(Command::ModEvent { name, data }),
         UiAction::Advance(hours) => {
             // Devtools only: step the sim now, as fast as it goes.
