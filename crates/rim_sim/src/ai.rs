@@ -377,12 +377,20 @@ fn flee(w: &mut World, p: &mut Pawn, from: IVec) -> Option<Job> {
 fn find_food(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
     let defs = w.defs.clone();
     w.map.ensure_regions();
-    let mut best: Option<((u32, u32), Entity, bool)> = None;
-    for (te, t) in w.ecs.query::<(Entity, &Thing)>().without::<&Blueprint>().without::<&Regrow>().iter() {
+    // (distance, id), the thing, and the harvest that yields food when it
+    // isn't food itself: Some(key).
+    let mut best: Option<((u32, u32), Entity, Option<HarvestKey>)> = None;
+    for (te, t) in w.ecs.query::<(Entity, &Thing)>().without::<&Blueprint>().iter() {
         let td = defs.thing(t.def);
         let is_item = td.category == Category::Item && td.food.is_some();
-        let is_plant =
-            !is_item && td.harvest.as_ref().is_some_and(|h| h.yields_r.iter().any(|y| defs.thing(y.0).food.is_some()));
+        let forage = (!is_item)
+            .then(|| {
+                td.harvest
+                    .iter()
+                    .find(|h| h.yields_r.iter().any(|y| defs.thing(y.0).food.is_some()) && w.harvest_ready(te, h.key()))
+            })
+            .flatten();
+        let is_plant = forage.is_some();
         if !is_item && !is_plant {
             continue;
         }
@@ -395,12 +403,12 @@ fn find_food(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
         if !w.map.can_reach(p.pos, goal) {
             continue;
         }
-        best = Some((d, te, is_item));
+        best = Some((d, te, forage.map(|h| h.key())));
     }
-    let (_, t, is_item) = best?;
+    let (_, t, forage) = best?;
     w.reserve(t, e);
-    if !is_item {
-        return Some(Job::Harvest { target: t, work: 0, forced: true });
+    if let Some(harvest) = forage {
+        return Some(Job::Harvest { target: t, work: 0, forced: true, harvest });
     }
     // Somewhere to sit and eat it, if the colony has such a thing.
     let food_at = w.thing(t).map_or(p.pos, |f| f.pos);
@@ -582,18 +590,21 @@ fn find_work(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
     }
 
     // Designated fixtures: harvest the natural ones, take down the built ones.
-    for (te, t, des) in
-        w.ecs.query::<(Entity, &Thing, &Designated)>().without::<&Regrow>().without::<&Blueprint>().iter()
-    {
+    for (te, t, des) in w.ecs.query::<(Entity, &Thing, &Designated)>().without::<&Blueprint>().iter() {
         let d = t.pos.octile(p.pos);
         if best.as_ref().is_some_and(|b| (b.0, b.2.id()) <= (d, te.id())) || w.reserved_by_other(te, e) {
             continue;
         }
+        let job = match w.defs.designations[des.0 as usize].targets {
+            Targets::Built => Job::Deconstruct { target: te, work: 0 },
+            _ => match w.defs.thing(t.def).harvest_for(des.0) {
+                Some(h) if w.harvest_ready(te, h.key()) => {
+                    Job::Harvest { target: te, work: 0, forced: false, harvest: h.key() }
+                }
+                _ => continue,
+            },
+        };
         if w.map.can_reach(p.pos, Goal::Touch(t.pos)) {
-            let job = match w.defs.designations[des.0 as usize].targets {
-                Targets::Built => Job::Deconstruct { target: te, work: 0 },
-                _ => Job::Harvest { target: te, work: 0, forced: false },
-            };
             consider(&mut best, d, job, te);
         }
     }
@@ -663,7 +674,7 @@ fn run_job(w: &mut World, e: Entity, p: &mut Pawn) {
             Go::Moving if w.tick < until => (Some(j), 0),
             _ => (None, 30),
         },
-        Job::Harvest { target, work, forced } => (run_harvest(w, p, target, work, forced), 0),
+        Job::Harvest { target, work, forced, harvest } => (run_harvest(w, p, target, work, forced, harvest), 0),
         Job::Deliver { bp, src, want, stage } => (run_deliver(w, p, bp, src, want, stage), 0),
         Job::Construct { bp } => (run_construct(w, p, bp), 0),
         Job::Deconstruct { target, work } => (run_deconstruct(w, p, target, work), 0),
@@ -679,24 +690,34 @@ fn run_job(w: &mut World, e: Entity, p: &mut Pawn) {
     }
 }
 
-fn run_harvest(w: &mut World, p: &mut Pawn, target: Entity, work: u32, forced: bool) -> Option<Job> {
+fn run_harvest(
+    w: &mut World,
+    p: &mut Pawn,
+    target: Entity,
+    work: u32,
+    forced: bool,
+    harvest: HarvestKey,
+) -> Option<Job> {
     let t = w.thing(target)?;
-    if w.ecs.get::<&Regrow>(target).is_ok() || (!forced && w.ecs.get::<&Designated>(target).is_err()) {
+    let defs = w.defs.clone();
+    let hd = defs.thing(t.def).harvest_by_key(harvest)?;
+    let marked = w.ecs.get::<&Designated>(target).is_ok_and(|d| d.0 == hd.desig_r);
+    if !w.harvest_ready(target, harvest) || (!forced && !marked) {
         return None;
     }
-    let defs = w.defs.clone();
-    let hd = defs.thing(t.def).harvest.as_ref()?;
     match go_to(w, p, Goal::Touch(t.pos)) {
         Go::Failed => None,
-        Go::Moving => Some(Job::Harvest { target, work, forced }),
+        Go::Moving => Some(Job::Harvest { target, work, forced, harvest }),
         Go::Arrived => {
             if work + 1 >= hd.work {
-                let _ = w.ecs.remove_one::<Designated>(target);
+                if marked {
+                    let _ = w.ecs.remove_one::<Designated>(target);
+                }
                 if hd.destroy {
                     w.despawn_thing(target);
                 } else {
                     let ready_at = w.tick + (hd.regrow_days * crate::TICKS_PER_DAY as f64) as u64;
-                    let _ = w.ecs.insert_one(target, Regrow { ready_at });
+                    w.regrow(target, harvest, ready_at);
                     w.map.touch(t.pos);
                 }
                 for &(yd, n) in &hd.yields_r {
@@ -704,7 +725,7 @@ fn run_harvest(w: &mut World, p: &mut Pawn, target: Entity, work: u32, forced: b
                 }
                 None
             } else {
-                Some(Job::Harvest { target, work: work + 1, forced })
+                Some(Job::Harvest { target, work: work + 1, forced, harvest })
             }
         }
     }

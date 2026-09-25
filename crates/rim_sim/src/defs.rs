@@ -23,6 +23,24 @@ fn dtrue() -> bool {
 fn d1f() -> f64 {
     1.0
 }
+/// One table or a list of them: `harvest = { ... }` and `harvest = [{ ... }, { ... }]`.
+fn one_or_many<'de, D, T>(d: D) -> Result<Vec<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum OneOrMany<T> {
+        One(T),
+        Many(Vec<T>),
+    }
+    Ok(match OneOrMany::deserialize(d)? {
+        OneOrMany::One(t) => vec![t],
+        OneOrMany::Many(v) => v,
+    })
+}
+
 fn d075() -> f64 {
     0.75
 }
@@ -114,7 +132,10 @@ pub struct ThingDef {
     /// Natural features don't count toward colony wealth.
     #[serde(default)]
     pub natural: bool,
-    pub harvest: Option<HarvestDef>,
+    /// Ways to harvest it, one per designation: an oak can be gathered for
+    /// branches and chopped for wood.
+    #[serde(default, deserialize_with = "one_or_many")]
+    pub harvest: Vec<HarvestDef>,
     pub build: Option<BuildDef>,
     pub food: Option<FoodDef>,
     pub bed: Option<BedDef>,
@@ -177,6 +198,35 @@ pub struct HarvestDef {
     pub desig_r: DefId,
     #[serde(skip)]
     pub yields_r: Vec<(DefId, u32)>,
+    /// Its place in the thing's list.
+    #[serde(skip)]
+    pub index: usize,
+}
+
+/// How regrowth and jobs name one of a thing's harvests: by its
+/// designation, which a load maps like any def reference, or `None` for the
+/// thing's first harvest. That is how every save named it before a thing
+/// could have several, so those saves read the same.
+pub type HarvestKey = Option<DefId>;
+
+impl HarvestDef {
+    pub fn key(&self) -> HarvestKey {
+        (self.index > 0).then_some(self.desig_r)
+    }
+}
+
+impl ThingDef {
+    /// The harvest a designation marks this thing for.
+    pub fn harvest_for(&self, designation: DefId) -> Option<&HarvestDef> {
+        self.harvest.iter().find(|h| h.desig_r == designation)
+    }
+
+    pub fn harvest_by_key(&self, key: HarvestKey) -> Option<&HarvestDef> {
+        match key {
+            None => self.harvest.first(),
+            Some(d) => self.harvest_for(d),
+        }
+    }
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -828,9 +878,18 @@ impl DefDb {
             let mut art =
                 crate::look::Art { sprites: &mut self.sprites, glyphs: &mut self.glyphs, home: home_of(&d.id) };
             d.look_r = d.look.compile(&mut self.join_groups, &mut art).map_err(|e| format!("{ctx}: {e}"))?;
-            if let Some(h) = &mut d.harvest {
+            for (i, h) in d.harvest.iter_mut().enumerate() {
                 h.desig_r = get("designation", &h.designation, &ctx)?;
                 h.yields_r = counts(&h.yields, &ctx)?;
+                h.index = i;
+            }
+            for (i, h) in d.harvest.iter().enumerate() {
+                if d.harvest[..i].iter().any(|o| o.desig_r == h.desig_r) {
+                    return Err(format!(
+                        "{ctx}: two harvests use the designation '{}'; each needs its own",
+                        h.designation
+                    ));
+                }
             }
             if let Some(b) = &mut d.build {
                 b.cost_r = counts(&b.cost, &ctx)?;

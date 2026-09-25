@@ -2,10 +2,12 @@
 id: 4e9d5a12-ad0c-4170-bc53-5d8c2a5328a2
 title: 'Several harvests on one thing: gather without felling'
 type: feature
-status: backlog
+status: done
 milestone: stone-age
+assignee: Oddur Sigurdsson
 created: 2026-09-24
 updated: 2026-09-25
+closed_at: 2026-09-25
 priority: p0
 api: additive
 effort: s
@@ -34,9 +36,13 @@ No per-tick cost. One extra lookup when a designation is placed, which happens a
 
 ## Acceptance criteria
 
-- [ ] `harvest` parses as one table or a list, existing defs untouched
-- [ ] Two harvests with the same designation is a reported load conflict
-- [ ] A tree can be gathered (regrows) and chopped (destroys) in one def
-- [ ] Regrow readiness is per harvest entry, and survives a save and load
-- [ ] A patch appends a harvest entry to another mod's thing
-- [ ] Determinism test passes
+- [x] `harvest` parses as one table or a list, existing defs untouched
+- [x] Two harvests with the same designation is a reported load conflict
+- [x] A tree can be gathered (regrows) and chopped (destroys) in one def
+- [x] Regrow readiness is per harvest entry, and survives a save and load
+- [x] A patch appends a harvest entry to another mod's thing
+- [x] Determinism test passes
+
+## 2026-09-25
+
+Harvests are keyed by designation (HarvestKey = Option<DefId>, None for a thing's first harvest), not by list position: a load under another mod list remaps designations like any def id, and the first-harvest case saves byte-for-byte as before, so no format bump. A patch treats a single table as a list of one for append and edit. set on a list of one still merges, and set on several is reported and skipped. wildlife_plus moved to edit. A right-click offers the designated harvest only, else the gentlest ready one, so a click never fells a tree you meant to gather.

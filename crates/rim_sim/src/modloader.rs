@@ -538,6 +538,14 @@ fn apply_patch(
     Ok(())
 }
 
+/// A field that takes one table or a list of them (`harvest`) is patched
+/// as a list: a single table becomes a list of one.
+fn listify(v: &mut toml::Value) {
+    if let toml::Value::Table(t) = v {
+        *v = toml::Value::Array(vec![toml::Value::Table(std::mem::take(t))]);
+    }
+}
+
 /// Does a list element match a pattern? A table pattern matches a table
 /// that has all its keys with equal values; anything else must be equal.
 fn matches(el: &toml::Value, pattern: &toml::Value) -> bool {
@@ -570,6 +578,7 @@ fn list_op(
             }
             toml::Value::Array(items) => {
                 let entry = dst.entry(k.clone()).or_insert_with(|| toml::Value::Array(Vec::new()));
+                listify(entry);
                 let toml::Value::Array(list) = entry else {
                     return Err(format!("{origin}: can't {verb} to {p}: it isn't a list"));
                 };
@@ -616,13 +625,18 @@ fn edit_list(
     };
     let mut node = dst;
     let mut keys = list_path.split('.').peekable();
+    let not_list = || format!("{origin}: edit: {target}.{list_path} isn't a list");
     let list = loop {
         let k = keys.next().unwrap_or_default();
-        match (node.get_mut(k), keys.peek().is_some()) {
-            (Some(toml::Value::Table(t)), true) => node = t,
-            (Some(toml::Value::Array(a)), false) => break a,
-            _ => return Err(format!("{origin}: edit: {target}.{list_path} isn't a list")),
+        if keys.peek().is_some() {
+            let Some(toml::Value::Table(t)) = node.get_mut(k) else { return Err(not_list()) };
+            node = t;
+            continue;
         }
+        let Some(v) = node.get_mut(k) else { return Err(not_list()) };
+        listify(v);
+        let toml::Value::Array(a) = v else { return Err(not_list()) };
+        break a;
     };
     let key: Vec<String> = pat.iter().map(|(k, v)| format!("{k}={v}")).collect();
     let el_path = format!("{target}.{list_path}[{}]", key.join(","));
@@ -647,6 +661,19 @@ fn merge(dst: &mut toml::Table, src: &toml::Table, path: &str, mod_id: &str, log
         let p = format!("{path}.{k}");
         match (dst.get_mut(k), v) {
             (Some(toml::Value::Table(d)), toml::Value::Table(s)) => merge(d, s, &p, mod_id, log),
+            // A one-or-many field another patch made a list: a table still
+            // merges into a list of one. With several there's no telling
+            // which one it means.
+            (Some(toml::Value::Array(list)), toml::Value::Table(s)) if list.iter().all(|e| e.is_table()) => {
+                match list.as_mut_slice() {
+                    [toml::Value::Table(only)] => merge(only, s, &p, mod_id, log),
+                    _ => log.warnings.push(format!(
+                        "patch: '{mod_id}' sets {p}, which holds {} entries, so a table can't say which; \
+                         use [[patch.edit]] (skipped)",
+                        list.len()
+                    )),
+                }
+            }
             _ => {
                 if let Some(prev) = log.set_by.insert(p.clone(), mod_id.to_string()) {
                     if prev != mod_id {
