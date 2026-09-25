@@ -44,6 +44,14 @@ id = "harvest"
 label = "Harvest"
 color = "#d64a6a"
 
+# Take what a thing gives without taking the thing: branches off a tree,
+# stones off the ground. Core's own things have no gather harvest; it's
+# here so plugins agree on one (DESIGN.md §5 rule 2, §4e).
+[[designation]]
+id = "gather"
+label = "Gather"
+color = "#c9a25e"
+
 [[designation]]
 id = "deconstruct"
 label = "Deconstruct"

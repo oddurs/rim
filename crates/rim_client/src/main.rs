@@ -221,7 +221,20 @@ fn typed_char(c: char) -> Option<char> {
 
 #[cfg(test)]
 mod tests {
-    use super::{save_setting, saved_render_scale};
+    use super::{markable, save_setting, saved_render_scale};
+
+    /// Core names `gather` for plugins but has nothing to gather, so its
+    /// toolbar has no Gather button; chop and the rest stay.
+    #[test]
+    fn a_designation_nothing_can_be_marked_for_has_no_button() {
+        let mods = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mods");
+        let s = rim_sim::Sim::new(&mods, 1).unwrap();
+        let d = |id: &str| s.world.defs.lookup("designation", id).unwrap();
+        assert!(!markable(&s.world.defs, d("core:gather")));
+        for id in ["core:chop", "core:mine", "core:harvest", "core:hunt", "core:deconstruct"] {
+            assert!(markable(&s.world.defs, d(id)), "{id}");
+        }
+    }
 
     #[test]
     fn the_render_scale_round_trips_and_a_bad_one_is_reported() {
@@ -548,12 +561,19 @@ fn find_mods() -> Option<PathBuf> {
     None
 }
 
+/// Whether anything loaded can be marked with this designation. One that
+/// nothing can is no use as a button: core names `gather` for plugins, and
+/// has nothing of its own to gather.
+pub fn markable(defs: &rim_sim::defs::DefDb, d: DefId) -> bool {
+    defs.designations[d as usize].targets != Targets::Thing || defs.things.iter().any(|t| t.harvest_for(d).is_some())
+}
+
 /// The toolbar is generated from defs: a mod that adds a designation or a
 /// buildable thing gets a button without touching the client.
 fn toolbar(sim: &Sim) -> Vec<ToolDef> {
     let defs = &sim.world.defs;
     let mut items = vec![ToolDef { key: "select".into(), label: "Select".into(), tool: Tool::Select, color: GRAY }];
-    for (i, d) in defs.designations.iter().enumerate() {
+    for (i, d) in defs.designations.iter().enumerate().filter(|(i, _)| markable(defs, *i as DefId)) {
         items.push(ToolDef {
             key: format!("designate:{}", d.id),
             label: d.label.clone(),
