@@ -1223,7 +1223,9 @@ fn step(app: &mut App) {
         }
     }
     let w = &app.sim.world;
-    if app.selected.is_some_and(|e| !w.pawn_alive(e) && w.thing(e).is_none()) {
+    // A thing someone picked up is in their hand, not on the map.
+    let gone = |e| !w.pawn_alive(e) && (w.thing(e).is_none() || w.ecs.get::<&rim_sim::world::Held>(e).is_ok());
+    if app.selected.is_some_and(gone) {
         app.selected = None;
     }
 }

@@ -137,6 +137,9 @@ pub struct ThingDef {
     #[serde(default, deserialize_with = "one_or_many")]
     pub harvest: Vec<HarvestDef>,
     pub build: Option<BuildDef>,
+    /// Present on things a pawn can hold and work with (DESIGN.md §4e).
+    #[serde(default)]
+    pub tool: Option<ToolDef>,
     pub food: Option<FoodDef>,
     pub bed: Option<BedDef>,
     /// Present on items that things can be built out of.
@@ -194,6 +197,11 @@ pub struct HarvestDef {
     pub destroy: bool,
     #[serde(default)]
     pub regrow_days: f64,
+    /// Tool tags the worker must hold ("chopping"): core's shared names.
+    #[serde(default)]
+    pub requires: Vec<String>,
+    #[serde(skip)]
+    pub requires_r: ToolMask,
     #[serde(skip)]
     pub desig_r: DefId,
     #[serde(skip)]
@@ -227,6 +235,25 @@ impl ThingDef {
             Some(d) => self.harvest_for(d),
         }
     }
+}
+
+/// Tool tags as bits, one per tag name any def mentions.
+pub type ToolMask = u64;
+
+/// What a tool does, and how well.
+#[derive(Deserialize, Clone, Debug)]
+pub struct ToolDef {
+    /// What it does, in core's shared names (docs/modding/vocabulary.md).
+    pub tags: Vec<String>,
+    /// Work per tick against bare hands' 1, before its material's
+    /// `tool_speed` factor.
+    #[serde(default = "d1f")]
+    pub speed: f64,
+    /// Hit points a finished job costs it. At none left, it breaks.
+    #[serde(default)]
+    pub wear: u32,
+    #[serde(skip)]
+    pub tags_r: ToolMask,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -793,6 +820,8 @@ pub struct DefDb {
     pub sprite_files: Vec<std::path::PathBuf>,
     /// Characters looks draw (`draw = "glyph"`), indexed by `Prim::Glyph::id`.
     pub glyphs: Vec<String>,
+    /// Every tool tag any def names, sorted; a tag's bit is its index.
+    pub tool_tags: Vec<String>,
     /// Qualified ids ("core:wall").
     index: HashMap<(&'static str, String), DefId>,
     /// Bare ids ("wall"), for tools and tests that don't care which mod.
@@ -918,6 +947,10 @@ impl DefDb {
     }
     pub fn thing(&self, d: DefId) -> &ThingDef {
         &self.things[d as usize]
+    }
+    /// The tag names a mask holds, in tag order.
+    pub fn tool_tag_names(&self, mask: ToolMask) -> Vec<&str> {
+        self.tool_tags.iter().enumerate().filter(|(i, _)| mask & 1 << i != 0).map(|(_, n)| n.as_str()).collect()
     }
     pub fn creature(&self, d: DefId) -> &CreatureDef {
         &self.creatures[d as usize]
@@ -1065,6 +1098,30 @@ impl DefDb {
         let mut order: Vec<DefId> = (0..self.work_types.len() as DefId).collect();
         order.sort_by_key(|&w| (self.work_types[w as usize].order, w));
         self.work_order = order;
+        // Tool tags become bits: a gate is then a mask test.
+        let tags: std::collections::BTreeSet<String> = self
+            .things
+            .iter()
+            .flat_map(|d| d.tool.iter().flat_map(|t| &t.tags).chain(d.harvest.iter().flat_map(|h| &h.requires)))
+            .cloned()
+            .collect();
+        if tags.len() > ToolMask::BITS as usize {
+            let all: Vec<String> = tags.into_iter().collect();
+            return Err(format!("more than {} tool tags: {}", ToolMask::BITS, all.join(", ")));
+        }
+        self.tool_tags = tags.into_iter().collect();
+        let names = self.tool_tags.clone();
+        let mask = |tags: &[String]| -> ToolMask {
+            tags.iter().filter_map(|t| names.iter().position(|n| n == t)).fold(0, |m, i| m | 1 << i)
+        };
+        for d in &mut self.things {
+            if let Some(t) = &mut d.tool {
+                t.tags_r = mask(&t.tags);
+            }
+            for h in &mut d.harvest {
+                h.requires_r = mask(&h.requires);
+            }
+        }
         for d in &mut self.things {
             let ctx = format!("thing/{}", d.id);
             d.rgb = parse_color(&d.color).map_err(|e| format!("{ctx}: {e}"))?;
@@ -1105,6 +1162,13 @@ impl DefDb {
                 em.field_r = get("field", &em.field, &ctx)?;
             }
             d.stack_limit = d.stack_limit.max(1);
+            if let Some(t) = &d.tool {
+                // A tool is one thing in one hand, with its own wear.
+                d.stack_limit = 1;
+                if t.speed <= 0.0 || !t.speed.is_finite() {
+                    return Err(format!("{ctx}: tool speed must be above 0 (it's {})", t.speed));
+                }
+            }
         }
         for d in &mut self.creatures {
             let ctx = format!("creature/{}", d.id);

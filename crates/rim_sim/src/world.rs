@@ -10,7 +10,7 @@ use crate::terms::Q;
 use crate::{IVec, TICKS_PER_DAY};
 use hecs::Entity;
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 
 /// Needs are stored as integers in `0..=NEED_MAX`.
@@ -66,6 +66,10 @@ pub enum Job {
         /// Which of the thing's harvests.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         harvest: HarvestKey,
+        /// A tool to fetch first, when the harvest needs one the pawn
+        /// doesn't hold.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tool: Option<Entity>,
     },
     Deliver {
         bp: Entity,
@@ -181,6 +185,9 @@ pub struct Pawn {
     /// work type not here is at its def's default (DESIGN.md §4d).
     #[serde(default)]
     pub priorities: Vec<(DefId, u8)>,
+    /// The tool it holds, off the map while it's held (DESIGN.md §4e).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hand: Option<Entity>,
 }
 
 impl Pawn {
@@ -296,6 +303,12 @@ pub struct Owner(pub Faction);
 /// Player has marked this thing or creature for work.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct Designated(pub DefId);
+
+/// On a tool a pawn holds: it is off the map until put down.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub struct Held {
+    pub by: Entity,
+}
 
 /// Harvests growing back, each named by its key:
 /// `harvest` is ready again at `ready_at`, and any others are in `also`.
@@ -444,6 +457,9 @@ pub struct World {
     /// else, so the map is touched when one joins or leaves and at no other
     /// time. Derived: not saved, rebuilt by the next unit of work.
     pub worksites: BTreeMap<Entity, (IVec, u64)>,
+    /// Every tool in the world, held or lying about, so what the colony can
+    /// do is a few lookups rather than a scan. Derived: rebuilt on load.
+    pub tools: BTreeSet<Entity>,
     /// The last few notable events (tick, kind, pawn, name) for the UI:
     /// "joined", "died", "left". Not part of the simulation state.
     pub recent_events: Vec<(u64, &'static str, Entity, String)>,
@@ -478,6 +494,7 @@ impl World {
             wealth: 0.0,
             hits: Vec::new(),
             worksites: BTreeMap::new(),
+            tools: BTreeSet::new(),
             recent_events: Vec::new(),
             colony_lost: false,
             seen_room_rebuilds: u64::MAX,
@@ -713,7 +730,12 @@ impl World {
                     match self.map.item[i] {
                         None => {
                             let n = count.min(limit);
-                            let e = self.spawn((Thing { def, pos: p, count: n, hp: 100 },));
+                            let td = self.defs.thing(def);
+                            let (hp, tool) = (td.hp as i32, td.tool.is_some());
+                            let e = self.spawn((Thing { def, pos: p, count: n, hp },));
+                            if tool {
+                                self.tools.insert(e);
+                            }
                             self.map.set_item(p, Some(e));
                             let defs = self.defs.clone();
                             self.fields.add_emitters(&defs, &self.map, e, def, p);
@@ -769,8 +791,119 @@ impl World {
         }
         self.reservations.remove(&e);
         self.worksites.remove(&e);
+        self.tools.remove(&e);
         self.fields.remove_emitters(e);
         let _ = self.ecs.despawn(e);
+    }
+
+    // ------------------------------------------------------------ tools
+
+    /// The tags a thing does as a tool; none if it isn't one.
+    pub fn tool_tags(&self, e: Entity) -> ToolMask {
+        let def = self.ecs.get::<&Thing>(e).map(|t| t.def);
+        def.ok().and_then(|d| self.defs.thing(d).tool.as_ref()).map_or(0, |t| t.tags_r)
+    }
+
+    /// Every tag some tool in the world has, held or not.
+    pub fn colony_tools(&self) -> ToolMask {
+        self.tools.iter().fold(0, |m, &t| m | self.tool_tags(t))
+    }
+
+    /// Whether what `p` holds covers `need`. Nothing is needed of bare hands.
+    pub fn hand_covers(&self, p: &Pawn, need: ToolMask) -> bool {
+        need == 0 || p.hand.is_some_and(|t| self.tool_tags(t) & need == need)
+    }
+
+    /// How fast a tool works: its own speed times its material's.
+    pub fn tool_speed(&self, t: Entity) -> f64 {
+        let def = self.ecs.get::<&Thing>(t).map(|t| t.def);
+        let speed = def.ok().and_then(|d| self.defs.thing(d).tool.as_ref()).map_or(1.0, |t| t.speed);
+        speed * self.stat(t, "tool_speed").unwrap_or(1.0)
+    }
+
+    /// The nearest tool lying about that covers `need`, reachable from
+    /// `from`, that nobody but `by` has claimed.
+    pub fn nearest_tool(&self, by: Entity, from: IVec, need: ToolMask) -> Option<(u32, Entity)> {
+        let mut best: Option<(u32, Entity)> = None;
+        for &t in &self.tools {
+            if self.tool_tags(t) & need != need || self.ecs.get::<&Held>(t).is_ok() || self.reserved_by_other(t, by) {
+                continue;
+            }
+            let Ok(pos) = self.ecs.get::<&Thing>(t).map(|t| t.pos) else { continue };
+            let d = pos.octile(from);
+            if best.is_some_and(|b| (b.0, b.1.id()) <= (d, t.id())) || !self.map.can_reach(from, Goal::Cell(pos)) {
+                continue;
+            }
+            best = Some((d, t));
+        }
+        best
+    }
+
+    /// `by` picks up `tool` from the map, putting down what it held there.
+    pub fn take_tool(&mut self, by: Entity, p: &mut Pawn, tool: Entity) {
+        let Some(at) = self.thing(tool).map(|t| t.pos) else { return };
+        if self.map.item_at(at) == Some(tool) {
+            self.map.set_item(at, None);
+        }
+        // Held is its claim now; nobody else can take it. What it emits
+        // (a torch's light) goes with the pawn, not the cell it lay in.
+        self.fields.remove_emitters(tool);
+        let _ = self.ecs.insert_one(tool, Held { by });
+        if self.reservations.get(&tool) == Some(&by) {
+            self.reservations.remove(&tool);
+        }
+        if let Some(old) = p.hand.replace(tool) {
+            self.put_down(old, at);
+        }
+    }
+
+    /// A held tool goes back on the map, in the nearest free cell to `near`.
+    pub fn put_down(&mut self, tool: Entity, near: IVec) {
+        let _ = self.ecs.remove_one::<Held>(tool);
+        let free = (0..=8i32).flat_map(|r| {
+            (-r..=r)
+                .flat_map(move |dy| (-r..=r).map(move |dx| (dx, dy)))
+                .filter(move |(dx, dy)| dx.abs().max(dy.abs()) == r)
+        });
+        for (dx, dy) in free {
+            let p = near.offset(dx, dy);
+            if self.map.passable(p) && self.map.item_at(p).is_none() {
+                let Ok(def) = self.ecs.get::<&mut Thing>(tool).map(|mut t| {
+                    t.pos = p;
+                    t.def
+                }) else {
+                    return;
+                };
+                self.map.set_item(p, Some(tool));
+                let defs = self.defs.clone();
+                self.fields.add_emitters(&defs, &self.map, tool, def, p);
+                return;
+            }
+        }
+        // Nowhere to put it: it's lost.
+        self.despawn_thing(tool);
+    }
+
+    /// A finished job wears what `p` holds. At no hp left it breaks.
+    pub fn wear_tool(&mut self, p: &mut Pawn) {
+        let Some(tool) = p.hand else { return };
+        let Some(t) = self.thing(tool) else { return };
+        let td = self.defs.thing(t.def);
+        let wear = td.tool.as_ref().map_or(0, |d| d.wear) as i32;
+        let hp = t.hp - wear;
+        if hp > 0 {
+            if let Ok(mut t) = self.ecs.get::<&mut Thing>(tool) {
+                t.hp = hp;
+            }
+            return;
+        }
+        let what = match self.ecs.get::<&MadeOf>(tool).ok().map(|m| self.defs.thing(m.0).label.clone()) {
+            Some(m) => format!("{m} {}", td.label),
+            None => td.label.clone(),
+        };
+        self.message(format!("{}'s {what} broke.", p.name), MsgKind::Bad);
+        p.hand = None;
+        self.despawn_thing(tool);
     }
 
     // ------------------------------------------------------------ work

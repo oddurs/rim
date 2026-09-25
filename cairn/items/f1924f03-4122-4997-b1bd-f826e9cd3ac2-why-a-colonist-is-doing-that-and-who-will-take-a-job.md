@@ -8,7 +8,7 @@ depends_on:
 - 0e73145a-39c4-4f1d-88a4-59d803a2f535
 - f1b96df4-ff22-4c7c-88b4-15bd0c6391a2
 created: 2026-09-24
-updated: 2026-09-24
+updated: 2026-09-25
 priority: p1
 api: additive
 pillar:
@@ -17,9 +17,6 @@ effort: m
 layer: client
 area: ui
 ---
-
-
-
 
 ## Why
 
@@ -37,3 +34,7 @@ area: ui
 - [ ] The why panel names the real reason for each skipped work type (tests for each reason)
 - [ ] The "who takes this" ranking matches who actually takes it on a test map
 - [ ] Costs nothing measurable when nobody is inspecting
+
+## 2026-09-25
+
+Tools (7016d86b) give a refusal reason the why panel should show: rim_sim::ai::work_blocked says 'Needs a chopping tool.' when no tool in the colony has the tag, and 'Needs a free chopping tool.' when the colony's are held, claimed or out of reach. The thing inspector already shows it.

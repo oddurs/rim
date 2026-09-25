@@ -2,10 +2,12 @@
 id: 7016d86b-72d5-4d1f-a5ee-3f14e376fe7f
 title: 'Tools in hand: work that needs a tool'
 type: feature
-status: backlog
+status: done
 milestone: stone-age
+assignee: Oddur Sigurdsson
 created: 2026-09-24
 updated: 2026-09-25
+closed_at: 2026-09-25
 priority: p0
 api: additive
 effort: l
@@ -35,12 +37,16 @@ A gate is a bitset test. The fetch stage is one `nearest_item` over tools, only 
 
 ## Acceptance criteria
 
-- [ ] `requires` on a harvest entry gates it; a pawn with no covering tool never takes it
-- [ ] A pawn fetches a loose tool that covers the job, dropping what it held
-- [ ] Making the tool unblocks the work without a reload
-- [ ] Work speed follows `speed` × the material's `tool_speed`
-- [ ] Wear breaks a tool at 0 hp, with a message
-- [ ] Gated work the colony can't do is rejected in O(1)
+- [x] `requires` on a harvest entry gates it; a pawn with no covering tool never takes it
+- [x] A pawn fetches a loose tool that covers the job, dropping what it held
+- [x] Making the tool unblocks the work without a reload
+- [x] Work speed follows `speed` × the material's `tool_speed`
+- [x] Wear breaks a tool at 0 hp, with a message
+- [x] Gated work the colony can't do is rejected in O(1)
 - [ ] "Needs a chopping tool" is visible on the designated thing and in the why panel
-- [ ] A held tool survives a save and load in its pawn's hand
-- [ ] Determinism test passes
+- [x] A held tool survives a save and load in its pawn's hand
+- [x] Determinism test passes
+
+## 2026-09-25
+
+Tool tags are interned to bits (DefDb::tool_tags, ToolMask = u64, at most 64 tags). The colony's tags are an OR over World.tools, a derived index of every tool entity, gathered once per work search, so each gated candidate costs a mask test: O(1) per candidate, O(tools) per search, not a kept mask. A pawn holds one tool (Pawn.hand plus Held on the tool, off the map); a gated job fetches the nearest free covering tool first, and the walk counts in the job's distance. Speed scales Work.total when the work starts; wear costs hp per finished job and breaks the tool with a message. Tools force stack_limit 1, and speed <= 0 fails the load. Emitters follow the tool. Save format 3 adds engine:held; a load puts back on the map any tool its holder didn't bring. Right-click offers only harvests the pawn can get a tool for. Not built here: the why panel itself (f1924f03). work_blocked gives 'Needs a chopping tool.' or 'Needs a free chopping tool.', and the thing inspector shows it.
