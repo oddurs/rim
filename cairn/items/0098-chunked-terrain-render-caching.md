@@ -55,7 +55,7 @@ meshes):
 | mid (z 12) | 2.56 | 0.31 | 0.87 | 32 → 60 | 0 |
 | close (z 28) | 0.82 | 0.21 | 0.27 | 14 → 24 | 0 |
 | storm (z 4) | 4.37 | 0.99 | 1.64 | 50 → 99 | 0 |
-| zooming (new) | — | 0.47 | 3.50 | 98 | 192 in 240 frames |
+| zooming (new) | — | 0.72 | 2.96 | 64 | 168 in 240 frames |
 
 Submit falls with it (0.61 → 0.39 on the whole map): the batches macroquad
 builds and uploads each frame are now the ground, plans, pawns, weather and
