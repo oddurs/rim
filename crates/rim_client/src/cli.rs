@@ -72,10 +72,41 @@ const CHECK_USAGE: &str = "usage: rim check [MOD_DIR ...] [--hours H] [--strict]
 
 Loads each mod with its dependencies, runs a few in-game hours, and reports
 load errors, warnings (patch conflicts, skipped patches, determinism hazards)
-and script errors. Its UI scripts are checked against the UI API: a ui_api
+and script errors. Its sprites must decode and fit the world atlas. Its UI
+scripts are checked against the UI API: a ui_api
 the engine lacks, or a ui., act. or view. member that does not exist, is an
 error naming the file and line. With no MOD_DIR, checks every mod in ./mods.
 Exits 1 on an error, or on a warning with --strict.";
+
+/// Each PNG under the mod's `sprites/`, at any depth, must decode and fit
+/// a world atlas page, or the game refuses to start with it.
+fn sprite_errors(dir: &std::path::Path) -> Vec<String> {
+    fn pngs(dir: &std::path::Path, out: &mut Vec<PathBuf>) {
+        let Ok(rd) = std::fs::read_dir(dir) else { return };
+        for p in rd.flatten().map(|e| e.path()) {
+            if p.is_dir() {
+                pngs(&p, out);
+            } else if p.extension().is_some_and(|e| e.eq_ignore_ascii_case("png")) {
+                out.push(p);
+            }
+        }
+    }
+    let mut files = Vec::new();
+    pngs(&dir.join("sprites"), &mut files);
+    files.sort();
+    files
+        .iter()
+        .filter_map(|f| match rim_ui::image::decode(f) {
+            Err(e) => Some(format!("{}: {e}", f.display())),
+            Ok((w, h, _)) if !crate::atlas::fits(w, h) => Some(format!(
+                "{}: {w}×{h} doesn't fit a {m}×{m} world atlas page",
+                f.display(),
+                m = crate::atlas::MAX_PAGE
+            )),
+            Ok(_) => None,
+        })
+        .collect()
+}
 
 /// `rim check`: returns the process exit code.
 pub fn check(args: &[String]) -> i32 {
@@ -116,7 +147,8 @@ pub fn check(args: &[String]) -> i32 {
                 failed = true;
             }
             Ok(r) => {
-                let ui = rim_ui::check::check_mod_ui(dir);
+                let mut ui = rim_ui::check::check_mod_ui(dir);
+                ui.extend(sprite_errors(dir));
                 let bad = !r.errors.is_empty() || !ui.is_empty() || (strict && !r.warnings.is_empty());
                 let mark = if bad { "FAIL" } else { "ok  " };
                 println!(
@@ -141,4 +173,20 @@ pub fn check(args: &[String]) -> i32 {
         }
     }
     i32::from(failed)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_sprite_that_does_not_decode_is_an_error_naming_it() {
+        let dir = std::env::temp_dir().join(format!("rim-sprite-check-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("sprites/deep")).unwrap();
+        std::fs::write(dir.join("sprites/deep/broken.PNG"), b"not a png").unwrap();
+        std::fs::copy("../../mods/wildlife_plus/sprites/salt_lick.png", dir.join("sprites/fine.png")).unwrap();
+        let errors = sprite_errors(&dir);
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        assert!(errors[0].contains("broken.PNG"), "found in a subfolder, any case: {errors:?}");
+    }
 }

@@ -607,6 +607,10 @@ pub struct DefDb {
     pub mod_defs: BTreeMap<String, Vec<crate::data::Data>>,
     /// Labels things join up by (`look.join`), indexed by `Look::join`.
     pub join_groups: Vec<String>,
+    /// Sprite keys looks use (`mod:name`), indexed by `Prim::Sprite::id`.
+    pub sprites: Vec<String>,
+    /// Each sprite's PNG, parallel to `sprites`; the modloader finds them.
+    pub sprite_files: Vec<std::path::PathBuf>,
     /// Qualified ids ("core:wall").
     index: HashMap<(&'static str, String), DefId>,
     /// Bare ids ("wall"), for tools and tests that don't care which mod.
@@ -819,7 +823,8 @@ impl DefDb {
             if d.shape.is_some() {
                 return Err(format!("{ctx}: `shape` was replaced by `look` in API 0.4; see docs/modding/looks.md"));
             }
-            d.look_r = d.look.compile(&mut self.join_groups).map_err(|e| format!("{ctx}: {e}"))?;
+            let mut sprites = crate::look::Sprites { keys: &mut self.sprites, home: home_of(&d.id) };
+            d.look_r = d.look.compile(&mut self.join_groups, &mut sprites).map_err(|e| format!("{ctx}: {e}"))?;
             if let Some(h) = &mut d.harvest {
                 h.desig_r = get("designation", &h.designation, &ctx)?;
                 h.yields_r = counts(&h.yields, &ctx)?;

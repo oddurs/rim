@@ -11,8 +11,10 @@
 //! and one frame's draw calls and indices.
 //!
 //! `--check` exits 1 when the world's CPU time on the whole map (clear, in
-//! a storm, or zooming through it) is over budget. `--json FILE` writes the numbers, `--shots DIR` saves a
-//! screenshot of each view, and `--frames N` sets the frames per view.
+//! a storm, or zooming through it) is over budget. `--sprite-mods N` adds N
+//! generated mods whose furniture is drawn from sprites. `--json FILE`
+//! writes the numbers, `--shots DIR` saves a screenshot of each view, and
+//! `--frames N` sets the frames per view.
 
 use crate::{frame, render, App, RawInput, RenderTimes, MIN_ZOOM};
 use macroquad::prelude::*;
@@ -20,7 +22,7 @@ use macroquad::telemetry;
 use rim_sim::defs::Category;
 use rim_sim::world::{Faction, Owner};
 use rim_sim::{Command, IVec, Sim};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// The world renderer's CPU budget per frame on the reference machine, in
 /// ms (DESIGN.md §8).
@@ -33,9 +35,52 @@ const ROOM: i32 = 8;
 /// Side of the stamped colony, in cells.
 const COLONY: i32 = 96;
 
-/// The §8 world with a colony in it.
-pub fn world(mods: &Path, seed: u64) -> Result<Sim, String> {
-    let mut s = Sim::build(mods, seed, &|_| true, SIZE)?;
+/// A copy of `mods` plus `n` generated mods, each a piece of furniture
+/// drawn from a sprite of its own: the colony gets built of them, so the
+/// bench shows what twenty mods' art costs in draw calls.
+fn with_sprite_mods(mods: &Path, n: usize) -> Result<PathBuf, String> {
+    fn copy(from: &Path, to: &Path) -> std::io::Result<()> {
+        std::fs::create_dir_all(to)?;
+        for e in std::fs::read_dir(from)?.flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                copy(&p, &to.join(e.file_name()))?;
+            } else {
+                std::fs::copy(&p, to.join(e.file_name()))?;
+            }
+        }
+        Ok(())
+    }
+    let err = |e: std::io::Error| format!("render bench: sprite mods: {e}");
+    // Fresh each run: a left-over folder from a reused pid would add mods.
+    let dir = std::env::temp_dir().join(format!("rim-bench-sprites-{}", std::process::id()));
+    if dir.exists() {
+        std::fs::remove_dir_all(&dir).map_err(err)?;
+    }
+    copy(mods, &dir).map_err(err)?;
+    let art = mods.join("wildlife_plus/sprites/salt_lick.png");
+    for k in 0..n {
+        let m = dir.join(format!("art{k:02}"));
+        std::fs::create_dir_all(m.join("sprites")).map_err(err)?;
+        std::fs::create_dir_all(m.join("defs")).map_err(err)?;
+        std::fs::copy(&art, m.join("sprites/piece.png")).map_err(err)?;
+        let manifest = format!(
+            "id = \"art{k:02}\"\nname = \"Art {k}\"\nversion = \"0.0.0\"\napi = \"0.4\"\ndepends = [\"core\"]\n"
+        );
+        std::fs::write(m.join("mod.toml"), manifest).map_err(err)?;
+        let def = "[[thing]]\nid = \"piece\"\nlabel = \"piece\"\ncolor = \"#a08060\"\ncategory = \"building\"\n\
+                   path_cost = 50\n\
+                   build = { menu = \"furniture\", work = 10, stuff = { category = \"structural\", count = 1 } }\n\
+                   look.layers = [{ draw = \"sprite\", sprite = \"piece\", tint = true }]\n";
+        std::fs::write(m.join("defs/piece.toml"), def).map_err(err)?;
+    }
+    Ok(dir)
+}
+
+/// The §8 world with a colony in it, and `sprite_mods` generated art mods.
+pub fn world(mods: &Path, seed: u64, sprite_mods: usize) -> Result<Sim, String> {
+    let mods = if sprite_mods > 0 { with_sprite_mods(mods, sprite_mods)? } else { mods.to_path_buf() };
+    let mut s = Sim::build(&mods, seed, &|_| true, SIZE)?;
     let defs = s.world.defs.clone();
     let c = s.world.colony_center().ok_or("render bench: the map has no colony")?;
     let mut rng = rim_sim::rng::Rng::new(seed ^ 0xBE7C);

@@ -5,6 +5,7 @@
 //! last layout; panels swallow clicks). UI actions apply, then whatever the
 //! UI didn't take drives the world. The HUD itself is core's UI mod.
 
+mod atlas;
 mod autotest;
 mod bench;
 mod cli;
@@ -103,6 +104,8 @@ pub struct App {
     pub render_us: RenderTimes,
     /// Floors, items and fixtures, cached per chunk on the GPU.
     pub meshes: mesh::Meshes,
+    /// Every mod's sprites, packed at load.
+    pub world_atlas: atlas::WorldAtlas,
     /// Input subscriber for wheel events (see `Wheel`).
     wheel_sub: usize,
 }
@@ -278,6 +281,12 @@ fn conf() -> macroquad::conf::Conf {
 }
 
 async fn fail(e: String) {
+    // Nobody is watching the window in the autotest or the bench: say it
+    // and exit, so CI fails instead of waiting forever.
+    if std::env::args().any(|a| a == "--autotest" || a == "--bench-render") {
+        eprintln!("rim failed to start: {e}");
+        std::process::exit(2);
+    }
     loop {
         clear_background(Color::from_rgba(30, 20, 20, 255));
         draw_text("rim failed to start", 40.0, 60.0, 36.0, WHITE);
@@ -319,7 +328,14 @@ async fn game() {
     let bench = args.iter().any(|a| a == "--bench-render");
     let sim = match find_mods().ok_or_else(|| "could not find a mods/ directory".to_string()).and_then(|d| {
         if bench {
-            bench::world(&d, seed)
+            let n = match args.iter().position(|a| a == "--sprite-mods") {
+                None => Ok(0),
+                Some(i) => args
+                    .get(i + 1)
+                    .and_then(|v| v.parse().ok())
+                    .ok_or_else(|| "--sprite-mods wants a number of mods".to_string()),
+            };
+            n.and_then(|n| bench::world(&d, seed, n))
         } else {
             Sim::new(&d, seed)
         }
@@ -350,6 +366,10 @@ async fn game() {
         eprintln!("  warning: {w}");
     }
 
+    let world_atlas = match atlas::WorldAtlas::load(&sim.world.defs.sprite_files) {
+        Ok(a) => a,
+        Err(e) => return fail(e).await,
+    };
     let atlas = Texture2D::from_rgba8(ui.text.atlas.size as u16, ui.text.atlas.size as u16, &ui.text.atlas.pixels);
     atlas.set_filter(FilterMode::Linear);
     let center = sim.world.colony_center().unwrap_or(IVec::new(100, 100));
@@ -380,6 +400,7 @@ async fn game() {
         ground: draw::Ground::default(),
         render_us: RenderTimes::default(),
         meshes: mesh::Meshes::default(),
+        world_atlas,
         wheel_sub: macroquad::input::utils::register_input_subscriber(),
     };
     app.selected = app.sim.world.colonists().next();

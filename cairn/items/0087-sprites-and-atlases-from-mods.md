@@ -2,8 +2,10 @@
 id: e2ce89c3-de39-43ac-a302-d2dcc325aedf
 title: Sprites from mods, packed into one world atlas at load
 type: feature
-status: backlog
+status: doing
 milestone: graphics
+assignee: Oddur Sigurdsson
+claimed: 2026-09-24
 depends_on:
 - b25b27e0-b43b-478f-b50b-825fedbf62e3
 - 3dd22b0d-a723-4acb-ae23-4095dc784e7e
@@ -44,10 +46,10 @@ a frame. The number of mods must not change the number of draw calls.
 
 ## Acceptance criteria
 
-- [ ] The example plugin ships sprites and a def that uses one
-- [ ] Sprites from several mods on screen draw in one call (bench counts calls)
-- [ ] Draw calls do not grow with the number of mods (test with a generated set of 20)
-- [ ] Atlas overflow spills to a second page with a load-log line, not a crash
+- [x] The example plugin ships sprites and a def that uses one
+- [x] Sprites from several mods on screen draw in one call (bench counts calls)
+- [x] Draw calls do not grow with the number of mods (test with a generated set of 20)
+- [x] Atlas overflow spills to a second page with a load-log line, not a crash
 
 ## 2026-09-24
 
@@ -56,3 +58,11 @@ Graphics milestone: rewritten from a two-line stub. The per-mod atlas in the Loo
 ## 2026-09-24
 
 From the Looks item: sprite keys, their validation (unknown key is a load error naming the mod) and a glyph primitive all land here, drawn from the world atlas.
+
+## 2026-09-24
+
+Sprites are PNGs under a mod's sprites/, keyed bare or mod:name, interned at load (Prim::Sprite{id}); the modloader resolves each to a file or fails naming the def. The client packs them tallest-first onto shelf pages of the smallest power of two that fits, up to 4096, each with a white block that primitives sample, so a chunk layer is still one call. Sprites draw as painted unless tint = true (thing or material colour) or a color is given. rim check decodes every PNG under sprites/. Bench --sprite-mods 20 adds twenty generated mods whose furniture is sprites: whole map 99 calls against 98 without (the one is UI: twenty more toolbar buttons), mid and close identical; CI now runs the gate with them. Glyphs split out to ee5c5cc6.
+
+## 2026-09-24
+
+Review: parts break on every page change so draw order holds across pages; sprite names are paths inside sprites/ only (no '..', '\\', root); rim check walks subfolders, any case, with the packer's own fit test; full-cell sprites pad like fills; atlas UVs are highp where the GPU has it; --sprite-mods rejects a non-number; the bench's temp mods are fresh each run; a headless start failure exits 2 instead of waiting on the error screen. Declined: a bare key in a patch resolves in the patched def's mod, as every def reference does (DESIGN.md §10); looks.md says so.

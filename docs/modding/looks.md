@@ -4,7 +4,8 @@ A thing's `look` says how it is drawn: layers of a few primitives, painted
 in order over its cell. The renderer knows the primitives and nothing about
 what the thing is, so a loom, a fence or a hedge needs no engine change.
 Core ships no art: out of the box the game is coloured rectangles and discs,
-which is the fastest thing to draw and the easiest to read.
+which is the fastest thing to draw and the easiest to read. Mods bring
+sprites.
 
 A thing with no look is its cell filled in its `color`. Nothing is ever
 invisible.
@@ -20,6 +21,7 @@ is the middle. Line widths are in screen points.
 | `outline` | `x`, `y`, `w`, `h`, `width` (1) | a rectangle's outline |
 | `disc` | `x`, `y` (0.5, 0.5), `r` (0.4), `min_px`, `pulse` | a disc |
 | `edges` | `width` (1.5) | the cell's border, left open toward joined neighbours |
+| `sprite` | see [Sprites](#sprites) | a mod's picture |
 
 Every layer also takes:
 
@@ -52,6 +54,41 @@ look.layers = [
     { draw = "disc", x = 0.42, y = 0.42, r = 0.14, shade = 1.3, min_px = 1.0 },
 ]
 ```
+
+## Sprites
+
+A mod ships pictures as PNGs under `sprites/`. A `sprite` layer draws one
+over a rectangle of the cell (`x`, `y`, `w`, `h`, the whole cell by
+default). `sprite` is the file's path under `sprites/` without `.png`
+(`oak` or `trees/oak`): bare for the def's own mod, `mod:name` for another's.
+As with every reference in a def, bare means the def's mod even in your
+patch to another mod's def, so there write `my_mod:name`.
+
+| `draw` | fields | draws |
+|---|---|---|
+| `sprite` | `sprite`, `x`, `y`, `w`, `h`, `tint` | a picture |
+
+A sprite draws as painted. With `tint = true` it is multiplied by the
+thing's colour, or its material's, so one grey plank serves every wood;
+with a `color`, by that.
+
+Every loaded mod's sprites are packed at load into one texture, the world
+atlas, so art from twenty mods draws in the same batch as core's
+rectangles wherever the world is cached per chunk: everything but plans
+and animated looks, which are drawn each frame. A page is at most 4096×4096; past that the atlas spills to a
+second page and says so in the load log. A sprite with no file, or from a
+mod that isn't loaded, is a load error naming the def; `rim check` also
+decodes every PNG under `sprites/`.
+
+<!-- not a sample -->
+```toml
+look.layers = [
+    { draw = "disc", x = 0.54, y = 0.84, r = 0.3, color = "#00000030" },
+    { draw = "sprite", sprite = "salt_lick", x = 0.1, y = 0.05, w = 0.8, h = 0.8 },
+]
+```
+
+This is wildlife_plus's salt lick (`mods/wildlife_plus`).
 
 ## Joining
 
