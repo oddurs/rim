@@ -9,7 +9,11 @@
 //! building code, over one calendar year by default so every season's weather
 //! and growth is in the hash. Prints the state hash at the end of each day, so when two
 //! platforms disagree the output shows the first day they diverged.
+//!
+//! A twin of the game is saved and loaded every few days (DESIGN.md §7a),
+//! and must match the one that never saved, section for section, every day.
 
+use rim_sim::snapshot::Snapshot;
 use rim_sim::{Command, IVec, Sim, TICKS_PER_DAY};
 use std::path::Path;
 
@@ -47,18 +51,34 @@ fn main() {
     s.push(Command::Build { thing: thing("bed"), stuff: wood, a: at(2, 2), b: at(2, 2) });
     s.push(Command::Build { thing: thing("campfire"), stuff: None, a: at(1, 1), b: at(1, 1) });
 
+    // The commands apply on the first tick; the twin splits off after it.
+    s.step();
+    let mut twin = Snapshot::capture(&s).restore(&mods, &|_| true).expect("the twin loads");
+
     println!(
         "crosscheck seed {seed}, {days} days, mods: {}",
         s.mods.iter().map(|m| m.id.as_str()).collect::<Vec<_>>().join(", ")
     );
     for day in 1..=days {
-        for _ in 0..TICKS_PER_DAY {
+        let ticks = if day == 1 { TICKS_PER_DAY - 1 } else { TICKS_PER_DAY };
+        for _ in 0..ticks {
             s.step();
+            twin.step();
+        }
+        let snap = Snapshot::capture(&s);
+        if snap != Snapshot::capture(&twin) {
+            eprintln!("day {day}: the game that was saved and loaded no longer matches the one that wasn't");
+            std::process::exit(1);
+        }
+        if day % 5 == 0 {
+            let bytes = Snapshot::capture(&twin).to_bytes();
+            twin = Snapshot::from_bytes(&bytes).and_then(|b| b.restore(&mods, &|_| true)).expect("the twin reloads");
         }
         let w = &s.world;
         println!(
-            "day {day:>3}  hash {:016x}  pawns {:>3}  messages {:>4}",
+            "day {day:>3}  hash {:016x}  snapshot {:016x}  pawns {:>3}  messages {:>4}",
             w.state_hash(),
+            snap.hash(),
             w.pawns.len(),
             w.messages.len()
         );

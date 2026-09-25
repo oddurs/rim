@@ -47,6 +47,11 @@ impl Rng {
         f as i32 + self.chance(v - f) as i32
     }
 
+    /// Resume from a saved `state()`.
+    pub fn from_state(state: u64) -> Self {
+        Rng { state }
+    }
+
     pub fn state(&self) -> u64 {
         self.state
     }

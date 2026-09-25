@@ -9,7 +9,7 @@ use crate::IVec;
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, serde::Serialize, serde::Deserialize)]
 pub enum Goal {
     /// Stand on this cell.
     Cell(IVec),

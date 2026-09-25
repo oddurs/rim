@@ -12,6 +12,14 @@ use std::time::Instant;
 
 pub const MAP_SIZE: i32 = 200;
 
+/// Mods loaded and their scripts started, before there is a world.
+pub(crate) struct Mods {
+    pub manifests: Vec<ModManifest>,
+    pub scripts: ScriptHost,
+    pub warnings: Vec<String>,
+    pub defs: Arc<crate::defs::DefDb>,
+}
+
 pub struct Sim {
     pub world: World,
     pub scripts: ScriptHost,
@@ -35,10 +43,8 @@ impl Sim {
 
     /// Everything configurable: which mods, and the map's size (square).
     pub fn build(mods_dir: &Path, seed: u64, enabled: &dyn Fn(&str) -> bool, size: i32) -> Result<Sim, String> {
-        let loaded = modloader::load_only(mods_dir, enabled)?;
-        let scripts = ScriptHost::load(&loaded.mods, &loaded.scripts, &loaded.defs)?;
-        let warnings: Vec<String> = loaded.warnings.iter().chain(&scripts.warnings).cloned().collect();
-        let defs = Arc::new(loaded.defs);
+        let m = Self::load_mods(mods_dir, enabled)?;
+        let defs = m.defs.clone();
         let mut world = World::new(defs.clone(), size, size, seed);
         let start = mapgen::generate(&mut world);
 
@@ -71,15 +77,27 @@ impl Sim {
         let clock = world.clock();
         world.fields.update_ambient(&defs, clock);
 
-        Ok(Sim {
+        Ok(Self::assemble(m, world))
+    }
+
+    /// Load and check the mods `enabled` accepts, and start their scripts.
+    pub(crate) fn load_mods(mods_dir: &Path, enabled: &dyn Fn(&str) -> bool) -> Result<Mods, String> {
+        let loaded = modloader::load_only(mods_dir, enabled)?;
+        let scripts = ScriptHost::load(&loaded.mods, &loaded.scripts, &loaded.defs)?;
+        let warnings: Vec<String> = loaded.warnings.iter().chain(&scripts.warnings).cloned().collect();
+        Ok(Mods { manifests: loaded.mods, scripts, warnings, defs: Arc::new(loaded.defs) })
+    }
+
+    pub(crate) fn assemble(m: Mods, world: World) -> Sim {
+        Sim {
             world,
-            scripts,
-            mods: loaded.mods,
-            warnings,
+            scripts: m.scripts,
+            mods: m.manifests,
+            warnings: m.warnings,
             profile: Profile::default(),
             queue: Vec::new(),
             over_budget: Vec::new(),
-        })
+        }
     }
 
     /// Queue a player command; it applies at the start of the next tick.
@@ -92,6 +110,11 @@ impl Sim {
         let w = &mut self.world;
         let prof = &mut self.profile;
 
+        // A command sees the map as it is, not as the regions last saw it:
+        // a load can't reproduce out-of-date regions.
+        if !self.queue.is_empty() {
+            w.map.ensure_regions();
+        }
         for c in self.queue.drain(..) {
             command::apply(w, c);
         }

@@ -7,7 +7,7 @@
 use crate::rng::mix;
 use std::collections::BTreeMap;
 
-#[derive(Clone, Debug, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, PartialEq, PartialOrd, serde::Serialize, serde::Deserialize)]
 pub enum Data {
     Bool(bool),
     Int(i64),
@@ -16,7 +16,7 @@ pub enum Data {
     Table(BTreeMap<Key, Data>),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 pub enum Key {
     Int(i64),
     Str(String),

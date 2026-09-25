@@ -12,10 +12,12 @@ Measured on the reference machine (Apple Silicon, macOS), release builds.
 | Crate | Version | Features |
 |---|---|---|
 | mlua | 0.12 (Luau 0.736) | `luau` |
-| hecs | 0.11 | default |
+| hecs | 0.11 | default + `serde` (an `Entity` saves as its id) |
 | toml | 1.1 | default |
 | serde_path_to_error | 0.1 | |
 | libm | 0.2 | no default features (deterministic transcendentals for scripts) |
+| rmp-serde | 1.3 | default (save sections, `to_vec_named`) |
+| zstd | 0.14 | default (save sections, level 3) |
 | taffy | 0.14 | `std`, `taffy_tree`, `flexbox`, `content_size` |
 | cosmic-text | 0.19 | default (`std`, `swash`, `fontconfig`) + `shape-run-cache` |
 | macroquad | 0.4.16 | default |
@@ -136,10 +138,32 @@ in the AI isn't hecs: `ai.rs` scans every `Thing` for each pawn looking for
 work, O(pawns × things). A per-def or spatial index is the fix, and it
 belongs with the building sprint's changes to `ai.rs`.
 
-For save games (0060): hecs' serializers rebuild archetypes, which can
-change query order and the entity ids handed out after a load. The save
-format needs a "save at tick N, load, run to M, compare with an unbroken run"
-test.
+For save games (0060): the world hands out entity ids itself through
+`spawn_at` and never reuses one, so ids survive a load. A load does rebuild
+archetypes in a different order, so the sim never lets hecs's iteration
+order decide anything: ties break by id (`tests/entity_ids.rs`), and
+`tests/snapshot.rs` saves, loads, reverses the ECS and runs on.
+
+## Saves: MessagePack and zstd
+
+A snapshot section is serde into MessagePack with named fields (rmp-serde),
+compressed with zstd at level 3. Self-describing, so migrations and a
+removed mod's parked data work on plain values (DESIGN.md §7a). Measured
+against CBOR (ciborium) on a colony at day 60, all shipped mods, release
+build:
+
+| | 200×200 | 250×250 |
+|---|---|---|
+| Things, pawns | 3,405, 44 | 5,928, 26 |
+| MessagePack raw / zstd | 229 KB / 24 KB | 369 KB / 38 KB |
+| CBOR raw / zstd | 235 KB / 25 KB | 377 KB / 38 KB |
+| Decode to plain values, MessagePack / CBOR | 1.4 / 3.5 ms | 2.2 / 5.7 ms |
+| Capture (sim thread) | 0.43 ms | 0.70 ms |
+| Compress, decompress | 0.30, 0.11 ms | 0.38, 0.16 ms |
+| Restore (mods, world, rebuild) / new game | 4.2 / 4.8 ms | 5.2 / 6.6 ms |
+
+Same size once compressed; MessagePack decodes 2.6× faster. zstd is a C
+library (zstd-sys); nothing pure-Rust compresses as well.
 
 ## toml and error messages
 
