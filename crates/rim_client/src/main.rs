@@ -14,6 +14,7 @@ mod mesh;
 mod save;
 mod sky;
 mod title;
+mod wear;
 
 use macroquad::prelude::*;
 use rim_sim::defs::{DefId, Targets};

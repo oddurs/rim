@@ -10,7 +10,8 @@ category = "building"
 # Walls, windows and doors join up: a run reads as one wall with
 # openings in it, outlined only where it faces something else.
 look.join = "wall"
-look.layers = [{ draw = "fill" }, { draw = "edges", width = 1.5, shade = 0.65 }]
+# It rises as it is built, and gets its edges as it's finished.
+look.layers = [{ draw = "fill", grow = [0.0, 0.85] }, { draw = "edges", width = 1.5, shade = 0.65, grow = [0.85, 1.0] }]
 blocks = true
 hp = 200
 market_value = 8

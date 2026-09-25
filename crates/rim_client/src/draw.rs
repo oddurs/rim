@@ -1,8 +1,10 @@
 //! Rendering. Read-only access to the simulation.
 
 use crate::atlas::{Slot, WorldAtlas};
+use crate::wear;
 use crate::{rgb, App, Tool};
 use macroquad::prelude::*;
+use rim_sim::defs::Wear;
 use rim_sim::hecs::Entity;
 use rim_sim::look::{Layer, Prim};
 use rim_sim::map::CHUNK;
@@ -181,29 +183,95 @@ pub fn thing(s: &mut impl Sink, w: &World, e: Entity, cell: IVec, at: (f32, f32)
         Err(_) => rgb(td.rgb),
     };
     let (sx, sy) = at;
+    let look = &td.look_r;
     if let Ok(bp) = w.ecs.get::<&Blueprint>(e) {
-        let need: u32 = bp.cost.iter().map(|c| c.1).sum();
-        let have: u32 = bp.delivered.iter().sum();
-        let ghost = Color::new(0.45, 0.7, 1.0, 0.35);
-        s.rect(sx + 1.0, sy + 1.0, z - 2.0, z - 2.0, ghost);
-        outline(s, sx + 1.0, sy + 1.0, z - 2.0, z - 2.0, 1.5, Color::new(0.55, 0.8, 1.0, 0.8));
-        let built = w.ecs.get::<&Work>(e).map_or(0.0, |k| k.done as f32 / k.total.max(1) as f32);
-        let frac = if have < need { have as f32 / need.max(1) as f32 * 0.5 } else { 0.5 + 0.5 * built };
-        s.rect(sx + 2.0, sy + z - 4.0, (z - 4.0) * frac, 2.5, Color::new(0.6, 0.9, 1.0, 0.9));
+        plan(s, w, e, &bp, &look.layers, c, cell, at, z, t);
         return None;
     }
-    let look = &td.look_r;
     let layers = match w.ecs.get::<&Regrow>(e) {
         Ok(_) if !look.regrowing.is_empty() => &look.regrowing,
         _ => &look.layers,
     };
-    paint(s, w, layers, look.join, c, cell, at, z, t);
+    let f = wear::progress(w, e);
+    match (f > 0.0).then(|| wear::style(w, e, &th)).flatten().map(|st| st.wear) {
+        Some(Wear::Lean) => {
+            // Away from the axe, more as the cut deepens.
+            let (tx, ty) = wear::toward(w, e);
+            let k = 0.1 * f * f * z;
+            wear::draw_chips(s, cell, (tx, ty), f, at, z, chip_color(w, e, td, c));
+            paint(s, w, layers, look.join, c, cell, (sx - tx * k, sy - ty * k), z, t);
+        }
+        Some(Wear::Cracks) => {
+            let toward = wear::toward(w, e);
+            if w.ecs.get::<&Work>(e).is_ok() {
+                wear::draw_chips(s, cell, toward, f, at, z, chip_color(w, e, td, c));
+            }
+            paint(s, w, layers, look.join, shade(c, 1.0 - 0.16 * f), cell, at, z, t);
+            wear::draw_cracks(s, cell, toward, f, at, z);
+        }
+        // Taken down in reverse of how it went up. Only for things that
+        // don't block: the loader refuses it for those that do.
+        Some(Wear::Grow) => {
+            let (grown, _) = wear::grown(layers, 1.0 - f, c, 1.0);
+            paint(s, w, &grown, look.join, c, cell, at, z, t);
+        }
+        Some(Wear::None) | None => paint(s, w, layers, look.join, c, cell, at, z, t),
+    }
     if let Ok(d) = w.ecs.get::<&Designated>(e) {
         let dc = rgb(defs.designations[d.0 as usize].rgb);
         disc(s, sx + z * 0.82, sy + z * 0.18, z * 0.13 + 1.0, BLACK);
         disc(s, sx + z * 0.82, sy + z * 0.18, z * 0.13, dc);
     }
     (th.count > 1).then_some(th.count)
+}
+
+/// A plan: what stands of it so far, rising through its layers' `grow`
+/// windows see-through and hatched, because a plan doesn't block and
+/// mustn't look as if it does. Above that, a faint ghost of the rest.
+#[allow(clippy::too_many_arguments)]
+fn plan(
+    s: &mut impl Sink,
+    w: &World,
+    e: Entity,
+    bp: &Blueprint,
+    layers: &[Layer],
+    own: Color,
+    cell: IVec,
+    at: (f32, f32),
+    z: f32,
+    t: f32,
+) {
+    const BLUEPRINT: Color = Color::new(0.55, 0.8, 1.0, 0.8);
+    let (sx, sy) = at;
+    let f = wear::progress(w, e);
+    let (grown, top) = if f > 0.0 { wear::grown(layers, f, own, 0.55) } else { (Vec::new(), 1.0) };
+    s.rect(sx + 1.0, sy + 1.0, z - 2.0, (top * z - 1.0).max(0.0), Color::new(0.45, 0.7, 1.0, 0.3));
+    if !grown.is_empty() {
+        // A plan joins nothing until it stands.
+        paint(s, w, &grown, None, own, cell, at, z, t);
+        wear::hatch(s, (sx, sy + top * z, z, (1.0 - top) * z), (z / 7.0).max(4.0), Color::new(0.55, 0.8, 1.0, 0.4));
+    }
+    outline(s, sx + 1.0, sy + 1.0, z - 2.0, z - 2.0, 1.5, BLUEPRINT);
+    // The materials that have arrived, stacked in the corner until used.
+    let need: u32 = bp.cost.iter().map(|c| c.1).sum();
+    let have: u32 = bp.delivered.iter().sum();
+    let pile = 0.32 * have as f32 / need.max(1) as f32 * (1.0 - f);
+    if let (true, Some(&(m, _))) = (pile > 0.04, bp.cost.first()) {
+        let mc = rgb(w.defs.thing(m).rgb);
+        s.rect(sx + 0.08 * z, sy + (0.92 - pile) * z, pile * z, pile * z, mc);
+    }
+    let frac = if have < need { have as f32 / need.max(1) as f32 * 0.5 } else { 0.5 + 0.5 * f };
+    s.rect(sx + 2.0, sy + z - 4.0, (z - 4.0) * frac, 2.5, Color::new(0.6, 0.9, 1.0, 0.9));
+}
+
+/// What comes off a thing as it is worked: what it yields, or what it was
+/// built of.
+fn chip_color(w: &World, e: Entity, td: &rim_sim::defs::ThingDef, own: Color) -> Color {
+    let worked = w.ecs.get::<&Work>(e).ok().and_then(|k| k.designation).and_then(|d| td.harvest_for(d));
+    match worked.or(wear::felled_by(td)).and_then(|h| h.yields_r.first()) {
+        Some(&(y, _)) if w.ecs.get::<&MadeOf>(e).is_err() => rgb(w.defs.thing(y).rgb),
+        _ => own,
+    }
 }
 
 /// Stacks show their count once a cell is big enough to read one.

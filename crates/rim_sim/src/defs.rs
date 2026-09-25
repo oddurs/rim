@@ -610,10 +610,75 @@ pub struct DesignationDef {
     pub targets: Targets,
     /// The work type whose priority decides who does it (DESIGN.md §4d).
     pub work_type: String,
+    /// The `[[work_style]]` its work looks like. Unset, it shows no wear.
+    #[serde(default)]
+    pub style: Option<String>,
     #[serde(skip)]
     pub rgb: [u8; 3],
     #[serde(skip)]
     pub work_r: DefId,
+    #[serde(skip)]
+    pub style_r: Option<DefId>,
+}
+
+// ---------------------------------------------------------------- work styles
+
+/// How work on a cell looks (DESIGN.md §6b): what each blow does, how the
+/// thing wears as the work goes on, and how it leaves. Every name is one of
+/// a fixed set of client mechanisms, like the look primitives, so a mod
+/// picks and colours effects and never draws per frame.
+#[derive(Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct WorkStyleDef {
+    pub id: String,
+    /// Work between two strikes.
+    pub every: u32,
+    #[serde(default)]
+    pub strike: Vec<Strike>,
+    #[serde(default)]
+    pub wear: Wear,
+    #[serde(default)]
+    pub exit: Exit,
+    /// The style every build uses. At most one style may say so.
+    #[serde(default)]
+    pub builds: bool,
+}
+
+#[derive(Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum Strike {
+    /// The thing jolts away from the blow.
+    Shake,
+    /// Bits of what it yields, or is made of, fly toward the worker.
+    Chips,
+    Dust,
+    /// Bits of the thing's own colour drop from it: leaves, needles.
+    Shed,
+}
+
+#[derive(Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum Wear {
+    #[default]
+    None,
+    /// Layers appear in their `grow` windows; taken down, they go in reverse.
+    Grow,
+    /// Cracks spread from the worked side.
+    Cracks,
+    /// It leans away from the worker.
+    Lean,
+}
+
+#[derive(Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum Exit {
+    #[default]
+    None,
+    /// Falls away from the worker, or to an open side.
+    Fall,
+    Crumble,
+    /// Its yield pops out.
+    Pop,
 }
 
 // ---------------------------------------------------------------- work
@@ -701,6 +766,9 @@ pub struct DefDb {
     pub creatures: Vec<CreatureDef>,
     pub needs: Vec<NeedDef>,
     pub designations: Vec<DesignationDef>,
+    pub work_styles: Vec<WorkStyleDef>,
+    /// The style builds use (`builds = true`).
+    pub build_style: Option<DefId>,
     /// Work types in load order; `work_order` has them in `order` order.
     pub work_types: Vec<WorkTypeDef>,
     pub work_order: Vec<DefId>,
@@ -800,6 +868,7 @@ pub const KINDS: &[&str] = &[
     "designation",
     "work_type",
     "priority_scale",
+    "work_style",
     "field",
     "calendar",
     "sky",
@@ -836,6 +905,7 @@ impl DefDb {
             "need" => self.needs[i].id.clone(),
             "designation" => self.designations[i].id.clone(),
             "work_type" => self.work_types[i].id.clone(),
+            "work_style" => self.work_styles[i].id.clone(),
             "field" => self.fields[i].id.clone(),
             _ => String::new(),
         }
@@ -876,6 +946,9 @@ impl DefDb {
         }
         for (i, d) in self.work_types.iter().enumerate() {
             index.insert(("work_type", d.id.clone()), i as DefId);
+        }
+        for (i, d) in self.work_styles.iter().enumerate() {
+            index.insert(("work_style", d.id.clone()), i as DefId);
         }
         for (i, d) in self.fields.iter().enumerate() {
             index.insert(("field", d.id.clone()), i as DefId);
@@ -948,6 +1021,21 @@ impl DefDb {
             let ctx = format!("designation/{}", d.id);
             d.rgb = parse_color(&d.color).map_err(|e| format!("{ctx}: {e}"))?;
             d.work_r = get("work_type", &d.work_type, &ctx)?;
+            d.style_r = d.style.as_ref().map(|st| get("work_style", st, &ctx)).transpose()?;
+        }
+        for (i, st) in self.work_styles.iter().enumerate() {
+            if st.every == 0 {
+                return Err(format!("work_style/{}: `every` is the work between strikes, at least 1", st.id));
+            }
+            if st.builds {
+                if let Some(b) = self.build_style {
+                    return Err(format!(
+                        "work_style/{}: only one style can be the one builds use, and work_style/{} already is",
+                        st.id, self.work_styles[b as usize].id
+                    ));
+                }
+                self.build_style = Some(i as DefId);
+            }
         }
         let levels = self.priority_scale.levels;
         if !(1..=9).contains(&levels) {
@@ -1034,6 +1122,23 @@ impl DefDb {
         }
         if let Some(s) = &mut self.start {
             s.creature_r = get("creature", &s.creature, &format!("start/{}", s.id))?;
+        }
+        // A thing that blocks keeps its outline until it is gone (DESIGN.md
+        // §6b), so whatever takes it down may crack it but not shrink it.
+        let take_down = self.designations.iter().find(|d| d.targets == Targets::Built).and_then(|d| d.style_r);
+        for d in self.things.iter().filter(|d| d.blocks) {
+            let felled =
+                d.harvest.iter().filter(|h| h.destroy).filter_map(|h| self.designations[h.desig_r as usize].style_r);
+            let dismantled = d.build.as_ref().and(take_down);
+            for st in felled.chain(dismantled).map(|st| &self.work_styles[st as usize]) {
+                if st.wear == Wear::Grow {
+                    return Err(format!(
+                        "work_style/{}: wear = \"grow\" can't take down thing/{}, which blocks: it would look open \
+                         while it still stands. Use \"cracks\" or \"lean\"",
+                        st.id, d.id
+                    ));
+                }
+            }
         }
         if self.terrain.is_empty() {
             return Err("no terrain defined — is the core mod installed?".into());

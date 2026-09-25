@@ -564,6 +564,70 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         t.app.cam.zoom = 28.0;
     }
 
+    // Worksites (DESIGN.md §6b): a row of things part-way through being
+    // built, mined, felled, taken down and broken, each drawn from its stage.
+    println!("\n# worksites show how far along they are");
+    {
+        let row = (2..40i32)
+            .flat_map(|r| (-r..=r).flat_map(move |dy| (-r..=r).map(move |dx| home.offset(dx, dy))))
+            .find(|&p| {
+                (-1..7).all(|k| {
+                    let q = p.offset(k, 0);
+                    (-1..=1).all(|dy| {
+                        let q = q.offset(0, dy);
+                        t.w().map.passable(q) && t.w().map.fixture_at(q).is_none() && t.w().map.item_at(q).is_none()
+                    })
+                })
+            })
+            .expect("a free row");
+        let d = t.w().defs.clone();
+        let id = |s: &str| d.thing_id(s).unwrap_or_else(|| panic!("{s}"));
+        let (wall, wood, oak, granite) = (id("wall"), id("wood"), id("tree_oak"), id("granite"));
+        let decon = d.designations.iter().position(|x| x.targets == rim_sim::defs::Targets::Built).unwrap() as u16;
+        let desig = |thing| d.thing(thing).harvest.iter().find(|h| h.destroy).unwrap().desig_r;
+        let w = &mut t.app.sim.world;
+        let mut at = |k: i32, def, plan: bool, work: Option<(u32, Option<u16>, Side)>| {
+            let cell = row.offset(k, 0);
+            let e = w.spawn_fixture_of(def, cell, plan, Some(wood)).expect("placed");
+            if !plan && d.thing(def).build.is_some() {
+                rim_sim::ai::complete_building(w, e);
+            }
+            if let Some((pct, designation, side)) = work {
+                let total = w.ecs.get::<&Work>(e).map_or(100, |k| k.total);
+                let k = Work { done: total * pct / 100, total, designation, side };
+                w.ecs.insert_one(e, k).unwrap();
+            }
+            w.map.touch(cell);
+            e
+        };
+        let rising = at(0, wall, true, Some((40, None, Side::West)));
+        at(1, wall, true, Some((90, None, Side::West)));
+        let rock = at(2, granite, false, Some((60, Some(desig(granite)), Side::West)));
+        at(3, oak, false, Some((75, Some(desig(oak)), Side::East)));
+        at(4, wall, false, Some((55, Some(decon), Side::North)));
+        let hurt = at(5, wall, false, None);
+        let max = w.stat(hurt, "hp").unwrap().round() as i32;
+        w.ecs.get::<&mut Thing>(hurt).unwrap().hp = max * 3 / 8;
+        w.mark_worksite(rock, row.offset(2, 0));
+        t.check(
+            (t.w().stage(rising), t.w().stage(rock), t.w().stage(hurt)) == (3, 4, 5),
+            format!(
+                "stages read work and lost hp ({}, {}, {})",
+                t.w().stage(rising),
+                t.w().stage(rock),
+                t.w().stage(hurt)
+            ),
+        );
+        t.focus(row.offset(3, 0));
+        t.app.cam.zoom = 48.0;
+        t.frame().await;
+        let live: Vec<IVec> = (0..3).flat_map(|l| t.app.meshes.live(l).collect::<Vec<_>>()).collect();
+        t.check(live.contains(&row.offset(2, 0)), "the site being worked is drawn live");
+        t.check(!live.contains(&row), "and a plan nobody is building comes from the cache");
+        t.shot("worksites").await;
+        t.app.cam.zoom = 28.0;
+    }
+
     // Render scale: the world at half the pixels, the UI still full. The
     // same frame at both scales must look alike: a flipped or darkened
     // world (translucent plans are on screen) would not.
