@@ -29,17 +29,17 @@ The headless engine: defs, mod loading and patching, map, pathing, AI skeleton, 
 
 ## graphics — Graphics
 
-`########··` 71% · 5 of 7 done
+`##########` 100% · 7 of 7 done
 
 A sprint: fast on a little old laptop with mods loaded. The reference machine is a 2017 integrated GPU (Intel UHD 620 class) at 1080p: 60 fps on the DESIGN.md §8 map with 20 mods, which gives the world renderer 4 ms of CPU a frame. It starts by measuring, with a render benchmark that CI gates on. Then the look becomes data (primitives and sprite keys, no content names in the renderer), every mod's sprites pack into one shared atlas so the number of mods doesn't change the number of draw calls, whatever doesn't move is cached per chunk on the GPU, and a render scale keeps high-DPI screens within an integrated GPU's pixel budget. Design: DESIGN.md §6a, §8.
 
-- [ ] `3dd22b0d` Looks: draw primitives and sprite keys replace named shapes <sup>feature · p0 · l · engine</sup>
-- [ ] `ee5c5cc6` Glyph primitive drawn from the world atlas <sup>feature · p3 · m · client</sup>
 - [x] `30760c07` Render scale: the world at a fraction of the screen's pixels <sup>feature · p1 · m · client</sup>
+- [x] `3dd22b0d` Looks: draw primitives and sprite keys replace named shapes <sup>feature · p0 · l · engine</sup>
 - [x] `4376f91e` Render benchmark and a frame budget CI holds <sup>perf · p0 · m · client</sup>
 - [x] `96d2dac9` Chunks: one dirty unit for regions, fields and the renderer <sup>perf · p0 · m · engine</sup>
 - [x] `e2ce89c3` Sprites from mods, packed into one world atlas at load <sup>feature · p0 · m · client</sup>
 - [x] `e3c1f87b` Chunked meshes: what does not move is drawn from the GPU <sup>perf · p0 · m · client</sup>
+- [x] `ee5c5cc6` Glyph primitive drawn from the world atlas <sup>feature · p3 · m · client</sup>
 
 ## castaway — Castaway
 
