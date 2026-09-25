@@ -441,3 +441,71 @@ fn a_save_begun_mid_game_is_rooted_at_its_snapshot() {
     assert_eq!((r.root, r.from_tick, r.diverged), (savefile::Root::Snapshot, 100, None));
     let _ = std::fs::remove_file(path);
 }
+
+#[test]
+fn a_writer_on_its_own_thread_saves_the_same_game() {
+    let path = save_path("writer");
+    let mods = common::mods();
+    let (mut sim, save) = new_game(&mods, &path);
+    let writer = savefile::Writer::spawn(save);
+    for _ in 0..3_000 {
+        sim.step();
+        if sim.world.tick.is_multiple_of(600) {
+            writer.log(&mut sim);
+        }
+        if sim.world.tick == 1_800 {
+            writer.snapshot(&mut sim);
+        }
+    }
+    let live = Snapshot::capture(&sim).hash();
+    writer.finish().unwrap();
+    let (loaded, _, report) = SaveFile::load(&path, &mods, &|_| true).unwrap();
+    assert_eq!((report.from_snapshot, report.tick), (1_800, 3_000));
+    assert_eq!(Snapshot::capture(&loaded).hash(), live);
+    let _ = std::fs::remove_file(path);
+}
+
+#[test]
+fn compaction_drops_old_snapshots_and_nothing_else() {
+    let path = save_path("compact");
+    let mods = common::mods();
+    let (mut sim, mut save) = new_game(&mods, &path);
+    let mut hashes = BTreeMap::new();
+    for _ in 0..6 {
+        play(&mut sim, &mut save, 1_200, &mut hashes);
+        save.snapshot(&mut sim).unwrap();
+    }
+    play(&mut sim, &mut save, 600, &mut hashes);
+    drop(save);
+    let before = std::fs::metadata(&path).unwrap().len();
+    savefile::compact(&path, 2).unwrap();
+    let after = std::fs::metadata(&path).unwrap().len();
+    assert!(after < before, "{after} bytes after, {before} before");
+    let (epochs, cut) = savefile::read(&path).unwrap();
+    assert_eq!(cut, 0);
+    let ticks: Vec<u64> = epochs[0].snapshots.iter().map(|s| s.header.tick).collect();
+    assert_eq!(ticks, [0, 6_000, 7_200], "the root and the newest two");
+    let (loaded, _, report) = SaveFile::load(&path, &mods, &|_| true).unwrap();
+    assert_eq!((report.from_snapshot, report.tick), (7_200, 7_800));
+    assert_eq!(Snapshot::capture(&loaded).hash(), hashes[&7_800]);
+    let r = savefile::replay(&path, &mods, Some(0)).unwrap();
+    assert_eq!((r.diverged, r.checked.last()), (None, Some(&7_800)), "the whole log is still there");
+    let _ = std::fs::remove_file(path);
+}
+
+#[test]
+fn compaction_leaves_a_damaged_save_for_the_load_to_rescue() {
+    let path = save_path("compact-damaged");
+    let mods = common::mods();
+    let (mut sim, mut save) = new_game(&mods, &path);
+    let mut hashes = BTreeMap::new();
+    play(&mut sim, &mut save, 1_800, &mut hashes);
+    drop(save);
+    let mut bytes = std::fs::read(&path).unwrap();
+    let mid = bytes.len() / 2;
+    bytes[mid] ^= 0xff;
+    std::fs::write(&path, &bytes).unwrap();
+    assert!(savefile::compact(&path, 2).is_err());
+    assert_eq!(std::fs::read(&path).unwrap(), bytes, "untouched");
+    let _ = std::fs::remove_file(path);
+}

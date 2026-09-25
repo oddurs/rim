@@ -60,6 +60,13 @@ pub struct Log {
     pub hashes: BTreeMap<String, u64>,
 }
 
+impl Log {
+    /// The commands applied since the last log, and the state they led to.
+    fn of(sim: &Sim) -> Log {
+        Log { tick: sim.world.tick, commands: sim.applied().to_vec(), hashes: section_hashes(sim) }
+    }
+}
+
 fn section_hashes(sim: &Sim) -> BTreeMap<String, u64> {
     Snapshot::capture(sim).sections.iter().map(|(n, b)| (n.clone(), hash_bytes(b))).collect()
 }
@@ -211,10 +218,7 @@ impl SaveFile {
     /// that hasn't run yet is rooted at its seed, so it replays from there;
     /// one that has is rooted at its snapshot.
     pub fn create(path: &Path, sim: &mut Sim) -> std::io::Result<SaveFile> {
-        let mut file = File::create(path)?;
-        file.write_all(MAGIC)?;
-        let len = MAGIC.len() as u64;
-        let mut s = SaveFile { path: path.to_path_buf(), file, len, broken: false, stored: HashSet::new() };
+        let mut s = SaveFile::blank(path)?;
         let root = match sim.world.tick {
             0 => Root::Seed { seed: sim.world.seed, size: sim.world.map.w },
             _ => Root::Snapshot,
@@ -244,6 +248,14 @@ impl SaveFile {
         }
     }
 
+    /// A new file with nothing in it yet.
+    fn blank(path: &Path) -> std::io::Result<SaveFile> {
+        let mut file = File::create(path)?;
+        file.write_all(MAGIC)?;
+        let len = MAGIC.len() as u64;
+        Ok(SaveFile { path: path.to_path_buf(), file, len, broken: false, stored: HashSet::new() })
+    }
+
     /// Open an epoch at the game's current state.
     fn epoch(&mut self, sim: &mut Sim, root: Root) -> std::io::Result<()> {
         sim.record();
@@ -257,10 +269,13 @@ impl SaveFile {
     /// state they led to. Call it as often as losing the tail would hurt; if
     /// it fails, the commands are kept for the next try.
     pub fn log(&mut self, sim: &mut Sim) -> std::io::Result<()> {
-        let log = Log { tick: sim.world.tick, commands: sim.applied().to_vec(), hashes: section_hashes(sim) };
-        self.put(LOG, &msgpack(&log))?;
+        self.write_log(&Log::of(sim))?;
         sim.clear_applied();
         Ok(())
+    }
+
+    fn write_log(&mut self, log: &Log) -> std::io::Result<()> {
+        self.put(LOG, &msgpack(log))
     }
 
     /// Log, then write a snapshot: its record, and any section this file
@@ -424,4 +439,150 @@ pub fn replay(path: &Path, mods_dir: &Path, epoch: Option<usize>) -> Result<Repl
     let mut checked = Vec::new();
     let diverged = replay_logs(&mut sim, &e.logs, None, &mut |t| checked.push(t)).err();
     Ok(ReplayReport { epoch: n, root: e.epoch.root.clone(), from_tick, checked, diverged })
+}
+
+/// Rewrite a save without the snapshots nothing needs: each epoch keeps the
+/// snapshot it began with (replays start there) and the last epoch keeps its
+/// newest `keep` as well. Every log stays, so nothing can be lost; only the
+/// cache gets smaller. Written beside the file, then renamed over it.
+pub fn compact(path: &Path, keep: usize) -> Result<(), String> {
+    let (epochs, cut) = read(path)?;
+    if cut > 0 {
+        // Only a load cuts a damaged tail, and it keeps a copy first.
+        return Err(format!("{} has a damaged end: load it before compacting it", path.display()));
+    }
+    let tmp = path.with_extension("compacting");
+    let err = |e: std::io::Error| format!("{}: {e}", tmp.display());
+    let mut out = SaveFile::blank(&tmp).map_err(err)?;
+    for (i, e) in epochs.iter().enumerate() {
+        out.put(EPOCH, &msgpack(&e.epoch)).map_err(err)?;
+        let newest = if i + 1 == epochs.len() { keep } else { 0 };
+        let kept: Vec<&Snapshot> = e
+            .snapshots
+            .iter()
+            .enumerate()
+            .filter(|(k, _)| *k == 0 || *k + newest >= e.snapshots.len())
+            .map(|(_, s)| s)
+            .collect();
+        // Back in the order they were written: the root first, then logs and
+        // snapshots by tick, each snapshot after the log that reached it.
+        let mut items: Vec<(u64, u8, Option<&Snapshot>, Option<&Log>)> = Vec::new();
+        for (k, s) in kept.iter().enumerate() {
+            items.push((s.header.tick, if k == 0 { 0 } else { 2 }, Some(s), None));
+        }
+        items.extend(e.logs.iter().map(|l| (l.tick, 1, None, Some(l))));
+        items.sort_by_key(|x| (x.0, x.1));
+        for (_, _, snap, log) in items {
+            match (snap, log) {
+                (Some(s), _) => out.write_snapshot(s).map_err(err)?,
+                (_, Some(l)) => out.write_log(l).map_err(err)?,
+                _ => unreachable!("each item is one or the other"),
+            }
+        }
+    }
+    out.sync().map_err(err)?;
+    drop(out);
+    std::fs::rename(&tmp, path).map_err(|e| format!("{}: {e}", path.display()))
+}
+
+enum Job {
+    Log(Log),
+    Snapshot(Log, Snapshot),
+}
+
+/// A save file on a thread of its own: the game hands it logs and snapshots
+/// (capturing one takes under a millisecond) and carries on, while the
+/// compressing and writing happen elsewhere.
+pub struct Writer {
+    tx: Option<std::sync::mpsc::Sender<Job>>,
+    thread: Option<std::thread::JoinHandle<Result<(), String>>>,
+    /// The last write that failed, for the player to hear about.
+    failed: std::sync::Arc<std::sync::Mutex<Option<String>>>,
+}
+
+impl Writer {
+    pub fn spawn(mut save: SaveFile) -> Writer {
+        let (tx, rx) = std::sync::mpsc::channel::<Job>();
+        let failed = std::sync::Arc::new(std::sync::Mutex::new(None));
+        let report = failed.clone();
+        let thread = std::thread::spawn(move || {
+            // Commands whose log didn't make it to disk ride in the next one,
+            // so the log never skips a command the state went on to reflect.
+            let mut carried: Vec<(u64, Command)> = Vec::new();
+            let mut last_err = None;
+            for job in rx {
+                let (mut log, snap) = match job {
+                    Job::Log(l) => (l, None),
+                    Job::Snapshot(l, s) => (l, Some(s)),
+                };
+                log.commands.splice(0..0, carried.drain(..));
+                let mut r = save.write_log(&log);
+                if r.is_err() {
+                    carried = log.commands;
+                }
+                // The snapshot is worth writing even if the log wasn't.
+                if let Some(s) = snap {
+                    r = r.and(save.write_snapshot(&s));
+                }
+                // Keep going: a later write may succeed, and `put` refuses to
+                // append once the file can't be kept whole.
+                if let Err(e) = r {
+                    let e = format!("saving to {} failed: {e}", save.path().display());
+                    eprintln!("rim: {e}");
+                    *report.lock().unwrap_or_else(|p| p.into_inner()) = Some(e.clone());
+                    last_err = Some(e);
+                }
+            }
+            save.sync().map_err(|e| e.to_string())?;
+            last_err.map_or(Ok(()), Err)
+        });
+        Writer { tx: Some(tx), thread: Some(thread), failed }
+    }
+
+    /// The latest save failure since the last call, if any.
+    pub fn take_error(&self) -> Option<String> {
+        self.failed.lock().unwrap_or_else(|p| p.into_inner()).take()
+    }
+
+    /// Log the commands applied since the last log.
+    pub fn log(&self, sim: &mut Sim) {
+        self.send(Job::Log(Log::of(sim)));
+        sim.clear_applied();
+    }
+
+    /// Log, and take a snapshot.
+    pub fn snapshot(&self, sim: &mut Sim) {
+        self.send(Job::Snapshot(Log::of(sim), Snapshot::capture(sim)));
+        sim.clear_applied();
+    }
+
+    fn send(&self, job: Job) {
+        if let Some(tx) = &self.tx {
+            // The thread only stops early by panicking.
+            if tx.send(job).is_err() {
+                *self.failed.lock().unwrap_or_else(|p| p.into_inner()) = Some("the save thread stopped".into());
+            }
+        }
+    }
+
+    /// Write everything handed over so far, and wait for the disk.
+    pub fn finish(mut self) -> Result<(), String> {
+        self.stop()
+    }
+
+    fn stop(&mut self) -> Result<(), String> {
+        drop(self.tx.take());
+        match self.thread.take() {
+            Some(t) => t.join().map_err(|_| "the save thread panicked".to_string())?,
+            None => Ok(()),
+        }
+    }
+}
+
+impl Drop for Writer {
+    fn drop(&mut self) {
+        if let Err(e) = self.stop() {
+            eprintln!("rim: {e}");
+        }
+    }
 }
