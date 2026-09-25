@@ -52,7 +52,11 @@ fn with_sprite_mods(mods: &Path, n: usize) -> Result<PathBuf, String> {
         Ok(())
     }
     let err = |e: std::io::Error| format!("render bench: sprite mods: {e}");
+    // Fresh each run: a left-over folder from a reused pid would add mods.
     let dir = std::env::temp_dir().join(format!("rim-bench-sprites-{}", std::process::id()));
+    if dir.exists() {
+        std::fs::remove_dir_all(&dir).map_err(err)?;
+    }
     copy(mods, &dir).map_err(err)?;
     let art = mods.join("wildlife_plus/sprites/salt_lick.png");
     for k in 0..n {

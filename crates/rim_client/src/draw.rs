@@ -422,7 +422,10 @@ fn paint(
                 disc(s, sx + x * z, sy + y * z, (r * z).max(min_px) * f, c);
             }
             Prim::Edges { width } => edges(s, w, cell, join, (sx, sy), z, width, c),
-            Prim::Sprite { rect: [x, y, rw, rh], id } => s.sprite(sx + x * z, sy + y * z, rw * z, rh * z, id, c),
+            Prim::Sprite { rect, id } => {
+                let (x, y, rw, rh) = px(rect);
+                s.sprite(x, y, rw, rh, id, c);
+            }
         }
     }
 }

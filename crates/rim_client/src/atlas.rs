@@ -82,6 +82,11 @@ fn pack(sizes: &[(u32, u32)], max: u32) -> (Vec<(usize, u32, u32)>, Vec<u32>) {
     (at, sides)
 }
 
+/// Can a `w`×`h` sprite go on a page at all?
+pub fn fits(w: u32, h: u32) -> bool {
+    pack(&[(w, h)], MAX_PAGE).0[0].0 != usize::MAX
+}
+
 impl WorldAtlas {
     /// Decode and pack `files` (by sprite id). Errors name the file.
     pub fn load(files: &[PathBuf]) -> Result<WorldAtlas, String> {
@@ -184,5 +189,6 @@ mod tests {
         assert_eq!(at.iter().map(|a| a.0).collect::<Vec<_>>(), [0, 1, 2, 3, 4]);
         let (at, _) = pack(&[(300, 10)], 256);
         assert_eq!(at[0].0, usize::MAX, "bigger than a page is refused, not looped on");
+        assert!(fits(4000, 4000) && !fits(4094, 4094), "the white block and gutters count");
     }
 }

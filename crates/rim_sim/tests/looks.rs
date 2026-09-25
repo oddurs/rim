@@ -95,4 +95,8 @@ fn sprite_keys_find_their_files_or_fail_naming_them() {
     let e =
         with_defs("looks-sprite-nomod", &def("elsewhere:x")).err().expect("a sprite from no loaded mod doesn't load");
     assert!(e.contains("no mod 'elsewhere' is loaded"), "{e}");
+    for bad in ["../core/sprites/x", "a//b", "m:/etc/x", "a\\\\b"] {
+        let e = with_defs("looks-sprite-path", &def(bad)).err().expect("a name outside sprites/ doesn't load");
+        assert!(e.contains("a path inside the mod's sprites/"), "{bad}: {e}");
+    }
 }

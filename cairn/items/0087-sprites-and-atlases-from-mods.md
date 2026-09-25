@@ -62,3 +62,7 @@ From the Looks item: sprite keys, their validation (unknown key is a load error 
 ## 2026-09-24
 
 Sprites are PNGs under a mod's sprites/, keyed bare or mod:name, interned at load (Prim::Sprite{id}); the modloader resolves each to a file or fails naming the def. The client packs them tallest-first onto shelf pages of the smallest power of two that fits, up to 4096, each with a white block that primitives sample, so a chunk layer is still one call. Sprites draw as painted unless tint = true (thing or material colour) or a color is given. rim check decodes every PNG under sprites/. Bench --sprite-mods 20 adds twenty generated mods whose furniture is sprites: whole map 99 calls against 98 without (the one is UI: twenty more toolbar buttons), mid and close identical; CI now runs the gate with them. Glyphs split out to ee5c5cc6.
+
+## 2026-09-24
+
+Review: parts break on every page change so draw order holds across pages; sprite names are paths inside sprites/ only (no '..', '\\', root); rim check walks subfolders, any case, with the packer's own fit test; full-cell sprites pad like fills; atlas UVs are highp where the GPU has it; --sprite-mods rejects a non-number; the bench's temp mods are fresh each run; a headless start failure exits 2 instead of waiting on the error screen. Declined: a bare key in a patch resolves in the patched def's mod, as every def reference does (DESIGN.md §10); looks.md says so.

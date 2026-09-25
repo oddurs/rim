@@ -59,8 +59,10 @@ look.layers = [
 
 A mod ships pictures as PNGs under `sprites/`. A `sprite` layer draws one
 over a rectangle of the cell (`x`, `y`, `w`, `h`, the whole cell by
-default). `sprite` is the file's name without `.png`: bare for your own
-mod's, `mod:name` for another's.
+default). `sprite` is the file's path under `sprites/` without `.png`
+(`oak` or `trees/oak`): bare for the def's own mod, `mod:name` for another's.
+As with every reference in a def, bare means the def's mod even in your
+patch to another mod's def, so there write `my_mod:name`.
 
 | `draw` | fields | draws |
 |---|---|---|
@@ -72,7 +74,8 @@ with a `color`, by that.
 
 Every loaded mod's sprites are packed at load into one texture, the world
 atlas, so art from twenty mods draws in the same batch as core's
-rectangles. A page is at most 4096×4096; past that the atlas spills to a
+rectangles wherever the world is cached per chunk: everything but plans
+and animated looks, which are drawn each frame. A page is at most 4096×4096; past that the atlas spills to a
 second page and says so in the load log. A sprite with no file, or from a
 mod that isn't loaded, is a load error naming the def; `rim check` also
 decodes every PNG under `sprites/`.

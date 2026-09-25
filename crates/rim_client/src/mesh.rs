@@ -44,15 +44,13 @@ impl<'a> Builder<'a> {
         Builder { atlas, parts: Vec::new() }
     }
 
+    /// The part to append to: the last one, if it is on `page` and has
+    /// room. Only ever the last, so parts draw in the order painted.
     fn room(&mut self, page: usize, verts: usize) -> (&mut Vec<Vert>, &mut Vec<u16>) {
-        let k = match self.parts.iter().rposition(|p| p.0 == page) {
-            Some(k) if self.parts[k].1.len() + verts <= MAX_VERTS => k,
-            _ => {
-                self.parts.push((page, Vec::new(), Vec::new()));
-                self.parts.len() - 1
-            }
-        };
-        let (_, v, i) = &mut self.parts[k];
+        if self.parts.last().is_none_or(|p| p.0 != page || p.1.len() + verts > MAX_VERTS) {
+            self.parts.push((page, Vec::new(), Vec::new()));
+        }
+        let (_, v, i) = self.parts.last_mut().expect("just pushed");
         (v, i)
     }
 
@@ -175,7 +173,12 @@ attribute vec2 pos;
 attribute vec2 uv0;
 attribute vec4 color0;
 varying lowp vec4 color;
+// A texel on a 4096 page needs more than mediump's 10 bits.
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+varying highp vec2 uv;
+#else
 varying mediump vec2 uv;
+#endif
 uniform vec2 origin;
 uniform vec2 screen;
 uniform float scale;
@@ -188,7 +191,11 @@ void main() {
 
 const FRAGMENT: &str = "#version 100
 varying lowp vec4 color;
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+varying highp vec2 uv;
+#else
 varying mediump vec2 uv;
+#endif
 uniform sampler2D tex;
 void main() {
     gl_FragColor = texture2D(tex, uv) * color;

@@ -281,6 +281,12 @@ fn conf() -> macroquad::conf::Conf {
 }
 
 async fn fail(e: String) {
+    // Nobody is watching the window in the autotest or the bench: say it
+    // and exit, so CI fails instead of waiting forever.
+    if std::env::args().any(|a| a == "--autotest" || a == "--bench-render") {
+        eprintln!("rim failed to start: {e}");
+        std::process::exit(2);
+    }
     loop {
         clear_background(Color::from_rgba(30, 20, 20, 255));
         draw_text("rim failed to start", 40.0, 60.0, 36.0, WHITE);
@@ -322,8 +328,14 @@ async fn game() {
     let bench = args.iter().any(|a| a == "--bench-render");
     let sim = match find_mods().ok_or_else(|| "could not find a mods/ directory".to_string()).and_then(|d| {
         if bench {
-            let n = args.windows(2).find(|w| w[0] == "--sprite-mods").and_then(|w| w[1].parse().ok()).unwrap_or(0);
-            bench::world(&d, seed, n)
+            let n = match args.iter().position(|a| a == "--sprite-mods") {
+                None => Ok(0),
+                Some(i) => args
+                    .get(i + 1)
+                    .and_then(|v| v.parse().ok())
+                    .ok_or_else(|| "--sprite-mods wants a number of mods".to_string()),
+            };
+            n.and_then(|n| bench::world(&d, seed, n))
         } else {
             Sim::new(&d, seed)
         }

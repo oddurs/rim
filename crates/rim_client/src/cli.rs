@@ -78,20 +78,31 @@ the engine lacks, or a ui., act. or view. member that does not exist, is an
 error naming the file and line. With no MOD_DIR, checks every mod in ./mods.
 Exits 1 on an error, or on a warning with --strict.";
 
-/// Each PNG under the mod's `sprites/` must decode and fit a world atlas
-/// page, or the game refuses to start with it.
+/// Each PNG under the mod's `sprites/`, at any depth, must decode and fit
+/// a world atlas page, or the game refuses to start with it.
 fn sprite_errors(dir: &std::path::Path) -> Vec<String> {
-    let Ok(rd) = std::fs::read_dir(dir.join("sprites")) else { return Vec::new() };
-    let mut files: Vec<PathBuf> =
-        rd.flatten().map(|e| e.path()).filter(|p| p.extension().is_some_and(|e| e == "png")).collect();
+    fn pngs(dir: &std::path::Path, out: &mut Vec<PathBuf>) {
+        let Ok(rd) = std::fs::read_dir(dir) else { return };
+        for p in rd.flatten().map(|e| e.path()) {
+            if p.is_dir() {
+                pngs(&p, out);
+            } else if p.extension().is_some_and(|e| e.eq_ignore_ascii_case("png")) {
+                out.push(p);
+            }
+        }
+    }
+    let mut files = Vec::new();
+    pngs(&dir.join("sprites"), &mut files);
     files.sort();
     files
         .iter()
         .filter_map(|f| match rim_ui::image::decode(f) {
             Err(e) => Some(format!("{}: {e}", f.display())),
-            Ok((w, h, _)) if w.max(h) + 2 > crate::atlas::MAX_PAGE => {
-                Some(format!("{}: {w}×{h} is larger than a world atlas page", f.display()))
-            }
+            Ok((w, h, _)) if !crate::atlas::fits(w, h) => Some(format!(
+                "{}: {w}×{h} doesn't fit a {m}×{m} world atlas page",
+                f.display(),
+                m = crate::atlas::MAX_PAGE
+            )),
             Ok(_) => None,
         })
         .collect()
@@ -171,11 +182,11 @@ mod tests {
     #[test]
     fn a_sprite_that_does_not_decode_is_an_error_naming_it() {
         let dir = std::env::temp_dir().join(format!("rim-sprite-check-{}", std::process::id()));
-        std::fs::create_dir_all(dir.join("sprites")).unwrap();
-        std::fs::write(dir.join("sprites/broken.png"), b"not a png").unwrap();
+        std::fs::create_dir_all(dir.join("sprites/deep")).unwrap();
+        std::fs::write(dir.join("sprites/deep/broken.PNG"), b"not a png").unwrap();
         std::fs::copy("../../mods/wildlife_plus/sprites/salt_lick.png", dir.join("sprites/fine.png")).unwrap();
         let errors = sprite_errors(&dir);
         assert_eq!(errors.len(), 1, "{errors:?}");
-        assert!(errors[0].contains("broken.png"), "{errors:?}");
+        assert!(errors[0].contains("broken.PNG"), "found in a subfolder, any case: {errors:?}");
     }
 }

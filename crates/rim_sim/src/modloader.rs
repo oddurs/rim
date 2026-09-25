@@ -299,6 +299,15 @@ fn sprite_files(mods: &[ModManifest], defs: &DefDb) -> Result<Vec<PathBuf>, Stri
         .enumerate()
         .map(|(id, key)| {
             let (m, name) = key.split_once(':').unwrap_or(("", key));
+            // A name is a path inside the mod's sprites/, and only inside it.
+            let inside = !name.is_empty()
+                && !name.contains('\\')
+                && name.split('/').all(|part| !part.is_empty() && part != "." && part != ".." && !part.contains(':'));
+            if !inside {
+                return Err(format!(
+                    "sprite '{key}': a name is a path inside the mod's sprites/, without '..', '\\' or a root"
+                ));
+            }
             let file = mods.iter().find(|x| x.id == m).map(|x| x.dir.join("sprites").join(format!("{name}.png")));
             match file {
                 Some(f) if f.is_file() => Ok(f),
