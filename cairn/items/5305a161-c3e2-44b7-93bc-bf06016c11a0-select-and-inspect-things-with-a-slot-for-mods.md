@@ -2,10 +2,12 @@
 id: 5305a161-c3e2-44b7-93bc-bf06016c11a0
 title: Select and inspect things, with a slot for mods
 type: feature
-status: backlog
+status: done
 milestone: stone-age
+assignee: Oddur Sigurdsson
 created: 2026-09-25
 updated: 2026-09-25
+closed_at: 2026-09-25
 priority: p0
 api: additive
 effort: m
@@ -26,7 +28,11 @@ Only pawns can be selected: `app.selected` holds whatever `pawn_under` finds (`c
 
 ## Acceptance criteria
 
-- [ ] Clicking a building, plant, rock or item stack selects it
-- [ ] The inspector shows its label, count, hp and material
-- [ ] A mod extends the thing inspector through `core:inspector.thing`
-- [ ] A designated thing whose work is blocked says why
+- [x] Clicking a building, plant, rock or item stack selects it
+- [x] The inspector shows its label, count, hp and material
+- [x] A mod extends the thing inspector through `core:inspector.thing`
+- [x] A designated thing whose work is blocked says why
+
+## 2026-09-25
+
+A click picks a pawn, then the item stack, the fixture, the floor: topmost first, so an item lying on a floor is what you get. The extension point is the node id core:inspector.thing, like core:inspector.sections, not a ui.slot. work_blocked (rim_sim ai) says why designated work isn't happening: growing back, everyone drafted, or no colonist can reach it. The tools item adds 'needs a <tag> tool'. UI API 0.3.

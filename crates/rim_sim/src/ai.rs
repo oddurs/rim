@@ -374,6 +374,32 @@ fn flee(w: &mut World, p: &mut Pawn, from: IVec) -> Option<Job> {
 
 // ================================================================ finding work
 
+/// Why a designated thing's work isn't being done, in the player's words,
+/// or `None` when nothing stands in the way. The inspector shows it.
+/// Reachability reads the regions as of the last tick: a wall finished
+/// this tick counts from the next.
+pub fn work_blocked(w: &World, e: Entity) -> Option<String> {
+    let d = w.ecs.get::<&Designated>(e).ok()?.0;
+    let t = w.thing(e)?;
+    if w.defs.designations[d as usize].targets == Targets::Thing {
+        let h = w.defs.thing(t.def).harvest_for(d)?;
+        if !w.harvest_ready(e, h.key()) {
+            return Some("Growing back.".into());
+        }
+    }
+    // Drafted colonists take no work.
+    let free: Vec<IVec> = w
+        .colonists()
+        .filter(|&c| w.ecs.get::<&Pawn>(c).is_ok_and(|p| !p.drafted))
+        .filter_map(|c| w.pawn_pos(c))
+        .collect();
+    if free.is_empty() && w.colonists().next().is_some() {
+        return Some("Everyone is drafted.".into());
+    }
+    let reachable = free.iter().any(|&p| w.map.can_reach(p, Goal::Touch(t.pos)));
+    (!reachable).then(|| "No colonist can reach it.".into())
+}
+
 fn find_food(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
     let defs = w.defs.clone();
     w.map.ensure_regions();

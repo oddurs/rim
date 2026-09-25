@@ -10,7 +10,7 @@
 /// The version of this surface, as a mod names it in `mod.toml` as
 /// `ui_api`. Before 1.0 every minor is breaking: a mod written against a
 /// newer surface names calls this engine lacks, and is refused.
-pub const UI_API_VERSION: (u32, u32) = (0, 2);
+pub const UI_API_VERSION: (u32, u32) = (0, 3);
 
 /// One member of `ui`, `act` or `view`.
 pub struct UiDoc {
@@ -79,6 +79,10 @@ type Stuff = { id: string, label: string, color: string, have: number, active: b
 type Hover = { x: number, y: number, terrain: string, shelter: string, readings: { string }, things: { string } }
 type ProfileRow = { name: string, us: number, mod: boolean }
 type ModInfo = { id: string, version: string, name: string }
+type ThingInfo = {
+    id: number, def: string, label: string, count: number, hp: number, max_hp: number,
+    made_of: string?, blueprint: boolean, designated: string?, why: string?,
+}
 type Save = { path: string, file: string, day: number, colonists: { string }, age: number, error: string? }
 type UiStats = { font: string, build_us: number, layout_us: number, paint_us: number, nodes: number, layouts: number }
 type Inspect = { id: string, owner: string, kind: string, path: string, x: number, y: number, w: number, h: number }
@@ -95,7 +99,7 @@ pub const UI_API: &[UiDoc] = &[
     d!("act.advance", "(hours: number) -> ()", "Run the game forward (devtools)."),
     d!("act.cycle_overlay", "() -> ()", "Show the next field overlay."),
     d!("act.draft", "(id: number, on: boolean) -> ()", "Draft or undraft a colonist."),
-    d!("act.focus", "(id: number) -> ()", "Move the camera to a pawn."),
+    d!("act.focus", "(id: number) -> ()", "Move the camera to a pawn or thing."),
     d!("act.load", "(path: string) -> ()", "Play a save from view.saves() (the title screen)."),
     d!("act.new_colony", "() -> ()", "Start a new colony (the title screen)."),
     d!(
@@ -103,7 +107,7 @@ pub const UI_API: &[UiDoc] = &[
         "(scale: number) -> ()",
         "Draw the world at this fraction of the screen's pixels, 0.25 to 1; the UI stays sharp. Saved for the player."
     ),
-    d!("act.select", "(id: number?) -> ()", "Select a pawn, or nothing."),
+    d!("act.select", "(id: number?) -> ()", "Select a pawn or thing, or nothing."),
     d!(
         "act.send",
         "(name: string, data: {[string]: any}?) -> ()",
@@ -212,12 +216,17 @@ pub const UI_API: &[UiDoc] = &[
     d!("view.profile", "() -> { ProfileRow }", "Smoothed time per system and mod, in µs."),
     d!("view.saves", "() -> { Save }", "The player's saves, newest first, on the title screen; empty in a game."),
     d!("view.screen", "() -> (number, number)", "Screen width and height in logical pixels."),
-    d!("view.selected", "() -> number?", "The selected pawn's id."),
+    d!("view.selected", "() -> number?", "The selected pawn or thing's id: view.pawn or view.thing says which."),
     d!("view.show_devtools", "() -> boolean", "Whether devtools are open."),
     d!("view.show_profiler", "() -> boolean", "Whether the profiler is open."),
     d!("view.speed", "() -> number", "The game speed."),
     d!("view.stats", "() -> { string }", "Client statistics lines."),
     d!("view.stuff", "() -> { Stuff }", "Materials for the active build tool: what you have, what you'd get."),
+    d!(
+        "view.thing",
+        "(id: number) -> ThingInfo?",
+        "A thing on the map: a building, plant, rock or item stack, or nil. why says what stops its designated work."
+    ),
     d!("view.tick", "() -> number", "The current tick."),
     d!("view.ticks_per_day", "() -> number", "Ticks in a game day."),
     d!("view.time", "() -> number", "Wall-clock seconds, for animation."),

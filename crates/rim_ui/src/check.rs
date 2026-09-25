@@ -239,7 +239,7 @@ mod tests {
         )
         .unwrap();
         let problems = check_mod_ui(&dir);
-        assert_eq!(problems, vec!["mod 'probe' targets ui_api 0.9 but the engine provides 0.2".to_string()]);
+        assert_eq!(problems, vec!["mod 'probe' targets ui_api 0.9 but the engine provides 0.3".to_string()]);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

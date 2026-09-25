@@ -162,14 +162,9 @@ ui.define("core:messages", function(view)
 end)
 ui.mount("left", "core:messages", { align = "start" })
 
--- ─── Inspector: the selected pawn ──────────────────────────────────────────
+-- ─── Inspector: the selected pawn or thing ─────────────────────────────────
 
-ui.define("core:inspector", function(view)
-	local id = view.selected()
-	local p = id and view.pawn(id)
-	if not p then
-		return nil
-	end
+local function pawn_panel(p)
 	local title = if p.founder then string.format(t("core:inspector.founder", "%s (founder)"), p.name) else p.name
 	local doing = if p.drafted then t("core:inspector.drafted", "drafted") else p.job
 	local bars = { kit.bar({ label = t("core:inspector.health", "health"), value = p.health, color = "good" }) }
@@ -189,6 +184,49 @@ ui.define("core:inspector", function(view)
 		col({ id = "core:inspector.sections", gap = "s" }),
 		hint and label(hint, { size = "small", color = "faint" }),
 	})
+end
+
+local function thing_panel(th)
+	local facts = {}
+	if th.count > 1 then
+		table.insert(facts, string.format(t("core:inspector.count", "×%d"), th.count))
+	end
+	if th.made_of then
+		table.insert(facts, th.made_of)
+	end
+	if th.blueprint then
+		table.insert(facts, t("core:inspector.blueprint", "planned"))
+	end
+	if th.designated then
+		table.insert(facts, string.format(t("core:inspector.designated", "marked: %s"), th.designated))
+	end
+	return kit.panel({ id = "core:inspector.panel", w = 300, gap = "m" }, {
+		col({ gap = "xxs" }, {
+			label(th.label, { size = "heading", weight = "strong" }),
+			#facts > 0 and label(table.concat(facts, " · "), { size = "small", color = "muted" }),
+		}),
+		th.max_hp > 0 and kit.bar({ label = t("core:inspector.hp", "hp"), value = th.hp / th.max_hp, color = "good" }),
+		th.why and label(th.why, { id = "core:inspector.why", size = "small", color = "bad", wrap = true }),
+		-- Extension point: mods add sections for things (a station's bills,
+		-- a tool's wear). They read the thing with view.thing(view.selected()).
+		col({ id = "core:inspector.thing", gap = "s" }),
+	})
+end
+
+ui.define("core:inspector", function(view)
+	local id = view.selected()
+	if not id then
+		return nil
+	end
+	local p = view.pawn(id)
+	if p then
+		return pawn_panel(p)
+	end
+	local th = view.thing(id)
+	if th then
+		return thing_panel(th)
+	end
+	return nil
 end)
 ui.mount("left", "core:inspector", { align = "end" })
 

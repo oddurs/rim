@@ -303,6 +303,16 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.check(t.ui_text().contains("Chop oak tree"), "and says what the click will do");
     t.shot("order").await;
 
+    // A click on a thing selects it, and the inspector shows it (5305a161).
+    t.click((tx, ty)).await;
+    t.check(t.app.selected == Some(tree.1), "clicking a tree selects it");
+    t.frame().await;
+    t.check(t.app.ui.find("core:inspector.thing").is_some(), "the inspector shows the tree");
+    t.shot("thing").await;
+    let at = t.pawn_screen(founder);
+    t.click(at).await;
+    t.check(t.app.selected == Some(founder), "and a click on the colonist selects them again");
+
     t.right_click((tx, ty)).await;
     t.ticks(1); // commands apply on the next tick
     t.check(

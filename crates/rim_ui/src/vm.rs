@@ -794,6 +794,10 @@ impl UiVm {
             Some(e) => pawn_table(lua, l.world, l.client, e),
             None => Ok(None),
         });
+        view!("thing", u64, |lua, l, id| match Entity::from_bits(id) {
+            Some(e) => thing_table(lua, l.world, e),
+            None => Ok(None),
+        });
         // Pawns on screen, for anchored labels.
         view!("visible_pawns", (), |lua, l, _a| {
             let t = lua.create_table()?;
@@ -1739,6 +1743,25 @@ fn hover_table(lua: &Lua, w: &World, client: &ClientView) -> mlua::Result<Value>
     }
     t.set("things", things)?;
     Ok(Value::Table(t))
+}
+
+/// One thing on the map, for the inspector.
+fn thing_table(lua: &Lua, w: &World, e: Entity) -> mlua::Result<Option<Table>> {
+    let Some(th) = w.thing(e) else { return Ok(None) };
+    let td = w.defs.thing(th.def);
+    let t = lua.create_table()?;
+    t.set("id", e.to_bits().get())?;
+    t.set("def", td.id.as_str())?;
+    t.set("label", td.label.as_str())?;
+    t.set("count", th.count)?;
+    t.set("hp", th.hp)?;
+    t.set("max_hp", w.stat(e, "hp").map_or(td.hp as i64, |m| m.round() as i64))?;
+    t.set("made_of", w.ecs.get::<&rim_sim::world::MadeOf>(e).ok().map(|m| w.defs.thing(m.0).label.clone()))?;
+    t.set("blueprint", w.ecs.get::<&Blueprint>(e).is_ok())?;
+    let designated = w.ecs.get::<&rim_sim::world::Designated>(e).ok().map(|d| d.0);
+    t.set("designated", designated.map(|d| w.defs.designations[d as usize].label.clone()))?;
+    t.set("why", rim_sim::ai::work_blocked(w, e))?;
+    Ok(Some(t))
 }
 
 /// UI script directories for the loaded mods, in load order.
