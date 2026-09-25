@@ -129,12 +129,15 @@ state hash, it will be saved, and the UI can read it:
 
 <!-- not a sample -->
 ```lua
-rim.set_data("my_mod:state", { spells = 3, last = "rain" })
-local s = rim.get_data("my_mod:state")   -- a fresh copy, or nil
+rim.set_data("state", { spells = 3, last = "rain" })   -- stored as "my_mod:state"
+local s = rim.get_data("state")          -- a fresh copy, or nil
+local f = rim.get_data("weather:forecast")  -- another mod's, read-only
 ```
 
-Only plain data: nil, booleans, numbers, strings and tables of those. Use your
-mod id as a prefix. In a UI script, `view.data("my_mod:state")` reads it.
+Only plain data: nil, booleans, numbers, strings and tables of those. A bare
+key is your mod's, and you can only write your own: `"my_mod:state"` works
+too, `"weather:forecast"` is an error. That keeps each mod's data apart in a save, so
+a migration or a removed mod's data is handled as a whole. In a UI script, `view.data("my_mod:state")` reads it.
 
 Send your own events to any mod's `rim.on` handlers:
 

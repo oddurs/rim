@@ -147,9 +147,9 @@ fn calendar_counts_days_and_seasons() {
 fn seasons_announce_themselves_once_each() {
     let script = r#"
         rim.on("season_changed", function(e)
-            local seen = rim.get_data("t:seen") or {}
+            local seen = rim.get_data("seen") or {}
             table.insert(seen, e.season .. " " .. e.year)
-            rim.set_data("t:seen", seen)
+            rim.set_data("seen", seen)
         end)
     "#;
     let dir = with_test_mods("seasons", &[("watch", &[("scripts/watch.luau", script)])]);
@@ -161,7 +161,7 @@ fn seasons_announce_themselves_once_each() {
             s.step();
         }
     }
-    let Some(Data::Table(seen)) = s.world.data.get("t:seen") else { panic!("no seasons seen") };
+    let Some(Data::Table(seen)) = s.world.data.get("watch:seen") else { panic!("no seasons seen") };
     let names: Vec<String> =
         seen.values().map(|v| if let Data::Str(x) = v { x.clone() } else { String::new() }).collect();
     assert_eq!(names, ["summer 1", "autumn 1", "winter 1", "spring 2", "summer 2", "autumn 2", "winter 2", "spring 3"]);

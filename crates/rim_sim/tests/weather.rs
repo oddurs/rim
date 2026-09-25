@@ -77,8 +77,8 @@ fn frequencies_follow_the_weights() {
                 local e = weather.pick("cloudy", start)
                 counts[e.id] = (counts[e.id] or 0) + 1
             end
-            rim.set_data("t:counts", counts)
-            rim.set_data("t:weights", weather.weights("cloudy", start))
+            rim.set_data("counts", counts)
+            rim.set_data("weights", weather.weights("cloudy", start))
         end)
     "#;
     let dir = test_mods("weights", &["core", "weather"], &[("probe", &[("scripts/probe.luau", script)])]);
@@ -90,7 +90,7 @@ fn frequencies_follow_the_weights() {
         let Some(Data::Table(t)) = s.world.data.get(k) else { panic!("no {k}") };
         t.iter().map(|(k, v)| (if let Key::Str(k) = k { k.clone() } else { String::new() }, v.num().unwrap())).collect()
     };
-    let (counts, weights) = (table("t:counts"), table("t:weights"));
+    let (counts, weights) = (table("probe:counts"), table("probe:weights"));
     let total_w: f64 = weights.iter().map(|w| w.1).sum();
     for (id, w) in &weights {
         let got = counts.iter().find(|c| &c.0 == id).map_or(0.0, |c| c.1) / 20000.0;
@@ -131,13 +131,13 @@ fn forcing_the_weather_and_hearing_about_it() {
     let script = r#"
         local weather = require("@weather/scripts/weather")
         rim.on("weather:changed", function(e)
-            local log = rim.get_data("t:log") or {}
+            local log = rim.get_data("log") or {}
             table.insert(log, e.to)
-            rim.set_data("t:log", log)
+            rim.set_data("log", log)
         end)
         rim.every(10, function()
-            if rim.tick() >= 1000 and not rim.get_data("t:forced") then
-                rim.set_data("t:forced", true)
+            if rim.tick() >= 1000 and not rim.get_data("forced") then
+                rim.set_data("forced", true)
                 weather.force("storm", 3)
             end
         end)
@@ -151,7 +151,7 @@ fn forcing_the_weather_and_hearing_about_it() {
     assert_eq!(q[0].0, "weather:storm", "the storm is the current weather: {q:?}");
     assert_eq!(q[0].2 - q[0].1, (3 * TICKS_PER_DAY / 24) as i64, "for three hours");
     assert!(q.windows(2).all(|w| w[0].2 == w[1].1), "the rest of the forecast follows on: {q:?}");
-    let Some(Data::Table(log)) = s.world.data.get("t:log") else { panic!("no weather:changed events") };
+    let Some(Data::Table(log)) = s.world.data.get("forcer:log") else { panic!("no weather:changed events") };
     assert_eq!(log.values().last(), Some(&Data::Str("weather:storm".into())), "weather:changed fired for the storm");
     let wind = s.world.defs.lookup("field", "wind").unwrap() as usize;
     for _ in 0..TICKS_PER_DAY / 24 * 2 {

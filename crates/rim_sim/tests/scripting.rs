@@ -349,6 +349,38 @@ fn mods_emit_only_their_own_events() {
 }
 
 #[test]
+fn script_data_belongs_to_the_mod_that_wrote_it() {
+    let script = r#"
+        rim.every(1, function()
+            rim.set_data("bare", 1)
+            rim.set_data("probe:qualified", 2)
+            local ok, err = pcall(rim.set_data, "weather:forecast", {})
+            rim.set_data("other", { ok = ok, err = tostring(err) })
+            rim.set_data("empty", (pcall(rim.set_data, "probe:", 1)))
+            rim.set_data("read", { bare = rim.get_data("bare"), theirs = rim.get_data("weather:types") ~= nil })
+        end)
+    "#;
+    let dir = test_mods("data", &["core", "weather"], &[("probe", &[("scripts/probe.luau", script)])]);
+    let mut s = Sim::new(&dir, 1).unwrap_or_else(|e| panic!("loads: {e}"));
+    // The weather plugin writes its data on its first 20-tick hook.
+    for _ in 0..25 {
+        s.step();
+    }
+    let _ = fs::remove_dir_all(dir);
+    assert_eq!(s.world.data.get("probe:bare"), Some(&Data::Int(1)), "a bare key is the caller's");
+    assert_eq!(s.world.data.get("probe:qualified"), Some(&Data::Int(2)));
+    let other = s.world.data.get("probe:other").expect("ran");
+    assert_eq!(other.get("ok"), Some(&Data::Bool(false)), "can't write another mod's data");
+    let Some(Data::Str(err)) = other.get("err") else { panic!("an error message") };
+    assert!(err.contains("mod 'probe' can't write \"weather:forecast\""), "{err}");
+    assert_eq!(s.world.data.get("probe:empty"), Some(&Data::Bool(false)), "an empty key is refused");
+    let read = s.world.data.get("probe:read").expect("ran");
+    assert_eq!(read.get("bare"), Some(&Data::Int(1)), "get_data resolves a bare key the same way");
+    assert_eq!(read.get("theirs"), Some(&Data::Bool(true)), "reading another mod's data is fine");
+    assert!(s.world.data.keys().all(|k| k.contains(':')), "every key is qualified");
+}
+
+#[test]
 fn a_slow_mod_is_named_in_the_warnings() {
     // Slow but not runaway: about 20k steps of work every tick.
     let s = run(

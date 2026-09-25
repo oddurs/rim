@@ -86,7 +86,7 @@ loaded mod defines that id.
 | `w:build(thing, x1, y1, x2, y2, stuff)` | Place blueprints; `x2`, `y2` and `stuff` are optional |
 | `w:send(name, data)` | Send your mod's sim scripts an event, as the UI's `act.send` does |
 | `w:call(module, fn, ...)` | Call a function a script exports, inside this world |
-| `w:data(key)` | Script data (`rim.set_data`) |
+| `w:data(key)` | Script data (`rim.set_data`), by its full key: `"core:storyteller"` |
 | `w:messages()` | The message feed: `{ text, kind, tick }` |
 | `w:ambient(field)`, `w:field(field, x, y)` | Field values |
 | `w:warnings()` | Load warnings, such as patch conflicts |
