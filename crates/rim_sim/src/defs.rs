@@ -812,6 +812,70 @@ impl Default for PriorityScaleDef {
     }
 }
 
+/// A named set of priority rules the colony switches with one click:
+/// the rules that name a stance hold while it's the colony's (DESIGN.md
+/// §4d). A mod adds one with data alone.
+#[derive(Deserialize, Clone, Debug)]
+pub struct StanceDef {
+    pub id: String,
+    pub label: String,
+    #[serde(default)]
+    pub icon: String,
+    /// Where it sits in the stance bar: lower first. The first is the
+    /// colony's stance in a new game.
+    #[serde(default)]
+    pub order: i32,
+}
+
+/// When a priority rule holds: every condition it gives.
+#[derive(Deserialize, Clone, Debug, Default)]
+#[serde(deny_unknown_fields)]
+pub struct WhenDef {
+    /// Hours of the day, from the first up to the second; `[22, 6]` wraps
+    /// past midnight.
+    #[serde(default)]
+    pub hours: Option<[u32; 2]>,
+    /// Any of these seasons, by the calendar's names.
+    #[serde(default)]
+    pub season: Vec<String>,
+    #[serde(default)]
+    pub stance: Option<String>,
+    /// A need of the colonist's, below or above a fraction of full.
+    #[serde(default)]
+    pub need: Option<String>,
+    #[serde(default)]
+    pub below: Option<f64>,
+    #[serde(default)]
+    pub above: Option<f64>,
+    #[serde(skip)]
+    pub season_r: Vec<u32>,
+    #[serde(skip)]
+    pub stance_r: Option<DefId>,
+    #[serde(skip)]
+    pub need_r: Option<DefId>,
+}
+
+/// Changes work priorities while its `when` holds: `set` puts a work type
+/// at a level, `shift` moves it (negative is sooner). A work type a
+/// colonist set to 0 stays 0 under a shift; only a `set` overrides never.
+#[derive(Deserialize, Clone, Debug)]
+pub struct PriorityRuleDef {
+    pub id: String,
+    /// How it reads in an explanation; the stance's label if it names one.
+    #[serde(default)]
+    pub label: String,
+    #[serde(default)]
+    pub when: WhenDef,
+    #[serde(default)]
+    pub set: BTreeMap<String, u8>,
+    #[serde(default)]
+    pub shift: BTreeMap<String, i32>,
+    #[serde(skip)]
+    pub set_r: Vec<(DefId, u8)>,
+    #[serde(skip)]
+    pub shift_r: Vec<(DefId, i32)>,
+}
+
 // ---------------------------------------------------------------- start / names
 
 #[derive(Deserialize, Clone, Debug)]
@@ -855,6 +919,14 @@ pub struct DefDb {
     pub work_types: Vec<WorkTypeDef>,
     pub work_order: Vec<DefId>,
     pub priority_scale: PriorityScaleDef,
+    pub stances: Vec<StanceDef>,
+    /// The stance a new colony starts in: the first by `order`.
+    pub default_stance: Option<DefId>,
+    pub priority_rules: Vec<PriorityRuleDef>,
+    /// What any rule's conditions read, so the colony's rules are worked
+    /// out again only when one of those changes.
+    pub rules_read_hour: bool,
+    pub rules_read_season: bool,
     /// The work type that raises blueprints, if any claims "build".
     pub build_work: Option<DefId>,
     /// The work type that carries items to stockpiles, if any claims "haul".
@@ -954,6 +1026,8 @@ pub const KINDS: &[&str] = &[
     "designation",
     "work_type",
     "priority_scale",
+    "stance",
+    "priority_rule",
     "work_style",
     "skill",
     "field",
@@ -992,6 +1066,7 @@ impl DefDb {
             "need" => self.needs[i].id.clone(),
             "designation" => self.designations[i].id.clone(),
             "work_type" => self.work_types[i].id.clone(),
+            "stance" => self.stances[i].id.clone(),
             "work_style" => self.work_styles[i].id.clone(),
             "skill" => self.skills[i].id.clone(),
             "field" => self.fields[i].id.clone(),
@@ -1049,6 +1124,9 @@ impl DefDb {
         }
         for (i, d) in self.skills.iter().enumerate() {
             index.insert(("skill", d.id.clone()), i as DefId);
+        }
+        for (i, d) in self.stances.iter().enumerate() {
+            index.insert(("stance", d.id.clone()), i as DefId);
         }
         for (i, d) in self.fields.iter().enumerate() {
             index.insert(("field", d.id.clone()), i as DefId);
@@ -1189,6 +1267,52 @@ impl DefDb {
         let mut order: Vec<DefId> = (0..self.work_types.len() as DefId).collect();
         order.sort_by_key(|&w| (self.work_types[w as usize].order, w));
         self.work_order = order;
+        self.default_stance = (0..self.stances.len() as DefId).min_by_key(|&s| (self.stances[s as usize].order, s));
+        let seasons = &self.calendar.seasons;
+        for r in &mut self.priority_rules {
+            let ctx = format!("priority_rule/{}", r.id);
+            let w = &mut r.when;
+            if let Some([a, b]) = w.hours {
+                if a > 23 || b > 24 || a == b {
+                    return Err(format!("{ctx}: hours are [from, to] within 0 to 24 and not equal, not [{a}, {b}]"));
+                }
+            }
+            w.season_r = w
+                .season
+                .iter()
+                .map(|n| {
+                    seasons.iter().position(|s| s == n).map(|i| i as u32).ok_or_else(|| {
+                        format!("{ctx}: no season '{n}' in the calendar (there are: {})", seasons.join(", "))
+                    })
+                })
+                .collect::<Result<_, _>>()?;
+            w.stance_r = w.stance.as_ref().map(|s| get("stance", s, &ctx)).transpose()?;
+            w.need_r = w.need.as_ref().map(|n| get("need", n, &ctx)).transpose()?;
+            let fraction = |v: Option<f64>| v.is_none_or(|v| (0.0..=1.0).contains(&v));
+            if w.need.is_some() != (w.below.is_some() || w.above.is_some()) || !fraction(w.below) || !fraction(w.above)
+            {
+                return Err(format!(
+                    "{ctx}: a `need` condition takes `below` or `above`, a fraction of full from 0 to 1"
+                ));
+            }
+            r.set_r = r
+                .set
+                .iter()
+                .map(|(t, &l)| Ok((get("work_type", t, &ctx)?, l.min(levels))))
+                .collect::<Result<_, String>>()?;
+            // A shift past the whole scale does no more than crossing it.
+            let span = levels as i32;
+            r.shift_r = r
+                .shift
+                .iter()
+                .map(|(t, &d)| Ok((get("work_type", t, &ctx)?, d.clamp(-span, span))))
+                .collect::<Result<_, String>>()?;
+            // Work-type order, not the order the TOML map sorted names in.
+            r.set_r.sort_unstable();
+            r.shift_r.sort_unstable();
+        }
+        self.rules_read_hour = self.priority_rules.iter().any(|r| r.when.hours.is_some());
+        self.rules_read_season = self.priority_rules.iter().any(|r| !r.when.season_r.is_empty());
         // Tool tags become bits: a gate is then a mask test.
         let tags: std::collections::BTreeSet<String> = self
             .things

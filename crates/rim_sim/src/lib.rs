@@ -17,6 +17,7 @@ pub mod order;
 pub mod path;
 pub mod profile;
 pub mod rng;
+pub mod rules;
 pub mod savefile;
 pub mod savetext;
 pub mod script;

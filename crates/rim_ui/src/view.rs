@@ -100,6 +100,8 @@ pub enum UiAction {
     Draft(Entity, bool),
     /// A colonist's priority for a work type, by its qualified id.
     SetPriority(Entity, String, u8),
+    /// Put the colony in a stance, by its qualified id.
+    SetStance(String),
     /// Let a stockpile take an item (by qualified id), or stop it.
     ZoneAllow(u32, String, bool),
     CycleOverlay,

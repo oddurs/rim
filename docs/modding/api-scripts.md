@@ -38,7 +38,8 @@ are in [Scripting rules](scripting.md).
 | `rim.on_migrate` | `(fn: (from_version: string, data: {[string]: any}) -> {[string]: any}) -> ()` | Upgrade your script data from a save made with a different version of your mod: fn gets that version and your data (bare keys) and returns the data to keep. It sees no world: only your data. Runs on load, before any hook. Register at load time. |
 | `rim.order` | `(site: number) -> OrderInfo?` | The work order on a thing and how far it's got, or nil. |
 | `rim.post_order` | `(site: number, order: OrderSpec) -> ()` | Post a work order on a thing (a station): bring what `needs` lists, by thing or by tag, then work `work` ticks there, holding a tool with every tag in `requires`. Colonists take it as `work_type` work. When it's done, `order_done` names what went in; make what it makes then. One order a site at a time. |
-| `rim.priority` | `(id: number, work: string) -> number?` | A colonist's priority for a work type: 1 first, 0 never. Nil if it isn't a pawn. |
+| `rim.priority` | `(id: number, work: string) -> number?` | A colonist's priority for a work type, rules and stance included: 1 first, 0 never. Nil if it isn't a pawn. |
+| `rim.priority_parts` | `(id: number, work: string) -> { PriorityPart }?` | How a colonist's priority came about: the base, then each rule that moved it. The deltas sum to rim.priority. |
 | `rim.push_ambient` | `(field: string, key: string, value: number, hours: number?, ease_hours: number?) -> ()` | Add a named contribution to a field's outdoor value, easing in over ease_hours and expiring after hours (nil: until cleared). |
 | `rim.random` | `() -> number` | A number in [0, 1) from the world's random numbers: the same on every machine. |
 | `rim.random_int` | `(lo: number, hi: number) -> number` | A whole number from lo to hi inclusive, from the world's random numbers. |
@@ -47,8 +48,10 @@ are in [Scripting rules](scripting.md).
 | `rim.seasons` | `{string}` | The calendar's season names, in order. |
 | `rim.set_ambient` | `(id: string, value: number?) -> ()` | Pin a field's outdoor value, overriding its terms and pushes; nil unpins. For tests and tools: mods push instead. |
 | `rim.set_data` | `(key: string, value: any) -> ()` | Keep plain data in the world (hashed, saved, readable by the UI as view.data). A bare key is your mod's ("state" is "your_mod:state"); you can't write another mod's. |
+| `rim.set_stance` | `(stance: string) -> ()` | Put the colony in a stance: its priority rules hold until another. For incidents; the player's comes as a command. |
 | `rim.spawn_item` | `(thing: string, x: number, y: number, count: number, stuff: string?) -> number` | Drop items near a cell, merging into stacks; returns how many didn't fit. stuff is what they're made of (a flint axe): it sets their hp and quality, and they stack only with the same. |
 | `rim.spawn_pawn` | `(creature: string, faction: Faction, x: number, y: number, name: string?) -> (number?, string?)` | Spawn a creature; returns its id and name, or nil if the cell is blocked. |
+| `rim.stance` | `() -> string?` | The colony's stance, or nil if no mod defines any. |
 | `rim.stat` | `(id: number, name: string) -> number?` | A thing's stat by name: its def's base times its material's factor. |
 | `rim.thing` | `(id: number) -> ThingAt?` | A thing by id: what it is and where, or nil if it's gone. |
 | `rim.thing_defs` | `{ThingInfo}` | Every thing def. |
@@ -66,6 +69,7 @@ type CreatureInfo = { id: string, label: string, intelligent: boolean, aggressiv
 type ThingInfo = { id: string, label: string, market_value: number, food: boolean, item: boolean, tags: { string } }
 type Date = { year: number, season: string, season_index: number, day: number, day_of_year: number, year_days: number, year_fraction: number }
 type Room = { id: number, cells: number, enclosed: boolean }
+type PriorityPart = { label: string, delta: number }
 type Part = { label: string, value: number }
 type OrderNeed = { thing: string?, tag: string?, count: number }
 type OrderSpec = { label: string, needs: { OrderNeed }, work: number, work_type: string, requires: { string }? }

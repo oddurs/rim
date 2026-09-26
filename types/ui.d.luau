@@ -57,6 +57,8 @@ type Tool = { key: string, label: string, color: string, active: boolean }
 type Zone = { id: number, name: string, cells: number, allows: { [string]: boolean } }
 type Item = { id: string, label: string, color: string }
 type WorkType = { id: string, label: string, icon: string, order: number, default: number }
+type Stance = { id: string, label: string, icon: string, active: boolean }
+type Effective = { value: number, why: string }
 type Stuff = { id: string, label: string, color: string, have: number, active: boolean, hp: number, work: number }
 type Hover = { x: number, y: number, terrain: string, shelter: string, readings: { string }, things: { string } }
 type ProfileRow = { name: string, us: number, mod: boolean }
@@ -156,6 +158,8 @@ declare act: {
     set_overlay: (index: number?) -> (),
     -- Set a colonist's priority for a work type: 1 first, 0 never.
     set_priority: (id: number, work: string, level: number) -> (),
+    -- Put the colony in a stance: its priority rules hold until another.
+    set_stance: (id: string) -> (),
     -- Set the game speed.
     speed: (speed: number) -> (),
     -- Choose the material for the active build tool.
@@ -193,6 +197,8 @@ declare view: {
     date: () -> UiDate,
     -- The day, counted from 1.
     day: () -> number,
+    -- A colonist's priority per work type once rules and the stance have had their say, with why: "Build 1 = base 3, Siege -2". Nil if it isn't a pawn.
+    effective: (id: number) -> { [string]: Effective }?,
     -- Recent joins, deaths and departures, newest last.
     events: (since_tick: number) -> { WorldEvent },
     -- Each term and push that makes up a field's outdoor value.
@@ -239,6 +245,8 @@ declare view: {
     show_profiler: () -> boolean,
     -- The game speed.
     speed: () -> number,
+    -- The colony's stances, in bar order; `active` is the one it's in.
+    stances: () -> { Stance },
     -- Client statistics lines.
     stats: () -> { string },
     -- Materials for the active build tool: what you have, what you'd get.

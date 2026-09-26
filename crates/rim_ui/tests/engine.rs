@@ -1905,6 +1905,30 @@ fn a_work_grid_cell_steps_a_priority() {
     assert_eq!(actions, vec![UiAction::SetPriority(pawn, "core:build".into(), 4)], "core's default is 3, of 4 levels");
 }
 
+/// The stance bar switches the colony's stance, and a cell a stance moves
+/// shows where it was and where it is now.
+#[test]
+fn the_stance_bar_switches_and_cells_show_the_rules() {
+    let mut sim = sim_at(&mods());
+    let siege = sim.world.defs.lookup("stance", "core:siege").unwrap();
+    let mut ui = ui_for(&sim);
+    let mut cv = client(&sim);
+    ui.open_window("core:work");
+    frame(&mut ui, &sim, &cv, Default::default());
+    frame(&mut ui, &sim, &cv, Default::default());
+    let button = ui.find("core:work.stance.core:siege").expect("a button per stance");
+    let actions = click(&mut ui, &sim, &mut cv, centre(button));
+    assert_eq!(actions, vec![UiAction::SetStance("core:siege".into())]);
+
+    sim.push(rim_sim::Command::SetStance { stance: siege });
+    sim.step();
+    // Past the idle rebuild interval, so the grid reads the new stance.
+    frame(&mut ui, &sim, &cv, Input { time: 10.0, ..Default::default() });
+    let tree = ui.snapshot();
+    assert!(tree.contains("3→1"), "build moved from 3 to 1: {tree}");
+    assert!(tree.contains("3→–"), "hunt set to never: {tree}");
+}
+
 /// The stockpiles panel: a toggle per item turns a zone's filter on or off.
 #[test]
 fn a_stockpile_toggle_changes_what_it_takes() {

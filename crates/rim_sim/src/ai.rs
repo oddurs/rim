@@ -612,15 +612,16 @@ pub fn comfortable_spot(w: &World, p: &Pawn) -> Option<IVec> {
     (best.0 + COMFORT_GAIN < here).then_some(best.1)
 }
 
-/// The work a colonist should do next (DESIGN.md §4d): of the work types it
-/// hasn't set to 0, those at its lowest priority level that have reachable
+/// The work a colonist should do next (DESIGN.md §4d): of the work types
+/// not at 0 once the priority rules have had their say, those at its lowest priority level that have reachable
 /// work, and of those the nearest job; `order` breaks a tie. Work comes from
 /// blueprints (the work type that covers "build"), designated things and
 /// designated creatures, each designation naming its work type.
 fn find_work(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
     w.map.ensure_regions();
     let defs = w.defs.clone();
-    let level: Vec<u8> = (0..defs.work_types.len() as DefId).map(|t| p.priority(&defs, t)).collect();
+    let level: Vec<u8> =
+        (0..defs.work_types.len() as DefId).map(|t| crate::rules::effective(&defs, &w.rules, p, t)).collect();
     let wanted = |t: DefId| level[t as usize] > 0;
     // The nearest job of each work type: (distance, job, what to reserve).
     let mut best: Vec<Option<(u32, Job, Entity)>> = vec![None; defs.work_types.len()];

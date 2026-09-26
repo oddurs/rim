@@ -67,6 +67,10 @@ pub enum Command {
         work: DefId,
         level: u8,
     },
+    /// Put the colony in a stance: its priority rules hold until another.
+    SetStance {
+        stance: DefId,
+    },
     /// A mod's interface asks its own sim scripts to do something: delivered
     /// as the script event `name` (namespaced by the mod, "weather:force")
     /// at the tick boundary, like any other input, so it replays and stays
@@ -193,6 +197,12 @@ pub fn apply(w: &mut World, c: Command) {
             let level = level.min(defs.priority_scale.levels);
             if let Ok(mut p) = w.ecs.get::<&mut Pawn>(pawn) {
                 p.set_priority(work, level);
+            }
+        }
+        Command::SetStance { stance } => {
+            if (stance as usize) < defs.stances.len() {
+                w.stance = Some(stance);
+                w.update_rules();
             }
         }
         Command::Order { pawn, cell, on } => {

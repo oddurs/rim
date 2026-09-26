@@ -189,12 +189,11 @@ The log is the save and snapshots are a cache (DESIGN.md §7a): a colony is alwa
 
 ## colony — Colony
 
-`#######···` 63% · 15 of 24 done · due 2026-12-15
+`#######···` 67% · 16 of 24 done · due 2026-12-15
 
 Running more than one person: stockpiles, hauling, work priorities, skills, colonist panels.
 
 - [ ] `03b9b791` Derived fields and feels-like temperature <sup>feature · p1 · s · engine</sup>
-- [ ] `0cb48faf` Priority rules and colony stances <sup>feature · p1 · m · engine</sup>
 - [ ] `0e73145a` Work pools: work givers post work, pawns stop scanning <sup>perf · p0 · m · engine</sup>
 - [ ] `4ad6b386` Colonist inspection panel <sup>feature · p1 · m · client</sup>
 - [ ] `8376a04f` Drafty rooms: room leak from terms <sup>feature · p3 · s · engine</sup>
@@ -203,6 +202,7 @@ Running more than one person: stockpiles, hauling, work priorities, skills, colo
 - [ ] `f1b96df4` The Work Board: a painted priority grid with live demand <sup>feature · p0 · l · core</sup>
 - [ ] `9bd9e8ab` Fire: burning, spread by wind, put out by rain <sup>feature · p1 · l · engine</sup>
 - [x] `03ad3e3a` Work types and priorities per colonist <sup>feature · p0 · m · engine</sup>
+- [x] `0cb48faf` Priority rules and colony stances <sup>feature · p1 · m · engine</sup>
 - [x] `1e977052` Floating windows and a saved UI layout <sup>feature · p0 · m · engine</sup>
 - [x] `29c323f5` Skills learned by doing <sup>feature · p1 · m · engine</sup>
 - [x] `3ab05834` Floors: built ground that remembers what it is made of <sup>feature · p1 · m · engine</sup>
@@ -234,7 +234,7 @@ The run gets a shape: eras, storyteller tiers, defensive strength in the threat 
 
 ## plugin-api — Plugin API
 
-`#####·····` 50% · 12 of 24 done · due 2027-02-01
+`#####·····` 48% · 12 of 25 done · due 2027-02-01
 
 The API grows up: stat pipeline, script components, custom jobs, needs and def kinds, modules and custom events, a real sandbox with hard limits, factions as data, rim test, typed API. Everything Mood needs, and everything DESIGN.md §10 says a mod from a stranger's repo must be safe to do.
 
@@ -242,6 +242,7 @@ The API grows up: stat pipeline, script components, custom jobs, needs and def k
 - [ ] `7f8ce379` Script-defined components on pawns and things <sup>feature · p0 · m · engine</sup>
 - [ ] `978be4f3` Factions as defs, not an engine enum <sup>feature · p0 · m · engine</sup>
 - [ ] `97e9d4a7` Stat pipeline: base values plus registered modifiers <sup>feature · p0 · l · engine</sup>
+- [ ] `99398b15` Priority rules on alerts and Luau predicates <sup>feature · p3 · m · engine</sup>
 - [ ] `b3df9f85` Mod-defined def kinds with schemas, and namespaced extension fields <sup>feature · p0 · l · engine</sup>
 - [ ] `c65db254` Per-mod budgets: profiler warnings and hard limits for runaway scripts <sup>feature · p1 · m · engine</sup>
 - [ ] `e63fd9c3` Script hook for a stage of map generation <sup>feature · p3 · m · engine</sup>

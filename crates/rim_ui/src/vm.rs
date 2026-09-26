@@ -687,6 +687,7 @@ impl UiVm {
             Some(e) => UiAction::SetPriority(e, work, level),
             None => return Err(rt("bad entity id")),
         });
+        act!("set_stance", String, |id| UiAction::SetStance(id));
         act!("zone_allow", (u32, String, bool), |(zone, item, on)| UiAction::ZoneAllow(zone, item, on));
         act!("cycle_overlay", (), |_a| UiAction::CycleOverlay);
         act!("set_overlay", Option<usize>, |i| UiAction::SetOverlay(i.map(|i| i.saturating_sub(1))));
@@ -940,6 +941,45 @@ impl UiVm {
             Ok(t)
         });
         view!("priority_levels", (), |_lua, l, _a| Ok(l.world.defs.priority_scale.levels));
+        view!("effective", u64, |lua, l, id| {
+            let Some(p) = Entity::from_bits(id).and_then(|e| l.world.ecs.get::<&Pawn>(e).ok()) else {
+                return Ok(None);
+            };
+            let t = lua.create_table()?;
+            let defs = &l.world.defs;
+            for (w, d) in defs.work_types.iter().enumerate() {
+                let (value, parts) = rim_sim::rules::explain(defs, &l.world.rules, &p, w as rim_sim::defs::DefId);
+                let steps: Vec<String> = parts
+                    .iter()
+                    .enumerate()
+                    .map(|(i, s)| match i {
+                        0 => format!("{} {}", s.label, s.delta),
+                        _ => format!("{} {:+}", s.label, s.delta),
+                    })
+                    .collect();
+                let row = lua.create_table()?;
+                row.set("value", value)?;
+                row.set("why", format!("{} {value} = {}", d.label, steps.join(", ")))?;
+                t.set(d.id.as_str(), row)?;
+            }
+            Ok(Some(t))
+        });
+        view!("stances", (), |lua, l, _a| {
+            let t = lua.create_table()?;
+            let defs = &l.world.defs;
+            let mut order: Vec<usize> = (0..defs.stances.len()).collect();
+            order.sort_by_key(|&s| (defs.stances[s].order, s));
+            for s in order {
+                let d = &defs.stances[s];
+                let row = lua.create_table()?;
+                row.set("id", d.id.as_str())?;
+                row.set("label", d.label.as_str())?;
+                row.set("icon", d.icon.as_str())?;
+                row.set("active", l.world.stance == Some(s as rim_sim::defs::DefId))?;
+                t.push(row)?;
+            }
+            Ok(t)
+        });
         view!("items", (), |lua, l, _a| {
             let t = lua.create_table()?;
             for d in l.world.defs.things.iter().filter(|d| d.category == rim_sim::defs::Category::Item) {

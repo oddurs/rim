@@ -1202,6 +1202,11 @@ fn apply_ui(app: &mut App, a: UiAction) {
                 app.sim.push(Command::SetPriority { pawn: e, work: w, level });
             }
         }
+        UiAction::SetStance(id) => {
+            if let Some(stance) = app.sim.world.defs.lookup("stance", &id) {
+                app.sim.push(Command::SetStance { stance });
+            }
+        }
         UiAction::CycleOverlay => apply(app, Action::CycleOverlay),
         UiAction::SetOverlay(o) => app.overlay = o.filter(|i| *i < app.sim.world.defs.fields.len()),
         UiAction::ToggleProfiler => apply(app, Action::ToggleProfiler),

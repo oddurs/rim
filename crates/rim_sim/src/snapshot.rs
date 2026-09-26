@@ -90,6 +90,9 @@ pub(crate) struct WorldSection {
     events: Vec<GameEvent>,
     /// `World::data_versions`: removed mods' data and its version.
     data_versions: BTreeMap<String, String>,
+    /// The colony's stance; a save from before stances has none.
+    #[serde(default)]
+    stance: Option<DefId>,
 }
 
 /// Each def kind's qualified ids, in `DefId` order: the table the raw ids in
@@ -163,6 +166,7 @@ fn def_table(defs: &DefDb) -> DefsSection {
         kind("designation", defs.designations.len()),
         kind("work_type", defs.work_types.len()),
         kind("skill", defs.skills.len()),
+        kind("stance", defs.stances.len()),
         kind("field", defs.fields.len()),
     ])
 }
@@ -239,6 +243,7 @@ impl Snapshot {
             recent_events: w.recent_events.iter().map(|(t, k, e, n)| (*t, k.to_string(), *e, n.clone())).collect(),
             events: w.events.clone(),
             data_versions: w.data_versions.clone(),
+            stance: w.stance,
         };
         let (disabled_hooks, disabled_handlers) = sim.scripts.disabled();
         let mut sections = BTreeMap::from([
@@ -771,6 +776,15 @@ impl Snapshot {
             zones.tidy();
             w.zones = zones;
         }
+        // A stance a removed mod added falls back to the first there is.
+        w.stance = match ws.stance {
+            Some(s) => remap.get("stance", s).filter(|&s| (s as usize) < defs.stances.len()).or_else(|| {
+                notes.push(format!("the stance {} is gone; the colony is back to its first", remap.name("stance", s)));
+                defs.default_stance
+            }),
+            None => defs.default_stance,
+        };
+        w.update_rules();
         let sc: ScriptsSection = dec(self, "engine:scripts")?;
         w.update_shelter();
         // Hook indices only mean the same hooks under the same scripts.

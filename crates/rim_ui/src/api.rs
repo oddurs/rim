@@ -10,7 +10,7 @@
 /// The version of this surface, as a mod names it in `mod.toml` as
 /// `ui_api`. Before 1.0 every minor is breaking: a mod written against a
 /// newer surface names calls this engine lacks, and is refused.
-pub const UI_API_VERSION: (u32, u32) = (0, 5);
+pub const UI_API_VERSION: (u32, u32) = (0, 6);
 
 /// One member of `ui`, `act` or `view`.
 pub struct UiDoc {
@@ -78,6 +78,8 @@ type Tool = { key: string, label: string, color: string, active: boolean }
 type Zone = { id: number, name: string, cells: number, allows: { [string]: boolean } }
 type Item = { id: string, label: string, color: string }
 type WorkType = { id: string, label: string, icon: string, order: number, default: number }
+type Stance = { id: string, label: string, icon: string, active: boolean }
+type Effective = { value: number, why: string }
 type Stuff = { id: string, label: string, color: string, have: number, active: boolean, hp: number, work: number }
 type Hover = { x: number, y: number, terrain: string, shelter: string, readings: { string }, things: { string } }
 type ProfileRow = { name: string, us: number, mod: boolean }
@@ -118,6 +120,7 @@ pub const UI_API: &[UiDoc] = &[
     ),
     d!("act.set_overlay", "(index: number?) -> ()", "Show a field overlay by its index in view.fields(), or none."),
     d!("act.set_priority", "(id: number, work: string, level: number) -> ()", "Set a colonist's priority for a work type: 1 first, 0 never."),
+    d!("act.set_stance", "(id: string) -> ()", "Put the colony in a stance: its priority rules hold until another."),
     d!("act.speed", "(speed: number) -> ()", "Set the game speed."),
     d!("act.stuff", "(id: string) -> ()", "Choose the material for the active build tool."),
     d!("act.toggle_devtools", "() -> ()", "Show or hide devtools."),
@@ -205,6 +208,7 @@ pub const UI_API: &[UiDoc] = &[
     d!("view.data", "(key: string) -> any", "A copy of data a sim script stored with rim.set_data, or nil."),
     d!("view.date", "() -> UiDate", "The calendar date, counted from 1."),
     d!("view.day", "() -> number", "The day, counted from 1."),
+    d!("view.effective", "(id: number) -> { [string]: Effective }?", "A colonist's priority per work type once rules and the stance have had their say, with why: \"Build 1 = base 3, Siege -2\". Nil if it isn't a pawn."),
     d!("view.events", "(since_tick: number) -> { WorldEvent }", "Recent joins, deaths and departures, newest last."),
     d!("view.explain", "(field: string) -> { Part }", "Each term and push that makes up a field's outdoor value."),
     d!("view.fields", "() -> { FieldInfo }", "The field layers."),
@@ -228,6 +232,7 @@ pub const UI_API: &[UiDoc] = &[
     d!("view.show_devtools", "() -> boolean", "Whether devtools are open."),
     d!("view.show_profiler", "() -> boolean", "Whether the profiler is open."),
     d!("view.speed", "() -> number", "The game speed."),
+    d!("view.stances", "() -> { Stance }", "The colony's stances, in bar order; `active` is the one it's in."),
     d!("view.stats", "() -> { string }", "Client statistics lines."),
     d!("view.stuff", "() -> { Stuff }", "Materials for the active build tool: what you have, what you'd get."),
     d!(

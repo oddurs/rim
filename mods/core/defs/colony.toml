@@ -107,6 +107,48 @@ priority = 3
 order = 60
 jobs = ["haul"]
 
+# Stances: named sets of priority rules the colony switches with one
+# click (DESIGN.md §4d). A rule holds while its `when` does (an hour range,
+# seasons, a stance, a colonist's need) and `shift`s work types (negative is
+# sooner) or `set`s them. The first stance by `order` is where a colony
+# starts. Mods add stances and rules, or rules for core's stances.
+[[stance]]
+id = "normal"
+label = "Normal"
+order = 0
+
+[[stance]]
+id = "harvest"
+label = "Harvest"
+order = 10
+
+[[stance]]
+id = "winter_prep"
+label = "Winter prep"
+order = 20
+
+[[stance]]
+id = "siege"
+label = "Siege"
+order = 30
+
+[[priority_rule]]
+id = "harvest"
+when = { stance = "harvest" }
+shift = { harvest = -2, haul = -1, mine = 1 }
+
+[[priority_rule]]
+id = "winter_prep"
+when = { stance = "winter_prep" }
+shift = { chop = -2, harvest = -1, build = -1 }
+
+# Stay inside the walls and raise more of them.
+[[priority_rule]]
+id = "siege"
+when = { stance = "siege" }
+set = { hunt = 0 }
+shift = { build = -2, chop = 1, mine = 1 }
+
 [[designation]]
 id = "chop"
 label = "Chop"
