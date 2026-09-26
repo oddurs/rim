@@ -88,11 +88,10 @@ First playable vertical slice. One warrior, harvest, build, eat, sleep, animals,
 
 ## interface — Interface
 
-`#########·` 84% · 21 of 25 done · due 2026-10-09
+`#########·` 88% · 22 of 25 done · due 2026-10-09
 
 A two-week sprint. The whole HUD moves out of Rust into `mods/core/ui/`, written in Luau on a small UI engine, so any mod can extend, replace, wrap or remove any part of the interface. Design: DESIGN.md §11.
 
-- [ ] `580f2fbf` Screens as sheets: Work, Storage and mods' screens share one place <sup>feature · p1 · m · engine</sup>
 - [ ] `668c7762` Context: an action row and an inspector tab registry <sup>feature · p2 · m · core</sup>
 - [ ] `86dcd0ca` Several selected: box and shift selection with shared actions <sup>feature · p2 · m · client</sup>
 - [ ] `93071dfd` Compact mode and UI scale <sup>feature · p2 · s · client</sup>
@@ -102,6 +101,7 @@ A two-week sprint. The whole HUD moves out of Rust into `mods/core/ui/`, written
 - [x] `36d3ea49` UI stack: taffy layout, cosmic-text and a second Luau VM on macroquad <sup>spike · p0 · s · client</sup>
 - [x] `452628d7` Client-only UI Luau VM with view and act APIs <sup>feature · p0 · l · client</sup>
 - [x] `5514aac6` Port the HUD into mods/core/ui and delete the Rust HUD <sup>feature · p0 · l · core</sup>
+- [x] `580f2fbf` Screens as sheets: Work, Storage and mods' screens share one place <sup>feature · p1 · m · engine</sup>
 - [x] `65588ce1` Names and speech bubbles lag a frame behind their pawn <sup>bug · p1 · s · client</sup>
 - [x] `6d04638b` System UI font: discovery, shaping and a glyph atlas <sup>feature · p0 · m · client</sup>
 - [x] `7497597f` UI layers and input routing <sup>feature · p0 · m · client</sup>

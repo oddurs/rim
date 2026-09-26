@@ -6,7 +6,7 @@ local t = ui.t
 
 local PER_ROW = 4
 
-ui.window("core:zones", { title = t("core:zones.title", "Stockpiles"), w = 460, h = 320, resizable = true }, function(view)
+ui.window("core:zones", { title = t("core:zones.title", "Stockpiles"), w = 460, h = 320, sheet = true }, function(view)
 	local zones = view.zones()
 	if #zones == 0 then
 		return col({ pad = "m" }, {
@@ -40,10 +40,9 @@ ui.window("core:zones", { title = t("core:zones.title", "Stockpiles"), w = 460, 
 	return col({ gap = "s", pad = "m" }, parts)
 end)
 
--- Z opens the dock's Zones palette; the list is a button at its end.
-ui.bind("core:zones", { label = t("core:keys.zones", "Stockpiles") }, function()
-	ui.toggle("core:zones")
-end)
+-- A screen with no key of its own: Z opens the dock's Zones palette, and
+-- the list is also a button at its end.
+require("@core/ui/screens").add({ id = "core:zones", label = t("core:keys.zones", "Stockpiles"), order = 20 })
 ui.extend("core:dock.palette.zones", function(view)
 	return kit.button({
 		id = "core:zones.open",

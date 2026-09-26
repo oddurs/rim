@@ -116,6 +116,9 @@ pub struct WindowDecl {
     pub w: f32,
     pub h: f32,
     pub resizable: bool,
+    /// A sheet: a screen the engine places in the band between the docked
+    /// columns, one open at a time. It is not moved or resized by hand.
+    pub sheet: bool,
     /// Open when first seen, before any saved layout says otherwise.
     pub open: bool,
     /// The component shown inside the chrome.
@@ -508,6 +511,7 @@ impl UiVm {
                     w: num("w", 360.0),
                     h: num("h", 240.0),
                     resizable: opts.get::<Option<bool>>("resizable").ok().flatten().unwrap_or(false),
+                    sheet: opts.get::<Option<bool>>("sheet").ok().flatten().unwrap_or(false),
                     open: opts.get::<Option<bool>>("open").ok().flatten().unwrap_or(false),
                     comp,
                 });
@@ -1364,6 +1368,12 @@ impl UiVm {
     }
 
     /// Declared windows, one per id: the last declaration wins.
+    /// A sheet's widest width, or None if `id` isn't a sheet. The last
+    /// declaration wins, as in `windows`.
+    pub fn sheet_width(&self, id: &str) -> Option<f32> {
+        self.reg.borrow().windows.iter().rev().find(|w| w.id == id).filter(|w| w.sheet).map(|w| w.w)
+    }
+
     pub fn windows(&self) -> Vec<WindowDecl> {
         let reg = self.reg.borrow();
         let mut out: Vec<WindowDecl> = Vec::new();

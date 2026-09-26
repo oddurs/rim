@@ -90,7 +90,7 @@ local function brush_bar(levels: number)
 	return row({ gap = "xs", align = "center" }, items)
 end
 
-ui.window("core:work", { title = t("core:work.title", "Work"), w = 760, h = 860, resizable = true }, function(view)
+ui.window("core:work", { title = t("core:work.title", "Work"), w = 760, h = 860, sheet = true }, function(view)
 	local b = view.board()
 	local levels, cols, rows = b.levels, b.cols, b.rows
 
@@ -256,6 +256,4 @@ ui.window("core:work.ranked", { title = t("core:work.ranked", "Ranked"), w = 280
 	return ui.scroll({ pad = "m", gap = "xs", table.unpack(items) })
 end)
 
-ui.bind("core:work", { key = "p", label = t("core:keys.work", "Work priorities") }, function()
-	ui.toggle("core:work")
-end)
+require("@core/ui/screens").add({ id = "core:work", label = t("core:keys.work", "Work"), key = "p", order = 10 })
