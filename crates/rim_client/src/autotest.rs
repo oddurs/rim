@@ -1354,6 +1354,18 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         .await;
     t.check(cam(&t).2 == before.2 && cam(&t).1 != before.1, "with scroll set to pan, a wheel pans");
     t.app.scroll_mode = crate::ScrollMode::Auto;
+    // A pinch: 10% apart zooms 10% about the pointer, the ground under it
+    // staying put.
+    let before = cam(&t);
+    let under = t.app.cam.to_world(mid.0, mid.1);
+    t.input(RawInput { mouse: mid, pinch: 0.1, ..Default::default() }).await;
+    let after_under = t.app.cam.to_world(mid.0, mid.1);
+    t.check(
+        (cam(&t).2 / before.2 - 1.1).abs() < 1e-3
+            && (after_under.0 - under.0).abs() < 1e-3
+            && (after_under.1 - under.1).abs() < 1e-3,
+        "a pinch zooms about the pointer",
+    );
     let before = cam(&t);
     t.key(KeyCode::Equal).await;
     t.check(cam(&t).2 > before.2, "= zooms in");
