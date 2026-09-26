@@ -167,7 +167,7 @@ ui.mount("right", "core:messages", { align = "start", order = 1 })
 
 -- The whole log, newest first, as a virtual list: a colony's thousandth
 -- message costs what its tenth did.
-ui.window("core:news", { title = t("core:news.title", "News"), w = 460, h = 420, resizable = true }, function(view)
+ui.window("core:news", { title = t("core:news.title", "News"), w = 560, h = 420, sheet = true }, function(view)
 	local total = view.message_count()
 	if total == 0 then
 		return label(t("core:news.none", "Nothing has happened yet."), { color = "muted" })
@@ -188,6 +188,4 @@ ui.window("core:news", { title = t("core:news.title", "News"), w = 460, h = 420,
 	}
 end)
 
-ui.bind("core:news", { key = "n", label = t("core:keys.news", "All news") }, function()
-	ui.toggle("core:news")
-end)
+require("@core/ui/screens").add({ id = "core:news", label = t("core:keys.news", "News"), key = "n", order = 30 })

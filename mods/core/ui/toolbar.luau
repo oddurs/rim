@@ -243,6 +243,8 @@ ui.define("core:toolbar", function(view)
 			)
 		end
 	end
+	-- Screens (mods/core/ui/screens.luau) and mods' buttons, at the far end.
+	table.insert(bar, { kind = "spacer" })
 	table.insert(bar, row({ id = "core:dock.right", gap = "s", align = "center" }))
 
 	return col({}, {

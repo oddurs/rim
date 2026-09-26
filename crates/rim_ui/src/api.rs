@@ -53,7 +53,7 @@ type ListProps = {
     id: string, count: number, row_h: Size, row: (i: number) -> Node,
     h: Size?, grow: number?, bg: string?, border: string?, pad: Size?,
 }
-type WindowOpts = { title: string?, w: number?, h: number?, resizable: boolean?, open: boolean? }
+type WindowOpts = { title: string?, w: number?, h: number?, resizable: boolean?, sheet: boolean?, open: boolean? }
 type WindowInfo = { id: string, title: string, w: number, h: number, resizable: boolean, comp: string }
 type Bind = { id: string, label: string, key: string, owner: string }
 type Layer = "top" | "bottom" | "left" | "right" | "anchored" | "cursor" | "modal" | "windows" | "title"
@@ -199,7 +199,7 @@ pub const UI_API: &[UiDoc] = &[
     d!(
         "ui.window",
         "(id: string, opts: WindowOpts, component: ((view: any) -> Node?) | string) -> ()",
-        "Declare a window the engine moves, sizes, stacks and remembers between runs. The component is shown inside the chrome; a function is defined under the window's id."
+        "Declare a window the engine moves, sizes, stacks and remembers between runs. The component is shown inside the chrome; a function is defined under the window's id. With sheet = true it is a screen instead: placed in the band between the docked columns, as wide as w allows, one sheet open at a time."
     ),
     d!(
         "ui.window_chrome",

@@ -54,7 +54,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `ui.t` | `(key: string, default: string?) -> string` | A user-visible string by key: a mod's ui/lang.toml can replace it; until one does, the default. |
 | `ui.text` | `(node: Node \| string) -> Node` | Text: { "words", size = ..., color = ... }. |
 | `ui.toggle` | `(id: string) -> ()` | Open a window if closed, close it if open. |
-| `ui.window` | `(id: string, opts: WindowOpts, component: ((view: any) -> Node?) \| string) -> ()` | Declare a window the engine moves, sizes, stacks and remembers between runs. The component is shown inside the chrome; a function is defined under the window's id. |
+| `ui.window` | `(id: string, opts: WindowOpts, component: ((view: any) -> Node?) \| string) -> ()` | Declare a window the engine moves, sizes, stacks and remembers between runs. The component is shown inside the chrome; a function is defined under the window's id. With sheet = true it is a screen instead: placed in the band between the docked columns, as wide as w allows, one sheet open at a time. |
 | `ui.window_chrome` | `(draw: (win: WindowInfo) -> Node) -> ()` | The function that draws every window's chrome around ui.slot(win.comp); nodes marked handle = "move", "resize" or "close" are routed by the engine. Core sets it. |
 | `ui.wrap` | `(id: string, wrap: (inner: Node, view: any) -> Node?) -> ()` | Decorate a node: get its tree, return a new one. |
 | `view.ambient` | `(field: string) -> number?` | A field's outdoor value, or nil for an unknown field. |

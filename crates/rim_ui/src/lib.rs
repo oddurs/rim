@@ -220,6 +220,8 @@ type CachedLayout = (u64, (f32, f32), Vec<Rect>);
 /// Layers bottom to top.
 const LAYERS: &[&str] = &["anchored", "docked", "title", "windows", "cursor", "modal", "tooltip"];
 const TOOLTIP_DELAY: f64 = 0.45;
+/// The id of the band between the docked columns, where sheets go.
+pub const CENTER: &str = "rim:center";
 /// How many slots away from its anchor a label may move to avoid overlap.
 const ANCHOR_SLOTS: usize = 12;
 /// How many anchored labels are placed per frame, by priority, inside the
@@ -567,8 +569,32 @@ impl Ui {
         }
         if open {
             self.raise_window(id);
+            // One sheet at a time: opening one closes the one that was up.
+            if self.vm.sheet_width(id).is_some() {
+                let others: Vec<String> = self
+                    .windows
+                    .iter()
+                    .filter(|w| w.open && w.id != *id && self.vm.sheet_width(&w.id).is_some())
+                    .map(|w| w.id.clone())
+                    .collect();
+                for other in others {
+                    self.apply_window_op(&vm::WindowOp::Close(other));
+                }
+            }
         }
         self.vm.set_window_open(id, open);
+    }
+
+    /// Sheets fill the band between the docked columns, as it was laid out
+    /// last frame (this frame's, unless the screen or a column just changed).
+    fn place_sheets(&mut self) {
+        let Some(&[x, y, w, h]) = self.ids.get(CENTER) else { return };
+        let s = self.theme.scale;
+        for win in &mut self.windows {
+            let Some(widest) = self.vm.sheet_width(&win.id) else { continue };
+            let width = widest.min(w / s);
+            (win.x, win.y, win.w, win.h) = (x / s + (w / s - width) / 2.0, y / s, width, h / s);
+        }
     }
 
     /// Keep a window's record inside the screen with its title bar reachable.
@@ -762,7 +788,8 @@ impl Ui {
                     Some(node::Handle::Resize) => Some(true),
                     _ => None,
                 };
-                if let (Some(resize), Some(w)) = (resize, self.windows.iter().find(|w| w.id == *id)) {
+                let placed = self.vm.sheet_width(id).is_some();
+                if let (Some(resize), Some(w), false) = (resize, self.windows.iter().find(|w| w.id == *id), placed) {
                     self.win_drag =
                         Some(WinDrag { id: id.clone(), resize, start: (mx, my), from: (w.x, w.y, w.w, w.h) });
                 }
@@ -1034,6 +1061,7 @@ impl Ui {
             actions.retain(|a| *a != UiAction::ToggleOutlines);
         }
 
+        self.place_sheets();
         let ch = client_hash(client);
         let input_happened = input.left_pressed
             || input.left_released
@@ -1482,7 +1510,8 @@ impl Ui {
         };
         let top = plain(10, Style { w: Len::Frac(1.0), ..Default::default() }, group("top", None));
         let bottom = plain(20, Style { w: Len::Frac(1.0), ..Default::default() }, group("bottom", None));
-        let center = plain(30, Style { grow: 1.0, ..Default::default() }, vec![]);
+        let mut center = plain(30, Style { grow: 1.0, ..Default::default() }, vec![]);
+        center.id = Some(CENTER.into());
         let middle = plain(
             40,
             // min_h 0: the band between the bars is the screen's, not its

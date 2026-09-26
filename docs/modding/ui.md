@@ -271,6 +271,30 @@ panel is rebuilt, so one may read the world freely, and a check that errors
 shows as a bad alert naming it. Each alert's row has the id
 `core:alerts.<id>`.
 
+### Screens
+
+A screen is a window declared with `sheet = true`. The engine places it in
+the band between the docked columns (the node `rim:center`), as wide as its
+`w` allows and as tall as the band, so it never covers the people, the
+alerts or the bars. One sheet is open at a time: opening another closes it.
+A sheet isn't dragged or resized; ordinary windows still are, and stay open
+over a sheet.
+
+Register a screen and it gets a key binding (so the command palette finds
+it) and a button at the right of the dock, beside core's Work (P),
+Stockpiles and News (N):
+
+```lua
+local screens = require("@core/ui/screens")
+ui.window("my_mod:herds", { title = "Herds", w = 640, h = 600, sheet = true }, function(view)
+	return build_herds(view)
+end)
+screens.add({ id = "my_mod:herds", label = "Herds", key = "h" })
+```
+
+Buttons are `core:screens.<id>`, sorted by `order` (core's are 10, 20
+and 30; the default is 100) and then by when they were added.
+
 ### The dock
 
 The bottom bar (`core:toolbar`, in [`toolbar.luau`](../../mods/core/ui/toolbar.luau))

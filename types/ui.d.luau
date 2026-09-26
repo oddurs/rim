@@ -32,7 +32,7 @@ type ListProps = {
     id: string, count: number, row_h: Size, row: (i: number) -> Node,
     h: Size?, grow: number?, bg: string?, border: string?, pad: Size?,
 }
-type WindowOpts = { title: string?, w: number?, h: number?, resizable: boolean?, open: boolean? }
+type WindowOpts = { title: string?, w: number?, h: number?, resizable: boolean?, sheet: boolean?, open: boolean? }
 type WindowInfo = { id: string, title: string, w: number, h: number, resizable: boolean, comp: string }
 type Bind = { id: string, label: string, key: string, owner: string }
 type Layer = "top" | "bottom" | "left" | "right" | "anchored" | "cursor" | "modal" | "windows" | "title"
@@ -139,7 +139,7 @@ declare ui: {
     text: (node: Node | string) -> Node,
     -- Open a window if closed, close it if open.
     toggle: (id: string) -> (),
-    -- Declare a window the engine moves, sizes, stacks and remembers between runs. The component is shown inside the chrome; a function is defined under the window's id.
+    -- Declare a window the engine moves, sizes, stacks and remembers between runs. The component is shown inside the chrome; a function is defined under the window's id. With sheet = true it is a screen instead: placed in the band between the docked columns, as wide as w allows, one sheet open at a time.
     window: (id: string, opts: WindowOpts, component: ((view: any) -> Node?) | string) -> (),
     -- The function that draws every window's chrome around ui.slot(win.comp); nodes marked handle = "move", "resize" or "close" are routed by the engine. Core sets it.
     window_chrome: (draw: (win: WindowInfo) -> Node) -> (),
