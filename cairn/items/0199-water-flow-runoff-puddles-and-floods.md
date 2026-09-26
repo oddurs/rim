@@ -7,7 +7,7 @@ milestone: scale
 depends_on:
 - d77d9e1f-f0ae-4e30-ae9c-95cd35c1346b
 created: 2026-09-23
-updated: 2026-09-23
+updated: 2026-09-26
 priority: p3
 api: additive
 effort: l
@@ -32,3 +32,7 @@ Stock fields have no lateral flow (DESIGN.md §4c, "should water flow?"). Water 
 - [ ] Water gathers in low ground after heavy rain
 - [ ] Stable under staggered updates at 6× speed
 - [ ] Cost at 250×250 within the §8 budget, recorded here
+
+## 2026-09-26
+
+DESIGN.md §6d (Depth) splits water in two. Flooding of dug space is basins, an engine mechanism with the water table and aquifers in core (3979868c-6de5-4926-8277-b4402adab473). This item stays rain runoff and puddles on the surface, as a stock-field plugin.

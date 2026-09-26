@@ -364,7 +364,7 @@ Mods reach players without a closed store: versioned dependencies, a modlist loc
 
 ## defense — Defense
 
-`··········` 0% · 0 of 9 done · due 2027-04-10
+`··········` 0% · 0 of 10 done · due 2027-04-10
 
 Combat depth: ranged weapons, apparel and armor, equipment, downed and rescue, raid tactics, turrets.
 
@@ -374,6 +374,7 @@ Combat depth: ranged weapons, apparel and armor, equipment, downed and rescue, r
 - [ ] `6499049f` Siege and sapper raids <sup>content · p2 · m · core</sup>
 - [ ] `6d15500e` Turrets and traps <sup>content · p2 · m · plugin</sup>
 - [ ] `713009ac` Fog and darkness limit sight <sup>feature · p3 · m · engine</sup>
+- [ ] `835c5674` Building up: supported floors, collapse, roofs and wall walks <sup>feature · p2 · l · engine</sup>
 - [ ] `cdddbcee` Downed state, rescue and medicine <sup>feature · p1 · l · engine</sup>
 - [ ] `d5d0ea1f` Equipment: pick up and equip, raiders drop gear <sup>feature · p1 · m · engine</sup>
 - [ ] `e2ad4bec` Ranged weapons and projectiles <sup>feature · p0 · l · engine</sup>
@@ -390,6 +391,21 @@ Lockstep co-op on top of determinism: command broadcast, desync detection, mod-l
 - [ ] `c31738fc` Mod-list handshake <sup>feature · p0 · s · engine</sup>
 - [ ] `c6ea8076` Shared control and player cursors <sup>feature · p2 · m · client</sup>
 - [ ] `fa6f0afb` Desync detection and resync from snapshot <sup>feature · p0 · l · engine</sup>
+
+## depth — Depth
+
+`··········` 0% · 0 of 8 done
+
+Dig down. The map becomes a stack of 2D levels joined only at stairs, ladders and holes, rock becomes terrain, and water fills what you dig into. Design: DESIGN.md §6d.
+
+- [ ] `3979868c` Basins: water fills what you dig into <sup>feature · p1 · l · engine</sup>
+- [ ] `3f90e043` Strata: a level is generated from the seed and z the tick something digs in <sup>feature · p0 · m · engine</sup>
+- [ ] `5689930d` The view: one level at a time, \[ and \], and the depth ruler <sup>feature · p0 · m · client</sup>
+- [ ] `8cc6252d` Rock is terrain: solid cells, mining them, and worksites <sup>feature · p0 · l · engine</sup>
+- [ ] `acd85584` Portals: stairs, ladders, digging down, and paths across levels <sup>feature · p0 · l · engine</sup>
+- [ ] `ba8253df` Pits and bridges: trenches that raiders have to bridge <sup>feature · p1 · m · engine</sup>
+- [ ] `e311c029` Positions gain z: the map becomes a stack of levels <sup>feature · p0 · l · engine</sup>
+- [ ] `f2a8ffc7` Underground: rock is a roof, the cellar keeps the year's mean, and it's dark <sup>content · p2 · s · core</sup>
 
 ## crafting — Crafting
 
@@ -430,7 +446,7 @@ Ship it: tutorial, settings, audio, art pass, crash reports with replays, frozen
 
 ## world — World
 
-`··········` 0% · 0 of 7 done · due 2027-06-01
+`··········` 0% · 0 of 8 done · due 2027-06-01
 
 The world beyond the map: factions, traders drawn by wealth, quests, taming.
 
@@ -438,6 +454,7 @@ The world beyond the map: factions, traders drawn by wealth, quests, taming.
 - [ ] `40eed01c` Trade UI and currency <sup>feature · p1 · m · client</sup>
 - [ ] `5a2fda29` Animal taming and pens <sup>feature · p2 · m · engine</sup>
 - [ ] `77750f23` Map size is a world-creation parameter <sup>feature · p2 · s · engine</sup>
+- [ ] `7e45762c` Caverns: a plugin that opens −4, and what comes up from it <sup>content · p3 · m · plugin</sup>
 - [ ] `9077e831` Traders: caravans pulled by wealth <sup>feature · p0 · m · core</sup>
 - [ ] `a27e294c` Factions with relations <sup>feature · p0 · l · engine</sup>
 - [ ] `e2cae1b2` Biomes: other climates as a plugin <sup>content · p2 · m · plugin</sup>
