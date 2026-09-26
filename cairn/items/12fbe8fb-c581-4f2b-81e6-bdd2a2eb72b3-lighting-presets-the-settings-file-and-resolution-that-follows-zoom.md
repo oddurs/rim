@@ -5,7 +5,6 @@ type: feature
 status: backlog
 milestone: lighting
 depends_on:
-- 5a69f9c9-b971-496f-bb3b-e3e1838e2f02
 - 6fd6b13b-1186-46f4-876e-743d173e03d7
 - 8f4f1de8-5784-4377-8cee-25bcf223275e
 created: 2026-09-26
@@ -33,3 +32,7 @@ Performance is the point. A player on the reference laptop must get a lit world 
 - [ ] Presets and overrides round-trip through the settings file (test)
 - [ ] At the minimum zoom the light buffer is 1 texel per cell (test)
 - [ ] Bench numbers for each preset on the dusk scene recorded here
+
+## 2026-09-26
+
+No longer waits on moving lights (5a69f9c9, blocked on fire). The dynamic cap and rays settings arrive with that item; this one covers the rest.

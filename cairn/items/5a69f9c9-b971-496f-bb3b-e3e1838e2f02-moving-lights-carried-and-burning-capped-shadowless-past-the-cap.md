@@ -2,10 +2,11 @@
 id: 5a69f9c9-b971-496f-bb3b-e3e1838e2f02
 title: 'Moving lights: carried and burning, capped, shadowless past the cap'
 type: feature
-status: backlog
+status: blocked
 milestone: lighting
 depends_on:
 - 6fd6b13b-1186-46f4-876e-743d173e03d7
+- 9bd9e8ab-6eef-44dc-b814-0b376ceec1e5
 created: 2026-09-26
 updated: 2026-09-26
 priority: p1
@@ -29,3 +30,7 @@ A colonist carrying a torch at night, a burning roof, fire arrows: these move or
 
 - [ ] 64 moving lights at `medium`: 8 cast shadows, all glow, frame inside budget (bench)
 - [ ] A burning building never triggers more than one static rebake a second (test)
+
+## 2026-09-26
+
+Blocked until something moves while emitting light. Core has no carried light, and burning (9bd9e8ab) is blocked itself, so a dynamic-light path now would have no caller. Everything that emits light today (campfire, stove) is a fixture, which the static bake covers. Unblock when fire spreads or a carried light lands.
