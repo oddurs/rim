@@ -192,6 +192,8 @@ struct Registry {
     window_open: HashMap<String, bool>,
     /// The function that draws a window's chrome around its body.
     chrome: Option<(Rc<str>, Function)>,
+    /// What a context menu request calls (`ui.on_context`): core's menus.
+    context: Option<(Rc<str>, Function)>,
     /// Bound actions in declaration order; a later bind of an id wins.
     binds: Vec<Bind>,
     /// The player's keys for bound ids, from the keybinds file.
@@ -469,7 +471,7 @@ impl UiVm {
             "mount",
             lua.create_function(move |_, (layer, id, opts): (String, String, Option<Table>)| {
                 const LAYERS: &[&str] =
-                    &["top", "bottom", "left", "right", "anchored", "cursor", "modal", "windows", "title"];
+                    &["top", "bottom", "left", "right", "anchored", "cursor", "popup", "modal", "windows", "title"];
                 if !LAYERS.contains(&layer.as_str()) {
                     return Err(rt(format!("unknown layer '{layer}' (one of {})", LAYERS.join(", "))));
                 }
@@ -617,6 +619,19 @@ impl UiVm {
                 let mut reg = r.borrow_mut();
                 let owner: Rc<str> = reg.current.as_str().into();
                 reg.chrome = Some((owner, f));
+                Ok(())
+            })?,
+        )?;
+        // ui.on_context(fn(subject, x, y)): what a right-click on a menu
+        // subject calls. Core's menus module sets it; one handler, the last
+        // set wins.
+        let r = self.reg.clone();
+        ui.set(
+            "on_context",
+            lua.create_function(move |_, f: Function| {
+                let mut reg = r.borrow_mut();
+                let owner: Rc<str> = reg.current.as_str().into();
+                reg.context = Some((owner, f));
                 Ok(())
             })?,
         )?;
@@ -1518,6 +1533,36 @@ impl UiVm {
 
     pub fn take_window_ops(&mut self) -> Vec<WindowOp> {
         std::mem::take(&mut self.reg.borrow_mut().window_ops)
+    }
+
+    /// Ask for the context menu of a subject at a point in logical pixels,
+    /// through the handler `ui.on_context` set. Returns whether one did.
+    pub fn context(
+        &mut self,
+        kind: &str,
+        id: &str,
+        at: (f32, f32),
+        world: &World,
+        client: &ClientView,
+        engine: &EngineInfo,
+    ) -> bool {
+        let Some((_, f)) = self.reg.borrow().context.clone() else { return false };
+        let subject = match self.lua.create_table() {
+            Ok(t) => t,
+            Err(_) => return false,
+        };
+        let _ = subject.set("kind", kind);
+        // Entity ids are integers: pass them as integers, not strings.
+        match id.parse::<i64>() {
+            Ok(n) => {
+                let _ = subject.set("id", n);
+            }
+            Err(_) => {
+                let _ = subject.set("id", id);
+            }
+        }
+        self.call_with(&f, (subject, at.0, at.1), world, client, engine);
+        true
     }
 
     pub fn set_window_open(&mut self, id: &str, open: bool) {

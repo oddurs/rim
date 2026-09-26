@@ -42,6 +42,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `ui.is_open` | `(id: string) -> boolean` | Whether a window is open. |
 | `ui.list` | `(props: ListProps) -> Node` | A scroll area that builds only the rows on screen. Needs an id, count, row_h and row(i); spacers stand in for the rows above and below. |
 | `ui.mount` | `(layer: Layer, id: string, opts: { order: number?, align: string?, refresh: ("frame" \| "fast" \| "slow")? }?) -> ()` | Show a component on a screen layer. refresh says how often it is rebuilt when nothing forces it: every frame, twenty times a second (the default) or four. |
+| `ui.on_context` | `(handler: (subject: { kind: string, id: any }, x: number, y: number) -> ()) -> ()` | What a right-click on a node with a menu subject (menu = { kind, id }) calls, with the point in logical pixels. Core's menus module sets it; the last one set wins. |
 | `ui.open` | `(id: string) -> ()` | Open a window (and bring it to the front). |
 | `ui.remove` | `(id: string) -> ()` | Hide a node by id. |
 | `ui.replace` | `(id: string, build: (view: any) -> Node?) -> ()` | Take over a node by id. |

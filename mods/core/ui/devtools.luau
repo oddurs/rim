@@ -104,7 +104,16 @@ ui.window("core:gallery", { title = t("core:gallery.title", "Kit gallery"), w = 
 			kit.bar({ label = t("core:gallery.low", "low"), value = 0.12, color = "bad" }),
 		}),
 		row({ gap = "m", align = "start" }, {
-			kit.menu({ items = { { label = t("core:gallery.menu_item", "Menu item") }, { label = t("core:gallery.another", "Another") }, { label = t("core:gallery.disabled", "Disabled"), disabled = true } } }),
+			kit.menu({
+				subject = t("core:gallery.menu_subject", "Oak tree"),
+				actor = t("core:gallery.menu_actor", "Gunnar"),
+				hi = 1,
+				groups = {
+					{ { label = t("core:gallery.menu_item", "Gather branches"), tone = "primary", trailing = "1" } },
+					{ { label = t("core:gallery.another", "Chop"), disabled = t("core:gallery.no_axe", "no axe") } },
+					{ { label = t("core:gallery.disabled", "Fell now"), tone = "damaging", trailing = "2" } },
+				},
+			}),
 			col({ gap = "xs" }, {
 				kit.toast({ text = t("core:gallery.toast_info", "An info toast"), kind = "info" }),
 				kit.toast({ text = t("core:gallery.toast_good", "Something good happened"), kind = "good" }),

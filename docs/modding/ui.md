@@ -109,6 +109,8 @@ ui.mount("windows", "my_mod:greeting")
 | `hover`, `press`, `focus` | Colour changes for each state: `{ bg = "surface_hover" }` |
 | `on_click`, `on_right_click` | Functions called when clicked |
 | `on_hover` | Function called once when the pointer comes onto the node |
+| `menu` | A context menu subject, `{ kind = ..., id = ... }`: a right-click here opens its menu |
+| `at`, `on_key`, `on_outside` | Popup roots: where to open (`{ x, y }`), every named key while open, a press anywhere else |
 | `tooltip` | Text shown after a short hover |
 | `handle` | Window chrome: `move`, `resize` or `close` (see Windows) |
 | `src`, `tint` | Image: `src = "mod:name"` names a PNG under that mod's `ui/img/`; `tint = true` draws it in the text colour (see Images) |
@@ -259,6 +261,61 @@ Ctrl+= and Ctrl+- step it and Ctrl+0 resets it. It is saved as `ui_scale`
 in the player's `settings.toml`, and `--ui-scale` on the command line
 overrides it for a run. `view.ui_scale()` reads it and `act.ui_scale(s)`
 sets it. Layout and hit testing both follow the scale.
+
+### Context menus
+
+One menu serves everything the player can point at
+([`menus.luau`](../../mods/core/ui/menus.luau), drawn with `kit.menu`). Give
+a node a subject and a right-click on it (or anything inside it) opens the
+menu for that subject:
+
+```lua
+ui.define("my_mod:crate", function(view)
+	return ui.row({ menu = { kind = "my_mod:crate", id = 1 }, pad = "item", ui.text({ "A crate" }) })
+end)
+ui.mount("top", "my_mod:crate")
+```
+
+The rows come from providers, registered by kind, and a mod adds to a menu
+without owning it:
+
+```lua
+local menus = require("@core/ui/menus")
+menus.add("thing", {
+	id = "my_mod:check_fuel",
+	label = "Check fuel",
+	group = "manage", -- do | work | manage | damaging
+	applies = function(ctx) return ctx.subject.def == "my_mod:kiln" end,
+	disabled = function(ctx) return #ctx.actors == 0 and "no one selected" end,
+	run = function(ctx) ui.open("my_mod:kiln") end,
+})
+```
+
+`ctx` holds the subject's `kind`, `id`, its table (`subject`, found by the
+kind's `resolve`), and `actors`, the selected ids. `menus.kind(name, {
+resolve, caption, actor })` describes a kind once: how to find its subject,
+and what the menu's caption says. A provider can give several rows with
+`rows = fn(ctx)` instead of `label` and `run`.
+
+Rows sort into four groups, always in this order: **do** (act now),
+**work** (mark for work), **manage** (look and set), **damaging** (take
+away). A hairline separates the groups. One row is primary, marked with a
+dot: the first flagged by its provider, else the first enabled row that
+acts now, and never a damaging one. A disabled row stays, with its reason
+("no axe") where a key would be.
+
+The menu opens 4 px from the pointer and flips to stay on screen. While it
+is open it takes the keys: the arrows move, Enter picks, 1–9 pick the nth
+row that can run, a letter jumps, Escape closes. A click outside closes it,
+and pressing on a subject, dragging onto a row and letting go picks that
+row. Providers run once, when it opens; a closed menu builds nothing. Rows
+are verbs first and three words at most, and name the object only when the
+caption doesn't.
+
+The engine side is general: any node's `menu` subject calls the handler
+`ui.on_context` set (core's menus), and a `popup` layer places a root at
+its `at`, taking keys through `on_key` and hearing a press elsewhere
+through `on_outside`.
 
 ### The inspector
 

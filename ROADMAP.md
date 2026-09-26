@@ -62,6 +62,19 @@ Hands first. The colonist wakes with nothing (pillar 93f291d5), and today nothin
 - [x] `ccd44902` Core vocabulary: the gather designation and tool tag names <sup>content · p0 · s · core</sup>
 - [x] `e3846c47` mods/primitive: the stone age as a plugin <sup>content · p0 · l · plugin</sup>
 
+## pointer — Pointer and Orders
+
+`··········` 0% · 0 of 6 done
+
+The map should answer a mouse and a trackpad the way each platform taught its users, and a right-click should never destroy anything. Design: the Pointer and Orders artifact (https://claude.ai/artifact/ShFMN72nbVYERCY4L9nwyN).
+
+- [ ] `2f756dfc` Pinch to zoom on macOS <sup>feature · p2 · s · client</sup>
+- [ ] `64a0648e` Context menus across the interface: colonists, zones, tray tiles, news <sup>feature · p1 · m · core</sup>
+- [ ] `7638bdbb` Undo the last order <sup>feature · p2 · m · engine</sup>
+- [ ] `9aa55d96` Right-click is safe: every order is an option, damage only by choice <sup>bug · p0 · m · engine</sup>
+- [ ] `fda56c8e` The camera answers a mouse and a trackpad <sup>feature · p0 · m · client</sup>
+- [ ] `3b1726ff` Context menus: one component, subjects and providers <sup>feature · p0 · m · engine</sup>
+
 ## castaway — Castaway
 
 `##########` 100% · 17 of 17 done · due 2026-10-15
