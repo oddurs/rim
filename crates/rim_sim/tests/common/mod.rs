@@ -47,6 +47,21 @@ pub fn test_mods(name: &str, ship: &[&str], extra: &[(&str, &[(&str, &str)])]) -
     dir
 }
 
+/// With the stone age loaded, an oak waits for an axe and granite for a
+/// hammerstone. Hand every colonist both, so a test that chops, mines and
+/// builds still does. Without the plugin, nothing changes.
+pub fn arm(sim: &mut rim_sim::Sim) {
+    let d = &sim.world.defs;
+    let tools: Vec<_> =
+        ["primitive:hand_axe", "primitive:hammerstone"].iter().filter_map(|id| d.thing_id(id)).collect();
+    for c in sim.world.colonists().collect::<Vec<_>>() {
+        let Some(at) = sim.world.pawn_pos(c) else { continue };
+        for &t in &tools {
+            sim.world.place_item(t, at, 1);
+        }
+    }
+}
+
 /// Move every entity into a fresh hecs world, last spawned first, keeping
 /// its id. This is the worst a load can do to hecs's internal order.
 pub fn respawn_reversed(sim: &mut rim_sim::Sim) {

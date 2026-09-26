@@ -53,7 +53,32 @@ station = "crafting:hand"
 inputs = [{ thing = "chip", count = 1 }]
 outputs = [{ thing = "blade" }]
 work = 10
-requires = ["nope"]
+work_type = "nope"
+
+[[thing]]
+id = "hammer"
+label = "hammer"
+color = "#555555"
+category = "item"
+look.layers = [{ draw = "fill" }]
+tool = { tags = ["pounding"] }
+
+[[crafting.recipe]]
+id = "hammer"
+label = "hammer"
+station = "crafting:hand"
+inputs = [{ thing = "chip", count = 1 }]
+outputs = [{ thing = "hammer" }]
+work = 60
+
+[[crafting.recipe]]
+id = "struck"
+label = "struck blade"
+station = "crafting:hand"
+inputs = [{ tag = "shard", count = 2 }]
+outputs = [{ thing = "blade" }]
+work = 60
+requires = ["pounding"]
 
 [[crafting.recipe]]
 id = "plank"
@@ -373,8 +398,24 @@ fn a_bill_removed_as_it_finishes_is_still_made() {
     assert_eq!(count(&s, "kit:blade"), 1, "the chips went in, so the blade comes out");
 }
 
-/// A recipe the engine refuses is paused, with the engine's reason on one
-/// line, not a stack trace in the save.
+/// A bill for a tool nobody has doesn't hold the station: the bill below,
+/// which makes the tool, runs first, and then the one above.
+#[test]
+fn a_bill_waiting_on_a_tool_lets_the_one_that_makes_it_run() {
+    let (mut s, founder, spot) = world(&kit_mods("craft-tool-order"), "crafting:spot");
+    let home = s.world.pawn_pos(founder).unwrap();
+    put(&mut s, "kit:chip", 3, home);
+    add_bill(&mut s, spot, "kit:struck");
+    add_bill(&mut s, spot, "kit:hammer");
+    steps(&mut s, 200);
+    assert_eq!(field(&first_bill(&s, spot), "why"), Some(&Data::Str("needs a pounding tool".into())));
+    assert!(run_until(&mut s, 12_000, |s| count(s, "kit:blade") == 1), "the hammer, then the blade");
+    assert_eq!(count(&s, "kit:hammer"), 1);
+}
+
+/// A recipe the engine refuses (here, under a work type that doesn't exist)
+/// is paused, with the engine's reason on one line, not a stack trace in
+/// the save.
 #[test]
 fn a_refused_recipe_is_paused_with_the_reason() {
     let (mut s, founder, spot) = world(&kit_mods("craft-refused"), "crafting:spot");

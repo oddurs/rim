@@ -13,9 +13,10 @@ fn mods() -> std::path::PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mods")
 }
 
-/// A game with the founder alone, so nobody else takes the job.
+/// A game with the founder alone, so nobody else takes the job. Core
+/// alone too: these are core's chop and mine, which the stone age gates.
 fn sim() -> (Sim, Entity) {
-    let mut s = Sim::new(&mods(), 21).expect("mods load");
+    let mut s = Sim::with_mods(&mods(), 21, &|m| m == "core").expect("mods load");
     s.step();
     let founder = s.world.colonists().next().expect("a founder");
     for e in s.world.pawns.clone() {
@@ -176,7 +177,7 @@ fn work_survives_a_save() {
     let (tree, _, _) = half_chop(&mut s, founder);
     let before = work(&s, tree).unwrap();
     let snap = Snapshot::capture(&s);
-    let loaded = snap.restore(&mods(), &|_| true).expect("restores");
+    let loaded = snap.restore(&mods(), &|m| m == "core").expect("restores");
     assert_eq!(work(&loaded, tree), Some(before));
     assert_eq!(Snapshot::capture(&loaded).hash(), snap.hash(), "the same world");
 }
@@ -203,7 +204,7 @@ fn a_format_1_plan_keeps_its_progress() {
         vec![(bp, OldBlueprint { cost: vec![(stone, 5)], delivered: vec![5], work: total, work_left: total - 30 })];
     snap.sections.insert("engine:blueprint".into(), rmp_serde::to_vec_named(&old).unwrap());
 
-    let loaded = snap.restore(&mods(), &|_| true).expect("a format-1 save loads");
+    let loaded = snap.restore(&mods(), &|m| m == "core").expect("a format-1 save loads");
     let k = work(&loaded, bp).expect("its progress moved to Work");
     assert_eq!((k.done, k.total, k.designation), (30, total, None));
     assert_eq!(loaded.world.ecs.get::<&Blueprint>(bp).unwrap().delivered, vec![5]);
@@ -236,7 +237,7 @@ fn a_format_1_chop_keeps_its_progress() {
     }
     snap.sections.insert("engine:blueprint".into(), rmp_serde::to_vec_named(&plans).unwrap());
 
-    let loaded = snap.restore(&mods(), &|_| true).expect("a format-1 save loads");
+    let loaded = snap.restore(&mods(), &|m| m == "core").expect("a format-1 save loads");
     let k = work(&loaded, tree).expect("the job's progress moved to the tree");
     assert_eq!((k.done, k.total, k.designation), (50, hd.work, Some(hd.desig_r)));
 }
@@ -246,7 +247,7 @@ fn a_newer_format_is_refused() {
     let (s, _) = sim();
     let mut snap = Snapshot::capture(&s);
     snap.header.format = rim_sim::snapshot::FORMAT + 1;
-    assert!(snap.restore(&mods(), &|_| true).is_err());
+    assert!(snap.restore(&mods(), &|m| m == "core").is_err());
 }
 
 #[test]

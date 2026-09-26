@@ -18,7 +18,7 @@
 use crate::command::Command;
 use crate::data::{from_lua, to_lua};
 use crate::modloader::{discover, ModManifest};
-use crate::world::{Faction, Pawn};
+use crate::world::{Blueprint, Faction, Held, Pawn, Thing};
 use crate::{IVec, Sim, TICKS_PER_DAY};
 use mlua::{Function, Lua, MultiValue, Table, UserData, UserDataMethods, Value};
 use std::cell::RefCell;
@@ -157,6 +157,54 @@ impl UserData for World {
                 t.push(row)?;
             }
             Ok(t)
+        });
+        // The nearest cell to build on: passable, with nothing standing or
+        // lying there. Rings outward in a fixed order, so it's the same
+        // cell every run, and it draws on no random numbers.
+        m.add_method("open_cell", |_, w, (x, y): (i32, i32)| {
+            let s = w.sim.borrow();
+            let map = &s.world.map;
+            let open =
+                |p: IVec| map.inb(p) && map.passable(p) && map.fixture_at(p).is_none() && map.item_at(p).is_none();
+            let at = IVec::new(x, y);
+            let found = (0..32i32).find_map(|r| {
+                (-r..=r)
+                    .flat_map(|dy| (-r..=r).map(move |dx| (dx, dy)))
+                    .filter(|&(dx, dy)| dx.abs().max(dy.abs()) == r)
+                    .map(|(dx, dy)| at.offset(dx, dy))
+                    .find(|&p| open(p))
+            });
+            Ok(found.map(|p| (p.x, p.y)).unzip())
+        });
+        // Things of one def, built, lying about or in a hand, in entity-id
+        // order: to find the station a test built, or the axe it made. A
+        // held tool's x and y are where it was picked up.
+        m.add_method("things", |lua, w, thing: String| {
+            let s = w.sim.borrow();
+            let d = def(&s, "thing", &thing)?;
+            let mut found: Vec<(hecs::Entity, Thing)> = s
+                .world
+                .ecs
+                .query::<(hecs::Entity, &Thing)>()
+                .iter()
+                .filter(|(_, t)| t.def == d)
+                .map(|(e, t)| (e, t.clone()))
+                .collect();
+            found.sort_by_key(|(e, _)| e.id());
+            let out = lua.create_table()?;
+            for (e, t) in found {
+                let row = lua.create_table()?;
+                row.set("id", e.to_bits().get())?;
+                row.set("x", t.pos.x)?;
+                row.set("y", t.pos.y)?;
+                row.set("count", t.count)?;
+                row.set("hp", t.hp)?;
+                row.set("blueprint", s.world.ecs.get::<&Blueprint>(e).is_ok())?;
+                row.set("held", s.world.ecs.get::<&Held>(e).is_ok())?;
+                row.set("made_of", s.world.made_of(e).map(|m| s.world.defs.thing(m).id.clone()))?;
+                out.push(row)?;
+            }
+            Ok(out)
         });
         m.add_method("count_pawns", |_, w, faction: String| {
             let f = Faction::parse(&faction).ok_or_else(|| rt(format!("unknown faction '{faction}'")))?;

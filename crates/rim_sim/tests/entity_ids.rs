@@ -10,6 +10,7 @@ use std::path::Path;
 fn sim(seed: u64) -> Sim {
     let mods = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mods");
     let mut sim = Sim::new(&mods, seed).expect("mods load");
+    common::arm(&mut sim);
     let chop = sim.world.defs.lookup("designation", "chop").unwrap();
     let wall = sim.world.defs.thing_id("wall").unwrap();
     let wood = sim.world.defs.thing_id("wood").unwrap();

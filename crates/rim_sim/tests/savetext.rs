@@ -39,6 +39,7 @@ fn odd_data() -> Data {
 /// A game with commands in its log and two snapshots, saved at `path`.
 fn a_save(mods: &Path, path: &Path) {
     let mut sim = Sim::new(mods, 3).expect("mods load");
+    common::arm(&mut sim);
     sim.world.data.insert("test:odd".into(), odd_data());
     let mut save = SaveFile::create(path, &mut sim).expect("save created");
     let chop = sim.world.defs.lookup("designation", "chop").unwrap();

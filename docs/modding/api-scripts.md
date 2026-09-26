@@ -27,6 +27,7 @@ are in [Scripting rules](scripting.md).
 | `rim.explain` | `(field: string) -> {Part}` | Each part of a field's outdoor value: its terms, then pushes. |
 | `rim.field` | `(id: string, x: number, y: number) -> number` | A field's value at a cell (temperature, light, ...). |
 | `rim.get_data` | `(key: string) -> any` | A copy of stored script data, or nil. A bare key is your mod's; "weather:forecast" reads another's. |
+| `rim.has_tool` | `(tags: { string }) -> boolean` | Whether some tool in the colony, lying about or in a hand, has every one of these tool tags. False for a tag no tool has. |
 | `rim.hour` | `() -> number` | Hour of the day, 0 to 24 (tick 0 is 06:00). |
 | `rim.indoors` | `(x: number, y: number) -> boolean` | Whether a cell is inside an enclosed room. |
 | `rim.leave_after` | `(id: number, ticks: number) -> ()` | Make a pawn give up and walk off the map after `ticks`. |

@@ -1,9 +1,12 @@
+mod common;
+
 use rim_sim::{Command, Sim, TICKS_PER_DAY};
 use std::path::Path;
 
 fn run(seed: u64, ticks: u64) -> u64 {
     let mods = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mods");
     let mut sim = Sim::new(&mods, seed).expect("mods load");
+    common::arm(&mut sim);
     let chop = sim.world.defs.lookup("designation", "chop").unwrap();
     let wall = sim.world.defs.thing_id("wall").unwrap();
     let wood = sim.world.defs.thing_id("wood").unwrap();
@@ -40,6 +43,7 @@ fn different_seed_different_state() {
 fn commands_applied_while_paused_are_the_same_game() {
     let mods = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mods");
     let orders = |sim: &mut Sim| {
+        common::arm(sim);
         let chop = sim.world.defs.lookup("designation", "chop").unwrap();
         let wall = sim.world.defs.thing_id("wall").unwrap();
         let wood = sim.world.defs.thing_id("wood").unwrap();

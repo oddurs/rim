@@ -1,8 +1,9 @@
-//! The stone age's first tier (mods/primitive): gather with bare hands, and
-//! see the first night through with branches.
+//! The stone age (mods/primitive): gather with bare hands, see the first
+//! night through with branches, and knap the tools that fell and quarry.
 
 mod common;
 
+use rim_sim::data::{Data, Key};
 use rim_sim::hecs::Entity;
 use rim_sim::world::{Blueprint, Thing};
 use rim_sim::{Command, IVec, Sim};
@@ -149,12 +150,71 @@ fn branches_build_walls() {
     );
 }
 
+/// Core's heavy work waits for a tool, and the thing says which.
+#[test]
+fn felling_and_quarrying_wait_for_tools_and_say_so() {
+    let (mut s, founder) = alone(3);
+    let (oak, at) = nearest(&s, "core:tree_oak").expect("an oak");
+    let (rock, rat) = nearest(&s, "core:granite").expect("granite");
+    for (des, p) in [("core:chop", at), ("core:mine", rat)] {
+        let designation = s.world.defs.lookup("designation", des).unwrap();
+        s.push(Command::Designate { designation, a: p, b: p });
+    }
+    s.step();
+    assert_eq!(rim_sim::ai::work_blocked(&s.world, oak).as_deref(), Some("Needs a chopping tool."));
+    assert_eq!(rim_sim::ai::work_blocked(&s.world, rock).as_deref(), Some("Needs a pounding tool."));
+    for _ in 0..3_000 {
+        s.step();
+    }
+    assert!(s.world.thing(oak).is_some() && s.world.thing(rock).is_some(), "nothing bare-handed");
+
+    // A hammerstone breaks stone, slowly; still no axe for the oak.
+    let home = s.world.pawn_pos(founder).unwrap();
+    let hammer = s.world.defs.thing_id("primitive:hammerstone").unwrap();
+    s.world.place_item(hammer, home, 1);
+    assert!(run_until(&mut s, 12_000, |s| s.world.thing(rock).is_none()), "quarried with a hammerstone");
+    assert!(s.world.thing(oak).is_some());
+    assert_eq!(rim_sim::ai::work_blocked(&s.world, oak).as_deref(), Some("Needs a chopping tool."));
+}
+
+/// A tool is made of what it was knapped from: one def, its quality from
+/// the material.
+#[test]
+fn a_hand_axe_is_made_of_its_flint() {
+    let (mut s, founder) = alone(3);
+    let home = s.world.pawn_pos(founder).unwrap();
+    let def = |s: &Sim, id: &str| s.world.defs.thing_id(id).unwrap();
+    let at = (2..10)
+        .flat_map(|d| [home.offset(d, 0), home.offset(-d, 0), home.offset(0, d), home.offset(0, -d)])
+        .find(|&p| s.world.map.passable(p) && s.world.map.fixture_at(p).is_none() && s.world.map.item_at(p).is_none())
+        .expect("room for a spot");
+    let spot = s.world.spawn_fixture_of(def(&s, "crafting:spot"), at, false, None).unwrap();
+    rim_sim::ai::complete_building(&mut s.world, spot);
+    s.world.place_item(def(&s, "primitive:flint"), home, 2);
+    s.world.place_item(def(&s, "primitive:hammerstone"), home, 1);
+    let data = [
+        (Key::Str("site".into()), Data::Int(spot.to_bits().get() as i64)),
+        (Key::Str("recipe".into()), Data::Str("primitive:hand_axe".into())),
+    ];
+    s.push(Command::ModEvent { name: "crafting:add_bill".into(), data: Some(Data::Table(data.into_iter().collect())) });
+    let axe = def(&s, "primitive:hand_axe");
+    let made = |s: &Sim| s.world.ecs.query::<&Thing>().iter().any(|t| t.def == axe);
+    assert!(run_until(&mut s, 12_000, made), "a hand axe is knapped");
+    let (e, hp) =
+        s.world.ecs.query::<(Entity, &Thing)>().iter().find(|(_, t)| t.def == axe).map(|(e, t)| (e, t.hp)).unwrap();
+    assert_eq!(s.world.made_of(e), Some(def(&s, "primitive:flint")));
+    assert_eq!(hp, 60, "flint's hp factor is 1");
+    assert!((s.world.tool_speed(e) - 0.6).abs() < 1e-9, "the axe's 0.6 at flint's 1.0");
+}
+
 /// With the plugin removed, core plays exactly as it did (DESIGN.md §5).
 #[test]
 fn core_alone_is_untouched() {
     let s = Sim::build(&common::mods(), 3, &|m| m == "core", 250).unwrap();
     let d = &s.world.defs;
     assert_eq!(d.thing(d.thing_id("tree_oak").unwrap()).harvest.len(), 1);
+    assert!(d.thing(d.thing_id("tree_oak").unwrap()).harvest[0].requires.is_empty(), "chopped bare-handed");
+    assert!(d.thing(d.thing_id("granite").unwrap()).harvest[0].requires.is_empty(), "mined bare-handed");
     let wood = d.thing_id("wood").unwrap();
     assert_eq!(d.thing(d.thing_id("campfire").unwrap()).build.as_ref().unwrap().cost_r, vec![(wood, 15)]);
 }

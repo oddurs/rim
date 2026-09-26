@@ -2,5 +2,5 @@ id = "primitive"
 name = "Primitive"
 version = "0.1.0"
 api = "0.6"
-description = "The stone age: gather with your hands, and build your first shelter and fire out of branches."
-depends = ["core"]
+description = "The stone age: gather with your hands, build a first shelter and fire out of branches, and knap flint into the tools that fell trees and break stone."
+depends = ["core", "crafting"]

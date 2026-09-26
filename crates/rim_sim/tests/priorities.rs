@@ -37,7 +37,8 @@ order = 5
 /// A colony with wood to build with, a row of walls planned and every tree
 /// around designated for chopping: both kinds of work are waiting.
 fn busy_colony(build: u8, chop: u8) -> (Sim, rim_sim::hecs::Entity) {
-    let mut sim = Sim::new(&common::mods(), 2).unwrap();
+    // Core alone: with the stone age on, the oaks would wait for an axe.
+    let mut sim = Sim::with_mods(&common::mods(), 2, &|m| m == "core").unwrap();
     let defs = sim.world.defs.clone();
     let pawn = sim.world.colonists().next().unwrap();
     let c = sim.world.pawn_pos(pawn).unwrap();

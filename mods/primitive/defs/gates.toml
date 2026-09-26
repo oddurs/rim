@@ -1,0 +1,18 @@
+# Core's heavy work, gated behind the tools (DESIGN.md §4e). Core alone
+# gates nothing; with the stone age on, a bare-handed colonist gathers, and
+# an oak waits for an axe. The toolbar still marks them: the thing says
+# what it needs ("Needs a chopping tool.").
+
+# The oak has two harvests (gather, from wild.toml, and core's chop), so
+# `edit` names the one it means.
+[[patch]]
+target = "thing/core:tree_oak"
+
+[[patch.edit]]
+list = "harvest"
+match = { designation = "chop" }
+set = { requires = ["chopping"] }
+
+[[patch]]
+target = "thing/core:granite"
+set = { harvest = { requires = ["pounding"] } }

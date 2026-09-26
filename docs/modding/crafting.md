@@ -113,9 +113,11 @@ how many:
 Bills run top first. The station takes the first bill that can run, and
 posts it as a work order; the colonists bring the inputs and work it, and
 the outputs appear at the station. A bill that can't run says why in the
-panel: "no sharp_stone", "1 of 2 wood", "have 5". A tool the order
-needs and no colonist has shows on the station itself: "Needs a pounding
-tool." A recipe the engine refuses, such as one that
+panel: "no sharp_stone", "1 of 2 wood", "have 5", or "needs a cutting tool"
+when no tool in the colony has what the recipe `requires`, so a bill for
+the tool itself, lower down, isn't kept waiting behind it. A tool that
+exists but can't be had (held, or out of reach) shows on the station
+itself: "Needs a free pounding tool." A recipe the engine refuses, such as one that
 requires a tool tag no tool has, is paused with the reason. Pausing or
 removing the bill being made takes its order down, and
 what was brought is put back on the ground.
@@ -138,6 +140,10 @@ bills.remove(station, id)
 bills.of(station)                                   -- its bills, top first
 bills.recipes_at("crafting:workbench")              -- recipe ids, in load order
 ```
+
+When an order is done, `crafting:made` fires once for each output: `{ site,
+recipe, thing, count, made_of }`, for a mod that marks a first tool or
+counts what was made.
 
 The panel's buttons send `crafting:add_bill`, `crafting:set_bill`,
 `crafting:move_bill` and `crafting:remove_bill`, which call these.

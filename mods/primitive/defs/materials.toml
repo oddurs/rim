@@ -31,7 +31,7 @@ market_value = 0.3
 stack_limit = 75
 tags = ["fibre"]
 
-# A hammerstone, once tools exist.
+# Shaped into a hammerstone (tools.toml), or bound into a maul.
 [[thing]]
 id = "stones"
 label = "stones"
@@ -59,3 +59,6 @@ look.layers = [
 market_value = 1.5
 stack_limit = 50
 tags = ["knappable"]
+# Lithic: what an edge is made of. What's knapped from flint is flint, and
+# takes its hp and its tool_speed from it (bone, poorer, comes later).
+stuff = { categories = ["lithic"], factors = { hp = 1.0, tool_speed = 1.0 } }

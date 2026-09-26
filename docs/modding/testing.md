@@ -119,6 +119,8 @@ loaded mod defines that id.
 | `w:tick()`, `w:day()`, `w:seed()`, `w:hash()` | Time, and the state hash (equal hashes, equal worlds) |
 | `w:colony_center()` | The colonists' average cell: `x, y` |
 | `w:colonists()` | `{ id, name, hp, x, y }` for each colonist |
+| `w:open_cell(x, y)` | The nearest cell with nothing on it, to build on: `x, y`, or nil |
+| `w:things(thing)` | `{ id, x, y, count, hp, blueprint, held, made_of }` for each thing of a def, in id order. A held tool's `x, y` is where it was picked up |
 | `w:count_pawns(faction)` | Living pawns of `"player"`, `"hostile"` or `"wild"` |
 | `w:spawn_pawn(creature, faction, x, y)` | Add a creature now; returns its id |
 | `w:spawn_item(thing, x, y, count)` | Drop items near a cell; returns how many didn't fit |

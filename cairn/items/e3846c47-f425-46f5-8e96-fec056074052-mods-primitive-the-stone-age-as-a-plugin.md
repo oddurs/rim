@@ -5,9 +5,12 @@ type: content
 status: backlog
 milestone: stone-age
 depends_on:
-- 4e9d5a12-ad0c-4170-bc53-5d8c2a5328a2
-- 7016d86b-72d5-4d1f-a5ee-3f14e376fe7f
 - 049e2f73-0d64-48ff-bf2e-21264f765d35
+- 4675019b-c017-47e7-b148-b12e4be58bda
+- 4e9d5a12-ad0c-4170-bc53-5d8c2a5328a2
+- 61c93a4e-e2d6-4422-9c53-5a3412d0a6f2
+- 7016d86b-72d5-4d1f-a5ee-3f14e376fe7f
+- 89f6d138-26e0-4d93-ad32-39c320d6e76f
 - ccd44902-24d5-4855-9def-406d1ed39f4a
 created: 2026-09-24
 updated: 2026-09-25
@@ -79,14 +82,18 @@ Hunting stays barehanded (a spear waits for equipment, d5d0ea1f).
 ## Acceptance criteria
 
 - [x] Branches, fibre and stones are gatherable by hand, and oak branches regrow
-- [ ] A flint flake and a hand axe are made at a free ground station
-- [ ] Chopping and mining are gated behind the tools, and say why when blocked
-- [ ] Tool quality comes from material, not duplicate defs
+- [x] A flint flake and a hand axe are made at a free ground station
+- [x] Chopping and mining are gated behind the tools, and say why when blocked
+- [x] Tool quality comes from material, not duplicate defs
 - [x] A branch shelter and campfire are buildable with no tools
 - [ ] Clay is dug with a digging stick, builds cob walls, and fires into a pot at a campfire
-- [ ] A `rim test` scene goes from bare hands to a felled tree
+- [x] A `rim test` scene goes from bare hands to a felled tree
 - [ ] Core alone still plays with the plugin removed (§5 CI smoke test)
 
 ## 2026-09-25
 
 First tier landed as mods/primitive (gather by hand): branches, fibre, loose stones and flint as items; deadfall, tall grass, loose stones and flint nodules as wild things with core:gather harvests and spawns; oak branches that regrow; branches as structural stuff; a campfire of 10 branches. Nothing is gated yet, so core's bare-hand chop and mine still work until tools (7016d86b). With the plugin on, an unmarked oak's right-click gathers (the gentlest harvest), so tests of core's own rules now load core alone. Loose stones spawn on dirt and sand only: rock_floor is all granite.
+
+## 2026-09-25
+
+Split into three: stone tools and the gates (4675019b), clay (89f6d138) and bone (61c93a4e). Each is a PR of its own. This item stays as the umbrella: its criteria are ticked as the parts land, and 'core alone still plays' is checked once at the end.

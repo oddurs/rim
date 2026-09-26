@@ -263,7 +263,8 @@ fn a_huge_shift_goes_to_the_end_of_the_scale() {
 /// fell, chop set sooner than build.
 fn first_work(stance_id: Option<&str>) -> &'static str {
     use rim_sim::world::Job;
-    let mut s = Sim::new(&common::mods(), 2).unwrap();
+    // Core alone: with the stone age on, the oaks would wait for an axe.
+    let mut s = Sim::with_mods(&common::mods(), 2, &|m| m == "core").unwrap();
     let defs = s.world.defs.clone();
     let pawn = s.world.colonists().next().unwrap();
     let c = s.world.pawn_pos(pawn).unwrap();

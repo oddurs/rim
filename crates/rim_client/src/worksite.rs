@@ -532,10 +532,11 @@ mod tests {
     use super::*;
     use rim_sim::{Command, Sim};
 
-    /// The founder alone, told to fell the nearest oak it can reach.
+    /// The founder alone, told to fell the nearest oak it can reach. Core
+    /// alone, whose oaks need no axe.
     fn chopping(seed: u64) -> (Sim, Entity, u32) {
         let mods = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mods");
-        let mut s = Sim::new(&mods, seed).unwrap();
+        let mut s = Sim::with_mods(&mods, seed, &|m| m == "core").unwrap();
         s.step();
         let founder = s.world.colonists().next().unwrap();
         for e in s.world.pawns.clone() {

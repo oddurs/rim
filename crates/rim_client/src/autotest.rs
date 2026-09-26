@@ -284,6 +284,10 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
 
     let oak = defs.thing_id("tree_oak").unwrap();
     let hp = t.pawn(founder).pos;
+    // With the stone age on, an oak waits for an axe: hand one over.
+    if let Some(axe) = defs.thing_id("primitive:hand_axe") {
+        t.app.sim.world.place_item(axe, hp, 1);
+    }
     let tree = {
         let w = t.w();
         let mut best: Option<(u32, Entity, IVec)> = None;

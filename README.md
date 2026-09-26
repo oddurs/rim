@@ -29,8 +29,9 @@ and adds cold snaps and heat waves, using only the public API. Remove it and
 core's mild climate remains. See [Modding climate and weather](docs/modding/weather.md).
 
 The stone age is another: `mods/primitive` has you gather branches, fibre,
-stones and flint with your hands, and build a first shelter and campfire out
-of branches. Remove it and core's bare-handed felling and quarrying remain.
+stones and flint with your hands, build a first shelter and campfire out of
+branches, and knap flint into the axe an oak now waits for. Remove it and
+core's bare-handed felling and quarrying remain.
 `mods/crafting` gives stations bills, "make five, then stop", on the engine's
 work orders; recipes are data any mod adds. See [Crafting](docs/modding/crafting.md).
 
