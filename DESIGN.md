@@ -1225,8 +1225,37 @@ The cap stands in for a roof.
   and cob, shingle on logs, turf on dry stone, slate on ashlar, tile on
   brick). A hearth gets a chimney. This is client-only and derived, and is
   rebuilt only when rooms are.
-- **Roofs still cost nothing to build.** Explicit roofs stay a plugin
-  (§4), and this is the question it would hook.
+- **Roofs still cost nothing to build.** An implicit roof is free. A built
+  floor on the level above is an explicit one (below).
+
+### Storeys: one span rule for roofs and floors
+
+Depth (§6d) makes the map a stack of levels joined at stairs, and building
+up puts a floor over air. Holding up a floor and holding up a roof are the
+same question, so they share one field, worked out per level (per `Map`):
+
+```
+covered(z, c)  = some support on z within its span of c
+roofed(z, c)   = covered(z, c)  or  the cell at (z+1, c) is solid or has a floor
+floor at (z+1, c) may be built  when  covered(z, c)  or  a support stands at (z, c)
+```
+
+- **Underground is roofed by rock.** A cell below a solid cell is roofed
+  whatever its distance from a wall. A pit dug to the surface isn't.
+- **The implicit roof marks where a storey can go.** Every cell a room's
+  walls roof is a cell that can carry the next floor. A floor built there
+  becomes that room's explicit roof, and the storey above has rooms of its
+  own, found on its own level.
+- **A house spans levels.** It is the set of indoor rooms that share walls
+  on a level, or that stand directly above one another. Its roof is drawn
+  over its topmost storey, and hovering it lifts the whole house.
+- **Seeing storeys.** One level is drawn at a time (§6d): the levels above
+  are cut away, so a plan is always a true floor plan. Walls on the level
+  below show through air as a dim ghost of their contour, which is how a
+  gallery or a stairwell reads. Stairs are a plan symbol: treads, a break
+  line, and an arrow marked UP or DN.
+- **Rooms and roles stay per level.** Span, roles and gaps are pure
+  functions of one `Map`, so the level stack wraps them unchanged.
 
 ### Tension: do rooms know what they are for?
 

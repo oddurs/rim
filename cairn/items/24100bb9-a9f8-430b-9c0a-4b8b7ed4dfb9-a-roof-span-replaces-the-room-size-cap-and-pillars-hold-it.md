@@ -31,3 +31,7 @@ A room is indoors when it is enclosed and at most 400 cells (§4). The cap can't
 - [ ] The stone_age and balance sweeps are unchanged within noise (the bot's huts are within span)
 - [ ] Room rebuild stays within 10% of today's on the 200×200 bench (0211's numbers)
 - [ ] The determinism test passes
+
+## 2026-09-26
+
+Depth (DESIGN §6d, milestone e58c8ff7) stacks levels. Span is computed per Map as covered(z,c); roofed(z,c) also holds when the cell above is solid or floored, and building up reuses covered() to allow a floor at z+1 (§6c Storeys). Keep it a pure function of one Map.

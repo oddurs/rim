@@ -30,3 +30,7 @@ Once the primitives exist, every core def should use them: walls as masses, open
 
 - [ ] The autotest gallery screenshot shows every core building in the plan style
 - [ ] docs/modding/looks.md documents joins, orientation, patterns and weights with core's defs as its samples
+
+## 2026-09-26
+
+Stairs get a plan look (treads, break line, UP/DN arrow) once Depth's portals exist; not in this item.
