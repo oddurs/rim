@@ -939,6 +939,24 @@ impl World {
 
     /// `stuff` is the material chosen for a buildable that takes one. It is
     /// ignored for anything with a fixed recipe.
+    /// Whether the colony has somewhere to sleep out of the weather: a built
+    /// bed in an enclosed room. Until it does, raising one is urgent work.
+    /// Reads the rooms as built at the start of the step: rebuilding them
+    /// mid-tick would renumber rooms under the fields' room values.
+    pub fn has_shelter(&self) -> bool {
+        self.ecs
+            .query::<&Thing>()
+            .without::<&Blueprint>()
+            .iter()
+            .any(|t| self.defs.thing(t.def).bed.is_some() && self.map.room_at(t.pos).is_some_and(|r| r.enclosed()))
+    }
+
+    /// Whether the colony has built something that comforts a need (a fire
+    /// for warmth). Until it does, raising one is urgent work.
+    pub fn has_comfort(&self) -> bool {
+        self.ecs.query::<&Thing>().without::<&Blueprint>().iter().any(|t| self.defs.thing(t.def).comforts)
+    }
+
     /// Where a pawn stands to work on a thing: next to any cell it covers.
     pub fn reach_goal(&self, t: &Thing) -> crate::path::Goal {
         match self.defs.thing(t.def).size {

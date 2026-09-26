@@ -206,12 +206,11 @@ The log is the save and snapshots are a cache (DESIGN.md §7a): a colony is alwa
 
 ## colony — Colony
 
-`##########` 92% · 22 of 24 done · due 2026-12-15
+`##########` 96% · 23 of 24 done · due 2026-12-15
 
 Running more than one person: stockpiles, hauling, work priorities, skills, colonist panels.
 
 - [ ] `21fc9ea3` Storyteller pressure on a lone stone-age colony <sup>chore · p1 · m · core</sup>
-- [ ] `8b2e05db` Work choice: an urgency term, so shelter beats nearby grass <sup>feature · p2 · m · engine</sup>
 - [x] `03ad3e3a` Work types and priorities per colonist <sup>feature · p0 · m · engine</sup>
 - [x] `03b9b791` Derived fields and feels-like temperature <sup>feature · p1 · s · engine</sup>
 - [x] `0cb48faf` Priority rules and colony stances <sup>feature · p1 · m · engine</sup>
@@ -223,6 +222,7 @@ Running more than one person: stockpiles, hauling, work priorities, skills, colo
 - [x] `69494df0` Strings through one door <sup>chore · p2 · s · core</sup>
 - [x] `8376a04f` Drafty rooms: room leak from terms <sup>feature · p3 · s · engine</sup>
 - [x] `87d9849d` Inter as the UI font, shipped by core <sup>feature · p1 · s · core</sup>
+- [x] `8b2e05db` Work choice: an urgency term, so shelter beats nearby grass <sup>feature · p2 · m · engine</sup>
 - [x] `8cf4db07` Multi-cell things occupy every cell of their footprint <sup>feature · p3 · m · engine</sup>
 - [x] `8d551753` Hauling: colonists carry loose items to stockpiles <sup>feature · p0 · m · engine</sup>
 - [x] `99bbff49` CI in half the time <sup>chore · p1 · s · tooling</sup>

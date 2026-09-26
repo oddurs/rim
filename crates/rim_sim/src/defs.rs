@@ -178,6 +178,11 @@ pub struct ThingDef {
     /// leaks a little, a window leaks a lot and lets daylight through.
     #[serde(default)]
     pub boundary: Vec<BoundaryDef>,
+    /// It warms (or otherwise comforts) what a need reads: it emits a
+    /// positive amount into a field a need is satisfied by, or that one is
+    /// worked out from. Until the colony has one, building one is urgent.
+    #[serde(skip)]
+    pub comforts: bool,
     #[serde(skip)]
     pub rgb: [u8; 3],
     #[serde(skip)]
@@ -1425,6 +1430,16 @@ impl DefDb {
                 h.requires_r = mask(&h.requires);
             }
         }
+        // Fields a need is satisfied by, and those they're worked out from.
+        let comfort_fields: Vec<usize> = self
+            .needs
+            .iter()
+            .filter(|n| n.satisfier == Satisfier::Field)
+            .flat_map(|n| {
+                let f = n.field_r as usize;
+                std::iter::once(f).chain(self.fields[f].terms.reads())
+            })
+            .collect();
         // Shelter and derived fields are worked out, not stamped or kept
         // per room: an emitter or a boundary piece on one would do nothing.
         let computed: Vec<Option<&str>> =
@@ -1480,6 +1495,7 @@ impl DefDb {
             for em in &mut d.emit {
                 em.field_r = get("field", &em.field, &ctx)?;
             }
+            d.comforts = d.emit.iter().any(|em| em.amount > 0.0 && comfort_fields.contains(&(em.field_r as usize)));
             let fed = d.boundary.iter().map(|b| b.field_r).chain(d.emit.iter().map(|e| e.field_r));
             if let Some(f) = fed.filter_map(|f| computed[f as usize]).next() {
                 return Err(format!(
