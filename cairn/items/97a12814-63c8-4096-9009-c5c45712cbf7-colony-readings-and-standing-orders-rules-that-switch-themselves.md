@@ -2,10 +2,12 @@
 id: 97a12814-63c8-4096-9009-c5c45712cbf7
 title: 'Colony readings and standing orders: rules that switch themselves'
 type: feature
-status: backlog
+status: done
 milestone: work
+assignee: Oddur Sigurdsson
 created: 2026-09-26
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p0
 api: additive
 effort: m
@@ -28,8 +30,8 @@ area: ai
 
 ## Acceptance criteria
 
-- [ ] A rule with `below = 5, until = 8` turns on at 4.9, stays on at 6, and turns off at 8 (test)
-- [ ] Setting a reading that crosses no mark doesn't re-evaluate rules (counted, like `Rules::evaluations`)
-- [ ] A disabled rule never applies and survives save and load (test)
-- [ ] `rule_started` and `rule_stopped` fire once per crossing (test)
-- [ ] Determinism test passes with a scripted reading
+- [x] A rule with `below = 5, until = 8` turns on at 4.9, stays on at 6, and turns off at 8 (test)
+- [x] Setting a reading that crosses no mark doesn't re-evaluate rules (counted, like `Rules::evaluations`)
+- [x] A disabled rule never applies and survives save and load (test)
+- [x] `rule_started` and `rule_stopped` fire once per crossing (test)
+- [x] Determinism test passes with a scripted reading

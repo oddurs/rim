@@ -953,16 +953,54 @@ pub struct WhenDef {
     /// A need of the colonist's, below or above a fraction of full.
     #[serde(default)]
     pub need: Option<String>,
+    /// A colony reading scripts publish ("core:food_days"), below or above
+    /// a value: a standing order (DESIGN.md §4d).
+    #[serde(default)]
+    pub reading: Option<String>,
     #[serde(default)]
     pub below: Option<f64>,
     #[serde(default)]
     pub above: Option<f64>,
+    /// For a reading: once on, the rule holds until the reading gets back
+    /// past this, so it doesn't flap at the mark (on under 5, off at 8).
+    #[serde(default)]
+    pub until: Option<f64>,
+    /// A reading's marks in thousandths, as readings are kept: (on, off).
+    #[serde(skip)]
+    pub band_r: Option<Band>,
     #[serde(skip)]
     pub season_r: Vec<u32>,
     #[serde(skip)]
     pub stance_r: Option<DefId>,
     #[serde(skip)]
     pub need_r: Option<DefId>,
+}
+
+/// Where a reading rule turns on and off, in thousandths. `Below` holds
+/// from under `on` until the reading is back at `off` or more; `Above`
+/// the other way round.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Band {
+    Below { on: i64, off: i64 },
+    Above { on: i64, off: i64 },
+}
+
+impl Band {
+    /// Whether the rule holds at `v`, given whether it held before.
+    pub fn holds(self, v: i64, was: bool) -> bool {
+        match (self, was) {
+            (Band::Below { off, .. }, true) => v < off,
+            (Band::Below { on, .. }, false) => v < on,
+            (Band::Above { off, .. }, true) => v > off,
+            (Band::Above { on, .. }, false) => v > on,
+        }
+    }
+}
+
+/// A reading as the sim keeps it: thousandths, so it hashes and compares
+/// exactly on every platform.
+pub fn milli(v: f64) -> i64 {
+    (v * 1000.0).round() as i64
 }
 
 /// Changes work priorities while its `when` holds: `set` puts a work type
@@ -1252,6 +1290,7 @@ impl DefDb {
             "work_type" => self.work_types[i].id.clone(),
             "stance" => self.stances[i].id.clone(),
             "room_role" => self.room_roles[i].id.clone(),
+            "priority_rule" => self.priority_rules[i].id.clone(),
             "work_style" => self.work_styles[i].id.clone(),
             "skill" => self.skills[i].id.clone(),
             "field" => self.fields[i].id.clone(),
@@ -1316,6 +1355,9 @@ impl DefDb {
         }
         for (i, d) in self.room_roles.iter().enumerate() {
             index.insert(("room_role", d.id.clone()), i as DefId);
+        }
+        for (i, d) in self.priority_rules.iter().enumerate() {
+            index.insert(("priority_rule", d.id.clone()), i as DefId);
         }
         for (i, d) in self.fields.iter().enumerate() {
             index.insert(("field", d.id.clone()), i as DefId);
@@ -1541,12 +1583,40 @@ impl DefDb {
                 .collect::<Result<_, _>>()?;
             w.stance_r = w.stance.as_ref().map(|s| get("stance", s, &ctx)).transpose()?;
             w.need_r = w.need.as_ref().map(|n| get("need", n, &ctx)).transpose()?;
-            let fraction = |v: Option<f64>| v.is_none_or(|v| (0.0..=1.0).contains(&v));
-            if w.need.is_some() != (w.below.is_some() || w.above.is_some()) || !fraction(w.below) || !fraction(w.above)
-            {
-                return Err(format!(
-                    "{ctx}: a `need` condition takes `below` or `above`, a fraction of full from 0 to 1"
-                ));
+            if w.reading.is_some() {
+                if w.need.is_some() {
+                    return Err(format!("{ctx}: a rule reads a need or a reading, not both"));
+                }
+                if w.reading.as_deref().is_some_and(|r| !r.contains(':')) {
+                    return Err(format!("{ctx}: name the reading with its mod, like \"core:food_days\""));
+                }
+                w.band_r = Some(match (w.below, w.above, w.until) {
+                    (Some(b), None, u) if u.is_none_or(|u| u >= b) => {
+                        Band::Below { on: milli(b), off: milli(u.unwrap_or(b)) }
+                    }
+                    (None, Some(a), u) if u.is_none_or(|u| u <= a) => {
+                        Band::Above { on: milli(a), off: milli(u.unwrap_or(a)) }
+                    }
+                    _ => {
+                        return Err(format!(
+                            "{ctx}: a `reading` takes `below` or `above`, and `until` on the far side of it \
+                             (below 5 until 8; above 30 until 10)"
+                        ))
+                    }
+                });
+            } else {
+                if w.until.is_some() {
+                    return Err(format!("{ctx}: `until` belongs to a `reading` condition"));
+                }
+                let fraction = |v: Option<f64>| v.is_none_or(|v| (0.0..=1.0).contains(&v));
+                if w.need.is_some() != (w.below.is_some() || w.above.is_some())
+                    || !fraction(w.below)
+                    || !fraction(w.above)
+                {
+                    return Err(format!(
+                        "{ctx}: a `need` condition takes `below` or `above`, a fraction of full from 0 to 1"
+                    ));
+                }
             }
             r.set_r = r
                 .set

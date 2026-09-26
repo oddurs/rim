@@ -680,6 +680,14 @@ pub enum GameEvent {
         owner: String,
         label: String,
     },
+    /// A standing order's reading crossed its mark: the rule holds now.
+    RuleStarted {
+        rule: String,
+    },
+    /// Its reading got back past `until`: the rule holds no more.
+    RuleStopped {
+        rule: String,
+    },
     /// Sent by a script with `rim.emit(name, data)`.
     Script {
         name: String,
@@ -752,6 +760,9 @@ pub struct World {
     pub stance: Option<DefId>,
     /// The priority rules that hold colony-wide. Derived: rebuilt on load.
     pub rules: crate::rules::Rules,
+    /// Colony readings, the standing orders they switched on, and the rules
+    /// the colony switched off. Saved.
+    pub standing: crate::rules::Standing,
     /// For each mod whose script data is here but which isn't loaded, the
     /// version it wrote that data with: when it comes back, it migrates
     /// from there (0139).
@@ -794,6 +805,7 @@ impl World {
             shelter_recomputes: 0,
             stance,
             rules: crate::rules::Rules::default(),
+            standing: crate::rules::Standing::default(),
             data_versions: BTreeMap::new(),
         }
     }
@@ -1763,6 +1775,7 @@ impl World {
         }
         h = self.zones.hash(h);
         h = crate::rng::mix(h ^ self.stance.map_or(0x57a2, |s| s as u64));
+        h = self.standing.hash(h);
         for (k, v) in &self.data {
             h = v.hash(k.bytes().fold(h, |h, b| crate::rng::mix(h ^ b as u64)));
         }

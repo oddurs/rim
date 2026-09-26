@@ -161,6 +161,34 @@ weather's `force`, it's the weather plugin that emits `weather:changed`.
 Handlers run in load order, then registration order, and payloads are plain
 data.
 
+## Readings and standing orders
+
+A reading is a number your script publishes about the colony, for priority
+rules to watch (DESIGN.md §4d). Publish it on your own cadence; the engine
+keeps it to thousandths, saves it and hashes it:
+
+<!-- not a sample -->
+```lua
+rim.every(rim.ticks_per_day // 24, function()
+    rim.set_reading("fuel_days", count_fuel() / burn_per_day())   -- my_mod:fuel_days
+end)
+```
+
+A rule on a reading is a standing order. `until` puts the off mark on the far
+side of the on mark, so the rule doesn't flap:
+
+```toml
+[[priority_rule]]
+id = "fuel_low"
+label = "Fuel is low"
+when = { reading = "my_mod:fuel_days", below = 5, until = 8 }
+shift = { "core:chop" = -1 }
+```
+
+A mod publishes only under its own name, and `rim.reading(id)` reads any
+mod's. Crossing a mark fires `rule_started` or `rule_stopped` with `rule`,
+`label`, `reading` and `value`, and a colony can switch any rule off.
+
 ## Upgrading saved data
 
 A save records your mod's version. When a player loads it with a different

@@ -97,6 +97,8 @@ declare rim: {
     random: () -> number,
     -- A whole number from lo to hi inclusive, from the world's random numbers.
     random_int: (lo: number, hi: number) -> number,
+    -- A colony reading, by qualified id ("core:food_days"); a bare name is your own mod's. Nil until published.
+    reading: (id: string) -> number?,
     -- The room at a cell, or nil on a wall or door. `role` is the first [[room_role]] it meets, if any.
     room_at: (x: number, y: number) -> Room?,
     -- A pawn says something: a speech bubble over it for `ticks` ticks (600 unless given). Higher `priority` wins when it has several lines or the screen is crowded; needs speak at 1, and 2 is the default. Only presentation: nothing in the sim reads it back.
@@ -109,6 +111,8 @@ declare rim: {
     set_ambient: (id: string, value: number?) -> (),
     -- Keep plain data in the world (hashed, saved, readable by the UI as view.data). A bare key is your mod's ("state" is "your_mod:state"); you can't write another mod's.
     set_data: (key: string, value: any) -> (),
+    -- Publish a colony reading, like "food_days", under your mod's name (kept to thousandths). Rules with `when = { reading = "mod:id", below = ..., until = ... }` switch on and off as it crosses their marks, firing `rule_started` and `rule_stopped`. Publish on your own cadence: hourly is plenty.
+    set_reading: (id: string, value: number) -> (),
     -- Put the colony in a stance: its priority rules hold until another. For incidents; the player's comes as a command.
     set_stance: (stance: string) -> (),
     -- Drop items near a cell, merging into stacks; returns how many didn't fit. stuff is what they're made of (a flint axe): it sets their hp and quality, and they stack only with the same.

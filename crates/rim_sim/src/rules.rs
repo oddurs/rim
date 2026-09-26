@@ -5,7 +5,9 @@
 //! half (a need) is checked when the colonist looks for work.
 
 use crate::defs::{DefDb, DefId};
-use crate::world::{Pawn, World, NEED_MAX};
+use crate::world::{GameEvent, Pawn, World, NEED_MAX};
+use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, BTreeSet};
 
 /// The rules whose colony-wide conditions hold, and what they were
 /// worked out for. Derived: rebuilt on load.
@@ -13,10 +15,50 @@ use crate::world::{Pawn, World, NEED_MAX};
 pub struct Rules {
     /// Indices into `DefDb::priority_rules`, in load order.
     pub on: Vec<u16>,
-    /// (hour, season, stance), with the parts no rule reads left at 0.
-    key: Option<(u32, u32, Option<DefId>)>,
+    /// (hour, season, stance, standing orders' generation), with the parts
+    /// no rule reads left at 0.
+    key: Option<(u32, u32, Option<DefId>, u64)>,
     /// How many times `on` was worked out, for tests and the profiler.
     pub evaluations: u64,
+}
+
+/// Colony readings and the standing orders on them (DESIGN.md §4d). Saved,
+/// unlike `Rules`: a rule with a band holds or not depending on where its
+/// reading has been, not only where it is. Rules are named by id, so a
+/// save outlives mods being added or removed.
+#[derive(Default, Clone, Debug, Serialize, Deserialize)]
+pub struct Standing {
+    /// What scripts published, by qualified id, in thousandths.
+    pub readings: BTreeMap<String, i64>,
+    /// Reading rules that hold now.
+    pub on: BTreeSet<String>,
+    /// Rules the colony switched off.
+    pub off: BTreeSet<String>,
+    /// Bumped when `on` or `off` changes, so `update_rules` stays a key
+    /// compare for readings that move without crossing a mark.
+    #[serde(skip)]
+    pub generation: u64,
+}
+
+impl Standing {
+    pub fn hash(&self, mut h: u64) -> u64 {
+        let bytes = |h: u64, s: &str| s.bytes().fold(h, |h, b| crate::rng::mix(h ^ b as u64));
+        for (k, v) in &self.readings {
+            h = crate::rng::mix(bytes(h, k) ^ *v as u64);
+        }
+        for k in &self.on {
+            h = bytes(h ^ 0x0a, k);
+        }
+        for k in &self.off {
+            h = bytes(h ^ 0x0f, k);
+        }
+        h
+    }
+
+    /// A reading as scripts see it.
+    pub fn reading(&self, id: &str) -> Option<f64> {
+        self.readings.get(id).map(|&v| v as f64 / 1000.0)
+    }
 }
 
 /// One step of an explanation: what moved the value, and by how much.
@@ -33,13 +75,18 @@ impl World {
         let defs = &self.defs;
         let hour = if defs.rules_read_hour { self.hour() as u32 } else { 0 };
         let season = if defs.rules_read_season { self.season_index() } else { 0 };
-        let key = (hour, season, self.stance);
+        let key = (hour, season, self.stance, self.standing.generation);
         if self.rules.key == Some(key) {
             return;
         }
+        let standing = &self.standing;
         self.rules.on = (0..defs.priority_rules.len())
             .filter(|&i| {
-                let w = &defs.priority_rules[i].when;
+                let rd = &defs.priority_rules[i];
+                if standing.off.contains(&rd.id) || (rd.when.band_r.is_some() && !standing.on.contains(&rd.id)) {
+                    return false;
+                }
+                let w = &rd.when;
                 let hours = w.hours.is_none_or(|[a, b]| match a < b {
                     true => (a..b).contains(&hour),
                     false => hour >= a || hour < b,
@@ -52,6 +99,47 @@ impl World {
             .collect();
         self.rules.key = Some(key);
         self.rules.evaluations += 1;
+    }
+
+    /// A script publishes a colony reading. The rules that read it switch
+    /// on or off only when it crosses a mark, each announcing it; a reading
+    /// that moves inside its band costs a compare per rule reading it.
+    pub fn set_reading(&mut self, id: &str, value: f64) {
+        let v = crate::defs::milli(value);
+        self.standing.readings.insert(id.to_string(), v);
+        let defs = self.defs.clone();
+        let mut changed = false;
+        for rd in &defs.priority_rules {
+            let Some(band) = rd.when.band_r.filter(|_| rd.when.reading.as_deref() == Some(id)) else { continue };
+            let was = self.standing.on.contains(&rd.id);
+            let now = band.holds(v, was);
+            if now == was {
+                continue;
+            }
+            changed = true;
+            let rule = rd.id.clone();
+            if now {
+                self.standing.on.insert(rule.clone());
+                self.events.push(GameEvent::RuleStarted { rule });
+            } else {
+                self.standing.on.remove(&rule);
+                self.events.push(GameEvent::RuleStopped { rule });
+            }
+        }
+        if changed {
+            self.standing.generation += 1;
+            self.update_rules();
+        }
+    }
+
+    /// Switch a rule off for this colony, or back on.
+    pub fn set_rule_enabled(&mut self, rule: DefId, on: bool) {
+        let Some(rd) = self.defs.priority_rules.get(rule as usize) else { return };
+        let changed = if on { self.standing.off.remove(&rd.id) } else { self.standing.off.insert(rd.id.clone()) };
+        if changed {
+            self.standing.generation += 1;
+            self.update_rules();
+        }
     }
 }
 

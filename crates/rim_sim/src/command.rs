@@ -97,6 +97,12 @@ pub enum Command {
         pawn: Entity,
         work: DefId,
     },
+    /// Switch a priority rule off for this colony, or back on: a standing
+    /// order the player doesn't want (DESIGN.md §4d).
+    SetRuleEnabled {
+        rule: DefId,
+        on: bool,
+    },
     /// Put the colony in a stance: its priority rules hold until another.
     SetStance {
         stance: DefId,
@@ -267,6 +273,7 @@ pub fn apply(w: &mut World, c: Command) {
                 p.clear_priority(work);
             }
         }
+        Command::SetRuleEnabled { rule, on } => w.set_rule_enabled(rule, on),
         Command::SetStance { stance } => {
             if (stance as usize) < defs.stances.len() {
                 w.stance = Some(stance);

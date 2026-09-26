@@ -1216,6 +1216,40 @@ impl ScriptHost {
                 Ok(())
             }
         );
+        // Readings are what standing orders watch (DESIGN.md §4d). A mod
+        // publishes only its own, like `rim.emit`.
+        api!(
+            "set_reading",
+            "(id: string, value: number) -> ()",
+            "Publish a colony reading, like \"food_days\", under your mod's name (kept to thousandths). Rules with \
+             `when = { reading = \"mod:id\", below = ..., until = ... }` switch on and off as it crosses their marks, \
+             firing `rule_started` and `rule_stopped`. Publish on your own cadence: hourly is plenty.",
+            (String, f64),
+            |w, from, (id, value)| {
+                let id = match id.split_once(':') {
+                    None => format!("{from}:{id}"),
+                    Some((m, _)) if m == from => id,
+                    Some(_) => {
+                        return Err(mlua::Error::runtime(format!("{from} can't publish another mod's reading '{id}'")))
+                    }
+                };
+                if !value.is_finite() {
+                    return Err(mlua::Error::runtime(format!("reading '{id}' must be a finite number")));
+                }
+                w.set_reading(&id, value);
+                Ok(())
+            }
+        );
+        api!(
+            "reading",
+            "(id: string) -> number?",
+            "A colony reading, by qualified id (\"core:food_days\"); a bare name is your own mod's. Nil until published.",
+            String,
+            |w, from, id| {
+                let id = if id.contains(':') { id } else { format!("{from}:{id}") };
+                Ok(w.standing.reading(&id))
+            }
+        );
         api!(
             "say",
             "(id: number, text: string, ticks: number?, priority: number?) -> ()",
@@ -1713,6 +1747,21 @@ impl ScriptHost {
             GameEvent::NewDay { day } => {
                 t.set("day", *day)?;
                 "new_day"
+            }
+            GameEvent::RuleStarted { rule } | GameEvent::RuleStopped { rule } => {
+                t.set("rule", rule.as_str())?;
+                if let Some(i) = w.defs.priority_rules.iter().position(|r| &r.id == rule) {
+                    t.set("label", crate::rules::label(&w.defs, i as u16))?;
+                    if let Some(r) = &w.defs.priority_rules[i].when.reading {
+                        t.set("reading", r.as_str())?;
+                        t.set("value", w.standing.reading(r))?;
+                    }
+                }
+                if matches!(ev, GameEvent::RuleStarted { .. }) {
+                    "rule_started"
+                } else {
+                    "rule_stopped"
+                }
             }
             GameEvent::SeasonChanged { season, index, year } => {
                 t.set("season", season.as_str())?;
