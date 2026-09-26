@@ -1193,18 +1193,10 @@ impl UiVm {
             let t = lua.create_table()?;
             let defs = &l.world.defs;
             for (w, d) in defs.work_types.iter().enumerate() {
-                let (value, parts) = rim_sim::rules::explain(defs, &l.world.rules, &p, w as rim_sim::defs::DefId);
-                let steps: Vec<String> = parts
-                    .iter()
-                    .enumerate()
-                    .map(|(i, s)| match i {
-                        0 => format!("{} {}", s.label, s.delta),
-                        _ => format!("{} {:+}", s.label, s.delta),
-                    })
-                    .collect();
+                let (value, parts) = rim_sim::rules::explain(l.world, &p, w as rim_sim::defs::DefId);
                 let row = lua.create_table()?;
                 row.set("value", value)?;
-                row.set("why", format!("{} {value} = {}", d.label, steps.join(", ")))?;
+                row.set("why", why_text(defs, &d.label, value, &parts))?;
                 t.set(d.id.as_str(), row)?;
             }
             Ok(Some(t))
@@ -1277,31 +1269,21 @@ impl UiVm {
                 row.set("id", e.to_bits().get())?;
                 row.set("name", p.name.as_str())?;
                 row.set("job", rim_sim::order::job_text(w, &p))?;
+                if let Some(r) = w.work_role_of(&p) {
+                    row.set("role", r as u32 + 1)?;
+                    row.set("role_label", w.work_roles[r as usize].label.as_str())?;
+                }
                 let cells = lua.create_table()?;
                 for &wt in &defs.work_order {
-                    let (value, parts) = rim_sim::rules::explain(defs, &w.rules, &p, wt);
+                    let (value, parts) = rim_sim::rules::explain(w, &p, wt);
                     let d = &defs.work_types[wt as usize];
                     let skill = d.skill_r.map(|k| p.skill(k));
                     let cell = lua.create_table()?;
-                    let pinned = p.own_priority(wt).is_some();
-                    cell.set("base", p.priority(defs, wt))?;
+                    cell.set("base", w.base_priority(&p, wt))?;
                     cell.set("value", value)?;
-                    cell.set("inherit", d.priority.min(levels))?;
-                    cell.set("pinned", pinned)?;
-                    // "Chop: Soon = Ana's setting Later · Harvest −1": the
-                    // base says whose it is, each rule how far it moved it.
-                    let steps: Vec<String> = parts
-                        .iter()
-                        .enumerate()
-                        .map(|(i, s)| match i {
-                            0 if pinned => format!("{}'s setting {}", p.name, scale.name(s.delta as u8)),
-                            0 => format!("default {}", scale.name(s.delta as u8)),
-                            _ if s.delta < 0 => format!("{} −{}", s.label, -s.delta),
-                            _ if s.delta > 0 => format!("{} +{}", s.label, s.delta),
-                            _ => format!("{} ±0", s.label),
-                        })
-                        .collect();
-                    cell.set("why", format!("{}: {} = {}", d.label, scale.name(value), steps.join(" · ")))?;
+                    cell.set("inherit", w.inherited_priority(&p, wt))?;
+                    cell.set("pinned", p.own_priority(wt).is_some())?;
+                    cell.set("why", why_text(defs, &d.label, value, &parts))?;
                     if let Some(s) = skill {
                         cell.set("skill", s)?;
                         cell.set("skill_frac", s as f64 / rim_sim::world::SKILL_MAX as f64)?;
@@ -1328,6 +1310,17 @@ impl UiVm {
             }
             t.set("cols", cols)?;
             t.set("rows", rows)?;
+            let roles = lua.create_table()?;
+            for (i, r) in w.work_roles.iter().enumerate() {
+                let role = lua.create_table()?;
+                role.set("index", i + 1)?;
+                role.set("id", r.def.clone())?;
+                role.set("label", r.label.as_str())?;
+                role.set("order", r.order)?;
+                role.set("edited", r.edited)?;
+                roles.push(role)?;
+            }
+            t.set("roles", roles)?;
             Ok(t)
         });
         // The why panel: each work type, and why the colonist takes it or not.
@@ -1352,7 +1345,7 @@ impl UiVm {
             let t = lua.create_table()?;
             let defs = &l.world.defs;
             for (w, d) in defs.work_types.iter().enumerate() {
-                t.set(d.id.as_str(), p.priority(defs, w as rim_sim::defs::DefId))?;
+                t.set(d.id.as_str(), l.world.base_priority(&p, w as rim_sim::defs::DefId))?;
             }
             Ok(Some(t))
         });
@@ -2365,4 +2358,30 @@ pub fn ui_files(dir: &Path) -> Vec<PathBuf> {
         .unwrap_or_default();
     v.sort();
     v
+}
+
+/// One wording for a priority's explanation, in the scale's names:
+/// "Build: First = default Later · Builder Soon · Cyd's setting First ·
+/// Siege −2". Defaults, roles and pins say the level they set; rules say
+/// how far they moved it.
+fn why_text(defs: &rim_sim::defs::DefDb, work: &str, value: u8, parts: &[rim_sim::rules::Part]) -> String {
+    use rim_sim::rules::PartKind;
+    let scale = &defs.priority_scale;
+    let mut at = 0i32;
+    let steps: Vec<String> = parts
+        .iter()
+        .map(|s| {
+            at += s.delta;
+            let level = scale.name(at.max(0) as u8);
+            match s.kind {
+                PartKind::Default => format!("default {level}"),
+                PartKind::Role => format!("{} {level}", s.label),
+                PartKind::Pin => format!("{}'s setting {level}", s.label),
+                PartKind::Rule if s.delta < 0 => format!("{} −{}", s.label, -s.delta),
+                PartKind::Rule if s.delta > 0 => format!("{} +{}", s.label, s.delta),
+                PartKind::Rule => format!("{} ±0", s.label),
+            }
+        })
+        .collect();
+    format!("{work}: {} = {}", scale.name(value), steps.join(" · "))
 }

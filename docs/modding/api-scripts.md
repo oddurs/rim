@@ -42,7 +42,7 @@ are in [Scripting rules](scripting.md).
 | `rim.order` | `(site: number) -> OrderInfo?` | The work order on a thing and how far it's got, or nil. |
 | `rim.post_order` | `(site: number, order: OrderSpec) -> ()` | Post a work order on a thing (a station): bring what `needs` lists, by thing or by tag, then work `work` ticks there, holding a tool with every tag in `requires`. Colonists take it as `work_type` work. When it's done, `order_done` names what went in; make what it makes then. One order a site at a time. |
 | `rim.priority` | `(id: number, work: string) -> number?` | A colonist's priority for a work type, rules and stance included: 1 first, 0 never. Nil if it isn't a pawn. |
-| `rim.priority_parts` | `(id: number, work: string) -> { PriorityPart }?` | How a colonist's priority came about: the base, then each rule that moved it. The deltas sum to rim.priority. |
+| `rim.priority_parts` | `(id: number, work: string) -> { PriorityPart }?` | How a colonist's priority came about: the work type's default, their work role if it sets one, their pin if they have one, then each rule that moved it. The deltas sum to rim.priority. |
 | `rim.push_ambient` | `(field: string, key: string, value: number, hours: number?, ease_hours: number?) -> ()` | Add a named contribution to a field's outdoor value, easing in over ease_hours and expiring after hours (nil: until cleared). |
 | `rim.random` | `() -> number` | A number in [0, 1) from the world's random numbers: the same on every machine. |
 | `rim.random_int` | `(lo: number, hi: number) -> number` | A whole number from lo to hi inclusive, from the world's random numbers. |
@@ -66,6 +66,8 @@ are in [Scripting rules](scripting.md).
 | `rim.ticks_per_day` | `number` | Ticks in a game day. |
 | `rim.wealth` | `() -> number` | The colony's wealth (recomputed every few hundred ticks). |
 | `rim.who_takes` | `(id: number) -> { Taker }` | Who would take the job on a thing next, soonest first, with about how many ticks until they're there: colonists free to choose. Empty if someone already holds it. |
+| `rim.work_role` | `(id: number) -> number?` | A colonist's work role, as an index into rim.work_roles(). Nil if it isn't a colonist or the colony has no roles. |
+| `rim.work_roles` | `() -> { WorkRoleInfo }` | The colony's work roles in its own order, each with its index (what a colonist's role names), the def it came from (nil for the player's own) and whether the player edited it. |
 | `rim.year` | `() -> number` | The year, from 1. |
 
 Types used above:
@@ -79,7 +81,8 @@ type StockQuery = { thing: string?, tag: string?, category: string? }
 type ItemCategoryInfo = { id: string, label: string, parent: string?, order: number, children: { string }, items: { string } }
 type Date = { year: number, season: string, season_index: number, day: number, day_of_year: number, year_days: number, year_fraction: number }
 type Room = { id: number, cells: number, enclosed: boolean, role: string?, role_label: string? }
-type PriorityPart = { label: string, delta: number }
+type PriorityPart = { kind: "default" | "role" | "pin" | "rule", label: string, delta: number }
+type WorkRoleInfo = { index: number, id: string?, label: string, edited: boolean }
 type WorkWhy = { work: string, level: number, why: string, dist: number? }
 type Taker = { id: number, ticks: number }
 type Part = { label: string, value: number }

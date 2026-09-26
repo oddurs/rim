@@ -696,7 +696,7 @@ pub fn explain_work(w: &World, e: Entity) -> Vec<WorkWhy> {
     defs.work_order
         .iter()
         .map(|&t| {
-            let level = crate::rules::effective(defs, &w.rules, &p, t);
+            let level = crate::rules::effective(w, &p, t);
             let (why, dist) = match (&chosen, refused.0[t as usize].take()) {
                 _ if level == 0 => (Why::Never, None),
                 (Some((c, job, _)), _) if *c == t => (Why::Picked(job.clone()), None),
@@ -752,8 +752,7 @@ pub fn who_takes(w: &World, target: Entity) -> Vec<(Entity, u64)> {
 /// without reserving anything. With `why`, each refusal is kept.
 fn choose_work(w: &World, e: Entity, p: &Pawn, mut why: Option<&mut Refusals>) -> Option<(DefId, Job, Entity)> {
     let defs = w.defs.clone();
-    let level: Vec<u8> =
-        (0..defs.work_types.len() as DefId).map(|t| crate::rules::effective(&defs, &w.rules, p, t)).collect();
+    let level: Vec<u8> = (0..defs.work_types.len() as DefId).map(|t| crate::rules::effective(w, p, t)).collect();
     let wanted = |t: DefId| level[t as usize] > 0;
     // Within a level, urgent work comes before calm work, and then the
     // nearest (DESIGN.md §4d): the key is the distance, plus CALM for work

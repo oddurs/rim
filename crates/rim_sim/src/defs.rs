@@ -1022,6 +1022,25 @@ pub fn milli(v: f64) -> i64 {
     (v * 1000.0).round() as i64
 }
 
+/// A work role (DESIGN.md §4d): a partial set of levels colonists belong
+/// to, one role each. What it leaves out is the work type's default. The
+/// colony keeps its own copy of each, seeded from here; see
+/// `rules::WorkRole`.
+#[derive(Deserialize, Clone, Debug)]
+pub struct WorkRoleDef {
+    pub id: String,
+    pub label: String,
+    /// The first by order is where colonists start.
+    #[serde(default)]
+    pub order: i32,
+    /// Levels by work type: `{ build = 1, haul = 2 }`.
+    #[serde(default)]
+    pub priorities: BTreeMap<String, u8>,
+    /// `priorities` resolved, in work-type id order.
+    #[serde(skip)]
+    pub priorities_r: Vec<(DefId, u8)>,
+}
+
 /// Changes work priorities while its `when` holds: `set` puts a work type
 /// at a level, `shift` moves it (negative is sooner). A work type a
 /// colonist set to 0 stays 0 under a shift; only a `set` overrides never.
@@ -1132,6 +1151,10 @@ pub struct DefDb {
     pub work_order: Vec<DefId>,
     pub priority_scale: PriorityScaleDef,
     pub stances: Vec<StanceDef>,
+    /// Work roles in load order; a colony copies them (`World::work_roles`).
+    pub work_roles: Vec<WorkRoleDef>,
+    /// Where colonists start: the first work role by `order`.
+    pub default_work_role: Option<DefId>,
     /// Room roles in load order: the first a room meets names it.
     pub room_roles: Vec<RoomRoleDef>,
     /// Every tag some room role counts, in first-asked order.
@@ -1267,6 +1290,7 @@ pub const KINDS: &[&str] = &[
     "priority_scale",
     "stance",
     "priority_rule",
+    "work_role",
     "room_role",
     "work_style",
     "skill",
@@ -1308,6 +1332,7 @@ impl DefDb {
             "designation" => self.designations[i].id.clone(),
             "work_type" => self.work_types[i].id.clone(),
             "stance" => self.stances[i].id.clone(),
+            "work_role" => self.work_roles[i].id.clone(),
             "room_role" => self.room_roles[i].id.clone(),
             "priority_rule" => self.priority_rules[i].id.clone(),
             "work_style" => self.work_styles[i].id.clone(),
@@ -1371,6 +1396,9 @@ impl DefDb {
         }
         for (i, d) in self.stances.iter().enumerate() {
             index.insert(("stance", d.id.clone()), i as DefId);
+        }
+        for (i, d) in self.work_roles.iter().enumerate() {
+            index.insert(("work_role", d.id.clone()), i as DefId);
         }
         for (i, d) in self.room_roles.iter().enumerate() {
             index.insert(("room_role", d.id.clone()), i as DefId);
@@ -1581,6 +1609,17 @@ impl DefDb {
         order.sort_by_key(|&w| (self.work_types[w as usize].order, w));
         self.work_order = order;
         self.default_stance = (0..self.stances.len() as DefId).min_by_key(|&s| (self.stances[s as usize].order, s));
+        for r in &mut self.work_roles {
+            let ctx = format!("work_role/{}", r.id);
+            r.priorities_r = r
+                .priorities
+                .iter()
+                .map(|(t, &l)| Ok((get("work_type", t, &ctx)?, l.min(levels))))
+                .collect::<Result<_, String>>()?;
+            r.priorities_r.sort_unstable();
+        }
+        self.default_work_role =
+            (0..self.work_roles.len() as DefId).min_by_key(|&r| (self.work_roles[r as usize].order, r));
         // Room roles count tags; each thing learns which of its tags count.
         self.room_tags.clear();
         for r in &mut self.room_roles {

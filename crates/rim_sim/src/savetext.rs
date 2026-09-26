@@ -65,6 +65,8 @@ const DEF_REFS: &[(&str, &str, &str)] = &[
     ("log", "*.commands.*.1.Build.stuff", "thing"),
     ("log", "*.commands.*.1.SetPriority.work", "work_type"),
     ("log", "*.commands.*.1.ClearPriority.work", "work_type"),
+    ("log", "*.commands.*.1.SetRolePriority.work", "work_type"),
+    ("engine:world", "work_roles.*.priorities.*.0", "work_type"),
     ("log", "*.commands.*.1.SetStance.stance", "stance"),
     ("log", "*.commands.*.1.SetRuleEnabled.rule", "priority_rule"),
     ("engine:world", "stance", "stance"),

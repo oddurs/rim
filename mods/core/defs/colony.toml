@@ -114,6 +114,28 @@ priority = 3
 order = 60
 jobs = ["haul"]
 
+# Work roles (DESIGN.md §4d): a partial set of levels colonists belong to,
+# one role each; what a role leaves out is the work type's default, and a
+# colonist's own setting (a pin) beats it. The first by `order` is where
+# colonists start. The colony keeps its own copy of each, which the player
+# edits; mods add roles or patch these (`work_role/core:builder`).
+[[work_role]]
+id = "hand"
+label = "Hand"
+order = 0
+
+[[work_role]]
+id = "builder"
+label = "Builder"
+order = 10
+priorities = { build = 1, mine = 2, haul = 2, hunt = 0 }
+
+[[work_role]]
+id = "forager"
+label = "Forager"
+order = 20
+priorities = { harvest = 1, hunt = 1, chop = 2 }
+
 # Stances: named sets of priority rules the colony switches with one
 # click (DESIGN.md §4d). A rule holds while its `when` does (an hour range,
 # seasons, a stance, a colonist's need) and `shift`s work types (negative is

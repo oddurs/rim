@@ -103,6 +103,25 @@ pub enum Command {
         rule: DefId,
         on: bool,
     },
+    /// Put a colonist in a work role, by its index in the colony's roles.
+    /// Their pins stay (DESIGN.md §4d).
+    AssignWorkRole {
+        pawn: Entity,
+        role: u16,
+    },
+    /// Change the level a colony's work role sets for a work type, or leave
+    /// it to the default with `None`. The role is the player's from then on.
+    SetRolePriority {
+        role: u16,
+        work: DefId,
+        level: Option<u8>,
+    },
+    /// A new work role of the player's, starting from another role's levels
+    /// or from a colonist's (their role and pins together).
+    CreateWorkRole {
+        label: String,
+        from: RoleSource,
+    },
     /// Put the colony in a stance: its priority rules hold until another.
     SetStance {
         stance: DefId,
@@ -116,6 +135,18 @@ pub enum Command {
         data: Option<crate::data::Data>,
     },
 }
+
+/// Where a new work role's levels come from.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum RoleSource {
+    /// A copy of one of the colony's roles.
+    Role(u16),
+    /// What a colonist has now before the rules: role and pins.
+    Pawn(Entity),
+}
+
+/// The longest a work role's name may be, in characters.
+pub const ROLE_LABEL_MAX: usize = 40;
 
 fn cells(w: &World, a: IVec, b: IVec) -> impl Iterator<Item = IVec> {
     let (x0, x1) = (a.x.min(b.x).max(0), a.x.max(b.x).min(w.map.w - 1));
@@ -288,6 +319,47 @@ pub fn apply(w: &mut World, c: Command) {
             }
         }
         Command::SetRuleEnabled { rule, on } => w.set_rule_enabled(rule, on),
+        Command::AssignWorkRole { pawn, role } => {
+            if !is_colonist(w, pawn) || role as usize >= w.work_roles.len() {
+                return;
+            }
+            if let Ok(mut p) = w.ecs.get::<&mut Pawn>(pawn) {
+                p.work_role = Some(role);
+            }
+        }
+        Command::SetRolePriority { role, work, level } => {
+            if work as usize >= defs.work_types.len() {
+                return;
+            }
+            let levels = defs.priority_scale.levels;
+            if let Some(r) = w.work_roles.get_mut(role as usize) {
+                r.set(work, level.map(|l| l.min(levels)));
+                r.edited = true;
+            }
+        }
+        Command::CreateWorkRole { label, from } => {
+            let label: String = label.trim().chars().take(ROLE_LABEL_MAX).collect();
+            if label.is_empty() {
+                return;
+            }
+            let priorities = match from {
+                RoleSource::Role(r) => match w.work_roles.get(r as usize) {
+                    Some(r) => r.priorities.clone(),
+                    None => return,
+                },
+                // What differs from the defaults, so the new role leaves the
+                // rest to them as any role does.
+                RoleSource::Pawn(e) => {
+                    let Ok(p) = w.ecs.get::<&Pawn>(e) else { return };
+                    (0..defs.work_types.len() as DefId)
+                        .map(|t| (t, w.base_priority(&p, t)))
+                        .filter(|&(t, l)| l != defs.work_types[t as usize].priority.min(defs.priority_scale.levels))
+                        .collect()
+                }
+            };
+            let order = w.work_roles.iter().map(|r| r.order).max().unwrap_or(0) + 10;
+            w.work_roles.push(crate::rules::WorkRole { def: None, label, order, priorities, edited: true });
+        }
         Command::SetStance { stance } => {
             if (stance as usize) < defs.stances.len() {
                 w.stance = Some(stance);

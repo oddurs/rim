@@ -9,7 +9,8 @@ type StockQuery = { thing: string?, tag: string?, category: string? }
 type ItemCategoryInfo = { id: string, label: string, parent: string?, order: number, children: { string }, items: { string } }
 type Date = { year: number, season: string, season_index: number, day: number, day_of_year: number, year_days: number, year_fraction: number }
 type Room = { id: number, cells: number, enclosed: boolean, role: string?, role_label: string? }
-type PriorityPart = { label: string, delta: number }
+type PriorityPart = { kind: "default" | "role" | "pin" | "rule", label: string, delta: number }
+type WorkRoleInfo = { index: number, id: string?, label: string, edited: boolean }
 type WorkWhy = { work: string, level: number, why: string, dist: number? }
 type Taker = { id: number, ticks: number }
 type Part = { label: string, value: number }
@@ -89,7 +90,7 @@ declare rim: {
     post_order: (site: number, order: OrderSpec) -> (),
     -- A colonist's priority for a work type, rules and stance included: 1 first, 0 never. Nil if it isn't a pawn.
     priority: (id: number, work: string) -> number?,
-    -- How a colonist's priority came about: the base, then each rule that moved it. The deltas sum to rim.priority.
+    -- How a colonist's priority came about: the work type's default, their work role if it sets one, their pin if they have one, then each rule that moved it. The deltas sum to rim.priority.
     priority_parts: (id: number, work: string) -> { PriorityPart }?,
     -- Add a named contribution to a field's outdoor value, easing in over ease_hours and expiring after hours (nil: until cleared).
     push_ambient: (field: string, key: string, value: number, hours: number?, ease_hours: number?) -> (),
@@ -137,6 +138,10 @@ declare rim: {
     wealth: () -> number,
     -- Who would take the job on a thing next, soonest first, with about how many ticks until they're there: colonists free to choose. Empty if someone already holds it.
     who_takes: (id: number) -> { Taker },
+    -- A colonist's work role, as an index into rim.work_roles(). Nil if it isn't a colonist or the colony has no roles.
+    work_role: (id: number) -> number?,
+    -- The colony's work roles in its own order, each with its index (what a colonist's role names), the def it came from (nil for the player's own) and whether the player edited it.
+    work_roles: () -> { WorkRoleInfo },
     -- The year, from 1.
     year: () -> number,
 }

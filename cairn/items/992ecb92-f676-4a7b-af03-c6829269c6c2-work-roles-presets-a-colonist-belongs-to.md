@@ -2,12 +2,14 @@
 id: 992ecb92-f676-4a7b-af03-c6829269c6c2
 title: 'Work roles: presets a colonist belongs to'
 type: feature
-status: backlog
+status: done
 milestone: work
+assignee: Oddur Sigurdsson
 depends_on:
 - 166a4cc9-fee8-4cd4-9384-4ec243f74031
 created: 2026-09-26
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p0
 api: additive
 effort: l
@@ -31,8 +33,8 @@ area: ai
 
 ## Acceptance criteria
 
-- [ ] Editing a role moves every member without a pin, and not a member with one (test)
-- [ ] A role a mod updates follows the update on load unless the player edited it (test)
-- [ ] An old save loads with everyone in the first role and the same effective levels as before (test)
-- [ ] `explain` lists default, role, pin and rules, and the parts sum to the level (test)
-- [ ] Save round trip, text save and determinism tests pass
+- [x] Editing a role moves every member without a pin, and not a member with one (test)
+- [x] A role a mod updates follows the update on load unless the player edited it (test)
+- [x] An old save loads with everyone in the first role and the same effective levels as before (test)
+- [x] `explain` lists default, role, pin and rules, and the parts sum to the level (test)
+- [x] Save round trip, text save and determinism tests pass

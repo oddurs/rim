@@ -34,12 +34,7 @@ shift = { "core:haul" = -1 }
 fn harvest(s: &Sim) -> u8 {
     let pawn = s.world.colonists().next().unwrap();
     let p = s.world.ecs.get::<&Pawn>(pawn).unwrap();
-    rim_sim::rules::effective(
-        &s.world.defs,
-        &s.world.rules,
-        &p,
-        s.world.defs.lookup("work_type", "core:harvest").unwrap(),
-    )
+    rim_sim::rules::effective(&s.world, &p, s.world.defs.lookup("work_type", "core:harvest").unwrap())
 }
 
 fn holds(s: &Sim, rule: &str) -> bool {
