@@ -49,6 +49,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `ui.scroll` | `(node: Node?) -> Node` | A column that scrolls. |
 | `ui.set_input` | `(id: string, text: string) -> ()` | Replace what a text input holds, caret at the end (the buffer is otherwise the player's). |
 | `ui.set_state` | `(key: string, value: any) -> ()` | Keep a value across rebuilds. |
+| `ui.sheet` | `() -> string?` | The open sheet's id, or nil: at most one is open. |
 | `ui.slot` | `(id: string) -> Node` | An extension point other mods fill with ui.extend. |
 | `ui.spacer` | `(node: Node?) -> Node` | Empty space that grows. |
 | `ui.state` | `(key: string, default: any) -> any` | A value kept with ui.set_state, or default. |

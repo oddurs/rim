@@ -43,6 +43,27 @@ pub fn translate(d: &mut Draw, dx: f32, dy: f32) {
     }
 }
 
+/// Scale a draw command's opacity by `a` (0 to 1).
+pub fn fade_draw(d: &mut Draw, a: f32) {
+    match d {
+        Draw::Rect { color, .. } | Draw::Outline { color, .. } | Draw::Glyphs { color, .. } => color[3] *= a,
+        Draw::Clip(_) | Draw::Unclip => {}
+    }
+}
+
+/// A soft shadow under a floating panel: a few widening, fainter rounded
+/// rects, dropped slightly. Five quads, where a blur would be a pass.
+pub fn shadow(out: &mut Vec<Draw>, r: Rect, radius: f32, scale: f32) {
+    for (spread, alpha) in [(14.0, 0.035), (9.0, 0.05), (5.0, 0.07), (2.5, 0.09), (1.0, 0.12)] {
+        let (e, dy) = (spread * scale, spread * 0.45 * scale);
+        out.push(Draw::Rect {
+            rect: [r[0] - e, r[1] - e + dy, r[2] + 2.0 * e, r[3] + 2.0 * e],
+            color: [0.0, 0.0, 0.0, alpha],
+            radius: radius + e,
+        });
+    }
+}
+
 /// Something the pointer can land on, in draw order (last is topmost).
 #[derive(Clone, Debug)]
 pub struct Hit {

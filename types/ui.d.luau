@@ -33,7 +33,7 @@ type ListProps = {
     h: Size?, grow: number?, bg: string?, border: string?, pad: Size?,
 }
 type WindowOpts = { title: string?, w: number?, h: number?, resizable: boolean?, sheet: boolean?, open: boolean? }
-type WindowInfo = { id: string, title: string, w: number, h: number, resizable: boolean, comp: string }
+type WindowInfo = { id: string, title: string, w: number, h: number, resizable: boolean, sheet: boolean, comp: string }
 type Bind = { id: string, label: string, key: string, owner: string }
 type Layer = "top" | "bottom" | "left" | "right" | "anchored" | "cursor" | "modal" | "windows" | "title"
 type Need = { id: string, label: string, value: number, color: string, low: boolean }
@@ -127,6 +127,8 @@ declare ui: {
     set_input: (id: string, text: string) -> (),
     -- Keep a value across rebuilds.
     set_state: (key: string, value: any) -> (),
+    -- The open sheet's id, or nil: at most one is open.
+    sheet: () -> string?,
     -- An extension point other mods fill with ui.extend.
     slot: (id: string) -> Node,
     -- Empty space that grows.

@@ -54,7 +54,7 @@ type ListProps = {
     h: Size?, grow: number?, bg: string?, border: string?, pad: Size?,
 }
 type WindowOpts = { title: string?, w: number?, h: number?, resizable: boolean?, sheet: boolean?, open: boolean? }
-type WindowInfo = { id: string, title: string, w: number, h: number, resizable: boolean, comp: string }
+type WindowInfo = { id: string, title: string, w: number, h: number, resizable: boolean, sheet: boolean, comp: string }
 type Bind = { id: string, label: string, key: string, owner: string }
 type Layer = "top" | "bottom" | "left" | "right" | "anchored" | "cursor" | "modal" | "windows" | "title"
 type Need = { id: string, label: string, value: number, color: string, low: boolean }
@@ -187,6 +187,7 @@ pub const UI_API: &[UiDoc] = &[
     d!("ui.scroll", "(node: Node?) -> Node", "A column that scrolls."),
     d!("ui.set_input", "(id: string, text: string) -> ()", "Replace what a text input holds, caret at the end (the buffer is otherwise the player's)."),
     d!("ui.set_state", "(key: string, value: any) -> ()", "Keep a value across rebuilds."),
+    d!("ui.sheet", "() -> string?", "The open sheet's id, or nil: at most one is open."),
     d!("ui.slot", "(id: string) -> Node", "An extension point other mods fill with ui.extend."),
     d!("ui.spacer", "(node: Node?) -> Node", "Empty space that grows."),
     d!("ui.state", "(key: string, default: any) -> any", "A value kept with ui.set_state, or default."),
