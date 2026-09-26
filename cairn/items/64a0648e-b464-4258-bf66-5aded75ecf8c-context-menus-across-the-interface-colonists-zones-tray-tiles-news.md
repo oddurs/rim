@@ -2,14 +2,14 @@
 id: 64a0648e-b464-4258-bf66-5aded75ecf8c
 title: 'Context menus across the interface: colonists, zones, tray tiles, news'
 type: feature
-status: review
+status: done
 milestone: pointer
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 depends_on:
 - 3b1726ff-ded5-45f6-968f-cb0a5e6a2577
 created: 2026-09-26
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p1
 api: additive
 effort: m

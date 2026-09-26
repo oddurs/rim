@@ -132,6 +132,8 @@ pub struct App {
     pub scroll_mode: ScrollMode,
     /// When the last precise (trackpad) scroll came.
     last_precise: f64,
+    /// The last order given, so it can be taken back.
+    pub last_order: Option<LastOrder>,
     /// Lighting and weather on screen.
     pub sky: sky::Sky,
     /// The terrain, baked into a texture.
@@ -615,6 +617,7 @@ async fn game() {
         right: None,
         scroll_mode,
         last_precise: f64::MIN,
+        last_order: None,
         sky: sky::Sky::default(),
         ground: draw::Ground::default(),
         render_us: RenderTimes::default(),
@@ -1075,6 +1078,7 @@ pub fn client_view(app: &mut App, mouse: (f32, f32), time: f64) -> ClientView {
             .collect(),
         stuff: stuff_view(app),
         hint: drag.or_else(|| app.hint.clone()),
+        last_order: app.last_order.as_ref().map(|o| (o.label.clone(), get_time() - o.at)),
         hover_cell,
         hover_pawn,
         time,
@@ -1458,16 +1462,12 @@ fn apply_ui(app: &mut App, a: UiAction) {
         UiAction::Draft(e, on) => app.sim.push(Command::Draft { pawn: e, on }),
         // A pick from the orders menu: every selected colonist it's on
         // offer to gets it, by name.
-        UiAction::Order { key, cell, on } => {
-            let mut ordered = false;
-            for e in selection(app) {
-                if order::choose(&app.sim.world, e, cell, on, &key).is_some() {
-                    app.sim.push(Command::Order { pawn: e, cell, on, pick: Some(key.clone()) });
-                    ordered = true;
+        UiAction::Order { key, cell, on } => give_orders(app, cell, on, Some(&key)),
+        UiAction::Undo => {
+            if let Some(last) = app.last_order.take() {
+                for c in last.undo {
+                    app.sim.push(c);
                 }
-            }
-            if ordered {
-                app.order_flash = Some((cell, get_time()));
             }
         }
         UiAction::ZoneAllow(zone, item, on) => {
@@ -1723,6 +1723,52 @@ fn open_orders(app: &mut App, cv: &rim_ui::view::ClientView, at: (f32, f32)) {
     app.ui.context(&app.sim.world, cv, "tile", &id, (at.0 * dpi, at.1 * dpi));
 }
 
+/// The last order given, for a few seconds: what to say, and the commands
+/// that take it back.
+pub struct LastOrder {
+    pub label: String,
+    pub at: f64,
+    pub undo: Vec<Command>,
+}
+
+/// Give every selected colonist the order at a spot, by name (`pick`, the
+/// orders menu) or the first safe one (a plain right-click), and remember
+/// how to take it back.
+fn give_orders(app: &mut App, cell: IVec, on: Option<Entity>, pick: Option<&str>) {
+    let mut undo = Vec::new();
+    let mut said: Option<(Entity, String)> = None;
+    for e in selection(app) {
+        let w = &app.sim.world;
+        let o = match pick {
+            Some(key) => order::choose(w, e, cell, on, key),
+            None => order::resolve(w, e, cell, on),
+        };
+        let Some(o) = o else { continue };
+        let target = order::target_of(&o.job);
+        // A deconstruct marks what it takes down; undo takes the mark back
+        // only if the order put it there.
+        let unmark = match o.job {
+            rim_sim::world::Job::Deconstruct { target, .. }
+                if w.ecs.get::<&rim_sim::world::Designated>(target).is_err() =>
+            {
+                Some(target)
+            }
+            _ => None,
+        };
+        undo.push(Command::UndoOrder { pawn: e, target, cell, unmark });
+        said.get_or_insert((e, o.label.clone()));
+        app.sim.push(Command::Order { pawn: e, cell, on, pick: pick.map(str::to_string) });
+    }
+    let Some((first, label)) = said else { return };
+    app.order_flash = Some((cell, get_time()));
+    let what = label.to_lowercase();
+    let who = match undo.len() {
+        1 => app.sim.world.ecs.get::<&Pawn>(first).map(|p| p.name.clone()).unwrap_or_default(),
+        n => format!("{n} colonists"),
+    };
+    app.last_order = Some(LastOrder { label: format!("{who} will {what}"), at: get_time(), undo });
+}
+
 /// Label the cursor with what a right-click would do. Resolving an order
 /// walks the map, so it happens once per tile rather than once per frame.
 fn hint(app: &mut App, mouse: (f32, f32)) {
@@ -1909,19 +1955,9 @@ pub fn apply(app: &mut App, action: Action) {
             }
         }
         Action::RightClick(x, y) => {
-            // Every selected pawn a safe order means something to gets it.
             let cell = app.cam.tile_at(x, y);
             let on = pawn_under(app, x, y);
-            let mut ordered = false;
-            for e in selection(app) {
-                if order::resolve(&app.sim.world, e, cell, on).is_some() {
-                    app.sim.push(Command::Order { pawn: e, cell, on, pick: None });
-                    ordered = true;
-                }
-            }
-            if ordered {
-                app.order_flash = Some((cell, get_time()));
-            }
+            give_orders(app, cell, on, None);
         }
     }
     let (mw, mh) = (app.sim.world.map.w as f32, app.sim.world.map.h as f32);

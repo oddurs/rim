@@ -320,6 +320,13 @@ could be given there, damaging ones (deconstruct, felling an unmarked tree)
 in the last group. `act.order(key, x, y, on)` gives a row by its key. A
 plain right-click only ever gives a safe order.
 
+Every order given leaves `view.last_order()` (`label`, `age` in seconds)
+for core's toast (`core:undo`): for five seconds it says what the order
+was, with Undo, and Cmd/Ctrl+Z (`act.undo()`) takes the newest back. Undo
+is a command: colonists still on the ordered job stop it, and a mark the
+order put on something (a deconstruct's) goes. What the order already did
+stays done.
+
 Core's kinds, each registered in the file that draws it, so a mod can add
 rows to any of them:
 

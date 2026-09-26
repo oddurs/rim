@@ -6,8 +6,12 @@
 --
 -- The subject is a map spot: kind "tile", id "x,y" or "x,y,<creature>".
 
+local kit = require("@core/ui/kit")
 local menus = require("@core/ui/menus")
 local t = ui.t
+
+-- How long an order can be taken back from its toast, in seconds.
+local UNDO_SECS = 5
 
 local function spot(id)
 	local x, y, on = string.match(tostring(id), "^(%-?%d+),(%-?%d+),?(%d*)$")
@@ -62,3 +66,31 @@ menus.add("tile", {
 		return rows
 	end,
 })
+
+-- ─── Taking an order back ──────────────────────────────────────────────────
+-- For a few seconds after an order, a pill over the dock says what it was,
+-- with Undo; Cmd/Ctrl+Z does the same for the newest order.
+ui.bind("core:undo", { key = "ctrl+z", label = t("core:keys.undo", "Undo the last order") }, function()
+	act.undo()
+end)
+
+ui.define("core:undo", function(view)
+	local o = view.last_order()
+	if not o or o.age > UNDO_SECS then
+		return nil
+	end
+	return kit.row({ justify = "center", pady = "tight" }, {
+		kit.row({ id = "core:undo", gap = "item", align = "center", padx = "inset", pady = "tight", bg = "surface_raised", border = "line_strong", radius = "radius" }, {
+			kit.label(o.label),
+			kit.button({
+				id = "core:undo.button",
+				label = t("core:undo.label", "Undo"),
+				hint = "⌘Z",
+				on_click = function()
+					act.undo()
+				end,
+			}),
+		}),
+	})
+end)
+ui.mount("bottom", "core:undo", { order = -1, refresh = "slow" })
