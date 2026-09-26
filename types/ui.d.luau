@@ -56,7 +56,7 @@ type FieldInfo = {
 }
 type UiDate = { year: number, season: string, season_index: number, day: number, day_of_year: number, year_days: number }
 type Part = { label: string, value: number }
-type Tool = { key: string, label: string, color: string, active: boolean }
+type Tool = { key: string, label: string, color: string, active: boolean, category: string, group: string }
 type Zone = { id: number, name: string, cells: number, allows: { [string]: boolean } }
 type Item = { id: string, label: string, color: string }
 type WorkType = { id: string, label: string, icon: string, order: number, default: number }
@@ -273,7 +273,7 @@ declare view: {
     ticks_per_day: () -> number,
     -- Wall-clock seconds, for animation.
     time: () -> number,
-    -- The toolbar's tools.
+    -- Every tool, with the dock category and group it is filed under.
     tools: () -> { Tool },
     -- The UI's own timings.
     ui_stats: () -> UiStats,

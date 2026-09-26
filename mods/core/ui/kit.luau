@@ -55,7 +55,7 @@ function kit.divider()
 end
 
 -- A button. props: label, on_click, active, disabled, tooltip, id, swatch
--- (a token or #colour shown as a small bar), strong.
+-- (a token or #colour shown as a small bar), strong, hint (a key, shown faint).
 function kit.button(props)
 	local active = props.active
 	return node("row", {
@@ -75,6 +75,7 @@ function kit.button(props)
 	}, {
 		props.swatch and { kind = "row", w = 3, h = 12, bg = props.swatch, radius = 1 },
 		kit.label(props.label, { weight = if active or props.strong then "strong" else "regular", color = props.color }),
+		props.hint and kit.label(props.hint, { size = "small", color = "faint" }),
 	})
 end
 

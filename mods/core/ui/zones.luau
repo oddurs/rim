@@ -40,6 +40,17 @@ ui.window("core:zones", { title = t("core:zones.title", "Stockpiles"), w = 460, 
 	return col({ gap = "s", pad = "m" }, parts)
 end)
 
-ui.bind("core:zones", { key = "z", label = t("core:keys.zones", "Stockpiles") }, function()
+-- Z opens the dock's Zones palette; the list is a button at its end.
+ui.bind("core:zones", { label = t("core:keys.zones", "Stockpiles") }, function()
 	ui.toggle("core:zones")
+end)
+ui.extend("core:dock.palette.zones", function(view)
+	return kit.button({
+		id = "core:zones.open",
+		label = t("core:zones.list", "All stockpiles…"),
+		active = ui.is_open("core:zones"),
+		on_click = function()
+			ui.toggle("core:zones")
+		end,
+	})
 end)

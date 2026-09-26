@@ -77,7 +77,7 @@ type FieldInfo = {
 }
 type UiDate = { year: number, season: string, season_index: number, day: number, day_of_year: number, year_days: number }
 type Part = { label: string, value: number }
-type Tool = { key: string, label: string, color: string, active: boolean }
+type Tool = { key: string, label: string, color: string, active: boolean, category: string, group: string }
 type Zone = { id: number, name: string, cells: number, allows: { [string]: boolean } }
 type Item = { id: string, label: string, color: string }
 type WorkType = { id: string, label: string, icon: string, order: number, default: number }
@@ -258,7 +258,7 @@ pub const UI_API: &[UiDoc] = &[
     d!("view.tick", "() -> number", "The current tick."),
     d!("view.ticks_per_day", "() -> number", "Ticks in a game day."),
     d!("view.time", "() -> number", "Wall-clock seconds, for animation."),
-    d!("view.tools", "() -> { Tool }", "The toolbar's tools."),
+    d!("view.tools", "() -> { Tool }", "Every tool, with the dock category and group it is filed under."),
     d!("view.ui_stats", "() -> UiStats", "The UI's own timings."),
     d!("view.ui_tree", "() -> { TreeRow }", "The node tree (devtools)."),
     d!("view.visible_pawns", "() -> { VisiblePawn }", "Pawns on screen, for anchored labels."),

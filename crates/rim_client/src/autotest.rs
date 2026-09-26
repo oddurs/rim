@@ -164,6 +164,28 @@ impl T {
         true
     }
 
+    /// Pick a tool from the dock the way a player does: open its category
+    /// and its group if its button isn't showing, then click it.
+    async fn click_tool(&mut self, key: &str) -> bool {
+        self.frame().await;
+        let id = format!("core:toolbar.{key}");
+        let Some((category, group)) =
+            self.app.tools.iter().find(|t| t.key == key).map(|t| (t.category, t.group.clone()))
+        else {
+            println!("      (no tool '{key}')");
+            return false;
+        };
+        if self.ui_rect(&id).is_none() && self.ui_rect(&format!("core:dock.palette.{category}")).is_none() {
+            self.click_ui(&format!("core:dock.{category}")).await;
+            self.frame().await;
+        }
+        if self.ui_rect(&id).is_none() && !group.is_empty() {
+            self.click_ui(&format!("core:dock.groups.{group}")).await;
+            self.frame().await;
+        }
+        self.click_ui(&id).await
+    }
+
     fn ui_text(&self) -> String {
         self.app.ui.snapshot()
     }
@@ -246,9 +268,36 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     let n_expected = 4 + markable + defs.things.iter().filter(|d| d.build.is_some()).count();
     t.check(keys.len() == n_expected, format!("one tool per markable designation and buildable def ({})", keys.len()));
     for k in &keys {
+        t.click_tool(k).await;
         let found = t.app.ui.find(&format!("core:toolbar.{k}")).is_some();
         t.check(found, format!("toolbar button for '{k}'"));
     }
+    // The dock is one row whatever is loaded, and every palette, group by
+    // group, fits a 1280-point screen with room to spare.
+    let dock = t.ui_rect("core:dock").map(|r| r[3]);
+    t.check(dock.is_some_and(|h| h < 60.0), format!("the dock is one row ({dock:?})"));
+    let mut widest = 0.0f32;
+    for tool in t.app.tools.iter().map(|t| t.key.clone()).collect::<Vec<_>>() {
+        t.click_tool(&tool).await;
+        if let Some(r) = t.ui_rect("core:toolbar.buttons") {
+            widest = widest.max(r[2]);
+        }
+    }
+    t.check(widest > 0.0 && widest < 1280.0 - 64.0, format!("the widest palette fits at 1280 ({widest:.0} pt)"));
+    t.key(KeyCode::Escape).await;
+    t.frame().await;
+    t.check(t.app.tool == Tool::Select, "Escape drops the tool");
+    t.check(t.ui_rect("core:toolbar.buttons").is_none(), "and closes its palette");
+    let selected = t.app.selected;
+    t.key(KeyCode::B).await;
+    t.frame().await;
+    t.check(t.ui_rect("core:dock.palette.build").is_some(), "B opens the Build palette");
+    t.key(KeyCode::Escape).await;
+    t.frame().await;
+    t.check(
+        t.ui_rect("core:dock.palette.build").is_none() && t.app.selected == selected,
+        "Escape closes an open palette before it touches the selection",
+    );
 
     // ---------------------------------------------------------- 0045 camera
     println!("\n# camera (0045)");
@@ -368,7 +417,7 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     // ---------------------------------------------------------- 0046 designate / build / cancel
     println!("\n# designate, build, cancel (0046)");
     let chop = defs.lookup("designation", "chop").unwrap();
-    t.click_ui("core:toolbar.designate:core:chop").await;
+    t.click_tool("designate:core:chop").await;
     t.check(t.app.tool == Tool::Designate(chop), "clicking Chop selects the chop tool");
     // Drag over the trees nearest home, wherever this map put them.
     let oak = defs.thing_id("tree_oak").unwrap();
@@ -393,7 +442,7 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
 
     let site = open_square(t.w(), home, 6).expect("open ground for a hut");
     let wall = defs.thing_id("wall").unwrap();
-    t.click_ui("core:toolbar.build:core:wall").await;
+    t.click_tool("build:core:wall").await;
     t.check(t.app.tool == Tool::Build(wall), "clicking wooden wall selects the wall tool");
     let (ax, ay) = t.screen(site);
     let (bx, by) = t.screen(site.offset(5, 5));
@@ -409,18 +458,18 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     );
     t.check(t.w().map.fixture_at(site.offset(2, 2)).is_none(), "the inside of the outline stays empty");
 
-    t.click_ui("core:toolbar.cancel").await;
+    t.click_tool("cancel").await;
     t.drag(site, site.offset(5, 0)).await;
     t.ticks(1);
     t.check(
         t.count::<&Blueprint>() == 14,
         format!("cancel removes the dragged row ({} left)", t.count::<&Blueprint>()),
     );
-    t.click_ui("core:toolbar.build:core:wall").await;
+    t.click_tool("build:core:wall").await;
     t.drag(site, site.offset(4, 0)).await;
-    t.click_ui("core:toolbar.build:door").await;
+    t.click_tool("build:door").await;
     t.drag(site.offset(5, 0), site.offset(5, 0)).await;
-    t.click_ui("core:toolbar.build:bed").await;
+    t.click_tool("build:bed").await;
     t.drag(site.offset(2, 2), site.offset(2, 2)).await;
     t.ticks(1);
     t.check(
@@ -531,7 +580,7 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.key(KeyCode::Escape).await;
     t.frame().await;
     t.check(t.ui_rect("core:stuff").is_none(), "no material row while nothing is being built");
-    t.click_ui("core:toolbar.build:core:wall").await;
+    t.click_tool("build:core:wall").await;
     t.frame().await;
     t.check(t.ui_rect("core:stuff").is_some(), "the wall tool brings up the material row");
     t.check(t.ui_rect("core:toolbar.buttons").is_some(), "and the toolbar is still there under it");
@@ -744,10 +793,10 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     crate::apply_ui(&mut t.app, rim_ui::view::UiAction::RenderScale(1.0));
     t.frame().await;
     t.check(t.app.world_target.is_none(), "full render scale draws straight to the screen");
-    t.click_ui("core:toolbar.cancel").await;
+    t.click_tool("cancel").await;
     t.drag(spot, spot).await;
     t.ticks(1);
-    t.click_ui("core:toolbar.build:core:wall").await;
+    t.click_tool("build:core:wall").await;
     t.frame().await;
     t.check(t.app.stuff_for.contains(&(wall, stone)), "the choice is remembered for the wall");
     t.click_ui("core:stuff.core:wood").await;
@@ -825,12 +874,12 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         .filter(|(th, d)| th.def == oak && d.is_none())
         .map(|(th, _)| th.pos)
         .min_by_key(|p| (p.octile(home), p.x, p.y));
-    t.click_ui("core:toolbar.designate:core:chop").await;
+    t.click_tool("designate:core:chop").await;
     if let Some(p) = tree {
         t.drag(p, p).await;
     }
     let spot = open_square(t.w(), home.offset(10, 10), 2).unwrap_or(home.offset(10, 10));
-    t.click_ui("core:toolbar.build:core:wall").await;
+    t.click_tool("build:core:wall").await;
     t.drag(spot, spot).await;
     t.frame().await;
     t.check(t.w().tick == tick, "paused: no time passed");
@@ -883,7 +932,7 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
             })
         })
         .expect("open ground for a stockpile");
-    t.click_ui("core:toolbar.stockpile").await;
+    t.click_tool("stockpile").await;
     t.check(t.app.tool == Tool::Stockpile, "clicking Stockpile selects the stockpile tool");
     // On screen, clear of the HUD: the camera is wherever the last step left it.
     t.focus(spot.offset(1, 1));
@@ -902,7 +951,11 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.focus(spot);
     t.shot("stockpile").await;
     t.key(KeyCode::Z).await;
-    t.check(t.app.ui.find("core:zones.1.core:wood").is_some(), "Z opens the stockpiles panel, a toggle per item");
+    t.click_ui("core:zones.open").await;
+    t.check(
+        t.app.ui.find("core:zones.1.core:wood").is_some(),
+        "Z, then the list, opens the stockpiles panel, a toggle per item",
+    );
     t.click_ui("core:zones.1.core:wood").await;
     t.ticks(1);
     let wood = defs.thing_id("wood").unwrap();
@@ -910,7 +963,13 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         zone.and_then(|z| t.w().zones.get(z)).is_some_and(|z| !z.takes(wood)),
         "a toggle stops the zone taking wood",
     );
+    t.click_ui("core:zones.open").await;
     t.key(KeyCode::Z).await;
+    t.frame().await;
+    t.check(
+        !t.app.ui.is_open("core:zones") && t.ui_rect("core:dock.palette.zones").is_none(),
+        "the list button closes the panel, and Z the palette",
+    );
 
     // ---------------------------------------------------------- 0cb48faf stances
     println!("\n# stances (0cb48faf)");
@@ -996,7 +1055,7 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.key(KeyCode::F12).await;
     t.frame().await;
     t.check(t.app.ui.find("core:devtools.panel").is_some(), "F12 opens devtools");
-    if let Some(r) = t.ui_rect("core:toolbar.designate:core:chop") {
+    if let Some(r) = t.ui_rect("core:dock.orders") {
         t.input(RawInput { mouse: (r[0] + r[2] / 2.0, r[1] + r[3] / 2.0), ..Default::default() }).await;
         t.frame().await;
     }

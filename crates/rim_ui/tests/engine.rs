@@ -15,7 +15,7 @@ fn shell_docks_regions_to_the_edges() {
     cv.hover_cell = sim.world.colony_center();
     frame(&mut ui, &sim, &cv, Default::default());
     let top = ui.find("core:topbar").expect("top bar laid out");
-    let bottom = ui.find("core:toolbar.buttons").expect("toolbar laid out");
+    let bottom = ui.find("core:dock").expect("dock laid out");
     assert_eq!(top[1], 0.0, "top bar sits at the top");
     assert!((top[2] - 1600.0).abs() < 1.0, "top bar spans the width: {top:?}");
     assert!((bottom[1] + bottom[3] - 960.0).abs() < 1.0, "toolbar sits at the bottom: {bottom:?}");
@@ -58,7 +58,9 @@ fn clicks_on_panels_never_reach_the_world() {
     let mut ui = ui_for(&sim);
     let mut cv = client(&sim);
     frame(&mut ui, &sim, &cv, Default::default());
-    let chop = ui.find("core:toolbar.designate:core:chop").unwrap();
+    let orders = ui.find("core:dock.orders").unwrap();
+    click(&mut ui, &sim, &mut cv, centre(orders));
+    let chop = ui.find("core:toolbar.designate:core:chop").expect("Orders opens its palette");
     let actions = click(&mut ui, &sim, &mut cv, centre(chop));
     assert_eq!(actions, vec![UiAction::Tool("designate:core:chop".into())]);
 
@@ -215,7 +217,7 @@ ui.mount("top", "oops:typo", { order = 6 })
     let snap = ui.snapshot();
     assert!(snap.contains("kaboom"), "the error should be shown in place:\n{snap}");
     assert!(snap.contains("unknown color token 'not_a_token'"), "bad tokens should be named:\n{snap}");
-    assert!(ui.find("core:toolbar.buttons").is_some(), "the rest of the UI must still build");
+    assert!(ui.find("core:dock").is_some(), "the rest of the UI must still build");
     assert!(ui.warnings().iter().any(|w| w.contains("oops") && w.contains("kaboom")));
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -244,7 +246,7 @@ ui.mount("top", "spin:forever", { order = 5 })
     assert!(t.elapsed() < std::time::Duration::from_secs(5), "the frame came back");
     let snap = ui.snapshot();
     assert!(snap.contains("endless loop"), "the component shows why it stopped:\n{snap}");
-    assert!(ui.find("core:toolbar.buttons").is_some(), "the rest of the UI still builds");
+    assert!(ui.find("core:dock").is_some(), "the rest of the UI still builds");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -1789,7 +1791,7 @@ fn the_material_row_renders_beside_the_toolbar() {
     cv.stuff = vec![mat("core:wood", "wood", 12, true), mat("core:stone", "stone blocks", 0, false)];
     frame(&mut ui, &sim, &cv, Default::default());
     let snap = ui.snapshot();
-    assert!(ui.find("core:toolbar.buttons").is_some(), "the toolbar must still build:\n{snap}");
+    assert!(ui.find("core:dock").is_some(), "the dock must still build:\n{snap}");
     assert!(ui.find("core:stuff").is_some(), "the material row is there:\n{snap}");
     assert!(
         ui.find("core:stuff.core:wood").is_some() && ui.find("core:stuff.core:stone").is_some(),
