@@ -198,10 +198,10 @@ Running more than one person: stockpiles, hauling, work priorities, skills, colo
 - [ ] `4ad6b386` Colonist inspection panel <sup>feature · p1 · m · client</sup>
 - [ ] `8376a04f` Drafty rooms: room leak from terms <sup>feature · p3 · s · engine</sup>
 - [ ] `8cf4db07` Multi-cell things occupy every cell of their footprint <sup>feature · p3 · m · engine</sup>
-- [ ] `9bd9e8ab` Fire: burning, spread by wind, put out by rain <sup>feature · p1 · l · engine</sup>
 - [ ] `f1924f03` Why a colonist is doing that, and who will take a job <sup>feature · p1 · m · client</sup>
 - [ ] `f1b96df4` The Work Board: a painted priority grid with live demand <sup>feature · p0 · l · core</sup>
 - [ ] `fa0de3f5` Wind shelter: the lee of walls, rock and trees <sup>feature · p1 · m · engine</sup>
+- [ ] `9bd9e8ab` Fire: burning, spread by wind, put out by rain <sup>feature · p1 · l · engine</sup>
 - [x] `03ad3e3a` Work types and priorities per colonist <sup>feature · p0 · m · engine</sup>
 - [x] `1e977052` Floating windows and a saved UI layout <sup>feature · p0 · m · engine</sup>
 - [x] `3ab05834` Floors: built ground that remembers what it is made of <sup>feature · p1 · m · engine</sup>
@@ -291,7 +291,7 @@ Making a mod feels like publishing a small open-source library: rim new, typed L
 
 ## scale — Scale
 
-`##········` 18% · 2 of 11 done · due 2027-03-15
+`##········` 17% · 2 of 12 done · due 2027-03-15
 
 Hit the performance budget: benchmark harness, hierarchical pathing, flow fields, spatial indices, incremental regions, render caching.
 
@@ -300,6 +300,7 @@ Hit the performance budget: benchmark harness, hierarchical pathing, flow fields
 - [ ] `66906291` Incremental region updates <sup>perf · p2 · m · engine</sup>
 - [ ] `91de1172` Parallel systems where read and write sets allow <sup>spike · p2 · m · engine</sup>
 - [ ] `a353667b` Flow fields for raid groups <sup>perf · p2 · m · engine</sup>
+- [ ] `c1089360` Pathfinding on a map full of work: long A* searches in forest and rock <sup>perf · p1 · m · engine</sup>
 - [ ] `da558444` Ground renderer: terrain, wetness and snow in one shader pass <sup>perf · p2 · m · client</sup>
 - [ ] `dab55ea2` Meet the budget: 6x speed at 60 fps <sup>perf · p0 · l · engine</sup>
 - [ ] `e8673d3f` scripting test a_slow_mod_is_named_in_the_warnings flakes under load <sup>bug · p2 · s · engine</sup>
