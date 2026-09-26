@@ -6,7 +6,7 @@ mod common;
 use rim_sim::data::{Data, Key};
 use rim_sim::defs::DefId;
 use rim_sim::hecs::Entity;
-use rim_sim::world::{Lot, MadeOf, Thing};
+use rim_sim::world::{Lot, MadeOf, Pawn, Thing};
 use rim_sim::{Command, IVec, Sim};
 use std::path::PathBuf;
 
@@ -251,4 +251,46 @@ fn an_old_carry_still_loads() {
     let now = Lot { def: 3, count: 7, made_of: Some(2), hp: Some(40) };
     let back: Lot = rmp_serde::from_slice(&rmp_serde::to_vec_named(&now).unwrap()).unwrap();
     assert_eq!(back, now);
+}
+
+/// A carry set down where every cell within reach of the old radius (8) is
+/// full used to lose whatever didn't fit: `end_job` ignored what
+/// `place_lot` couldn't place.
+#[test]
+fn a_carry_set_down_in_a_crowded_place_loses_nothing() {
+    let mut sim = Sim::new(&common::mods(), 3).unwrap();
+    let pawn = sim.world.colonists().next().unwrap();
+    let (wood, stone) = (sim.world.defs.thing_id("wood").unwrap(), sim.world.defs.thing_id("stone").unwrap());
+    let at = sim.world.pawn_pos(pawn).unwrap();
+    // Every cell a drop may use within radius 8, full of stone.
+    sim.world.place_lot(Lot::new(stone, 17 * 17 * 75), at);
+    let wood_before: u32 = count(&sim, wood);
+    sim.world.ecs.get::<&mut Pawn>(pawn).unwrap().carry = Some(Lot::new(wood, 30));
+    sim.push(Command::Draft { pawn, on: true });
+    sim.step();
+    assert!(sim.world.ecs.get::<&Pawn>(pawn).unwrap().carry.is_none(), "set down");
+    assert_eq!(count(&sim, wood), wood_before + 30, "every piece is on the map");
+}
+
+/// The same for a held tool: `put_down` gave up past radius 8 and despawned
+/// it.
+#[test]
+fn a_tool_put_down_in_a_crowded_place_is_kept() {
+    let mut sim = Sim::new(&common::mods(), 3).unwrap();
+    let pawn = sim.world.colonists().next().unwrap();
+    let (axe, stone) = (sim.world.defs.thing_id("hand_axe").unwrap(), sim.world.defs.thing_id("stone").unwrap());
+    let at = sim.world.pawn_pos(pawn).unwrap();
+    sim.world.place_item(axe, at, 1);
+    let tool = sim.world.map.item_at(at).expect("the axe lies at the pawn's feet");
+    let mut p = sim.world.ecs.remove_one::<Pawn>(pawn).unwrap();
+    sim.world.take_tool(pawn, &mut p, tool);
+    sim.world.place_lot(Lot::new(stone, 17 * 17 * 75), at);
+    sim.world.put_down(p.hand.take().unwrap(), at);
+    sim.world.ecs.insert_one(pawn, p).unwrap();
+    assert!(sim.world.thing(tool).is_some(), "the axe still exists");
+    assert_eq!(sim.world.map.item_at(sim.world.thing(tool).unwrap().pos), Some(tool), "on the map");
+}
+
+fn count(sim: &Sim, def: DefId) -> u32 {
+    sim.world.ecs.query::<&Thing>().iter().filter(|t| t.def == def).map(|t| t.count).sum()
 }
