@@ -7,7 +7,7 @@ milestone: plugin-api
 depends_on:
 - 0cb48faf-617a-4a64-922a-d6ebb842145a
 created: 2026-09-25
-updated: 2026-09-25
+updated: 2026-09-26
 priority: p3
 api: additive
 effort: m
@@ -28,3 +28,7 @@ Rules and stances (0cb48faf) shipped the conditions data can say: hours, seasons
 
 - [ ] A mod gates a rule on a Luau predicate, and it runs only when its declared inputs change (measured)
 - [ ] Two runs with a scripted rule hash identically
+
+## 2026-09-26
+
+The work milestone's readings item (97a12814) adds `when.reading` with a band, readings published by scripts, and rule start/stop events. Alert conditions can reuse that machinery: an alert is a reading that is 0 or 1.

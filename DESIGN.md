@@ -491,8 +491,18 @@ with winter or a siege, and it doesn't show how much work is waiting.
 
 - **`[[work_type]]`** (core data): id, label, icon, skill, default priority,
   and `order`, the tie-break, which the UI shows and lets you drag.
-- **`[[priority_scale]]`:** `levels = 4` in core. A mod that wants 9 changes
-  one line and the UI follows. 0 means never.
+- **`[[priority_scale]]`:** `levels = 4` in core, named
+  `labels = ["First", "Soon", "Later", "Spare time"]`. A mod that wants 9
+  changes one line and the UI follows with numbers. 0 means never.
+- **`[[work_role]]`:** a partial set of levels that colonists belong to,
+  one role each. What a role leaves out falls to the work type's default.
+  Roles are seeded from defs into the save and edited there; one the player
+  never touched follows its mod's updates. A mod ships roles or patches
+  core's (`work_role/core:builder`). Named work roles so they never read as
+  room roles (§6c).
+- **Pins:** a colonist's own level for one work type beats their role. It
+  exists only while it differs: set it back to the inherited value and it
+  is gone.
 - **Work finds its type from data.** A designation names its work type
   (`work_type = "chop"`); work the engine hands out itself, like raising
   blueprints, is claimed by the work type that lists it (`jobs = ["build"]`).
@@ -526,6 +536,94 @@ with winter or a siege, and it doesn't show how much work is waiting.
 - Priority changes are `Command`s, rules run in the sim, scores are
   integers: determinism holds.
 
+### Tension: should priorities drive themselves?
+
+- **For setting them by hand:** the grid is where players of the genre tune
+  their colony. A system that sets it for them hides the game.
+- **For automation:** a castaway player doesn't know what Chop at 2 means,
+  flat defaults are wrong for everyone, and at 30 colonists nobody keeps
+  200 cells current as the work changes.
+- **Ruling:** colonists start on **Auto**, a work role whose levels a
+  planner sets each in-game hour from skill and what is waiting, around what
+  the rest of the colony already covers. Taking control is a ladder, and
+  each rung leaves the ones below it running:
+
+| Rung | The player says | Costs |
+|---|---|---|
+| Auto | nothing; the colony plans itself | 0 |
+| Focus | the colony's situation: a stance, standing orders | 1 click |
+| Urgent | this one job, now | 1 click on the map |
+| Pin | this colonist, this work type | 1 click per cell |
+| Work roles | these colonists work alike | 1 edit per group |
+
+A pin never takes a colonist off Auto: the planner plans their other cells
+around it. Joining a fixed role does.
+
+### Tension: is Auto a mode or a role?
+
+- **For a colony-wide switch:** one toggle is easy to explain.
+- **For a role:** a switch is all or nothing. Players want a fixed crew of
+  builders with everyone else planned, and a new settler to slot in.
+- **Ruling:** a role (`planned = true`), the first by `order`, so it is where
+  colonists start. Every level resolves the same way:
+
+```
+start = Auto's plan | the role's level | the work type's default
+base  = the pin, if there is one, else start
+level = base, then each rule that holds: set, then shift
+```
+
+Two verbs: plans, roles and pins **set**; stances and standing orders
+**shift**. `explain` names each part:
+`Hunt First = Auto Later (melee 6, covered) · Ana's pin Soon · Food is low −1`.
+
+### What Auto promises
+
+- **It never says never.** Only the player or a rule sets 0.
+- **It never moves a pin,** and it counts pins as coverage.
+- **It changes slowly.** A planned level changes only when two plans in a
+  row agree, so colonists don't swap jobs every hour.
+- **It explains itself.** Every planned level carries its reason.
+- **Focus has the last word.** Rules shift the plan like any other base.
+
+### How the planner decides
+
+The Auto role names its planner (`planner = "core:auto"`), a Luau function
+the engine calls once an in-game hour with the board and whose plan it
+checks: a 0 or a pinned cell is an error. Core's is
+`mods/core/scripts/auto.luau`; a mod replaces it by patching the role, so
+two mods doing it is a loader conflict. The engine stores planned levels and
+applies the two-plan rule, and knows nothing of the policy.
+
+1. **Need:** a work type's waiting jobs over its `auto.per_person`, rounded
+   up, and at most the colony's size. Nothing waiting, nobody needed.
+2. **Gap:** minus the colonists at First or Soon whom the planner doesn't
+   move: role members and pins.
+3. **Fill:** every gap gets its first person before any gets a second.
+   Larger `waiting × auto.weight` goes first. Best skill wins, less a
+   penalty for each First already given. At most two First each, then Soon.
+4. **Rest:** Later if skilled or if the work needs no skill, Spare time if
+   unskilled.
+
+### Standing orders
+
+A standing order is a `[[priority_rule]]` whose `when` reads a colony
+**reading**, with a band so it doesn't flap:
+`when = { reading = "core:food_days", below = 5, until = 8 }`. Readings are
+numbers scripts publish on the sim's clock (`rim.set_reading`), so the
+engine knows no content. A reading re-evaluates the rules only when it
+crosses a band. Starting and stopping emit events for the news, and a
+colony can switch any order off (`SetRuleEnabled`). Core ships three, on by
+default: food is low, loose items piling up, and firewood for winter.
+A standing order only shifts; the stance stays the player's choice.
+
+### Urgent marks
+
+`MarkUrgent` flags one job: a blueprint, a designation, an order. Every
+colonist takes it one level sooner than its work type, never from 0, and it
+wins ties inside its level. Pools keep urgent work in its own bucket, so the
+walk stays a walk over levels. The mark clears when the work is done.
+
 ### The Work Board
 
 A panel in core's UI mod, so a mod can patch or replace it.
@@ -534,22 +632,41 @@ A panel in core's UI mod, so a mod can patch or replace it.
   to nudge it, press a number while hovering, shift-scroll a column. A cell
   shows the priority by brightness, the skill as a bar and passion as a
   flame.
+- **A cell says who set it:** a ring for Auto, a dot for a pin, nothing for
+  the role. Clicking a cell back to the value it would inherit removes the
+  pin, and `A` hands it back.
 - **Columns show demand:** jobs waiting, the backlog's trend, and coverage.
   A column with work waiting and no one on it at a high priority is marked.
-- **Rows show now:** the current job, a 24-hour schedule strip, time idle.
+- **Rows show now,** grouped by role with Auto first: what each colonist
+  would pick, a 24-hour schedule strip, time idle.
 - **Effective values are visible:** a cell reads `2→1` when a rule or stance
   moves it, and hovering explains why.
 - **The why panel** on a colonist: what they picked and its score, and each
   work type they passed over with the reason, linked to the map.
 - **On the map:** hovering a column lights its waiting jobs; hovering a job
   shows who would take it and when ("Bo in ~20s, then Cyd"). A right-click
-  order still forces it.
+  order still forces it, and "Mark urgent" sits beside it.
+- **Lenses:** the board, roles, and one person as shelves, registered like
+  screens so a mod adds its own (a headcount view, a labour list) that
+  writes the same commands.
+- **One colonist is a plan, not a grid:** their levels as shelves, each with
+  Auto's reason, and a way to pin any of them.
+
+### Disclosure
+
+Controls appear by colony size and by what the player does, never by an era
+id. One colonist: Auto, Focus on the HUD, Urgent in the right-click menu.
+Two to four: the board and pins. Five or more: roles, offered when two
+colonists have been pinned into the same shape. Fifteen or more: rows fold
+by role, and repeated alerts offer new standing orders.
 
 ### Cost
 
 Choosing work costs work posted and pools checked, not map size. At 200 pawns
 the budget is under 0.2 ms a tick for work choice, measured with a stress map
-of every cell designated.
+of every cell designated. The planner runs once an in-game hour over
+colonists × work types; its budget is 0.5 ms a run at 30 × 12, measured in
+the harness.
 
 ---
 
