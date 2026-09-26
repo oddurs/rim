@@ -108,6 +108,8 @@ You start as *the warrior*: a strong fighter with nothing on them.
   - Scripts ask with `rim.indoors(x, y)` and `rim.room_at(x, y)`.
   - Explicit roofs, if ever wanted, are a plugin that marks cells roofed and
     hooks the same question.
+  - **Revised in §6c:** the size cap becomes a roof span. A room is indoors
+    when every cell is within reach of a wall or a pillar.
 
 ### Tension: does a room know what it is made of?
 
@@ -924,6 +926,256 @@ primitives: a mod picks and colours effects and never draws per frame.
   wall that stops every pawn.
 - **Ruling:** no. Wear on a blocking thing cracks and darkens it and never
   shrinks it, and a load check holds mods to the same rule.
+
+---
+
+## 6c. Houses: drawn as their plan, built as orders
+
+A house today is a ring of flat brown cells with a 1.5-point edge. Its
+furniture is a few small rectangles, and its rooms can't be seen at all.
+The sim knows far more than that. It knows what each wall is made of,
+whether the ring encloses a room, how fast that room loses heat, what lets
+daylight in, and what the room holds. A house should show all of it, and
+§6a already rules out sprites for doing so. So the look has to carry the
+mechanics.
+
+A working prototype of this section is
+[docs/engineering/houses-prototype.html](docs/engineering/houses-prototype.html):
+one page of canvas code with no build step. Open it in a browser, paint
+walls, and watch the rooms change. Its join, pattern and roof code is the
+reference for the Rust renderer.
+
+### What the other games teach
+
+- **RimWorld:** things made of stuff, rooms found from walls, a roof held
+  up for 6 cells by a wall or a column, and rooms that take a role and a
+  score from what is in them.
+- **Minecraft:** a block is a shape times a material, and the material is
+  what you see. Working a material changes both its look and its stats
+  (cobblestone into stone bricks). The material decides which tool it
+  needs. Fences and panes join their neighbours by themselves: a post, and
+  an arm toward each neighbour. Structures are data.
+- **Prison Architect:** a top-down plan anyone can read, rooms defined by
+  what they must contain, and a room you draw with one drag.
+- **Terraria:** a house is a checklist the game can explain: walls, a
+  door, a light, a table, a chair.
+- **Townscaper** and the dual grid: a join is decided at a cell's corners,
+  not at the cell.
+- **Architects' drawings:** solid walls (poché), a few line weights, a
+  hatch for each material, and a door drawn as its leaf and its swing.
+
+### Tension: a picture of a house, or a plan of one?
+
+- **For a picture (sprites, three-quarter view):** it's warmer, and it is
+  what the genre looks like.
+- **Against:** every sprite is a binary that a mod must match or replace
+  (§6a). A three-quarter view hides the cell behind a wall. And a picture
+  shows what a house is like, where a plan shows how it works.
+- **Ruling:** **a house is drawn as its plan.** The view stays top-down and
+  orthographic. Walls are solid masses, openings are gaps with symbols,
+  furniture is outlined plan symbols, and rooms are labelled. Five rules
+  hold it together:
+  - **Four line weights.** Wall contours are the heaviest, openings are
+    medium (a door leaf, a pane), furniture is thin, and material patterns
+    and floor seams are hairlines. Hierarchy comes from weight, not colour.
+  - **Material is a pattern, not a picture.** Each material has a tint and
+    a pattern from a fixed vocabulary (`weave`, `stipple`, `logs`, `rubble`,
+    `courses`, `bond`, `crag`). The pattern is laid out in world space and
+    along the wall's run, so it flows from cell to cell. It fades out below
+    a zoom level, which keeps the worst case (the whole map zoomed out)
+    cheap.
+  - **One light.** Every mass casts the same short shadow down and to the
+    right, and its top and left edges catch a highlight. That gives height
+    without perspective.
+  - **The look never lies (§6b), extended to rooms.** A window facing an
+    enclosed room throws a fan of daylight into it. A fire fills its room
+    with a warm wash that stops at the walls. The one gap that keeps a ring
+    of walls from being a room is marked. Floor beyond the roof's reach is
+    hatched as sky.
+  - **Zoom tells three stories.** Up close you see the plan, with patterns
+    and labels. Further out you see masses and symbols. Furthest out you
+    see roofs, and the colony reads as a village. Hovering a house lifts
+    its roof.
+
+### Tension: how do walls join?
+
+- **Per-cell edges (today):** an `edges` layer leaves out the sides facing
+  a joined neighbour. It's cheap, and it's why a run already reads as one
+  wall. But corners are square notches, every cell is a flat box, and a
+  door is a rectangle that happens to sit in a wall.
+- **Hand-drawn tile sets (the 47-tile blob):** they look beautiful, but
+  they are 47 pictures per material, which is the opposite of §6a.
+- **Ruling:** **joins are a topology, drawn in quarters.** A joined piece
+  reads its 8 neighbours. Each quarter of the cell looks at its two sides
+  and the corner between them, which picks one of five shapes: outer
+  corner, either edge, inner corner, or solid. That is the blob tile set
+  worked out from the mask with primitives, instead of drawn by hand.
+  - `look.join = { group = "wall", style = "mass", round = 0.22 }`. A
+    `mass` fills the whole cell, which is honest because a wall blocks the
+    whole cell. It is rounded where a run ends and square where it meets
+    another. A material change along a run shows as a hairline seam, never
+    an outline.
+  - `style = "pipe"` is Minecraft's fence: a post in the middle and a pair
+    of rails toward each joined neighbour. `connects = ["wall"]` lets a
+    fence meet a wall without the wall bulging toward it.
+  - **Run orientation.** A layer can be written along the run
+    (`orient = "run"`) and the renderer turns it to fit the neighbours. So
+    a door or window placed in a north–south wall needs no rotation.
+    `into = "room"` mirrors a layer toward the enclosed side, which is how
+    a door swings into the room and a window's light falls inward.
+  - Rock joins as `rock` the same way, so a cliff is a mass too.
+- **New primitives, still a fixed set:** `mass`, `pipe`, `pattern` (the
+  material's) and `arc` (a door's swing). `edges` stays for mods that use
+  it.
+- **Cost:** a mask is 8 reads and is built with the chunk mesh. Neighbours
+  already dirty a chunk's border (§6b, `map.rs`). Patterns cost vertices
+  only at zooms where the chunk count is small.
+
+### Tension: facing, or looks that work it out?
+
+- **For explicit rotation everywhere:** it's simple, and it's what every
+  builder does.
+- **Against:** a door rotated by hand can face the wrong way, and a chair
+  turned away from its table is a mistake the game could have avoided.
+- **Ruling:** both, each where it fits. Things get a **facing** (four
+  directions). Their footprint, spots and look turn with it, so a 1×2 bed
+  or a workbench with a place to stand in front can face any way. Placing
+  one takes a facing, `R` in the client. **Joined pieces derive** their
+  facing from the run and the room, and a chair turns to face the table
+  it's beside. A look can say `face = "beside:table"`.
+
+### Tension: when is a room indoors?
+
+§4 ruled that a room is indoors when it is enclosed and at most 400 cells.
+The cap stands in for a roof.
+
+- **For the cap:** it's one number, and a new player never meets it.
+- **Against:** it can't be seen, and it can't be explained ("why is my
+  hall outdoors?" "it's 401 cells"). It treats a 20×20 hall the same as a
+  2×200 corridor. It gives materials no say, and pillars no job.
+- **Ruling (revises §4):** **the roof follows from the walls.** Every
+  support (wall, door, window, pillar, and rock, since overhead rock makes a
+  cave) holds the roof up for `span` cells in each direction. The span is a
+  material factor: 2 for wattle, 3 for cob and dry stone, 4 for logs and
+  brick, 5 for ashlar and granite. A room is indoors when it is enclosed
+  and every cell in it is within reach of a support. A 3×3 hut and the
+  bot's 5×5 hut don't change. A great hall needs pillars, and a valley
+  ringed by cliffs still isn't a house. The engine works the span out at
+  room rebuild, which already runs only when walls change: O(room cells).
+- **The same field draws the roof.** A house is the set of indoor rooms
+  that share walls. Its roof covers their cells and walls. Each cell's
+  height is its Chebyshev distance to the eaves, which gives a hipped roof
+  on any room shape. The material comes from the walls (thatch on wattle
+  and cob, shingle on logs, turf on dry stone, slate on ashlar, tile on
+  brick). A hearth gets a chimney. This is client-only and derived, and is
+  rebuilt only when rooms are.
+- **Roofs still cost nothing to build.** An implicit roof is free. A built
+  floor on the level above is an explicit one (below).
+
+### Storeys: one span rule for roofs and floors
+
+Depth (§6d) makes the map a stack of levels joined at stairs, and building
+up puts a floor over air. Holding up a floor and holding up a roof are the
+same question, so they share one field, worked out per level (per `Map`):
+
+```
+covered(z, c)  = some support on z within its span of c
+roofed(z, c)   = covered(z, c)  or  the cell at (z+1, c) is solid or has a floor
+floor at (z+1, c) may be built  when  covered(z, c)  or  a support stands at (z, c)
+```
+
+- **Underground is roofed by rock.** A cell below a solid cell is roofed
+  whatever its distance from a wall. A pit dug to the surface isn't.
+- **The implicit roof marks where a storey can go.** Every cell a room's
+  walls roof is a cell that can carry the next floor. A floor built there
+  becomes that room's explicit roof, and the storey above has rooms of its
+  own, found on its own level.
+- **A house spans levels.** It is the set of indoor rooms that share walls
+  on a level, or that stand directly above one another. Its roof is drawn
+  over its topmost storey, and hovering it lifts the whole house.
+- **Seeing storeys.** One level is drawn at a time (§6d): the levels above
+  are cut away, so a plan is always a true floor plan. Walls on the level
+  below show through air as a dim ghost of their contour, which is how a
+  gallery or a stairwell reads. Stairs are a plan symbol: treads, a break
+  line, and an arrow marked UP or DN.
+- **Rooms and roles stay per level.** Span, roles and gaps are pure
+  functions of one `Map`, so the level stack wraps them unchanged.
+
+### Tension: do rooms know what they are for?
+
+- **Scripts only:** a mood plugin could classify rooms in Luau. But eras
+  (Camp: "a shelter, a bed and a fire"), mood ("slept in a barracks") and
+  the storyteller would each classify them again, and could disagree.
+- **Ruling:** **room roles are data.** A `[[room_role]]` has `needs` (tag
+  counts) and optional limits (size, indoors). In load order, the first
+  role a room meets names it. The engine counts the tags inside each room
+  at room rebuild and when furniture changes, which is the same bitset
+  match as tools (§4e). Core declares `bedroom`, `dormitory`, `home` and
+  `hall`. Crafting adds `workshop`. Scripts read `rim.room_at(x, y).role`,
+  and the client labels the room on the plan with its role, size and
+  whether it's heated. Room scores (beauty from the boundary's material
+  factor, space, light) are stats on the §10 pipeline, for mood to weigh.
+
+### Tension: two ways to make things, or one?
+
+Building has Blueprint, Deliver and Construct. Crafting has orders. They
+are the same job (§4e).
+
+- **Ruling:** **a build is an order** (e7c4a3f6). A blueprint becomes an
+  order whose completion is the engine's own: it becomes the building. This
+  gives building what orders already have: inputs by tag, `requires` for
+  tools, a work type and the "why can't this run" reasons. Two things
+  follow:
+  - **A material names its tool.** `stuff.requires = ["pounding"]` means
+    anything built of ashlar waits on a maul in hand, the way a Minecraft
+    block names its pickaxe. Building then climbs the same ladder as
+    gathering: wattle and dry stone by hand, logs with an axe, ashlar with
+    a maul, brick from a kiln.
+  - **Replace in place.** Planning cob over a wattle wall, or a door over a
+    wall, keeps the old piece standing until the new material is
+    delivered, then swaps it in one work session. The room stays enclosed
+    through a winter upgrade.
+- **Deferred: two materials in one piece.** A timber frame with a cob
+  infill would be beautiful (half-timbering), and a look could colour
+  layers by slot. But it's the first user of a mechanism with no second
+  one (§6, rule of three). One material per piece, until a mod asks for it.
+
+### Plans as data
+
+A house plan is text: an ASCII grid and a legend, placed as blueprints
+with one command and turned by a facing.
+
+```toml
+[[plan]]
+id = "cob_house"
+label = "cob house with a hearth"
+grid = """
+#######
+#b.#.h#
+#..+..#
+#..#t.#
+###+###
+"""
+legend = { "#" = "core:wall", "+" = "core:door", b = "core:bed", h = "core:stove", t = "core:table" }
+```
+
+Mods ship plans, players save their own (client files, text again), and
+the balance bots build from them instead of hand-coding huts.
+
+### What this costs, and what it replaces
+
+- **Frame:** masks and patterns are built with the chunk mesh, and the roof
+  field is rebuilt only with rooms. Nothing new runs every frame. The
+  render bench (§8) gates it, and pattern LOD is the lever if it goes over.
+- **Tick:** role counting and span coverage run at room rebuild. No new
+  per-tick work.
+- **API:** joins, primitives, material looks, facing, roles and plans are
+  additive. Replacing `MAX_ROOM_CELLS` with a span changes what counts as
+  indoors, so it is breaking and needs an api bump.
+- **Content:** core's looks move to the new primitives. "Every core def has
+  a sprite" (f4e97005) becomes "every core def has a finished plan look".
+
+---
 
 ## 6d. Depth: stacked planes
 

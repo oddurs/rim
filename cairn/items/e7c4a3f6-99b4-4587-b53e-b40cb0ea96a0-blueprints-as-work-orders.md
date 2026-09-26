@@ -3,10 +3,10 @@ id: e7c4a3f6-99b4-4587-b53e-b40cb0ea96a0
 title: Blueprints as work orders
 type: feature
 status: backlog
-milestone: crafting
+milestone: houses
 created: 2026-09-25
-updated: 2026-09-25
-priority: p3
+updated: 2026-09-26
+priority: p1
 api: none
 effort: m
 layer: engine
@@ -28,3 +28,7 @@ Work orders (74b6fa7e) and blueprints are the same job: bring these things to a 
 - [ ] Every construction and deconstruction test passes unchanged
 - [ ] A blueprint can need a tool, through the same `requires`
 - [ ] Old saves with blueprints load
+
+## 2026-09-26
+
+Moved to houses and raised to p1: material tool gates (fff4fb42) and replace-in-place (b3ffbae1) build on builds being orders (DESIGN.md §6c).

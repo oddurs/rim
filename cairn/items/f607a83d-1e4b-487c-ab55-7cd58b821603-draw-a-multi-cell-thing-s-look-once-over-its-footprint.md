@@ -2,14 +2,14 @@
 id: f607a83d-1e4b-487c-ab55-7cd58b821603
 title: Draw a multi-cell thing's look once, over its footprint
 type: feature
-status: doing
+status: done
 milestone: building
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 depends_on:
 - 8cf4db07-217d-42f9-aed0-8c119d5acf0c
 created: 2026-09-25
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p2
 api: additive
 effort: m

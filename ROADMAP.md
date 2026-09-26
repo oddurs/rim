@@ -175,12 +175,11 @@ Exposure makes shelter matter: warmth, enclosed rooms, day/night, weather. Get f
 
 ## building — Building
 
-`#########·` 89% · 17 of 19 done · due 2026-11-15
+`##########` 95% · 18 of 19 done · due 2026-11-15
 
 A one-week sprint inside Colony. Building stops being a fixed list of defs
 
 - [ ] `ff97096d` A wall planned over loose items buries them <sup>bug · p2 · s · engine</sup>
-- [ ] `f607a83d` Draw a multi-cell thing's look once, over its footprint <sup>feature · p2 · m · client</sup>
 - [x] `3f4c257d` Rooms made of something: leak and daylight from the boundary <sup>feature · p0 · l · engine</sup>
 - [x] `419a24ab` Interaction spots: furniture a pawn uses <sup>feature · p1 · m · engine</sup>
 - [x] `49e5e583` Walls that look joined, in the colour of what they are made of <sup>feature · p1 · m · client</sup>
@@ -197,6 +196,7 @@ A one-week sprint inside Colony. Building stops being a fixed list of defs
 - [x] `ab0599d2` Do room properties come from the boundary? <sup>spike · p0 · s · engine</sup>
 - [x] `cecf0ba9` Core collapses to one wall, one door, one bed <sup>content · p1 · s · core</sup>
 - [x] `cf55217a` Strikes and exits on worksites <sup>feature · p2 · m · client</sup>
+- [x] `f607a83d` Draw a multi-cell thing's look once, over its footprint <sup>feature · p2 · m · client</sup>
 - [x] `fcfd0f4a` Worksite timing follows the worker's pace and the game's speed <sup>bug · p1 · s · client</sup>
 
 ## persistence — Persistence
@@ -294,6 +294,33 @@ The API grows up: stat pipeline, script components, custom jobs, needs and def k
 - [x] `b25b27e0` Image node and a mod atlas <sup>feature · p1 · m · engine</sup>
 - [x] `ded7881a` Deterministic math in scripts: replace library trig and exp <sup>feature · p1 · s · engine</sup>
 - [x] `f6e18475` Mod modules: require("@mod/path") limited to declared dependencies <sup>feature · p0 · m · engine</sup>
+
+## houses — Houses
+
+`#·········` 5% · 1 of 20 done
+
+A house is drawn as its plan and built as an order (DESIGN.md §6c). Walls join from their neighbours in quarters, with rounded ends and square junctions, and no sprites. Materials show as patterns and climb a ladder of tools from wattle to brick. Doors and windows orient themselves in the run and toward the room. Rooms take roles from what is in them, a roof span set by the materials replaces the 400-cell cap, and from far away the colony is a village of hipped roofs. The prototype, docs/engineering/houses-prototype.html, is the reference.
+
+- [ ] `24100bb9` A roof span replaces the room size cap, and pillars hold it <sup>feature · p0 · m · engine</sup>
+- [ ] `26a69a8e` Pipe joins: fences and palisades connect like Minecraft's <sup>feature · p2 · s · client</sup>
+- [ ] `26ba97aa` Plan a multi-cell building over grass, trees and rock <sup>feature · p2 · m · engine</sup>
+- [ ] `3fe8c3cb` Joins in quarters: a wall run draws as one mass <sup>feature · p0 · m · client</sup>
+- [ ] `454f4bde` Draw a room: drag a rectangle into a ring of walls <sup>feature · p2 · s · client</sup>
+- [ ] `4791e24b` Room state on the plan: daylight, firelight, gaps and open sky <sup>feature · p2 · m · client</sup>
+- [ ] `5643976c` Room labels on the plan <sup>feature · p2 · s · client</sup>
+- [ ] `7129a537` Openings turn to their wall and face the room <sup>feature · p0 · m · client</sup>
+- [ ] `7c53ec62` Material patterns: a fixed vocabulary, laid along the run <sup>feature · p1 · m · client</sup>
+- [ ] `827b2421` House plans as data: an ASCII grid placed with one command <sup>feature · p2 · m · engine</sup>
+- [ ] `ae5c3807` One light: every mass casts the same short shadow <sup>feature · p2 · s · client</sup>
+- [ ] `b3ffbae1` Replace in place: upgrade a wall without opening the room <sup>feature · p1 · m · engine</sup>
+- [ ] `ba18a8e4` Facing: things turn in four directions <sup>feature · p1 · m · engine</sup>
+- [ ] `df049dac` Roofs from far away, hipped by the span field <sup>feature · p2 · m · client</sup>
+- [ ] `e7c4a3f6` Blueprints as work orders <sup>feature · p1 · m · engine</sup>
+- [ ] `f709cdd4` Room roles as data <sup>feature · p0 · m · engine</sup>
+- [ ] `fbab2877` Core's looks in the plan style <sup>content · p1 · m · core</sup>
+- [ ] `ff479390` The building ladder: dry stone, logs, bricks and a kiln <sup>content · p1 · m · plugin</sup>
+- [ ] `fff4fb42` A material names the tool it is built with <sup>feature · p1 · s · engine</sup>
+- [x] `eb469f44` Houses concept: drawn as their plan, built as orders <sup>spike · p0 · m · tooling</sup>
 
 ## mood — Mood
 
@@ -409,12 +436,11 @@ Dig down. The map becomes a stack of 2D levels joined only at stairs, ladders an
 
 ## crafting — Crafting
 
-`··········` 0% · 0 of 15 done · due 2027-05-01
+`··········` 0% · 0 of 13 done · due 2027-05-01
 
 Production chains: workbenches and bills, cooking, farming, tailoring, research as a plugin.
 
 - [ ] `0927f0af` Tailoring: make apparel <sup>content · p2 · s · core</sup>
-- [ ] `26ba97aa` Plan a multi-cell building over grass, trees and rock <sup>feature · p2 · m · engine</sup>
 - [ ] `2c03427e` Cooking: raw food into meals <sup>content · p1 · s · core</sup>
 - [ ] `308074c6` Getting wet: pawn wetness and clothing insulation <sup>feature · p2 · m · engine</sup>
 - [ ] `6dd4891c` Ground wetness and snow in core <sup>content · p0 · m · core</sup>
@@ -426,7 +452,6 @@ Production chains: workbenches and bills, cooking, farming, tailoring, research 
 - [ ] `d77d9e1f` Stock fields: per-cell state with staggered updates <sup>feature · p0 · l · engine</sup>
 - [ ] `db7f1e06` Mining that rewards looking: rock kinds, veins and prospecting <sup>content · p1 · m · core</sup>
 - [ ] `e1be8ebd` Plants grow in the weather <sup>feature · p0 · m · engine</sup>
-- [ ] `e7c4a3f6` Blueprints as work orders <sup>feature · p3 · m · engine</sup>
 - [ ] `9bd9e8ab` Fire: burning, spread by wind, put out by rain <sup>feature · p1 · l · engine</sup>
 
 ## 1.0 — 1.0
@@ -442,7 +467,7 @@ Ship it: tutorial, settings, audio, art pass, crash reports with replays, frozen
 - [ ] `779a54c2` First-hour guidance <sup>feature · p1 · m · client</sup>
 - [ ] `8a8deb4a` Crash reports with seed, mods and replay attached <sup>feature · p1 · m · tooling</sup>
 - [ ] `92f2ceaf` Weather audio: rain, wind and thunder <sup>feature · p2 · m · client</sup>
-- [ ] `f4e97005` Art pass for all core defs <sup>content · p1 · xl · core</sup>
+- [ ] `f4e97005` Art pass for all core defs: finished looks, no sprites <sup>content · p1 · xl · core</sup>
 
 ## world — World
 
