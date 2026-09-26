@@ -2,10 +2,12 @@
 id: 668c7762-97c3-4b65-bf33-55bca0ea9e66
 title: 'Context: an action row and an inspector tab registry'
 type: feature
-status: backlog
+status: done
 milestone: interface
+assignee: Oddur Sigurdsson
 created: 2026-09-26
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p2
 api: additive
 effort: m
@@ -25,6 +27,10 @@ The inspector's tabs are a fixed list in hud.luau, and the actions for a selecti
 
 ## Acceptance criteria
 
-- [ ] Core's tabs and actions go through the registry
-- [ ] A mod adds a tab and an action without `ui.wrap`
-- [ ] Existing inspector ids and tests still pass
+- [x] Core's tabs and actions go through the registry
+- [x] A mod adds a tab and an action without `ui.wrap`
+- [x] Existing inspector ids and tests still pass
+
+## 2026-09-26
+
+Inspector moved to mods/core/ui/inspector.luau, which returns the tab and action registries. Core's tabs (overview, skills, work) and actions (core:draft R, core:center C) register through them; binding ids unchanged. Actions apply to things too (Centre). The palette test no longer depends on file load order.

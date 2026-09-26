@@ -843,10 +843,18 @@ fn the_palette_moves_its_selection_with_the_arrows_and_starts_clean() {
     frame(&mut ui, &sim, &cv, Default::default());
     let mut t = 1.0;
     press(&mut ui, &sim, &cv, &mut t, "ctrl+k");
-    // The second row is core:speed1; Down once selects it, Enter runs it.
-    t += 0.1;
-    let out = frame(&mut ui, &sim, &cv, Input { keys: vec![Key::Down], time: t, ..Default::default() });
-    assert!(out.captured_keys);
+    // Down as many times as core:speed1 is rows from the top selects it,
+    // wherever the load order put it; Enter runs it.
+    let snap = ui.snapshot();
+    let rows: Vec<&str> =
+        snap.split_whitespace().filter_map(|w| w.strip_prefix("#core:palette.")).filter(|r| r.contains(':')).collect();
+    let at = rows.iter().position(|r| *r == "core:speed1").expect("core:speed1 is listed");
+    assert!(at > 0, "the test needs a row above it: {rows:?}");
+    for _ in 0..at {
+        t += 0.1;
+        let out = frame(&mut ui, &sim, &cv, Input { keys: vec![Key::Down], time: t, ..Default::default() });
+        assert!(out.captured_keys);
+    }
     t += 0.1;
     frame(&mut ui, &sim, &cv, Input { time: t, ..Default::default() });
     assert_eq!(ui.edit_state("core:palette.query").map(|e| e.text.as_str()), Some(""), "the arrow typed nothing");

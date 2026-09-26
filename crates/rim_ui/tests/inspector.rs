@@ -212,3 +212,61 @@ fn the_work_tab_says_why_and_the_hover_says_who() {
     let snap = ui.snapshot();
     assert!(snap.contains(&format!("\"Next: {name} in ~")), "who'd take the tree: {snap}");
 }
+
+/// A mod adds a tab and an action through core's inspector module, without
+/// wrapping the panel; core's own draft action is a button as well as R.
+#[test]
+fn a_mod_adds_an_inspector_tab_and_action() {
+    let dir = image_free_mods(
+        "inspector-registry",
+        r#"
+local kit = require("@core/ui/kit")
+local inspector = require("@core/ui/inspector")
+inspector.tab({
+    id = "probe:mood",
+    label = "Mood",
+    applies = function(sel) return sel.kind == "pawn" and sel.player end,
+    build = function(view, sel) return kit.label("calm " .. sel.name, { id = "probe:mood.body" }) end,
+})
+inspector.action({
+    id = "probe:wave",
+    label = "Wave",
+    key = "g",
+    applies = function(sel) return sel.kind == "pawn" end,
+    run = function(sel) act.focus(sel.id) end,
+})
+"#,
+    );
+    let sim = sim_at(&dir);
+    let founder = sim.world.colonists().next().unwrap();
+    let mut ui = ui_for(&sim);
+    let mut cv = client(&sim);
+    cv.selected = Some(founder);
+    frame(&mut ui, &sim, &cv, Input::default());
+    assert!(ui.warnings().is_empty(), "{:?}", ui.warnings());
+
+    // Core's draft is a button in the action row, and does what R does.
+    let draft = ui.find("core:inspector.action.core:draft").expect("a draft button");
+    let actions = click(&mut ui, &sim, &mut cv, centre(draft));
+    assert!(actions.contains(&rim_ui::view::UiAction::Draft(founder, true)), "{actions:?}");
+
+    // The mod's action sits beside it, and its key runs it on the selection.
+    assert!(ui.find("core:inspector.action.probe:wave").is_some(), "the mod's action");
+    let out = frame(&mut ui, &sim, &cv, Input { pressed: vec!["g".into()], time: 5.0, ..Default::default() });
+    assert!(out.actions.contains(&rim_ui::view::UiAction::Focus(founder)), "{:?}", out.actions);
+
+    // The mod's tab is a tab like core's.
+    let tab = ui.find("core:inspector.tabs.probe:mood").expect("the mod's tab");
+    click(&mut ui, &sim, &mut cv, centre(tab));
+    frame(&mut ui, &sim, &cv, Input { time: 6.0, ..Default::default() });
+    assert!(ui.find("probe:mood.body").is_some(), "its body shows:\n{}", ui.snapshot());
+
+    // A thing gets neither: the tab and the action apply to pawns.
+    let (tree, _) = an_oak(&sim);
+    cv.selected = Some(tree);
+    frame(&mut ui, &sim, &cv, Input { time: 7.0, ..Default::default() });
+    assert!(ui.find("core:inspector.panel").is_some(), "the thing panel");
+    assert!(ui.find("core:inspector.action.probe:wave").is_none() && ui.find("core:inspector.tabs").is_none());
+    assert!(ui.find("core:inspector.action.core:center").is_some(), "centre applies to anything");
+    let _ = std::fs::remove_dir_all(&dir);
+}

@@ -38,19 +38,6 @@ end)
 ui.bind("core:overlay", { key = "o", label = t("core:keys.overlay", "Next overlay") }, function()
 	act.cycle_overlay()
 end)
-ui.bind("core:draft", { key = "r", label = t("core:keys.draft", "Draft or undraft the selected colonist") }, function()
-	local id = view.selected()
-	local p = id and view.pawn(id)
-	if p and p.player then
-		act.draft(id, not p.drafted)
-	end
-end)
-ui.bind("core:center", { key = "c", label = t("core:keys.center", "Centre on the selection") }, function()
-	local id = view.selected()
-	if id then
-		act.focus(id)
-	end
-end)
 ui.bind("core:palette", { key = "ctrl+k", label = t("core:keys.palette", "Command palette") }, function()
 	-- Window ops apply after the handler, so ask before toggling.
 	local opening = not ui.is_open("core:palette")
