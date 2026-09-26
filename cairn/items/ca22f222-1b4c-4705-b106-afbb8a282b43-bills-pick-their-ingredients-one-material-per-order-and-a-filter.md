@@ -4,8 +4,10 @@ title: 'Bills pick their ingredients: one material per order, and a filter'
 type: feature
 status: backlog
 milestone: crafting
+depends_on:
+- 01691032-1f99-475a-b964-6e3f4149fe22
 created: 2026-09-25
-updated: 2026-09-25
+updated: 2026-09-26
 priority: p2
 api: additive
 effort: m
@@ -28,3 +30,7 @@ A recipe's tag input (`knappable`) takes whatever lies nearest, and a work order
 - [ ] A hand axe never mixes flint and bone
 - [ ] A bill can be told to use flint only
 - [ ] A bill waiting for a matching second piece says so
+
+## 2026-09-26
+
+Uses the shared filter from 01691032 (DESIGN.md §4f) for its ingredient filter, so it waits for that item.
