@@ -215,8 +215,9 @@ pub fn thing(
     let z = zt;
     let (sx, sy) = at;
     let look = &td.look_r;
+    let orient = orient_of(w, cell, look, span);
     if let Ok(bp) = w.ecs.get::<&Blueprint>(e) {
-        plan(s, w, e, &bp, &look.layers, c, cell, at, z, t, span);
+        plan(s, w, e, &bp, &look.layers, c, cell, at, z, t, span, orient);
         return None;
     }
     let layers = match w.ecs.get::<&Regrow>(e) {
@@ -238,14 +239,14 @@ pub fn thing(
                     s.rect(sx + fx * k * z, sy + fy * k * z, z, z, Color::new(1.0, 0.84, 0.47, a));
                 }
             }
-            paint(s, w, layers, join_of(look), c, cell, (sx - tx * k, sy - ty * k), z, t, span);
+            paint(s, w, layers, join_of(look), orient, c, cell, (sx - tx * k, sy - ty * k), z, t, span);
         }
         Some(Wear::Cracks) => {
             let toward = wear::toward(w, e);
             if w.ecs.get::<&Work>(e).is_ok() {
                 wear::draw_chips(s, cell, toward, f, at, z, chip_color(w, e, td, c));
             }
-            paint(s, w, layers, join_of(look), shade(c, 1.0 - 0.16 * f), cell, at, z, t, span);
+            paint(s, w, layers, join_of(look), orient, shade(c, 1.0 - 0.16 * f), cell, at, z, t, span);
             // Every cell cracks from its own seed, so a boulder isn't copies.
             for q in td.footprint(cell) {
                 let at = (sx + (q.x - cell.x) as f32 * z, sy + (q.y - cell.y) as f32 * z);
@@ -256,9 +257,9 @@ pub fn thing(
         // don't block: the loader refuses it for those that do.
         Some(Wear::Grow) => {
             let (grown, _) = wear::grown(layers, 1.0 - f, c, 1.0);
-            paint(s, w, &grown, join_of(look), c, cell, at, z, t, span);
+            paint(s, w, &grown, join_of(look), orient, c, cell, at, z, t, span);
         }
-        Some(Wear::None) | None => paint(s, w, layers, join_of(look), c, cell, at, z, t, span),
+        Some(Wear::None) | None => paint(s, w, layers, join_of(look), orient, c, cell, at, z, t, span),
     }
     if let Ok(d) = w.ecs.get::<&Designated>(e) {
         let dc = rgb(defs.designations[d.0 as usize].rgb);
@@ -286,6 +287,7 @@ fn plan(
     z: f32,
     t: f32,
     span: [u32; 2],
+    orient: Orient,
 ) {
     const BLUEPRINT: Color = Color::new(0.55, 0.8, 1.0, 0.8);
     let (sx, sy) = at;
@@ -295,7 +297,7 @@ fn plan(
     s.rect(sx + 1.0, sy + 1.0, zx - 2.0, (top * zy - 1.0).max(0.0), Color::new(0.45, 0.7, 1.0, 0.3));
     if !grown.is_empty() {
         // A plan joins nothing until it stands.
-        paint(s, w, &grown, None, own, cell, at, z, t, span);
+        paint(s, w, &grown, None, orient, own, cell, at, z, t, span);
         let hatched = (sx, sy + top * zy, zx, (1.0 - top) * zy);
         wear::hatch(s, hatched, (z / 7.0).max(4.0), Color::new(0.55, 0.8, 1.0, 0.4));
     }
@@ -398,7 +400,19 @@ fn worksite_motion(app: &App, t: f32) {
                 let alpha = if p < 0.8 { 1.0 } else { (1.0 - p) / 0.2 };
                 let (layers, _) = wear::grown(&w.defs.thing(l.def).look_r.layers, 1.0, l.own, alpha);
                 let o = (z - zt) / 2.0;
-                paint(s, w, &layers, None, l.own, l.cell, (x + o, y + o), zt, t, w.defs.thing(l.def).size);
+                paint(
+                    s,
+                    w,
+                    &layers,
+                    None,
+                    Orient::default(),
+                    l.own,
+                    l.cell,
+                    (x + o, y + o),
+                    zt,
+                    t,
+                    w.defs.thing(l.def).size,
+                );
             }
             // Nine pieces hop away from the worked side, shrinking.
             Exit::Crumble => {
@@ -670,6 +684,7 @@ fn paint(
     w: &World,
     layers: &[Layer],
     join: Join,
+    orient: Orient,
     own: Color,
     cell: IVec,
     at: (f32, f32),
@@ -697,23 +712,38 @@ fn paint(
             f *= 1.0 - l.vary / 2.0 + hash2_f(cell.x as i64, cell.y as i64, 7) as f32 * l.vary;
         }
         let c = shade(base, f);
+        let flip = orient.flip && l.into_room;
         match l.prim {
             Prim::Fill { rect, min_px } => {
+                let rect = orient.rect(flip, rect);
                 // Grown to `min_px` about its middle, so a seam stays centred.
                 let (x, y, rw, rh) = px(rect);
                 let (gw, gh) = ((min_px - rw).max(0.0), (min_px - rh).max(0.0));
                 s.rect(x - gw / 2.0, y - gh / 2.0, rw + gw, rh + gh, c);
             }
             Prim::Outline { rect, width } => {
-                let [x, y, rw, rh] = rect;
+                let [x, y, rw, rh] = orient.rect(flip, rect);
                 outline(s, sx + x * zx, sy + y * zy, rw * zx, rh * zy, width, c);
             }
-            Prim::Disc { at: [x, y], r, min_px, pulse } => {
+            Prim::Disc { at, r, min_px, pulse } => {
+                let [x, y] = orient.pt(flip, at);
                 let f = if pulse > 0.0 { 1.0 + (t * 9.0 + cell.x as f32).sin() * pulse } else { 1.0 };
                 disc(s, sx + x * zx, sy + y * zy, (r * zr).max(min_px) * f, c);
             }
             Prim::Edges { width } => edges(s, w, cell, span, join, (sx, sy), z, width, c),
             Prim::Mass => mass(s, w, cell, span, join, (sx, sy), z, c),
+            Prim::Arc { at, r, from, to, width } => {
+                const STEPS: usize = 8;
+                let point = |k: usize| {
+                    let a = from + (to - from) * k as f32 / STEPS as f32;
+                    let [x, y] = orient.pt(flip, [at[0] + r * a.cos(), at[1] + r * a.sin()]);
+                    (sx + x * zx, sy + y * zy)
+                };
+                for k in 0..STEPS {
+                    let ((x0, y0), (x1, y1)) = (point(k), point(k + 1));
+                    s.line(x0, y0, x1, y1, width, c);
+                }
+            }
             Prim::Sprite { rect, id } => {
                 let (x, y, rw, rh) = px(rect);
                 let slot = s.atlas().slot(id);
@@ -731,6 +761,57 @@ fn paint(
             }
         }
     }
+}
+
+/// How a look sits in its cell (DESIGN.md §6c): turned across the
+/// diagonal when the run it joins goes north–south (`orient = "run"`),
+/// and its `into = "room"` layers mirrored when the room is to the north
+/// or west. Layers are written for an east–west run with the room south.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Orient {
+    pub swap: bool,
+    pub flip: bool,
+}
+
+impl Orient {
+    fn pt(self, flip: bool, [u, v]: [f32; 2]) -> [f32; 2] {
+        let v = if flip { 1.0 - v } else { v };
+        if self.swap {
+            [v, u]
+        } else {
+            [u, v]
+        }
+    }
+    fn rect(self, flip: bool, [x, y, w, h]: [f32; 4]) -> [f32; 4] {
+        let y = if flip { 1.0 - y - h } else { y };
+        if self.swap {
+            [y, x, h, w]
+        } else {
+            [x, y, w, h]
+        }
+    }
+}
+
+/// Which way a one-cell look that follows its run faces: along the run its
+/// joined neighbours make, and toward the enclosed side. With a room on
+/// both sides, toward the smaller; with none, south or east.
+fn orient_of(w: &World, cell: IVec, look: &rim_sim::look::Look, span: [u32; 2]) -> Orient {
+    if !look.along_run || span != [1, 1] {
+        return Orient::default();
+    }
+    let j = join_of(look);
+    let across = joins(w, cell.offset(-1, 0), j) || joins(w, cell.offset(1, 0), j);
+    let down = joins(w, cell.offset(0, -1), j) || joins(w, cell.offset(0, 1), j);
+    let swap = down && !across;
+    let (before, after) =
+        if swap { (cell.offset(-1, 0), cell.offset(1, 0)) } else { (cell.offset(0, -1), cell.offset(0, 1)) };
+    let room = |p: IVec| w.map.room_at(p).filter(|r| r.enclosed());
+    let flip = match (room(before), room(after)) {
+        (Some(a), Some(b)) => a.cells < b.cells,
+        (Some(_), None) => true,
+        _ => false,
+    };
+    Orient { swap, flip }
 }
 
 /// A look's join group and how round its outer corners are.
@@ -1118,5 +1199,58 @@ pub fn ui(list: &[Draw], atlas: &Texture2D, white: (f32, f32), dpi: f32) {
     b.flush();
     unsafe {
         get_internal_gl().quad_gl.scissor(None);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rim_sim::Sim;
+
+    /// A ring of wood walls with pieces at `doors`, on cleared ground.
+    fn building(s: &mut Sim, o: IVec, w: i32, h: i32, inner_x: Option<i32>, doors: &[IVec]) {
+        let d = &s.world.defs;
+        let (wall, door, wood) =
+            (d.thing_id("wall").unwrap(), d.thing_id("door").unwrap(), d.thing_id("wood").unwrap());
+        for y in -1..=h {
+            for x in -1..=w {
+                if let Some(e) = s.world.map.fixture_at(o.offset(x, y)) {
+                    s.world.despawn_thing(e);
+                }
+            }
+        }
+        for y in 0..h {
+            for x in 0..w {
+                let p = o.offset(x, y);
+                if x == 0 || y == 0 || x == w - 1 || y == h - 1 || Some(x) == inner_x {
+                    let def = if doors.contains(&p) { door } else { wall };
+                    s.world.spawn_fixture_of(def, p, false, Some(wood)).expect("a piece");
+                }
+            }
+        }
+        s.world.map.ensure_rooms();
+    }
+
+    fn orient(s: &Sim, p: IVec) -> Orient {
+        let e = s.world.map.fixture_at(p).unwrap();
+        let td = s.world.defs.thing(s.world.thing(e).unwrap().def);
+        orient_of(&s.world, p, &td.look_r, td.size)
+    }
+
+    #[test]
+    fn a_door_follows_its_wall_and_faces_the_room() {
+        let mut s = Sim::new(std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../mods")), 1).unwrap();
+        let o = s.world.colony_center().unwrap().offset(12, 12);
+        // Doors in the south and the west walls of a hut.
+        let (south, west) = (o.offset(2, 4), o.offset(0, 2));
+        building(&mut s, o, 5, 5, None, &[south, west]);
+        assert_eq!(orient(&s, south), Orient { swap: false, flip: true }, "south door: room to the north");
+        assert_eq!(orient(&s, west), Orient { swap: true, flip: false }, "west door: room to the east");
+        // A partition door between a closet (1×3, west) and a room (2×3,
+        // east) swings into the closet.
+        let q = o.offset(10, 0);
+        let inner = q.offset(2, 2);
+        building(&mut s, q, 6, 5, Some(2), &[inner]);
+        assert_eq!(orient(&s, inner), Orient { swap: true, flip: true }, "into the smaller room");
     }
 }

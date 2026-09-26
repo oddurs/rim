@@ -698,6 +698,61 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     let joint = px(&img, at(&t, run, 1.0 - 1.0 / z, 2.0 / z));
     t.check(dist(joint, fill) < 0.1, format!("a joined corner is square and seamless ({joint:?} vs fill {fill:?})"));
     t.shot("joins").await;
+
+    // ---------------------------------------------------------- openings turn to their wall
+    println!("\n# a door turns to its wall and swings into the room (DESIGN.md §6c)");
+    let door = defs.thing_id("door").unwrap();
+    let hut = slot.offset(0, 6);
+    for x in -1..=6 {
+        for y in -1..=6 {
+            if let Some(e) = t.w().map.fixture_at(hut.offset(x, y)) {
+                t.app.sim.world.despawn_thing(e);
+            }
+        }
+    }
+    let west = hut.offset(0, 2);
+    for y in 0..5 {
+        for x in 0..5 {
+            if x == 0 || y == 0 || x == 4 || y == 4 {
+                let def = if hut.offset(x, y) == west { door } else { wall };
+                t.app.sim.world.spawn_fixture_of(def, hut.offset(x, y), false, Some(wood)).expect("a hut piece");
+            }
+        }
+    }
+    t.app.sim.world.map.ensure_rooms();
+    t.focus(west);
+    let img = t.grab().await;
+    let z = t.app.cam.zoom;
+    let wood_c = of(defs.thing(wood).rgb);
+    let ground = px(&img, at(&t, west, -1.5, 0.5));
+    let near = |c: [f32; 3]| dist(c, wood_c) < dist(c, ground);
+    // In a north–south wall the wall's ends are the door's top and bottom.
+    let jamb = px(&img, at(&t, west, 0.5, 2.0 / z));
+    let side = px(&img, at(&t, west, 2.0 / z, 0.5));
+    t.check(
+        near(jamb) && !near(side),
+        format!("the door's jambs turned to a north–south wall ({jamb:?}, side {side:?})"),
+    );
+    // The leaf stands open toward the hut, across the door cell's east
+    // half just below the jamb, and nothing stands in the west half. Both
+    // are in the doorway, under the same light: wood is redder than grass.
+    let woody = |c: [f32; 3]| c[0] > c[1];
+    let count = |x0: f32, x1: f32| {
+        let mut n = 0;
+        for i in 0..=20 {
+            for j in 0..=8 {
+                let (fx, fy) = (x0 + (x1 - x0) * i as f32 / 20.0, 0.13 + 0.15 * j as f32 / 8.0);
+                n += woody(px(&img, at(&t, west, fx, fy))) as usize;
+            }
+        }
+        n
+    };
+    let (east, west_half) = (count(0.55, 0.98), count(0.02, 0.45));
+    t.check(
+        east >= 10 && west_half == 0,
+        format!("the leaf swings into the room ({east} wood samples east of the hinge, {west_half} west)"),
+    );
+    t.shot("door").await;
     t.app.cam.zoom = zoom;
 
     // ---------------------------------------------------------- 0215 materials

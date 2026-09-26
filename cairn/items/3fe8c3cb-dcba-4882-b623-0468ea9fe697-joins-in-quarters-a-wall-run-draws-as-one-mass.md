@@ -2,12 +2,12 @@
 id: 3fe8c3cb-dcba-4882-b623-0468ea9fe697
 title: 'Joins in quarters: a wall run draws as one mass'
 type: feature
-status: doing
+status: done
 milestone: houses
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 created: 2026-09-26
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p0
 api: additive
 effort: m

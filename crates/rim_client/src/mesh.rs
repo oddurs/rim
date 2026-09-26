@@ -154,6 +154,9 @@ struct Chunk {
     /// Something anchored here reaches past its right or bottom edge, so it
     /// is drawn when the chunk beside or below it is on screen.
     spills: bool,
+    /// Something here faces the room beside it (a door's swing): the room
+    /// rebuild it was drawn for, since rooms can change with no wall here.
+    rooms_seen: Option<u64>,
 }
 
 pub struct Meshes {
@@ -292,6 +295,7 @@ impl Meshes {
         chunk.live = Default::default();
         chunk.counts.clear();
         chunk.spills = false;
+        chunk.rooms_seen = None;
         for layer in 0..3 {
             let mut b = Builder::new(atlas);
             for y in y0..(y0 + CHUNK).min(w.map.h) {
@@ -300,8 +304,12 @@ impl Meshes {
                     let i = w.map.idx(cell);
                     let Some(e) = w.map.layers_at(i)[layer] else { continue };
                     if let Some(t) = w.thing(e).filter(|t| t.pos == cell) {
-                        let [sw, sh] = w.defs.thing(t.def).size;
+                        let td = w.defs.thing(t.def);
+                        let [sw, sh] = td.size;
                         chunk.spills |= x + sw as i32 > x0 + CHUNK || y + sh as i32 > y0 + CHUNK;
+                        if td.look_r.reads_rooms() {
+                            chunk.rooms_seen = Some(w.map.room_rebuilds);
+                        }
                     }
                     if live(w, e) {
                         chunk.live[layer].push(cell);
@@ -373,6 +381,7 @@ impl Meshes {
             let stale = match self.chunks[c].built {
                 None => true,
                 Some((r, _)) if r != w.map.things_rev(c) => true,
+                _ if self.chunks[c].rooms_seen.is_some_and(|r| r != w.map.room_rebuilds) => true,
                 Some((_, z)) if z == cam.zoom => false,
                 Some((_, z)) => {
                     let far = (cam.zoom / z).max(z / cam.zoom) > MAX_SCALE;

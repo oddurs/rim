@@ -22,6 +22,7 @@ is the middle. Line widths are in screen points.
 | `disc` | `x`, `y` (0.5, 0.5), `r` (0.4), `min_px`, `pulse` | a disc |
 | `edges` | `width` (1.5) | the cell's border, left open toward joined neighbours |
 | `mass` | | the whole cell, rounded at its outer corners (see [Joining](#joining)) |
+| `arc` | `x`, `y` (0.5, 0.5), `r` (0.4), `from`, `to` (0, 90), `width` (1) | an arc, in degrees clockwise from east |
 | `sprite` | see [Sprites](#sprites) | a mod's picture |
 | `glyph` | see [Glyphs](#glyphs) | one character |
 
@@ -163,6 +164,49 @@ category = "building"
 blocks = true
 look.join = { group = "hedge", round = 0.35 }
 look.layers = [{ draw = "mass" }, { draw = "edges", width = 1.5, shade = 0.55 }]
+```
+
+## Turning with the wall
+
+A piece set into a run of wall, like a door or a window, should follow the
+wall. `look.orient = "run"` says the layers are written for a run going
+east to west, and the renderer turns them when the joined neighbours run
+north to south instead. A layer with `into = "room"` is written with the
+room to the south. It is mirrored when the enclosed side is the north or
+the west. With a room on both sides it goes toward the smaller, and with
+none it stays south. Core's door is the wall's two ends, and the leaf
+standing open into the room with the arc it swings through:
+
+<!-- not a sample -->
+```toml
+look.join = "wall"
+look.orient = "run"
+look.layers = [
+    { draw = "fill", w = 0.12, shade = 0.75 },
+    { draw = "fill", x = 0.88, w = 0.12, shade = 0.75 },
+    { draw = "arc", x = 0.12, r = 0.76, from = 0, to = 90, width = 1.0, shade = 0.45, into = "room" },
+    { draw = "fill", x = 0.12, y = 0.5, w = 0.1, h = 0.76, shade = 0.5, into = "room" },
+]
+```
+
+`orient` needs `join`, since it follows the run. `into` applies to
+`fill`, `outline`, `disc` and `arc`. Edges, masses, sprites and glyphs
+don't turn. A layer may reach past its cell (a leaf swinging into the
+room does). Only one-cell things turn. A gate in a fence:
+
+```toml
+[[thing]]
+id = "gate"
+label = "gate"
+color = "#8a6a45"
+category = "building"
+door = true
+look.join = "fence"
+look.orient = "run"
+look.layers = [
+    { draw = "fill", y = 0.4, h = 0.2, shade = 0.8 },
+    { draw = "arc", x = 0.05, r = 0.9, from = 0, to = 60, into = "room" },
+]
 ```
 
 ## States

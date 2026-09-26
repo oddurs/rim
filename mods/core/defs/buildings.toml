@@ -26,10 +26,18 @@ blocks_wind = 1.0
 label = "door"
 color = "#b07a45"
 category = "building"
+# Drawn as a plan draws a door: the wall's two ends, and the leaf standing
+# open into the room with the arc it swings through. Written for a wall
+# running east to west with the room to the south; it turns to its wall
+# and mirrors toward the room by itself (DESIGN.md §6c).
 look.join = "wall"
+look.orient = "run"
 look.layers = [
-    { draw = "fill", x = 0.08, y = 0.08, w = 0.84, h = 0.84 },
-    { draw = "fill", x = 0.45, y = 0.1, w = 0.1, h = 0.8, shade = 0.6 },
+    { draw = "fill", w = 0.12, shade = 0.75 },
+    { draw = "fill", x = 0.88, w = 0.12, shade = 0.75 },
+    { draw = "arc", x = 0.12, r = 0.76, from = 0, to = 90, width = 1.0, shade = 0.45, into = "room" },
+    { draw = "fill", x = 0.12, y = 0.5, w = 0.1, h = 0.76, shade = 0.5, into = "room" },
+    { draw = "fill", x = 0.14, y = 0.52, w = 0.06, h = 0.72, shade = 1.1, into = "room" },
 ]
 door = true
 path_cost = 60
@@ -48,10 +56,16 @@ blocks_wind = 1.0
 label = "window"
 color = "#9a7b58"
 category = "building"
+# The wall with a pane across it, as a plan draws a window: two faces of
+# glass and the frame's line down the middle, turned to follow its wall.
 look.join = { group = "wall", round = 0.22 }
+look.orient = "run"
 look.layers = [
     { draw = "mass" },
-    { draw = "fill", x = 0.2, y = 0.2, w = 0.6, h = 0.6, color = "#bfe0ffe6" },
+    { draw = "fill", y = 0.36, h = 0.28, color = "#c4e4ffe6" },
+    { draw = "fill", y = 0.36, h = 0.0, min_px = 1.0, shade = 0.5 },
+    { draw = "fill", y = 0.64, h = 0.0, min_px = 1.0, shade = 0.5 },
+    { draw = "fill", y = 0.5, h = 0.0, min_px = 1.0, color = "#5a8cc8" },
     { draw = "edges", width = 1.5, shade = 0.55 },
 ]
 blocks = true
