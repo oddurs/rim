@@ -20,6 +20,7 @@ pub mod rng;
 pub mod savefile;
 pub mod savetext;
 pub mod script;
+pub mod shelter;
 pub mod sim;
 pub mod snapshot;
 pub mod systems;

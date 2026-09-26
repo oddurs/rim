@@ -766,6 +766,7 @@ impl Snapshot {
             w.zones = zones;
         }
         let sc: ScriptsSection = dec(self, "engine:scripts")?;
+        w.update_shelter();
         // Hook indices only mean the same hooks under the same scripts.
         if remap.to.is_none() && lock_matches(&self.header.mods, &mods.manifests) {
             mods.scripts.set_disabled(&sc.disabled_hooks, &sc.disabled_handlers);

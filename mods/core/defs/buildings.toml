@@ -4,6 +4,7 @@
 # the wall's own; the material scales them (0213) and tints it (0220).
 [[thing]]
 id = "wall"
+blocks_wind = 1.0
 label = "wall"
 color = "#7a5230"
 category = "building"
@@ -20,6 +21,7 @@ boundary = [{ field = "temperature", leak = 1.0 }]
 
 [[thing]]
 id = "door"
+blocks_wind = 1.0
 label = "door"
 color = "#b07a45"
 category = "building"
@@ -41,6 +43,7 @@ boundary = [{ field = "temperature", leak = 1.5 }]
 # implied, since nothing in core makes glass yet.
 [[thing]]
 id = "window"
+blocks_wind = 1.0
 label = "window"
 color = "#9a7b58"
 category = "building"
