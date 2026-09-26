@@ -12,7 +12,8 @@
 //! the time a tick has at 6x speed), with 3x slack on shared CI runners.
 //!
 //! Flags: --seed N, --size N, --colonists N, --pawns N, --days F,
-//! --designate-all (every cell of the map designated), --check.
+//! --designate-all (every cell of the map designated), --haul (a stockpile
+//! and 300 loose stacks instead of other work), --check.
 
 use rim_sim::world::Faction;
 use rim_sim::{Command, IVec, Sim, TICKS_PER_DAY};
@@ -79,24 +80,24 @@ fn main() {
         }
     }
 
-    // Work: chop and mine a large area (or the whole map), plan buildings.
-    let des = |id: &str| defs.lookup("designation", id).expect(id);
-    let (a, b) = if flag("--designate-all") {
-        (IVec::new(0, 0), IVec::new(size - 1, size - 1))
-    } else {
-        (c.offset(-40, -40), c.offset(40, 40))
-    };
-    for d in ["chop", "mine", "harvest"] {
-        s.push(Command::Designate { designation: des(d), a, b });
-    }
-    let wood = defs.thing_id("wood");
-    if let (Some(wall), Some(bed)) = (defs.thing_id("wall"), defs.thing_id("bed")) {
-        for k in 0..6 {
-            let o = c.offset(8 + k * 7, 8);
-            s.push(Command::Build { thing: wall, stuff: wood, a: o, b: o.offset(5, 0) });
-            s.push(Command::Build { thing: wall, stuff: wood, a: o.offset(0, 4), b: o.offset(5, 4) });
-            s.push(Command::Build { thing: bed, stuff: wood, a: o.offset(2, 2), b: o.offset(2, 2) });
+    // --haul is the hauling case (cairn 8d551753): a 40x40 stockpile, 300
+    // loose stacks of wood and stone, and no other work.
+    if flag("--haul") {
+        let items: Vec<_> = ["wood", "stone"].iter().filter_map(|id| defs.thing_id(id)).collect();
+        let z = c.offset(10, -20);
+        s.push(Command::Stockpile { a: z, b: z.offset(39, 39), zone: None });
+        let (mut placed, mut tries) = (0, 0);
+        while placed < 300 && tries < 100_000 {
+            tries += 1;
+            let p = c.offset(rng.range(-60, 60), rng.range(-60, 60));
+            let d = items[placed % items.len()];
+            if s.world.room_for(d, None, p) >= 75 && s.world.zones.at(&s.world.map, p).is_none() {
+                s.world.place_item(d, p, 30);
+                placed += 1;
+            }
         }
+    } else {
+        plan_work(&mut s, &defs, c, size);
     }
 
     // Warm up (paths, rooms, first jobs), then measure.
@@ -194,5 +195,27 @@ fn main() {
             std::process::exit(1);
         }
         println!("bench: within budget ({mean:.3} <= {limit:.1} ms)");
+    }
+}
+
+/// Work: chop and mine a large area (or the whole map), plan buildings.
+fn plan_work(s: &mut Sim, defs: &rim_sim::defs::DefDb, c: IVec, size: i32) {
+    let des = |id: &str| defs.lookup("designation", id).expect(id);
+    let (a, b) = if flag("--designate-all") {
+        (IVec::new(0, 0), IVec::new(size - 1, size - 1))
+    } else {
+        (c.offset(-40, -40), c.offset(40, 40))
+    };
+    for d in ["chop", "mine", "harvest"] {
+        s.push(Command::Designate { designation: des(d), a, b });
+    }
+    let wood = defs.thing_id("wood");
+    if let (Some(wall), Some(bed)) = (defs.thing_id("wall"), defs.thing_id("bed")) {
+        for k in 0..6 {
+            let o = c.offset(8 + k * 7, 8);
+            s.push(Command::Build { thing: wall, stuff: wood, a: o, b: o.offset(5, 0) });
+            s.push(Command::Build { thing: wall, stuff: wood, a: o.offset(0, 4), b: o.offset(5, 4) });
+            s.push(Command::Build { thing: bed, stuff: wood, a: o.offset(2, 2), b: o.offset(2, 2) });
+        }
     }
 }

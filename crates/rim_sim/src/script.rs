@@ -122,6 +122,7 @@ pub const RIM_TYPES: &str = r#"type Faction = "player" | "hostile" | "wild"
 type MessageKind = "info" | "good" | "threat" | "bad"
 type CreatureInfo = { id: string, label: string, intelligent: boolean, aggressive: boolean, flees: boolean, plural: string, market_value: number, max_hp: number, wild: boolean }
 type ThingInfo = { id: string, label: string, market_value: number, food: boolean, item: boolean, tags: { string } }
+type StockQuery = { thing: string?, tag: string?, category: string? }
 type ItemCategoryInfo = { id: string, label: string, parent: string?, order: number, children: { string }, items: { string } }
 type Date = { year: number, season: string, season_index: number, day: number, day_of_year: number, year_days: number, year_fraction: number }
 type Room = { id: number, cells: number, enclosed: boolean, role: string?, role_label: string? }
@@ -1290,14 +1291,45 @@ impl ScriptHost {
                     (None, Some(tag)) => w.defs.thing(d).tags.contains(tag),
                     (None, None) => false,
                 };
-                let n: u32 = w
-                    .ecs
-                    .query::<(hecs::Entity, &Thing)>()
-                    .iter()
-                    .filter(|(e, t)| takes(t.def) && w.map.item_at(t.pos) == Some(*e))
-                    .map(|(_, t)| t.count)
-                    .sum();
-                Ok(n)
+                Ok((0..w.defs.things.len() as crate::defs::DefId)
+                    .filter(|&d| takes(d))
+                    .map(|d| w.stock.on_map(d))
+                    .sum::<u32>())
+            }
+        );
+        api!(
+            "stock",
+            "(what: string | StockQuery, place: (\"stored\" | \"loose\")?) -> number",
+            "How many the colony has on the map, read from the stock ledger (never counted): a thing by id, or \
+             { thing = }, { tag = } or { category = } (an item category and those under it). `place` narrows it to \
+             what lies where a stockpile keeps it, or to what doesn't.",
+            (Value, Option<String>),
+            |w, from, (what, place)| {
+                let defs = &w.defs;
+                let (thing, tag, category): (Option<String>, Option<String>, Option<String>) = match &what {
+                    Value::String(s) => (Some(s.to_str()?.to_string()), None, None),
+                    Value::Table(t) => (t.get("thing")?, t.get("tag")?, t.get("category")?),
+                    _ => {
+                        return Err(mlua::Error::runtime("stock: give a thing id or { thing | tag | category = ... }"))
+                    }
+                };
+                let items: Vec<crate::defs::DefId> = match (thing, tag, category) {
+                    (Some(t), None, None) => vec![def_id(w, "thing", &t, &from)?],
+                    (None, Some(tag), None) => (0..defs.things.len() as crate::defs::DefId)
+                        .filter(|&d| defs.thing(d).tags.contains(&tag))
+                        .collect(),
+                    (None, None, Some(c)) => defs.category_items(def_id(w, "item_category", &c, &from)?),
+                    _ => return Err(mlua::Error::runtime("stock: give exactly one of thing, tag or category")),
+                };
+                let count = |d| match place.as_deref() {
+                    None => Ok(w.stock.on_map(d)),
+                    Some("stored") => Ok(w.stock.stored(d)),
+                    Some("loose") => Ok(w.stock.on_map(d) - w.stock.stored(d)),
+                    Some(other) => {
+                        Err(mlua::Error::runtime(format!("stock: place is \"stored\" or \"loose\", not \"{other}\"")))
+                    }
+                };
+                items.into_iter().map(count).sum::<mlua::Result<u32>>()
             }
         );
         api!(

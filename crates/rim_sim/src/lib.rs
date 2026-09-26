@@ -25,6 +25,7 @@ pub mod script;
 pub mod shelter;
 pub mod sim;
 pub mod snapshot;
+pub mod stock;
 pub mod systems;
 pub mod terms;
 pub mod world;
