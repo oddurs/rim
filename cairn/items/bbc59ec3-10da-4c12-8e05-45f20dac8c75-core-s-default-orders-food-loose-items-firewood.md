@@ -34,3 +34,7 @@ Auto reacts to waiting work; the colony also needs to react to what it is short 
 - [ ] Each reading matches a hand count in a fixture colony (test)
 - [ ] Each order starts and stops at its marks in a scripted scenario (test)
 - [ ] The survival harness loses no more colonies with the orders on than off, recorded in DESIGN.md §4d
+
+## 2026-09-26
+
+The storage work (DESIGN §4f) is adding a stock ledger: rim.stock(thing | {tag} | {category}, "stored" | "loose"), O(1). Read core:loose_items from rim.stock(..., "loose") instead of scanning items.

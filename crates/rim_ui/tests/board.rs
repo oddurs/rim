@@ -168,7 +168,11 @@ fn cells_show_the_rules_and_say_why() {
     frame(&mut ui, &sim, &cv, Input { time: 10.0, ..Default::default() });
     let build = ui.grid_cell("core:work.grid", 1, column(&sim, "core:build")).unwrap();
     assert_eq!(build.text, "3→1");
-    assert!(build.tip.as_deref().is_some_and(|t| t.starts_with("Build 1 = base 3, Siege -2")), "{:?}", build.tip);
+    assert!(
+        build.tip.as_deref().is_some_and(|t| t.starts_with("Build: First = default Later · Siege −2")),
+        "{:?}",
+        build.tip
+    );
     assert!(build.bar > 0.0, "the colonist's construction skill as a bar");
     assert_eq!(ui.grid_cell("core:work.grid", 1, column(&sim, "core:hunt")).unwrap().text, "3→–");
 }
@@ -197,37 +201,100 @@ fn headers_show_demand_and_mark_neglected_work() {
     assert!(ui.grid_cell("core:work.header", 2, col).unwrap().bg.is_none(), "someone's on it now");
 }
 
-/// The ranked view writes the same numbers the board reads: a change in
-/// either shows in the other.
+/// The shelves write the same settings the board reads: a change in either
+/// shows in the other.
 #[test]
-fn the_ranked_view_and_the_board_agree() {
+fn the_shelves_and_the_board_agree() {
     let (mut sim, mut ui, mut cv) = board(1);
     let pawn = sim.world.colonists().next().unwrap();
     let name = cell_at(&ui, "core:work.names", 1, 1);
     click(&mut ui, &sim, &mut cv, name);
     frame(&mut ui, &sim, &cv, Input { time: 5.0, ..Default::default() });
-    let up = ui.find("core:work.ranked.core:mine.up").expect("the ranked view opens on the name");
-    let actions = click(&mut ui, &sim, &mut cv, centre(up));
-    assert_eq!(actions, vec![UiAction::SetPriority(pawn, "core:mine".into(), 2)]);
+    let mine_token = ui.find("core:work.ranked.core:mine").expect("the shelves open on the name");
+    let actions = click(&mut ui, &sim, &mut cv, centre(mine_token));
+    assert_eq!(actions, vec![UiAction::SetPriority(pawn, "core:mine".into(), 4)], "a click moves it a shelf later");
     // Applied as the client would, both read it back.
     let mine = sim.world.defs.lookup("work_type", "core:mine").unwrap();
-    sim.push(Command::SetPriority { pawn, work: mine, level: 2 });
+    sim.push(Command::SetPriority { pawn, work: mine, level: 4 });
     sim.step();
     frame(&mut ui, &sim, &cv, Input { time: 20.0, ..Default::default() });
-    assert_eq!(ui.grid_cell("core:work.grid", 1, column(&sim, "core:mine")).unwrap().text, "2");
+    assert_eq!(ui.grid_cell("core:work.grid", 1, column(&sim, "core:mine")).unwrap().text, "4");
     let tree = ui.snapshot();
-    let level2 = tree.find("\"Level 2\"").expect("a level 2 group");
-    let mine_row = tree.find("#core:work.ranked.core:mine").unwrap();
-    assert!(mine_row > level2, "mine moved up into level 2:\n{tree}");
+    let spare = tree.find("#core:work.shelf.4").expect("a Spare time shelf");
+    let mine_at = tree.find("#core:work.ranked.core:mine").unwrap();
+    assert!(mine_at > spare && tree[spare..mine_at].contains("Spare time"), "mine is on the Spare time shelf:\n{tree}");
 
-    // And the board's paint shows in the ranked view.
+    // And the board's paint shows on the shelves.
     let build = sim.world.defs.lookup("work_type", "core:build").unwrap();
     sim.push(Command::SetPriority { pawn, work: build, level: 0 });
     sim.step();
     frame(&mut ui, &sim, &cv, Input { time: 30.0, ..Default::default() });
     let tree = ui.snapshot();
-    let never = tree.find("\"Never\"").expect("a never group");
-    assert!(tree.find("#core:work.ranked.core:build").unwrap() > never, "build is under Never");
+    let never = tree.find("#core:work.shelf.0").expect("a never shelf");
+    assert!(tree.find("#core:work.ranked.core:build").unwrap() > never, "build is on the Never shelf");
+}
+
+/// A pinned cell is drawn as the player's, and clicking it back to what the
+/// colonist would inherit hands it back rather than pinning the default.
+#[test]
+fn a_pin_is_marked_and_clicking_back_hands_it_back() {
+    let (mut sim, mut ui, mut cv) = board(1);
+    let pawn = sim.world.colonists().next().unwrap();
+    let build = sim.world.defs.lookup("work_type", "core:build").unwrap();
+    let c = column(&sim, "core:build");
+    assert!(ui.grid_cell("core:work.grid", 1, c).unwrap().dot.is_none(), "a default isn't a pin");
+    sim.push(Command::SetPriority { pawn, work: build, level: 2 });
+    sim.step();
+    frame(&mut ui, &sim, &cv, Input { time: 20.0, ..Default::default() });
+    let cell = ui.grid_cell("core:work.grid", 1, c).unwrap();
+    assert!(cell.dot.is_some() && cell.weight.is_some(), "a pin is bold with a dot: {cell:?}");
+    assert!(cell.tip.as_deref().unwrap_or("").contains("setting Soon"), "the tip says whose: {:?}", cell.tip);
+    let at = cell_at(&ui, "core:work.grid", 1, c);
+    let actions = click(&mut ui, &sim, &mut cv, at);
+    assert_eq!(
+        actions,
+        vec![UiAction::ClearPriority(pawn, "core:build".into())],
+        "Soon steps to Later, core's default"
+    );
+}
+
+/// Over a cell, a level's number sets it, N sets never and A hands it back,
+/// ahead of any key binding.
+#[test]
+fn keys_over_a_cell_set_and_hand_back() {
+    let (mut sim, mut ui, cv) = board(1);
+    let pawn = sim.world.colonists().next().unwrap();
+    let build = sim.world.defs.lookup("work_type", "core:build").unwrap();
+    sim.push(Command::SetPriority { pawn, work: build, level: 2 });
+    sim.step();
+    let at = cell_at(&ui, "core:work.grid", 1, column(&sim, "core:build"));
+    let mut t = 20.0;
+    let mut press = |ui: &mut Ui, key: &str| {
+        t += 0.1;
+        frame(ui, &sim, &cv, Input { mouse: at, time: t, ..Default::default() });
+        let out =
+            frame(ui, &sim, &cv, Input { mouse: at, time: t + 0.05, pressed: vec![key.into()], ..Default::default() });
+        assert!(out.captured_keys, "{key} is the cell's, not a binding's");
+        out.actions
+    };
+    assert_eq!(press(&mut ui, "1"), vec![UiAction::SetPriority(pawn, "core:build".into(), 1)]);
+    assert_eq!(press(&mut ui, "n"), vec![UiAction::SetPriority(pawn, "core:build".into(), 0)]);
+    assert_eq!(press(&mut ui, "a"), vec![UiAction::ClearPriority(pawn, "core:build".into())]);
+    assert_eq!(
+        press(&mut ui, "3"),
+        vec![UiAction::ClearPriority(pawn, "core:build".into())],
+        "Later is what build inherits: its number hands the pin back"
+    );
+}
+
+/// The brush speaks in the scale's names.
+#[test]
+fn the_brush_names_the_levels() {
+    let (_sim, ui, _cv) = board(1);
+    let tree = ui.snapshot();
+    for name in ["First", "Soon", "Later", "Spare time", "Never"] {
+        assert!(tree.contains(&format!("\"{name}\"")), "the brush offers {name}:\n{tree}");
+    }
 }
 
 /// A mod's work type is a column with no UI change.

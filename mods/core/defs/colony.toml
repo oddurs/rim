@@ -57,9 +57,12 @@ id = "melee"
 label = "Melee"
 melee = true
 
+# Levels by name (DESIGN.md §4d). A mod that patches `levels` patches
+# `labels` with it, or empties them and the board shows numbers.
 [[priority_scale]]
 id = "core"
 levels = 4
+labels = ["First", "Soon", "Later", "Spare time"]
 
 [[work_type]]
 id = "build"

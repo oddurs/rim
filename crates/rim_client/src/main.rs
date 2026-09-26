@@ -1480,6 +1480,11 @@ fn apply_ui(app: &mut App, a: UiAction) {
                 app.sim.push(Command::SetPriority { pawn: e, work: w, level });
             }
         }
+        UiAction::ClearPriority(e, work) => {
+            if let Some(w) = app.sim.world.defs.lookup("work_type", &work) {
+                app.sim.push(Command::ClearPriority { pawn: e, work: w });
+            }
+        }
         UiAction::SetStance(id) => {
             if let Some(stance) = app.sim.world.defs.lookup("stance", &id) {
                 app.sim.push(Command::SetStance { stance });

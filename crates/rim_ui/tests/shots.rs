@@ -107,7 +107,10 @@ fn work_board_at_4_and_9_levels() {
         &[(
             "fine",
             "",
-            &[("defs/scale.toml", "[[patch]]\ntarget = \"priority_scale/core:core\"\nset = { levels = 9 }\n")],
+            &[(
+                "defs/scale.toml",
+                "[[patch]]\ntarget = \"priority_scale/core:core\"\nset = { levels = 9, labels = [] }\n",
+            )],
         )],
     );
     for (name, dir) in [("work_board_4", mods()), ("work_board_9", nine.clone())] {
@@ -121,6 +124,11 @@ fn work_board_at_4_and_9_levels() {
         let levels = defs.priority_scale.levels;
         for (k, p) in sim.world.colonists().collect::<Vec<_>>().into_iter().enumerate() {
             for (j, w) in (0..defs.work_types.len()).enumerate() {
+                // Some cells left at the default, so pins and inherited
+                // values sit side by side.
+                if (k + j) % 3 == 0 {
+                    continue;
+                }
                 let level = ((k + j * 2 + 1) % (levels as usize + 1)) as u8;
                 sim.push(rim_sim::Command::SetPriority { pawn: p, work: w as rim_sim::defs::DefId, level });
             }

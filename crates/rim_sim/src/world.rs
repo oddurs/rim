@@ -273,6 +273,18 @@ impl Pawn {
         pct / 100
     }
 
+    /// The priority the player set for this colonist, if they set one: a
+    /// pin, which beats what the colonist would otherwise inherit.
+    pub fn own_priority(&self, work: DefId) -> Option<u8> {
+        self.priorities.iter().find(|p| p.0 == work).map(|p| p.1)
+    }
+
+    /// Hand a work type back: forget the colonist's own setting, so they
+    /// follow the default again. The list only ever holds what differs.
+    pub fn clear_priority(&mut self, work: DefId) {
+        self.priorities.retain(|p| p.0 != work);
+    }
+
     /// Set a priority, keeping the list in work-type order so the state
     /// doesn't depend on the order changes were made in.
     pub fn set_priority(&mut self, work: DefId, level: u8) {

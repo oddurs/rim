@@ -2,10 +2,12 @@
 id: 166a4cc9-fee8-4cd4-9384-4ec243f74031
 title: 'Named levels and pins: First, Soon, Later, Spare time'
 type: feature
-status: backlog
+status: done
 milestone: work
+assignee: Oddur Sigurdsson
 created: 2026-09-26
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p0
 api: additive
 effort: s
@@ -27,8 +29,12 @@ The board speaks in numbers a new player can't read, and it can't say whether a 
 
 ## Acceptance criteria
 
-- [ ] A scale whose `labels` length differs from `levels` fails to load with a message naming the mod (test)
-- [ ] `SetPriority` with `inherit` removes the setting, and the state hash equals a pawn that never had one (test)
-- [ ] Cycling a cell back to its default leaves no pin on the board (autotest or UI test)
-- [ ] The board and ranked view show names; a nine-level fixture scale shows numbers
-- [ ] `scripts/check-luau.sh` and the determinism test pass
+- [x] A scale whose `labels` length differs from `levels` fails to load with a message naming the mod (test)
+- [x] `SetPriority` with `inherit` removes the setting, and the state hash equals a pawn that never had one (test)
+- [x] Cycling a cell back to its default leaves no pin on the board (autotest or UI test)
+- [x] The board and ranked view show names; a nine-level fixture scale shows numbers
+- [x] `scripts/check-luau.sh` and the determinism test pass
+
+## 2026-09-26
+
+SetPriority's field type stays u8: saves log commands, so changing it to level | inherit would break old logs. Handing back is a new ClearPriority command instead. The label count must match levels or the load fails, so a mod growing the scale patches levels = 9, labels = [] (DESIGN.md updated to say so).

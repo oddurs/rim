@@ -240,8 +240,19 @@ fn walk(
                     let color = cell.bar_color.unwrap_or(default_color);
                     p.draw.push(Draw::Rect { rect: bar, color: fade(color, alpha * 0.8), radius: 0.0 });
                 }
+                // Who set a value: a dot or a ring tucked into the corner.
+                let r_mark = (g.cell_h * 0.14).clamp(2.0, 4.0);
+                let at = [cr[0] + cr[2] - inset - 2.0 * r_mark, cr[1] + inset, 2.0 * r_mark, 2.0 * r_mark];
+                if let Some(c) = cell.dot {
+                    p.draw.push(Draw::Rect { rect: at, color: fade(c, alpha), radius: r_mark });
+                }
+                if let Some(c) = cell.ring {
+                    let width = (r_mark * 0.4).max(1.0);
+                    p.draw.push(Draw::Outline { rect: at, color: fade(c, alpha), width, radius: r_mark });
+                }
                 if !cell.text.is_empty() {
-                    let quads = p.text.quads(&cell.text, g.size, g.weight, 0.0, None, cr[0] + inset, cr[1] + inset);
+                    let weight = cell.weight.unwrap_or(g.weight);
+                    let quads = p.text.quads(&cell.text, g.size, weight, 0.0, None, cr[0] + inset, cr[1] + inset);
                     if !quads.is_empty() {
                         p.draw.push(Draw::Glyphs { quads, color: fade(cell.color.unwrap_or(default_color), alpha) });
                     }

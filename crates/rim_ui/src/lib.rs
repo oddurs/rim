@@ -183,6 +183,12 @@ enum Call {
         cell: (usize, usize),
         value: mlua::Value,
     },
+    /// A key the grid asked for, over one of its cells.
+    GridKey {
+        f: mlua::Function,
+        cell: (usize, usize),
+        key: String,
+    },
 }
 
 /// One laid-out layer from the last frame, kept for input routing.
@@ -1084,9 +1090,25 @@ impl Ui {
                 out.captured_keys = true;
             }
         }
+        // A grid under the pointer takes the keys it names, before any
+        // binding: a number over a Work Board cell sets it.
+        let grid_keys = match (&top, input.pressed.is_empty()) {
+            (Some((layer, h)), false) => self
+                .node_at(layer, h.path[0], &h.path[1..])
+                .and_then(|n| n.grid.clone())
+                .and_then(|g| Some((g.on_key.clone()?, g.cell_at(h.rect, mx, my)?, g.keys.clone()))),
+            _ => None,
+        };
         // Bound actions fire from their keys, unless a text input is typing.
         if !input.pressed.is_empty() && self.focused_input().is_none() && popup_keys.is_none() {
             for key in &input.pressed {
+                if let Some((f, cell, keys)) = &grid_keys {
+                    if keys.iter().any(|k| k == key) {
+                        handlers.push(Call::GridKey { f: f.clone(), cell: *cell, key: key.clone() });
+                        out.captured_keys = true;
+                        continue;
+                    }
+                }
                 if let Some(f) = self.vm.bind_for_key(key) {
                     handlers.push(Call::Click(f));
                     out.captured_keys = true;
@@ -1181,6 +1203,9 @@ impl Ui {
                 }
                 Call::Paint { f, cell, value } => {
                     self.vm.call_with(&f, (cell.0 as i64 + 1, cell.1 as i64 + 1, value), world, client, &self.shown);
+                }
+                Call::GridKey { f, cell, key } => {
+                    self.vm.call_with(&f, (cell.0 as i64 + 1, cell.1 as i64 + 1, key), world, client, &self.shown);
                 }
             }
         }

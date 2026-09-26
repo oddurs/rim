@@ -863,17 +863,33 @@ pub struct SkillDef {
     pub melee: bool,
 }
 
-/// How many priority levels there are. Core says 4; a mod patches it to 9.
+/// How many priority levels there are, and what the player calls them.
+/// Core says 4, named; a mod patches it to 9, and without names the UI
+/// shows numbers.
 #[derive(Deserialize, Clone, Debug)]
 pub struct PriorityScaleDef {
     pub id: String,
     #[serde(default = "d4")]
     pub levels: u8,
+    /// A name per level, first to last: "First", "Soon". Empty, or one per
+    /// level.
+    #[serde(default)]
+    pub labels: Vec<String>,
 }
 
 impl Default for PriorityScaleDef {
     fn default() -> Self {
-        PriorityScaleDef { id: "default".into(), levels: 4 }
+        PriorityScaleDef { id: "default".into(), levels: 4, labels: Vec::new() }
+    }
+}
+
+impl PriorityScaleDef {
+    /// What the player calls a level: its label, or its number; 0 is never.
+    pub fn name(&self, level: u8) -> String {
+        match level {
+            0 => "never".into(),
+            l => self.labels.get(l as usize - 1).cloned().unwrap_or_else(|| l.to_string()),
+        }
     }
 }
 
@@ -1432,6 +1448,13 @@ impl DefDb {
         let levels = self.priority_scale.levels;
         if !(1..=9).contains(&levels) {
             return Err(format!("priority_scale/{}: levels must be 1 to 9, not {levels}", self.priority_scale.id));
+        }
+        let named = self.priority_scale.labels.len();
+        if named != 0 && named != levels as usize {
+            return Err(format!(
+                "priority_scale/{}: {named} labels for {levels} levels; give one per level or none",
+                self.priority_scale.id
+            ));
         }
         // Each engine job is claimed by at most one work type.
         let mut claims: Vec<Option<usize>> = vec![None; ENGINE_JOBS.len()];
