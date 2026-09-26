@@ -2,12 +2,12 @@
 id: 668c7762-97c3-4b65-bf33-55bca0ea9e66
 title: 'Context: an action row and an inspector tab registry'
 type: feature
-status: review
+status: done
 milestone: interface
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 created: 2026-09-26
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p2
 api: additive
 effort: m
