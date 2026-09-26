@@ -60,7 +60,10 @@ cargo dist                                                        # a shipping b
 | Key                  | Action                             |
 |----------------------|------------------------------------|
 | Space / 1 2 3        | pause / 1x 3x 6x speed             |
-| WASD, wheel, middle  | pan, zoom, drag                    |
+| WASD / arrows        | pan                                |
+| Trackpad             | two fingers pan, Cmd+scroll zooms  |
+| Mouse                | wheel zooms, middle- or right-drag pans |
+| `-` `=`              | zoom out, in                       |
 | Click / drag         | select, or apply the toolbar tool  |
 | R                    | draft the selected colonist        |
 | Right-click          | the safe order there: go, hunt, eat, gather (never deconstruct or fell) |

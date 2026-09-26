@@ -2,14 +2,14 @@
 id: 9aa55d96-c35e-4378-bfcc-c5882bcbc3b7
 title: 'Right-click is safe: every order is an option, damage only by choice'
 type: bug
-status: review
+status: done
 milestone: pointer
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 depends_on:
 - 3b1726ff-ded5-45f6-968f-cb0a5e6a2577
 created: 2026-09-26
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p0
 api: additive
 effort: m

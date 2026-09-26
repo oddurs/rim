@@ -130,6 +130,7 @@ pub const UI_API: &[UiDoc] = &[
         "(scale: number) -> ()",
         "Draw the world at this fraction of the screen's pixels, 0.25 to 1; the UI stays sharp. Saved for the player."
     ),
+    d!("act.scroll_mode", "(mode: string) -> ()", "What a scroll does on the map: 'auto' (a trackpad pans, a wheel zooms), 'zoom' or 'pan'. Saved with the player's settings."),
     d!("act.select", "(id: number?, add: boolean?) -> ()", "Select a pawn or thing, or nothing. With add, put a colonist into the selection or take them out of it (a shift-click)."),
     d!(
         "act.send",
@@ -148,6 +149,7 @@ pub const UI_API: &[UiDoc] = &[
     d!("act.tool", "(key: string) -> ()", "Pick a toolbar tool (\"designate:core:chop\", \"build:core:wall\")."),
     d!("act.ui_scale", "(scale: number) -> ()", "Set the player's UI scale, 0.75 to 2 on top of the display's; it is saved with their settings."),
     d!("act.zone_allow", "(zone: number, item: string, on: boolean) -> ()", "Let a stockpile take an item, or stop it."),
+    d!("act.zoom", "(factor: number) -> ()", "Zoom the map by a factor about the middle of the screen (1.12 is one wheel notch in)."),
     d!("ui.anchored", "(node: Node?) -> Node", "A node attached to a pawn (entity) or cell, on the anchored layer."),
     d!(
         "ui.bind",

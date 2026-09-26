@@ -750,6 +750,14 @@ impl UiVm {
         act!("toggle_devtools", (), |_a| UiAction::ToggleDevtools);
         act!("toggle_outlines", (), |_a| UiAction::ToggleOutlines);
         act!("preview", Option<String>, |key| UiAction::Preview(key));
+        act!("zoom", f32, |f| match f.is_finite() && f > 0.0 {
+            true => UiAction::Zoom(f.clamp(0.25, 4.0)),
+            false => return Err(rt("act.zoom: wants a positive factor")),
+        });
+        act!("scroll_mode", String, |m| match m.as_str() {
+            "auto" | "zoom" | "pan" => UiAction::ScrollMode(m),
+            _ => return Err(rt("act.scroll_mode: auto, zoom or pan")),
+        });
         act!("ui_scale", f32, |s| match s.is_finite() {
             true => UiAction::UiScale(s.clamp(UI_SCALE.0, UI_SCALE.1)),
             false => return Err(rt("act.ui_scale: wants a number from 0.75 to 2")),

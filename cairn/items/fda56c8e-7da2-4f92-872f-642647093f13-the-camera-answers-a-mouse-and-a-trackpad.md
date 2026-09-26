@@ -2,8 +2,10 @@
 id: fda56c8e-7da2-4f92-872f-642647093f13
 title: The camera answers a mouse and a trackpad
 type: feature
-status: backlog
+status: review
 milestone: pointer
+assignee: Oddur Sigurdsson
+claimed: 2026-09-26
 created: 2026-09-26
 updated: 2026-09-26
 priority: p0
@@ -26,7 +28,11 @@ Panning is WASD, the arrows or a middle-button drag, so a trackpad can't pan wit
 
 ## Acceptance criteria
 
-- [ ] Fractional two-axis scroll pans the map by exactly its delta; whole notches zoom at the pointer
-- [ ] Cmd or Ctrl with a scroll zooms
-- [ ] A right-drag pans and gives no order
-- [ ] The scroll setting overrides the guess and survives a restart
+- [x] Fractional two-axis scroll pans the map by exactly its delta; whole notches zoom at the pointer
+- [x] Cmd or Ctrl with a scroll zooms
+- [x] A right-drag pans and gives no order
+- [x] The scroll setting overrides the guess and survives a restart
+
+## 2026-09-26
+
+Scroll events are sorted per event (classify): whole notches on one axis are a wheel, anything else is precise travel in points; a round-numbered event within 300 ms of precise scrolling still counts as the trackpad. Auto pans travel and zooms notches; Cmd/Ctrl zooms either; the scroll setting pins zoom or pan. Right-drag pans past 6 pt and gives no order. Pinch still needs the macOS magnify event (2f756dfc).
