@@ -184,3 +184,31 @@ fn tip(ui: &mut rim_ui::Ui, sim: &rim_sim::Sim, cv: &mut rim_ui::view::ClientVie
     frame(ui, sim, cv, Input { mouse: at, time: now + 5.0, ..Default::default() });
     ui.tooltip_text(now + 5.0).unwrap_or_else(|| panic!("no tooltip for {id}"))
 }
+
+/// The Work tab is the why panel: the work picked, and why the rest waits.
+/// Hovering a marked tree says who'd take it.
+#[test]
+fn the_work_tab_says_why_and_the_hover_says_who() {
+    let mut sim = rim_sim::Sim::with_mods(&mods(), 1, &|m| m == "core").unwrap();
+    let founder = sim.world.colonists().next().unwrap();
+    let (_, at) = an_oak(&sim);
+    let chop = sim.world.defs.lookup("designation", "core:chop").unwrap();
+    sim.push(Command::Designate { designation: chop, a: at, b: at });
+    sim.step();
+    let mut ui = ui_for(&sim);
+    let mut cv = client(&sim);
+    cv.selected = Some(founder);
+    frame(&mut ui, &sim, &cv, Input::default());
+    let tab = ui.find("core:inspector.tabs.work").expect("a work tab");
+    click(&mut ui, &sim, &mut cv, centre(tab));
+    frame(&mut ui, &sim, &cv, Input { time: 5.0, ..Default::default() });
+    let tree_text = ui.snapshot();
+    assert!(tree_text.contains("\"Next: Chop oak tree\""), "the pick: {tree_text}");
+    assert!(tree_text.contains("\"Nothing waiting\""), "and a type with nothing to do");
+
+    cv.hover_cell = Some(at);
+    frame(&mut ui, &sim, &cv, Input { time: 10.0, ..Default::default() });
+    let name = sim.world.ecs.get::<&rim_sim::world::Pawn>(founder).unwrap().name.clone();
+    let snap = ui.snapshot();
+    assert!(snap.contains(&format!("\"Next: {name} in ~")), "who'd take the tree: {snap}");
+}

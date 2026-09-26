@@ -25,6 +25,7 @@ are in [Scripting rules](scripting.md).
 | `rim.emit` | `(name: string, data: {[string]: any}?) -> ()` | Send an event to rim.on handlers in any mod. Only under your own name: "your_mod:event". |
 | `rim.every` | `(interval: number, fn: () -> ()) -> ()` | Run fn every `interval` ticks (hooks are staggered). Register at load time. |
 | `rim.explain` | `(field: string) -> {Part}` | Each part of a field's outdoor value: its terms, then pushes. |
+| `rim.explain_work` | `(id: number) -> { WorkWhy }` | Why a colonist would do what it would, and passes over the rest, work type by work type in tie-break order. Empty if it isn't a pawn. |
 | `rim.field` | `(id: string, x: number, y: number) -> number` | A field's value at a cell (temperature, light, ...). |
 | `rim.get_data` | `(key: string) -> any` | A copy of stored script data, or nil. A bare key is your mod's; "weather:forecast" reads another's. |
 | `rim.has_tool` | `(tags: { string }) -> boolean` | Whether some tool in the colony, lying about or in a hand, has every one of these tool tags. False for a tag no tool has. |
@@ -59,6 +60,7 @@ are in [Scripting rules](scripting.md).
 | `rim.tick` | `() -> number` | The current tick. A day is `rim.ticks_per_day` ticks. |
 | `rim.ticks_per_day` | `number` | Ticks in a game day. |
 | `rim.wealth` | `() -> number` | The colony's wealth (recomputed every few hundred ticks). |
+| `rim.who_takes` | `(id: number) -> { Taker }` | Who would take the job on a thing next, soonest first, with about how many ticks until they're there: colonists free to choose. Empty if someone already holds it. |
 | `rim.year` | `() -> number` | The year, from 1. |
 
 Types used above:
@@ -71,6 +73,8 @@ type ThingInfo = { id: string, label: string, market_value: number, food: boolea
 type Date = { year: number, season: string, season_index: number, day: number, day_of_year: number, year_days: number, year_fraction: number }
 type Room = { id: number, cells: number, enclosed: boolean }
 type PriorityPart = { label: string, delta: number }
+type WorkWhy = { work: string, level: number, why: string, dist: number? }
+type Taker = { id: number, ticks: number }
 type Part = { label: string, value: number }
 type OrderNeed = { thing: string?, tag: string?, count: number }
 type OrderSpec = { label: string, needs: { OrderNeed }, work: number, work_type: string, requires: { string }? }

@@ -87,7 +87,8 @@ type Board = { levels: number, high: number, cols: { BoardCol }, rows: { BoardRo
 type Stance = { id: string, label: string, icon: string, active: boolean }
 type Effective = { value: number, why: string }
 type Stuff = { id: string, label: string, color: string, have: number, active: boolean, hp: number, work: number }
-type Hover = { x: number, y: number, terrain: string, shelter: string, readings: { string }, things: { string } }
+type Hover = { x: number, y: number, terrain: string, shelter: string, readings: { string }, things: { string }, takes: string? }
+type WorkWhy = { work: string, level: number, why: string, picked: boolean, dist: number? }
 type ProfileRow = { name: string, us: number, mod: boolean }
 type ModInfo = { id: string, version: string, name: string }
 type ThingInfo = {
@@ -218,6 +219,7 @@ pub const UI_API: &[UiDoc] = &[
     d!("view.effective", "(id: number) -> { [string]: Effective }?", "A colonist's priority per work type once rules and the stance have had their say, with why: \"Build 1 = base 3, Siege -2\". Nil if it isn't a pawn."),
     d!("view.events", "(since_tick: number) -> { WorldEvent }", "Recent joins, deaths and departures, newest last."),
     d!("view.explain", "(field: string) -> { Part }", "Each term and push that makes up a field's outdoor value."),
+    d!("view.explain_work", "(id: number) -> { WorkWhy }?", "The why panel: each work type in tie-break order with why the colonist would take it or passes it over (\"Needs a chopping tool\", \"Build first\"), and which it picks."),
     d!("view.fields", "() -> { FieldInfo }", "The field layers."),
     d!("view.hint", "() -> string?", "What a right-click would do."),
     d!("view.hour", "() -> number", "Hour of the day, 0 to 24."),

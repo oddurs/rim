@@ -151,11 +151,12 @@ Exposure makes shelter matter: warmth, enclosed rooms, day/night, weather. Get f
 
 ## building — Building
 
-`########··` 80% · 16 of 20 done · due 2026-11-15
+`########··` 76% · 16 of 21 done · due 2026-11-15
 
 A one-week sprint inside Colony. Building stops being a fixed list of defs
 
 - [ ] `26ba97aa` Plan a multi-cell building over grass, trees and rock <sup>feature · p2 · m · engine</sup>
+- [ ] `9ebfa104` Work Board: hovering a column lights its waiting jobs on the map <sup>feature · p3 · s · client</sup>
 - [ ] `f607a83d` Draw a multi-cell thing's look once, over its footprint <sup>feature · p2 · m · client</sup>
 - [ ] `ff97096d` A wall planned over loose items buries them <sup>bug · p2 · s · engine</sup>
 - [ ] `58f8cfb3` Gathering from a half-felled tree keeps the felling's progress <sup>bug · p2 · s · engine</sup>
@@ -197,11 +198,10 @@ The log is the save and snapshots are a cache (DESIGN.md §7a): a colony is alwa
 
 ## colony — Colony
 
-`##########` 95% · 21 of 22 done · due 2026-12-15
+`##########` 100% · 22 of 22 done · due 2026-12-15
 
 Running more than one person: stockpiles, hauling, work priorities, skills, colonist panels.
 
-- [ ] `f1924f03` Why a colonist is doing that, and who will take a job <sup>feature · p1 · m · client</sup>
 - [x] `03ad3e3a` Work types and priorities per colonist <sup>feature · p0 · m · engine</sup>
 - [x] `03b9b791` Derived fields and feels-like temperature <sup>feature · p1 · s · engine</sup>
 - [x] `0cb48faf` Priority rules and colony stances <sup>feature · p1 · m · engine</sup>
@@ -219,6 +219,7 @@ Running more than one person: stockpiles, hauling, work priorities, skills, colo
 - [x] `a7da68e2` Component kit v2: slider, text input and tables <sup>feature · p1 · m · core</sup>
 - [x] `c3c4d136` Grid node and virtual list <sup>feature · p0 · m · engine</sup>
 - [x] `ecd54de8` Stockpile zones with item filters <sup>feature · p0 · l · engine</sup>
+- [x] `f1924f03` Why a colonist is doing that, and who will take a job <sup>feature · p1 · m · client</sup>
 - [x] `f1b96df4` The Work Board: a painted priority grid with live demand <sup>feature · p0 · l · core</sup>
 - [x] `f802c0b4` rim check fails a mod for being slow on a slow machine <sup>bug · p1 · s · tooling</sup>
 - [x] `fa0de3f5` Wind shelter: the lee of walls, rock and trees <sup>feature · p1 · m · engine</sup>

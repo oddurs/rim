@@ -66,7 +66,8 @@ type Board = { levels: number, high: number, cols: { BoardCol }, rows: { BoardRo
 type Stance = { id: string, label: string, icon: string, active: boolean }
 type Effective = { value: number, why: string }
 type Stuff = { id: string, label: string, color: string, have: number, active: boolean, hp: number, work: number }
-type Hover = { x: number, y: number, terrain: string, shelter: string, readings: { string }, things: { string } }
+type Hover = { x: number, y: number, terrain: string, shelter: string, readings: { string }, things: { string }, takes: string? }
+type WorkWhy = { work: string, level: number, why: string, picked: boolean, dist: number? }
 type ProfileRow = { name: string, us: number, mod: boolean }
 type ModInfo = { id: string, version: string, name: string }
 type ThingInfo = {
@@ -211,6 +212,8 @@ declare view: {
     events: (since_tick: number) -> { WorldEvent },
     -- Each term and push that makes up a field's outdoor value.
     explain: (field: string) -> { Part },
+    -- The why panel: each work type in tie-break order with why the colonist would take it or passes it over ("Needs a chopping tool", "Build first"), and which it picks.
+    explain_work: (id: number) -> { WorkWhy }?,
     -- The field layers.
     fields: () -> { FieldInfo },
     -- What a right-click would do.

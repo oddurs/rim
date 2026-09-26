@@ -808,7 +808,9 @@ pub struct WorkTypeDef {
     /// The level a colonist starts at: 1 is first, `levels` last, 0 never.
     #[serde(default = "d3")]
     pub priority: u8,
-    /// Breaks a tie between work types at the same level: lower first.
+    /// Breaks a tie between work types at the same level and the same
+    /// distance: lower first. Within a level the nearest job wins
+    /// (DESIGN.md §4d), so the leftmost column never beats one next door.
     #[serde(default)]
     pub order: i32,
     /// Engine jobs this work type covers, from `ENGINE_JOBS`: "build" is

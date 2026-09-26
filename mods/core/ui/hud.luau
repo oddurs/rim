@@ -207,15 +207,25 @@ local function skills(p)
 	return col({ id = "core:inspector.skills", gap = "xs" }, rows)
 end
 
+-- Each work type: its level (the rules' reason as the tooltip) and why the
+-- colonist takes it or passes it over: the why panel (DESIGN.md §4d).
 local function work(view, p)
 	local eff = view.effective(p.id) or {}
+	local why = {}
+	for _, x in view.explain_work(p.id) or {} do
+		why[x.work] = x
+	end
 	local rows = {}
 	for _, w in view.work_types() do
 		local e = eff[w.id]
 		if e then
+			local x = why[w.id]
 			table.insert(rows, row({ id = "core:inspector.work." .. w.id, gap = "s", tooltip = e.why }, {
-				row({ w = 90 }, { label(w.label, { size = "small" }) }),
-				label(if e.value == 0 then "–" else tostring(e.value), { size = "small", color = if e.value == 0 then "faint" else nil }),
+				row({ w = 70 }, { label(w.label, { size = "small", weight = if x and x.picked then "strong" else nil }) }),
+				row({ w = 16 }, {
+					label(if e.value == 0 then "–" else tostring(e.value), { size = "small", color = if e.value == 0 then "faint" else nil }),
+				}),
+				x and label(x.why, { id = "core:inspector.why." .. w.id, size = "small", color = if x.picked then "good" else "muted" }),
 			}))
 		end
 	end
@@ -307,6 +317,9 @@ ui.define("core:hover", function(view)
 	end
 	for _, t in h.things do
 		table.insert(lines, label(t))
+	end
+	if h.takes then
+		table.insert(lines, label(h.takes, { id = "core:hover.takes", size = "small", color = "accent" }))
 	end
 	return kit.panel({ gap = "xxs", maxw = 460 }, lines)
 end)
