@@ -427,7 +427,8 @@ The world beyond the map: factions, traders drawn by wealth, quests, taming.
 
 ## Unscheduled
 
-`##########` 100% · 1 of 1 done
+`#####·····` 50% · 1 of 2 done
 
+- [ ] `c97f1924` CI: Linux on PRs, every platform on main <sup>chore · p1 · s · tooling</sup>
 - [x] `cc6ac1c3` Autotest: the wall-seam check picks a row a pawn is standing on <sup>bug · p1 · s · client</sup>
 

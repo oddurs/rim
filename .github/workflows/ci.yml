@@ -2,10 +2,17 @@ name: CI
 
 # PRs run once, on pull_request. `push` is for main alone: on a PR branch it
 # ran the whole workflow a second time, in another concurrency group.
+#
+# The repository is private, so minutes past the free quota are billed, and
+# macOS bills 10x and Windows 2x. PRs run Linux; macOS, Windows and ARM run
+# on main, where the platforms are compared. A PR labelled `full-ci` runs
+# every platform (a determinism-sensitive sim change). Drafts run nothing,
+# and a PR that only touches cairn items or Markdown runs the checks alone.
 on:
   push:
     branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
 
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
@@ -22,10 +29,50 @@ env:
   CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER: rust-lld.exe
 
 jobs:
+  # What this run needs: every platform or Linux alone, and whether anything
+  # but cairn items and Markdown changed.
+  plan:
+    name: Plan
+    if: github.event.pull_request.draft != true
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.plan.outputs.code }}
+      everywhere: ${{ steps.plan.outputs.everywhere }}
+      platforms: ${{ steps.plan.outputs.platforms }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - id: plan
+        shell: bash
+        env:
+          FULL: ${{ github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'full-ci') }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "$FULL" = true ]; then
+            echo 'platforms=["ubuntu-latest","macos-latest","windows-latest"]' >> "$GITHUB_OUTPUT"
+            echo "everywhere=true" >> "$GITHUB_OUTPUT"
+          else
+            echo 'platforms=["ubuntu-latest"]' >> "$GITHUB_OUTPUT"
+            echo "everywhere=false" >> "$GITHUB_OUTPUT"
+          fi
+          # Markdown doesn't build, except the API references a test keeps
+          # in step with the code.
+          code=true
+          if [ -n "$BASE" ]; then
+            changed=$(git diff --name-only "$BASE" HEAD)
+            if ! grep -qvE '^cairn/|\.md$' <<<"$changed" && ! grep -q '^docs/modding/api-' <<<"$changed"; then
+              code=false
+            fi
+          fi
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "code changed: $code; every platform: $FULL"
+
   # The quick ones, on one runner: formatting, mod scripts against the
   # declared API, and the backlog.
   checks:
     name: Format, types, roadmap
+    needs: plan
     runs-on: ubuntu-latest
     env:
       LUAU_LSP_VERSION: 1.70.0
@@ -59,10 +106,12 @@ jobs:
 
   test:
     name: Test (${{ matrix.os }})
+    needs: plan
+    if: needs.plan.outputs.code == 'true'
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: ${{ fromJSON(needs.plan.outputs.platforms) }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
@@ -155,6 +204,8 @@ jobs:
   # The fourth platform for the crosscheck: ARM Linux, which no test job is.
   crosscheck-arm:
     name: Crosscheck (ubuntu-24.04-arm)
+    needs: plan
+    if: needs.plan.outputs.code == 'true' && needs.plan.outputs.everywhere == 'true'
     runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v5
@@ -174,7 +225,8 @@ jobs:
 
   agree:
     name: Every platform reaches the same state
-    needs: [test, crosscheck-arm]
+    needs: [plan, test, crosscheck-arm]
+    if: needs.plan.outputs.code == 'true' && needs.plan.outputs.everywhere == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -205,6 +257,8 @@ jobs:
   # The long sim runs, beside the tests rather than after them.
   sim:
     name: Sim runs (soak, climate, benchmark)
+    needs: plan
+    if: needs.plan.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -238,6 +292,8 @@ jobs:
   # have no OpenGL).
   client:
     name: Client (autotest, render benchmark)
+    needs: plan
+    if: needs.plan.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
