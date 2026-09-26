@@ -101,9 +101,10 @@ pub fn reanchor(
     world: &rim_sim::world::World,
     cam: (f32, f32, f32),
     screen: (f32, f32),
+    frac: f32,
 ) {
     for a in anchored {
-        let Some(now) = view::anchor_screen(a.anchor, world, cam, screen) else { continue };
+        let Some(now) = view::anchor_screen(a.anchor, world, cam, screen, frac) else { continue };
         let (dx, dy) = (now.0 - a.at.0, now.1 - a.at.1);
         if dx == 0.0 && dy == 0.0 {
             continue;
@@ -1738,7 +1739,9 @@ impl Ui {
                 break;
             }
             let Some(anchor) = n.anchor else { continue };
-            let Some((ax, ay)) = view::anchor_screen(anchor, world, client.cam, client.screen) else { continue };
+            let Some((ax, ay)) = view::anchor_screen(anchor, world, client.cam, client.screen, client.frac) else {
+                continue;
+            };
             if ax < -200.0 || ay < -200.0 || ax > sw + 200.0 || ay > sh + 200.0 {
                 continue;
             }
