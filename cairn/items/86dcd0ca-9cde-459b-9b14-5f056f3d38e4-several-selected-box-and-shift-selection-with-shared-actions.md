@@ -2,14 +2,14 @@
 id: 86dcd0ca-9cde-459b-9b14-5f056f3d38e4
 title: 'Several selected: box and shift selection with shared actions'
 type: feature
-status: review
+status: done
 milestone: interface
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 depends_on:
 - 668c7762-97c3-4b65-bf33-55bca0ea9e66
 created: 2026-09-26
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p2
 api: additive
 effort: m
