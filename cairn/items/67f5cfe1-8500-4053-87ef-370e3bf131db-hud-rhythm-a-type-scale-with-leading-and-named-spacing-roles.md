@@ -2,12 +2,12 @@
 id: 67f5cfe1-8500-4053-87ef-370e3bf131db
 title: 'HUD rhythm: a type scale with leading and named spacing roles'
 type: feature
-status: review
+status: done
 milestone: interface
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 created: 2026-09-26
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p1
 api: additive
 effort: m
