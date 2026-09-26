@@ -280,6 +280,61 @@ fn a_pot_is_fired_at_a_campfire() {
     assert_eq!(s.world.made_of(e), Some(def(&s, "primitive:clay")));
 }
 
+/// A dead deer gives bone as well as its meat.
+#[test]
+fn a_deer_gives_bone() {
+    let (mut s, founder) = alone(3);
+    let home = s.world.pawn_pos(founder).unwrap();
+    let deer = s.world.defs.creature_id("core:deer").unwrap();
+    let at = (3..20)
+        .flat_map(|d| [home.offset(d, 0), home.offset(-d, 0), home.offset(0, d), home.offset(0, -d)])
+        .find(|&p| s.world.map.passable(p) && s.world.map.item_at(p).is_none())
+        .expect("room for a deer");
+    let e = s.world.spawn_pawn(deer, rim_sim::world::Faction::Wild, at, None);
+    s.world.ecs.get::<&mut rim_sim::world::Pawn>(e).unwrap().dead = true;
+    s.step();
+    assert_eq!(count(&s, "primitive:bone"), 4);
+    assert_eq!(count(&s, "core:raw_meat"), 35, "and all its meat still");
+}
+
+/// Bone knaps like flint, only worse: the same hand axe, made of bone,
+/// wears out sooner and works slower.
+#[test]
+fn a_bone_hand_axe_is_worse_than_a_flint_one() {
+    let axe_of = |material: &str| {
+        let (mut s, founder) = alone(3);
+        let home = s.world.pawn_pos(founder).unwrap();
+        let def = |s: &Sim, id: &str| s.world.defs.thing_id(id).unwrap();
+        let at = (2..10)
+            .flat_map(|d| [home.offset(d, 0), home.offset(-d, 0), home.offset(0, d), home.offset(0, -d)])
+            .find(|&p| {
+                s.world.map.passable(p) && s.world.map.fixture_at(p).is_none() && s.world.map.item_at(p).is_none()
+            })
+            .expect("room for a spot");
+        let spot = s.world.spawn_fixture_of(def(&s, "crafting:spot"), at, false, None).unwrap();
+        rim_sim::ai::complete_building(&mut s.world, spot);
+        s.world.place_item(def(&s, material), home, 2);
+        s.world.place_item(def(&s, "primitive:hammerstone"), home, 1);
+        let data = [
+            (Key::Str("site".into()), Data::Int(spot.to_bits().get() as i64)),
+            (Key::Str("recipe".into()), Data::Str("primitive:hand_axe".into())),
+        ];
+        s.push(Command::ModEvent {
+            name: "crafting:add_bill".into(),
+            data: Some(Data::Table(data.into_iter().collect())),
+        });
+        let axe = def(&s, "primitive:hand_axe");
+        assert!(run_until(&mut s, 12_000, |s| count(s, "primitive:hand_axe") == 1), "knapped from {material}");
+        let (e, hp) =
+            s.world.ecs.query::<(Entity, &Thing)>().iter().find(|(_, t)| t.def == axe).map(|(e, t)| (e, t.hp)).unwrap();
+        assert_eq!(s.world.made_of(e), Some(def(&s, material)));
+        (hp, s.world.tool_speed(e))
+    };
+    let ((bone_hp, bone_speed), (flint_hp, flint_speed)) = (axe_of("primitive:bone"), axe_of("primitive:flint"));
+    assert_eq!((bone_hp, flint_hp), (48, 60), "bone's hp factor is 0.8");
+    assert!(bone_speed < flint_speed, "bone {bone_speed} against flint {flint_speed}");
+}
+
 /// With the plugin removed, core plays exactly as it did (DESIGN.md §5).
 #[test]
 fn core_alone_is_untouched() {
@@ -288,6 +343,8 @@ fn core_alone_is_untouched() {
     assert_eq!(d.thing(d.thing_id("tree_oak").unwrap()).harvest.len(), 1);
     assert!(d.thing(d.thing_id("tree_oak").unwrap()).harvest[0].requires.is_empty(), "chopped bare-handed");
     assert!(d.thing(d.thing_id("granite").unwrap()).harvest[0].requires.is_empty(), "mined bare-handed");
+    let deer = d.creature(d.creature_id("deer").unwrap());
+    assert_eq!(deer.butcher_r, vec![(d.thing_id("raw_meat").unwrap(), 35)], "a deer is only meat");
     let wood = d.thing_id("wood").unwrap();
     assert_eq!(d.thing(d.thing_id("campfire").unwrap()).build.as_ref().unwrap().cost_r, vec![(wood, 15)]);
 }

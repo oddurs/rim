@@ -48,3 +48,7 @@ The first days still need their pacing measured, not assumed.
 ## 2026-09-25
 
 Correction to the note above: it was measured today, the 25th. The seed-1 founder was killed by wolves (hurt on day 2, dead on day 3), not by cold. Across crosscheck seeds 5, 6, 7, 9, 11 and 12, every colony is gone by day 45; seed 9 lasts longest, with 7 colonists at day 30. The crosscheck now defaults to seed 9. The storyteller's pressure on a stone-age colony belongs in this sweep.
+
+## 2026-09-25
+
+Bone (61c93a4e) opens the chopping gate without flint. A bare-handed hunt of two hares or one deer is enough for a bone hand axe, at 0.42 speed and 48 hp against flint's 0.6 and 60. Deer outnumber flint nodules by far. Weigh that in the sweep.
