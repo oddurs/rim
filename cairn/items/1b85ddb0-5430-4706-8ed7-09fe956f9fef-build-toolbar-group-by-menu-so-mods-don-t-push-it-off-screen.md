@@ -2,12 +2,12 @@
 id: 1b85ddb0-5430-4706-8ed7-09fe956f9fef
 title: 'Build toolbar: group by menu so mods don''t push it off screen'
 type: bug
-status: review
+status: done
 milestone: interface
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 created: 2026-09-25
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p2
 api: none
 effort: m
