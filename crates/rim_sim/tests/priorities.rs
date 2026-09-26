@@ -187,16 +187,19 @@ fn work_waiting_counts_what_there_is_to_do() {
     sim.push(Command::Designate { designation: chop, a: c.offset(-20, -20), b: c.offset(20, 20) });
     sim.step();
     let blueprints = sim.world.ecs.query::<&Blueprint>().iter().count() as u32;
+    // A plant in the wall's way is cleared as part of building it (#116).
+    let planned = sim.world.ecs.query::<&rim_sim::world::Planned>().iter().count() as u32;
     let designated = sim
         .world
         .ecs
         .query::<&rim_sim::world::Designated>()
         .without::<&Blueprint>()
+        .without::<&rim_sim::world::Planned>()
         .iter()
         .filter(|d| defs.designations[d.0 as usize].work_r as usize == wt("core:chop"))
         .count() as u32;
     let now = waiting(&sim);
-    assert!(blueprints > 0 && now[wt("core:build")] == blueprints, "a blueprint is a build job");
+    assert!(blueprints > 0 && now[wt("core:build")] == blueprints + planned, "a blueprint is a build job");
     assert!(designated > 0 && now[wt("core:chop")] == designated, "each grown tree marked to chop is a job");
 
     // Loose items wait for a stockpile that would take them.

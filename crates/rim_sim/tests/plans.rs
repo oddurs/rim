@@ -134,6 +134,32 @@ fn gathering_over_a_planned_oak_keeps_it_marked_to_fell() {
     assert!(built(&s, at), "felled, and the wall stands where it was");
 }
 
+/// Clearing the ground for a building is building: a colonist told never
+/// to gather still clears the grass under a planned wall.
+#[test]
+fn clearing_for_a_building_goes_at_the_build_priority() {
+    let mut s = Sim::new(&common::mods(), 3).unwrap();
+    let founder = alone(&mut s);
+    let (grass, at) = in_a_row(&s, "primitive:tall_grass").expect("tall grass");
+    let home = s.world.pawn_pos(founder).unwrap();
+    s.world.place_item(s.world.defs.thing_id("core:wood").unwrap(), home, 10);
+    let harvest = s.world.defs.lookup("work_type", "core:harvest").unwrap();
+    s.push(Command::SetPriority { pawn: founder, work: harvest, level: 0 });
+    build_wall(&mut s, at, at);
+    // The Work Board counts it where it's done: under Build, not Harvest.
+    let build = s.world.defs.lookup("work_type", "core:build").unwrap();
+    let waiting = rim_sim::ai::work_waiting(&s.world);
+    assert_eq!(waiting[harvest as usize], 0, "{waiting:?}");
+    assert!(waiting[build as usize] >= 1, "{waiting:?}");
+    for _ in 0..8_000 {
+        s.step();
+        if built(&s, at) {
+            break;
+        }
+    }
+    assert!(s.world.thing(grass).is_none() && built(&s, at), "cleared and built with gathering off");
+}
+
 /// With no harvest that clears it (a berry bush regrows), a thing in the
 /// way is cleared at once.
 #[test]

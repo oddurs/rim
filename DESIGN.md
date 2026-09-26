@@ -494,6 +494,10 @@ with winter or a siege, and it doesn't show how much work is waiting.
 - **Work finds its type from data.** A designation names its work type
   (`work_type = "chop"`); work the engine hands out itself, like raising
   blueprints, is claimed by the work type that lists it (`jobs = ["build"]`).
+  Clearing a thing for a building planned over it (grass under a wall) is
+  building, at the priority of the work type that claims `build`. It
+  still trains and paces with its designation's skill, and a colonist with
+  Chop at 0 will fell a tree a planned wall stands on.
   A colonist without a setting for a work type is at its default, so a
   mod's new work type shows up on every colonist.
 - **Effective priority = base + rules.** A `[[priority_rule]]` shifts or
@@ -632,6 +636,35 @@ assumed.
   stick.
 - **Day three:** fell the first oak and quarry the first stone with a maul.
   Dig clay for warm cob walls, and fire a pot at the campfire.
+
+Measured (`cargo run --release -p rim_sim --example stone_age`, a bot
+playing the opening through commands, seeds 1 to 20; 1 to 40 in brackets):
+
+| Step | Share of seeds | Target |
+|---|---|---|
+| A campfire and an enclosed bed before the first night | 90% (92%) | 90% |
+| A flint tool by the end of day 2 | 100% (100%) | 80% |
+| A felled tree by the end of day 3 | 100% (98%) | 80% |
+| Cob walls by the end of day 4 | 90% (85%) | 60% |
+
+It holds only with a player's sense:
+- building first (at equal priorities the nearest work wins, and some grass
+  is always nearer than the hut's materials);
+- a first hut of 3x3 on ground that can be cleared by hand, not over a tree,
+  with a grass pallet (6 fibre) for a bed rather than a timber one (25
+  branches);
+- flint marked where it's seen, since it's rarely within 20 cells.
+
+What set the numbers is the content: an oak gives 5 branches for 45 work,
+deadfall gives 6 and grows on grass, dirt and rich soil at 3%, and the
+grass pallet takes the bed off the branch bill. With the old content the
+first target was 55%. The misses left are the sparsest maps
+(60 to 120 branches by nightfall against a hut's 55 to 60); lifting them
+floods the median map, at about 240. The target passes by one seed, so the
+next change to wild spawns can move it.
+
+Colonies don't yet last. Raids and wolves end most lone colonies within
+days 3 to 45, and storyteller pressure on a stone-age colony is still to tune.
 
 ### Cost
 

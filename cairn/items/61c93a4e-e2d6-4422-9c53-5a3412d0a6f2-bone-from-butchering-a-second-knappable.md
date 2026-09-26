@@ -2,14 +2,14 @@
 id: 61c93a4e-e2d6-4422-9c53-5a3412d0a6f2
 title: Bone from butchering, a second knappable
 type: content
-status: doing
+status: done
 milestone: stone-age
 assignee: Oddur Sigurdsson
-claimed: 2026-09-25
 depends_on:
 - 4675019b-c017-47e7-b148-b12e4be58bda
 created: 2026-09-25
 updated: 2026-09-25
+closed_at: 2026-09-25
 priority: p2
 api: none
 effort: s

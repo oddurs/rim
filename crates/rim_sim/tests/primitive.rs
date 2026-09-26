@@ -83,7 +83,7 @@ fn deadfall_and_tall_grass_are_gathered_whole() {
     let (mut s, _) = alone(3);
     let gather = s.world.defs.lookup("designation", "core:gather").unwrap();
     for (wild, item, n) in
-        [("primitive:deadfall", "primitive:branches", 4), ("primitive:tall_grass", "primitive:fibre", 3)]
+        [("primitive:deadfall", "primitive:branches", 6), ("primitive:tall_grass", "primitive:fibre", 3)]
     {
         let (e, at) = nearest(&s, wild).unwrap_or_else(|| panic!("a {wild} in reach"));
         let before = count(&s, item);
@@ -333,6 +333,24 @@ fn a_bone_hand_axe_is_worse_than_a_flint_one() {
     let ((bone_hp, bone_speed), (flint_hp, flint_speed)) = (axe_of("primitive:bone"), axe_of("primitive:flint"));
     assert_eq!((bone_hp, flint_hp), (48, 60), "bone's hp factor is 0.8");
     assert!(bone_speed < flint_speed, "bone {bone_speed} against flint {flint_speed}");
+}
+
+/// A first bed of grass: six fibre, no branches, and it's a bed.
+#[test]
+fn a_grass_pallet_is_a_bed_of_fibre() {
+    let (mut s, founder) = alone(3);
+    let home = s.world.pawn_pos(founder).unwrap();
+    let pallet = s.world.defs.thing_id("primitive:pallet").unwrap();
+    assert!(s.world.defs.thing(pallet).bed.as_ref().is_some_and(|b| b.rest_rate < 1.8), "a bed, poorer than core's");
+    let at = (2..10)
+        .flat_map(|d| [home.offset(d, 0), home.offset(-d, 0), home.offset(0, d), home.offset(0, -d)])
+        .find(|&p| s.world.map.passable(p) && s.world.map.fixture_at(p).is_none() && s.world.map.item_at(p).is_none())
+        .expect("room for a pallet");
+    s.world.place_item(s.world.defs.thing_id("primitive:fibre").unwrap(), home, 6);
+    s.push(Command::Build { thing: pallet, stuff: None, a: at, b: at });
+    let built = |s: &Sim| s.world.map.fixture_at(at).is_some_and(|f| s.world.ecs.get::<&Blueprint>(f).is_err());
+    assert!(run_until(&mut s, 6_000, built), "built from the fibre");
+    assert_eq!(count(&s, "primitive:fibre"), 0);
 }
 
 /// With the plugin removed, core plays exactly as it did (DESIGN.md §5).
