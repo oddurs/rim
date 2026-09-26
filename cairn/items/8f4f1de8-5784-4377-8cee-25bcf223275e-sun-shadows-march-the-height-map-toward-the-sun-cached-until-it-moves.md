@@ -28,6 +28,7 @@ The first thing that makes the world look lit: long shadows at dusk, short at no
 - The sun's path is data on core's `[[sky]]`: rise, set, peak elevation, azimuth arc. Brightness still comes from the sim's `daylight` terms; cloud widens the penumbra.
 - Rebuilt only when a body moves past the preset's threshold (0.25° at `medium`) or occluders change.
 - GLSL 100, RGBA8 targets, square-root encoded with dither.
+- The plan's contact shadow (0779def9): compose reads the occluder a short step up and to the left, and darkens under a mass by a factor that fades as the texel's direct sky visibility rises. This replaces the down-right shadow ae5c3807 would have baked into the chunk mesh.
 
 ## Acceptance criteria
 
@@ -35,3 +36,4 @@ The first thing that makes the world look lit: long shadows at dusk, short at no
 - [ ] With time paused, frames run no sky pass (counter test)
 - [ ] Bench: sky rebuild and steady frame recorded here, inside §8 on the dusk scene
 - [ ] The old lightmap texture and its shader are gone
+- [ ] A wall shows only the contact shadow at night and only the sun's shadow in full sun (screenshots at 00:30 and 12:30)

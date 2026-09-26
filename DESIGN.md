@@ -1215,7 +1215,8 @@ reference for the Rust renderer.
     cheap.
   - **One light.** Every mass casts the same short shadow down and to the
     right, and its top and left edges catch a highlight. That gives height
-    without perspective.
+    without perspective. (§6e: the shadow is a contact shadow drawn with the
+    light, and it yields to the sun's.)
   - **The look never lies (§6b), extended to rooms.** A window facing an
     enclosed room throws a fan of daylight into it. A fire fills its room
     with a warm wash that stops at the walls. The one gap that keeps a ring
@@ -1649,20 +1650,47 @@ baked into the chunk mesh. Sky shadows point wherever the sun is.
   every hour and on every machine, and it costs nothing per frame.
 - **For the sun's:** it is the atmosphere this section exists for, and two
   shadows on one wall at dusk contradict each other.
-- **Ruling (proposed; a person decides in 0779def9):** the fixed shadow stays as a short
-  **contact shadow** under every mass, and it fades in proportion to the
-  direct sky light that reaches the cell, so by day the sun's shadow takes
-  over and at night or on Low the plan convention remains. Roofs (df049dac)
-  shade their facets by the real sun direction instead of a fixed one.
+- **Ruling (0779def9):** the fixed shadow becomes a short **contact
+  shadow**, down and to the right, that fades as direct sky light reaches
+  the cell. By day the sun's shadow does the work; at night, indoors,
+  underground and on `low` the plan convention remains, so a wall never
+  has two shadows and never has none.
+  - It is drawn by the lighting compose pass, not baked into the chunk
+    mesh, because the fade needs the per-texel sky visibility that only
+    compose has. It costs one occluder read. The top-and-left highlight
+    stays in the mesh (ae5c3807).
+  - Roofs (df049dac) shade their facets by the real sun direction instead
+    of a fixed one.
 
 ### Depth
 
-Light is per level, like everything else in §6d. Buffers are keyed by `z`;
-the viewed level and the one below stay cached, the rest are evicted with
-their chunk meshes. The sky reaches level `z` only down columns that are open
-all the way up, so a pit or a shaft gets a patch of sun with its rim's shadow
-and a cellar gets none. The level below, seen through air, is drawn with its
-own light, dimmed. Underground, exposure is set by firelight, not the sky.
+Light is per level, like everything else in §6d, and it has to be
+**continuous across levels**: no edge where one level's light stops and the
+next begins, and no pop when the view changes level.
+
+- Buffers are keyed by `z`. The viewed level and its neighbours above and
+  below stay cached; the rest are evicted with their chunk meshes.
+- **Light crosses openings.** Every air cell, stairwell and ladder is an
+  opening. Each level's compose adds the light of the level above through
+  its openings, and the level below's through its own air cells, from a
+  blurred, half-resolution copy of that level's composed light, attenuated
+  per level (0.5 by default). So a torch at the top of a stairwell lights
+  the steps below and fades out around them, and a fire in a pit glows on
+  its rim. The cost is one read of a small texture per texel, and it is
+  skipped on a level with no openings.
+- **Sky down a shaft falls off with depth.** A column open to the sky gets
+  direct sun only while the sun is inside the shaft's cone, which the same
+  height-map march gives when the levels above count as solid height. The
+  diffuse sky share falls with the solid angle of open sky seen from the
+  bottom (`width / (width + 2·depth)`), so light fades smoothly down a
+  shaft instead of stopping at the surface.
+- **The level below, through air, is lit by its own light** and dimmed by a
+  depth tint per level, the same curve at every step down, so looking down
+  a shaft three levels deep reads as one gradient.
+- **Exposure is one continuous value.** It blends between sky-driven and
+  firelight-driven by how much sky reaches the view, and eases over about a
+  second, including when the view changes level. Changing level crossfades
+  the two cached buffers for 150 ms.
 
 ### Presets
 
