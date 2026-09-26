@@ -123,6 +123,7 @@ pub const UI_API: &[UiDoc] = &[
     d!("act.focus", "(id: number) -> ()", "Move the camera to a pawn or thing."),
     d!("act.load", "(path: string) -> ()", "Play a save from view.saves() (the title screen)."),
     d!("act.new_colony", "() -> ()", "Start a new colony (the title screen)."),
+    d!("act.order", "(key: string, x: number, y: number, on: number?) -> ()", "Give the selected colonists the order named key at a map spot (a row from view.orders), each one it's on offer to."),
     d!("act.preview", "(key: string?) -> ()", "Point the materials view (view.stuff) at a buildable by its tool key, for a card describing it; nil goes back to the tool in hand."),
     d!(
         "act.render_scale",
@@ -244,6 +245,7 @@ pub const UI_API: &[UiDoc] = &[
     d!("view.message_count", "() -> number", "How many messages the log holds."),
     d!("view.messages", "(max: number, skip: number?) -> { Message }", "The newest messages, newest first; skip that many of the newest to page back through the log."),
     d!("view.mods", "() -> { ModInfo }", "Loaded mods, in load order."),
+    d!("view.orders", "(x: number, y: number, on: number?) -> { caption: string?, actors: number, actor: string?, rows: { { key: string, label: string, group: string, trailing: string?, disabled: string? } } }", "Every order the selected colonists could be given at a map spot, merged by key: group 'damaging' for ones that take something away, trailing '2 of 3' when only some can, disabled with a reason when none can. Walks the map, so call it once per menu, not per frame."),
     d!("view.outlines", "() -> boolean", "Whether layout outlines are on."),
     d!("view.overlay", "() -> string?", "The label of the field overlay shown, if any."),
     d!("view.paused", "() -> boolean", "Whether the game is paused."),

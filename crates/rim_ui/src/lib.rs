@@ -341,6 +341,9 @@ pub struct Ui {
     opened_at: HashMap<String, f64>,
     /// This frame's time.
     now: f64,
+    /// Something outside a frame changed what scripts show (a context menu
+    /// opened from the map, popups dismissed): rebuild next frame.
+    poked: bool,
     /// A window moved, resized, opened or closed since the layout was last taken.
     layout_dirty: bool,
     /// The mods' PNGs, placed in the atlas as they are drawn.
@@ -435,6 +438,7 @@ impl Ui {
             win_rects: Vec::new(),
             opened_at: HashMap::new(),
             now: 0.0,
+            poked: false,
             layout_dirty: false,
             images,
             edits: HashMap::new(),
@@ -773,6 +777,7 @@ impl Ui {
         at: (f32, f32),
     ) -> bool {
         let s = self.theme.scale;
+        self.poked = true;
         self.vm.context(kind, id, (at.0 / s, at.1 / s), world, client, &self.shown)
     }
 
@@ -780,6 +785,7 @@ impl Ui {
     /// game changed underneath): each one's `on_outside` runs.
     pub fn dismiss_popups(&mut self, world: &rim_sim::world::World, client: &ClientView) {
         let calls: Vec<mlua::Function> = self.popup_roots().filter_map(|n| n.on_outside.clone()).collect();
+        self.poked |= !calls.is_empty();
         for f in calls {
             self.vm.call_handler(&f, world, client, &self.shown);
         }
@@ -1215,7 +1221,8 @@ impl Ui {
         // Everything rebuilds on input or a client change; otherwise each
         // mount rebuilds at its own cadence, and the windows with the
         // default one.
-        let force = handled
+        let force = std::mem::take(&mut self.poked)
+            || handled
             || windows_changed
             || input_happened
             || ch != self.built_for

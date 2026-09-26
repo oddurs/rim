@@ -13,6 +13,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `act.focus` | `(id: number) -> ()` | Move the camera to a pawn or thing. |
 | `act.load` | `(path: string) -> ()` | Play a save from view.saves() (the title screen). |
 | `act.new_colony` | `() -> ()` | Start a new colony (the title screen). |
+| `act.order` | `(key: string, x: number, y: number, on: number?) -> ()` | Give the selected colonists the order named key at a map spot (a row from view.orders), each one it's on offer to. |
 | `act.preview` | `(key: string?) -> ()` | Point the materials view (view.stuff) at a buildable by its tool key, for a card describing it; nil goes back to the tool in hand. |
 | `act.render_scale` | `(scale: number) -> ()` | Draw the world at this fraction of the screen's pixels, 0.25 to 1; the UI stays sharp. Saved for the player. |
 | `act.select` | `(id: number?, add: boolean?) -> ()` | Select a pawn or thing, or nothing. With add, put a colonist into the selection or take them out of it (a shift-click). |
@@ -86,6 +87,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `view.message_count` | `() -> number` | How many messages the log holds. |
 | `view.messages` | `(max: number, skip: number?) -> { Message }` | The newest messages, newest first; skip that many of the newest to page back through the log. |
 | `view.mods` | `() -> { ModInfo }` | Loaded mods, in load order. |
+| `view.orders` | `(x: number, y: number, on: number?) -> { caption: string?, actors: number, actor: string?, rows: { { key: string, label: string, group: string, trailing: string?, disabled: string? } } }` | Every order the selected colonists could be given at a map spot, merged by key: group 'damaging' for ones that take something away, trailing '2 of 3' when only some can, disabled with a reason when none can. Walks the map, so call it once per menu, not per frame. |
 | `view.outlines` | `() -> boolean` | Whether layout outlines are on. |
 | `view.overlay` | `() -> string?` | The label of the field overlay shown, if any. |
 | `view.paused` | `() -> boolean` | Whether the game is paused. |

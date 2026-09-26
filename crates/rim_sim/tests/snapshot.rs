@@ -181,7 +181,7 @@ fn a_command_sees_the_same_map_before_and_after_a_load() {
     }
     let mut loaded = load(&Snapshot::capture(&live));
     for sim in [&mut live, &mut loaded] {
-        sim.push(Command::Order { pawn, cell: target, on: None });
+        sim.push(Command::Order { pawn, cell: target, on: None, pick: None });
         for _ in 0..30 {
             sim.step();
         }

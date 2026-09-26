@@ -94,9 +94,12 @@ ui.mount("right", "core:hover", { align = "end" })
 
 -- ─── Order hint: what a right-click would do, beside the cursor ────────────
 
+local menus = require("@core/ui/menus")
+
 ui.define("core:hint", function(view)
 	local text = view.hint()
-	if not text then
+	-- An open menu is the answer to the hint: it would only sit under it.
+	if not text or menus.is_open() then
 		return nil
 	end
 	return kit.panel({ pad = "s", padx = "l", bg = "surface_raised", border = "accent" }, { label(text) })

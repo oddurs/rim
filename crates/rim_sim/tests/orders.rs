@@ -68,20 +68,35 @@ fn nearest_thing(s: &mut Sim, from: IVec, def: &str) -> (Entity, IVec) {
 }
 
 fn order(s: &mut Sim, pawn: Entity, cell: IVec, on: Option<Entity>) {
-    s.push(Command::Order { pawn, cell, on });
+    s.push(Command::Order { pawn, cell, on, pick: None });
     s.step();
 }
 
+/// Pick an option by its label's start, as the orders menu does.
+fn order_pick(s: &mut Sim, pawn: Entity, cell: IVec, on: Option<Entity>, label: &str) {
+    let key = order::options(&s.world, pawn, cell, on)
+        .into_iter()
+        .find(|c| c.label.starts_with(label))
+        .unwrap_or_else(|| panic!("no '{label}' here"))
+        .key;
+    s.push(Command::Order { pawn, cell, on, pick: Some(key) });
+    s.step();
+}
+
+/// Felling a tree nobody marked is the menu's to give, by name: a plain
+/// right-click doesn't.
 #[test]
-fn order_chops_a_tree_nobody_designated() {
+fn the_menu_chops_a_tree_nobody_designated() {
     let (mut s, founder) = sim(3);
     let here = at(&s, founder);
     let (tree, tp) = nearest_thing(&mut s, here, "tree_oak");
     assert!(s.world.ecs.get::<&rim_sim::world::Designated>(tree).is_err(), "tree starts undesignated");
 
-    let hint = order::resolve(&s.world, founder, tp, None).expect("a tree offers an order");
-    assert_eq!(hint.label, "Chop oak tree");
-    order(&mut s, founder, tp, None);
+    let plain = order::resolve(&s.world, founder, tp, None).map(|o| o.label);
+    assert!(!plain.as_deref().is_some_and(|l| l.starts_with("Chop")), "a plain click doesn't fell it: {plain:?}");
+    let chop = order::options(&s.world, founder, tp, None).into_iter().find(|c| c.label == "Chop oak tree");
+    assert!(chop.as_ref().is_some_and(|c| c.damaging), "the menu offers it, as damaging");
+    order_pick(&mut s, founder, tp, None, "Chop");
     assert!(matches!(job(&s, founder), Job::Harvest { target, .. } if target == tree), "ordered to chop");
 
     // 280 work ticks plus the walk.
@@ -171,10 +186,10 @@ fn an_order_takes_work_off_the_pawn_already_doing_it() {
     let second = s.world.spawn_pawn(s.world.defs.creature_id("human").unwrap(), Faction::Player, here, None);
     s.step();
 
-    order(&mut s, founder, tp, None);
+    order_pick(&mut s, founder, tp, None, "Chop");
     assert!(matches!(job(&s, founder), Job::Harvest { target, .. } if target == tree));
 
-    order(&mut s, second, tp, None);
+    order_pick(&mut s, second, tp, None, "Chop");
     assert!(matches!(job(&s, second), Job::Harvest { target, .. } if target == tree), "the second pawn takes it");
     assert!(!matches!(job(&s, founder), Job::Harvest { .. }), "the first pawn is off the job");
     assert!(!s.world.reserved_by_other(tree, second), "the claim moved across");

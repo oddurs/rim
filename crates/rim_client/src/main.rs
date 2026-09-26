@@ -124,6 +124,9 @@ pub struct App {
     profile: (Vec<(String, f64)>, Vec<String>, f64),
     acc: f64,
     pan_anchor: Option<(f32, f32)>,
+    /// A right press on the map, until it's decided: a click, a hold that
+    /// opens the orders menu, or a drag.
+    right: Option<RightPress>,
     /// Lighting and weather on screen.
     pub sky: sky::Sky,
     /// The terrain, baked into a texture.
@@ -557,6 +560,7 @@ async fn game() {
         profile: (Vec::new(), Vec::new(), f64::MIN),
         acc: 0.0,
         pan_anchor: None,
+        right: None,
         sky: sky::Sky::default(),
         ground: draw::Ground::default(),
         render_us: RenderTimes::default(),
@@ -744,6 +748,8 @@ pub struct RawInput {
     pub left_released: bool,
     pub right_pressed: bool,
     pub right_released: bool,
+    /// The right button is held.
+    pub right_down: bool,
     /// Wheel movement in notches (fractional on a trackpad).
     pub wheel: f32,
     pub keys: Vec<KeyCode>,
@@ -846,6 +852,7 @@ impl RawInput {
             left_released: is_mouse_button_released(MouseButton::Left),
             right_pressed: is_mouse_button_pressed(MouseButton::Right),
             right_released: is_mouse_button_released(MouseButton::Right),
+            right_down: is_mouse_button_down(MouseButton::Right),
             wheel,
             keys,
             chars,
@@ -995,6 +1002,7 @@ pub fn frame(app: &mut App, raw: &RawInput) {
         apply_ui(app, a);
     }
 
+    let cam_before = (app.cam.x, app.cam.y, app.cam.zoom);
     // Escape always gives the keyboard back; what else it does (close the
     // dock's palette, drop the tool, deselect) is core's `core:escape`
     // binding, so a mod can put its own step in front.
@@ -1026,8 +1034,10 @@ pub fn frame(app: &mut App, raw: &RawInput) {
     if raw.left_released && app.drag_start.is_some() {
         apply(app, Action::LeftUp(mx, my));
     }
-    if raw.right_pressed && !out.captured_right {
-        apply(app, Action::RightClick(mx, my));
+    right_button(app, raw, &cv, out.captured_right);
+    // The camera moving takes the player's attention off an open menu.
+    if (app.cam.x, app.cam.y, app.cam.zoom) != cam_before {
+        app.ui.dismiss_popups(&app.sim.world, &cv);
     }
 
     // Orders show the frame they're given, paused or not.
@@ -1309,6 +1319,20 @@ fn apply_ui(app: &mut App, a: UiAction) {
         UiAction::Speed(s) => apply(app, Action::Speed(s)),
         UiAction::TogglePause => apply(app, Action::TogglePause),
         UiAction::Draft(e, on) => app.sim.push(Command::Draft { pawn: e, on }),
+        // A pick from the orders menu: every selected colonist it's on
+        // offer to gets it, by name.
+        UiAction::Order { key, cell, on } => {
+            let mut ordered = false;
+            for e in selection(app) {
+                if order::choose(&app.sim.world, e, cell, on, &key).is_some() {
+                    app.sim.push(Command::Order { pawn: e, cell, on, pick: Some(key.clone()) });
+                    ordered = true;
+                }
+            }
+            if ordered {
+                app.order_flash = Some((cell, get_time()));
+            }
+        }
         UiAction::ZoneAllow(zone, item, on) => {
             if let Some(thing) = app.sim.world.defs.thing_id(&item) {
                 app.sim.push(Command::ZoneAllow { zone, thing, on });
@@ -1428,6 +1452,73 @@ pub fn toggle_selected(app: &mut App, e: Entity) {
     select(app, v);
 }
 
+/// How long a right press is held before it opens the orders menu.
+const HOLD_SECS: f64 = 0.35;
+/// How far a press may wander, in points, and still be a click.
+const CLICK_SLOP: f32 = 6.0;
+
+/// A right press on the map, until it's a click, a hold or a drag.
+struct RightPress {
+    at: (f32, f32),
+    t: f64,
+    moved: bool,
+    opened: bool,
+}
+
+/// The right button on the map, decided on release rather than press. A
+/// tool in hand drops at once; otherwise a press held still opens the
+/// orders menu, one that wanders is a drag and orders nothing, and a
+/// click gives the selected colonists the first safe order there, or opens
+/// the menu when there is none. Nothing damaging ever happens here: that
+/// takes a pick from the menu.
+fn right_button(app: &mut App, raw: &RawInput, cv: &rim_ui::view::ClientView, captured: bool) {
+    let (mx, my) = raw.mouse;
+    if raw.right_pressed && !captured {
+        if app.tool != Tool::Select {
+            app.tool = Tool::Select;
+            app.drag_start = None;
+            return;
+        }
+        app.right = Some(RightPress { at: (mx, my), t: raw.time, moved: false, opened: false });
+    }
+    let Some(r) = app.right.as_mut() else { return };
+    if !r.moved && ((mx - r.at.0).powi(2) + (my - r.at.1).powi(2)).sqrt() > CLICK_SLOP {
+        r.moved = true;
+    }
+    if !r.moved && !r.opened && raw.time - r.t >= HOLD_SECS {
+        r.opened = true;
+        let at = r.at;
+        open_orders(app, cv, at);
+    }
+    if raw.right_released || !raw.right_down {
+        let Some(r) = app.right.take() else { return };
+        if r.moved || r.opened {
+            return;
+        }
+        let (x, y) = r.at;
+        let cell = app.cam.tile_at(x, y);
+        let on = pawn_under(app, x, y);
+        let safe = selection(app).into_iter().any(|e| order::resolve(&app.sim.world, e, cell, on).is_some());
+        if safe {
+            apply(app, Action::RightClick(x, y));
+        } else if !selection(app).is_empty() {
+            open_orders(app, cv, (x, y));
+        }
+    }
+}
+
+/// Open the orders menu for the map spot under a point (logical).
+fn open_orders(app: &mut App, cv: &rim_ui::view::ClientView, at: (f32, f32)) {
+    let cell = app.cam.tile_at(at.0, at.1);
+    let on = pawn_under(app, at.0, at.1);
+    let id = match on {
+        Some(e) => format!("{},{},{}", cell.x, cell.y, e.to_bits().get()),
+        None => format!("{},{}", cell.x, cell.y),
+    };
+    let dpi = screen_dpi_scale();
+    app.ui.context(&app.sim.world, cv, "tile", &id, (at.0 * dpi, at.1 * dpi));
+}
+
 /// Label the cursor with what a right-click would do. Resolving an order
 /// walks the map, so it happens once per tile rather than once per frame.
 fn hint(app: &mut App, mouse: (f32, f32)) {
@@ -1442,7 +1533,14 @@ fn hint(app: &mut App, mouse: (f32, f32)) {
         return;
     }
     app.hint_key = Some(key);
-    app.hint = order::resolve(&app.sim.world, e, key.1, key.2).map(|o| o.label);
+    let options = order::options(&app.sim.world, e, key.1, key.2);
+    let safe = options.iter().filter(|c| !c.damaging).find_map(|c| c.order.as_ref().map(|o| o.label.clone()));
+    app.hint = match safe {
+        Some(label) if options.len() > 1 => Some(format!("{label} · hold for more")),
+        Some(label) => Some(label),
+        None if !options.is_empty() => Some("Hold for orders".into()),
+        None => None,
+    };
 }
 
 pub fn pawn_under(app: &App, sx: f32, sy: f32) -> Option<Entity> {
@@ -1607,18 +1705,13 @@ pub fn apply(app: &mut App, action: Action) {
             }
         }
         Action::RightClick(x, y) => {
-            if app.tool != Tool::Select {
-                app.tool = Tool::Select;
-                app.drag_start = None;
-                return;
-            }
-            // Every selected pawn the order means something to gets it.
+            // Every selected pawn a safe order means something to gets it.
             let cell = app.cam.tile_at(x, y);
             let on = pawn_under(app, x, y);
             let mut ordered = false;
             for e in selection(app) {
                 if order::resolve(&app.sim.world, e, cell, on).is_some() {
-                    app.sim.push(Command::Order { pawn: e, cell, on });
+                    app.sim.push(Command::Order { pawn: e, cell, on, pick: None });
                     ordered = true;
                 }
             }

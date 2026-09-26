@@ -37,10 +37,15 @@ pub enum Command {
     /// Right-click: give one pawn the job that fits what it was clicked
     /// on, ahead of whatever it picked for itself. `on` is the creature
     /// under the cursor, which wins over the cell it is standing in.
+    /// `pick` names one of the spot's options (`order::options`, by key),
+    /// as the orders menu does; without it the order is the first safe one,
+    /// never a damaging one.
     Order {
         pawn: Entity,
         cell: IVec,
         on: Option<Entity>,
+        #[serde(default)]
+        pick: Option<String>,
     },
     /// Paint cells into a stockpile: into `zone`, or a new zone taking every
     /// item when it's `None`.
@@ -225,11 +230,15 @@ pub fn apply(w: &mut World, c: Command) {
                 w.update_rules();
             }
         }
-        Command::Order { pawn, cell, on } => {
+        Command::Order { pawn, cell, on, pick } => {
             if !is_colonist(w, pawn) {
                 return;
             }
-            let Some(o) = order::resolve(w, pawn, cell, on) else { return };
+            let o = match &pick {
+                Some(key) => order::choose(w, pawn, cell, on, key),
+                None => order::resolve(w, pawn, cell, on),
+            };
+            let Some(o) = o else { return };
             // The player outranks whoever was already on this work.
             let held: Vec<Entity> =
                 o.reserve.iter().filter_map(|t| w.reservations.get(t).copied()).filter(|&h| h != pawn).collect();

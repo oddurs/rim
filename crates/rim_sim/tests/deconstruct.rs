@@ -139,26 +139,38 @@ fn cancel_stops_it() {
     assert!(s.world.thing(w).is_some(), "the wall stands");
 }
 
+/// The bug: a right-click meant as "go here" landed on our wall and took it
+/// down. Now a plain right-click never deconstructs; the menu names it.
 #[test]
-fn right_click_offers_it_on_what_we_built() {
+fn a_plain_right_click_never_deconstructs_but_the_menu_can() {
     let (mut s, founder) = sim();
     let (wall, stone) = (thing(&s, "wall"), thing(&s, "stone"));
     let at = open_cells(&s, 1)[0];
     let w = built(&mut s, wall, stone, at);
-    let o = order::resolve(&s.world, founder, at, None).expect("an order on our wall");
-    assert_eq!(o.label, "Deconstruct wall");
-    assert!(matches!(o.job, Job::Deconstruct { target, .. } if target == w));
+    assert!(order::resolve(&s.world, founder, at, None).is_none(), "nothing safe to do at our wall");
+    let options = order::options(&s.world, founder, at, None);
+    let take_down = options.iter().find(|c| c.label == "Deconstruct wall").expect("the menu offers it");
+    assert!(take_down.damaging, "and says it takes something away");
+    let key = take_down.key.clone();
 
-    // Giving the order marks it, so a later Cancel can still stop it.
-    s.push(Command::Order { pawn: founder, cell: at, on: None });
+    // A plain order does nothing to it.
+    s.push(Command::Order { pawn: founder, cell: at, on: None, pick: None });
+    s.step();
+    assert!(!designated(&s, w), "a plain right-click leaves the wall alone");
+    assert!(!matches!(s.world.ecs.get::<&Pawn>(founder).unwrap().job, Job::Deconstruct { .. }));
+
+    // Picked by name, it's given, and marked so a later Cancel can stop it.
+    s.push(Command::Order { pawn: founder, cell: at, on: None, pick: Some(key) });
     s.step();
     assert!(designated(&s, w), "an ordered deconstruct carries the mark");
     assert_eq!(order::job_text(&s.world, &s.world.ecs.get::<&Pawn>(founder).unwrap()), "Deconstruct wall");
 }
 
+/// A tree offers its harvests, never a deconstruct; felling one nobody
+/// marked is damaging, and once marked it's the plain click's order.
 #[test]
-fn a_tree_still_offers_chop_not_deconstruct() {
-    let (s, founder) = sim();
+fn a_tree_offers_chop_not_deconstruct() {
+    let (mut s, founder) = sim();
     let oak = thing(&s, "tree_oak");
     let from = s.world.pawn_pos(founder).unwrap();
     let tree = s
@@ -170,7 +182,14 @@ fn a_tree_still_offers_chop_not_deconstruct() {
         .min_by_key(|t| t.pos.octile(from))
         .map(|t| t.pos)
         .expect("an oak");
-    if let Some(o) = order::resolve(&s.world, founder, tree, None) {
+    let options = order::options(&s.world, founder, tree, None);
+    assert!(options.iter().all(|c| !c.label.starts_with("Deconstruct")), "no deconstruct on a tree");
+    if let Some(chop) = options.iter().find(|c| c.label.starts_with("Chop")) {
+        assert!(chop.damaging, "felling an unmarked tree is damaging");
+        let chop_def = s.world.defs.lookup("designation", "chop").unwrap();
+        s.push(Command::Designate { designation: chop_def, a: tree, b: tree });
+        s.step();
+        let o = order::resolve(&s.world, founder, tree, None).expect("marked, a plain click chops");
         assert!(o.label.starts_with("Chop"), "{}", o.label);
     }
 }

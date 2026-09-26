@@ -299,14 +299,16 @@ tool = { tags = ["chopping"], speed = 0.0 }
 /// A click offers only what the pawn could do: no chop without an axe, and
 /// with one lying about, a chop that fetches it first.
 #[test]
-fn a_click_offers_a_chop_only_with_an_axe_to_hand() {
+fn the_chop_on_offer_needs_an_axe_to_hand() {
     let (mut s, founder) = alone(&kit("tools-click"));
     let (_, at) = oaks(&s, 1)[0];
-    let order = |s: &Sim| rim_sim::order::resolve(&s.world, founder, at, None);
-    assert_ne!(order(&s).map(|o| o.label).as_deref(), Some("Chop oak tree"), "no axe, no chop");
+    let chop =
+        |s: &Sim| rim_sim::order::options(&s.world, founder, at, None).into_iter().find(|c| c.label == "Chop oak tree");
+    let without = chop(&s).expect("chop is on offer");
+    assert!(without.order.is_none(), "no axe, no chop");
+    assert!(without.reason.as_deref().is_some_and(|r| r.starts_with("no ")), "and it says why: {:?}", without.reason);
     let (axe, _) = place_away(&mut s, "axe", founder, 4);
-    let o = order(&s).expect("an order");
-    assert_eq!(o.label, "Chop oak tree");
+    let o = chop(&s).and_then(|c| c.order).expect("with an axe, an order");
     assert!(matches!(o.job, rim_sim::world::Job::Harvest { tool: Some(t), .. } if t == axe), "fetching the axe first");
     assert!(o.reserve.contains(&axe), "and claiming it");
 }

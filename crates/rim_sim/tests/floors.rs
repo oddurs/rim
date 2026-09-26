@@ -166,15 +166,22 @@ fn deconstructing_a_floor_gives_the_material_back() {
     assert_eq!(stacks_near(&s, wood, at), wood0);
 }
 
+/// A floor is walked on: a right-click there means go here. Taking it up
+/// is in the menu, marked as damaging.
 #[test]
-fn right_click_on_a_floor_offers_to_take_it_up() {
+fn right_click_on_a_floor_walks_and_the_menu_offers_to_take_it_up() {
     let (mut s, founder) = sim();
     let stone = thing(&s, "stone");
     let at = open_cells(&s, 1)[0];
     let f = built(&mut s, "floor", stone, at);
     let o = order::resolve(&s.world, founder, at, None).expect("an order on our floor");
-    assert_eq!(o.label, "Deconstruct floor");
-    assert!(matches!(o.job, Job::Deconstruct { target, .. } if target == f));
+    assert!(matches!(o.job, Job::MoveTo { .. }), "a plain click walks there: {}", o.label);
+    let options = order::options(&s.world, founder, at, None);
+    let up = options.iter().find(|c| c.label == "Deconstruct floor").expect("the menu offers it");
+    assert!(
+        up.damaging
+            && matches!(up.order.as_ref().map(|o| &o.job), Some(Job::Deconstruct { target, .. }) if *target == f)
+    );
 }
 
 #[test]
