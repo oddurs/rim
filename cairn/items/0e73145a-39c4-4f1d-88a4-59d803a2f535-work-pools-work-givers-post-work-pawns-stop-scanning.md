@@ -2,7 +2,7 @@
 id: 0e73145a-39c4-4f1d-88a4-59d803a2f535
 title: 'Work pools: work givers post work, pawns stop scanning'
 type: perf
-status: backlog
+status: dropped
 milestone: colony
 depends_on:
 - 03ad3e3a-efe1-4186-b764-8dcd1d9344f1
@@ -50,3 +50,7 @@ Measured 2026-09-25 with work types, stockpiles and hauling in (bench --designat
 ## Proposed status: backlog -> dropped (Oddur Sigurdsson, 2026-09-25)
 
 Its budget is already met: find_work is 0.047 ms a tick on the stress bench (budget 0.2 ms), measured with work types, stockpiles and hauling in. The stress cost is pathfinding (98% of the tick), which pools don't touch; that is now c1089360 in Scale. The why panel (f1924f03) can take its candidates from find_work for an inspected pawn instead of from pools.
+
+## Accepted status: dropped (Oddur Sigurdsson, 2026-09-25)
+
+Proposed by Oddur Sigurdsson on 2026-09-25.
