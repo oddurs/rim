@@ -39,8 +39,9 @@ type Need = { id: string, label: string, value: number, color: string, low: bool
 type Pawn = {
     id: number, name: string, label: string, faction: string, player: boolean, founder: boolean,
     drafted: boolean, asleep: boolean, hp: number, max_hp: number, health: number, job: string,
-    selected: boolean, needs: { Need },
+    selected: boolean, needs: { Need }, skills: { Skill }, hand: string?, carrying: string?,
 }
+type Skill = { id: string, label: string, level: number, progress: number, trains: string }
 type VisiblePawn = {
     id: number, name: string, faction: string, intelligent: boolean, asleep: boolean,
     selected: boolean, hovered: boolean, radius: number,

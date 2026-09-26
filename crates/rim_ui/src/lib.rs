@@ -1442,7 +1442,8 @@ impl Ui {
         out
     }
 
-    fn tooltip_text(&self, now: f64) -> Option<String> {
+    /// The hovered node's tooltip, once it has been hovered long enough.
+    pub fn tooltip_text(&self, now: f64) -> Option<String> {
         let key = self.hovered?;
         if now - self.hovered_since < TOOLTIP_DELAY {
             return None;

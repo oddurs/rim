@@ -135,3 +135,52 @@ fn copy(from: &std::path::Path, to: &std::path::Path) {
         }
     }
 }
+
+/// A colonist's panel has tabs: needs and gear, every skill with its level
+/// and what trains it, and the work they'd do with rules applied.
+#[test]
+fn a_colonist_panel_has_overview_skills_and_work_tabs() {
+    let mut sim = sim_at(&mods());
+    let founder = sim.world.colonists().next().unwrap();
+    let wood = sim.world.defs.thing_id("core:wood").unwrap();
+    sim.world.ecs.get::<&mut rim_sim::world::Pawn>(founder).unwrap().carry = Some(rim_sim::world::Lot::new(wood, 7));
+    let mut ui = ui_for(&sim);
+    let mut cv = client(&sim);
+    cv.selected = Some(founder);
+    frame(&mut ui, &sim, &cv, Input::default());
+    assert!(ui.find("core:inspector.bars").is_some(), "overview first");
+    assert!(ui.snapshot().contains("carrying wood ×7"), "{}", ui.snapshot());
+
+    let tab = ui.find("core:inspector.tabs.skills").expect("a skills tab");
+    click(&mut ui, &sim, &mut cv, centre(tab));
+    let tree = ui.snapshot();
+    for s in &sim.world.defs.skills {
+        assert!(ui.find(&format!("core:inspector.skill.{}", s.id)).is_some(), "{}: {tree}", s.id);
+    }
+    assert_eq!(tip(&mut ui, &sim, &mut cv, "core:inspector.skill.core:plants", 1.0), "Trained by Chop, Harvest");
+
+    let tab = ui.find("core:inspector.tabs.work").expect("a work tab");
+    click(&mut ui, &sim, &mut cv, centre(tab));
+    assert!(ui.find("core:inspector.work.core:build").is_some());
+    let siege = sim.world.defs.lookup("stance", "core:siege").unwrap();
+    sim.push(Command::SetStance { stance: siege });
+    sim.step();
+    frame(&mut ui, &sim, &cv, Input { time: 10.0, ..Default::default() });
+    assert_eq!(tip(&mut ui, &sim, &mut cv, "core:inspector.work.core:build", 10.0), "Build 1 = base 3, Siege -2");
+
+    // Anyone else's panel has no tabs.
+    cv.selected = sim.world.pawns.iter().copied().find(|&e| e != founder);
+    frame(&mut ui, &sim, &cv, Input { time: 11.0, ..Default::default() });
+    if cv.selected.is_some_and(|e| !sim.world.colonists().any(|c| c == e)) {
+        assert!(ui.find("core:inspector.tabs").is_none());
+    }
+}
+
+/// Hover a node until its tooltip shows, and read the tooltip's text.
+fn tip(ui: &mut rim_ui::Ui, sim: &rim_sim::Sim, cv: &mut rim_ui::view::ClientView, id: &str, now: f64) -> String {
+    let at = centre(ui.find(id).unwrap_or_else(|| panic!("no {id}")));
+    cv.mouse = at;
+    frame(ui, sim, cv, Input { mouse: at, time: now, ..Default::default() });
+    frame(ui, sim, cv, Input { mouse: at, time: now + 5.0, ..Default::default() });
+    ui.tooltip_text(now + 5.0).unwrap_or_else(|| panic!("no tooltip for {id}"))
+}

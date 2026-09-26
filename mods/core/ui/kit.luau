@@ -91,11 +91,11 @@ function kit.toggle(props)
 	})
 end
 
--- A labelled meter. props: label, value (0..1), color, width, id.
+-- A labelled meter. props: label, value (0..1), color, width, label_width, tooltip, id.
 function kit.bar(props)
 	local v = math.clamp(props.value or 0, 0, 1)
 	local pct = math.floor(v * 1000 + 0.5) / 10
-	return node("row", { id = props.id, gap = "m", align = "center", w = props.width }, {
+	return node("row", { id = props.id, gap = "m", align = "center", w = props.width, tooltip = props.tooltip }, {
 		props.label and kit.label(props.label, { size = "small", color = "muted" }) and {
 			kind = "col",
 			w = props.label_width or 52,

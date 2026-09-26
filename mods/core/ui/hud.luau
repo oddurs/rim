@@ -164,24 +164,86 @@ ui.mount("left", "core:messages", { align = "start" })
 
 -- ─── Inspector: the selected pawn or thing ─────────────────────────────────
 
-local function pawn_panel(p)
-	local title = if p.founder then string.format(t("core:inspector.founder", "%s (founder)"), p.name) else p.name
-	local doing = if p.drafted then t("core:inspector.drafted", "drafted") else p.job
+-- A colonist's panel has tabs: how they are, what they're good at, and
+-- what they'll do next. Other pawns show only the first.
+local TABS = {
+	{ key = "overview", label = t("core:inspector.tab.overview", "Overview") },
+	{ key = "skills", label = t("core:inspector.tab.skills", "Skills") },
+	{ key = "work", label = t("core:inspector.tab.work", "Work") },
+}
+
+local function overview(p)
 	local bars = { kit.bar({ label = t("core:inspector.health", "health"), value = p.health, color = "good" }) }
 	for _, n in p.needs do
 		table.insert(bars, kit.bar({ id = "core:inspector.need." .. n.id, label = n.label, value = n.value, color = if n.low then "bad" else n.color }))
 	end
+	local gear = {}
+	if p.hand then
+		table.insert(gear, string.format(t("core:inspector.hand", "holding %s"), p.hand))
+	end
+	if p.carrying then
+		table.insert(gear, string.format(t("core:inspector.carrying", "carrying %s"), p.carrying))
+	end
+	return col({ gap = "s" }, {
+		col({ id = "core:inspector.bars", gap = "xs" }, bars),
+		#gear > 0 and label(table.concat(gear, " · "), { id = "core:inspector.gear", size = "small", color = "muted" }),
+		-- Extension point: mods add sections (mood, traits...).
+		col({ id = "core:inspector.sections", gap = "s" }),
+	})
+end
+
+local function skills(p)
+	local rows = {}
+	for _, s in p.skills do
+		table.insert(rows, kit.bar({
+			id = "core:inspector.skill." .. s.id,
+			label = string.format(t("core:inspector.skill", "%s %d"), s.label, s.level),
+			value = s.progress,
+			color = "accent",
+			label_width = 110,
+			tooltip = if s.trains ~= "" then string.format(t("core:inspector.trains", "Trained by %s"), s.trains) else nil,
+		}))
+	end
+	return col({ id = "core:inspector.skills", gap = "xs" }, rows)
+end
+
+local function work(view, p)
+	local eff = view.effective(p.id) or {}
+	local rows = {}
+	for _, w in view.work_types() do
+		local e = eff[w.id]
+		if e then
+			table.insert(rows, row({ id = "core:inspector.work." .. w.id, gap = "s", tooltip = e.why }, {
+				row({ w = 90 }, { label(w.label, { size = "small" }) }),
+				label(if e.value == 0 then "–" else tostring(e.value), { size = "small", color = if e.value == 0 then "faint" else nil }),
+			}))
+		end
+	end
+	return col({ id = "core:inspector.work", gap = "xxs" }, rows)
+end
+
+local function pawn_panel(view, p)
+	local title = if p.founder then string.format(t("core:inspector.founder", "%s (founder)"), p.name) else p.name
+	local doing = if p.drafted then t("core:inspector.drafted", "drafted") else p.job
 	local hint = if p.player
 		then (if p.drafted then t("core:inspector.hint_drafted", "R undraft · right-click move/attack") else t("core:inspector.hint", "R draft · right-click to order"))
 		else nil
+	local tab = if p.player then ui.state("core:inspector.tab", "overview") else "overview"
+	local body = if tab == "skills" then skills(p) elseif tab == "work" then work(view, p) else overview(p)
 	return kit.panel({ w = 300, gap = "m" }, {
 		col({ gap = "xxs" }, {
 			label(title, { size = "heading", weight = "strong" }),
 			label(string.format(t("core:inspector.sub", "%s · %s · %s"), p.label, p.faction, doing), { size = "small", color = "muted" }),
 		}),
-		col({ id = "core:inspector.bars", gap = "xs" }, bars),
-		-- Extension point: mods add sections (mood, skills...).
-		col({ id = "core:inspector.sections", gap = "s" }),
+		p.player and kit.tabs({
+			id = "core:inspector.tabs",
+			tabs = TABS,
+			selected = tab,
+			on_select = function(key)
+				ui.set_state("core:inspector.tab", key)
+			end,
+		}),
+		body,
 		hint and label(hint, { size = "small", color = "faint" }),
 	})
 end
@@ -220,7 +282,7 @@ ui.define("core:inspector", function(view)
 	end
 	local p = view.pawn(id)
 	if p then
-		return pawn_panel(p)
+		return pawn_panel(view, p)
 	end
 	local th = view.thing(id)
 	if th then
