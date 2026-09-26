@@ -863,14 +863,22 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     // ---------------------------------------------------------- 0cb48faf stances
     println!("\n# stances (0cb48faf)");
     t.key(KeyCode::P).await;
-    t.check(t.app.ui.find("core:work.stance.core:siege").is_some(), "P opens the work grid with a stance bar");
+    t.check(t.app.ui.find("core:work.stance.core:siege").is_some(), "P opens the Work Board with a stance bar");
     t.click_ui("core:work.stance.core:siege").await;
     t.ticks(1);
     t.check(t.w().stance == defs.lookup("stance", "core:siege"), "a stance button puts the colony in it");
     for _ in 0..20 {
         t.frame().await;
     }
-    t.check(t.ui_text().contains("3→1"), "a cell a stance moves reads where it was and where it is");
+    let build = {
+        let d = &t.w().defs;
+        d.work_order.iter().position(|&w| d.work_types[w as usize].id == "core:build").unwrap() + 1
+    };
+    let cell = t.app.ui.grid_cell("core:work.grid", 1, build).map(|c| c.text);
+    t.check(
+        cell.as_deref() == Some("3→1"),
+        format!("a cell a stance moves reads where it was and where it is ({cell:?})"),
+    );
     t.shot("stance_siege").await;
     t.click_ui("core:work.stance.core:normal").await;
     t.ticks(1);

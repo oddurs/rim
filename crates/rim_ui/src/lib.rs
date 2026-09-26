@@ -110,6 +110,13 @@ enum Call {
         fx: f32,
         fy: f32,
     },
+    /// The wheel over a grid cell with on_wheel.
+    Wheel {
+        f: mlua::Function,
+        cell: (usize, usize),
+        steps: f32,
+        shift: bool,
+    },
     /// A press on a grid cell: ask the mod what to paint, then paint it.
     Press {
         grid: Rc<node::Grid>,
@@ -211,6 +218,11 @@ pub struct Ui {
     layers: Vec<LayerOut>,
     hovered: Option<u64>,
     hovered_since: f64,
+    /// Where the pointer was last frame, for a grid cell's tooltip.
+    mouse: (f32, f32),
+    /// Wheel movement over one grid cell not yet whole steps: a trackpad
+    /// sends fractions every frame, and a nudge is a whole step.
+    wheel_acc: Option<(u64, (usize, usize), f32)>,
     pressed: Option<u64>,
     painting: Option<Painting>,
     focused: Option<u64>,
@@ -310,6 +322,8 @@ impl Ui {
             layers: Vec::new(),
             hovered: None,
             hovered_since: 0.0,
+            mouse: (0.0, 0.0),
+            wheel_acc: None,
             pressed: None,
             painting: None,
             focused: None,
@@ -627,8 +641,13 @@ impl Ui {
                         if h.scroll && scroll_hit.is_none() {
                             scroll_hit = Some(h.clone());
                         }
-                        if h.interactive {
+                        // The first interactive hit takes the pointer; the
+                        // search goes on only for the scroll area it's in,
+                        // so the wheel over a button in a list still scrolls.
+                        if h.interactive && top.is_none() {
                             top = Some((l.name, h.clone()));
+                        }
+                        if top.is_some() && scroll_hit.is_some() {
                             break;
                         }
                     }
@@ -648,7 +667,27 @@ impl Ui {
             self.hovered_since = input.time;
         }
 
-        if let Some(h) = &scroll_hit {
+        self.mouse = input.mouse;
+        // The wheel over a grid that takes it nudges a cell, not the scroll.
+        let grid_wheel = match (&top, input.wheel != 0.0) {
+            (Some((layer, h)), true) => self
+                .node_at(layer, h.path[0], &h.path[1..])
+                .and_then(|n| n.grid.clone())
+                .and_then(|g| Some((h.key, g.on_wheel.clone()?, g.cell_at(h.rect, mx, my)?))),
+            _ => None,
+        };
+        if let Some((key, f, cell)) = grid_wheel {
+            let acc = match self.wheel_acc {
+                Some((k, c, a)) if k == key && c == cell => a + input.wheel,
+                _ => input.wheel,
+            };
+            let steps = acc.trunc();
+            self.wheel_acc = Some((key, cell, acc - steps));
+            if steps != 0.0 {
+                handlers.push(Call::Wheel { f, cell, steps, shift: input.shift });
+            }
+            out.captured_wheel = true;
+        } else if let Some(h) = &scroll_hit {
             if input.wheel != 0.0 {
                 let step = 40.0 * self.theme.scale;
                 let e = self.scroll.entry(h.key).or_insert(0.0);
@@ -740,10 +779,14 @@ impl Ui {
         // A drag across a grid: every newly entered cell gets the value.
         if let Some(Painting { key, value, mut done }) = self.painting.take() {
             if !input.left_released && self.pressed == Some(key) {
-                let found = self.hit_by_key(key).and_then(|(layer, h)| {
-                    let g = self.node_at(layer, h.path[0], &h.path[1..])?.grid.clone()?;
-                    Some((g.cell_at(h.rect, mx, my), g))
-                });
+                // Only cells the player can see: dragging past the edge of a
+                // window or a scroll area paints nothing hidden.
+                let found = self.hit_by_key(key).filter(|(_, h)| h.clip.is_none_or(|c| contains(c, mx, my))).and_then(
+                    |(layer, h)| {
+                        let g = self.node_at(layer, h.path[0], &h.path[1..])?.grid.clone()?;
+                        Some((g.cell_at(h.rect, mx, my), g))
+                    },
+                );
                 if let Some((Some(cell), g)) = found {
                     if done.insert(cell) {
                         if let Some(f) = g.on_paint.clone() {
@@ -912,6 +955,10 @@ impl Ui {
                         self.vm.call_with(f, (r, c, value.clone()), world, client, &self.shown);
                     }
                     self.painting = Some(Painting { key, value, done: HashSet::from([cell]) });
+                }
+                Call::Wheel { f, cell, steps, shift } => {
+                    let (r, c) = (cell.0 as i64 + 1, cell.1 as i64 + 1);
+                    self.vm.call_with(&f, (r, c, steps, shift), world, client, &self.shown);
                 }
                 Call::Paint { f, cell, value } => {
                     self.vm.call_with(&f, (cell.0 as i64 + 1, cell.1 as i64 + 1, value), world, client, &self.shown);
@@ -1442,6 +1489,21 @@ impl Ui {
         out
     }
 
+    /// One cell of a laid-out grid, by the grid's id and 1-based row and
+    /// column: what it shows, for tests and tools.
+    pub fn grid_cell(&self, id: &str, r: usize, c: usize) -> Option<node::GridCell> {
+        self.layers.iter().find_map(|l| {
+            l.hits.iter().find_map(|h| {
+                let mut n = l.roots.get(h.path[0])?;
+                for &i in &h.path[1..] {
+                    n = n.children.get(i)?;
+                }
+                let g = n.grid.as_ref().filter(|_| n.id.as_deref() == Some(id))?;
+                (r >= 1 && c >= 1 && r <= g.rows && c <= g.cols).then(|| g.cells[(r - 1) * g.cols + c - 1].clone())
+            })
+        })
+    }
+
     /// The hovered node's tooltip, once it has been hovered long enough.
     pub fn tooltip_text(&self, now: f64) -> Option<String> {
         let key = self.hovered?;
@@ -1454,7 +1516,12 @@ impl Ui {
             for &i in &h.path[1..] {
                 n = n.children.get(i)?;
             }
-            n.tooltip.clone()
+            // A grid is one node: its tooltip is the cell's under the pointer.
+            let cell = n.grid.as_ref().and_then(|g| {
+                let (r, c) = g.cell_at(h.rect, self.mouse.0, self.mouse.1)?;
+                g.cells[r * g.cols + c].tip.clone()
+            });
+            cell.or_else(|| n.tooltip.clone())
         })
     }
 

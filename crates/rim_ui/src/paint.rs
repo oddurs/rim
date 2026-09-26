@@ -200,6 +200,12 @@ fn walk(
                 if let Some(bg) = cell.bg {
                     p.draw.push(Draw::Rect { rect: cr, color: fade(bg, alpha), radius: 0.0 });
                 }
+                if cell.bar > 0.0 {
+                    let h = (g.cell_h * 0.12).max(2.0);
+                    let bar = [cr[0], cr[1] + cr[3] - h, cr[2] * cell.bar, h];
+                    let color = cell.bar_color.unwrap_or(default_color);
+                    p.draw.push(Draw::Rect { rect: bar, color: fade(color, alpha * 0.8), radius: 0.0 });
+                }
                 if !cell.text.is_empty() {
                     let quads = p.text.quads(&cell.text, g.size, g.weight, None, cr[0] + inset, cr[1] + inset);
                     if !quads.is_empty() {

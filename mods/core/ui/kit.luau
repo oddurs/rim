@@ -275,7 +275,7 @@ function kit.window(win)
 				press = { bg = "surface_press" },
 			}, { kit.label(ui.t("core:window.close", "×"), { color = "muted" }) }),
 		}),
-		{ kind = "scroll", grow = 1, pad = "l", gap = "s", ui.slot(win.comp) },
+		{ kind = "scroll", id = win.id .. ".body", grow = 1, pad = "l", gap = "s", ui.slot(win.comp) },
 		win.resizable and node("row", { justify = "end", pad = 0 }, {
 			node("row", { id = win.id .. ".resize", handle = "resize", w = 14, h = 14, bg = "line", radius = 0 }),
 		}),

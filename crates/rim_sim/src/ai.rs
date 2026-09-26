@@ -757,6 +757,49 @@ fn find_work(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
     Some(job)
 }
 
+/// How many jobs of each work type are waiting, from the same sources
+/// `find_work` takes them from: blueprints, designations whose work is
+/// ready, work orders, loose items a stockpile would take, and designated
+/// creatures. Reach and reservations aren't counted: this is what's there
+/// to do, not who can do it. For the Work Board's column headers.
+pub fn work_waiting(w: &World) -> Vec<u32> {
+    let defs = &w.defs;
+    let mut n = vec![0u32; defs.work_types.len()];
+    if let Some(bw) = defs.build_work {
+        n[bw as usize] += w.ecs.query::<&Blueprint>().iter().count() as u32;
+    }
+    for (te, t, des) in w.ecs.query::<(Entity, &Thing, &Designated)>().without::<&Blueprint>().iter() {
+        let dd = &defs.designations[des.0 as usize];
+        let ready = match dd.targets {
+            Targets::Built => true,
+            _ => defs.thing(t.def).harvest_for(des.0).is_some_and(|h| w.harvest_ready(te, h.key())),
+        };
+        if ready {
+            n[dd.work_r as usize] += 1;
+        }
+    }
+    for o in w.ecs.query::<&Order>().without::<&Blueprint>().iter() {
+        n[o.work_type as usize] += 1;
+    }
+    if let Some(hw) = defs.haul_work.filter(|_| !w.zones.list.is_empty()) {
+        let mut taken: BTreeMap<DefId, bool> = BTreeMap::new();
+        for (te, t) in w.ecs.query::<(Entity, &Thing)>().without::<&Blueprint>().iter() {
+            if w.map.item_at(t.pos) != Some(te) || w.zones.at(&w.map, t.pos).is_some_and(|z| z.takes(t.def)) {
+                continue;
+            }
+            if *taken.entry(t.def).or_insert_with(|| w.zones.list.iter().any(|z| z.takes(t.def))) {
+                n[hw as usize] += 1;
+            }
+        }
+    }
+    for &o in &w.pawns {
+        if let Ok(des) = w.ecs.get::<&Designated>(o) {
+            n[defs.designations[des.0 as usize].work_r as usize] += 1;
+        }
+    }
+    n
+}
+
 /// The nearest stack lying where no stockpile keeps it that one would take,
 /// and the nearest cell with room for it: (the walk there and on to the
 /// cell, the job, the stack to reserve).

@@ -96,3 +96,47 @@ fn shots() {
     };
     shot(&mut ui, &title, "title", None);
 }
+
+/// The Work Board at core's 4 levels and at 9 (a one-line patch): twelve
+/// colonists, a siege moving cells, a wall waiting to be built.
+#[test]
+#[ignore]
+fn work_board_at_4_and_9_levels() {
+    let nine = scratch_mods(
+        "board9",
+        &[(
+            "fine",
+            "",
+            &[("defs/scale.toml", "[[patch]]\ntarget = \"priority_scale/core:core\"\nset = { levels = 9 }\n")],
+        )],
+    );
+    for (name, dir) in [("work_board_4", mods()), ("work_board_9", nine.clone())] {
+        let mut sim = sim_at(&dir);
+        let defs = sim.world.defs.clone();
+        let human = defs.creature_id("human").unwrap();
+        let c = sim.world.colony_center().unwrap();
+        for i in 1..12 {
+            sim.world.spawn_pawn(human, rim_sim::world::Faction::Player, c.offset(i % 4, i / 4), None);
+        }
+        let levels = defs.priority_scale.levels;
+        for (k, p) in sim.world.colonists().collect::<Vec<_>>().into_iter().enumerate() {
+            for (j, w) in (0..defs.work_types.len()).enumerate() {
+                let level = ((k + j * 2 + 1) % (levels as usize + 1)) as u8;
+                sim.push(rim_sim::Command::SetPriority { pawn: p, work: w as rim_sim::defs::DefId, level });
+            }
+        }
+        let (wall, wood) = (defs.thing_id("wall").unwrap(), defs.thing_id("wood").unwrap());
+        sim.push(rim_sim::Command::Build { thing: wall, stuff: Some(wood), a: c.offset(-6, 6), b: c.offset(-2, 6) });
+        sim.push(rim_sim::Command::SetStance { stance: defs.lookup("stance", "core:siege").unwrap() });
+        sim.step();
+        let mut ui = ui_for(&sim);
+        let cv = client(&sim);
+        ui.open_window("core:work");
+        frame(&mut ui, &sim, &cv, Input { time: 1.0, ..Default::default() });
+        let out = frame(&mut ui, &sim, &cv, Input { time: 2.0, ..Default::default() });
+        let mut canvas = Canvas::new(cv.screen.0 as usize, cv.screen.1 as usize, GROUND);
+        canvas.draw(&out.draw, &ui.text.atlas);
+        canvas.write_png(&out_dir().join(format!("{name}.png")));
+    }
+    let _ = std::fs::remove_dir_all(nine);
+}

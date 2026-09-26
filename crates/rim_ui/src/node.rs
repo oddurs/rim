@@ -65,6 +65,11 @@ pub struct GridCell {
     pub text: String,
     pub bg: Option<Rgba>,
     pub color: Option<Rgba>,
+    /// A meter along the cell's bottom edge, 0 to 1 (0: none).
+    pub bar: f32,
+    pub bar_color: Option<Rgba>,
+    /// Shown when the pointer rests on this cell.
+    pub tip: Option<String>,
 }
 
 /// A grid's shape and its cells. The node is laid out as one leaf of
@@ -85,6 +90,8 @@ pub struct Grid {
     pub on_press: Option<Function>,
     /// Called for the pressed cell and each newly entered one: (r, c, value).
     pub on_paint: Option<Function>,
+    /// The wheel over a cell: (r, c, steps, shift). Up is positive.
+    pub on_wheel: Option<Function>,
 }
 
 impl Grid {
@@ -219,7 +226,12 @@ impl Node {
             || self.on_right_click.is_some()
             || self.tooltip.is_some()
             || self.focusable
-            || self.grid.as_ref().is_some_and(|g| g.on_press.is_some() || g.on_paint.is_some())
+            || self.grid.as_ref().is_some_and(|g| {
+                g.on_press.is_some()
+                    || g.on_paint.is_some()
+                    || g.on_wheel.is_some()
+                    || g.cells.iter().any(|c| c.tip.is_some())
+            })
             || self.handle.is_some()
             || self.on_drag.is_some()
             || self.input.is_some()
@@ -486,7 +498,7 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
     let (mut rows, mut cols) = (0usize, 0usize);
     let (mut cell_w, mut cell_h) = (None, None);
     let mut cell_fn: Option<Function> = None;
-    let (mut on_press, mut on_paint) = (None, None);
+    let (mut on_press, mut on_paint, mut on_wheel) = (None, None, None);
     let mut src: Option<String> = None;
     let mut tint = false;
     let mut value = String::new();
@@ -614,6 +626,7 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
             "cell_h" => cell_h = Some(size(theme, "space", "cell_h", &v)?),
             "on_press" => on_press = Some(function("on_press", v)?),
             "on_paint" => on_paint = Some(function("on_paint", v)?),
+            "on_wheel" => on_wheel = Some(function("on_wheel", v)?),
             "value" => value = string("value", &v)?,
             "placeholder" => placeholder = string("placeholder", &v)?,
             "on_change" => on_change = Some(function("on_change", v)?),
@@ -733,7 +746,21 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
                             Value::Nil => None,
                             v => Some(color(theme, "color", &v)?),
                         };
-                        GridCell { text, bg, color: col }
+                        let bar = match ct.get::<Value>("bar").map_err(|e| e.to_string())? {
+                            Value::Nil => 0.0,
+                            Value::Integer(i) => (i as f32).clamp(0.0, 1.0),
+                            Value::Number(x) => (x as f32).clamp(0.0, 1.0),
+                            _ => return Err("a cell's bar is a number from 0 to 1".into()),
+                        };
+                        let bar_color = match ct.get::<Value>("bar_color").map_err(|e| e.to_string())? {
+                            Value::Nil => None,
+                            v => Some(color(theme, "bar_color", &v)?),
+                        };
+                        let tip = match ct.get::<Value>("tip").map_err(|e| e.to_string())? {
+                            Value::Nil => None,
+                            v => Some(string("tip", &v)?),
+                        };
+                        GridCell { text, bg, color: col, bar, bar_color, tip }
                     }
                     _ => return Err(format!("cell({}, {}) must return text, a table or nil", r + 1, c + 1)),
                 });
@@ -753,6 +780,7 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
             cells,
             on_press,
             on_paint,
+            on_wheel,
         }));
         n.text = None;
     }

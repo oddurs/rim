@@ -634,15 +634,17 @@ fn to_u8(c: Color) -> [u8; 3] {
 
 /// One frame's raw input, in logical points. The real loop gathers it from
 /// macroquad; `--autotest` builds it by hand, so both drive the same path.
-/// Sums every wheel event in a frame. `mouse_wheel()` keeps only the last
-/// one, and a trackpad sends several per frame.
-struct Wheel(f32);
+/// Sums every wheel event in a frame, vertical and horizontal.
+/// `mouse_wheel()` keeps only the last one, and a trackpad sends several
+/// per frame.
+struct Wheel(f32, f32);
 
 impl macroquad::miniquad::EventHandler for Wheel {
     fn update(&mut self) {}
     fn draw(&mut self) {}
-    fn mouse_wheel_event(&mut self, _x: f32, y: f32) {
+    fn mouse_wheel_event(&mut self, x: f32, y: f32) {
         self.0 += y;
+        self.1 += x;
     }
 }
 
@@ -651,8 +653,15 @@ impl Wheel {
     /// wheel is 1, a trackpad gives fractions. Backends report notches in
     /// different units.
     fn gather(sub: usize) -> f32 {
-        let mut w = Wheel(0.0);
+        let mut w = Wheel(0.0, 0.0);
         macroquad::input::utils::repeat_all_miniquad_input(&mut w, sub);
+        // macOS turns shift and a mouse wheel into a sideways scroll: with
+        // shift held, that's still the wheel (shift-wheel nudges a column).
+        let shift =
+            macroquad::input::is_key_down(KeyCode::LeftShift) || macroquad::input::is_key_down(KeyCode::RightShift);
+        if shift && w.0 == 0.0 {
+            w.0 = w.1;
+        }
         let per_notch = if cfg!(target_os = "macos") {
             10.0
         } else if cfg!(target_os = "windows") {

@@ -79,7 +79,9 @@ pub fn scratch_mods(name: &str, extra: &[ExtraMod]) -> PathBuf {
         )
         .unwrap();
         for (file, body) in *files {
-            std::fs::write(m.join(file), body).unwrap();
+            let path = m.join(file);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, body).unwrap();
         }
     }
     dir
