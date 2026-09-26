@@ -124,6 +124,7 @@ type CreatureInfo = { id: string, label: string, intelligent: boolean, aggressiv
 type ThingInfo = { id: string, label: string, market_value: number, food: boolean, item: boolean, tags: { string } }
 type Date = { year: number, season: string, season_index: number, day: number, day_of_year: number, year_days: number, year_fraction: number }
 type Room = { id: number, cells: number, enclosed: boolean }
+type PriorityPart = { label: string, delta: number }
 type Part = { label: string, value: number }
 type OrderNeed = { thing: string?, tag: string?, count: number }
 type OrderSpec = { label: string, needs: { OrderNeed }, work: number, work_type: string, requires: { string }? }
@@ -1081,16 +1082,58 @@ impl ScriptHost {
             (u64, String),
             |w, (id, name)| Ok(w.stat(rim_sim_entity(id)?, &name))
         );
-        // A colonist's work priority: 1 first, up to the scale's levels; 0 never.
+        // A colonist's work priority once the rules have had their say.
         api!(
             "priority",
             "(id: number, work: string) -> number?",
-            "A colonist's priority for a work type: 1 first, 0 never. Nil if it isn't a pawn.",
+            "A colonist's priority for a work type, rules and stance included: 1 first, 0 never. Nil if it isn't a pawn.",
             (u64, String),
             |w, from, (id, work)| {
                 let t = def_id(w, "work_type", &work, &from)?;
                 let e = rim_sim_entity(id)?;
-                Ok(w.ecs.get::<&Pawn>(e).ok().map(|p| p.priority(&w.defs, t)))
+                Ok(w.ecs.get::<&Pawn>(e).ok().map(|p| crate::rules::effective(&w.defs, &w.rules, &p, t)))
+            }
+        );
+        // Why a priority is what it is: the base, then each rule that moved it.
+        {
+            let ptr = self.world.clone();
+            let f = lua.create_function(move |lua, (id, work): (u64, String)| {
+                let from = calling_mod(lua).unwrap_or_default();
+                let parts = with_world(&ptr, |w| {
+                    let t = def_id(w, "work_type", &work, &from)?;
+                    let e = rim_sim_entity(id)?;
+                    Ok(w.ecs.get::<&Pawn>(e).ok().map(|p| crate::rules::explain(&w.defs, &w.rules, &p, t).1))
+                })?;
+                let Some(parts) = parts else { return Ok(Value::Nil) };
+                let t = lua.create_table()?;
+                for p in parts {
+                    let row = lua.create_table()?;
+                    row.set("label", p.label)?;
+                    row.set("delta", p.delta)?;
+                    t.push(row)?;
+                }
+                Ok(Value::Table(t))
+            })?;
+            rim.set("priority_parts", f)?;
+            self.declare(
+                "priority_parts",
+                "(id: number, work: string) -> { PriorityPart }?",
+                "How a colonist's priority came about: the base, then each rule that moved it. The deltas sum to rim.priority.",
+            );
+        }
+        api!("stance", "() -> string?", "The colony's stance, or nil if no mod defines any.", (), |w, _a| Ok(w
+            .stance
+            .map(|s| w.defs.stances[s as usize].id.clone())));
+        // Scripts run inside the tick, so this is as deterministic as a Command.
+        api!(
+            "set_stance",
+            "(stance: string) -> ()",
+            "Put the colony in a stance: its priority rules hold until another. For incidents; the player's comes as a command.",
+            String,
+            |w, from, stance| {
+                w.stance = Some(def_id(w, "stance", &stance, &from)?);
+                w.update_rules();
+                Ok(())
             }
         );
         // Make a pawn give up and walk off the map after `ticks`.

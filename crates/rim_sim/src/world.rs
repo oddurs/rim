@@ -665,6 +665,10 @@ pub struct World {
     /// How many times shelter has been worked out: for tests and profiling,
     /// not simulation state.
     pub shelter_recomputes: u64,
+    /// The colony's stance: which stance's priority rules hold.
+    pub stance: Option<DefId>,
+    /// The priority rules that hold colony-wide. Derived: rebuilt on load.
+    pub rules: crate::rules::Rules,
     /// For each mod whose script data is here but which isn't loaded, the
     /// version it wrote that data with: when it comes back, it migrates
     /// from there (0139).
@@ -674,6 +678,7 @@ pub struct World {
 impl World {
     pub fn new(defs: Arc<DefDb>, w: i32, h: i32, seed: u64) -> Self {
         let fields = Fields::new(&defs, (w * h) as usize);
+        let stance = defs.default_stance;
         World {
             defs,
             seed,
@@ -698,6 +703,8 @@ impl World {
             data: BTreeMap::new(),
             zones: crate::zone::Zones::new((w * h) as usize),
             shelter_recomputes: 0,
+            stance,
+            rules: crate::rules::Rules::default(),
             data_versions: BTreeMap::new(),
         }
     }
@@ -1423,6 +1430,7 @@ impl World {
             }
         }
         h = self.zones.hash(h);
+        h = crate::rng::mix(h ^ self.stance.map_or(0x57a2, |s| s as u64));
         for (k, v) in &self.data {
             h = v.hash(k.bytes().fold(h, |h, b| crate::rng::mix(h ^ b as u64)));
         }

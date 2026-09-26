@@ -80,6 +80,7 @@ impl Sim {
         let clock = world.clock();
         world.fields.update_ambient(&defs, clock);
         world.update_shelter();
+        world.update_rules();
 
         Ok(Self::assemble(m, world))
     }
@@ -161,6 +162,7 @@ impl Sim {
         let clock = w.clock();
         prof.time("fields", || w.fields.update(&defs, &mut w.map, clock));
         prof.time("shelter", || w.update_shelter());
+        prof.time("rules", || w.update_rules());
         prof.time("pawns", || ai::tick_pawns(w));
         prof.time("worksites", || w.sweep_worksites());
         prof.time("deaths", || systems::deaths(w));

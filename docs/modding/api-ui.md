@@ -18,6 +18,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `act.send` | `(name: string, data: {[string]: any}?) -> ()` | Send an event to your mod's own sim scripts ("your_mod:event"), as a player command. |
 | `act.set_overlay` | `(index: number?) -> ()` | Show a field overlay by its index in view.fields(), or none. |
 | `act.set_priority` | `(id: number, work: string, level: number) -> ()` | Set a colonist's priority for a work type: 1 first, 0 never. |
+| `act.set_stance` | `(id: string) -> ()` | Put the colony in a stance: its priority rules hold until another. |
 | `act.speed` | `(speed: number) -> ()` | Set the game speed. |
 | `act.stuff` | `(id: string) -> ()` | Choose the material for the active build tool. |
 | `act.toggle_devtools` | `() -> ()` | Show or hide devtools. |
@@ -65,6 +66,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `view.data` | `(key: string) -> any` | A copy of data a sim script stored with rim.set_data, or nil. |
 | `view.date` | `() -> UiDate` | The calendar date, counted from 1. |
 | `view.day` | `() -> number` | The day, counted from 1. |
+| `view.effective` | `(id: number) -> { [string]: Effective }?` | A colonist's priority per work type once rules and the stance have had their say, with why: "Build 1 = base 3, Siege -2". Nil if it isn't a pawn. |
 | `view.events` | `(since_tick: number) -> { WorldEvent }` | Recent joins, deaths and departures, newest last. |
 | `view.explain` | `(field: string) -> { Part }` | Each term and push that makes up a field's outdoor value. |
 | `view.fields` | `() -> { FieldInfo }` | The field layers. |
@@ -88,6 +90,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `view.show_devtools` | `() -> boolean` | Whether devtools are open. |
 | `view.show_profiler` | `() -> boolean` | Whether the profiler is open. |
 | `view.speed` | `() -> number` | The game speed. |
+| `view.stances` | `() -> { Stance }` | The colony's stances, in bar order; `active` is the one it's in. |
 | `view.stats` | `() -> { string }` | Client statistics lines. |
 | `view.stuff` | `() -> { Stuff }` | Materials for the active build tool: what you have, what you'd get. |
 | `view.thing` | `(id: number) -> ThingInfo?` | A thing on the map: a building, plant, rock or item stack, or nil. why says what stops its designated work. |

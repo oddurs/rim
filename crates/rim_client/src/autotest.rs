@@ -847,6 +847,23 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     );
     t.key(KeyCode::Z).await;
 
+    // ---------------------------------------------------------- 0cb48faf stances
+    println!("\n# stances (0cb48faf)");
+    t.key(KeyCode::P).await;
+    t.check(t.app.ui.find("core:work.stance.core:siege").is_some(), "P opens the work grid with a stance bar");
+    t.click_ui("core:work.stance.core:siege").await;
+    t.ticks(1);
+    t.check(t.w().stance == defs.lookup("stance", "core:siege"), "a stance button puts the colony in it");
+    for _ in 0..20 {
+        t.frame().await;
+    }
+    t.check(t.ui_text().contains("3→1"), "a cell a stance moves reads where it was and where it is");
+    t.shot("stance_siege").await;
+    t.click_ui("core:work.stance.core:normal").await;
+    t.ticks(1);
+    t.check(t.w().stance == defs.lookup("stance", "core:normal"), "and back");
+    t.key(KeyCode::P).await;
+
     // ---------------------------------------------------------- 0049 profiler
     println!("\n# profiler (0049)");
     t.key(KeyCode::F3).await;
