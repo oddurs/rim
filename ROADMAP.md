@@ -192,11 +192,10 @@ The log is the save and snapshots are a cache (DESIGN.md §7a): a colony is alwa
 
 ## colony — Colony
 
-`########··` 71% · 17 of 24 done · due 2026-12-15
+`########··` 75% · 18 of 24 done · due 2026-12-15
 
 Running more than one person: stockpiles, hauling, work priorities, skills, colonist panels.
 
-- [ ] `03b9b791` Derived fields and feels-like temperature <sup>feature · p1 · s · engine</sup>
 - [ ] `0e73145a` Work pools: work givers post work, pawns stop scanning <sup>perf · p0 · m · engine</sup>
 - [ ] `4ad6b386` Colonist inspection panel <sup>feature · p1 · m · client</sup>
 - [ ] `8cf4db07` Multi-cell things occupy every cell of their footprint <sup>feature · p3 · m · engine</sup>
@@ -204,6 +203,7 @@ Running more than one person: stockpiles, hauling, work priorities, skills, colo
 - [ ] `f1b96df4` The Work Board: a painted priority grid with live demand <sup>feature · p0 · l · core</sup>
 - [ ] `9bd9e8ab` Fire: burning, spread by wind, put out by rain <sup>feature · p1 · l · engine</sup>
 - [x] `03ad3e3a` Work types and priorities per colonist <sup>feature · p0 · m · engine</sup>
+- [x] `03b9b791` Derived fields and feels-like temperature <sup>feature · p1 · s · engine</sup>
 - [x] `0cb48faf` Priority rules and colony stances <sup>feature · p1 · m · engine</sup>
 - [x] `1e977052` Floating windows and a saved UI layout <sup>feature · p0 · m · engine</sup>
 - [x] `29c323f5` Skills learned by doing <sup>feature · p1 · m · engine</sup>

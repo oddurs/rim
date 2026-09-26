@@ -301,10 +301,13 @@ of = [{ input = "hour", curve = [[3, -1.0], [9, 0.0], [15, 1.0], [21, 0.0], [27,
 ```
 
 - **Inputs** (v1): `input = "year"` (0–1), `input = "hour"` (0–24),
-  `ambient = "id"` (another field's outdoor value), `noise = "key"` (smooth
-  deterministic noise with a period of `hours`), and plain numbers. Per-cell
-  inputs (terrain, shelter, the cell's own value) come with stock fields and
-  farming.
+  `ambient = "id"` (another field's outdoor value), `field = "id"` (another
+  field's value at the cell being read, for a derived field; outdoors, its
+  outdoor value), `noise = "key"` (smooth deterministic noise with a period
+  of `hours`), and plain numbers. A `kind = "derived"` field is only its
+  `value` terms, worked out when read: feels-like is the air less wind chill
+  and cold rain, read where the colonist stands. Terrain inputs come with
+  stock fields and farming.
 - **Tables keyed by label**, not arrays: a patch can change one term
   (`set = { ambient = { day = { scale = 11.0 } } }`) and conflicts are
   reported per term.

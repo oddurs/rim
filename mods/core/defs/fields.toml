@@ -145,3 +145,40 @@ unit = "%"
 range = [0.0, 100.0]
 color_low = "#3a6e4a"
 color_high = "#d8e8f0"
+
+# What the cold feels like where you stand (DESIGN.md §4c): the air, less
+# wind chill and cold rain. Derived, so it's worked out when read and
+# stores nothing; indoors it's the room's temperature, since no wind or
+# rain gets in. A push onto it (rim.push_ambient) counts everywhere,
+# indoors too. The warmth need reads this, not the thermometer.
+[[field]]
+id = "feels_like"
+label = "feels like"
+unit = "°C"
+kind = "derived"
+range = [-10.0, 35.0]
+color_low = "#3b6fd4"
+color_high = "#e0452b"
+
+[field.value.air]
+of = [{ field = "temperature" }]
+
+# The wind where you stand (the wind past a breeze, times how exposed the
+# cell is) takes up to half a degree per m/s off, and only in the cold:
+# 16 m/s at 0° is -3°, at -20° it's -6°; under 4 m/s or above 10°, nothing.
+[field.value.wind_chill]
+scale = -1.0
+of = [
+  { ambient = "wind", curve = [[0, 0.0], [4, 0.0], [16, 6.0], [25, 10.5]] },
+  { field = "wind_exposure", curve = [[0, 0.0], [100, 1.0]] },
+  { field = "temperature", curve = [[-20, 1.0], [0, 0.5], [10, 0.0]] },
+]
+
+# Cold rain soaks through: 0.3° per mm/h past a drizzle (2 mm/h) at 5°
+# and below, nothing by 20°.
+[field.value.wet]
+scale = -0.3
+of = [
+  { field = "precipitation", curve = [[0, 0.0], [2, 0.0], [12, 10.0]] },
+  { field = "temperature", curve = [[5, 1.0], [20, 0.0]] },
+]
