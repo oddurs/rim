@@ -627,7 +627,7 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
             }
             if let Some((pct, designation, side)) = work {
                 let total = w.ecs.get::<&Work>(e).map_or(100, |k| k.total);
-                let k = Work { done: total * pct / 100, total, designation, side };
+                let k = Work { done: total * pct / 100, side, ..Work::new(total, designation) };
                 w.ecs.insert_one(e, k).unwrap();
             }
             w.map.touch(cell);
