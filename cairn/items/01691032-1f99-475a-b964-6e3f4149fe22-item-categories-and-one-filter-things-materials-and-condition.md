@@ -2,12 +2,12 @@
 id: 01691032-1f99-475a-b964-6e3f4149fe22
 title: 'Item categories and one filter: things, materials and condition'
 type: feature
-status: review
+status: done
 milestone: crafting
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 created: 2026-09-26
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p1
 api: additive
 effort: m

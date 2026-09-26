@@ -457,7 +457,7 @@ Dig down. The map becomes a stack of 2D levels joined only at stairs, ladders an
 
 ## crafting — Crafting
 
-`··········` 0% · 0 of 26 done · due 2027-05-01
+`#·········` 4% · 1 of 26 done · due 2027-05-01
 
 Production chains: workbenches and bills, cooking, farming, tailoring, research as a plugin.
 
@@ -468,7 +468,6 @@ Production chains: workbenches and bills, cooking, farming, tailoring, research 
 - [ ] `308074c6` Getting wet: pawn wetness and clothing insulation <sup>feature · p2 · m · engine</sup>
 - [ ] `4f3e5d8d` mods/timber: planks, plank walls, crates, shelves, racks and a granary <sup>content · p2 · m · plugin</sup>
 - [ ] `5e323021` Store inspector: Contents and Accepts tabs <sup>feature · p1 · m · core</sup>
-- [ ] `629e1fa7` Nothing is lost when a carried stack doesn't fit where it's set down <sup>bug · p1 · s · engine</sup>
 - [ ] `63811969` Spoilage, and keeping things by where they're stored <sup>feature · p3 · m · engine</sup>
 - [ ] `6ce26632` The UI draws a thing's look: the item token <sup>feature · p1 · m · client</sup>
 - [ ] `6dd4891c` Ground wetness and snow in core <sup>content · p0 · m · core</sup>
@@ -485,8 +484,9 @@ Production chains: workbenches and bills, cooking, farming, tailoring, research 
 - [ ] `e1be8ebd` Plants grow in the weather <sup>feature · p0 · m · engine</sup>
 - [ ] `e953d711` Store levels: sorting that only climbs, and room reserved by count <sup>feature · p1 · l · engine</sup>
 - [ ] `f22f1a62` Stores sheet, storage overlay and hover card <sup>feature · p2 · m · core</sup>
-- [ ] `01691032` Item categories and one filter: things, materials and condition <sup>feature · p1 · m · engine</sup>
+- [ ] `629e1fa7` Nothing is lost when a carried stack doesn't fit where it's set down <sup>bug · p1 · s · engine</sup>
 - [ ] `9bd9e8ab` Fire: burning, spread by wind, put out by rain <sup>feature · p1 · l · engine</sup>
+- [x] `01691032` Item categories and one filter: things, materials and condition <sup>feature · p1 · m · engine</sup>
 
 ## 1.0 — 1.0
 

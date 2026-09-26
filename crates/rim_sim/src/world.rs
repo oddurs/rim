@@ -1023,8 +1023,6 @@ impl World {
         Some(e)
     }
 
-    /// Drop items near `near`, merging into existing stacks. Returns the
-    /// amount that could not be placed.
     /// Room a cell has for `def`: a stack's worth if it holds no item, the
     /// rest of the stack if it holds the same one, else none. A cell with a
     /// fixture on it, even a blueprint, has none: a wall would go up over
@@ -1093,18 +1091,21 @@ impl World {
     }
 
     /// Drop a lot near `near`, merging into stacks of the same thing of the
-    /// same material. Returns how many didn't fit.
+    /// same material, nearest ring first. Nothing is lost (DESIGN.md §4f):
+    /// it keeps looking further out until it has put everything down, so it
+    /// returns anything only when the whole map is full.
     pub fn place_lot(&mut self, lot: Lot, near: IVec) -> u32 {
         let limit = self.defs.thing(lot.def).stack_limit;
         let mut count = lot.count;
-        for r in 0..=8i32 {
+        let reach = self.map.w.max(self.map.h);
+        for r in 0..=reach {
             for dy in -r..=r {
-                for dx in -r..=r {
+                // Each ring's own cells, in rows, so a far drop walks rings
+                // and not the squares inside them.
+                let edge = dy.abs() == r;
+                for dx in (-r..=r).filter(|dx| edge || dx.abs() == r) {
                     if count == 0 {
                         return 0;
-                    }
-                    if dx.abs().max(dy.abs()) != r {
-                        continue;
                     }
                     let p = near.offset(dx, dy);
                     // Not under a plan, or where one will go once the grass
@@ -1279,13 +1280,13 @@ impl World {
         }
     }
 
-    /// A held tool goes back on the map, in the nearest free cell to `near`.
+    /// A held tool goes back on the map, in the nearest free cell to `near`,
+    /// however far that is (nothing is lost).
     pub fn put_down(&mut self, tool: Entity, near: IVec) {
         let _ = self.ecs.remove_one::<Held>(tool);
-        let free = (0..=8i32).flat_map(|r| {
+        let free = (0..=self.map.w.max(self.map.h)).flat_map(|r| {
             (-r..=r)
-                .flat_map(move |dy| (-r..=r).map(move |dx| (dx, dy)))
-                .filter(move |(dx, dy)| dx.abs().max(dy.abs()) == r)
+                .flat_map(move |dy| (-r..=r).filter(move |dx| dy.abs() == r || dx.abs() == r).map(move |dx| (dx, dy)))
         });
         for (dx, dy) in free {
             let p = near.offset(dx, dy);
@@ -1302,7 +1303,7 @@ impl World {
                 return;
             }
         }
-        // Nowhere to put it: it's lost.
+        // Nowhere on the whole map to put it.
         self.despawn_thing(tool);
     }
 
