@@ -10,20 +10,28 @@ id = "temperature"
 label = "temperature"
 unit = "°C"
 indoor = "room"
-# Insulation: a sealed room closes 6% of the gap to outdoors per hour, so a
-# hut holds some of the day's warmth into the night.
-leak_per_hour = 0.06
+# Insulation: a sealed room closes 6% of the gap to outdoors per hour
+# (`leak`, as terms), so a hut holds some of the day's warmth into the night.
 # Heating power: a campfire (12°) warms a 3x3 room about 10° an hour, up to
 # its cap. Bigger rooms warm slower and may need more than one fire.
 room_gain = 7.5
 # What a room is made of scales its leak: each boundary piece's `leak` is
 # divided by its material's `insulation` factor, then averaged around the
-# room. Wood is 1.0, so a wooden hut leaks at exactly the constant above.
+# room. Wood is 1.0, so a wooden hut leaks at exactly the `leak` below.
 boundary_factor = "insulation"
 range = [-10.0, 35.0]
 color_low = "#3b6fd4"
 color_high = "#e0452b"
 hud = true
+
+[field.leak.sealed]
+of = [0.06]
+
+# Wind drives heat out through every gap: a breeze does nothing, a storm's
+# 16 m/s leaks 1.8 times as fast.
+[field.leak.wind]
+scale = 0.06
+of = [{ ambient = "wind", curve = [[0, 0.0], [4, 0.0], [16, 0.8], [25, 1.0]] }]
 
 # Core's climate: the same mild day every day of the year. The weather plugin
 # replaces `mean` with a seasonal curve and damps `day` under cloud.

@@ -111,7 +111,7 @@ You start as *the warrior*: a strong fighter with nothing on them.
 
 ### Tension: does a room know what it is made of?
 
-- **The question:** `leak_per_hour` is a constant on the *field* def, so every
+- **The question:** `leak_per_hour` was a constant on the *field* def, so every
   room on the map loses heat at the same rate. A room ringed in stone behaves
   exactly like the same room in wood, and a window can only be a hard-coded
   special case. A window is not a special case; it is the first piece of wall
@@ -158,7 +158,8 @@ a special case for each.
     adding or removing one costs only its own footprint, and a wall change
     re-stamps only the emitters within reach of it.
   - **Room state:** a `room` field holds one value per enclosed room. It leaks
-    toward outdoors at `leak_per_hour` (insulation) and is pushed by emitters
+    toward outdoors at `leak` (insulation; terms, so wind makes a hut
+    draftier, or a constant `leak_per_hour`) and is pushed by emitters
     inside at `room_gain` (heating power), up to each emitter's `cap`. These
     are separate on purpose: how well a hut holds warmth and how fast a fire
     heats it are different questions. When walls change and rooms rebuild,

@@ -142,7 +142,7 @@ pub struct Layer {
     pub ambient: i32,
     /// Per-room value for `indoor = "room"` fields, indexed by room id - 1.
     pub rooms: Vec<i32>,
-    /// Per-room multiplier on `leak_per_hour`, from what encloses the room.
+    /// Per-room multiplier on the field's leak, from what encloses the room.
     /// 1.0 for a boundary that says nothing.
     pub leak_mult: Vec<f64>,
     /// Per-room fraction of the outdoor value that gets in through the
@@ -475,6 +475,10 @@ impl Fields {
                 continue;
             }
             let n = map.room_count();
+            let leak_now = match fd.leak_terms.terms.is_empty() {
+                true => fd.leak_per_hour,
+                false => self.eval_global(&fd.leak_terms).max(0.0),
+            };
             let layer = &mut self.layers[fi];
             layer.rooms.resize(n, layer.ambient);
             // Summed as integers: the emitter list is in the order things were
@@ -497,7 +501,7 @@ impl Fields {
                     continue;
                 }
                 let v = *value as f64;
-                let leak = fd.leak_per_hour * layer.leak_mult.get(r).copied().unwrap_or(1.0);
+                let leak = leak_now * layer.leak_mult.get(r).copied().unwrap_or(1.0);
                 let change = (ambient as f64 - v) * leak + *heat as f64 * fd.room_gain / room.cells as f64;
                 *value = (v + change * hours).round() as i32;
             }

@@ -260,3 +260,47 @@ fn boundary_refresh_is_cheap() {
     assert!(ms < 5.0, "boundary refresh took {ms} ms");
     let _ = ROOM_INTERVAL;
 }
+
+/// Two identical warm huts, one in a gale: the one in the wind loses its
+/// heat faster (8376a04f). The wind field is the same everywhere, so each
+/// run has one hut and one wind.
+fn warm_hut_after(wind: f64) -> f64 {
+    let mut s = sim();
+    let wood = thing(&s, "wood");
+    let o = site(&s, &[]);
+    let inside = hut(&mut s, o, wood, None, None);
+    let (t, w) = (field(&s, "temperature"), field(&s, "wind"));
+    let fire = s.world.spawn_fixture(thing(&s, "campfire"), inside, false).expect("a fire");
+    run_at(&mut s, 2.0, TICKS_PER_DAY / 12);
+    s.world.despawn_thing(fire);
+    s.world.fields.set_ambient(w, Some(wind));
+    run_at(&mut s, 2.0, TICKS_PER_DAY / 8);
+    s.world.fields.value(&s.world.defs, &s.world.map, t, inside)
+}
+
+#[test]
+fn a_room_cools_faster_in_a_gale() {
+    let (calm, breeze, gale) = (warm_hut_after(0.0), warm_hut_after(3.0), warm_hut_after(16.0));
+    assert_eq!(calm, breeze, "a breeze doesn't find the gaps");
+    assert!(gale < calm - 1.0, "a storm wind draws the heat out: {gale}° vs {calm}° in calm");
+}
+
+/// A field that still says `leak_per_hour` loads and leaks as it did.
+#[test]
+fn a_constant_leak_still_loads() {
+    let dir = std::env::temp_dir().join(format!("rim-test-leak-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    copy_dir(&mods().join("core"), &dir.join("core"));
+    let f = dir.join("core/defs/fields.toml");
+    let text = std::fs::read_to_string(&f).unwrap();
+    let start = text.find("[field.leak.sealed]").unwrap();
+    let end = text.find("# Core's climate").unwrap();
+    let text = format!("{}{}", &text[..start], &text[end..])
+        .replace("boundary_factor", "leak_per_hour = 0.06\nboundary_factor");
+    std::fs::write(&f, text).unwrap();
+    let s = Sim::new(&dir, 21).expect("leak_per_hour loads");
+    let t = field(&s, "temperature");
+    let fd = &s.world.defs.fields[t];
+    assert!(fd.leak_terms.terms.is_empty() && fd.leak_per_hour == 0.06);
+    let _ = std::fs::remove_dir_all(dir);
+}
