@@ -16,6 +16,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `act.order` | `(key: string, x: number, y: number, on: number?) -> ()` | Give the selected colonists the order named key at a map spot (a row from view.orders), each one it's on offer to. |
 | `act.preview` | `(key: string?) -> ()` | Point the materials view (view.stuff) at a buildable by its tool key, for a card describing it; nil goes back to the tool in hand. |
 | `act.render_scale` | `(scale: number) -> ()` | Draw the world at this fraction of the screen's pixels, 0.25 to 1; the UI stays sharp. Saved for the player. |
+| `act.scroll_mode` | `(mode: string) -> ()` | What a scroll does on the map: 'auto' (a trackpad pans, a wheel zooms), 'zoom' or 'pan'. Saved with the player's settings. |
 | `act.select` | `(id: number?, add: boolean?) -> ()` | Select a pawn or thing, or nothing. With add, put a colonist into the selection or take them out of it (a shift-click). |
 | `act.send` | `(name: string, data: {[string]: any}?) -> ()` | Send an event to your mod's own sim scripts ("your_mod:event"), as a player command. |
 | `act.set_overlay` | `(index: number?) -> ()` | Show a field overlay by its index in view.fields(), or none. |
@@ -30,6 +31,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `act.tool` | `(key: string) -> ()` | Pick a toolbar tool ("designate:core:chop", "build:core:wall"). |
 | `act.ui_scale` | `(scale: number) -> ()` | Set the player's UI scale, 0.75 to 2 on top of the display's; it is saved with their settings. |
 | `act.zone_allow` | `(zone: number, item: string, on: boolean) -> ()` | Let a stockpile take an item, or stop it. |
+| `act.zoom` | `(factor: number) -> ()` | Zoom the map by a factor about the middle of the screen (1.12 is one wheel notch in). |
 | `ui.anchored` | `(node: Node?) -> Node` | A node attached to a pawn (entity) or cell, on the anchored layer. |
 | `ui.bind` | `(id: string, opts: { key: string?, label: string? }, run: () -> ()) -> ()` | A named action with a default key ("space", "f3", "ctrl+k"): it fires from the key when no text input is typing, and from the command palette. With no key it is in the palette alone. The player's keybinds file overrides the key. Two mods binding one id or one key is reported. |
 | `ui.close` | `(id: string) -> ()` | Close a window. |

@@ -31,6 +31,25 @@ end)
 ui.bind("core:devtools", { key = "f12", label = t("core:keys.devtools", "Devtools") }, function()
 	act.toggle_devtools()
 end)
+-- The map's zoom, a wheel notch at a time, about the middle of the screen.
+ui.bind("core:zoom_in", { key = "=", label = t("core:keys.zoom_in", "Zoom in") }, function()
+	act.zoom(1.12)
+end)
+ui.bind("core:zoom_out", { key = "-", label = t("core:keys.zoom_out", "Zoom out") }, function()
+	act.zoom(1 / 1.12)
+end)
+-- What a scroll does on the map. Auto sorts a trackpad (pans) from a wheel
+-- (zooms); the others are for a device that reads as the wrong one.
+ui.bind("core:scroll_auto", { label = t("core:keys.scroll_auto", "Scroll: trackpad pans, wheel zooms") }, function()
+	act.scroll_mode("auto")
+end)
+ui.bind("core:scroll_zoom", { label = t("core:keys.scroll_zoom", "Scroll: always zooms") }, function()
+	act.scroll_mode("zoom")
+end)
+ui.bind("core:scroll_pan", { label = t("core:keys.scroll_pan", "Scroll: always pans") }, function()
+	act.scroll_mode("pan")
+end)
+
 -- UI scale, on top of the display's: saved with the player's settings.
 local UI_STEP = 0.125
 ui.bind("core:ui_bigger", { key = "ctrl+=", label = t("core:keys.ui_bigger", "Bigger interface") }, function()

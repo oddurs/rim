@@ -1285,6 +1285,79 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         t.app.sim.world.fields.set_ambient(f, None);
     }
 
+    // ---------------------------------------------------------- fda56c8e camera by device
+    println!("\n# the camera answers a mouse and a trackpad (fda56c8e)");
+    t.clear_dock().await;
+    t.focus(t.pawn(founder).pos);
+    t.frame().await;
+    let mid = (600.0, 400.0);
+    let cam = |t: &T| (t.app.cam.x, t.app.cam.y, t.app.cam.zoom);
+    // Let any earlier scroll's stickiness lapse.
+    for _ in 0..30 {
+        t.frame().await;
+    }
+    let before = cam(&t);
+    t.input(RawInput {
+        mouse: mid,
+        scroll: crate::Scroll { notches: 0.0, travel: (12.0, -30.0) },
+        ..Default::default()
+    })
+    .await;
+    let after = cam(&t);
+    t.check(
+        (after.0 - (before.0 - 12.0 / before.2)).abs() < 1e-3 && (after.1 - (before.1 + 30.0 / before.2)).abs() < 1e-3,
+        format!("a trackpad's travel pans one to one ({before:?} → {after:?})"),
+    );
+    t.check(after.2 == before.2, "and doesn't zoom");
+    for _ in 0..30 {
+        t.frame().await;
+    }
+    let before = cam(&t);
+    t.input(RawInput { mouse: mid, scroll: crate::Scroll { notches: 1.0, travel: (0.0, 0.0) }, ..Default::default() })
+        .await;
+    let after = cam(&t);
+    t.check((after.2 / before.2 - 1.12).abs() < 1e-3, format!("a wheel notch zooms 12% ({:.3})", after.2 / before.2));
+    let before = cam(&t);
+    t.input(RawInput {
+        mouse: mid,
+        scroll: crate::Scroll { notches: 0.0, travel: (0.0, 40.0) },
+        zoom_mod: true,
+        ..Default::default()
+    })
+    .await;
+    t.check(cam(&t).2 > before.2, "Cmd with a trackpad scroll zooms");
+    // A round-numbered delta right after trackpad scrolling is still the trackpad.
+    let before = cam(&t);
+    t.input(RawInput { mouse: mid, scroll: crate::Scroll { notches: 0.0, travel: (0.0, 5.0) }, ..Default::default() })
+        .await;
+    t.input(RawInput { mouse: mid, scroll: crate::Scroll { notches: 1.0, travel: (0.0, 0.0) }, ..Default::default() })
+        .await;
+    t.check(cam(&t).2 == before.2, "a whole notch amid trackpad scrolling pans, not zooms");
+    // Right-drag pans, and gives no order.
+    for _ in 0..30 {
+        t.frame().await;
+    }
+    t.app.order_flash = None;
+    let before = cam(&t);
+    t.input(RawInput { mouse: mid, right_pressed: true, right_down: true, ..Default::default() }).await;
+    t.input(RawInput { mouse: (mid.0 + 50.0, mid.1), right_down: true, ..Default::default() }).await;
+    t.input(RawInput { mouse: (mid.0 + 50.0, mid.1), right_released: true, ..Default::default() }).await;
+    t.check(
+        (cam(&t).0 - (before.0 - 50.0 / before.2)).abs() < 1e-3,
+        format!("a right-drag pans the ground with the pointer ({before:?} → {:?})", cam(&t)),
+    );
+    t.check(t.app.order_flash.is_none() && t.app.ui.find("core:menu").is_none(), "and gives no order");
+    // The setting pins it: with "pan", a wheel pans too.
+    t.app.scroll_mode = crate::ScrollMode::Pan;
+    let before = cam(&t);
+    t.input(RawInput { mouse: mid, scroll: crate::Scroll { notches: 1.0, travel: (0.0, 0.0) }, ..Default::default() })
+        .await;
+    t.check(cam(&t).2 == before.2 && cam(&t).1 != before.1, "with scroll set to pan, a wheel pans");
+    t.app.scroll_mode = crate::ScrollMode::Auto;
+    let before = cam(&t);
+    t.key(KeyCode::Equal).await;
+    t.check(cam(&t).2 > before.2, "= zooms in");
+
     // ---------------------------------------------------------- 9aa55d96 safe right-click
     println!("\n# a right-click never takes a wall down (9aa55d96)");
     t.clear_dock().await;

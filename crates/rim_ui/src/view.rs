@@ -154,6 +154,10 @@ pub enum UiAction {
     /// Draw the UI this much bigger (0.75 to 2), on top of the display's
     /// own scale.
     UiScale(f32),
+    /// Zoom the map by a factor, about the middle of the screen.
+    Zoom(f32),
+    /// What a scroll does on the map: "auto", "zoom" or "pan".
+    ScrollMode(String),
     /// The buildable the build tray's card is about (by tool key), so the
     /// materials view describes it; None goes back to the active tool.
     Preview(Option<String>),

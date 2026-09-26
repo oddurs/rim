@@ -127,6 +127,10 @@ pub struct App {
     /// A right press on the map, until it's decided: a click, a hold that
     /// opens the orders menu, or a drag.
     right: Option<RightPress>,
+    /// What a scroll does on the map (the player's `scroll` setting).
+    pub scroll_mode: ScrollMode,
+    /// When the last precise (trackpad) scroll came.
+    last_precise: f64,
     /// Lighting and weather on screen.
     pub sky: sky::Sky,
     /// The terrain, baked into a texture.
@@ -252,7 +256,38 @@ fn typed_char(c: char) -> Option<char> {
 
 #[cfg(test)]
 mod tests {
-    use super::{markable, save_setting, saved_render_scale, saved_ui_scale};
+    use super::{
+        classify, markable, save_setting, saved_render_scale, saved_scroll_mode, saved_ui_scale, Scroll, ScrollMode,
+    };
+
+    #[test]
+    fn a_wheel_steps_and_a_trackpad_travels() {
+        // macOS units: a wheel notch is 10, a trackpad reports points.
+        assert_eq!(
+            classify(&[(0.0, 10.0), (0.0, 20.0), (0.0, -10.0)], 10.0, 1.0, false),
+            Scroll { notches: 2.0, travel: (0.0, 0.0) }
+        );
+        let pad = classify(&[(0.0, 2.5), (1.25, -3.75)], 10.0, 1.0, false);
+        assert_eq!(pad.notches, 0.0, "fractions are a trackpad");
+        assert_eq!(pad.travel, (1.25, -1.25), "and travel in points, both axes");
+        let sideways = classify(&[(3.0, 0.0)], 10.0, 1.0, false);
+        assert_eq!(sideways.travel, (3.0, 0.0), "sideways is travel");
+        assert_eq!(classify(&[(10.0, 0.0)], 10.0, 1.0, true).notches, 1.0, "shift-wheel is still the wheel");
+        assert_eq!(classify(&[(0.0, 10.0), (0.0, 0.5)], 10.0, 1.0, false), Scroll { notches: 1.0, travel: (0.0, 0.5) });
+        // Windows: 120 a notch, a precision touchpad's units a third of a point.
+        assert_eq!(
+            classify(&[(0.0, 240.0), (0.0, 30.0)], 120.0, 1.0 / 3.0, false),
+            Scroll { notches: 2.0, travel: (0.0, 10.0) }
+        );
+    }
+
+    #[test]
+    fn the_scroll_mode_round_trips() {
+        assert_eq!(saved_scroll_mode("scroll = \"pan\""), Ok(Some(ScrollMode::Pan)));
+        assert_eq!(saved_scroll_mode("ui_scale = 1.5"), Ok(None));
+        assert!(saved_scroll_mode("scroll = \"sideways\"").is_err());
+        assert!(saved_scroll_mode("scroll = 3").is_err());
+    }
 
     /// Core names `gather` for plugins but has nothing to gather, so its
     /// toolbar has no Gather button; chop and the rest stay.
@@ -469,6 +504,18 @@ async fn game() {
     } else {
         player_file("settings.toml")
     };
+    // What a scroll does on the map: the player's setting, else sorted by
+    // device. The tests read devices as they come.
+    let scroll_mode = settings_file
+        .as_ref()
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .and_then(|text| {
+            saved_scroll_mode(&text).unwrap_or_else(|e| {
+                eprintln!("  warning: settings file: {e}");
+                None
+            })
+        })
+        .unwrap_or_default();
     let render_scale = if args.iter().any(|a| a == "--autotest" || a == "--bench-render") {
         // They measure full resolution unless they ask.
         Some(1.0)
@@ -561,6 +608,8 @@ async fn game() {
         acc: 0.0,
         pan_anchor: None,
         right: None,
+        scroll_mode,
+        last_precise: f64::MIN,
         sky: sky::Sky::default(),
         ground: draw::Ground::default(),
         render_us: RenderTimes::default(),
@@ -702,42 +751,116 @@ fn to_u8(c: Color) -> [u8; 3] {
 
 /// One frame's raw input, in logical points. The real loop gathers it from
 /// macroquad; `--autotest` builds it by hand, so both drive the same path.
-/// Sums every wheel event in a frame, vertical and horizontal.
+/// Every scroll event in a frame, as the backend reported them.
 /// `mouse_wheel()` keeps only the last one, and a trackpad sends several
 /// per frame.
-struct Wheel(f32, f32);
+struct Wheel(Vec<(f32, f32)>);
 
 impl macroquad::miniquad::EventHandler for Wheel {
     fn update(&mut self) {}
     fn draw(&mut self) {}
     fn mouse_wheel_event(&mut self, x: f32, y: f32) {
-        self.0 += y;
-        self.1 += x;
+        self.0.push((x, y));
     }
 }
 
+/// One wheel notch in the backend's units. miniquad passes macOS's
+/// precise (trackpad) deltas through in points and multiplies a wheel's
+/// coarse line steps by 10; Windows reports 120 a notch; X11 reports 1.
+const NOTCH: f32 = if cfg!(target_os = "macos") {
+    10.0
+} else if cfg!(target_os = "windows") {
+    120.0
+} else {
+    1.0
+};
+/// Points of travel per backend unit, for precise scrolling.
+const POINTS_PER_UNIT: f32 = if cfg!(target_os = "windows") { 1.0 / 3.0 } else { 1.0 };
+/// How long after a precise scroll a round-numbered one still counts as
+/// the trackpad's: its deltas can land on a whole notch by chance.
+const PRECISE_STICKS: f64 = 0.3;
+
+/// One frame of scrolling, sorted by what made it.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Scroll {
+    /// Whole steps from a wheel: they zoom.
+    pub notches: f32,
+    /// Travel in points from a trackpad (or a smooth wheel), both axes:
+    /// it pans, one to one with the fingers.
+    pub travel: (f32, f32),
+}
+
+/// Sort a frame's scroll events: a wheel moves in whole notches along one
+/// axis, a trackpad in fractions and often sideways, `points` points to a
+/// unit. With shift held, a sideways whole notch is still the wheel (macOS
+/// turns shift-wheel into a sideways scroll).
+pub fn classify(events: &[(f32, f32)], notch: f32, points: f32, shift: bool) -> Scroll {
+    let whole = |v: f32| v != 0.0 && ((v / notch) - (v / notch).round()).abs() < 1e-3;
+    let mut s = Scroll::default();
+    for &(x, y) in events {
+        if x == 0.0 && whole(y) {
+            s.notches += y / notch;
+        } else if shift && y == 0.0 && whole(x) {
+            s.notches += x / notch;
+        } else {
+            s.travel.0 += x * points;
+            s.travel.1 += y * points;
+        }
+    }
+    s
+}
+
 impl Wheel {
-    /// Wheel movement this frame in mouse-wheel notches: one click of a
-    /// wheel is 1, a trackpad gives fractions. Backends report notches in
-    /// different units.
-    fn gather(sub: usize) -> f32 {
-        let mut w = Wheel(0.0, 0.0);
+    /// This frame's scrolling: sorted for the camera, and summed in notches
+    /// for the interface's scroll areas (fractional on a trackpad).
+    fn gather(sub: usize) -> (Scroll, f32) {
+        let mut w = Wheel(Vec::new());
         macroquad::input::utils::repeat_all_miniquad_input(&mut w, sub);
-        // macOS turns shift and a mouse wheel into a sideways scroll: with
-        // shift held, that's still the wheel (shift-wheel nudges a column).
         let shift =
             macroquad::input::is_key_down(KeyCode::LeftShift) || macroquad::input::is_key_down(KeyCode::RightShift);
-        if shift && w.0 == 0.0 {
-            w.0 = w.1;
+        let scroll = classify(&w.0, NOTCH, POINTS_PER_UNIT, shift);
+        let mut y: f32 = w.0.iter().map(|e| e.1).sum();
+        if shift && y == 0.0 {
+            y = w.0.iter().map(|e| e.0).sum();
         }
-        let per_notch = if cfg!(target_os = "macos") {
-            10.0
-        } else if cfg!(target_os = "windows") {
-            120.0
-        } else {
-            1.0
-        };
-        (w.0 / per_notch).clamp(-4.0, 4.0)
+        (scroll, (y / NOTCH).clamp(-4.0, 4.0))
+    }
+}
+
+/// What a scroll does on the map. Auto sorts each event by what made it;
+/// the others are for devices that look like the other kind (a mouse with
+/// a free-spinning smooth wheel reads as a trackpad).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ScrollMode {
+    #[default]
+    Auto,
+    Zoom,
+    Pan,
+}
+
+impl ScrollMode {
+    fn name(self) -> &'static str {
+        match self {
+            ScrollMode::Auto => "auto",
+            ScrollMode::Zoom => "zoom",
+            ScrollMode::Pan => "pan",
+        }
+    }
+    fn parse(s: &str) -> Option<ScrollMode> {
+        [ScrollMode::Auto, ScrollMode::Zoom, ScrollMode::Pan].into_iter().find(|m| m.name() == s)
+    }
+}
+
+/// The scroll mode a settings file holds, if any.
+fn saved_scroll_mode(text: &str) -> Result<Option<ScrollMode>, String> {
+    let t: toml::Table = toml::from_str(text).map_err(|e| e.to_string())?;
+    match t.get("scroll") {
+        None => Ok(None),
+        Some(v) => v
+            .as_str()
+            .and_then(ScrollMode::parse)
+            .map(Some)
+            .ok_or_else(|| format!("scroll should be \"auto\", \"zoom\" or \"pan\", not {v}")),
     }
 }
 
@@ -750,8 +873,13 @@ pub struct RawInput {
     pub right_released: bool,
     /// The right button is held.
     pub right_down: bool,
-    /// Wheel movement in notches (fractional on a trackpad).
+    /// Wheel movement in notches (fractional on a trackpad), for the
+    /// interface's scroll areas.
     pub wheel: f32,
+    /// The same scrolling, sorted for the camera.
+    pub scroll: Scroll,
+    /// Cmd or Ctrl is held: any scroll zooms.
+    pub zoom_mod: bool,
     pub keys: Vec<KeyCode>,
     /// Characters typed this frame, for a focused text input.
     pub chars: Vec<char>,
@@ -845,7 +973,7 @@ impl RawInput {
             }
         }
 
-        let wheel = Wheel::gather(wheel_sub);
+        let (scroll, wheel) = Wheel::gather(wheel_sub);
         RawInput {
             mouse: (mx, my),
             left_pressed: is_mouse_button_pressed(MouseButton::Left),
@@ -854,6 +982,8 @@ impl RawInput {
             right_released: is_mouse_button_released(MouseButton::Right),
             right_down: is_mouse_button_down(MouseButton::Right),
             wheel,
+            scroll,
+            zoom_mod: ctrl,
             keys,
             chars,
             pressed,
@@ -1023,10 +1153,8 @@ pub fn frame(app: &mut App, raw: &RawInput) {
         apply(app, Action::Pan(raw.pan.0, raw.pan.1));
     }
     let (mx, my) = raw.mouse;
-    if raw.wheel != 0.0 && !out.captured_wheel {
-        // Proportional, so a trackpad zooms smoothly and a wheel click is
-        // one 12% step.
-        apply(app, Action::Zoom(1.12f32.powf(raw.wheel), mx, my));
+    if !out.captured_wheel {
+        scroll_camera(app, raw);
     }
     if raw.left_pressed && !out.captured_left {
         apply(app, Action::LeftDown(mx, my));
@@ -1365,6 +1493,19 @@ fn apply_ui(app: &mut App, a: UiAction) {
                 }
             }
         }
+        UiAction::Zoom(f) => {
+            let (w, h) = (screen_width(), screen_height());
+            apply(app, Action::Zoom(f, w / 2.0, h / 2.0));
+        }
+        UiAction::ScrollMode(m) => {
+            let Some(mode) = ScrollMode::parse(&m) else { return };
+            app.scroll_mode = mode;
+            if let Some(p) = &app.settings_file {
+                if let Err(e) = save_setting(p, "scroll", toml::Value::String(m)) {
+                    eprintln!("rim: could not save settings: {e}");
+                }
+            }
+        }
         UiAction::UiScale(s) => {
             app.ui.set_user_scale(s);
             let s = app.ui.user_scale();
@@ -1452,6 +1593,39 @@ pub fn toggle_selected(app: &mut App, e: Entity) {
     select(app, v);
 }
 
+/// The camera's answer to a frame of scrolling. A trackpad's travel pans
+/// one to one with the fingers (momentum included: macOS keeps sending it
+/// after they lift); a wheel's notches zoom at the pointer, a notch a 12%
+/// step; Cmd or Ctrl with either zooms. The scroll setting can pin one.
+fn scroll_camera(app: &mut App, raw: &RawInput) {
+    let (mx, my) = raw.mouse;
+    let mut s = raw.scroll;
+    if s.travel != (0.0, 0.0) {
+        app.last_precise = raw.time;
+    } else if s.notches != 0.0 && raw.time - app.last_precise < PRECISE_STICKS {
+        s = Scroll { notches: 0.0, travel: (0.0, s.notches * NOTCH * POINTS_PER_UNIT) };
+    }
+    if s == Scroll::default() {
+        return;
+    }
+    let zoom_in_steps = s.notches + s.travel.1 / 40.0;
+    match (raw.zoom_mod, app.scroll_mode) {
+        (true, _) | (false, ScrollMode::Zoom) => apply(app, Action::Zoom(1.12f32.powf(zoom_in_steps), mx, my)),
+        (false, ScrollMode::Pan) => {
+            let (dx, dy) = (s.travel.0, s.travel.1 + s.notches * 40.0);
+            apply(app, Action::Pan(-dx / app.cam.zoom, -dy / app.cam.zoom));
+        }
+        (false, ScrollMode::Auto) => {
+            if s.notches != 0.0 {
+                apply(app, Action::Zoom(1.12f32.powf(s.notches), mx, my));
+            }
+            if s.travel != (0.0, 0.0) {
+                apply(app, Action::Pan(-s.travel.0 / app.cam.zoom, -s.travel.1 / app.cam.zoom));
+            }
+        }
+    }
+}
+
 /// How long a right press is held before it opens the orders menu.
 const HOLD_SECS: f64 = 0.35;
 /// How far a press may wander, in points, and still be a click.
@@ -1460,6 +1634,8 @@ const CLICK_SLOP: f32 = 6.0;
 /// A right press on the map, until it's a click, a hold or a drag.
 struct RightPress {
     at: (f32, f32),
+    /// Where the pointer was last frame, for a drag's pan.
+    last: (f32, f32),
     t: f64,
     moved: bool,
     opened: bool,
@@ -1479,31 +1655,45 @@ fn right_button(app: &mut App, raw: &RawInput, cv: &rim_ui::view::ClientView, ca
             app.drag_start = None;
             return;
         }
-        app.right = Some(RightPress { at: (mx, my), t: raw.time, moved: false, opened: false });
+        app.right = Some(RightPress { at: (mx, my), last: (mx, my), t: raw.time, moved: false, opened: false });
     }
     let Some(r) = app.right.as_mut() else { return };
-    if !r.moved && ((mx - r.at.0).powi(2) + (my - r.at.1).powi(2)).sqrt() > CLICK_SLOP {
+    if !r.moved && !r.opened && ((mx - r.at.0).powi(2) + (my - r.at.1).powi(2)).sqrt() > CLICK_SLOP {
         r.moved = true;
     }
-    if !r.moved && !r.opened && raw.time - r.t >= HOLD_SECS {
+    let (last, moved, held_open) = (r.last, r.moved, r.opened);
+    r.last = (mx, my);
+    let released = raw.right_released || !raw.right_down;
+    // A right-drag pans, the grabbed ground following the pointer: the pan
+    // a mouse without a middle button has.
+    if moved {
+        let z = app.cam.zoom;
+        apply(app, Action::Pan(-(mx - last.0) / z, -(my - last.1) / z));
+        if released {
+            app.right = None;
+        }
+        return;
+    }
+    if !held_open && raw.time - r.t >= HOLD_SECS {
         r.opened = true;
         let at = r.at;
         open_orders(app, cv, at);
     }
-    if raw.right_released || !raw.right_down {
-        let Some(r) = app.right.take() else { return };
-        if r.moved || r.opened {
-            return;
-        }
-        let (x, y) = r.at;
-        let cell = app.cam.tile_at(x, y);
-        let on = pawn_under(app, x, y);
-        let safe = selection(app).into_iter().any(|e| order::resolve(&app.sim.world, e, cell, on).is_some());
-        if safe {
-            apply(app, Action::RightClick(x, y));
-        } else if !selection(app).is_empty() {
-            open_orders(app, cv, (x, y));
-        }
+    if !released {
+        return;
+    }
+    let Some(r) = app.right.take() else { return };
+    if r.opened {
+        return;
+    }
+    let (x, y) = r.at;
+    let cell = app.cam.tile_at(x, y);
+    let on = pawn_under(app, x, y);
+    let safe = selection(app).into_iter().any(|e| order::resolve(&app.sim.world, e, cell, on).is_some());
+    if safe {
+        apply(app, Action::RightClick(x, y));
+    } else if !selection(app).is_empty() {
+        open_orders(app, cv, (x, y));
     }
 }
 

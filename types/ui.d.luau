@@ -174,6 +174,8 @@ declare act: {
     preview: (key: string?) -> (),
     -- Draw the world at this fraction of the screen's pixels, 0.25 to 1; the UI stays sharp. Saved for the player.
     render_scale: (scale: number) -> (),
+    -- What a scroll does on the map: 'auto' (a trackpad pans, a wheel zooms), 'zoom' or 'pan'. Saved with the player's settings.
+    scroll_mode: (mode: string) -> (),
     -- Select a pawn or thing, or nothing. With add, put a colonist into the selection or take them out of it (a shift-click).
     select: (id: number?, add: boolean?) -> (),
     -- Send an event to your mod's own sim scripts ("your_mod:event"), as a player command.
@@ -202,6 +204,8 @@ declare act: {
     ui_scale: (scale: number) -> (),
     -- Let a stockpile take an item, or stop it.
     zone_allow: (zone: number, item: string, on: boolean) -> (),
+    -- Zoom the map by a factor about the middle of the screen (1.12 is one wheel notch in).
+    zoom: (factor: number) -> (),
 }
 
 declare view: {
