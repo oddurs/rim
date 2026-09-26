@@ -13,6 +13,19 @@
 -- work waiting and mark a column nobody is on at a high priority. A
 -- colonist's name opens their levels as shelves, which write the same
 -- settings.
+--
+-- The window shows one lens at a time: the board, one person's shelves,
+-- and any a mod adds (DESIGN.md §4d). A lens is a view over the same
+-- board data, and writes only through `act`, so no lens can disagree with
+-- another:
+--
+--     local work = require("@core/ui/work")
+--     work.lens({ id = "my_mod:crews", label = "Crews", order = 40, draw = function(view, board)
+--         return kit.label(#board.rows .. " colonists")
+--     end })
+--
+-- Tabs are `core:work.lens.<id>`, sorted by `order` (core's are 10 and
+-- 20), then in the order they were added.
 local kit = require("@core/ui/kit")
 local row, col, label, button = kit.row, kit.col, kit.label, kit.button
 local t = ui.t
@@ -121,8 +134,46 @@ local function brush_bar(levels: number, labels: { string })
 	return row({ gap = "xs", align = "center" }, items)
 end
 
-ui.window("core:work", { title = t("core:work.title", "Work"), w = 760, h = 860, sheet = true }, function(view)
-	local b = view.board()
+local work = {}
+
+local lenses: { any } = {}
+local added = 0
+
+-- Register a lens. A second `lens` with the same id replaces the first and
+-- keeps its place, so a reloaded script doesn't double up.
+function work.lens(def)
+	assert(type(def) == "table" and type(def.id) == "string", "work.lens: needs an id")
+	assert(type(def.label) == "string", `work.lens('{def.id}'): needs a label`)
+	assert(type(def.draw) == "function", `work.lens('{def.id}'): needs draw = fn(view, board)`)
+	local seq = nil
+	for i, l in lenses do
+		if l.id == def.id then
+			seq = l.seq
+			table.remove(lenses, i)
+			break
+		end
+	end
+	if not seq then
+		added += 1
+		seq = added
+	end
+	table.insert(lenses, { id = def.id, label = def.label, order = def.order or 100, seq = seq, draw = def.draw })
+	table.sort(lenses, function(a, b)
+		if a.order ~= b.order then
+			return a.order < b.order
+		end
+		return a.seq < b.seq
+	end)
+end
+
+-- Show one colonist on the Person lens.
+local function show_person(id: number)
+	ui.set_state("core:work.person", id)
+	ui.set_state("core:work.lens", "core:work.person")
+end
+
+-- The board: a row per colonist, a column per work type, painted.
+local function board_lens(view, b)
 	local levels, labels, cols, rows = b.levels, b.labels, b.cols, b.rows
 
 	-- Column headers: the label, then what's waiting.
@@ -210,7 +261,7 @@ ui.window("core:work", { title = t("core:work.title", "Work"), w = 760, h = 860,
 		end,
 	})
 
-	-- Names open the ranked view; the job column says what each is doing.
+	-- Names open the Person lens; the job column says what each is doing.
 	local names = ui.grid({
 		id = "core:work.names",
 		rows = #rows,
@@ -219,11 +270,10 @@ ui.window("core:work", { title = t("core:work.title", "Work"), w = 760, h = 860,
 		cell_h = CELL_H,
 		gap = 2,
 		cell = function(r, _c)
-			return { text = rows[r].name, tip = t("core:work.rank_tip", "Rank their work") }
+			return { text = rows[r].name, tip = t("core:work.rank_tip", "See their levels as shelves") }
 		end,
 		on_press = function(r, _c)
-			ui.set_state("core:work.ranked", rows[r].id)
-			ui.open("core:work.ranked")
+			show_person(rows[r].id)
 			return nil
 		end,
 	})
@@ -239,32 +289,44 @@ ui.window("core:work", { title = t("core:work.title", "Work"), w = 760, h = 860,
 		end,
 	})
 
-	return col({ gap = "s", pad = "m" }, {
-		stance_bar(view),
+	return col({ gap = "s" }, {
 		brush_bar(levels, labels),
 		row({ gap = "s" }, { row({ w = NAME_W }), header }),
 		-- The window scrolls; the wheel over a cell nudges it instead.
 		row({ gap = "s" }, { names, grid, jobs }),
 	})
-end)
+end
 
 -- One colonist's work as shelves: a row per level, first to never, each
 -- work type a token on the shelf it's on. The same settings as the board:
 -- a click moves a token to the next level, bold tokens are pins, and a
 -- token set back to what it would inherit is handed back.
-ui.window("core:work.ranked", { title = t("core:work.shelves", "Levels"), w = 480, h = 300, resizable = true }, function(view)
-	local id = ui.state("core:work.ranked", nil)
-	local b = view.board()
-	local who
+local function person_lens(_view, b)
+	if #b.rows == 0 then
+		return label(t("core:work.none", "No colonists."), { color = "muted" })
+	end
+	local id = ui.state("core:work.person", nil)
+	local who = b.rows[1]
 	for _, r in b.rows do
 		if r.id == id then
 			who = r
 		end
 	end
-	if not who then
-		return col({ pad = "m" }, { label(t("core:work.pick", "Pick a colonist on the Work board."), { color = "muted" }) })
+	local pick = {}
+	for _, r in b.rows do
+		table.insert(
+			pick,
+			button({
+				id = "core:work.person." .. r.id,
+				label = r.name,
+				active = r == who,
+				on_click = function()
+					show_person(r.id)
+				end,
+			})
+		)
 	end
-	local items = { label(who.name, { size = "heading", weight = "strong" }) }
+	local items = { row({ gap = "xs", align = "center" }, pick), label(who.name, { size = "heading", weight = "strong" }) }
 	for shelf = 1, b.levels + 1 do
 		local level = if shelf > b.levels then 0 else shelf
 		local tokens = {}
@@ -289,12 +351,48 @@ ui.window("core:work.ranked", { title = t("core:work.shelves", "Levels"), w = 48
 		table.insert(
 			items,
 			row({ id = "core:work.shelf." .. level, gap = "xs", align = "center" }, {
-				row({ w = 80 }, { label(name, { size = "small", color = "muted" }) }),
+				row({ w = 90 }, { label(name, { size = "small", color = "muted" }) }),
 				row({ gap = "xs" }, tokens),
 			})
 		)
 	end
-	return ui.scroll({ pad = "m", gap = "s", table.unpack(items) })
+	return col({ gap = "s" }, items)
+end
+
+work.lens({ id = "core:work.board", label = t("core:work.lens_board", "Board"), order = 10, draw = board_lens })
+work.lens({ id = "core:work.person", label = t("core:work.lens_person", "Person"), order = 20, draw = person_lens })
+
+-- The Work screen: the stance, the lenses as tabs, and the lens shown.
+ui.window("core:work", { title = t("core:work.title", "Work"), w = 760, h = 860, sheet = true }, function(view)
+	local b = view.board()
+	local current = ui.state("core:work.lens", "core:work.board")
+	local shown = lenses[1]
+	local tabs = {}
+	for _, l in lenses do
+		if l.id == current then
+			shown = l
+		end
+	end
+	for _, l in lenses do
+		table.insert(
+			tabs,
+			button({
+				id = "core:work.lens." .. l.id,
+				label = l.label,
+				active = l == shown,
+				on_click = function()
+					ui.set_state("core:work.lens", l.id)
+				end,
+			})
+		)
+	end
+	return col({ gap = "s", pad = "m" }, {
+		stance_bar(view),
+		row({ id = "core:work.lenses", gap = "xs", align = "center" }, tabs),
+		shown.draw(view, b),
+	})
 end)
 
 require("@core/ui/screens").add({ id = "core:work", label = t("core:keys.work", "Work"), key = "p", order = 10 })
+
+return work

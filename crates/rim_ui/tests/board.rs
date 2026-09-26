@@ -218,16 +218,21 @@ fn the_shelves_and_the_board_agree() {
     sim.push(Command::SetPriority { pawn, work: mine, level: 4 });
     sim.step();
     frame(&mut ui, &sim, &cv, Input { time: 20.0, ..Default::default() });
-    assert_eq!(ui.grid_cell("core:work.grid", 1, column(&sim, "core:mine")).unwrap().text, "4");
     let tree = ui.snapshot();
     let spare = tree.find("#core:work.shelf.4").expect("a Spare time shelf");
     let mine_at = tree.find("#core:work.ranked.core:mine").unwrap();
     assert!(mine_at > spare && tree[spare..mine_at].contains("Spare time"), "mine is on the Spare time shelf:\n{tree}");
+    let tab = ui.find("core:work.lens.core:work.board").unwrap();
+    click(&mut ui, &sim, &mut cv, centre(tab));
+    frame(&mut ui, &sim, &cv, Input { time: 25.0, ..Default::default() });
+    assert_eq!(ui.grid_cell("core:work.grid", 1, column(&sim, "core:mine")).unwrap().text, "4", "and on the board");
 
     // And the board's paint shows on the shelves.
     let build = sim.world.defs.lookup("work_type", "core:build").unwrap();
     sim.push(Command::SetPriority { pawn, work: build, level: 0 });
     sim.step();
+    let tab = ui.find("core:work.lens.core:work.person").unwrap();
+    click(&mut ui, &sim, &mut cv, centre(tab));
     frame(&mut ui, &sim, &cv, Input { time: 30.0, ..Default::default() });
     let tree = ui.snapshot();
     let never = tree.find("#core:work.shelf.0").expect("a never shelf");
@@ -313,4 +318,62 @@ fn a_mods_work_type_is_a_column() {
     assert_eq!(ui.grid_cell("core:work.header", 1, c).unwrap().text, "Tailor");
     assert_eq!(ui.grid_cell("core:work.grid", 1, c).unwrap().text, "3");
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A mod's lens: a tab beside core's, a view over the same board, and its
+/// writes are the board's commands.
+#[test]
+fn a_mods_lens_is_a_tab_that_writes_like_the_board() {
+    const LENS: &str = r#"
+local work = require("@core/ui/work")
+local kit = require("@core/ui/kit")
+work.lens({ id = "crews:waiting", label = "Waiting", order = 30, draw = function(_view, board)
+    local items = {}
+    for _, c in board.cols do
+        table.insert(items, kit.button({ id = "crews:first." .. c.id, label = c.label .. " " .. c.waiting, on_click = function()
+            act.set_priority(board.rows[1].id, c.id, 1)
+        end }))
+    end
+    return kit.col({ gap = "xs" }, items)
+end })
+"#;
+    let dir = scratch_mods("lens", &[("crews", "", &[("ui/lens.luau", LENS)])]);
+    let sim = sim_at(&dir);
+    let pawn = sim.world.colonists().next().unwrap();
+    let mut ui = ui_for(&sim);
+    let mut cv = client(&sim);
+    frame(&mut ui, &sim, &cv, Default::default());
+    ui.open_window("core:work");
+    frame(&mut ui, &sim, &cv, Input { time: 0.5, ..Default::default() });
+    for id in ["core:work.lens.core:work.board", "core:work.lens.core:work.person", "core:work.lens.crews:waiting"] {
+        assert!(ui.find(id).is_some(), "a tab for {id}");
+    }
+    let tabs = ui.snapshot();
+    let at = |id: &str| tabs.find(&format!("#{id}")).unwrap();
+    assert!(at("core:work.lens.core:work.person") < at("core:work.lens.crews:waiting"), "tabs in order");
+    assert!(ui.find("crews:first.core:haul").is_none(), "the board shows first");
+
+    let tab = ui.find("core:work.lens.crews:waiting").unwrap();
+    click(&mut ui, &sim, &mut cv, centre(tab));
+    frame(&mut ui, &sim, &cv, Input { time: 5.0, ..Default::default() });
+    assert!(ui.find("core:work.grid").is_none(), "one lens at a time");
+    let haul = ui.find("crews:first.core:haul").expect("the mod's lens draws");
+    let actions = click(&mut ui, &sim, &mut cv, centre(haul));
+    assert_eq!(actions, vec![UiAction::SetPriority(pawn, "core:haul".into(), 1)]);
+}
+
+/// A name on the board opens the Person lens on that colonist, and the
+/// separate ranked window is gone.
+#[test]
+fn a_name_opens_the_person_lens() {
+    let (sim, mut ui, mut cv) = board(3);
+    let second = sim.world.colonists().nth(1).unwrap();
+    let name = cell_at(&ui, "core:work.names", 2, 1);
+    click(&mut ui, &sim, &mut cv, name);
+    frame(&mut ui, &sim, &cv, Input { time: 5.0, ..Default::default() });
+    assert!(ui.find("core:work.grid").is_none(), "the board gave way");
+    let picked = ui.find(&format!("core:work.person.{}", second.to_bits().get())).expect("a button per colonist");
+    assert!(ui.snapshot().contains("core:work.shelf.1"), "their shelves");
+    assert!(picked[2] > 0.0);
+    assert!(!ui.is_open("core:work.ranked"), "no separate window");
 }
