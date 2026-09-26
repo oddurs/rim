@@ -12,8 +12,8 @@ look.layers = [
     { draw = "fill", x = 0.24, y = 0.6, w = 0.5, h = 0.08, shade = 1.1 },
 ]
 natural = true
-harvest = { designation = "core:gather", work = 40, yields = [{ thing = "branches", count = 4 }] }
-spawn = { terrain = ["core:grass", "core:dirt"], density = 0.02 }
+harvest = { designation = "core:gather", work = 40, yields = [{ thing = "branches", count = 6 }] }
+spawn = { terrain = ["core:grass", "core:dirt", "core:rich_soil"], density = 0.03 }
 
 [[thing]]
 id = "tall_grass"
@@ -79,5 +79,5 @@ spawn = { terrain = ["core:marsh"], density = 0.05 }
 # Branches off a standing oak: they grow back, and the oak can still be felled.
 [[patch]]
 target = "thing/core:tree_oak"
-append = { harvest = [{ designation = "core:gather", work = 60, destroy = false, regrow_days = 3.0,
-                        yields = [{ thing = "primitive:branches", count = 3 }] }] }
+append = { harvest = [{ designation = "core:gather", work = 45, destroy = false, regrow_days = 3.0,
+                        yields = [{ thing = "primitive:branches", count = 5 }] }] }

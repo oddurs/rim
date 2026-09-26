@@ -7,3 +7,19 @@ set = { build = { cost = [{ thing = "primitive:branches", count = 10 }] } }
 [[patch]]
 target = "thing/core:campfire"
 append = { tags = ["crafting:fire"] }
+
+# A bed of grass for the first nights: a timber frame is 25 branches that
+# a hand-gathered day can't spare. It rests less well than a real bed.
+[[thing]]
+id = "pallet"
+label = "grass pallet"
+color = "#a8a85a"
+category = "building"
+look.layers = [
+    { draw = "fill", x = 0.14, y = 0.1, w = 0.72, h = 0.8, shade = 0.85 },
+    { draw = "fill", x = 0.2, y = 0.16, w = 0.6, h = 0.2 },
+]
+market_value = 3
+bed = { rest_rate = 1.3 }
+spots = [{ dx = 0, dy = 0 }]
+build = { menu = "furniture", work = 120, cost = [{ thing = "fibre", count = 6 }] }

@@ -616,7 +616,8 @@ pub fn comfortable_spot(w: &World, p: &Pawn) -> Option<IVec> {
 /// not at 0 once the priority rules have had their say, those at its lowest priority level that have reachable
 /// work, and of those the nearest job; `order` breaks a tie. Work comes from
 /// blueprints (the work type that covers "build"), designated things and
-/// designated creatures, each designation naming its work type.
+/// designated creatures, each designation naming its work type, except that
+/// clearing a thing a building is planned over is building.
 fn find_work(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
     w.map.ensure_regions();
     let (_, job, res) = choose_work(w, e, p, None)?;
@@ -803,13 +804,14 @@ fn choose_work(w: &World, e: Entity, p: &Pawn, mut why: Option<&mut Refusals>) -
     let have = w.colony_tools();
     for (te, t, des) in w.ecs.query::<(Entity, &Thing, &Designated)>().without::<&Blueprint>().iter() {
         let dd = &defs.designations[des.0 as usize];
+        let wt = designated_work(w, te, dd.work_r);
         let d = t.pos.octile(p.pos);
-        if !wanted(dd.work_r) || !nearer(&best[dd.work_r as usize], d, te) {
+        if !wanted(wt) || !nearer(&best[wt as usize], d, te) {
             continue;
         }
         if w.reserved_by_other(te, e) {
             if let Some(r) = why.as_deref_mut() {
-                r.note(dd.work_r, d, Why::Reserved);
+                r.note(wt, d, Why::Reserved);
             }
             continue;
         }
@@ -821,7 +823,7 @@ fn choose_work(w: &World, e: Entity, p: &Pawn, mut why: Option<&mut Refusals>) -
                     Some((extra, tool)) => (Job::Harvest { target: te, forced: false, harvest: h.key(), tool }, extra),
                     None => {
                         if let Some(r) = why.as_deref_mut() {
-                            r.note(dd.work_r, d, Why::NeedsTool(h.requires_r));
+                            r.note(wt, d, Why::NeedsTool(h.requires_r));
                         }
                         continue;
                     }
@@ -829,12 +831,12 @@ fn choose_work(w: &World, e: Entity, p: &Pawn, mut why: Option<&mut Refusals>) -
                 _ => continue,
             },
         };
-        let nearest = detour == 0 || nearer(&best[dd.work_r as usize], d + detour, te);
+        let nearest = detour == 0 || nearer(&best[wt as usize], d + detour, te);
         if nearest && w.map.can_reach(p.pos, w.reach_goal(t)) {
-            best[dd.work_r as usize] = Some((d + detour, job, te));
+            best[wt as usize] = Some((d + detour, job, te));
         } else if nearest {
             if let Some(r) = why.as_deref_mut() {
-                r.note(dd.work_r, d, Why::Unreachable);
+                r.note(wt, d, Why::Unreachable);
             }
         }
     }
@@ -941,6 +943,16 @@ fn choose_work(w: &World, e: Entity, p: &Pawn, mut why: Option<&mut Refusals>) -
     Some((chosen, job, res))
 }
 
+/// The work type a designated thing's job counts under: its designation's,
+/// except that clearing the ground for a building planned over it is
+/// building, at the build priority rather than the gathering one.
+fn designated_work(w: &World, e: Entity, designation_work: DefId) -> DefId {
+    match w.ecs.get::<&Planned>(e) {
+        Ok(_) => w.defs.build_work.unwrap_or(designation_work),
+        Err(_) => designation_work,
+    }
+}
+
 /// How many jobs of each work type are waiting, from the same sources
 /// `find_work` takes them from: blueprints, designations whose work is
 /// ready, work orders, loose items a stockpile would take, and designated
@@ -959,7 +971,7 @@ pub fn work_waiting(w: &World) -> Vec<u32> {
             _ => defs.thing(t.def).harvest_for(des.0).is_some_and(|h| w.harvest_ready(te, h.key())),
         };
         if ready {
-            n[dd.work_r as usize] += 1;
+            n[designated_work(w, te, dd.work_r) as usize] += 1;
         }
     }
     for o in w.ecs.query::<&Order>().without::<&Blueprint>().iter() {

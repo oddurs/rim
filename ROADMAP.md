@@ -44,17 +44,17 @@ A sprint: fast on a little old laptop with mods loaded. The reference machine is
 
 ## stone-age — Stone age
 
-`#########·` 85% · 11 of 13 done
+`##########` 92% · 12 of 13 done
 
 Hands first. The colonist wakes with nothing (pillar 93f291d5), and today nothing asks what they hold: a naked warrior fells an oak and quarries granite bare-handed. This milestone makes the first days a climb. You gather branches, fibre, stones and berries with your hands. You find flint and knap it into a flake and a hand axe on the ground. Branch walls and a campfire see you through the first night. A digging stick opens the clay banks, for warm cob walls and fired pots. Then the axe fells trees and a stone maul quarries rock.
 
 - [ ] `4bd94457` Balance: the first three days with only your hands <sup>chore · p0 · m · plugin</sup>
-- [ ] `61c93a4e` Bone from butchering, a second knappable <sup>content · p2 · s · plugin</sup>
 - [x] `049e2f73` Crafting as a plugin: recipes, stations and bills <sup>feature · p0 · l · plugin</sup>
 - [x] `3ccab46f` Carried things keep what they're made of <sup>bug · p1 · m · engine</sup>
 - [x] `4675019b` Stone tools: knapping, hafting, and the gates they open <sup>content · p0 · l · plugin</sup>
 - [x] `4e9d5a12` Several harvests on one thing: gather without felling <sup>feature · p0 · s · engine</sup>
 - [x] `5305a161` Select and inspect things, with a slot for mods <sup>feature · p0 · m · client</sup>
+- [x] `61c93a4e` Bone from butchering, a second knappable <sup>content · p2 · s · plugin</sup>
 - [x] `7016d86b` Tools in hand: work that needs a tool <sup>feature · p0 · l · engine</sup>
 - [x] `74b6fa7e` Work orders: bring things to a place, then work there <sup>feature · p0 · l · engine</sup>
 - [x] `89f6d138` Clay: banks, cob walls, and pots fired at the campfire <sup>content · p1 · m · plugin</sup>
@@ -198,10 +198,12 @@ The log is the save and snapshots are a cache (DESIGN.md §7a): a colony is alwa
 
 ## colony — Colony
 
-`##########` 100% · 22 of 22 done · due 2026-12-15
+`##########` 92% · 22 of 24 done · due 2026-12-15
 
 Running more than one person: stockpiles, hauling, work priorities, skills, colonist panels.
 
+- [ ] `21fc9ea3` Storyteller pressure on a lone stone-age colony <sup>chore · p1 · m · core</sup>
+- [ ] `8b2e05db` Work choice: an urgency term, so shelter beats nearby grass <sup>feature · p2 · m · engine</sup>
 - [x] `03ad3e3a` Work types and priorities per colonist <sup>feature · p0 · m · engine</sup>
 - [x] `03b9b791` Derived fields and feels-like temperature <sup>feature · p1 · s · engine</sup>
 - [x] `0cb48faf` Priority rules and colony stances <sup>feature · p1 · m · engine</sup>
