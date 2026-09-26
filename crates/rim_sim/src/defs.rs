@@ -187,6 +187,10 @@ pub struct ThingDef {
     pub rgb: [u8; 3],
     #[serde(skip)]
     pub look_r: Look,
+    /// Its tags that some room role asks for, as indices into
+    /// `DefDb::room_tags`.
+    #[serde(skip)]
+    pub room_tags_r: Vec<u16>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -888,6 +892,28 @@ pub struct StanceDef {
     pub order: i32,
 }
 
+/// What a room is for (DESIGN.md §6c). In load order, the first role
+/// whose needs a room meets names it. The engine only counts tags: what a
+/// bedroom *means* is for mood, eras and the storyteller to read.
+#[derive(Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct RoomRoleDef {
+    pub id: String,
+    pub label: String,
+    /// How many things inside must carry each tag: `{ bed = 1, fire = 1 }`.
+    pub needs: BTreeMap<String, u32>,
+    /// Smallest room, in cells, that can take it.
+    #[serde(default)]
+    pub min_cells: u32,
+    /// Only enclosed rooms can take it (the default); `false` lets an open
+    /// yard be a pen or a camp.
+    #[serde(default = "dtrue")]
+    pub enclosed: bool,
+    /// `needs` as (index into `DefDb::room_tags`, count).
+    #[serde(skip)]
+    pub needs_r: Vec<(u16, u32)>,
+}
+
 /// When a priority rule holds: every condition it gives.
 #[derive(Deserialize, Clone, Debug, Default)]
 #[serde(deny_unknown_fields)]
@@ -1026,6 +1052,10 @@ pub struct DefDb {
     pub work_order: Vec<DefId>,
     pub priority_scale: PriorityScaleDef,
     pub stances: Vec<StanceDef>,
+    /// Room roles in load order: the first a room meets names it.
+    pub room_roles: Vec<RoomRoleDef>,
+    /// Every tag some room role counts, in first-asked order.
+    pub room_tags: Vec<String>,
     /// The stance a new colony starts in: the first by `order`.
     pub default_stance: Option<DefId>,
     pub priority_rules: Vec<PriorityRuleDef>,
@@ -1157,6 +1187,7 @@ pub const KINDS: &[&str] = &[
     "priority_scale",
     "stance",
     "priority_rule",
+    "room_role",
     "work_style",
     "skill",
     "field",
@@ -1197,6 +1228,7 @@ impl DefDb {
             "designation" => self.designations[i].id.clone(),
             "work_type" => self.work_types[i].id.clone(),
             "stance" => self.stances[i].id.clone(),
+            "room_role" => self.room_roles[i].id.clone(),
             "work_style" => self.work_styles[i].id.clone(),
             "skill" => self.skills[i].id.clone(),
             "field" => self.fields[i].id.clone(),
@@ -1258,6 +1290,9 @@ impl DefDb {
         }
         for (i, d) in self.stances.iter().enumerate() {
             index.insert(("stance", d.id.clone()), i as DefId);
+        }
+        for (i, d) in self.room_roles.iter().enumerate() {
+            index.insert(("room_role", d.id.clone()), i as DefId);
         }
         for (i, d) in self.fields.iter().enumerate() {
             index.insert(("field", d.id.clone()), i as DefId);
@@ -1434,6 +1469,28 @@ impl DefDb {
         order.sort_by_key(|&w| (self.work_types[w as usize].order, w));
         self.work_order = order;
         self.default_stance = (0..self.stances.len() as DefId).min_by_key(|&s| (self.stances[s as usize].order, s));
+        // Room roles count tags; each thing learns which of its tags count.
+        self.room_tags.clear();
+        for r in &mut self.room_roles {
+            if r.needs.is_empty() {
+                return Err(format!("room_role/{}: `needs` is empty, so every room would take it", r.id));
+            }
+            r.needs_r = r
+                .needs
+                .iter()
+                .map(|(tag, &n)| {
+                    let i = self.room_tags.iter().position(|t| t == tag).unwrap_or_else(|| {
+                        self.room_tags.push(tag.clone());
+                        self.room_tags.len() - 1
+                    });
+                    (i as u16, n)
+                })
+                .collect();
+        }
+        for d in &mut self.things {
+            d.room_tags_r =
+                d.tags.iter().filter_map(|t| self.room_tags.iter().position(|r| r == t).map(|i| i as u16)).collect();
+        }
         let seasons = &self.calendar.seasons;
         for r in &mut self.priority_rules {
             let ctx = format!("priority_rule/{}", r.id);

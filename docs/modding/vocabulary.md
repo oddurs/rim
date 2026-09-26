@@ -70,6 +70,9 @@ and a selected thing says so: "Needs a chopping tool."
 |---|---|
 | `table` | Something to eat at: a chair's spot with `beside = "table"` faces it |
 | `bulky` | Too big for a basket, a crate or a shelf: wood, stone blocks, branches. Bulk stores and the ground take it |
+| `bed` | Somewhere to sleep, as a room role counts it (core's bed, primitive's grass pallet) |
+| `fire` | A hearth: core's campfire and stove |
+| `seat` | Something to sit on: core's chair |
 
 ## Item categories
 
@@ -93,3 +96,32 @@ stuff = []                # items that are material of these stuff categories
 An item can be in several categories. One category may say `rest = true`
 (core's `other`): items no category claims land there, so every item can be
 filtered. Scripts read the tree as `rim.item_categories`.
+
+## Room roles
+
+What a room is for is data (DESIGN.md §6c). A `[[room_role]]` names the
+tags a room must hold, and in load order the first role a room meets is
+its role. Things count for the room they stand in; a thing that blocks,
+like a workbench, counts for the first room beside it.
+
+| Role | Needs | From |
+|---|---|---|
+| `core:dormitory` | `bed = 2` | core |
+| `core:home` | `bed = 1, fire = 1` | core |
+| `core:bedroom` | `bed = 1` | core |
+| `core:hall` | `table = 1, seat = 1` | core |
+| `crafting:workshop` | `crafting:hand = 1` | crafting |
+
+```toml
+[[room_role]]
+id = "reading_room"
+label = "Reading room"
+needs = { seat = 2 }
+min_cells = 9        # smallest room that can take it (default 0)
+enclosed = true      # only enclosed rooms (the default)
+```
+
+A role with no `needs` would fit every room, so it doesn't load. Scripts
+read a room's role with `rim.room_at(x, y).role` (its qualified id) and
+`.role_label`. Roles are worked out again only when rooms rebuild or a
+thing carrying a counted tag is built or taken away.

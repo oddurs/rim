@@ -90,3 +90,9 @@ build = { menu = "production", work = 400, stuff = { category = "structural", co
 id = "workbench"
 thing = "crafting:workbench"
 speed = 1.5
+
+# A room with somewhere to do handwork in it is a workshop (DESIGN.md §6c).
+[[room_role]]
+id = "workshop"
+label = "Workshop"
+needs = { "crafting:hand" = 1 }

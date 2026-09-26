@@ -46,7 +46,7 @@ are in [Scripting rules](scripting.md).
 | `rim.push_ambient` | `(field: string, key: string, value: number, hours: number?, ease_hours: number?) -> ()` | Add a named contribution to a field's outdoor value, easing in over ease_hours and expiring after hours (nil: until cleared). |
 | `rim.random` | `() -> number` | A number in [0, 1) from the world's random numbers: the same on every machine. |
 | `rim.random_int` | `(lo: number, hi: number) -> number` | A whole number from lo to hi inclusive, from the world's random numbers. |
-| `rim.room_at` | `(x: number, y: number) -> Room?` | The room at a cell, or nil on a wall or door. |
+| `rim.room_at` | `(x: number, y: number) -> Room?` | The room at a cell, or nil on a wall or door. `role` is the first [[room_role]] it meets, if any. |
 | `rim.say` | `(id: number, text: string, ticks: number?, priority: number?) -> ()` | A pawn says something: a speech bubble over it for `ticks` ticks (600 unless given). Higher `priority` wins when it has several lines or the screen is crowded; needs speak at 1, and 2 is the default. Only presentation: nothing in the sim reads it back. |
 | `rim.season` | `() -> string` | The current season's name. |
 | `rim.seasons` | `{string}` | The calendar's season names, in order. |
@@ -74,7 +74,7 @@ type CreatureInfo = { id: string, label: string, intelligent: boolean, aggressiv
 type ThingInfo = { id: string, label: string, market_value: number, food: boolean, item: boolean, tags: { string } }
 type ItemCategoryInfo = { id: string, label: string, parent: string?, order: number, children: { string }, items: { string } }
 type Date = { year: number, season: string, season_index: number, day: number, day_of_year: number, year_days: number, year_fraction: number }
-type Room = { id: number, cells: number, enclosed: boolean }
+type Room = { id: number, cells: number, enclosed: boolean, role: string?, role_label: string? }
 type PriorityPart = { label: string, delta: number }
 type WorkWhy = { work: string, level: number, why: string, dist: number? }
 type Taker = { id: number, ticks: number }

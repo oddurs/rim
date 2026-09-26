@@ -1,6 +1,8 @@
 //! Rooms: enclosed areas bounded by walls, doors, rock and water, cut off from
 //! the map edge and no bigger than MAX_ROOM_CELLS.
 
+mod common;
+
 use rim_sim::map::MAX_ROOM_CELLS;
 use rim_sim::path::Goal;
 use rim_sim::{IVec, Sim};
@@ -195,4 +197,89 @@ fn copy_dir(from: &Path, to: &Path) {
             std::fs::copy(&p, to.join(e.file_name())).unwrap();
         }
     }
+}
+
+/// The role of the room at `p`, by qualified id.
+fn role(s: &mut Sim, p: IVec) -> Option<String> {
+    s.world.map.ensure_rooms();
+    s.world.ensure_roles();
+    s.world.room_role(p).map(|d| s.world.defs.room_roles[d as usize].id.clone())
+}
+
+/// A room takes the first `[[room_role]]` it meets, from what's inside it
+/// (DESIGN.md §6c): a bed and a fire make a home, a second bed a dormitory.
+#[test]
+fn a_room_takes_the_first_role_it_meets() {
+    let mut s = sim();
+    let o = site(&s);
+    clear(&mut s, o.offset(-1, -1), 9);
+    ring(&mut s, o, 7, Some(o.offset(3, 6)), None);
+    let inside = o.offset(3, 3);
+    assert_eq!(role(&mut s, inside), None, "an empty room has no role");
+    put(&mut s, "bed", o.offset(1, 1));
+    assert_eq!(role(&mut s, inside).as_deref(), Some("core:bedroom"));
+    put(&mut s, "campfire", o.offset(5, 5));
+    assert_eq!(role(&mut s, inside).as_deref(), Some("core:home"));
+    put(&mut s, "bed", o.offset(3, 1));
+    assert_eq!(role(&mut s, inside).as_deref(), Some("core:dormitory"));
+    // Taking a bed away changes the role without any wall changing.
+    let bed = s.world.map.fixture_at(o.offset(3, 1)).unwrap();
+    s.world.despawn_thing(bed);
+    assert_eq!(role(&mut s, inside).as_deref(), Some("core:home"));
+    // Knock a hole in the wall and it's outdoors: no role needs an open room.
+    let wall = s.world.map.fixture_at(o.offset(0, 3)).unwrap();
+    s.world.despawn_thing(wall);
+    assert_eq!(role(&mut s, inside), None);
+}
+
+/// A mod adds a role with data alone, and a script reads it.
+#[test]
+fn a_mod_adds_a_role_and_a_script_reads_it() {
+    let defs = r#"
+[[room_role]]
+id = "reading_room"
+label = "Reading room"
+needs = { seat = 2 }
+min_cells = 9
+"#;
+    let script = r#"
+        rim.every(1, function()
+            local x, y = rim.get_data("probe:at_x"), rim.get_data("probe:at_y")
+            if x == nil then return end
+            local r = rim.room_at(x, y)
+            rim.set_data("seen", { role = r and r.role or "none", label = r and r.role_label or "none" })
+        end)
+    "#;
+    let dir = common::test_mods(
+        "room-role",
+        &["core"],
+        &[("probe", &[("defs/rooms.toml", defs), ("scripts/probe.luau", script)])],
+    );
+    let mut s = Sim::new(&dir, 21).unwrap_or_else(|e| panic!("loads: {e}"));
+    let _ = std::fs::remove_dir_all(dir);
+    let o = site(&s);
+    clear(&mut s, o.offset(-1, -1), 9);
+    ring(&mut s, o, 7, Some(o.offset(3, 6)), None);
+    put(&mut s, "chair", o.offset(1, 1));
+    put(&mut s, "chair", o.offset(2, 1));
+    let inside = o.offset(3, 3);
+    assert_eq!(role(&mut s, inside).as_deref(), Some("probe:reading_room"));
+    s.world.data.insert("probe:at_x".into(), rim_sim::data::Data::Int(inside.x as i64));
+    s.world.data.insert("probe:at_y".into(), rim_sim::data::Data::Int(inside.y as i64));
+    s.step();
+    let seen = s.world.data.get("probe:seen").expect("the script ran");
+    assert_eq!(seen.get("role"), Some(&rim_sim::data::Data::Str("probe:reading_room".into())));
+    assert_eq!(seen.get("label"), Some(&rim_sim::data::Data::Str("Reading room".into())));
+}
+
+#[test]
+fn a_role_that_needs_nothing_is_refused() {
+    let dir = common::test_mods(
+        "room-role-empty",
+        &["core"],
+        &[("probe", &[("defs/rooms.toml", "[[room_role]]\nid = \"any\"\nlabel = \"Any\"\nneeds = {}\n")])],
+    );
+    let e = Sim::new(&dir, 1).err().expect("an empty role doesn't load");
+    let _ = std::fs::remove_dir_all(dir);
+    assert!(e.contains("room_role/probe:any") && e.contains("`needs` is empty"), "{e}");
 }
