@@ -323,6 +323,15 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     let at = t.pawn_screen(founder);
     t.click(at).await;
     t.check(t.app.selected == Some(founder), "and a click on the colonist selects them again");
+    // A colonist's panel has tabs (4ad6b386).
+    t.frame().await;
+    t.click_ui("core:inspector.tabs.skills").await;
+    t.check(t.app.ui.find("core:inspector.skills").is_some(), "the Skills tab lists every skill");
+    t.shot("inspector_skills").await;
+    t.click_ui("core:inspector.tabs.work").await;
+    t.check(t.app.ui.find("core:inspector.work.core:build").is_some(), "the Work tab lists the work types");
+    t.click_ui("core:inspector.tabs.overview").await;
+    t.check(t.app.ui.find("core:inspector.bars").is_some(), "and Overview has the needs again");
 
     t.right_click((tx, ty)).await;
     t.ticks(1); // commands apply on the next tick

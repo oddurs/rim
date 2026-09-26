@@ -13,9 +13,9 @@ use crate::node::{error_node, key_for, node_from_table, Ctx, Node};
 use crate::theme::Theme;
 use crate::view::{ClientView, UiAction};
 use mlua::{Function, Lua, Table, Value};
-use rim_sim::defs::Satisfier;
+use rim_sim::defs::{DefId, Satisfier};
 use rim_sim::hecs::Entity;
-use rim_sim::world::{Blueprint, Faction, MsgKind, Pawn, Regrow, Thing, World, NEED_MAX};
+use rim_sim::world::{skill_xp, Blueprint, Faction, MsgKind, Pawn, Regrow, Thing, World, NEED_MAX, SKILL_MAX};
 use rim_sim::TICKS_PER_DAY;
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
@@ -1800,6 +1800,35 @@ fn pawn_table(lua: &Lua, w: &World, client: &ClientView, e: Entity) -> mlua::Res
         needs.raw_push(row)?;
     }
     t.raw_set("needs", needs)?;
+    // Every skill there is, in def order, with the work types it trains.
+    let skills = lua.create_table_with_capacity(defs.skills.len(), 0)?;
+    for (k, sd) in defs.skills.iter().enumerate() {
+        let k = k as DefId;
+        let (level, xp) = (p.skill(k), p.skills.iter().find(|s| s.0 == k).map_or(0, |s| s.1));
+        let (lo, hi) = (skill_xp(level), skill_xp((level + 1).min(SKILL_MAX)));
+        let trains: Vec<&str> = defs
+            .work_order
+            .iter()
+            .map(|&w| &defs.work_types[w as usize])
+            .filter(|w| w.skill_r == Some(k))
+            .map(|w| w.label.as_str())
+            .collect();
+        let row = lua.create_table_with_capacity(0, 5)?;
+        row.raw_set("id", sd.id.as_str())?;
+        row.raw_set("label", sd.label.as_str())?;
+        row.raw_set("level", level)?;
+        row.raw_set("progress", if hi > lo { (xp.saturating_sub(lo)) as f64 / (hi - lo) as f64 } else { 1.0 })?;
+        row.raw_set("trains", trains.join(", "))?;
+        skills.raw_push(row)?;
+    }
+    t.raw_set("skills", skills)?;
+    if let Some(tool) = p.hand.and_then(|h| w.thing(h)) {
+        t.raw_set("hand", defs.thing(tool.def).label.as_str())?;
+    }
+    if let Some(l) = &p.carry {
+        let of = l.made_of.map(|m| format!(" ({})", defs.thing(m).label)).unwrap_or_default();
+        t.raw_set("carrying", format!("{} ×{}{of}", defs.thing(l.def).label, l.count))?;
+    }
     Ok(Some(t))
 }
 
