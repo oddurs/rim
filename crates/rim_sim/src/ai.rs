@@ -253,7 +253,7 @@ fn nearest_breach(w: &World, from: IVec, who: Faction, to: IVec) -> Option<Entit
         if best.is_some_and(|b| b.0 <= key) {
             continue;
         }
-        if touches(t.pos, mine) && touches(t.pos, theirs) && w.map.can_reach_for(from, Goal::Touch(t.pos), who) {
+        if touches(t.pos, mine) && touches(t.pos, theirs) && w.map.can_reach_for(from, w.reach_goal(t), who) {
             best = Some((key, de));
         }
     }
@@ -394,7 +394,7 @@ pub fn work_blocked(w: &World, e: Entity) -> Option<String> {
     if free.is_empty() && w.colonists().next().is_some() {
         return Some("Everyone is drafted.".into());
     }
-    let reachable = free.iter().filter_map(|&c| w.pawn_pos(c)).any(|p| w.map.can_reach(p, Goal::Touch(t.pos)));
+    let reachable = free.iter().filter_map(|&c| w.pawn_pos(c)).any(|p| w.map.can_reach(p, w.reach_goal(&t)));
     if !reachable {
         return Some("No colonist can reach it.".into());
     }
@@ -462,7 +462,7 @@ fn find_food(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
         if best.is_some_and(|b| b.0 <= d) || w.reserved_by_other(te, e) {
             continue;
         }
-        let goal = if is_item { Goal::Cell(t.pos) } else { Goal::Touch(t.pos) };
+        let goal = if is_item { Goal::Cell(t.pos) } else { w.reach_goal(t) };
         if !w.map.can_reach(p.pos, goal) {
             continue;
         }
@@ -630,19 +630,19 @@ fn find_work(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
 
     // Blueprints, nearest first; stop at the first that yields a job.
     if let Some(bw) = defs.build_work.filter(|&t| wanted(t)) {
-        /// (distance, blueprint, position, first missing material and how many)
-        type Candidate = (u32, Entity, IVec, Option<(DefId, u32)>);
+        /// (distance, blueprint, where to stand, first missing material and how many)
+        type Candidate = (u32, Entity, Goal, Option<(DefId, u32)>);
         let mut bps: Vec<Candidate> = Vec::new();
         for (be, t, bp) in w.ecs.query::<(Entity, &Thing, &Blueprint)>().iter() {
             if w.reserved_by_other(be, e) {
                 continue;
             }
             let missing = bp.cost.iter().zip(&bp.delivered).find(|(c, d)| **d < c.1).map(|(c, d)| (c.0, c.1 - d));
-            bps.push((t.pos.octile(p.pos), be, t.pos, missing));
+            bps.push((t.pos.octile(p.pos), be, w.reach_goal(t), missing));
         }
         bps.sort_by_key(|b| (b.0, b.1.id()));
-        for (d, be, bpos, missing) in bps {
-            if !w.map.can_reach(p.pos, Goal::Touch(bpos)) {
+        for (d, be, goal, missing) in bps {
+            if !w.map.can_reach(p.pos, goal) {
                 continue;
             }
             match missing {
@@ -682,7 +682,7 @@ fn find_work(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
             },
         };
         let nearest = detour == 0 || nearer(&best[dd.work_r as usize], d + detour, te);
-        if nearest && w.map.can_reach(p.pos, Goal::Touch(t.pos)) {
+        if nearest && w.map.can_reach(p.pos, w.reach_goal(t)) {
             best[dd.work_r as usize] = Some((d + detour, job, te));
         }
     }
@@ -694,7 +694,7 @@ fn find_work(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
         if !wanted(wt) || !nearer(&best[wt as usize], d, se) || w.reserved_by_other(se, e) {
             continue;
         }
-        if !w.map.can_reach(p.pos, Goal::Touch(t.pos)) {
+        if !w.map.can_reach(p.pos, w.reach_goal(t)) {
             continue;
         }
         let job = match o.missing() {
@@ -953,7 +953,8 @@ fn run_harvest(
     if !w.hand_covers(p, hd.requires_r) {
         return None;
     }
-    match go_to(w, p, Goal::Touch(t.pos)) {
+    let goal = w.reach_goal(&t);
+    match go_to(w, p, goal) {
         Go::Failed => None,
         Go::Moving => Some(Job::Harvest { target, forced, harvest, tool }),
         Go::Arrived => {
@@ -1026,8 +1027,10 @@ fn run_supply(w: &mut World, p: &mut Pawn, site: Entity, src: Entity, need: u8, 
             }
         };
     }
-    let at = w.thing(site)?.pos;
-    match go_to(w, p, Goal::Touch(at)) {
+    let st = w.thing(site)?;
+    let at = st.pos;
+    let goal = w.reach_goal(&st);
+    match go_to(w, p, goal) {
         Go::Failed => None,
         Go::Moving => Some(Job::Supply { site, src, need, want, stage }),
         Go::Arrived => {
@@ -1072,7 +1075,8 @@ fn run_craft(w: &mut World, e: Entity, p: &mut Pawn, site: Entity, tool: Option<
     if !w.hand_covers(p, need) {
         return None;
     }
-    match go_to(w, p, Goal::Touch(t.pos)) {
+    let goal = w.reach_goal(&t);
+    match go_to(w, p, goal) {
         Go::Failed => None,
         Go::Moving => Some(Job::Craft { site, tool }),
         Go::Arrived => {
@@ -1140,7 +1144,8 @@ fn run_deliver(w: &mut World, p: &mut Pawn, bp: Entity, src: Entity, want: u32, 
         };
     }
     let b = w.thing(bp)?;
-    match go_to(w, p, Goal::Touch(b.pos)) {
+    let goal = w.reach_goal(&b);
+    match go_to(w, p, goal) {
         Go::Failed => None,
         Go::Moving => Some(Job::Deliver { bp, src, want, stage }),
         Go::Arrived => {
@@ -1197,7 +1202,8 @@ fn run_deconstruct(w: &mut World, p: &mut Pawn, target: Entity) -> Option<Job> {
     let Ok(desig) = w.ecs.get::<&Designated>(target).map(|d| d.0) else {
         return None; // cancelled
     };
-    match go_to(w, p, Goal::Touch(t.pos)) {
+    let goal = w.reach_goal(&t);
+    match go_to(w, p, goal) {
         Go::Failed => None,
         Go::Moving => Some(Job::Deconstruct { target }),
         Go::Arrived => {
@@ -1229,7 +1235,8 @@ fn run_construct(w: &mut World, p: &mut Pawn, bp: Entity) -> Option<Job> {
             return None;
         }
     }
-    match go_to(w, p, Goal::Touch(b.pos)) {
+    let goal = w.reach_goal(&b);
+    match go_to(w, p, goal) {
         Go::Failed => None,
         Go::Moving => Some(Job::Construct { bp }),
         Go::Arrived => {
@@ -1237,9 +1244,12 @@ fn run_construct(w: &mut World, p: &mut Pawn, bp: Entity) -> Option<Job> {
             let amount = p.work_amount(skill);
             let work = w.work_on(bp, b.pos, p.pos, None, amount, |w| work_total(w, bp))?;
             if work.finished() {
-                // A pawn standing on a fresh wall steps out first.
-                if w.defs.thing(b.def).blocks && (p.pos == b.pos || p.next == Some(b.pos)) {
-                    return step_off(w, p, b.pos).then_some(Job::Construct { bp });
+                // A pawn standing on a fresh wall, anywhere in its
+                // footprint, steps out first.
+                let td = w.defs.thing(b.def);
+                let inside = [Some(p.pos), p.next].into_iter().flatten().find(|&c| td.footprint(b.pos).any(|f| f == c));
+                if let Some(cell) = inside.filter(|_| td.blocks) {
+                    return step_off(w, p, cell).then_some(Job::Construct { bp });
                 }
                 complete_building(w, bp);
                 None
@@ -1285,19 +1295,26 @@ pub fn complete_building(w: &mut World, bp: Entity) {
         return;
     }
     let (blocks, cost, door) = (td.blocks, td.path_cost, td.door);
-    w.map.set_fixture(t.pos, Some(bp), blocks, cost, door);
-    w.map.set_owner(t.pos, Some(Faction::Player));
+    for c in td.footprint(t.pos) {
+        w.map.set_fixture(c, Some(bp), blocks, cost, door);
+        w.map.set_owner(c, Some(Faction::Player));
+    }
     let defs = w.defs.clone();
     w.fields.add_emitters(&defs, &w.map, bp, t.def, t.pos);
     if blocks {
         // Anyone else caught inside gets nudged out.
         for i in 0..w.pawns.len() {
             let e = w.pawns[i];
-            let stuck = w.ecs.get::<&Pawn>(e).map(|o| o.active && o.pos == t.pos).unwrap_or(false);
-            if stuck {
-                if let Some(q) =
-                    crate::map::NEIGHBORS8.iter().map(|(dx, dy)| t.pos.offset(*dx, *dy)).find(|q| w.map.passable(*q))
-                {
+            let at = w.ecs.get::<&Pawn>(e).ok().filter(|o| o.active).map(|o| o.pos);
+            if let Some(at) = at.filter(|&a| td.footprint(t.pos).any(|c| c == a)) {
+                // The nearest open cell, ring by ring: from the middle of
+                // a big thing, its neighbours are the thing.
+                let ring = |r: i32| (-r..=r).flat_map(move |dy| (-r..=r).map(move |dx| (dx, dy)));
+                let out = (1..=crate::defs::MAX_SIZE as i32)
+                    .flat_map(|r| ring(r).filter(move |(dx, dy)| dx.abs() == r || dy.abs() == r))
+                    .map(|(dx, dy)| at.offset(dx, dy))
+                    .find(|q| w.map.passable(*q));
+                if let Some(q) = out {
                     if let Ok(mut o) = w.ecs.get::<&mut Pawn>(e) {
                         o.pos = q;
                         o.next = None;
@@ -1466,7 +1483,8 @@ fn run_attack(w: &mut World, e: Entity, p: &mut Pawn, target: Entity, until: u64
 /// gone, and the next think finds the way in now open.
 fn run_breach(w: &mut World, p: &mut Pawn, target: Entity) -> Option<Job> {
     let t = w.thing(target)?;
-    match go_to(w, p, Goal::Touch(t.pos)) {
+    let goal = w.reach_goal(&t);
+    match go_to(w, p, goal) {
         Go::Failed => None,
         Go::Moving => Some(Job::Breach { target }),
         Go::Arrived => {

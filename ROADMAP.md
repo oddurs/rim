@@ -151,10 +151,12 @@ Exposure makes shelter matter: warmth, enclosed rooms, day/night, weather. Get f
 
 ## building — Building
 
-`#########·` 89% · 16 of 18 done · due 2026-11-15
+`########··` 80% · 16 of 20 done · due 2026-11-15
 
 A one-week sprint inside Colony. Building stops being a fixed list of defs
 
+- [ ] `26ba97aa` Plan a multi-cell building over grass, trees and rock <sup>feature · p2 · m · engine</sup>
+- [ ] `f607a83d` Draw a multi-cell thing's look once, over its footprint <sup>feature · p2 · m · client</sup>
 - [ ] `ff97096d` A wall planned over loose items buries them <sup>bug · p2 · s · engine</sup>
 - [ ] `58f8cfb3` Gathering from a half-felled tree keeps the felling's progress <sup>bug · p2 · s · engine</sup>
 - [x] `3f4c257d` Rooms made of something: leak and daylight from the boundary <sup>feature · p0 · l · engine</sup>
@@ -195,11 +197,10 @@ The log is the save and snapshots are a cache (DESIGN.md §7a): a colony is alwa
 
 ## colony — Colony
 
-`##########` 91% · 20 of 22 done · due 2026-12-15
+`##########` 95% · 21 of 22 done · due 2026-12-15
 
 Running more than one person: stockpiles, hauling, work priorities, skills, colonist panels.
 
-- [ ] `8cf4db07` Multi-cell things occupy every cell of their footprint <sup>feature · p3 · m · engine</sup>
 - [ ] `f1924f03` Why a colonist is doing that, and who will take a job <sup>feature · p1 · m · client</sup>
 - [x] `03ad3e3a` Work types and priorities per colonist <sup>feature · p0 · m · engine</sup>
 - [x] `03b9b791` Derived fields and feels-like temperature <sup>feature · p1 · s · engine</sup>
@@ -212,6 +213,7 @@ Running more than one person: stockpiles, hauling, work priorities, skills, colo
 - [x] `69494df0` Strings through one door <sup>chore · p2 · s · core</sup>
 - [x] `8376a04f` Drafty rooms: room leak from terms <sup>feature · p3 · s · engine</sup>
 - [x] `87d9849d` Inter as the UI font, shipped by core <sup>feature · p1 · s · core</sup>
+- [x] `8cf4db07` Multi-cell things occupy every cell of their footprint <sup>feature · p3 · m · engine</sup>
 - [x] `8d551753` Hauling: colonists carry loose items to stockpiles <sup>feature · p0 · m · engine</sup>
 - [x] `99bbff49` CI in half the time <sup>chore · p1 · s · tooling</sup>
 - [x] `a7da68e2` Component kit v2: slider, text input and tables <sup>feature · p1 · m · core</sup>

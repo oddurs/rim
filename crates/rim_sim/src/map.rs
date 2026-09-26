@@ -367,7 +367,9 @@ impl Map {
         }
         match goal {
             Goal::Cell(c) => region_at(c) == rf,
-            Goal::Touch(c) => (-1..=1).any(|dy| (-1..=1).any(|dx| region_at(c.offset(dx, dy)) == rf)),
+            Goal::Touch(_) | Goal::Area { .. } => {
+                goal.cells().any(|c| (-1..=1).any(|dy| (-1..=1).any(|dx| region_at(c.offset(dx, dy)) == rf)))
+            }
         }
     }
 
