@@ -685,6 +685,32 @@ fn find_work(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
         }
     }
 
+    // Work orders: bring what's missing, or work one that has it all.
+    for (se, t, o) in w.ecs.query::<(Entity, &Thing, &Order)>().without::<&Blueprint>().iter() {
+        let wt = o.work_type;
+        let d = t.pos.octile(p.pos);
+        if !wanted(wt) || !nearer(&best[wt as usize], d, se) || w.reserved_by_other(se, e) {
+            continue;
+        }
+        if !w.map.can_reach(p.pos, Goal::Touch(t.pos)) {
+            continue;
+        }
+        let job = match o.missing() {
+            Some((i, want)) => {
+                let need = &o.needs[i];
+                nearest_item_where(w, e, p.pos, |def| need.takes(&defs, def))
+                    .map(|(sd, src)| (sd + d, Job::Supply { site: se, src, need: i as u8, want, stage: 0 }))
+            }
+            None => defs
+                .tool_mask(&o.requires)
+                .and_then(|need| tool_for(w, e, p, need, have))
+                .map(|(extra, tool)| (d + extra, Job::Craft { site: se, tool })),
+        };
+        if let Some((dist, job)) = job.filter(|j| nearer(&best[wt as usize], j.0, se)) {
+            best[wt as usize] = Some((dist, job, se));
+        }
+    }
+
     // Loose items a stockpile would take, unless work at a better level
     // was already found: hauling is the costliest search.
     if let Some(hw) = defs.haul_work.filter(|&t| wanted(t)) {
@@ -719,7 +745,11 @@ fn find_work(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
         .filter_map(|(t, b)| Some((t as DefId, b?)))
         .min_by_key(|(t, b)| (level[*t as usize], b.0, rank(*t), b.2.id()))?;
     w.reserve(res, e);
-    if let Job::Deliver { src, .. } | Job::Harvest { tool: Some(src), .. } = job {
+    if let Job::Deliver { src, .. }
+    | Job::Supply { src, .. }
+    | Job::Harvest { tool: Some(src), .. }
+    | Job::Craft { tool: Some(src), .. } = job
+    {
         w.reserve(src, e);
     }
     Some(job)
@@ -784,9 +814,14 @@ fn find_haul(w: &World, e: Entity, from: IVec) -> Option<(u32, Job, Entity)> {
 
 /// Nearest reachable stack of `def` that nobody but `e` has claimed.
 pub fn nearest_item(w: &World, e: Entity, from: IVec, def: DefId) -> Option<(u32, Entity)> {
+    nearest_item_where(w, e, from, |d| d == def)
+}
+
+/// `nearest_item`, of whatever `takes` accepts: a work order's input by tag.
+pub fn nearest_item_where(w: &World, e: Entity, from: IVec, takes: impl Fn(DefId) -> bool) -> Option<(u32, Entity)> {
     let mut best: Option<(u32, Entity)> = None;
     for (te, t) in w.ecs.query::<(Entity, &Thing)>().without::<&Blueprint>().iter() {
-        if t.def != def || w.map.item_at(t.pos) != Some(te) {
+        if !takes(t.def) || w.map.item_at(t.pos) != Some(te) {
             continue;
         }
         let d = t.pos.octile(from);
@@ -830,6 +865,8 @@ fn run_job(w: &mut World, e: Entity, p: &mut Pawn) {
         Job::Harvest { target, forced, harvest, tool } => (run_harvest(w, e, p, target, forced, harvest, tool), 0),
         Job::Deliver { bp, src, want, stage } => (run_deliver(w, p, bp, src, want, stage), 0),
         Job::Haul { src, to, stage } => (run_haul(w, p, src, to, stage), 0),
+        Job::Supply { site, src, need, want, stage } => (run_supply(w, p, site, src, need, want, stage), 0),
+        Job::Craft { site, tool } => (run_craft(w, e, p, site, tool), 0),
         Job::Construct { bp } => (run_construct(w, p, bp), 0),
         Job::Deconstruct { target } => (run_deconstruct(w, p, target), 0),
         Job::Eat { src, t, seat, stage } => (run_eat(w, p, src, t, seat, stage), 0),
@@ -863,16 +900,8 @@ fn run_harvest(
     }
     // First the tool, if it needs one this pawn doesn't hold.
     if let Some(tl) = tool {
-        let lying = w.ecs.get::<&Held>(tl).is_err();
-        let at = w.thing(tl).map(|t| t.pos).filter(|_| lying)?;
-        return match go_to(w, p, Goal::Cell(at)) {
-            Go::Failed => None,
-            Go::Moving => Some(Job::Harvest { target, forced, harvest, tool }),
-            Go::Arrived => {
-                w.take_tool(e, p, tl);
-                Some(Job::Harvest { target, forced, harvest, tool: None })
-            }
-        };
+        let taken = fetch(w, e, p, tl)?;
+        return Some(Job::Harvest { target, forced, harvest, tool: tool.filter(|_| !taken) });
     }
     if !w.hand_covers(p, hd.requires_r) {
         return None;
@@ -913,6 +942,128 @@ fn run_harvest(
             }
         }
     }
+}
+
+/// Walk to a tool lying about and take it: `Some(true)` once it's in hand,
+/// `Some(false)` on the way, `None` if it's gone or out of reach.
+fn fetch(w: &mut World, e: Entity, p: &mut Pawn, tool: Entity) -> Option<bool> {
+    let lying = w.ecs.get::<&Held>(tool).is_err();
+    let at = w.thing(tool).map(|t| t.pos).filter(|_| lying)?;
+    match go_to(w, p, Goal::Cell(at)) {
+        Go::Failed => None,
+        Go::Moving => Some(false),
+        Go::Arrived => {
+            w.take_tool(e, p, tool);
+            Some(true)
+        }
+    }
+}
+
+/// Bring a work order's input: take it up at `src`, carry it to the site.
+fn run_supply(w: &mut World, p: &mut Pawn, site: Entity, src: Entity, need: u8, want: u32, stage: u8) -> Option<Job> {
+    let short = |w: &World| w.ecs.get::<&Order>(site).ok().and_then(|o| Some(o.needs.get(need as usize)?.missing()));
+    if short(w).unwrap_or(0) == 0 {
+        return None;
+    }
+    if stage == 0 {
+        let s = w.thing(src)?;
+        return match go_to(w, p, Goal::Cell(s.pos)) {
+            Go::Failed => None,
+            Go::Moving => Some(Job::Supply { site, src, need, want, stage }),
+            Go::Arrived => {
+                let n = w.take_from_stack(src, want.min(CARRY_CAPACITY));
+                if n == 0 {
+                    return None;
+                }
+                w.reservations.remove(&src);
+                p.carry = Some((s.def, n));
+                Some(Job::Supply { site, src, need, want, stage: 1 })
+            }
+        };
+    }
+    let at = w.thing(site)?.pos;
+    match go_to(w, p, Goal::Touch(at)) {
+        Go::Failed => None,
+        Go::Moving => Some(Job::Supply { site, src, need, want, stage }),
+        Go::Arrived => {
+            let (cdef, cn) = p.carry?;
+            let defs = w.defs.clone();
+            if let Ok(mut o) = w.ecs.get::<&mut Order>(site) {
+                if let Some(n) = o.needs.get_mut(need as usize).filter(|n| n.takes(&defs, cdef)) {
+                    let add = cn.min(n.missing());
+                    match n.delivered.iter_mut().find(|d| d.0 == cdef) {
+                        Some(d) => d.1 += add,
+                        None => n.delivered.push((cdef, add)),
+                    }
+                    p.carry = (cn > add).then_some((cdef, cn - add));
+                }
+            }
+            w.map.touch(at);
+            None
+        }
+    }
+}
+
+/// Work a work order that has everything, with its tool.
+fn run_craft(w: &mut World, e: Entity, p: &mut Pawn, site: Entity, tool: Option<Entity>) -> Option<Job> {
+    let t = w.thing(site)?;
+    let (requires, work) = {
+        let o = w.ecs.get::<&Order>(site).ok()?;
+        if o.missing().is_some() {
+            return None;
+        }
+        (o.requires.clone(), o.work)
+    };
+    let need = w.defs.tool_mask(&requires)?;
+    if let Some(tl) = tool {
+        let taken = fetch(w, e, p, tl)?;
+        return Some(Job::Craft { site, tool: tool.filter(|_| !taken) });
+    }
+    if !w.hand_covers(p, need) {
+        return None;
+    }
+    match go_to(w, p, Goal::Touch(t.pos)) {
+        Go::Failed => None,
+        Go::Moving => Some(Job::Craft { site, tool }),
+        Go::Arrived => {
+            let speed = p.hand.filter(|_| need != 0).map_or(1.0, |tl| w.tool_speed(tl));
+            let finished = {
+                let mut o = w.ecs.get::<&mut Order>(site).ok()?;
+                if o.total == 0 {
+                    o.total = ((work as f64 / speed.max(0.01)).ceil() as u32).max(1);
+                }
+                o.done = (o.done + 1).min(o.total);
+                o.done >= o.total
+            };
+            w.mark_worksite(site, t.pos);
+            if !finished {
+                return Some(Job::Craft { site, tool });
+            }
+            finish_order(w, site);
+            if need != 0 {
+                w.wear_tool(p);
+            }
+            None
+        }
+    }
+}
+
+/// A work order is done: its inputs are used up, and the mod that posted it
+/// hears what went in, to make what it makes.
+pub fn finish_order(w: &mut World, site: Entity) {
+    let Ok(o) = w.ecs.remove_one::<Order>(site) else { return };
+    let mut inputs: Vec<(DefId, u32)> = Vec::new();
+    for (d, n) in o.needs.iter().flat_map(|n| &n.delivered) {
+        match inputs.iter_mut().find(|i| i.0 == *d) {
+            Some(i) => i.1 += n,
+            None => inputs.push((*d, *n)),
+        }
+    }
+    let stuff = inputs.iter().map(|i| i.0).find(|&d| w.defs.thing(d).stuff.is_some());
+    if let Some(t) = w.thing(site) {
+        w.map.touch(t.pos);
+    }
+    w.events.push(GameEvent::OrderDone { site, owner: o.owner, label: o.label, inputs, stuff });
 }
 
 fn run_deliver(w: &mut World, p: &mut Pawn, bp: Entity, src: Entity, want: u32, stage: u8) -> Option<Job> {

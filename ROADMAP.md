@@ -43,18 +43,19 @@ A sprint: fast on a little old laptop with mods loaded. The reference machine is
 
 ## stone-age — Stone age
 
-`#####·····` 44% · 4 of 9 done
+`#####·····` 50% · 5 of 10 done
 
 Hands first. The colonist wakes with nothing (pillar 93f291d5), and today nothing asks what they hold: a naked warrior fells an oak and quarries granite bare-handed. This milestone makes the first days a climb. You gather branches, fibre, stones and berries with your hands. You find flint and knap it into a flake and a hand axe on the ground. Branch walls and a campfire see you through the first night. A digging stick opens the clay banks, for warm cob walls and fired pots. Then the axe fells trees and a stone maul quarries rock.
 
 - [ ] `049e2f73` Crafting as a plugin: recipes, stations and bills <sup>feature · p0 · l · plugin</sup>
+- [ ] `3ccab46f` Carried things keep what they're made of <sup>bug · p1 · m · engine</sup>
 - [ ] `4bd94457` Balance: the first three days with only your hands <sup>chore · p0 · m · plugin</sup>
-- [ ] `74b6fa7e` Work orders: bring things to a place, then work there <sup>feature · p0 · l · engine</sup>
 - [ ] `af17cc1d` Blueprints on plants: say so, or clear them <sup>bug · p1 · s · engine</sup>
 - [ ] `e3846c47` mods/primitive: the stone age as a plugin <sup>content · p0 · l · plugin</sup>
 - [x] `4e9d5a12` Several harvests on one thing: gather without felling <sup>feature · p0 · s · engine</sup>
 - [x] `5305a161` Select and inspect things, with a slot for mods <sup>feature · p0 · m · client</sup>
 - [x] `7016d86b` Tools in hand: work that needs a tool <sup>feature · p0 · l · engine</sup>
+- [x] `74b6fa7e` Work orders: bring things to a place, then work there <sup>feature · p0 · l · engine</sup>
 - [x] `ccd44902` Core vocabulary: the gather designation and tool tag names <sup>content · p0 · s · core</sup>
 
 ## castaway — Castaway
@@ -290,7 +291,7 @@ Making a mod feels like publishing a small open-source library: rim new, typed L
 
 ## scale — Scale
 
-`##········` 20% · 2 of 10 done · due 2027-03-15
+`##········` 18% · 2 of 11 done · due 2027-03-15
 
 Hit the performance budget: benchmark harness, hierarchical pathing, flow fields, spatial indices, incremental regions, render caching.
 
@@ -301,6 +302,7 @@ Hit the performance budget: benchmark harness, hierarchical pathing, flow fields
 - [ ] `a353667b` Flow fields for raid groups <sup>perf · p2 · m · engine</sup>
 - [ ] `da558444` Ground renderer: terrain, wetness and snow in one shader pass <sup>perf · p2 · m · client</sup>
 - [ ] `dab55ea2` Meet the budget: 6x speed at 60 fps <sup>perf · p0 · l · engine</sup>
+- [ ] `e8673d3f` scripting test a_slow_mod_is_named_in_the_warnings flakes under load <sup>bug · p2 · s · engine</sup>
 - [ ] `fbf3ee1c` Spatial index for things by def <sup>perf · p1 · m · engine</sup>
 - [x] `8ee7a610` Anchored labels capped by priority inside the viewport <sup>perf · p2 · s · engine</sup>
 - [x] `ee7fe7fd` Benchmark harness: target map, 30 colonists, 200 pawns <sup>perf · p0 · m · tooling</sup>
@@ -351,7 +353,7 @@ Lockstep co-op on top of determinism: command broadcast, desync detection, mod-l
 
 ## crafting — Crafting
 
-`··········` 0% · 0 of 11 done · due 2027-05-01
+`··········` 0% · 0 of 12 done · due 2027-05-01
 
 Production chains: workbenches and bills, cooking, farming, tailoring, research as a plugin.
 
@@ -366,6 +368,7 @@ Production chains: workbenches and bills, cooking, farming, tailoring, research 
 - [ ] `d77d9e1f` Stock fields: per-cell state with staggered updates <sup>feature · p0 · l · engine</sup>
 - [ ] `db7f1e06` Mining that rewards looking: rock kinds, veins and prospecting <sup>content · p1 · m · core</sup>
 - [ ] `e1be8ebd` Plants grow in the weather <sup>feature · p0 · m · engine</sup>
+- [ ] `e7c4a3f6` Blueprints as work orders <sup>feature · p3 · m · engine</sup>
 
 ## 1.0 — 1.0
 

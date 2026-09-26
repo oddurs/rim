@@ -2,12 +2,14 @@
 id: 74b6fa7e-7a36-44ba-a15d-d42c9a04dc19
 title: 'Work orders: bring things to a place, then work there'
 type: feature
-status: backlog
+status: done
 milestone: stone-age
+assignee: Oddur Sigurdsson
 depends_on:
 - 7016d86b-72d5-4d1f-a5ee-3f14e376fe7f
 created: 2026-09-25
 updated: 2026-09-25
+closed_at: 2026-09-25
 priority: p0
 api: additive
 effort: l
@@ -38,9 +40,17 @@ No per-tick cost for an idle order. The input search reuses `nearest_item`. A sc
 ## Acceptance criteria
 
 - [ ] Blueprints run on orders; every construction and deconstruction test passes unchanged
-- [ ] A script posts an order with tag inputs and a tool requirement, a pawn fulfils it, and `order_done` names the inputs and their stuff
-- [ ] Cancelling an order refunds what was delivered
-- [ ] `rim.count_items` counts by def and by tag
-- [ ] `rim.spawn_item` takes a stuff, and the item keeps it
-- [ ] An order survives a save and load, half delivered
-- [ ] Determinism test passes
+- [x] A script posts an order with tag inputs and a tool requirement, a pawn fulfils it, and `order_done` names the inputs and their stuff
+- [x] Cancelling an order refunds what was delivered
+- [x] `rim.count_items` counts by def and by tag
+- [x] `rim.spawn_item` takes a stuff, and the item keeps it
+- [x] An order survives a save and load, half delivered
+- [x] Determinism test passes
+
+## 2026-09-25
+
+Scoped down on purpose: orders are a new component (Order on a site, Need by def or tag), with Supply and Craft jobs that mirror Deliver and Construct, and blueprints are unchanged. Construction had just been reworked (#93 Work, #96 work styles), and moving it onto orders in the same PR put the most-tested code in the game at risk for no gain yet. Criterion 1 moves to e7c4a3f6. An order names its work type, so find_work buckets it with no new ENGINE_JOBS entry; its tool gate reuses tools (7016d86b). order_done carries site, x, y, owner, label, inputs and stuff (the first input that is a material). place_item_of keeps stacks of different materials apart and gives a new stack its material's hp. engine:order is optional in saves, so no format bump.
+
+## 2026-09-25
+
+After review: craft progress lives on the Order (done/total), not in Work. On a finished building, Work means taking it down, and the client draws it as dismantling. A site is a built fixture, not natural (an item could be eaten, a tree felled). A site torn down mid-order puts its inputs back and raises order_lost. Needs are capped at 16. Only the owner can cancel. On load an order whose tool tags no tool has any more is dropped with a note. Known limit: carry is by def, so an input's own material isn't carried through.

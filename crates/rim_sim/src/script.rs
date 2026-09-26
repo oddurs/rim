@@ -125,7 +125,15 @@ type ThingInfo = { id: string, label: string, market_value: number, food: boolea
 type Date = { year: number, season: string, season_index: number, day: number, day_of_year: number, year_days: number, year_fraction: number }
 type Room = { id: number, cells: number, enclosed: boolean }
 type Part = { label: string, value: number }
+type OrderNeed = { thing: string?, tag: string?, count: number }
+type OrderSpec = { label: string, needs: { OrderNeed }, work: number, work_type: string, requires: { string }? }
+type OrderInput = { thing: string?, tag: string?, count: number, have: number }
+type OrderInfo = { owner: string, label: string, needs: { OrderInput }, work: number, done: number, total: number, requires: { string } }
+type ItemQuery = { thing: string?, tag: string? }
 "#;
+
+/// A work order's needs, at most: a recipe, not a shopping list.
+const MAX_NEEDS: usize = 16;
 
 pub struct ScriptHost {
     /// The engine's `rim` members, as declared at registration.
@@ -1100,14 +1108,165 @@ impl ScriptHost {
         );
         api!(
             "spawn_item",
-            "(thing: string, x: number, y: number, count: number) -> number",
-            "Drop items near a cell, merging into stacks; returns how many didn't fit.",
-            (String, i32, i32, u32),
-            |w, from, (thing, x, y, count)| {
+            "(thing: string, x: number, y: number, count: number, stuff: string?) -> number",
+            "Drop items near a cell, merging into stacks; returns how many didn't fit. stuff is what they're made \
+             of (a flint axe): it sets their hp and quality, and they stack only with the same.",
+            (String, i32, i32, u32, Option<String>),
+            |w, from, (thing, x, y, count, stuff)| {
                 let def = def_id(w, "thing", &thing, &from)?;
-                Ok(w.place_item(def, IVec::new(x, y), count))
+                let stuff = match stuff {
+                    None => None,
+                    Some(s) => {
+                        let m = def_id(w, "thing", &s, &from)?;
+                        if w.defs.thing(m).stuff.is_none() {
+                            return Err(mlua::Error::runtime(format!("spawn_item: {s} isn't a material")));
+                        }
+                        Some(m)
+                    }
+                };
+                Ok(w.place_item_of(def, IVec::new(x, y), count, stuff))
             }
         );
+        api!(
+            "count_items",
+            "(what: ItemQuery) -> number",
+            "Items lying on the map, by thing ({ thing = \"core:wood\" }) or by tag ({ tag = \"knappable\" }).",
+            Table,
+            |w, from, q| {
+                let thing: Option<String> = q.get("thing")?;
+                let tag: Option<String> = q.get("tag")?;
+                let def = thing.map(|t| def_id(w, "thing", &t, &from)).transpose()?;
+                let takes = |d: crate::defs::DefId| match (&def, &tag) {
+                    (Some(x), _) => *x == d,
+                    (None, Some(tag)) => w.defs.thing(d).tags.contains(tag),
+                    (None, None) => false,
+                };
+                let n: u32 = w
+                    .ecs
+                    .query::<(hecs::Entity, &Thing)>()
+                    .iter()
+                    .filter(|(e, t)| takes(t.def) && w.map.item_at(t.pos) == Some(*e))
+                    .map(|(_, t)| t.count)
+                    .sum();
+                Ok(n)
+            }
+        );
+        api!(
+            "post_order",
+            "(site: number, order: OrderSpec) -> ()",
+            "Post a work order on a thing (a station): bring what `needs` lists, by thing or by tag, then work \
+             `work` ticks there, holding a tool with every tag in `requires`. Colonists take it as `work_type` work. \
+             When it's done, `order_done` names what went in; make what it makes then. One order a site at a time.",
+            (u64, Table),
+            |w, from, (site, spec)| {
+                let site = rim_sim_entity(site)?;
+                let t = w.thing(site).ok_or_else(|| mlua::Error::runtime("post_order: no thing with that id"))?;
+                // A site is something built that stands: not an item that
+                // could be eaten or carried off, nor a tree to be felled.
+                if w.map.fixture_at(t.pos) != Some(site) || w.defs.thing(t.def).natural {
+                    return Err(mlua::Error::runtime(
+                        "post_order: a site is a building or station, not an item or a plant",
+                    ));
+                }
+                if w.ecs.get::<&Blueprint>(site).is_ok() {
+                    return Err(mlua::Error::runtime("post_order: the site is still a plan"));
+                }
+                if w.ecs.get::<&Order>(site).is_ok() {
+                    return Err(mlua::Error::runtime(format!(
+                        "post_order: the {} already has an order",
+                        w.defs.thing(t.def).label
+                    )));
+                }
+                let label: String = spec.get("label")?;
+                let work: u32 = spec.get("work")?;
+                let work_type: String = spec.get("work_type")?;
+                let work_type = def_id(w, "work_type", &work_type, &from)?;
+                let requires: Vec<String> = spec.get::<Option<Vec<String>>>("requires")?.unwrap_or_default();
+                if let Some(t) = requires.iter().find(|t| !w.defs.tool_tags.contains(t)) {
+                    return Err(mlua::Error::runtime(format!("post_order: no tool has the tag \"{t}\"")));
+                }
+                let mut needs = Vec::new();
+                for n in spec.get::<Table>("needs")?.sequence_values::<Table>() {
+                    let n = n?;
+                    let thing: Option<String> = n.get("thing")?;
+                    let tag: Option<String> = n.get("tag")?;
+                    let count: u32 = n.get("count")?;
+                    if thing.is_some() == tag.is_some() || count == 0 {
+                        return Err(mlua::Error::runtime(
+                            "post_order: each need is { thing = ..., count = n } or { tag = ..., count = n }",
+                        ));
+                    }
+                    let thing = thing.map(|t| def_id(w, "thing", &t, &from)).transpose()?;
+                    needs.push(Need { thing, tag, count, delivered: Vec::new() });
+                }
+                if needs.len() > MAX_NEEDS {
+                    return Err(mlua::Error::runtime(format!("post_order: at most {MAX_NEEDS} needs")));
+                }
+                let order =
+                    Order { owner: from, label, needs, work: work.max(1), requires, work_type, done: 0, total: 0 };
+                let _ = w.ecs.insert_one(site, order);
+                w.map.touch(t.pos);
+                Ok(())
+            }
+        );
+        api!(
+            "cancel_order",
+            "(site: number) -> boolean",
+            "Take your work order off its site. What was brought is put back down there. False if it had none.",
+            u64,
+            |w, from, site| {
+                let site = rim_sim_entity(site)?;
+                match w.ecs.get::<&Order>(site).map(|o| o.owner.clone()) {
+                    Err(_) => return Ok(false),
+                    Ok(owner) if owner != from => {
+                        return Err(mlua::Error::runtime(format!("cancel_order: the order is {owner}'s")))
+                    }
+                    Ok(_) => {}
+                }
+                let Ok(o) = w.ecs.remove_one::<Order>(site) else { return Ok(false) };
+                if let Some(t) = w.thing(site) {
+                    for &(d, n) in o.needs.iter().flat_map(|n| &n.delivered) {
+                        w.place_item(d, t.pos, n);
+                    }
+                    w.map.touch(t.pos);
+                }
+                Ok(true)
+            }
+        );
+        // The order on a site, and how far it's got, or nil.
+        {
+            let ptr = self.world.clone();
+            let f = lua.create_function(move |lua, site: u64| {
+                let site = rim_sim_entity(site)?;
+                with_world(&ptr, |w| {
+                    let Ok(o) = w.ecs.get::<&Order>(site) else { return Ok(Value::Nil) };
+                    let t = lua.create_table()?;
+                    t.set("owner", o.owner.as_str())?;
+                    t.set("label", o.label.as_str())?;
+                    t.set("work", o.work)?;
+                    t.set("done", o.done)?;
+                    t.set("total", if o.total > 0 { o.total } else { o.work })?;
+                    t.set("requires", lua.create_sequence_from(o.requires.iter().map(String::as_str))?)?;
+                    let needs = lua.create_table()?;
+                    for n in &o.needs {
+                        let row = lua.create_table()?;
+                        row.set("thing", n.thing.map(|d| w.defs.thing(d).id.clone()))?;
+                        row.set("tag", n.tag.as_deref())?;
+                        row.set("count", n.count)?;
+                        row.set("have", n.have())?;
+                        needs.push(row)?;
+                    }
+                    t.set("needs", needs)?;
+                    Ok(Value::Table(t))
+                })
+            })?;
+            rim.set("order", f)?;
+            self.declare(
+                "order",
+                "(site: number) -> OrderInfo?",
+                "The work order on a thing and how far it's got, or nil.",
+            );
+        }
 
         // Mods see `rim` through a proxy: reads go to the API table, and a
         // write is an error that says how to share code instead.
@@ -1355,6 +1514,31 @@ impl ScriptHost {
                 t.set("index", index + 1)?;
                 t.set("year", year + 1)?;
                 "season_changed"
+            }
+            GameEvent::OrderDone { site, owner, label, inputs, stuff } => {
+                t.set("site", site.to_bits().get())?;
+                if let Some(at) = w.thing(*site).map(|t| t.pos) {
+                    t.set("x", at.x)?;
+                    t.set("y", at.y)?;
+                }
+                t.set("owner", owner.as_str())?;
+                t.set("label", label.as_str())?;
+                let ins = self.lua.create_table()?;
+                for &(d, n) in inputs {
+                    let row = self.lua.create_table()?;
+                    row.set("thing", defs.thing(d).id.as_str())?;
+                    row.set("count", n)?;
+                    ins.push(row)?;
+                }
+                t.set("inputs", ins)?;
+                t.set("stuff", stuff.map(|d| defs.thing(d).id.clone()))?;
+                "order_done"
+            }
+            GameEvent::OrderLost { site, owner, label } => {
+                t.set("site", site.to_bits().get())?;
+                t.set("owner", owner.as_str())?;
+                t.set("label", label.as_str())?;
+                "order_lost"
             }
             GameEvent::Script { .. } => unreachable!("handled in event_table"),
             GameEvent::ColonyLost => "colony_lost",
