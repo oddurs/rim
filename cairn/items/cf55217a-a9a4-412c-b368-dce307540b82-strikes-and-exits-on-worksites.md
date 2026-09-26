@@ -2,14 +2,14 @@
 id: cf55217a-a9a4-412c-b368-dce307540b82
 title: Strikes and exits on worksites
 type: feature
-status: doing
+status: done
 milestone: building
 assignee: Oddur Sigurdsson
-claimed: 2026-09-25
 depends_on:
 - 74ff83ce-1d16-43f7-a49b-ca3340d509d3
 created: 2026-09-25
 updated: 2026-09-25
+closed_at: 2026-09-25
 priority: p2
 api: none
 effort: m

@@ -146,11 +146,10 @@ Exposure makes shelter matter: warmth, enclosed rooms, day/night, weather. Get f
 
 ## building — Building
 
-`##########` 93% · 14 of 15 done · due 2026-11-15
+`##########` 100% · 15 of 15 done · due 2026-11-15
 
 A one-week sprint inside Colony. Building stops being a fixed list of defs
 
-- [ ] `cf55217a` Strikes and exits on worksites <sup>feature · p2 · m · client</sup>
 - [x] `3f4c257d` Rooms made of something: leak and daylight from the boundary <sup>feature · p0 · l · engine</sup>
 - [x] `419a24ab` Interaction spots: furniture a pawn uses <sup>feature · p1 · m · engine</sup>
 - [x] `49e5e583` Walls that look joined, in the colour of what they are made of <sup>feature · p1 · m · client</sup>
@@ -165,6 +164,7 @@ A one-week sprint inside Colony. Building stops being a fixed list of defs
 - [x] `a14a5ff6` Work progress lives on the thing <sup>feature · p1 · m · engine</sup>
 - [x] `ab0599d2` Do room properties come from the boundary? <sup>spike · p0 · s · engine</sup>
 - [x] `cecf0ba9` Core collapses to one wall, one door, one bed <sup>content · p1 · s · core</sup>
+- [x] `cf55217a` Strikes and exits on worksites <sup>feature · p2 · m · client</sup>
 
 ## persistence — Persistence
 
