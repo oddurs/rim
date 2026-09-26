@@ -927,164 +927,6 @@ primitives: a mod picks and colours effects and never draws per frame.
 - **Ruling:** no. Wear on a blocking thing cracks and darkens it and never
   shrinks it, and a load check holds mods to the same rule.
 
-## 6d. Depth: stacked planes
-
-Mining and building gain a z axis: dig down for clay, metal and shelter,
-build up for second storeys. Depth has to feel big and cost nothing where
-nobody has dug.
-
-### Tension: true 3D or stacked planes?
-
-- **For 3D:** ramps, slopes, free vertical movement, water under pressure.
-  It is Dwarf Fortress's model and the richest one.
-- **Against:** every flood fill, A* and field stamp goes from 4 or 8
-  neighbours to 6 or 26, and regions and rooms span levels. §6a makes the
-  lattice engine because every hot path depends on its shape; 3D changes
-  that shape in all of them at once.
-- **Ruling:** stacked planes. A level is a `Map`, unchanged. Levels meet
-  only at **portals** (stairs, ladders, anything whose def says `portal`),
-  which cover two cells one above the other the way a multi-cell thing
-  covers its footprint. There are tens of portals, not thousands, so every
-  3D question becomes a 2D one plus a small graph:
-  - Positions carry `z`; 0 is the surface, and a missing `z` means 0.
-  - Regions, rooms, fields and chunk caches stay per level, with per-level
-    dirty flags. A wall on −2 rebuilds −2 and nothing else.
-  - Reachability is a union-find over `(z, region)` joined at portals,
-    rebuilt in O(portals) when a level's regions or a portal change. Asking
-    stays O(1).
-  - A path is planned leg by leg: a route over the portal graph, then A* on
-    one plane to the next portal with today's scratch buffers. The next leg
-    is planned on arrival.
-  - A level nobody has dug into is **untouched**: a function of the seed and
-    `z`, generated from `[[stratum]]` defs the tick something breaks in, and
-    never saved until then.
-
-### Tension: how deep?
-
-- **For many levels:** Dwarf Fortress has a hundred-odd, and depth is the
-  point.
-- **Against:** a fort there lives in ten or so, and what players remember
-  is the aquifer, the magma and the cavern, not the count. Each level here
-  is a whole 192 × 192 plane of rock that nobody mines out. A level that
-  asks no new question is a screen to scroll past.
-- **Ruling:** the range is a world-creation parameter, like size. Core
-  sets three down, and two up once building up lands. Each level below
-  earns its place with a new material, tool tag and danger: −1 soil and
-  clay (`digging`: cellars, wells, pits, the water table), −2 limestone
-  (`pounding`: copper, tin, aquifers), −3 granite (`mining`, a new core
-  tag: iron, coal). A caverns
-  plugin opens −4 and what lives there. The default map shrinks to
-  **192 × 192**, six chunks a side, because dug levels add the area of
-  whole maps; 250 × 250 stays the §8 stress case.
-
-### Rock is terrain
-
-Granite was a thing spawned on every `rock_floor` cell: one entity per rock
-cell. Four levels of that would be 147,456 entities that never act.
-
-- **Ruling:** a terrain may be `solid`: it fills its cell, blocks movement
-  and bounds rooms, which already treat impassable terrain as boundary. Its
-  `mine` block gives work, required tags, yields and the floor it leaves.
-  Progress lives on a thing (§6b), so designating a rock cell spawns a
-  worksite entity that holds the `Work` and is gone with the rock.
-- A cell's terrain is **solid**, **floor** or **air**. A floor belongs to
-  the cell that stands on it, so mining the rock under a room leaves the
-  room's floor. **Dig down** turns an open cell's floor to air and mines
-  the cell below: a pit one level deep, or a stair pair if you ask for
-  stairs. It always goes exactly one level. Air is not walkable; items and
-  water fall through it.
-
-### Tension: can a pit stop a raid?
-
-- **For:** digging costs real labour, and for a stone-age colony that can't
-  afford stone walls a trench *is* the wall.
-- **Against:** a closed ring of air makes raids pointless. That is §1's
-  failure again: players learn to exploit the system instead of building.
-- **Ruling:** a pit is impassable at its level and nothing climbs out, so
-  it can't be broken, only **bridged**. A raider who can't reach anything
-  lays planks over air a cell at a time, as raiders break doors today, and
-  defenders can knock a bridge down. The colony's own way out is a
-  drawbridge: an owned floor over air, which is the owned-door rule laid
-  flat. Trenches count as defence in the raid budget. Climbing is a mod: a
-  movement class whose region layer treats a one-level drop as passable.
-
-### Tension: water per cell or per basin?
-
-"Dig into water and it floods" needs moving water. Two prototypes, 192 × 192
-× 5, a mine of 13,276 dug cells breached into a river (release, Apple
-Silicon, one run each; the reference machine is slower):
-
-| Model | Fill the mine | Mean per tick | At rest |
-|---|---|---|---|
-| Per cell: fall, then halve differences | not full (64%) after 200,000 ticks | 0.0089 ms | 0.0056 ms |
-| Per basin: volume per connected open area | 332 ticks (24 game minutes) | 0.0014 ms | 0.000009 ms |
-
-Per cell is cheap per step (13.6 ns a cell) but diffusion through a tunnel
-takes time in the square of its length. On a whole flooded level it costs
-0.40 ms a tick for 18,532 ticks and settles 62% full, in a slope, because a
-one-unit difference never moves. Dwarf Fortress fixes that with pressure,
-which is where its cost and strangeness come from.
-
-- **Ruling:** basins. A basin is a connected open area on one level,
-  derived like regions and rebuilt with them; only its volume is saved.
-  - Surface water terrain is the **water table**: static, infinite, never
-    simulated. Open space dug next to it floods. Aquifer rock seeps at its
-    def's rate once a face is exposed.
-  - Water falls first, through air and stairwells, into the basin below
-    until that one is full. It never climbs: no pressure, and a U-bend
-    doesn't level out.
-  - A wet front grows one ring a tick from where the water entered. The
-    depth is uniform across wet cells.
-  - Wading, swimming and drowning depths are data on a `[[fluid]]` def.
-    Passability changes only when a basin crosses one, and then that
-    level's regions rebuild at most once every 60 ticks.
-  - Doors pass water unless their def `holds_water`. Core has no drains;
-    pumps are crafting content. Runoff and puddles from rain stay a
-    stock-field plugin on the surface (§5).
-
-### Seeing it
-
-One level is drawn at a time: levels above are cut away, and the level
-below shows through air, dimmed. Rock nobody has stood beside is drawn
-plain, so a vein is found by looking. `[` goes down and `]` goes up. Chunk
-meshes are keyed by `(z, chunk)`. The depth ruler that shows who is on
-which level is a UI mod.
-
-### Underground
-
-Rock is a roof. Solid terrain is a roof support (§6c), and a cell is
-roofed when a support's span reaches it or the cell above is solid or has
-a floor, so every underground room is roofed with no special case.
-Temperature below comes from terms: −1 follows the year's mean with a
-damped swing, and deeper is steady and warmer. Light is zero until
-something emits it.
-
-### Building up comes second
-
-Digging removes material from a solid world; building up adds floors to an
-empty one, which needs support, collapse and coverage. It reuses §6c's
-roof span rather than adding a second one, computed per level:
-
-    roofed(z, c) = span_covered(z, c) || solid_or_floor(z + 1, c)
-
-A built floor at `(z + 1, c)` is allowed only where `span_covered(z, c)`
-holds or a support stands directly below it. So the implicit roof over a
-room is exactly where a second storey can go, and the floor laid there
-becomes its explicit roof. A floor that loses its span falls.
-
-### Costs we accept
-
-- Positions gaining `z` touches nearly every file, the commands, the save
-  and the Luau surface: one large mechanical change.
-- Rock becoming terrain breaks mods that patch `thing/granite`, and bumps
-  the API.
-- Basins simplify: no currents, no pressure, and water never climbs stairs.
-- One cell of height per level: no ramps or slopes, and hilltops are flat.
-- Cross-level pathing, drawing the level below and generating a level are
-  not yet measured. Each ticket that adds one records its number here.
-
----
-
 ## 6c. Houses: drawn as their plan, built as orders
 
 A house today is a ring of flat brown cells with a 1.5-point edge. Its
@@ -1330,6 +1172,164 @@ the balance bots build from them instead of hand-coding huts.
   indoors, so it is breaking and needs an api bump.
 - **Content:** core's looks move to the new primitives. "Every core def has
   a sprite" (f4e97005) becomes "every core def has a finished plan look".
+
+---
+
+## 6d. Depth: stacked planes
+
+Mining and building gain a z axis: dig down for clay, metal and shelter,
+build up for second storeys. Depth has to feel big and cost nothing where
+nobody has dug.
+
+### Tension: true 3D or stacked planes?
+
+- **For 3D:** ramps, slopes, free vertical movement, water under pressure.
+  It is Dwarf Fortress's model and the richest one.
+- **Against:** every flood fill, A* and field stamp goes from 4 or 8
+  neighbours to 6 or 26, and regions and rooms span levels. §6a makes the
+  lattice engine because every hot path depends on its shape; 3D changes
+  that shape in all of them at once.
+- **Ruling:** stacked planes. A level is a `Map`, unchanged. Levels meet
+  only at **portals** (stairs, ladders, anything whose def says `portal`),
+  which cover two cells one above the other the way a multi-cell thing
+  covers its footprint. There are tens of portals, not thousands, so every
+  3D question becomes a 2D one plus a small graph:
+  - Positions carry `z`; 0 is the surface, and a missing `z` means 0.
+  - Regions, rooms, fields and chunk caches stay per level, with per-level
+    dirty flags. A wall on −2 rebuilds −2 and nothing else.
+  - Reachability is a union-find over `(z, region)` joined at portals,
+    rebuilt in O(portals) when a level's regions or a portal change. Asking
+    stays O(1).
+  - A path is planned leg by leg: a route over the portal graph, then A* on
+    one plane to the next portal with today's scratch buffers. The next leg
+    is planned on arrival.
+  - A level nobody has dug into is **untouched**: a function of the seed and
+    `z`, generated from `[[stratum]]` defs the tick something breaks in, and
+    never saved until then.
+
+### Tension: how deep?
+
+- **For many levels:** Dwarf Fortress has a hundred-odd, and depth is the
+  point.
+- **Against:** a fort there lives in ten or so, and what players remember
+  is the aquifer, the magma and the cavern, not the count. Each level here
+  is a whole 192 × 192 plane of rock that nobody mines out. A level that
+  asks no new question is a screen to scroll past.
+- **Ruling:** the range is a world-creation parameter, like size. Core
+  sets three down, and two up once building up lands. Each level below
+  earns its place with a new material, tool tag and danger: −1 soil and
+  clay (`digging`: cellars, wells, pits, the water table), −2 limestone
+  (`pounding`: copper, tin, aquifers), −3 granite (`mining`, a new core
+  tag: iron, coal). A caverns
+  plugin opens −4 and what lives there. The default map shrinks to
+  **192 × 192**, six chunks a side, because dug levels add the area of
+  whole maps; 250 × 250 stays the §8 stress case.
+
+### Rock is terrain
+
+Granite was a thing spawned on every `rock_floor` cell: one entity per rock
+cell. Four levels of that would be 147,456 entities that never act.
+
+- **Ruling:** a terrain may be `solid`: it fills its cell, blocks movement
+  and bounds rooms, which already treat impassable terrain as boundary. Its
+  `mine` block gives work, required tags, yields and the floor it leaves.
+  Progress lives on a thing (§6b), so designating a rock cell spawns a
+  worksite entity that holds the `Work` and is gone with the rock.
+- A cell's terrain is **solid**, **floor** or **air**. A floor belongs to
+  the cell that stands on it, so mining the rock under a room leaves the
+  room's floor. **Dig down** turns an open cell's floor to air and mines
+  the cell below: a pit one level deep, or a stair pair if you ask for
+  stairs. It always goes exactly one level. Air is not walkable; items and
+  water fall through it.
+
+### Tension: can a pit stop a raid?
+
+- **For:** digging costs real labour, and for a stone-age colony that can't
+  afford stone walls a trench *is* the wall.
+- **Against:** a closed ring of air makes raids pointless. That is §1's
+  failure again: players learn to exploit the system instead of building.
+- **Ruling:** a pit is impassable at its level and nothing climbs out, so
+  it can't be broken, only **bridged**. A raider who can't reach anything
+  lays planks over air a cell at a time, as raiders break doors today, and
+  defenders can knock a bridge down. The colony's own way out is a
+  drawbridge: an owned floor over air, which is the owned-door rule laid
+  flat. Trenches count as defence in the raid budget. Climbing is a mod: a
+  movement class whose region layer treats a one-level drop as passable.
+
+### Tension: water per cell or per basin?
+
+"Dig into water and it floods" needs moving water. Two prototypes, 192 × 192
+× 5, a mine of 13,276 dug cells breached into a river (release, Apple
+Silicon, one run each; the reference machine is slower):
+
+| Model | Fill the mine | Mean per tick | At rest |
+|---|---|---|---|
+| Per cell: fall, then halve differences | not full (64%) after 200,000 ticks | 0.0089 ms | 0.0056 ms |
+| Per basin: volume per connected open area | 332 ticks (24 game minutes) | 0.0014 ms | 0.000009 ms |
+
+Per cell is cheap per step (13.6 ns a cell) but diffusion through a tunnel
+takes time in the square of its length. On a whole flooded level it costs
+0.40 ms a tick for 18,532 ticks and settles 62% full, in a slope, because a
+one-unit difference never moves. Dwarf Fortress fixes that with pressure,
+which is where its cost and strangeness come from.
+
+- **Ruling:** basins. A basin is a connected open area on one level,
+  derived like regions and rebuilt with them; only its volume is saved.
+  - Surface water terrain is the **water table**: static, infinite, never
+    simulated. Open space dug next to it floods. Aquifer rock seeps at its
+    def's rate once a face is exposed.
+  - Water falls first, through air and stairwells, into the basin below
+    until that one is full. It never climbs: no pressure, and a U-bend
+    doesn't level out.
+  - A wet front grows one ring a tick from where the water entered. The
+    depth is uniform across wet cells.
+  - Wading, swimming and drowning depths are data on a `[[fluid]]` def.
+    Passability changes only when a basin crosses one, and then that
+    level's regions rebuild at most once every 60 ticks.
+  - Doors pass water unless their def `holds_water`. Core has no drains;
+    pumps are crafting content. Runoff and puddles from rain stay a
+    stock-field plugin on the surface (§5).
+
+### Seeing it
+
+One level is drawn at a time: levels above are cut away, and the level
+below shows through air, dimmed. Rock nobody has stood beside is drawn
+plain, so a vein is found by looking. `[` goes down and `]` goes up. Chunk
+meshes are keyed by `(z, chunk)`. The depth ruler that shows who is on
+which level is a UI mod.
+
+### Underground
+
+Rock is a roof. Solid terrain is a roof support (§6c), and a cell is
+roofed when a support's span reaches it or the cell above is solid or has
+a floor, so every underground room is roofed with no special case.
+Temperature below comes from terms: −1 follows the year's mean with a
+damped swing, and deeper is steady and warmer. Light is zero until
+something emits it.
+
+### Building up comes second
+
+Digging removes material from a solid world; building up adds floors to an
+empty one, which needs support, collapse and coverage. It reuses §6c's
+roof span rather than adding a second one, computed per level:
+
+    roofed(z, c) = span_covered(z, c) || solid_or_floor(z + 1, c)
+
+A built floor at `(z + 1, c)` is allowed only where `span_covered(z, c)`
+holds or a support stands directly below it. So the implicit roof over a
+room is exactly where a second storey can go, and the floor laid there
+becomes its explicit roof. A floor that loses its span falls.
+
+### Costs we accept
+
+- Positions gaining `z` touches nearly every file, the commands, the save
+  and the Luau surface: one large mechanical change.
+- Rock becoming terrain breaks mods that patch `thing/granite`, and bumps
+  the API.
+- Basins simplify: no currents, no pressure, and water never climbs stairs.
+- One cell of height per level: no ramps or slopes, and hilltops are flat.
+- Cross-level pathing, drawing the level below and generating a level are
+  not yet measured. Each ticket that adds one records its number here.
 
 ---
 
