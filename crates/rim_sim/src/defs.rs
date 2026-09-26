@@ -712,7 +712,7 @@ pub enum Exit {
 
 /// Kinds of work the engine itself hands out, which a work type claims by
 /// name. Designations name their work type; this is for the rest.
-pub const ENGINE_JOBS: &[&str] = &["build"];
+pub const ENGINE_JOBS: &[&str] = &["build", "haul"];
 
 fn d3() -> u8 {
     3
@@ -802,6 +802,8 @@ pub struct DefDb {
     pub priority_scale: PriorityScaleDef,
     /// The work type that raises blueprints, if any claims "build".
     pub build_work: Option<DefId>,
+    /// The work type that carries items to stockpiles, if any claims "haul".
+    pub haul_work: Option<DefId>,
     pub fields: Vec<FieldDef>,
     /// Fields in the order their ambient terms must be evaluated.
     pub ambient_order: Vec<usize>,
@@ -1074,27 +1076,28 @@ impl DefDb {
         if !(1..=9).contains(&levels) {
             return Err(format!("priority_scale/{}: levels must be 1 to 9, not {levels}", self.priority_scale.id));
         }
-        let mut build: Option<usize> = None;
+        // Each engine job is claimed by at most one work type.
+        let mut claims: Vec<Option<usize>> = vec![None; ENGINE_JOBS.len()];
         for (i, d) in self.work_types.iter_mut().enumerate() {
             d.priority = d.priority.min(levels);
             for j in &d.jobs {
-                if !ENGINE_JOBS.contains(&j.as_str()) {
+                let Some(k) = ENGINE_JOBS.iter().position(|e| e == j) else {
                     return Err(format!(
                         "work_type/{}: no engine job '{j}' (there are: {})",
                         d.id,
                         ENGINE_JOBS.join(", ")
                     ));
+                };
+                if claims[k].is_some() {
+                    return Err(format!("work_type/{}: another work type already covers '{j}'", d.id));
                 }
-                match build {
-                    Some(_) if j == "build" => {
-                        return Err(format!("work_type/{}: another work type already covers 'build'", d.id))
-                    }
-                    _ if j == "build" => build = Some(i),
-                    _ => {}
-                }
+                claims[k] = Some(i);
             }
         }
-        self.build_work = build.map(|i| i as DefId);
+        let claim =
+            |job: &str| claims[ENGINE_JOBS.iter().position(|e| *e == job).expect("an engine job")].map(|i| i as DefId);
+        self.build_work = claim("build");
+        self.haul_work = claim("haul");
         let mut order: Vec<DefId> = (0..self.work_types.len() as DefId).collect();
         order.sort_by_key(|&w| (self.work_types[w as usize].order, w));
         self.work_order = order;

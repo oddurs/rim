@@ -32,7 +32,8 @@ empty_damage_per_day = 40
 # Work types: the columns of the priority grid (DESIGN.md §4d). A colonist
 # does the work at its lowest priority level that has something reachable;
 # 1 is first, 0 never. `order` breaks ties; `jobs = ["build"]` is the work
-# type that raises blueprints and brings them materials.
+# type that raises blueprints and brings them materials; `jobs = ["haul"]`
+# the one that carries loose items to stockpiles.
 [[priority_scale]]
 id = "core"
 levels = 4
@@ -77,6 +78,15 @@ icon = "U"
 skill = "shooting"
 priority = 3
 order = 50
+
+# Carrying loose items to the stockpiles that take them.
+[[work_type]]
+id = "haul"
+label = "Haul"
+icon = "L"
+priority = 3
+order = 60
+jobs = ["haul"]
 
 [[designation]]
 id = "chop"
