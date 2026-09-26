@@ -115,3 +115,25 @@ pub fn nearest_rock(w: &rim_sim::world::World, from: rim_sim::IVec) -> Option<ri
         .filter(|&p| w.solid_at(p).is_some() && w.map.can_reach(from, rim_sim::path::Goal::Touch(p)))
         .min_by_key(|&p| (p.octile(from), w.map.idx(p)))
 }
+
+/// The nearest cells to `from` a stack can be dropped on that no stockpile
+/// covers: passable, no item, no fixture, no zone. A test's loose stack
+/// then stays loose whatever the map puts near the colonist.
+pub fn loose_cells(sim: &Sim, from: IVec, n: usize) -> Vec<IVec> {
+    let w = &sim.world;
+    let free = |p: IVec| {
+        w.map.passable(p)
+            && w.map.item_at(p).is_none()
+            && w.map.fixture_at(p).is_none()
+            && w.zones.at(&w.map, p).is_none()
+    };
+    (1..60)
+        .flat_map(|r: i32| {
+            (-r..=r).flat_map(move |dy| {
+                (-r..=r).filter(move |dx| dx.abs() == r || dy.abs() == r).map(move |dx| from.offset(dx, dy))
+            })
+        })
+        .filter(|&p| free(p))
+        .take(n)
+        .collect()
+}

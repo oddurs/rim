@@ -2,12 +2,12 @@
 id: 6ce26632-93be-424e-935d-9312a4afbdc5
 title: 'The UI draws a thing''s look: the item token'
 type: feature
-status: review
+status: done
 milestone: crafting
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 created: 2026-09-26
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p1
 api: additive
 effort: m
@@ -39,3 +39,7 @@ Mechanism: a token node kind (kind = "token") and a token field on grid cells, p
 ## 2026-09-26
 
 Gate green (503 tests, rim test, rim check --strict, crosscheck) and client autotest 206 passed, 0 failed. The gallery shows every item def as a grid of small tokens, plus a row of every size and state.
+
+## 2026-09-26
+
+Closed with its ui_api criterion unticked, deliberately: additive UI API changes haven't bumped ui_api (0.6) so far, and a bump makes every mod and in-flight branch edit its mod.toml. Revisit when a change breaks the UI API.

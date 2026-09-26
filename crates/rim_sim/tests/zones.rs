@@ -103,9 +103,9 @@ fn painting_never_takes_cells_from_another_zone_and_only_items_are_allowed() {
 fn a_loaded_set_of_zones_is_made_consistent() {
     let mut z = rim_sim::zone::Zones::new(4);
     let f = |allows: Vec<u16>| rim_sim::filter::Filter { allows, refuses: vec![], hp: [0, 100] };
-    z.list.push(rim_sim::zone::Zone { id: 7, name: "a".into(), filter: f(vec![3, 1, 3]) });
-    z.list.push(rim_sim::zone::Zone { id: 7, name: "twin".into(), filter: f(vec![]) });
-    z.list.push(rim_sim::zone::Zone { id: 9, name: "empty".into(), filter: f(vec![]) });
+    z.list.push(rim_sim::zone::Zone { id: 7, name: "a".into(), filter: f(vec![3, 1, 3]), level: 1 });
+    z.list.push(rim_sim::zone::Zone { id: 7, name: "twin".into(), filter: f(vec![]), level: 1 });
+    z.list.push(rim_sim::zone::Zone { id: 9, name: "empty".into(), filter: f(vec![]), level: 1 });
     z.cells = vec![7, 5, 0, 7];
     z.next_id = 2;
     z.tidy();

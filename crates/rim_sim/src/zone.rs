@@ -24,6 +24,19 @@ pub struct Zone {
     /// only `allows`) loads as one that takes any material and condition.
     #[serde(flatten)]
     pub filter: Filter,
+    /// Its place on the store priority scale: stacks move only to a store
+    /// at a higher level (DESIGN.md §4f). A zone saved before levels is at
+    /// core's Normal.
+    #[serde(default = "normal", skip_serializing_if = "is_normal")]
+    pub level: u8,
+}
+
+fn normal() -> u8 {
+    1
+}
+
+fn is_normal(level: &u8) -> bool {
+    *level == normal()
 }
 
 impl Zone {
@@ -77,7 +90,8 @@ impl Zones {
     pub fn create(&mut self, defs: &DefDb, map: &Map, a: IVec, b: IVec) -> u32 {
         let id = self.next_id;
         self.next_id += 1;
-        self.list.push(Zone { id, name: format!("Stockpile {id}"), filter: Filter::everything(defs) });
+        let level = defs.store_priority.default;
+        self.list.push(Zone { id, name: format!("Stockpile {id}"), filter: Filter::everything(defs), level });
         self.paint(map, a, b, Some(id));
         id
     }
@@ -131,6 +145,14 @@ impl Zones {
         }
     }
 
+    /// Put a zone at a level, within the scale.
+    pub fn set_level(&mut self, defs: &DefDb, id: u32, level: u8) {
+        let top = defs.store_priority.labels.len().saturating_sub(1) as u8;
+        if let Some(z) = self.list.iter_mut().find(|z| z.id == id) {
+            z.level = level.min(top);
+        }
+    }
+
     /// The single zone the cells from `a` to `b` touch, if exactly one.
     pub fn touched(&self, map: &Map, a: IVec, b: IVec) -> Option<u32> {
         let (x0, x1) = (a.x.min(b.x).max(0), a.x.max(b.x).min(map.w - 1));
@@ -178,7 +200,7 @@ impl Zones {
         use crate::rng::mix;
         h = mix(h ^ self.next_id as u64);
         for z in &self.list {
-            h = z.filter.hash(mix(h ^ z.id as u64));
+            h = z.filter.hash(mix(h ^ z.id as u64 ^ (z.level as u64) << 40));
         }
         for (i, &c) in self.cells.iter().enumerate().filter(|(_, &c)| c != 0) {
             h = mix(h ^ (i as u64) << 20 ^ c as u64);

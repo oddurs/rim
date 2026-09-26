@@ -2,12 +2,12 @@
 id: 629e1fa7-7e3c-4c42-96dd-98ea8a3b762f
 title: Nothing is lost when a carried stack doesn't fit where it's set down
 type: bug
-status: review
+status: done
 milestone: crafting
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 created: 2026-09-26
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p1
 api: none
 effort: s

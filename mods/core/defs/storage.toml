@@ -1,4 +1,14 @@
-# The item category tree stores and bills filter by (DESIGN.md §4f). An
+# Storage's shared names (DESIGN.md §4f): the levels stores sort by, and
+# the item category tree stores and bills filter by.
+
+# A stack only ever moves to a store at a higher level, so two stores at
+# one level never trade. New stores start at Normal.
+[[store_priority]]
+id = "core"
+labels = ["Low", "Normal", "Preferred", "Important", "Critical"]
+default = 1
+
+# The item category tree stores and bills filter by. An
 # item joins by tag, by id, or by what it is, so a mod's new food is under
 # Food with no patch. A mod adds its own shelves with `parent`.
 

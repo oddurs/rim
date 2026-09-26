@@ -2,12 +2,12 @@
 id: ac643c1f-3f5b-4908-884f-da4e87bfcf01
 title: 'Stock ledger and holdings: counts by thing, material and chunk'
 type: perf
-status: review
+status: done
 milestone: crafting
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 created: 2026-09-26
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p1
 api: additive
 effort: m

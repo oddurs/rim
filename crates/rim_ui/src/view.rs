@@ -144,6 +144,8 @@ pub enum UiAction {
     SetStance(String),
     /// Let a stockpile take an item (by qualified id), or stop it.
     ZoneAllow(u32, String, bool),
+    /// Put a stockpile at a level of the store priority scale.
+    StoreLevel(u32, u8),
     CycleOverlay,
     SetOverlay(Option<usize>),
     ToggleProfiler,

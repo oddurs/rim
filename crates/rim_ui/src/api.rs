@@ -86,7 +86,7 @@ type Tool = {
     key: string, label: string, color: string, active: boolean, category: string, group: string,
     cost: string, work: number, hp: number,
 }
-type Zone = { id: number, name: string, cells: number, allows: { [string]: boolean } }
+type Zone = { id: number, name: string, cells: number, allows: { [string]: boolean }, level: number, level_label: string }
 type Item = { id: string, label: string, color: string }
 type WorkType = { id: string, label: string, icon: string, order: number, default: number }
 type BoardCol = { id: string, label: string, icon: string, skill: string?, waiting: number, on: number, high: number }
@@ -144,6 +144,7 @@ pub const UI_API: &[UiDoc] = &[
     d!("act.set_priority", "(id: number, work: string, level: number) -> ()", "Set a colonist's priority for a work type: 1 first, 0 never."),
     d!("act.set_stance", "(id: string) -> ()", "Put the colony in a stance: its priority rules hold until another."),
     d!("act.speed", "(speed: number) -> ()", "Set the game speed."),
+    d!("act.store_level", "(zone: number, level: number) -> ()", "Put a stockpile at a level of the store priority scale (0 is lowest). Stacks only move to a higher one."),
     d!("act.stuff", "(id: string) -> ()", "Choose the material for the active build tool."),
     d!("act.toggle_devtools", "() -> ()", "Show or hide devtools."),
     d!("act.toggle_outlines", "() -> ()", "Show or hide layout outlines (devtools)."),
@@ -277,6 +278,7 @@ pub const UI_API: &[UiDoc] = &[
     d!("view.speed", "() -> number", "The game speed."),
     d!("view.stances", "() -> { Stance }", "The colony's stances, in bar order; `active` is the one it's in."),
     d!("view.stats", "() -> { string }", "Client statistics lines."),
+    d!("view.store_levels", "() -> { string }", "The store priority scale's level names, lowest first."),
     d!("view.stuff", "() -> { Stuff }", "Materials for the active build tool: what you have, what you'd get."),
     d!(
         "view.thing",
@@ -294,7 +296,7 @@ pub const UI_API: &[UiDoc] = &[
     d!("view.warnings", "() -> { string }", "Load warnings."),
     d!("view.wealth", "() -> number", "The colony's wealth."),
     d!("view.work_types", "() -> { WorkType }", "The work types, in tie-break order."),
-    d!("view.zones", "() -> { Zone }", "The stockpiles, oldest first, with how many cells each has and which items it takes."),
+    d!("view.zones", "() -> { Zone }", "The stockpiles, oldest first, with how many cells each has, which items it takes, and its level (0 is lowest) and that level's name."),
 ];
 
 /// `types/ui.d.luau`.

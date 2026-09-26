@@ -2,12 +2,12 @@
 id: dce75339-9120-495d-9b3b-b4012251adac
 title: A build takes a material and parts, and may require a tool
 type: feature
-status: review
+status: done
 milestone: crafting
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 created: 2026-09-26
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p1
 api: additive
 effort: m

@@ -84,6 +84,12 @@ pub enum Command {
         store: StoreRef,
         edit: FilterEdit,
     },
+    /// Put a store at a level of the store priority scale: stacks move only
+    /// to a higher one (DESIGN.md §4f).
+    StoreLevel {
+        store: StoreRef,
+        level: u8,
+    },
     /// Set how much a colonist wants to do a kind of work: 1 first, 0 never,
     /// up to the priority scale's `levels` (DESIGN.md §4d).
     SetPriority {
@@ -283,23 +289,27 @@ pub fn apply(w: &mut World, c: Command) {
         Command::ModEvent { name, data } => w.events.push(GameEvent::Script { name, data }),
         Command::Stockpile { a, b, zone: None } => {
             w.zones.create(&defs, &w.map, a, b);
-            w.recount_stored();
+            w.zones_changed();
         }
         Command::Stockpile { a, b, zone: Some(id) } => {
             w.zones.paint(&w.map, a, b, Some(id));
-            w.recount_stored();
+            w.zones_changed();
         }
         Command::ClearZone { a, b } => {
             w.zones.paint(&w.map, a, b, None);
-            w.recount_stored();
+            w.zones_changed();
         }
         Command::ZoneAllow { zone, thing, on } => {
             w.zones.edit(&defs, zone, FilterEdit::Thing { thing, on });
-            w.recount_stored();
+            w.zones_changed();
         }
         Command::StoreFilter { store: StoreRef::Zone(zone), edit } => {
             w.zones.edit(&defs, zone, edit);
-            w.recount_stored();
+            w.zones_changed();
+        }
+        Command::StoreLevel { store: StoreRef::Zone(zone), level } => {
+            w.zones.set_level(&defs, zone, level);
+            w.zones_changed();
         }
         Command::SetPriority { pawn, work, level } => {
             if !is_colonist(w, pawn) || work as usize >= defs.work_types.len() {

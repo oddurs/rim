@@ -762,6 +762,9 @@ pub struct World {
     /// What the colony has on the map, kept as stacks change (stock.rs).
     /// Derived: rebuilt on load.
     pub stock: crate::stock::Stock,
+    /// Where things go: stores by thing and level, open cells, stacks with
+    /// somewhere better to be (store.rs). Derived: rebuilt on load.
+    pub stores: crate::store::StoreIndex,
     /// How many times shelter has been worked out: for tests and profiling,
     /// not simulation state.
     pub shelter_recomputes: u64,
@@ -814,6 +817,7 @@ impl World {
             data: BTreeMap::new(),
             zones: crate::zone::Zones::new((w * h) as usize),
             stock: crate::stock::Stock::new(things),
+            stores: crate::store::StoreIndex::default(),
             shelter_recomputes: 0,
             stance,
             rules: crate::rules::Rules::default(),
@@ -1639,6 +1643,66 @@ impl World {
         let kept = self.zones.at(&self.map, t.pos).is_some_and(|z| z.keeps(&self.defs, t.def, made_of, Some(t.hp)));
         let chunk = self.map.chunk_of(t.pos) as u32;
         self.stock.change(crate::stock::Change { def: t.def, made_of, chunk, kept, units, stacks });
+        if let Some(s) = self.stack_at(e) {
+            match stacks < 0 {
+                true => self.stores.stack_gone(s),
+                false => self.stores.stack_here(s),
+            }
+        }
+    }
+
+    /// How the store index sees a stack on the item layer.
+    pub fn stack_at(&self, e: Entity) -> Option<crate::store::StackAt> {
+        let t = self.thing(e)?;
+        if self.map.item_at(t.pos) != Some(e) {
+            return None;
+        }
+        let made_of = self.made_of(e);
+        let zone = self.zones.at(&self.map, t.pos);
+        Some(crate::store::StackAt {
+            entity: e.to_bits().get(),
+            kind: (t.def, made_of),
+            cell: self.map.idx(t.pos) as u32,
+            chunk: self.map.chunk_of(t.pos) as u32,
+            zone: zone.map(|z| z.id),
+            level: zone.filter(|z| z.keeps(&self.defs, t.def, made_of, Some(t.hp))).map(|z| z.level),
+            below_limit: t.count < self.defs.thing(t.def).stack_limit,
+        })
+    }
+
+    /// Zones were painted, or a filter or level changed: what's stored and
+    /// where everything should go are worked out again.
+    pub fn zones_changed(&mut self) {
+        self.recount_stored();
+        self.rebuild_stores();
+    }
+
+    /// The store index from scratch: on load, and when zones change.
+    pub fn rebuild_stores(&mut self) {
+        let things = self.defs.things.len();
+        self.stores.rebuild_accepts(&self.zones, things);
+        self.stores.rebuild_open(&self.zones, &self.map);
+        self.stores.clear_stacks();
+        let mut stacks: Vec<Entity> = self
+            .ecs
+            .query::<(Entity, &Thing)>()
+            .iter()
+            .filter(|(e, t)| self.map.item_at(t.pos) == Some(*e))
+            .map(|(e, _)| e)
+            .collect();
+        stacks.sort_by_key(|e| e.id());
+        for e in stacks {
+            if let Some(s) = self.stack_at(e) {
+                self.stores.stack_here(s);
+            }
+        }
+    }
+
+    /// Open cells checked again once walls, fixtures or terrain changed.
+    pub fn sync_stores(&mut self) {
+        if self.stores.seen_revision != self.map.revision {
+            self.stores.rebuild_open(&self.zones, &self.map);
+        }
     }
 
     /// The stock counted from scratch, by walking every stack: what the
@@ -1662,9 +1726,11 @@ impl World {
         s
     }
 
-    /// Count the stock again from scratch: on load.
+    /// Count the stock again from scratch, and where everything should go:
+    /// on load.
     pub fn recount_stock(&mut self) {
         self.stock = self.counted_stock();
+        self.rebuild_stores();
     }
 
     /// Count what's stored again: after zones were painted or their

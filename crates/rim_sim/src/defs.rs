@@ -947,6 +947,26 @@ impl PriorityScaleDef {
     }
 }
 
+/// The levels stores sort by (DESIGN.md §4f): a stack only ever moves to a
+/// store at a higher one. Core names five; a mod that wants three or nine
+/// changes the list, and the UI follows.
+#[derive(Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct StorePriorityDef {
+    pub id: String,
+    /// Lowest first.
+    pub labels: Vec<String>,
+    /// The level a new store starts at, an index into `labels`.
+    pub default: u8,
+}
+
+impl Default for StorePriorityDef {
+    fn default() -> Self {
+        let labels = ["Low", "Normal", "Preferred", "Important", "Critical"];
+        StorePriorityDef { id: "default".into(), labels: labels.map(String::from).to_vec(), default: 1 }
+    }
+}
+
 /// A named set of priority rules the colony switches with one click:
 /// the rules that name a stance hold while it's the colony's (DESIGN.md
 /// §4d). A mod adds one with data alone.
@@ -1182,6 +1202,7 @@ pub struct DefDb {
     pub work_types: Vec<WorkTypeDef>,
     pub work_order: Vec<DefId>,
     pub priority_scale: PriorityScaleDef,
+    pub store_priority: StorePriorityDef,
     pub stances: Vec<StanceDef>,
     /// Work roles in load order; a colony copies them (`World::work_roles`).
     pub work_roles: Vec<WorkRoleDef>,
@@ -1332,6 +1353,7 @@ pub const KINDS: &[&str] = &[
     "start",
     "names",
     "item_category",
+    "store_priority",
 ];
 
 impl DefDb {
@@ -1593,6 +1615,13 @@ impl DefDb {
                 }
                 self.build_style = Some(i as DefId);
             }
+        }
+        let sp = &self.store_priority;
+        if !(2..=9).contains(&sp.labels.len()) || sp.default as usize >= sp.labels.len() {
+            return Err(format!(
+                "store_priority/{}: 2 to 9 labels, and a default that is one of them (an index from 0)",
+                sp.id
+            ));
         }
         let levels = self.priority_scale.levels;
         if !(1..=9).contains(&levels) {
