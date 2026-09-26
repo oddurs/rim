@@ -100,6 +100,9 @@ pub struct App {
     pub mouse_over_ui: bool,
     /// The UI's draw list from the last frame.
     pub last_draw: Vec<rim_ui::paint::Draw>,
+    /// The anchored labels among `last_draw`, to catch up with the camera
+    /// and the pawns before they're drawn.
+    pub last_anchored: Vec<rim_ui::AnchoredDraw>,
     /// Profiler rows, refreshed a few times a second.
     profile: (Vec<(String, f64)>, Vec<String>, f64),
     acc: f64,
@@ -501,6 +504,7 @@ async fn game() {
         order_flash: None,
         mouse_over_ui: false,
         last_draw: Vec::new(),
+        last_anchored: Vec::new(),
         profile: (Vec::new(), Vec::new(), f64::MIN),
         acc: 0.0,
         pan_anchor: None,
@@ -911,6 +915,7 @@ pub fn frame(app: &mut App, raw: &RawInput) {
     let input = ui_input(raw, dpi);
     let out = app.ui.frame(&app.sim.world, &cv, &input);
     app.last_draw = out.draw;
+    app.last_anchored = out.anchored;
     app.mouse_over_ui = out.mouse_over_ui;
     for a in out.actions {
         apply_ui(app, a);
@@ -1165,6 +1170,11 @@ pub fn render(app: &mut App) {
     upload_atlas(&mut app.ui, &app.atlas);
     let white = app.ui.text.atlas.white_texel();
     draw::ui(&labels, &app.atlas, white, dpi);
+    // The UI was laid out before this frame's pan, zoom and sim step:
+    // names and bubbles follow their pawns to where the world just drew them.
+    let cam = (app.cam.x, app.cam.y, app.cam.zoom * dpi);
+    let screen = (screen_width() * dpi, screen_height() * dpi);
+    rim_ui::reanchor(&mut app.last_draw, &mut app.last_anchored, &app.sim.world, cam, screen);
     draw::ui(&app.last_draw, &app.atlas, white, dpi);
     t.ui = lap();
     app.render_us = t;

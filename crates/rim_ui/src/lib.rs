@@ -73,10 +73,54 @@ pub enum Key {
     Escape,
 }
 
+/// An anchored label among a frame's draw commands: its anchor, the screen
+/// point that was at when it was placed, and its commands.
+#[derive(Clone, Debug)]
+pub struct AnchoredDraw {
+    pub anchor: Anchor,
+    pub at: (f32, f32),
+    pub draws: std::ops::Range<usize>,
+}
+
+/// An anchored node placed this frame: the node, its rects, its anchor and
+/// where that was on screen.
+type PlacedAnchor = (Node, Vec<Rect>, Anchor, (f32, f32));
+
+/// Move each anchored label in `draw` by how far its anchor has moved on
+/// screen since it was placed: the camera (`cam`: x, y and pixels per cell)
+/// and the pawns may have moved between the UI's frame and the world's
+/// draw. A translation of the anchored commands, nothing laid out again. A
+/// label whose pawn is gone keeps its place; calling it twice moves nothing
+/// the second time.
+pub fn reanchor(
+    draw: &mut [Draw],
+    anchored: &mut [AnchoredDraw],
+    world: &rim_sim::world::World,
+    cam: (f32, f32, f32),
+    screen: (f32, f32),
+) {
+    for a in anchored {
+        let Some(now) = view::anchor_screen(a.anchor, world, cam, screen) else { continue };
+        let (dx, dy) = (now.0 - a.at.0, now.1 - a.at.1);
+        if dx == 0.0 && dy == 0.0 {
+            continue;
+        }
+        for d in draw.get_mut(a.draws.clone()).unwrap_or_default() {
+            paint::translate(d, dx, dy);
+        }
+        a.at = now;
+    }
+}
+
 /// What the client needs back from a frame.
 #[derive(Default)]
 pub struct Output {
     pub draw: Vec<Draw>,
+    /// The anchored labels among `draw`: what each is attached to and where
+    /// that was when it was placed. The camera and the pawns move after the
+    /// UI's frame and before the world is drawn; `reanchor` catches the
+    /// labels up.
+    pub anchored: Vec<AnchoredDraw>,
     pub actions: Vec<UiAction>,
     /// The pointer is over UI, so world hover and clicks should be ignored.
     pub mouse_over_ui: bool,
@@ -1098,6 +1142,7 @@ impl Ui {
         let mut paint_us = 0.0;
         let mut layers: Vec<LayerOut> = Vec::new();
         let mut draw = Vec::new();
+        let mut anchored_draws: Vec<AnchoredDraw> = Vec::new();
         let mut ids = HashMap::new();
         let mut id_keys = HashMap::new();
         let mut nodes = 0;
@@ -1124,6 +1169,8 @@ impl Ui {
             };
             // (root node, rects) for this layer.
             let mut placed: Vec<(Node, Vec<Rect>)> = Vec::new();
+            // For the anchored layer, each root's anchor and where it was.
+            let mut anchors: Vec<(Anchor, (f32, f32))> = Vec::new();
             let t = Instant::now();
             match layer {
                 "docked" => {
@@ -1132,9 +1179,11 @@ impl Ui {
                     placed.push((shell, rects));
                 }
                 "anchored" => {
-                    for (m, tree) in built.iter().filter(|(m, _)| m.layer == "anchored") {
-                        let _ = m;
-                        placed.extend(self.place_anchored(tree, world, client));
+                    for (_, tree) in built.iter().filter(|(m, _)| m.layer == "anchored") {
+                        for (n, rects, anchor, at) in self.place_anchored(tree, world, client) {
+                            placed.push((n, rects));
+                            anchors.push((anchor, at));
+                        }
                     }
                 }
                 "cursor" => {
@@ -1220,7 +1269,11 @@ impl Ui {
             let t = Instant::now();
             for (ri, (root, rects)) in placed.into_iter().enumerate() {
                 let mut hits = Vec::new();
+                let from = draw.len();
                 paint::paint(&root, &rects, (0.0, 0.0), &state, &mut self.text, &self.images, &mut draw, &mut hits);
+                if let Some(&(anchor, at)) = anchors.get(ri) {
+                    anchored_draws.push(AnchoredDraw { anchor, at, draws: from..draw.len() });
+                }
                 for mut h in hits {
                     h.path.insert(0, ri);
                     lo.hits.push(h);
@@ -1312,6 +1365,7 @@ impl Ui {
         actions.extend(self.vm.take_actions());
         out.actions = actions;
         out.draw = draw;
+        out.anchored = anchored_draws;
         out
     }
 
@@ -1424,12 +1478,7 @@ impl Ui {
     }
 
     /// Place anchored nodes at their entities or cells, nudging overlaps apart.
-    fn place_anchored(
-        &mut self,
-        tree: &Node,
-        world: &rim_sim::world::World,
-        client: &ClientView,
-    ) -> Vec<(Node, Vec<Rect>)> {
+    fn place_anchored(&mut self, tree: &Node, world: &rim_sim::world::World, client: &ClientView) -> Vec<PlacedAnchor> {
         let mut items: Vec<&Node> = Vec::new();
         fn gather<'a>(n: &'a Node, out: &mut Vec<&'a Node>) {
             if n.kind == Kind::Anchored {
@@ -1454,14 +1503,7 @@ impl Ui {
                 break;
             }
             let Some(anchor) = n.anchor else { continue };
-            let (ax, ay) = match anchor {
-                Anchor::Entity(bits) => {
-                    let Some(e) = rim_sim::hecs::Entity::from_bits(bits) else { continue };
-                    let Ok(p) = world.ecs.get::<&rim_sim::world::Pawn>(e) else { continue };
-                    view::pawn_screen(&p, client)
-                }
-                Anchor::Cell(x, y) => view::cell_screen(x as f32 + 0.5, y as f32 + 0.5, client),
-            };
+            let Some((ax, ay)) = view::anchor_screen(anchor, world, client.cam, client.screen) else { continue };
             if ax < -200.0 || ay < -200.0 || ax > sw + 200.0 || ay > sh + 200.0 {
                 continue;
             }
@@ -1484,7 +1526,7 @@ impl Ui {
             let Some(rect) = free else { continue };
             taken.push(rect);
             let rects = rel.iter().map(|r| [r[0] + rect[0], r[1] + rect[1], r[2], r[3]]).collect();
-            out.push((wrapper, rects));
+            out.push((wrapper, rects, anchor, (ax, ay)));
         }
         out
     }

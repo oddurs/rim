@@ -127,16 +127,46 @@ pub enum UiAction {
 /// Screen position of a pawn (physical pixels), interpolated between cells
 /// the same way the world renderer draws it.
 pub fn pawn_screen(p: &rim_sim::world::Pawn, cv: &ClientView) -> (f32, f32) {
-    let (mut x, mut y) = (p.pos.x as f32 + 0.5, p.pos.y as f32 + 0.5);
-    if let Some(n) = p.next {
-        let t = p.progress as f32 / p.step_ticks.max(1) as f32;
-        x += (n.x as f32 + 0.5 - x) * t;
-        y += (n.y as f32 + 0.5 - y) * t;
-    }
+    let (x, y) = pawn_cell(p);
     cell_screen(x, y, cv)
 }
 
 pub fn cell_screen(wx: f32, wy: f32, cv: &ClientView) -> (f32, f32) {
-    let (cx, cy, z) = cv.cam;
-    ((wx - cx) * z + cv.screen.0 / 2.0, (wy - cy) * z + cv.screen.1 / 2.0)
+    to_screen(wx, wy, cv.cam, cv.screen)
+}
+
+fn to_screen(wx: f32, wy: f32, (cx, cy, z): (f32, f32, f32), (sw, sh): (f32, f32)) -> (f32, f32) {
+    ((wx - cx) * z + sw / 2.0, (wy - cy) * z + sh / 2.0)
+}
+
+/// Where an anchored node's anchor is on screen (physical pixels) for the
+/// camera `cam` (x, y, pixels per cell), or None if its pawn is gone.
+pub fn anchor_screen(
+    anchor: crate::node::Anchor,
+    world: &rim_sim::world::World,
+    cam: (f32, f32, f32),
+    screen: (f32, f32),
+) -> Option<(f32, f32)> {
+    match anchor {
+        crate::node::Anchor::Entity(bits) => {
+            let e = rim_sim::hecs::Entity::from_bits(bits)?;
+            let p = world.ecs.get::<&rim_sim::world::Pawn>(e).ok()?;
+            let (x, y) = pawn_cell(&p);
+            Some(to_screen(x, y, cam, screen))
+        }
+        crate::node::Anchor::Cell(x, y) => Some(to_screen(x as f32 + 0.5, y as f32 + 0.5, cam, screen)),
+    }
+}
+
+/// A pawn's centre in cells, interpolated between cells the way the world
+/// renderer draws it.
+fn pawn_cell(p: &rim_sim::world::Pawn) -> (f32, f32) {
+    let (x, y) = (p.pos.x as f32 + 0.5, p.pos.y as f32 + 0.5);
+    match p.next {
+        Some(n) => {
+            let t = p.progress as f32 / p.step_ticks.max(1) as f32;
+            (x + (n.x as f32 + 0.5 - x) * t, y + (n.y as f32 + 0.5 - y) * t)
+        }
+        None => (x, y),
+    }
 }
