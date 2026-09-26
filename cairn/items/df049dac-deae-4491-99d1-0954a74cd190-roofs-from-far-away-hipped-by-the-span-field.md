@@ -31,3 +31,7 @@ Zoomed out, the colony should read as a village, not a diagram. The roof comes f
 - [ ] An L-shaped house gets one roof with a valley, not two (screenshot)
 - [ ] The roof mesh rebuilds only when rooms do
 - [ ] Render bench within budget with roofs on
+
+## 2026-09-26
+
+Lighting's 153dda59 feeds this roof height field into the occluders and shades the facets by the real sun direction instead of a fixed light. Keep the height field available to the client as data (not only baked into the mesh), so both can read it.

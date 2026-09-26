@@ -39,3 +39,7 @@ Depth (DESIGN §6d, milestone e58c8ff7) stacks levels. Span is computed per Map 
 ## 2026-09-26
 
 When the cap goes, update the building milestone's body (0210-building.md), which still says 'enclosure plus the 400-cell cap'.
+
+## 2026-09-26
+
+Lighting's occluder pass (e5d8b445) reads 'roofed' through one per-cell query. Today it's map.indoors; when this lands, it switches to roofed(z, c), and unroofed floor inside walls gets sky light and shadows with no lighting change. Expose the per-cell result, not only the per-room verdict.

@@ -37,3 +37,7 @@ Depth is only as good as moving through it. The player sees one level, knows whe
 - [ ] Render bench on the stacked scene inside the 4 ms CPU budget, recorded here and in §6d
 - [ ] Changing level with both levels cached costs no chunk rebuilds (test on the mesh cache)
 - [ ] Tray groups work from Tab and Shift+Tab
+
+## 2026-09-26
+
+Lighting keys its buffers by z the same way as the chunk meshes (3124bd7b): the viewed level and the one below are cached, and the level below through air is drawn with its own light, dimmed. Evict them together.

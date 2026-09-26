@@ -8,7 +8,7 @@ depends_on:
 - 2e0b9d43-90e5-4051-bda6-81544e9caf0f
 - 3bb54ba3-21f9-42a4-9f7c-8299b5db1db5
 created: 2026-09-23
-updated: 2026-09-23
+updated: 2026-09-26
 priority: p2
 effort: m
 layer: engine
@@ -34,3 +34,7 @@ The game is hackable, so its sky should be too. After the Weather sprint, a mod 
 - [ ] `cycle` evaluates in fixed point and matches an f64 reference within 0.01
 - [ ] A mod adds a coloured sky term without replacing core's tint
 - [ ] The two-suns example mod loads alongside `mods/weather`, and clouds dim its light (screenshots reviewed)
+
+## 2026-09-26
+
+The renderer side of sky bodies (path, colour, softness, shadows) is 1a17d685 in the lighting milestone. This item stays sim-side: the cycle input and coloured terms.
