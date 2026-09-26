@@ -21,7 +21,7 @@ pillar:
 
 ## Why
 
-An untouched level costs nothing only if it can be produced on demand, exactly, from the seed. Depth also has to be content: which rock is where, and why a level is worth reaching, belongs in defs and mods, not the engine (DESIGN.md §6c).
+An untouched level costs nothing only if it can be produced on demand, exactly, from the seed. Depth also has to be content: which rock is where, and why a level is worth reaching, belongs in defs and mods, not the engine (DESIGN.md §6d).
 
 ## What
 
@@ -35,7 +35,7 @@ An untouched level costs nothing only if it can be produced on demand, exactly, 
 ## Acceptance criteria
 
 - [ ] The same seed generates the same level whether it is opened on day 2 or day 40 (test)
-- [ ] Generating a level costs under 10 ms on the reference machine, recorded here and in DESIGN.md §6c
+- [ ] Generating a level costs under 10 ms on the reference machine, recorded here and in DESIGN.md §6d
 - [ ] A Luau mod replaces −2's generation in a fixture test
 - [ ] Core alone digs to −3; with `primitive`, −1 needs `digging` and −2 needs `pounding`
 - [ ] Determinism test passes

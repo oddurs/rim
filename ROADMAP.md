@@ -396,7 +396,7 @@ Lockstep co-op on top of determinism: command broadcast, desync detection, mod-l
 
 `··········` 0% · 0 of 8 done
 
-Dig down. The map becomes a stack of 2D levels joined only at stairs, ladders and holes, rock becomes terrain, and water fills what you dig into. Design: DESIGN.md §6c.
+Dig down. The map becomes a stack of 2D levels joined only at stairs, ladders and holes, rock becomes terrain, and water fills what you dig into. Design: DESIGN.md §6d.
 
 - [ ] `3979868c` Basins: water fills what you dig into <sup>feature · p1 · l · engine</sup>
 - [ ] `3f90e043` Strata: a level is generated from the seed and z the tick something digs in <sup>feature · p0 · m · engine</sup>

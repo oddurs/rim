@@ -35,4 +35,4 @@ Stock fields have no lateral flow (DESIGN.md §4c, "should water flow?"). Water 
 
 ## 2026-09-26
 
-DESIGN.md §6c (Depth) splits water in two. Flooding of dug space is basins, an engine mechanism with the water table and aquifers in core (3979868c-6de5-4926-8277-b4402adab473). This item stays rain runoff and puddles on the surface, as a stock-field plugin.
+DESIGN.md §6d (Depth) splits water in two. Flooding of dug space is basins, an engine mechanism with the water table and aquifers in core (3979868c-6de5-4926-8277-b4402adab473). This item stays rain runoff and puddles on the surface, as a stock-field plugin.

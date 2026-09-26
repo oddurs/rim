@@ -20,7 +20,7 @@ pillar:
 
 ## Why
 
-The deepest level should be a place, not more rock: open pockets that were always there, and a second front for the storyteller. As a first-party plugin, it also tests that a mod can add a level (DESIGN.md §6c).
+The deepest level should be a place, not more rock: open pockets that were always there, and a second front for the storyteller. As a first-party plugin, it also tests that a mod can add a level (DESIGN.md §6d).
 
 ## What
 

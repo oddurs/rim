@@ -21,7 +21,7 @@ pillar:
 
 ## Why
 
-Dig next to a river and the space floods; breach an aquifer and the levels below fill. DESIGN.md §6c compares two prototypes (192 × 192 × 5, one breached mine of 13,276 dug cells). Per-cell flow hadn't filled it after 200,000 ticks, and on a whole level it cost 0.40 ms a tick and settled 62% full in a slope. Volume per basin filled it in 332 ticks at 0.0014 ms a tick, and costs 9 ns a tick at rest.
+Dig next to a river and the space floods; breach an aquifer and the levels below fill. DESIGN.md §6d compares two prototypes (192 × 192 × 5, one breached mine of 13,276 dug cells). Per-cell flow hadn't filled it after 200,000 ticks, and on a whole level it cost 0.40 ms a tick and settled 62% full in a slope. Volume per basin filled it in 332 ticks at 0.0014 ms a tick, and costs 9 ns a tick at rest.
 
 ## What
 
@@ -38,6 +38,6 @@ Dig next to a river and the space floods; breach an aquifer and the levels below
 
 - [ ] Digging beside the river floods the dug space to the brim, and a flooded trench blocks non-swimmers (scene test)
 - [ ] An aquifer breach at −2 fills −3 before −2
-- [ ] Cost at 250 × 250 with three open levels: flooding mean and worst tick, and at rest, recorded here and in §6c
+- [ ] Cost at 250 × 250 with three open levels: flooding mean and worst tick, and at rest, recorded here and in §6d
 - [ ] Colonists leave water that is rising past wading depth; nobody drowns in the scene test
 - [ ] Determinism test passes; basins are iterated in id order

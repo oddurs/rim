@@ -61,4 +61,4 @@ are a separate mechanism and this ticket is content.
 
 ## 2026-09-26
 
-DESIGN.md §6c (Depth) rules that rock is terrain. Build rock kinds and veins as solid [[terrain]] with a mine block on top of 8cc6252d-67a0-4652-b764-851f3e6bc72a, not as more rock things. Rock kinds per level come from [[stratum]] defs (3f90e043-bf62-48c8-ac67-d043dc755b6e). The seen bit for prospecting is part of 5689930d-2bd1-4838-b403-a72bc61c31e9.
+DESIGN.md §6d (Depth) rules that rock is terrain. Build rock kinds and veins as solid [[terrain]] with a mine block on top of 8cc6252d-67a0-4652-b764-851f3e6bc72a, not as more rock things. Rock kinds per level come from [[stratum]] defs (3f90e043-bf62-48c8-ac67-d043dc755b6e). The seen bit for prospecting is part of 5689930d-2bd1-4838-b403-a72bc61c31e9.

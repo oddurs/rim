@@ -18,7 +18,7 @@ pillar:
 
 ## Why
 
-DESIGN.md §6c: depth is stacked 2D planes, not voxels. Every hot path (A*, flood fills, field stamps, the chunk mesher) stays on one plane, and the vertical is a small graph of portals. This item is the stack itself, with nothing to dig yet.
+DESIGN.md §6d: depth is stacked 2D planes, not voxels. Every hot path (A*, flood fills, field stamps, the chunk mesher) stays on one plane, and the vertical is a small graph of portals. This item is the stack itself, with nothing to dig yet.
 
 ## What
 
@@ -28,7 +28,7 @@ DESIGN.md §6c: depth is stacked 2D planes, not voxels. Every hot path (A*, floo
 - Regions, rooms, fields and chunk revisions are per level, with per-level dirty flags. A change on one level rebuilds only that level.
 - Save: one `engine:map` section per open level. Content addressing shares an unchanged level between snapshots (§7a).
 - Luau: every position argument takes an optional `z`, defaulting to 0. `rim.levels()` returns the range. This is additive for scripts.
-- The default map becomes 192 × 192, six chunks a side (§6c). Re-run the balance, stone-age and year harnesses and record what moves.
+- The default map becomes 192 × 192, six chunks a side (§6d). Re-run the balance, stone-age and year harnesses and record what moves.
 
 ## Acceptance criteria
 

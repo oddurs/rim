@@ -19,7 +19,7 @@ pillar:
 
 ## Why
 
-A trench is the stone-age wall: you can dig one before you can build stone. But a closed ring of air that nothing can answer makes raids pointless, which is §1's failure again (DESIGN.md §6c).
+A trench is the stone-age wall: you can dig one before you can build stone. But a closed ring of air that nothing can answer makes raids pointless, which is §1's failure again (DESIGN.md §6d).
 
 ## What
 

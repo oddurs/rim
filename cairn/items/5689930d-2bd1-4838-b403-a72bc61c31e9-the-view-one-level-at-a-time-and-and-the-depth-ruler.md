@@ -19,7 +19,7 @@ pillar:
 
 ## Why
 
-Depth is only as good as moving through it. The player sees one level, knows where everyone is, and changes level without thinking (DESIGN.md §6c).
+Depth is only as good as moving through it. The player sees one level, knows where everyone is, and changes level without thinking (DESIGN.md §6d).
 
 ## What
 
@@ -34,6 +34,6 @@ Depth is only as good as moving through it. The player sees one level, knows whe
 ## Acceptance criteria
 
 - [ ] `[` and `]` change level; the ruler shows counts and alerts (autotest by node id)
-- [ ] Render bench on the stacked scene inside the 4 ms CPU budget, recorded here and in §6c
+- [ ] Render bench on the stacked scene inside the 4 ms CPU budget, recorded here and in §6d
 - [ ] Changing level with both levels cached costs no chunk rebuilds (test on the mesh cache)
 - [ ] Tray groups work from Tab and Shift+Tab

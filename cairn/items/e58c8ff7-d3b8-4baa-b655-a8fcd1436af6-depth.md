@@ -12,11 +12,11 @@ priority: p2
 api: breaking
 ---
 
-Dig down. The map becomes a stack of 2D levels joined only at stairs, ladders and holes, rock becomes terrain, and water fills what you dig into. Design: DESIGN.md §6c.
+Dig down. The map becomes a stack of 2D levels joined only at stairs, ladders and holes, rock becomes terrain, and water fills what you dig into. Design: DESIGN.md §6d.
 
 ## Goal
 
-On the default install, a colony digs a cellar at −1 with a digging stick in its first week, trenches its camp, floods the trench from the river, and watches a raid bridge it. A shaft reaches −3 by the Village era. Water from a breached aquifer fills the levels below, and colonists get out of its way. All of it inside the §8 budget, with the cost of each new system recorded in §6c.
+On the default install, a colony digs a cellar at −1 with a digging stick in its first week, trenches its camp, floods the trench from the river, and watches a raid bridge it. A shaft reaches −3 by the Village era. Water from a breached aquifer fills the levels below, and colonists get out of its way. All of it inside the §8 budget, with the cost of each new system recorded in §6d.
 
 ## Order
 

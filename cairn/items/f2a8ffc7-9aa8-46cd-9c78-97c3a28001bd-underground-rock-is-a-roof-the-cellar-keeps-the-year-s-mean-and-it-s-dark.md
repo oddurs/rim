@@ -19,11 +19,11 @@ pillar:
 
 ## Why
 
-A reason to dig in the first week that isn't ore: the cellar is the warmest place in winter and the coolest in summer (DESIGN.md §6c).
+A reason to dig in the first week that isn't ore: the cellar is the warmest place in winter and the coolest in summer (DESIGN.md §6d).
 
 ## What
 
-- Every underground room counts as enclosed. The 400-cell cap (§4) stood in for roof span, and rock spans everything.
+- Every underground room is roofed through §6c's roof span, since solid terrain is a support. No underground special case.
 - A field def may give `below = [terms]` for underground ambient. Core: −1 follows the year's mean with a damped seasonal swing; deeper is steady and a little warmer per level.
 - Light below ground is zero. Torches and fires are emitters, as indoors today.
 

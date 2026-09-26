@@ -794,7 +794,7 @@ What the engine promises about it is short:
 
 - One terrain, one fixture and one item stack per cell, plus a movement cost.
 - The map is a stack of such planes, one per level, joined only at portals
-  (§6c).
+  (§6d).
 - Passability is 4-connected. A* may step diagonally only when both
   orthogonal neighbours are open, so the two never disagree.
 - Regions (reachability), rooms (§4) and fields (§4a) are derived from the
@@ -925,7 +925,7 @@ primitives: a mod picks and colours effects and never draws per frame.
 - **Ruling:** no. Wear on a blocking thing cracks and darkens it and never
   shrinks it, and a load check holds mods to the same rule.
 
-## 6c. Depth: stacked planes
+## 6d. Depth: stacked planes
 
 Mining and building gain a z axis: dig down for clay, metal and shelter,
 build up for second storeys. Depth has to feel big and cost nothing where
@@ -1050,18 +1050,25 @@ which level is a UI mod.
 
 ### Underground
 
-Rock is a roof: every underground room is sheltered, and the 400-cell cap
-(§4), which stood in for roof span, doesn't apply. Temperature below comes
-from terms: −1 follows the year's mean with a damped swing, and deeper is
-steady and warmer. Light is zero until something emits it.
+Rock is a roof. Solid terrain is a roof support (§6c), and a cell is
+roofed when a support's span reaches it or the cell above is solid or has
+a floor, so every underground room is roofed with no special case.
+Temperature below comes from terms: −1 follows the year's mean with a
+damped swing, and deeper is steady and warmer. Light is zero until
+something emits it.
 
 ### Building up comes second
 
 Digging removes material from a solid world; building up adds floors to an
-empty one, which needs support, collapse and coverage. One rule: a floor
-over air needs a wall or rock below it, or a supported floor within its
-def's `span`. An unsupported floor falls. A floor on the level above is a
-roof, which is how §4's explicit roofs arrive. Shelter stays enclosure.
+empty one, which needs support, collapse and coverage. It reuses §6c's
+roof span rather than adding a second one, computed per level:
+
+    roofed(z, c) = span_covered(z, c) || solid_or_floor(z + 1, c)
+
+A built floor at `(z + 1, c)` is allowed only where `span_covered(z, c)`
+holds or a support stands directly below it. So the implicit roof over a
+room is exactly where a second storey can go, and the floor laid there
+becomes its explicit roof. A floor that loses its span falls.
 
 ### Costs we accept
 

@@ -20,7 +20,7 @@ pillar:
 
 ## Why
 
-Levels meet only at portals (DESIGN.md §6c). This item is how a colonist gets down, and how the engine knows it can: reachability must stay O(1) and a path must stay one plane at a time.
+Levels meet only at portals (DESIGN.md §6d). This item is how a colonist gets down, and how the engine knows it can: reachability must stay O(1) and a path must stay one plane at a time.
 
 ## What
 
@@ -36,6 +36,6 @@ Levels meet only at portals (DESIGN.md §6c). This item is how a colonist gets d
 
 - [ ] A colonist on the surface fetches stone from −3 through two stairwells (scene test)
 - [ ] `can_reach` across levels is O(1); rebuilding reach costs under 0.05 ms with 60 portals, recorded here
-- [ ] Bench with a three-level colony: mean and p99 per tick and nodes expanded per search, recorded here and in §6c
+- [ ] Bench with a three-level colony: mean and p99 per tick and nodes expanded per search, recorded here and in §6d
 - [ ] A raider can't use a colony's owned stairs
 - [ ] Determinism test passes
