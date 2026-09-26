@@ -16,14 +16,18 @@
 //! - with a digging stick: dig the nearest clay, and plan a row of cob
 //!   walls beside the hut.
 //!
+//! Every death is recorded with its day and cause: what last attacked the
+//! colonist (within the last few hours), or else the need that ran out.
+//!
 //! Each morning it marks what has regrown to be gathered again. `--show
 //! SEED` prints that run's messages. `--defaults` leaves every priority at
 //! its default, to measure what the colonist does unprompted.
 
 use rim_sim::data::{Data, Key};
 use rim_sim::hecs::Entity;
-use rim_sim::world::{Blueprint, MadeOf, Thing};
+use rim_sim::world::{Blueprint, Job, MadeOf, Pawn, Thing, NEED_MAX};
 use rim_sim::{Command, IVec, Sim, TICKS_PER_DAY};
+use std::collections::BTreeMap;
 use std::path::Path;
 
 fn arg(name: &str, default: u64) -> u64 {
@@ -44,6 +48,10 @@ struct Report {
     clay: Option<f64>,
     cob: Option<f64>,
     died: Option<f64>,
+    /// Every colonist's death: (day, cause).
+    deaths: Vec<(f64, String)>,
+    /// Colonists alive at the start of day 30, if the run got there.
+    alive_30: Option<usize>,
     /// At nightfall on day one: branches gathered so far (lying or built
     /// in), and how many of the hut's plans stand.
     night_branches: u32,
@@ -175,6 +183,9 @@ fn run(mods: &Path, seed: u64, days: u64, hut: i32) -> Report {
     let every = TICKS_PER_DAY / 48;
     let mut tick = 0;
     let mut marked: Vec<Entity> = Vec::new();
+    // Each colonist's last attacker (tick, what) and what they'd die of now.
+    let mut hit_by: BTreeMap<Entity, (u64, String)> = BTreeMap::new();
+    let mut last_cause: BTreeMap<Entity, String> = BTreeMap::new();
     while tick < days * TICKS_PER_DAY {
         // Each morning, gather again what has grown back, and keep the
         // trees marked to fell once there's an axe (gather would take the
@@ -309,10 +320,61 @@ fn run(mods: &Path, seed: u64, days: u64, hut: i32) -> Report {
         }
         s.step();
         tick += 1;
+        track_deaths(&s, &mut r, &mut hit_by, &mut last_cause);
+        if tick == 30 * TICKS_PER_DAY {
+            r.alive_30 = Some(s.world.colonists().count());
+        }
     }
     r.messages =
         s.world.messages.iter().map(|m| format!("{:>6.2}  {}", m.tick as f64 / TICKS_PER_DAY as f64, m.text)).collect();
     r
+}
+
+/// Record colonists who died this tick, with the cause they had just
+/// before: whatever was attacking them within the last four hours, else
+/// the need that ran out. Then note each living colonist's cause-if-it-happened-now.
+fn track_deaths(
+    s: &Sim,
+    r: &mut Report,
+    hit_by: &mut BTreeMap<Entity, (u64, String)>,
+    last_cause: &mut BTreeMap<Entity, String>,
+) {
+    let w = &s.world;
+    for &e in &w.pawns {
+        let Ok(p) = w.ecs.get::<&Pawn>(e) else { continue };
+        // Targeted by, not necessarily struck yet: close enough for a cause.
+        if let Job::Attack { target, .. } = p.job {
+            let cd = w.defs.creature(p.def);
+            let what = if cd.intelligent { "raiders".to_string() } else { cd.label.clone() };
+            hit_by.insert(target, (w.tick, what));
+        }
+    }
+    let alive: Vec<Entity> = w.colonists().collect();
+    let day = w.tick as f64 / TICKS_PER_DAY as f64;
+    for (e, cause) in std::mem::take(last_cause) {
+        if !alive.contains(&e) {
+            r.deaths.push((day, cause));
+        }
+    }
+    let recent = TICKS_PER_DAY / 6;
+    for e in alive {
+        let Ok(p) = w.ecs.get::<&Pawn>(e) else { continue };
+        let cause = match hit_by.get(&e).filter(|h| w.tick - h.0 < recent) {
+            Some((_, what)) => what.clone(),
+            None => {
+                let empty =
+                    |id: &str| w.defs.lookup("need", id).and_then(|n| p.need(n)).is_some_and(|v| v <= NEED_MAX / 100);
+                if empty("core:food") {
+                    "starvation".into()
+                } else if empty("core:warmth") {
+                    "cold".into()
+                } else {
+                    "other".into()
+                }
+            }
+        };
+        last_cause.insert(e, cause);
+    }
 }
 
 fn main() {
@@ -368,6 +430,25 @@ fn main() {
         ("a felled tree by the end of day 3", share(&|r| r.felled.is_some_and(|t| t < 3.0)), 80.0),
         ("cob walls by the end of day 4", share(&|r| r.cob.is_some_and(|t| t < 4.0)), 60.0),
     ];
+    // Deaths by cause, in five-day spans, over every seed.
+    let mut by: BTreeMap<String, Vec<u32>> = BTreeMap::new();
+    let spans = (days as usize).div_ceil(5).max(1);
+    for (day, cause) in reports.iter().flat_map(|r| &r.deaths) {
+        by.entry(cause.clone()).or_insert_with(|| vec![0; spans])[(*day as usize / 5).min(spans - 1)] += 1;
+    }
+    if !by.is_empty() {
+        println!();
+        let head: Vec<String> = (0..spans).map(|i| format!("d{:<2}-{:<2}", i * 5, i * 5 + 5)).collect();
+        println!("{:<16} {}", "deaths by cause", head.join(" "));
+        for (cause, n) in &by {
+            let cells: Vec<String> = n.iter().map(|x| format!("{x:>6}")).collect();
+            println!("{cause:<16} {}", cells.join(" "));
+        }
+    }
+    if days >= 30 {
+        let alive = reports.iter().filter(|r| r.alive_30.is_some_and(|n| n > 0)).count();
+        println!("colonies alive at day 30: {alive}/{}", reports.len());
+    }
     println!();
     for (what, got, want) in targets {
         println!("{} {what}: {got:.0}% (target {want:.0}%)", if got >= want { "ok  " } else { "MISS" });

@@ -14,7 +14,7 @@ are in [Scripting rules](scripting.md).
 | `rim.clear_ambient` | `(field: string, key: string, ease_hours: number?) -> ()` | Ease a named contribution out and remove it. |
 | `rim.colonists` | `() -> number` | How many colonists are alive. |
 | `rim.colony_center` | `() -> (number?, number?)` | The colonists' average cell, or nil if there are none. |
-| `rim.colony_strength` | `() -> number` | Rough melee output of the colony, which raids are weighed against. |
+| `rim.colony_strength` | `() -> number` | Rough melee output of the colony, which raids are weighed against: each colonist's damage (skill and the founder's edge included) per second, by health. |
 | `rim.count_items` | `(what: ItemQuery) -> number` | Items lying on the map, by thing ({ thing = "core:wood" }) or by tag ({ tag = "knappable" }). |
 | `rim.count_pawns` | `(faction: Faction) -> number` | Living pawns of a faction. |
 | `rim.creature_defs` | `{CreatureInfo}` | Every creature def. |

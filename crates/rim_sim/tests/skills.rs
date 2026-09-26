@@ -99,3 +99,34 @@ fn a_person_without_skills_loads_with_middling_ones() {
     assert_eq!(p.skills.len(), back.world.defs.skills.len());
     assert!(p.skills.iter().all(|&(k, _)| p.skill(k) == 3), "{:?}", p.skills);
 }
+
+/// The colony's strength, which raids are weighed against, counts what a
+/// colonist can really do: a master of melee is a harder target.
+#[test]
+fn a_skilled_fighter_makes_the_colony_stronger() {
+    let dir = common::test_mods(
+        "strength",
+        &["core"],
+        &[(
+            "probe",
+            &[(
+                "scripts/main.luau",
+                "rim.every(1, function() rim.set_data(\"probe:strength\", rim.colony_strength()) end)\n",
+            )],
+        )],
+    );
+    let mut s = Sim::new(&dir, 1).unwrap();
+    let strength = |s: &Sim| match s.world.data.get("probe:strength") {
+        Some(rim_sim::data::Data::Num(x)) => *x,
+        Some(rim_sim::data::Data::Int(x)) => *x as f64,
+        other => panic!("{other:?}"),
+    };
+    s.step();
+    let before = strength(&s);
+    let founder = s.world.colonists().next().unwrap();
+    let melee = s.world.defs.melee_skill.unwrap();
+    s.world.ecs.get::<&mut Pawn>(founder).unwrap().learn(melee, skill_xp(20));
+    s.step();
+    assert!(strength(&s) > before, "a master fighter: {} vs {before}", strength(&s));
+    let _ = std::fs::remove_dir_all(dir);
+}

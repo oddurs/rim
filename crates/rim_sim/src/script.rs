@@ -778,7 +778,7 @@ impl ScriptHost {
         api!(
             "colony_strength",
             "() -> number",
-            "Rough melee output of the colony, which raids are weighed against.",
+            "Rough melee output of the colony, which raids are weighed against: each colonist's damage (skill and the founder's edge included) per second, by health.",
             (),
             |w, _a| {
                 let defs = w.defs.clone();
@@ -786,8 +786,8 @@ impl ScriptHost {
                 for e in w.colonists() {
                     if let Ok(p) = w.ecs.get::<&Pawn>(e) {
                         let cd = defs.creature(p.def);
-                        s +=
-                            (p.hp as f64 / cd.max_hp as f64) * cd.melee_damage as f64 * 60.0 / cd.melee_cooldown as f64;
+                        let hit = crate::ai::melee_base(&defs, &p) as f64;
+                        s += (p.hp as f64 / cd.max_hp as f64) * hit * 60.0 / cd.melee_cooldown as f64;
                     }
                 }
                 Ok(s)
