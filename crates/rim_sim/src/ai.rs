@@ -619,6 +619,128 @@ pub fn comfortable_spot(w: &World, p: &Pawn) -> Option<IVec> {
 /// designated creatures, each designation naming its work type.
 fn find_work(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
     w.map.ensure_regions();
+    let (_, job, res) = choose_work(w, e, p, None)?;
+    w.reserve(res, e);
+    if let Job::Deliver { src, .. }
+    | Job::Supply { src, .. }
+    | Job::Harvest { tool: Some(src), .. }
+    | Job::Craft { tool: Some(src), .. } = job
+    {
+        w.reserve(src, e);
+    }
+    Some(job)
+}
+
+/// Why a kind of work was or wasn't taken: the why panel (DESIGN.md §4d).
+#[derive(Clone, Debug)]
+pub enum Why {
+    /// This is the work it picked.
+    Picked(Job),
+    /// Set to never, by the player or a rule.
+    Never,
+    /// None of it is waiting.
+    Nothing,
+    /// The nearest is someone else's.
+    Reserved,
+    /// None of it can be reached.
+    Unreachable,
+    /// A job needs something brought and none can be found: what.
+    NoMaterials(Option<DefId>),
+    /// A job needs a tool with these tags, and none is free to hold.
+    NeedsTool(ToolMask),
+    /// Work of this type is there, but this won: a better level, or the
+    /// same level and nearer.
+    Beaten(DefId),
+}
+
+/// One work type's outcome for one colonist, with its effective level
+/// and, where there was a job, how far.
+#[derive(Clone, Debug)]
+pub struct WorkWhy {
+    pub work: DefId,
+    pub level: u8,
+    pub why: Why,
+    pub dist: Option<u32>,
+}
+
+/// The nearest refusal of each work type while choosing: (distance, why).
+struct Refusals(Vec<Option<(u32, Why)>>);
+
+impl Refusals {
+    fn note(&mut self, t: DefId, d: u32, why: Why) {
+        let slot = &mut self.0[t as usize];
+        if slot.as_ref().is_none_or(|s| d < s.0) {
+            *slot = Some((d, why));
+        }
+    }
+}
+
+/// Why pawn `e` would take the work it would, and passes over the rest,
+/// work type by work type in tie-break order. The same choice find_work
+/// makes, with the refusals kept: it runs only for someone inspecting.
+pub fn explain_work(w: &World, e: Entity) -> Vec<WorkWhy> {
+    let Ok(p) = w.ecs.get::<&Pawn>(e).map(|p| (*p).clone()) else { return Vec::new() };
+    let defs = &w.defs;
+    let mut refused = Refusals(vec![None; defs.work_types.len()]);
+    let chosen = choose_work(w, e, &p, Some(&mut refused));
+    defs.work_order
+        .iter()
+        .map(|&t| {
+            let level = crate::rules::effective(defs, &w.rules, &p, t);
+            let (why, dist) = match (&chosen, refused.0[t as usize].take()) {
+                _ if level == 0 => (Why::Never, None),
+                (Some((c, job, _)), _) if *c == t => (Why::Picked(job.clone()), None),
+                // Hauling unsearched because a better level had work: it
+                // lost to whatever won.
+                (_, Some((u32::MAX, Why::Beaten(_)))) => (Why::Beaten(chosen.as_ref().map_or(t, |c| c.0)), None),
+                (_, Some((d, why))) => (why, Some(d)),
+                _ => (Why::Nothing, None),
+            };
+            WorkWhy { work: t, level, why, dist }
+        })
+        .collect()
+}
+
+/// Who would take the job on `target` next, soonest first, and in about
+/// how many ticks they'd be there: the colonists free to choose (idle, or
+/// wandering until their wander is up) whose own choice it is, in the
+/// order they'd next think (spawn order within a tick). Busy colonists
+/// aren't asked: when they'll be free is anyone's guess, and asking costs
+/// a search each. A job someone already holds has nobody next: ask
+/// `World::reservations` who's on it. Needs come first for a colonist,
+/// and this doesn't ask them.
+pub fn who_takes(w: &World, target: Entity) -> Vec<(Entity, u64)> {
+    if w.reservations.contains_key(&target) {
+        return Vec::new();
+    }
+    let mut line: Vec<(u64, usize, Entity, u64)> = Vec::new();
+    for (i, &c) in w.pawns.iter().enumerate() {
+        let Ok(p) = w.ecs.get::<&Pawn>(c).map(|p| (*p).clone()) else { continue };
+        if p.faction != Faction::Player || p.drafted || !p.active || p.dead {
+            continue;
+        }
+        let think = match p.job {
+            Job::Idle => p.next_think,
+            Job::Wander { until, .. } => until.max(p.next_think),
+            _ => continue,
+        };
+        let Some((_, _, res)) = choose_work(w, c, &p, None) else { continue };
+        if res != target {
+            continue;
+        }
+        let there = w.thing(target).map(|t| t.pos).or_else(|| w.pawn_pos(target)).unwrap_or(p.pos);
+        let think = think.max(w.tick);
+        // A cell takes about the creature's speed in ticks to cross.
+        let walk = there.octile(p.pos) as u64 * w.defs.creature(p.def).speed as u64 / 10;
+        line.push((think, i, c, think - w.tick + walk));
+    }
+    line.sort_unstable_by_key(|x| (x.0, x.1));
+    line.into_iter().map(|x| (x.2, x.3)).collect()
+}
+
+/// The work pawn `e` would take next, and of which type: the choice,
+/// without reserving anything. With `why`, each refusal is kept.
+fn choose_work(w: &World, e: Entity, p: &Pawn, mut why: Option<&mut Refusals>) -> Option<(DefId, Job, Entity)> {
     let defs = w.defs.clone();
     let level: Vec<u8> =
         (0..defs.work_types.len() as DefId).map(|t| crate::rules::effective(&defs, &w.rules, p, t)).collect();
@@ -635,14 +757,23 @@ fn find_work(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
         let mut bps: Vec<Candidate> = Vec::new();
         for (be, t, bp) in w.ecs.query::<(Entity, &Thing, &Blueprint)>().iter() {
             if w.reserved_by_other(be, e) {
+                if let Some(r) = why.as_deref_mut() {
+                    r.note(bw, t.pos.octile(p.pos), Why::Reserved);
+                }
                 continue;
             }
             let missing = bp.cost.iter().zip(&bp.delivered).find(|(c, d)| **d < c.1).map(|(c, d)| (c.0, c.1 - d));
             bps.push((t.pos.octile(p.pos), be, w.reach_goal(t), missing));
         }
         bps.sort_by_key(|b| (b.0, b.1.id()));
+        // A material with nothing to bring for one plan has nothing for
+        // the next: asked once, not once per plan across the whole map.
+        let mut none_of: Vec<DefId> = Vec::new();
         for (d, be, goal, missing) in bps {
             if !w.map.can_reach(p.pos, goal) {
+                if let Some(r) = why.as_deref_mut() {
+                    r.note(bw, d, Why::Unreachable);
+                }
                 continue;
             }
             match missing {
@@ -651,9 +782,15 @@ fn find_work(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
                     break;
                 }
                 Some((mdef, want)) => {
-                    if let Some((sd, src)) = nearest_item(w, e, p.pos, mdef) {
-                        best[bw as usize] = Some((sd + d, Job::Deliver { bp: be, src, want, stage: 0 }, be));
-                        break;
+                    if !none_of.contains(&mdef) {
+                        if let Some((sd, src)) = nearest_item(w, e, p.pos, mdef) {
+                            best[bw as usize] = Some((sd + d, Job::Deliver { bp: be, src, want, stage: 0 }, be));
+                            break;
+                        }
+                        none_of.push(mdef);
+                    }
+                    if let Some(r) = why.as_deref_mut() {
+                        r.note(bw, d, Why::NoMaterials(Some(mdef)));
                     }
                 }
             }
@@ -667,7 +804,13 @@ fn find_work(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
     for (te, t, des) in w.ecs.query::<(Entity, &Thing, &Designated)>().without::<&Blueprint>().iter() {
         let dd = &defs.designations[des.0 as usize];
         let d = t.pos.octile(p.pos);
-        if !wanted(dd.work_r) || !nearer(&best[dd.work_r as usize], d, te) || w.reserved_by_other(te, e) {
+        if !wanted(dd.work_r) || !nearer(&best[dd.work_r as usize], d, te) {
+            continue;
+        }
+        if w.reserved_by_other(te, e) {
+            if let Some(r) = why.as_deref_mut() {
+                r.note(dd.work_r, d, Why::Reserved);
+            }
             continue;
         }
         // The walk to fetch a tool counts, as the walk to a material does.
@@ -676,7 +819,12 @@ fn find_work(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
             _ => match defs.thing(t.def).harvest_for(des.0) {
                 Some(h) if w.harvest_ready(te, h.key()) => match tool_for(w, e, p, h.requires_r, have) {
                     Some((extra, tool)) => (Job::Harvest { target: te, forced: false, harvest: h.key(), tool }, extra),
-                    None => continue,
+                    None => {
+                        if let Some(r) = why.as_deref_mut() {
+                            r.note(dd.work_r, d, Why::NeedsTool(h.requires_r));
+                        }
+                        continue;
+                    }
                 },
                 _ => continue,
             },
@@ -684,6 +832,10 @@ fn find_work(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
         let nearest = detour == 0 || nearer(&best[dd.work_r as usize], d + detour, te);
         if nearest && w.map.can_reach(p.pos, w.reach_goal(t)) {
             best[dd.work_r as usize] = Some((d + detour, job, te));
+        } else if nearest {
+            if let Some(r) = why.as_deref_mut() {
+                r.note(dd.work_r, d, Why::Unreachable);
+            }
         }
     }
 
@@ -691,10 +843,14 @@ fn find_work(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
     for (se, t, o) in w.ecs.query::<(Entity, &Thing, &Order)>().without::<&Blueprint>().iter() {
         let wt = o.work_type;
         let d = t.pos.octile(p.pos);
-        if !wanted(wt) || !nearer(&best[wt as usize], d, se) || w.reserved_by_other(se, e) {
+        if !wanted(wt) || !nearer(&best[wt as usize], d, se) {
             continue;
         }
-        if !w.map.can_reach(p.pos, w.reach_goal(t)) {
+        let reserved = w.reserved_by_other(se, e);
+        if reserved || !w.map.can_reach(p.pos, w.reach_goal(t)) {
+            if let Some(r) = why.as_deref_mut() {
+                r.note(wt, d, if reserved { Why::Reserved } else { Why::Unreachable });
+            }
             continue;
         }
         let job = match o.missing() {
@@ -708,16 +864,32 @@ fn find_work(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
                 .and_then(|need| tool_for(w, e, p, need, have))
                 .map(|(extra, tool)| (d + extra, Job::Craft { site: se, tool })),
         };
-        if let Some((dist, job)) = job.filter(|j| nearer(&best[wt as usize], j.0, se)) {
-            best[wt as usize] = Some((dist, job, se));
+        match job {
+            Some((dist, job)) if nearer(&best[wt as usize], dist, se) => best[wt as usize] = Some((dist, job, se)),
+            Some(_) => {}
+            None => {
+                if let Some(r) = why.as_deref_mut() {
+                    let refusal = match o.missing() {
+                        Some(_) => Why::NoMaterials(None),
+                        None => Why::NeedsTool(defs.tool_mask(&o.requires).unwrap_or(0)),
+                    };
+                    r.note(wt, d, refusal);
+                }
+            }
         }
     }
 
     // Loose items a stockpile would take, unless work at a better level
     // was already found: hauling is the costliest search.
     if let Some(hw) = defs.haul_work.filter(|&t| wanted(t)) {
-        let beaten = best.iter().enumerate().any(|(t, b)| b.is_some() && level[t] < level[hw as usize]);
-        if !beaten {
+        let beaten = best.iter().enumerate().find(|(t, b)| b.is_some() && level[*t] < level[hw as usize]);
+        // Not searched: the costliest search, and it couldn't win.
+        if let (Some((t, _)), Some(r)) = (beaten, why.as_deref_mut()) {
+            if !w.zones.list.is_empty() {
+                r.note(hw, u32::MAX, Why::Beaten(t as DefId));
+            }
+        }
+        if beaten.is_none() {
             if let Some(h) = find_haul(w, e, p.pos) {
                 if nearer(&best[hw as usize], h.0, h.2) {
                     best[hw as usize] = Some(h);
@@ -730,31 +902,43 @@ fn find_work(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
     for &o in &w.pawns {
         let Ok(des) = w.ecs.get::<&Designated>(o).map(|d| *d) else { continue };
         let wt = defs.designations[des.0 as usize].work_r;
-        if !wanted(wt) || w.reserved_by_other(o, e) {
+        if !wanted(wt) {
             continue;
         }
         let Some(op) = w.pawn_pos(o) else { continue };
         let d = op.octile(p.pos);
-        if nearer(&best[wt as usize], d, o) && w.map.can_reach(p.pos, Goal::Touch(op)) {
-            best[wt as usize] = Some((d, Job::Attack { target: o, until: w.tick + 2400 }, o));
+        if w.reserved_by_other(o, e) {
+            if let Some(r) = why.as_deref_mut() {
+                r.note(wt, d, Why::Reserved);
+            }
+            continue;
+        }
+        if nearer(&best[wt as usize], d, o) {
+            if w.map.can_reach(p.pos, Goal::Touch(op)) {
+                best[wt as usize] = Some((d, Job::Attack { target: o, until: w.tick + 2400 }, o));
+            } else if let Some(r) = why.as_deref_mut() {
+                r.note(wt, d, Why::Unreachable);
+            }
         }
     }
 
     let rank = |t: DefId| defs.work_order.iter().position(|&o| o == t).unwrap_or(usize::MAX);
-    let (_, (_, job, res)) = best
-        .into_iter()
+    let chosen = best
+        .iter()
         .enumerate()
-        .filter_map(|(t, b)| Some((t as DefId, b?)))
-        .min_by_key(|(t, b)| (level[*t as usize], b.0, rank(*t), b.2.id()))?;
-    w.reserve(res, e);
-    if let Job::Deliver { src, .. }
-    | Job::Supply { src, .. }
-    | Job::Harvest { tool: Some(src), .. }
-    | Job::Craft { tool: Some(src), .. } = job
-    {
-        w.reserve(src, e);
+        .filter_map(|(t, b)| Some((t as DefId, b.as_ref()?)))
+        .min_by_key(|(t, b)| (level[*t as usize], b.0, rank(*t), b.2.id()))
+        .map(|(t, _)| t)?;
+    // Every other type that had a job lost to this one.
+    if let Some(r) = why {
+        for (t, b) in best.iter().enumerate().filter(|(t, _)| *t as DefId != chosen) {
+            if let Some(b) = b {
+                r.0[t] = Some((b.0, Why::Beaten(chosen)));
+            }
+        }
     }
-    Some(job)
+    let (_, job, res) = best.swap_remove(chosen as usize)?;
+    Some((chosen, job, res))
 }
 
 /// How many jobs of each work type are waiting, from the same sources

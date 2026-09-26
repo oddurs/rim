@@ -1078,6 +1078,21 @@ impl UiVm {
             t.set("rows", rows)?;
             Ok(t)
         });
+        // The why panel: each work type, and why the colonist takes it or not.
+        view!("explain_work", u64, |lua, l, id| {
+            let Some(e) = Entity::from_bits(id) else { return Ok(None) };
+            let t = lua.create_table()?;
+            for x in rim_sim::ai::explain_work(l.world, e) {
+                let row = lua.create_table()?;
+                row.set("work", l.world.defs.work_types[x.work as usize].id.as_str())?;
+                row.set("level", x.level)?;
+                row.set("why", rim_sim::order::why_text(l.world, &x.why))?;
+                row.set("picked", matches!(x.why, rim_sim::ai::Why::Picked(_)))?;
+                row.set("dist", x.dist)?;
+                t.push(row)?;
+            }
+            Ok(Some(t))
+        });
         view!("priorities", u64, |lua, l, id| {
             let Some(p) = Entity::from_bits(id).and_then(|e| l.world.ecs.get::<&Pawn>(e).ok()) else {
                 return Ok(None);
@@ -1902,6 +1917,22 @@ fn pawn_table(lua: &Lua, w: &World, client: &ClientView, e: Entity) -> mlua::Res
     Ok(Some(t))
 }
 
+/// Who's on the work at `target`, or who'd take it: "Being done by Bo",
+/// "Next: Bo in ~20 s, then Cyd". At 1x the sim runs 60 ticks a second.
+fn takes_text(w: &World, target: Entity) -> String {
+    let name = |e: Entity| w.ecs.get::<&Pawn>(e).map(|p| p.name.clone()).unwrap_or_default();
+    if let Some(&holder) = w.reservations.get(&target) {
+        return format!("Being done by {}", name(holder));
+    }
+    let line = rim_sim::ai::who_takes(w, target);
+    let Some(&(first, ticks)) = line.first() else { return "Nobody free would take it now".into() };
+    let mut s = format!("Next: {} in ~{} s", name(first), (ticks / 60).max(1));
+    if let Some(&(second, _)) = line.get(1) {
+        s = format!("{s}, then {}", name(second));
+    }
+    s
+}
+
 /// What's under the cursor, for the hover readout.
 fn hover_table(lua: &Lua, w: &World, client: &ClientView) -> mlua::Result<Value> {
     let Some(tp) = client.hover_cell else { return Ok(Value::Nil) };
@@ -1927,6 +1958,15 @@ fn hover_table(lua: &Lua, w: &World, client: &ClientView) -> mlua::Result<Value>
         readings.push(format!("{} {:.0}{}", fd.label, w.fields.value(&w.defs, &w.map, fi, tp), fd.unit))?;
     }
     t.set("readings", readings)?;
+    // Who'd take the work waiting here, only for something with work on it.
+    let work_on = [w.map.fixture[i], w.map.floor[i]].into_iter().flatten().find(|&e| {
+        w.ecs.get::<&rim_sim::world::Designated>(e).is_ok()
+            || w.ecs.get::<&Blueprint>(e).is_ok()
+            || w.ecs.get::<&rim_sim::world::Order>(e).is_ok()
+    });
+    if let Some(e) = work_on {
+        t.set("takes", takes_text(w, e))?;
+    }
     let things = lua.create_table()?;
     for e in [w.map.fixture[i], w.map.item[i], w.map.floor[i]].into_iter().flatten() {
         let Ok(th) = w.ecs.get::<&Thing>(e) else { continue };

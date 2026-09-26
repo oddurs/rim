@@ -156,8 +156,34 @@ fn item(w: &World, from: IVec, i: Entity) -> Option<Order> {
 /// so the panel and the cursor agree. Jobs the pawn chose for itself, and
 /// anything whose target has gone, fall back to the generic label.
 pub fn job_text(w: &World, p: &Pawn) -> String {
+    describe(w, &p.job)
+}
+
+/// Why a colonist does or passes over a work type, in words, for the why
+/// panel, the inspector and scripts.
+pub fn why_text(w: &World, why: &crate::ai::Why) -> String {
+    use crate::ai::Why;
+    let defs = &w.defs;
+    match why {
+        Why::Picked(job) => format!("Next: {}", describe(w, job)),
+        Why::Never => "Never".into(),
+        Why::Nothing => "Nothing waiting".into(),
+        Why::Reserved => "Someone else has the nearest".into(),
+        Why::Unreachable => "Can't reach any".into(),
+        Why::NoMaterials(Some(d)) => format!("No {} to bring", defs.thing(*d).label),
+        Why::NoMaterials(None) => "Nothing to bring".into(),
+        Why::NeedsTool(m) => match defs.tool_tag_names(*m).join(" and ") {
+            tags if tags.is_empty() => "Needs a tool".into(),
+            tags => format!("Needs a {tags} tool"),
+        },
+        Why::Beaten(t) => format!("{} first", defs.work_types[*t as usize].label),
+    }
+}
+
+/// A job in words: "Chop oak tree", "Build wall".
+pub fn describe(w: &World, job: &Job) -> String {
     let thing_label = |e: Entity| w.thing(e).map(|t| w.defs.thing(t.def).label.clone());
-    let named = match &p.job {
+    let named = match job {
         Job::Harvest { target, harvest, .. } => w.thing(*target).and_then(|t| {
             let td = w.defs.thing(t.def);
             let hd = td.harvest_by_key(*harvest)?;
@@ -177,5 +203,5 @@ pub fn job_text(w: &World, p: &Pawn) -> String {
         }),
         _ => None,
     };
-    named.unwrap_or_else(|| p.job.label().to_string())
+    named.unwrap_or_else(|| job.label().to_string())
 }

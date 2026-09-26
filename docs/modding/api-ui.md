@@ -70,6 +70,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `view.effective` | `(id: number) -> { [string]: Effective }?` | A colonist's priority per work type once rules and the stance have had their say, with why: "Build 1 = base 3, Siege -2". Nil if it isn't a pawn. |
 | `view.events` | `(since_tick: number) -> { WorldEvent }` | Recent joins, deaths and departures, newest last. |
 | `view.explain` | `(field: string) -> { Part }` | Each term and push that makes up a field's outdoor value. |
+| `view.explain_work` | `(id: number) -> { WorkWhy }?` | The why panel: each work type in tie-break order with why the colonist would take it or passes it over ("Needs a chopping tool", "Build first"), and which it picks. |
 | `view.fields` | `() -> { FieldInfo }` | The field layers. |
 | `view.hint` | `() -> string?` | What a right-click would do. |
 | `view.hour` | `() -> number` | Hour of the day, 0 to 24. |
