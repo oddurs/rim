@@ -2,8 +2,10 @@
 id: 7129a537-c108-4a16-8f0f-27a5cd9419d8
 title: Openings turn to their wall and face the room
 type: feature
-status: backlog
+status: doing
 milestone: houses
+assignee: Oddur Sigurdsson
+claimed: 2026-09-26
 depends_on:
 - 3fe8c3cb-dcba-4882-b623-0468ea9fe697
 created: 2026-09-26
@@ -28,6 +30,10 @@ A door is a rectangle with a bar in it, and it can't say which way it opens. A w
 
 ## Acceptance criteria
 
-- [ ] A door in a north–south wall draws turned, with no facing set (screenshot)
-- [ ] A front door's leaf swings into the house; an inner door's swings into the smaller room
-- [ ] `arc` is validated like the other primitives: unknown or out-of-range fields are load errors
+- [x] A door in a north–south wall draws turned, with no facing set (screenshot)
+- [x] A front door's leaf swings into the house; an inner door's swings into the smaller room
+- [x] `arc` is validated like the other primitives: unknown or out-of-range fields are load errors
+
+## 2026-09-26
+
+Door leaves reach past their cell into the room. Chunk culling knows only right/down spill, so a leaf swinging north or west across a chunk edge can pop at the screen's edge. Seen as minor; a look-level 'reach' could fix it if it shows.

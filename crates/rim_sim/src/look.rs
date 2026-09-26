@@ -22,6 +22,11 @@ pub struct LookDef {
     /// and a `mass` fills toward them.
     #[serde(default)]
     pub join: Option<JoinDef>,
+    /// `"run"`: the layers are written for an east–west run of joined
+    /// pieces, and turned when the neighbours run north–south. A door in
+    /// any wall then needs no facing.
+    #[serde(default)]
+    pub orient: Option<String>,
 }
 
 /// `look.join` as written: `"wall"`, or `{ group = "wall", round = 0.2 }`.
@@ -92,6 +97,12 @@ pub struct LayerDef {
     pub glyph: Option<String>,
     /// For `glyph`: its height as a fraction of the cell.
     pub size: Option<f32>,
+    /// For `arc`: where it starts and ends, in degrees clockwise from east.
+    pub from: Option<f32>,
+    pub to: Option<f32>,
+    /// `"room"`: mirrored toward the enclosed side of the run, so a door
+    /// swings into the room and not out of it.
+    pub into: Option<String>,
     /// While it is built, the stretch of the work this layer appears over:
     /// absent before `from`, rising from the bottom (a disc from its middle)
     /// until `to`, whole after (DESIGN.md §6b).
@@ -108,6 +119,9 @@ pub enum Prim {
     Disc { at: [f32; 2], r: f32, min_px: f32, pulse: f32 },
     /// The cell's border on the sides that don't face a joined neighbour.
     Edges { width: f32 },
+    /// An arc about a point, `width` points thick, from `from` to `to`
+    /// radians clockwise from east: a door's swing.
+    Arc { at: [f32; 2], r: f32, from: f32, to: f32, width: f32 },
     /// The whole cell, drawn a quarter at a time from its neighbours: an
     /// outer corner is rounded by the join's `round`, and everything that
     /// faces a joined neighbour is square, so a run reads as one body.
@@ -129,6 +143,8 @@ pub struct Layer {
     pub vary: f32,
     /// Its `grow` window, if the def gave one.
     pub grow: Option<[f32; 2]>,
+    /// Mirrored toward the room (`into = "room"`).
+    pub into_room: bool,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -139,9 +155,17 @@ pub struct Look {
     pub join: Option<u16>,
     /// Outer corners' rounding, as a fraction of the cell (`look.join`).
     pub round: f32,
+    /// Turned to follow the run it joins (`orient = "run"`).
+    pub along_run: bool,
 }
 
 impl Look {
+    /// Does it read the rooms around it? Then it is drawn again whenever
+    /// rooms rebuild.
+    pub fn reads_rooms(&self) -> bool {
+        self.layers.iter().any(|l| l.into_room)
+    }
+
     /// Does it change from frame to frame? Then it can't be cached.
     pub fn animated(&self) -> bool {
         self.layers.iter().chain(&self.regrowing).any(|l| matches!(l.prim, Prim::Disc { pulse, .. } if pulse > 0.0))
@@ -157,6 +181,7 @@ pub fn plain() -> Vec<Layer> {
         shade: 1.0,
         vary: 0.0,
         grow: None,
+        into_room: false,
     }]
 }
 
@@ -229,15 +254,18 @@ pub fn parse_rgba(s: &str) -> Result<[u8; 4], String> {
 impl LayerDef {
     fn compile(&self, art: &mut Art) -> Result<Layer, String> {
         let allowed: &[&str] = match self.draw.as_str() {
-            "fill" => &["x", "y", "w", "h", "min_px"],
-            "outline" => &["x", "y", "w", "h", "width"],
-            "disc" => &["x", "y", "r", "min_px", "pulse"],
+            "fill" => &["x", "y", "w", "h", "min_px", "into"],
+            "outline" => &["x", "y", "w", "h", "width", "into"],
+            "disc" => &["x", "y", "r", "min_px", "pulse", "into"],
             "edges" => &["width"],
             "mass" => &[],
+            "arc" => &["x", "y", "r", "width", "from", "to", "into"],
             "sprite" => &["x", "y", "w", "h", "sprite", "tint"],
             "glyph" => &["x", "y", "glyph", "size"],
             other => {
-                return Err(format!("unknown draw '{other}' (want fill, outline, disc, edges, mass, sprite or glyph)"))
+                return Err(format!(
+                    "unknown draw '{other}' (want fill, outline, disc, arc, edges, mass, sprite or glyph)"
+                ))
             }
         };
         let given = [
@@ -253,6 +281,9 @@ impl LayerDef {
             ("tint", self.tint.is_some()),
             ("glyph", self.glyph.is_some()),
             ("size", self.size.is_some()),
+            ("from", self.from.is_some()),
+            ("to", self.to.is_some()),
+            ("into", self.into.is_some()),
         ];
         if let Some((name, _)) = given.iter().find(|(n, set)| *set && !allowed.contains(n)) {
             return Err(format!("`{name}` does not apply to draw = \"{}\"", self.draw));
@@ -308,6 +339,13 @@ impl LayerDef {
                 Prim::Glyph { at, size: self.size.unwrap_or(0.8), id: intern(art.glyphs, g.to_string()) }
             }
             "mass" => Prim::Mass,
+            "arc" => Prim::Arc {
+                at: [self.x.unwrap_or(0.5), self.y.unwrap_or(0.5)],
+                r: self.r.unwrap_or(0.4),
+                from: self.from.unwrap_or(0.0).to_radians(),
+                to: self.to.unwrap_or(90.0).to_radians(),
+                width: self.width.unwrap_or(1.0),
+            },
             _ => Prim::Edges { width: self.width.unwrap_or(1.5) },
         };
         if let Some([from, to]) = self.grow {
@@ -315,6 +353,11 @@ impl LayerDef {
                 return Err(format!("`grow` = [{from}, {to}] is not a window of the work (want 0 ≤ from < to ≤ 1)"));
             }
         }
+        let into_room = match self.into.as_deref() {
+            None => false,
+            Some("room") => true,
+            Some(o) => return Err(format!("`into` = {o:?}: the only side is \"room\"")),
+        };
         // A sprite draws as painted unless tinted or given a colour.
         let own = if matches!(prim, Prim::Sprite { .. }) && self.tint != Some(true) { Some([255; 4]) } else { None };
         Ok(Layer {
@@ -323,6 +366,7 @@ impl LayerDef {
             shade: self.shade.unwrap_or(1.0),
             vary: self.vary.unwrap_or(0.0),
             grow: self.grow,
+            into_room,
         })
     }
 }
@@ -348,11 +392,20 @@ impl LookDef {
         if !(0.0..=0.5).contains(&round) {
             return Err(format!("look.join: `round` = {round} is out of range (want from 0 to 0.5)"));
         }
+        let along_run = match self.orient.as_deref() {
+            None => false,
+            Some("run") if join.is_some() => true,
+            Some("run") => {
+                return Err("look.orient = \"run\" follows a run of joined pieces, so it needs look.join".into())
+            }
+            Some(o) => return Err(format!("look.orient = {o:?}: the only one is \"run\"")),
+        };
         let mut look = Look {
             layers: layers(&self.layers, "layers")?,
             regrowing: layers(&self.regrowing, "regrowing")?,
             join,
             round,
+            along_run,
         };
         if look.layers.is_empty() {
             look.layers = plain();
@@ -466,6 +519,22 @@ mod tests {
         let far = toml::from_str::<LookDef>("join = { group = \"wall\", round = 0.8 }").unwrap();
         assert!(far.compile(&mut groups, &mut sp).unwrap_err().contains("`round` = 0.8 is out of range"));
         assert!(toml::from_str::<LookDef>("join = { group = \"wall\", rnd = 0.2 }").is_err(), "unknown keys");
+    }
+
+    #[test]
+    fn an_arc_is_in_degrees_and_can_face_the_room() {
+        let l = layer("draw = \"arc\"\nx = 0.12\nr = 0.76\nfrom = 0\nto = 90\ninto = \"room\"").unwrap();
+        let Prim::Arc { at, r, from, to, width } = l.prim else { panic!("an arc") };
+        assert_eq!((at, r, from, width), ([0.12, 0.5], 0.76, 0.0, 1.0));
+        assert!((to - std::f32::consts::FRAC_PI_2).abs() < 1e-6);
+        assert!(l.into_room);
+        assert!(layer("draw = \"fill\"\ninto = \"hall\"").unwrap_err().contains("the only side"));
+        assert!(layer("draw = \"edges\"\ninto = \"room\"").unwrap_err().contains("does not apply"));
+        let mut groups = Vec::new();
+        let (mut keys, mut glyphs) = (Vec::new(), Vec::new());
+        let mut sp = Art { sprites: &mut keys, glyphs: &mut glyphs, home: "m" };
+        let lone = toml::from_str::<LookDef>("orient = \"run\"").unwrap();
+        assert!(lone.compile(&mut groups, &mut sp).unwrap_err().contains("needs look.join"));
     }
 
     #[test]
