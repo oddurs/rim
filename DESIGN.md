@@ -1065,8 +1065,9 @@ bug reports and `rim test` fixtures.
   every checkpoint. If they disagree, the snapshot wins and the mismatch is
   reported: a determinism bug costs the tail, never the colony.
 
-CI runs these on the crosscheck scenario on every platform. A save that
-doesn't round-trip is a desync that hasn't happened yet.
+CI runs these on the crosscheck scenario on every platform: on each push
+to main, and on a PR labelled `full-ci` (PRs otherwise run Linux alone). A
+save that doesn't round-trip is a desync that hasn't happened yet.
 
 ---
 
