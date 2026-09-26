@@ -159,7 +159,8 @@ Every function in `ui`, `act` and `view`, with its types, is in the
 | `view.pawn(id)`, `view.thing(id)`, `view.selected()` | One pawn; one thing (label, count, hp, material, what stops its work); the selection, a pawn or a thing |
 | `view.count_pawns(faction)` | Living pawns of `"player"`, `"hostile"` or `"wild"` |
 | `view.visible_pawns()` | Pawns on screen, for anchored labels |
-| `view.messages(n)`, `view.events(since_tick)` | The message feed; recent joins, deaths and departures |
+| `view.messages(n, skip?)`, `view.message_count()` | The message log, newest first (`text`, `kind`, `age`, `day`); `skip` pages back through it |
+| `view.events(since_tick)` | Recent joins, deaths and departures |
 | `view.fields()`, `view.hover()`, `view.overlay()` | Field layers; what's under the cursor; the active overlay |
 | `view.tools()`, `view.hint()` | Toolbar entries; what a right-click would do |
 | `view.profile()`, `view.stats()`, `view.mods()`, `view.warnings()` | Profiler and load information |
@@ -238,6 +239,37 @@ people.badge(function(p)
 	return p.asleep and kit.label("z", { size = "small", color = "muted" })
 end)
 ```
+
+### Now: alerts and news
+
+The right edge is what needs the player. `core:alerts` lists standing
+problems, most severe first; `core:messages` has the newest news, with a
+button (and N) for the whole log in the `core:news` window, a virtual list
+however long the log grows.
+
+An alert is a check registered with core's module. Core's own alerts (a
+colonist badly hurt, a need run dry, idle hands, no stockpile) are
+registered the same way, as are the weather mod's:
+
+```lua
+local alerts = require("@core/ui/alerts")
+alerts.add({
+	id = "my_mod:no_salt",
+	severity = "warn", -- "bad", "warn" or "info"
+	check = function(view)
+		if not has_salt(view) then
+			return "No salt: meat will spoil" -- or { text = ..., subject = pawn_id }
+		end
+	end,
+})
+```
+
+A check returns nothing when all is well. Given a `subject`, the alert
+selects and centres on it when clicked; `on_click` in the definition
+overrides that. Checks run at most four times a second however often the
+panel is rebuilt, so one may read the world freely, and a check that errors
+shows as a bad alert naming it. Each alert's row has the id
+`core:alerts.<id>`.
 
 ### The dock
 

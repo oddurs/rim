@@ -52,23 +52,6 @@ ui.define("core:topbar", function(view)
 end)
 ui.mount("top", "core:topbar")
 
--- ─── Messages: the newest few, fading with age ─────────────────────────────
-
-ui.define("core:messages", function(view)
-	local items = {}
-	for _, m in view.messages(8) do
-		if m.age > 1 then
-			break
-		end
-		table.insert(items, kit.toast({ text = m.text, kind = m.kind, age = m.age }))
-	end
-	if #items == 0 then
-		return nil
-	end
-	return col({ gap = "xs" }, items)
-end)
-ui.mount("left", "core:messages", { align = "start" })
-
 -- ─── Inspector: the selected pawn or thing ─────────────────────────────────
 
 -- A colonist's panel has tabs: how they are, what they're good at, and

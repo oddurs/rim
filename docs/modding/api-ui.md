@@ -77,7 +77,8 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `view.hover` | `() -> Hover?` | What's under the cursor. |
 | `view.inspect` | `() -> Inspect?` | The node under the cursor (devtools). |
 | `view.items` | `() -> { Item }` | Every item def, which a stockpile can take or refuse. |
-| `view.messages` | `(max: number) -> { Message }` | The newest messages, newest first. |
+| `view.message_count` | `() -> number` | How many messages the log holds. |
+| `view.messages` | `(max: number, skip: number?) -> { Message }` | The newest messages, newest first; skip that many of the newest to page back through the log. |
 | `view.mods` | `() -> { ModInfo }` | Loaded mods, in load order. |
 | `view.outlines` | `() -> boolean` | Whether layout outlines are on. |
 | `view.overlay` | `() -> string?` | The label of the field overlay shown, if any. |

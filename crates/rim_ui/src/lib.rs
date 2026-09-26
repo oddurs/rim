@@ -1461,11 +1461,16 @@ impl Ui {
             // The start stack may shrink below its content, so a panel that
             // scrolls (and says `minh = 0`) takes the room the end stack
             // leaves rather than running under it.
-            let start =
-                plain(key + 1, Style { gap, min_h: Some(0.0), ..Default::default() }, group(region, Some("start")));
+            // A panel narrower than its column sits against the screen edge.
+            let edge = Some(if region == "right" { node::Align::End } else { node::Align::Start });
+            let start = plain(
+                key + 1,
+                Style { gap, min_h: Some(0.0), align: edge, ..Default::default() },
+                group(region, Some("start")),
+            );
             let end = plain(
                 key + 2,
-                Style { gap, justify: Some(node::Align::End), ..Default::default() },
+                Style { gap, justify: Some(node::Align::End), align: edge, ..Default::default() },
                 group(region, Some("end")),
             );
             let spacer = plain(key + 3, Style { grow: 1.0, ..Default::default() }, vec![]);

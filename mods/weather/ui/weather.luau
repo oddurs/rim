@@ -69,6 +69,43 @@ ui.extend("core:topbar.right", function(view)
 	})
 end)
 
+-- Alerts, through core's registry: a storm on the way, and air cold
+-- enough to freeze in.
+local alerts = require("@core/ui/alerts")
+
+alerts.add({
+	id = "weather:storm",
+	severity = "warn",
+	check = function(view)
+		local q = view.data("weather:forecast")
+		if not q then
+			return nil
+		end
+		for i, e in q do
+			if e.id == "storm" then
+				if i == 1 then
+					return "Storm: stay under a roof"
+				elseif (e.start - view.tick()) / view.ticks_per_day() * 24 <= 12 then
+					return "Storm " .. when(view, e.start)
+				end
+			end
+		end
+		return nil
+	end,
+})
+
+alerts.add({
+	id = "weather:freezing",
+	severity = "warn",
+	check = function(view)
+		local temp = view.ambient("core:temperature")
+		if temp and temp <= 0 then
+			return string.format("Freezing outside: %.0f°C", temp)
+		end
+		return nil
+	end,
+})
+
 ui.define("weather:forecast", function(view)
 	if not ui.state("weather:open", false) then
 		return nil

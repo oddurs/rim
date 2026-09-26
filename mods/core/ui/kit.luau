@@ -37,7 +37,7 @@ end
 -- Text. `opts`: size ("small"/"body"/"heading"/"title"), weight, color, wrap.
 function kit.label(text: string, opts: { [string]: any }?)
 	local o = opts or {}
-	return { kind = "text", text, size = o.size, weight = o.weight, color = o.color, wrap = o.wrap, id = o.id }
+	return { kind = "text", text, size = o.size, weight = o.weight, color = o.color, wrap = o.wrap, id = o.id, minw = o.minw, grow = o.grow }
 end
 
 -- A surface: panels, cards, popovers.

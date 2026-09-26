@@ -27,7 +27,10 @@ fn shell_docks_regions_to_the_edges() {
     let people = ui.find("core:colonists").unwrap();
     assert!(people[0] < 12.0 && near(people[1], top[1] + top[3]), "people start just under the top bar: {people:?}");
     let messages = ui.find("core:messages").unwrap();
-    assert!(near(messages[1], people[1] + people[3]), "messages sit under the people: {messages:?}");
+    assert!(near(messages[0] + messages[2], 1600.0), "news docks right: {messages:?}");
+    let alerts = ui.find("core:alerts").unwrap();
+    assert!(near(alerts[1], top[1] + top[3]), "alerts start just under the top bar: {alerts:?}");
+    assert!(near(messages[1], alerts[1] + alerts[3]), "and the news sits under them: {messages:?}");
     let hover = ui.find("core:hover").unwrap();
     assert!(near(hover[0] + hover[2], 1600.0), "hover readout docks right: {hover:?}");
     assert!(near(hover[1] + hover[3], bottom[1]), "hover readout sits on the toolbar: {hover:?}");
