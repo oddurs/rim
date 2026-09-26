@@ -25,7 +25,9 @@ fn arg(name: &str, default: u64) -> u64 {
 }
 
 fn main() {
-    let seed = arg("--seed", 1);
+    // Seed 9: a colony that lives long enough for the hash to cover its
+    // work orders, building and needs (on seed 1 wolves end it on day 3).
+    let seed = arg("--seed", 9);
     let mods = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mods");
     let mut s = Sim::new(&mods, seed).expect("mods load");
     let days = arg("--days", s.world.defs.calendar.year_days as u64);
@@ -40,10 +42,32 @@ fn main() {
     // rest waits for them (below).
     s.push(Command::Designate { designation: des("gather"), a: c.offset(-20, -20), b: c.offset(20, 20) });
     s.push(Command::Designate { designation: des("harvest"), a: c.offset(-20, -20), b: c.offset(20, 20) });
+    // Flint is scarce and rarely close: like a player who spots it, mark
+    // the nearest few nodules wherever they are.
+    let nodule = thing("primitive:flint_nodule");
+    let mut flint: Vec<(i32, u32, IVec)> = s
+        .world
+        .ecs
+        .query::<(rim_sim::hecs::Entity, &rim_sim::world::Thing)>()
+        .iter()
+        .filter(|(_, t)| t.def == nodule)
+        .map(|(e, t)| ((t.pos.x - c.x).abs().max((t.pos.y - c.y).abs()), e.id(), t.pos))
+        .collect();
+    flint.sort();
+    for &(_, _, p) in flint.iter().take(3) {
+        s.push(Command::Designate { designation: des("gather"), a: p, b: p });
+    }
     let o = c.offset(3, 3);
     let at = |dx: i32, dy: i32| -> IVec { o.offset(dx, dy) };
     s.push(Command::Build { thing: thing("campfire"), stuff: None, a: at(1, 1), b: at(1, 1) });
-    let spot_at = at(2, 6);
+    // Outside the door, on the nearest cell with nothing growing on it and
+    // clear of the hut to come.
+    let hut_cell = |p: IVec| (0..5).contains(&(p.x - o.x)) && (0..5).contains(&(p.y - o.y));
+    let open = |p: IVec| s.world.map.passable(p) && s.world.map.fixture_at(p).is_none() && !hut_cell(p);
+    let spot_at = (0..16)
+        .flat_map(|r| (-r..=r).flat_map(move |dy| (-r..=r).map(move |dx| (dx, dy))).map(|(dx, dy)| at(2 + dx, 6 + dy)))
+        .find(|&p| open(p))
+        .expect("open ground for a crafting spot");
     s.push(Command::Build { thing: thing("crafting:spot"), stuff: None, a: spot_at, b: spot_at });
     // With an axe: fell the trees, and raise a 5x5 wooden hut around the
     // fire, with a door on the south side and a bed.
@@ -123,6 +147,11 @@ fn main() {
         // day 5 is a lost material or a lost job, not a determinism result.
         if day == 5 {
             use rim_sim::world::{Blueprint, Thing};
+            // A dead colony covers nothing of what this harness is for.
+            if w.colonists().next().is_none() {
+                eprintln!("day 5: the colony is gone; pick a seed where the scenario lives");
+                std::process::exit(1);
+            }
             let unbuilt = w.ecs.query::<&Thing>().with::<&Blueprint>().iter().count();
             let fires = w.ecs.query::<&Thing>().without::<&Blueprint>().iter().filter(|t| t.def == campfire).count();
             // Without an axe the scenario never reached its work orders or

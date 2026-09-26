@@ -59,6 +59,23 @@ natural = true
 harvest = { designation = "core:gather", work = 50, yields = [{ thing = "flint", count = 2 }] }
 spawn = { terrain = ["core:sand"], density = 0.006 }
 
+# A clay bank on the marsh: a pit you keep coming back to. It takes a
+# digging tool, and it isn't used up, only dug out for a few days.
+[[thing]]
+id = "clay_bank"
+label = "clay bank"
+color = "#8e5d40"
+category = "rock"
+look.layers = [
+    { draw = "disc", x = 0.5, y = 0.56, r = 0.34, shade = 0.8 },
+    { draw = "disc", x = 0.46, y = 0.5, r = 0.24 },
+    { draw = "disc", x = 0.4, y = 0.44, r = 0.08, shade = 1.2 },
+]
+natural = true
+harvest = { designation = "core:gather", work = 80, destroy = false, regrow_days = 4.0, requires = ["digging"],
+            yields = [{ thing = "clay", count = 4 }] }
+spawn = { terrain = ["core:marsh"], density = 0.05 }
+
 # Branches off a standing oak: they grow back, and the oak can still be felled.
 [[patch]]
 target = "thing/core:tree_oak"

@@ -30,7 +30,8 @@ core's mild climate remains. See [Modding climate and weather](docs/modding/weat
 
 The stone age is another: `mods/primitive` has you gather branches, fibre,
 stones and flint with your hands, build a first shelter and campfire out of
-branches, and knap flint into the axe an oak now waits for. Remove it and
+branches, knap flint into the axe an oak now waits for, and dig clay for
+warm cob walls and fired pots. Remove it and
 core's bare-handed felling and quarrying remain.
 `mods/crafting` gives stations bills, "make five, then stop", on the engine's
 work orders; recipes are data any mod adds. See [Crafting](docs/modding/crafting.md).

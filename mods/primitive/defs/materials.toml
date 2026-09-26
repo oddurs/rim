@@ -62,3 +62,19 @@ tags = ["knappable"]
 # Lithic: what an edge is made of. What's knapped from flint is flint, and
 # takes its hp and its tool_speed from it (bone, poorer, comes later).
 stuff = { categories = ["lithic"], factors = { hp = 1.0, tool_speed = 1.0 } }
+
+# Dug from the banks on marsh with a digging stick. Built into walls it's
+# cob: slower to raise than branches, and much warmer, and it won't burn.
+[[thing]]
+id = "clay"
+label = "clay"
+color = "#a86f4c"
+category = "item"
+look.layers = [
+    { draw = "disc", x = 0.5, y = 0.58, r = 0.26, shade = 0.85 },
+    { draw = "disc", x = 0.46, y = 0.5, r = 0.2 },
+]
+market_value = 0.5
+stack_limit = 75
+tags = ["clay"]
+stuff = { categories = ["structural"], factors = { hp = 0.8, work = 1.2, insulation = 1.6, flammability = 0.0, beauty = 0.9 } }

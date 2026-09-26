@@ -2,3 +2,8 @@
 [[patch]]
 target = "thing/core:campfire"
 set = { build = { cost = [{ thing = "primitive:branches", count = 10 }] } }
+
+# The fire is a station too: a clay pot is fired in it (tools.toml).
+[[patch]]
+target = "thing/core:campfire"
+append = { tags = ["crafting:fire"] }

@@ -2,12 +2,12 @@
 id: af17cc1d-6edb-4d07-a81c-f3581ff27f5a
 title: 'Blueprints on plants: say so, or clear them'
 type: bug
-status: doing
+status: done
 milestone: stone-age
 assignee: Oddur Sigurdsson
-claimed: 2026-09-25
 created: 2026-09-25
 updated: 2026-09-25
+closed_at: 2026-09-25
 priority: p1
 api: none
 effort: s

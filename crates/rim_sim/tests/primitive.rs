@@ -53,7 +53,13 @@ fn run_until(s: &mut Sim, ticks: u32, done: impl Fn(&Sim) -> bool) -> bool {
 #[test]
 fn the_wild_offers_branches_fibre_stones_and_flint() {
     // Over a few seeds, every wild thing turns up somewhere.
-    for id in ["primitive:deadfall", "primitive:tall_grass", "primitive:loose_stones", "primitive:flint_nodule"] {
+    for id in [
+        "primitive:deadfall",
+        "primitive:tall_grass",
+        "primitive:loose_stones",
+        "primitive:flint_nodule",
+        "primitive:clay_bank",
+    ] {
         let found = (1..=5).any(|seed| {
             let s = Sim::new(&common::mods(), seed).unwrap();
             count(&s, id) > 0
@@ -205,6 +211,73 @@ fn a_hand_axe_is_made_of_its_flint() {
     assert_eq!(s.world.made_of(e), Some(def(&s, "primitive:flint")));
     assert_eq!(hp, 60, "flint's hp factor is 1");
     assert!((s.world.tool_speed(e) - 0.6).abs() < 1e-9, "the axe's 0.6 at flint's 1.0");
+}
+
+/// A clay bank is dug with a digging stick, not bare hands, and isn't used
+/// up: it's dug out for a few days.
+#[test]
+fn clay_is_dug_with_a_digging_stick() {
+    let (mut s, founder) = (1..=10)
+        .map(alone)
+        .find(|(s, _)| nearest(s, "primitive:clay_bank").is_some())
+        .expect("a reachable clay bank on some seed");
+    let (bank, at) = nearest(&s, "primitive:clay_bank").unwrap();
+    let gather = s.world.defs.lookup("designation", "core:gather").unwrap();
+    s.push(Command::Designate { designation: gather, a: at, b: at });
+    s.step();
+    assert_eq!(rim_sim::ai::work_blocked(&s.world, bank).as_deref(), Some("Needs a digging tool."));
+    for _ in 0..3_000 {
+        s.step();
+    }
+    assert_eq!(count(&s, "primitive:clay"), 0, "not with bare hands");
+    let home = s.world.pawn_pos(founder).unwrap();
+    s.world.place_item(s.world.defs.thing_id("primitive:digging_stick").unwrap(), home, 1);
+    assert!(run_until(&mut s, 12_000, |s| count(s, "primitive:clay") >= 4), "dug with a stick");
+    assert!(s.world.thing(bank).is_some(), "and the bank is still there");
+}
+
+/// Cob (clay walls) keeps the warmth in better than branches do: a wall's
+/// leak is divided by its material's insulation.
+#[test]
+fn cob_insulates_better_than_branches() {
+    let (mut s, founder) = alone(3);
+    let home = s.world.pawn_pos(founder).unwrap();
+    let def = |s: &Sim, id: &str| s.world.defs.thing_id(id).unwrap();
+    let wall = def(&s, "core:wall");
+    let spots: Vec<IVec> = (2..20)
+        .flat_map(|d| [home.offset(d, 0), home.offset(-d, 0), home.offset(0, d), home.offset(0, -d)])
+        .filter(|&p| s.world.map.passable(p) && s.world.map.fixture_at(p).is_none())
+        .take(2)
+        .collect();
+    let cob = s.world.spawn_fixture_of(wall, spots[0], false, Some(def(&s, "primitive:clay"))).unwrap();
+    let branch = s.world.spawn_fixture_of(wall, spots[1], false, Some(def(&s, "primitive:branches"))).unwrap();
+    let (c, b) = (s.world.stat(cob, "insulation").unwrap(), s.world.stat(branch, "insulation").unwrap());
+    assert!(c > 2.0 * b, "cob {c} against branches {b}");
+}
+
+/// The campfire is a station: a pot is fired in it from a bill, and it's
+/// made of its clay.
+#[test]
+fn a_pot_is_fired_at_a_campfire() {
+    let (mut s, founder) = alone(3);
+    let home = s.world.pawn_pos(founder).unwrap();
+    let def = |s: &Sim, id: &str| s.world.defs.thing_id(id).unwrap();
+    let at = (2..10)
+        .flat_map(|d| [home.offset(d, 0), home.offset(-d, 0), home.offset(0, d), home.offset(0, -d)])
+        .find(|&p| s.world.map.passable(p) && s.world.map.fixture_at(p).is_none() && s.world.map.item_at(p).is_none())
+        .expect("room for a fire");
+    let fire = s.world.spawn_fixture_of(def(&s, "core:campfire"), at, false, None).unwrap();
+    rim_sim::ai::complete_building(&mut s.world, fire);
+    s.world.place_item(def(&s, "primitive:clay"), home, 3);
+    let data = [
+        (Key::Str("site".into()), Data::Int(fire.to_bits().get() as i64)),
+        (Key::Str("recipe".into()), Data::Str("primitive:pot".into())),
+    ];
+    s.push(Command::ModEvent { name: "crafting:add_bill".into(), data: Some(Data::Table(data.into_iter().collect())) });
+    let pot = def(&s, "primitive:pot");
+    assert!(run_until(&mut s, 12_000, |s| count(s, "primitive:pot") == 1), "a pot is fired");
+    let e = s.world.ecs.query::<(Entity, &Thing)>().iter().find(|(_, t)| t.def == pot).map(|(e, _)| e).unwrap();
+    assert_eq!(s.world.made_of(e), Some(def(&s, "primitive:clay")));
 }
 
 /// With the plugin removed, core plays exactly as it did (DESIGN.md §5).
