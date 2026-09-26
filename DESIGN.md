@@ -927,6 +927,8 @@ primitives: a mod picks and colours effects and never draws per frame.
 - **Ruling:** no. Wear on a blocking thing cracks and darkens it and never
   shrinks it, and a load check holds mods to the same rule.
 
+---
+
 ## 6c. Houses: drawn as their plan, built as orders
 
 A house today is a ring of flat brown cells with a 1.5-point edge. Its
