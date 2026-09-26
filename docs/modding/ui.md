@@ -224,6 +224,38 @@ readouts), `core:inspector.sections` (sections in the colonist
 inspector) and `core:inspector.thing` (sections in the inspector of a
 selected thing: a station's bills, a tool's wear).
 
+### The inspector
+
+The selected pawn or thing shows bottom left (`core:inspector`, in
+[`inspector.luau`](../../mods/core/ui/inspector.luau)). Its tabs and the row
+of actions under its title are two registries, and core's Overview, Skills
+and Work tabs and its Draft (R) and Centre (C) actions go through them:
+
+```lua
+local inspector = require("@core/ui/inspector")
+inspector.tab({
+	id = "my_mod:mood",
+	label = "Mood",
+	applies = function(sel) return sel.kind == "pawn" and sel.player end,
+	build = function(view, sel) return kit.label(mood_of(sel)) end,
+})
+inspector.action({
+	id = "my_mod:rally",
+	label = "Rally",
+	key = "g",
+	applies = function(sel) return sel.kind == "pawn" and sel.player end,
+	run = function(sel) act.send("my_mod:rally", sel.id) end,
+})
+```
+
+`sel` is the pawn (`view.pawn`) or thing (`view.thing`) table with `kind`
+set. A label may be a function of it, an action's `active(sel)` lights its
+button, and `order` places either (core's run 10, 20, 30; the default is
+100). An action's key is a binding with the action's id: it runs on the
+selection when the action applies, and the command palette lists it. Tabs
+are `core:inspector.tabs.<id>`, shown when more than one applies; actions
+are `core:inspector.action.<id>`.
+
 ### People
 
 The colonists run down the left edge (`core:colonists`, in
