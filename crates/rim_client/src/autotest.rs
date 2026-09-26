@@ -101,7 +101,7 @@ impl T {
     }
 
     fn pawn_screen(&self, e: Entity) -> (f32, f32) {
-        let (x, y) = draw::pawn_pos(&self.pawn(e));
+        let (x, y) = draw::pawn_pos(&self.pawn(e), self.app.tick_frac());
         self.app.cam.to_screen(x, y)
     }
 
@@ -539,7 +539,7 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         if !saw_interp {
             let p = t.pawn(founder);
             if p.next.is_some() && p.progress > 0 && p.progress < p.step_ticks {
-                let (x, y) = draw::pawn_pos(&p);
+                let (x, y) = draw::pawn_pos(&p, t.app.tick_frac());
                 saw_interp = (x.fract() - 0.5).abs() > 1e-3 || (y.fract() - 0.5).abs() > 1e-3;
             }
         }

@@ -1050,6 +1050,7 @@ pub fn client_view(app: &mut App, mouse: (f32, f32), time: f64) -> ClientView {
         scale: app.ui.theme.scale,
         cam: (app.cam.x, app.cam.y, app.cam.zoom * dpi),
         mouse: (mouse.0 * dpi, mouse.1 * dpi),
+        frac: app.tick_frac(),
         selected: app.selected,
         group: app.group.clone(),
         shift: app.shift,
@@ -1411,7 +1412,8 @@ pub fn render(app: &mut App) {
     // names and bubbles follow their pawns to where the world just drew them.
     let cam = (app.cam.x, app.cam.y, app.cam.zoom * dpi);
     let screen = (screen_width() * dpi, screen_height() * dpi);
-    rim_ui::reanchor(&mut app.last_draw, &mut app.last_anchored, &app.sim.world, cam, screen);
+    let frac = app.tick_frac();
+    rim_ui::reanchor(&mut app.last_draw, &mut app.last_anchored, &app.sim.world, cam, screen, frac);
     draw::ui(&app.last_draw, &app.atlas, white, dpi);
     t.ui = lap();
     app.render_us = t;
@@ -1542,7 +1544,9 @@ fn apply_ui(app: &mut App, a: UiAction) {
 
 fn step(app: &mut App) {
     if app.paused || app.sim.world.colony_lost {
-        app.acc = 0.0;
+        // Keep the part-tick: pawns are drawn that far along their step,
+        // and dropping it would pull them back a little on pause.
+        app.acc = app.acc.fract();
         return;
     }
     app.acc += frame_time() as f64 * 60.0 * app.speed as f64;
@@ -1564,6 +1568,15 @@ fn step(app: &mut App) {
     if app.selected.is_some_and(gone) || app.group.iter().any(|&e| gone(e)) {
         let keep: Vec<Entity> = selection(app).into_iter().filter(|&e| !gone(e)).collect();
         select(app, keep);
+    }
+}
+
+impl App {
+    /// How far into the next sim tick this frame falls: what the step
+    /// accumulator holds past its last whole tick. Pawns are drawn that
+    /// far along their step, so they glide at any frame rate.
+    pub fn tick_frac(&self) -> f32 {
+        (self.acc as f32).clamp(0.0, 0.999)
     }
 }
 
@@ -1799,7 +1812,7 @@ pub fn pawn_under(app: &App, sx: f32, sy: f32) -> Option<Entity> {
     let mut best: Option<(f32, Entity)> = None;
     for &e in &w.pawns {
         let Ok(p) = w.ecs.get::<&Pawn>(e) else { continue };
-        let (px, py) = draw::pawn_pos(&p);
+        let (px, py) = draw::pawn_pos(&p, app.tick_frac());
         let d = ((px - wx).powi(2) + (py - wy).powi(2)).sqrt();
         let bias = if p.faction == Faction::Player { -0.2 } else { 0.0 };
         if d < 0.7 && best.is_none_or(|b| d + bias < b.0) {
@@ -1937,7 +1950,7 @@ pub fn apply(app: &mut App, action: Action) {
                             .colonists()
                             .filter(|&e| {
                                 w.ecs.get::<&Pawn>(e).is_ok_and(|p| {
-                                    let (px, py) = draw::pawn_pos(&p);
+                                    let (px, py) = draw::pawn_pos(&p, app.tick_frac());
                                     let c = IVec::new(px.floor() as i32, py.floor() as i32);
                                     (lo.x..=hi.x).contains(&c.x) && (lo.y..=hi.y).contains(&c.y)
                                 })
