@@ -36,6 +36,11 @@ local t = ui.t
 
 local inspector = {}
 
+-- The panel's width; narrower on a small screen.
+local function width(view): number
+	return if view.compact() then 260 else 300
+end
+
 local tabs: { any } = {}
 local actions: { any } = {}
 
@@ -329,7 +334,7 @@ local function pawn_panel(view, p)
 		then (if p.drafted then t("core:inspector.hint_drafted", "right-click to move or attack") else t("core:inspector.hint", "right-click to order"))
 		else nil
 	local bar, body = tab_body(view, p)
-	return kit.panel({ w = 300, gap = "m" }, {
+	return kit.panel({ w = width(view), gap = "m" }, {
 		col({ gap = "xxs" }, {
 			label(title, { size = "heading", weight = "strong" }),
 			label(string.format(t("core:inspector.sub", "%s · %s · %s"), p.label, p.faction, doing), { size = "small", color = "muted" }),
@@ -356,7 +361,7 @@ local function thing_panel(view, th)
 		table.insert(facts, string.format(t("core:inspector.designated", "marked: %s"), th.designated))
 	end
 	local bar, body = tab_body(view, th)
-	return kit.panel({ id = "core:inspector.panel", w = 300, gap = "m" }, {
+	return kit.panel({ id = "core:inspector.panel", w = width(view), gap = "m" }, {
 		col({ gap = "xxs" }, {
 			label(th.label, { size = "heading", weight = "strong" }),
 			#facts > 0 and label(table.concat(facts, " · "), { size = "small", color = "muted" }),
@@ -411,7 +416,7 @@ local function group_panel(view, all)
 			})
 		)
 	end
-	return kit.panel({ id = "core:inspector.group", w = 300, gap = "m" }, {
+	return kit.panel({ id = "core:inspector.group", w = width(view), gap = "m" }, {
 		label(string.format(t("core:inspector.group", "%d colonists"), #all), { size = "heading", weight = "strong" }),
 		#buttons > 0 and row({ id = "core:inspector.actions", gap = "xs" }, buttons),
 		col({ gap = "xxs" }, members),

@@ -346,6 +346,7 @@ fn stamp(mods: &[ModDir]) -> u64 {
 impl Ui {
     /// `dpi` is the display's pixel ratio; `user_scale` the player's UI scale.
     pub fn new(mods: Vec<ModDir>, dpi: f32, user_scale: f32) -> Result<Ui, String> {
+        let user_scale = user_scale.clamp(vm::UI_SCALE.0, vm::UI_SCALE.1);
         let dirs: Vec<(String, &std::path::Path)> = mods.iter().map(|m| (m.id.clone(), m.dir.as_path())).collect();
         let mut theme = Theme::load(&dirs, total_scale(dpi, user_scale));
         let text = Text::new(if theme.font.is_empty() { None } else { Some(theme.font.as_str()) }, &mod_fonts(&dirs))?;
@@ -360,6 +361,7 @@ impl Ui {
             ));
         }
         let vm = UiVm::load(&mods);
+        vm.ui_scale.set(user_scale);
         let info = EngineInfo { font: format!("{} ({})", text.info.family, text.info.source), ..Default::default() };
         let reload_stamp = stamp(&mods);
         Ok(Ui {
@@ -615,6 +617,24 @@ impl Ui {
         self.theme.warnings.iter().chain(&self.vm.warnings).chain(&self.vm.errors).cloned().collect()
     }
 
+    /// The player's UI scale, on top of the display's.
+    pub fn user_scale(&self) -> f32 {
+        self.user_scale
+    }
+
+    /// Change the player's UI scale (clamped to `vm::UI_SCALE`). Everything
+    /// is laid out again at the new size; windows keep their logical places.
+    pub fn set_user_scale(&mut self, s: f32) {
+        let s = s.clamp(vm::UI_SCALE.0, vm::UI_SCALE.1);
+        if (s - self.user_scale).abs() > 1e-3 {
+            self.user_scale = s;
+            self.vm.ui_scale.set(s);
+            self.theme.scale = total_scale(self.dpi, s);
+            self.cache.clear();
+            self.layout_dirty = true;
+        }
+    }
+
     pub fn set_dpi(&mut self, dpi: f32) {
         if (dpi - self.dpi).abs() > 1e-3 {
             self.dpi = dpi;
@@ -676,6 +696,7 @@ impl Ui {
         self.layers.clear();
         self.last_trees.clear();
         self.theme = theme;
+        vm.ui_scale.set(self.user_scale);
         self.vm = vm;
         self.images = images;
         self.text.forget_images();

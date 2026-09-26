@@ -47,7 +47,8 @@ ui.define("core:topbar", function(view)
 		{ kind = "spacer" },
 		-- Extension point: mods add readouts here.
 		row({ id = "core:topbar.right", gap = "l", align = "center" }),
-		label(t("core:topbar.help", "Space pause · 1/2/3 speed · R draft · O overlay · F3 profiler · F12 devtools"), { size = "small", color = "faint" }),
+		-- On a small screen the keys are on their buttons; the line goes.
+		not view.compact() and label(t("core:topbar.help", "Space pause · 1/2/3 speed · R draft · O overlay · F3 profiler · F12 devtools"), { size = "small", color = "faint" }),
 	})
 end)
 ui.mount("top", "core:topbar")

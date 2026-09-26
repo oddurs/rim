@@ -138,6 +138,9 @@ pub enum UiAction {
     /// Draw the world at this fraction of the screen's pixels (0.25 to 1);
     /// the UI stays at full resolution.
     RenderScale(f32),
+    /// Draw the UI this much bigger (0.75 to 2), on top of the display's
+    /// own scale.
+    UiScale(f32),
     /// The title screen: play the save at this path.
     Load(String),
     /// The title screen: start a new colony.

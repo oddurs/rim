@@ -140,6 +140,7 @@ pub const UI_API: &[UiDoc] = &[
     d!("act.toggle_pause", "() -> ()", "Pause or resume."),
     d!("act.toggle_profiler", "() -> ()", "Show or hide the profiler."),
     d!("act.tool", "(key: string) -> ()", "Pick a toolbar tool (\"designate:core:chop\", \"build:core:wall\")."),
+    d!("act.ui_scale", "(scale: number) -> ()", "Set the player's UI scale, 0.75 to 2 on top of the display's; it is saved with their settings."),
     d!("act.zone_allow", "(zone: number, item: string, on: boolean) -> ()", "Let a stockpile take an item, or stop it."),
     d!("ui.anchored", "(node: Node?) -> Node", "A node attached to a pawn (entity) or cell, on the anchored layer."),
     d!(
@@ -217,6 +218,7 @@ pub const UI_API: &[UiDoc] = &[
     d!("view.clock", "() -> string", "The time of day, \"HH:MM\"."),
     d!("view.colonists", "(max: number?) -> { Pawn }", "The colonists, or the first max of them (a bar that shows a few should not pay for all of them; view.count_pawns(\"player\") has the total)."),
     d!("view.colony_lost", "() -> boolean", "Whether every colonist is gone."),
+    d!("view.compact", "() -> boolean", "Whether the screen is small (under 1440 logical pixels wide, UI scale included): core picks denser layouts."),
     d!("view.count_pawns", "(faction: string) -> number", "Living pawns of \"player\", \"hostile\" or \"wild\"."),
     d!("view.data", "(key: string) -> any", "A copy of data a sim script stored with rim.set_data, or nil."),
     d!("view.date", "() -> UiDate", "The calendar date, counted from 1."),
@@ -267,6 +269,7 @@ pub const UI_API: &[UiDoc] = &[
     d!("view.ticks_per_day", "() -> number", "Ticks in a game day."),
     d!("view.time", "() -> number", "Wall-clock seconds, for animation."),
     d!("view.tools", "() -> { Tool }", "Every tool, with the dock category and group it is filed under."),
+    d!("view.ui_scale", "() -> number", "The player's UI scale, on top of the display's (1 is normal)."),
     d!("view.ui_stats", "() -> UiStats", "The UI's own timings."),
     d!("view.ui_tree", "() -> { TreeRow }", "The node tree (devtools)."),
     d!("view.visible_pawns", "() -> { VisiblePawn }", "Pawns on screen, for anchored labels."),

@@ -9,10 +9,12 @@ local row, label = kit.row, kit.label
 local t = ui.t
 
 local WIDTH = 300
+local COMPACT_WIDTH = 240
 -- Alerts past this many are counted, not listed.
 local MAX_ALERTS = 8
 -- News lines shown in the column; older ones are in the window.
 local NEWS = 5
+local COMPACT_NEWS = 3
 -- A need this low is an alert, whatever the need.
 local CRITICAL = 0.15
 
@@ -127,7 +129,7 @@ ui.define("core:alerts", function(view)
 			})
 		)
 	end
-	return kit.panel({ w = WIDTH, pad = "s", gap = "xxs" }, items)
+	return kit.panel({ w = if view.compact() then COMPACT_WIDTH else WIDTH, pad = "s", gap = "xxs" }, items)
 end)
 ui.mount("right", "core:alerts", { align = "start", order = 0 })
 
@@ -140,7 +142,7 @@ end
 
 ui.define("core:messages", function(view)
 	local items = {}
-	for _, m in view.messages(NEWS) do
+	for _, m in view.messages(if view.compact() then COMPACT_NEWS else NEWS) do
 		if m.age > 1 then
 			break
 		end
@@ -161,7 +163,7 @@ ui.define("core:messages", function(view)
 			end,
 		})
 	)
-	return kit.panel({ w = WIDTH, pad = "s", gap = "xs" }, items)
+	return kit.panel({ w = if view.compact() then COMPACT_WIDTH else WIDTH, pad = "s", gap = "xs" }, items)
 end)
 ui.mount("right", "core:messages", { align = "start", order = 1 })
 

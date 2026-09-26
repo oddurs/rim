@@ -186,6 +186,8 @@ declare act: {
     toggle_profiler: () -> (),
     -- Pick a toolbar tool ("designate:core:chop", "build:core:wall").
     tool: (key: string) -> (),
+    -- Set the player's UI scale, 0.75 to 2 on top of the display's; it is saved with their settings.
+    ui_scale: (scale: number) -> (),
     -- Let a stockpile take an item, or stop it.
     zone_allow: (zone: number, item: string, on: boolean) -> (),
 }
@@ -203,6 +205,8 @@ declare view: {
     colonists: (max: number?) -> { Pawn },
     -- Whether every colonist is gone.
     colony_lost: () -> boolean,
+    -- Whether the screen is small (under 1440 logical pixels wide, UI scale included): core picks denser layouts.
+    compact: () -> boolean,
     -- Living pawns of "player", "hostile" or "wild".
     count_pawns: (faction: string) -> number,
     -- A copy of data a sim script stored with rim.set_data, or nil.
@@ -287,6 +291,8 @@ declare view: {
     time: () -> number,
     -- Every tool, with the dock category and group it is filed under.
     tools: () -> { Tool },
+    -- The player's UI scale, on top of the display's (1 is normal).
+    ui_scale: () -> number,
     -- The UI's own timings.
     ui_stats: () -> UiStats,
     -- The node tree (devtools).
