@@ -231,20 +231,6 @@ pub fn skill_xp(level: u32) -> u32 {
 }
 
 impl Pawn {
-    /// Where to draw the pawn, in cells (its centre): `frac` of a tick past
-    /// the last one, along the step it's on. The sim moves in whole ticks;
-    /// frames fall between them, and drawing only whole ticks judders.
-    pub fn drawn_at(&self, frac: f32) -> (f32, f32) {
-        let (x, y) = (self.pos.x as f32 + 0.5, self.pos.y as f32 + 0.5);
-        match self.next {
-            Some(n) => {
-                let t = ((self.progress as f32 + frac) / self.step_ticks.max(1) as f32).min(1.0);
-                (x + (n.x as f32 + 0.5 - x) * t, y + (n.y as f32 + 0.5 - y) * t)
-            }
-            None => (x, y),
-        }
-    }
-
     pub fn moving(&self) -> bool {
         self.next.is_some() || !self.path.is_empty()
     }
@@ -1613,31 +1599,5 @@ impl World {
             h = v.hash(k.bytes().fold(h, |h, b| crate::rng::mix(h ^ b as u64)));
         }
         h
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn walking(progress: u32) -> Pawn {
-        Pawn { pos: IVec::new(2, 3), next: Some(IVec::new(3, 3)), progress, step_ticks: 4, ..Default::default() }
-    }
-
-    #[test]
-    fn a_step_is_drawn_evenly_between_ticks() {
-        // Frames at a quarter tick apart, across a whole four-tick step:
-        // each moves the pawn the same distance, including across ticks.
-        let xs: Vec<f32> = (0..16).map(|f| walking(f / 4).drawn_at((f % 4) as f32 / 4.0).0).collect();
-        for pair in xs.windows(2) {
-            assert!((pair[1] - pair[0] - 1.0 / 16.0).abs() < 1e-5, "{xs:?}");
-        }
-        assert_eq!(walking(0).drawn_at(0.0), (2.5, 3.5), "a step starts on the cell it leaves");
-    }
-
-    #[test]
-    fn a_standing_pawn_is_drawn_on_its_cell() {
-        let p = Pawn { pos: IVec::new(2, 3), ..Default::default() };
-        assert_eq!(p.drawn_at(0.7), (2.5, 3.5));
     }
 }

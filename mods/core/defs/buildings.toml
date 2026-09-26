@@ -8,11 +8,12 @@ blocks_wind = 1.0
 label = "wall"
 color = "#7a5230"
 category = "building"
-# Walls, windows and doors join up: a run reads as one wall with
-# openings in it, outlined only where it faces something else.
-look.join = "wall"
-# It rises as it is built, and gets its edges as it's finished.
-look.layers = [{ draw = "fill", grow = [0.0, 0.85] }, { draw = "edges", width = 1.5, shade = 0.65, grow = [0.85, 1.0] }]
+# Walls, windows and doors join up: a run reads as one mass with
+# openings in it, rounded where it ends and outlined only where it faces
+# something else (DESIGN.md §6c).
+look.join = { group = "wall", round = 0.22 }
+# It rises as it is built, and gets its outline as it's finished.
+look.layers = [{ draw = "mass", grow = [0.0, 0.85] }, { draw = "edges", width = 1.5, shade = 0.55, grow = [0.85, 1.0] }]
 blocks = true
 hp = 200
 market_value = 8
@@ -47,11 +48,11 @@ blocks_wind = 1.0
 label = "window"
 color = "#9a7b58"
 category = "building"
-look.join = "wall"
+look.join = { group = "wall", round = 0.22 }
 look.layers = [
-    { draw = "fill" },
+    { draw = "mass" },
     { draw = "fill", x = 0.2, y = 0.2, w = 0.6, h = 0.6, color = "#bfe0ffe6" },
-    { draw = "edges", width = 1.5, shade = 0.65 },
+    { draw = "edges", width = 1.5, shade = 0.55 },
 ]
 blocks = true
 hp = 60

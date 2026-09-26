@@ -101,7 +101,7 @@ impl T {
     }
 
     fn pawn_screen(&self, e: Entity) -> (f32, f32) {
-        let (x, y) = draw::pawn_pos(&self.pawn(e), self.app.tick_frac());
+        let (x, y) = draw::pawn_pos(&self.pawn(e));
         self.app.cam.to_screen(x, y)
     }
 
@@ -539,7 +539,7 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         if !saw_interp {
             let p = t.pawn(founder);
             if p.next.is_some() && p.progress > 0 && p.progress < p.step_ticks {
-                let (x, y) = draw::pawn_pos(&p, t.app.tick_frac());
+                let (x, y) = draw::pawn_pos(&p);
                 saw_interp = (x.fract() - 0.5).abs() > 1e-3 || (y.fract() - 0.5).abs() > 1e-3;
             }
         }
@@ -606,6 +606,16 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     let (cx, cy) = t.screen(row);
     let seam = px(&img, (cx + z / 2.0, cy));
     t.check(dist(seam, wood_c) < 0.08, format!("no seam between joined walls ({seam:?} vs fill {wood_c:?})"));
+    // Wood meets stone at the second wall's east side: a hairline, darker than either.
+    let (sx2, _) = t.screen(row.offset(2, 0));
+    let change = [0.0, 0.5, 1.0, 1.5]
+        .into_iter()
+        .map(|dx| px(&img, (sx2 - z / 2.0 + dx, cy)))
+        .fold(f32::INFINITY, |m, c| m.min(c.iter().sum::<f32>()));
+    t.check(
+        change < stone_c.iter().sum::<f32>().min(wood_c.iter().sum::<f32>()) - 0.05,
+        format!("a hairline where wood meets stone (darkest {change:.2} against {wood_c:?} and {stone_c:?})"),
+    );
     // The edge is a 1.5px line on the cell's border; where it rasterises is
     // the renderer's business, so look across the first two pixels.
     let end = [0.0, 0.5, 1.0, 1.5]
@@ -617,6 +627,78 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         format!("the end of the run has an edge (strongest contrast {end:.2} against fill {wood_c:?})"),
     );
     t.shot("walls").await;
+
+    // ---------------------------------------------------------- joins in quarters
+    println!("\n# a wall run draws as one mass, round where it ends (DESIGN.md §6c)");
+    // Post, run, corner, tee, cross and block, each in a 3×3 slot.
+    let shapes: [&[(i32, i32)]; 6] = [
+        &[(1, 1)],
+        &[(0, 1), (1, 1), (2, 1)],
+        &[(1, 1), (2, 1), (1, 2)],
+        &[(0, 1), (1, 1), (2, 1), (1, 2)],
+        &[(0, 1), (1, 1), (2, 1), (1, 0), (1, 2)],
+        &[(0, 1), (1, 1), (2, 1), (1, 2), (2, 2)],
+    ];
+    let (sw, sh) = (4 * shapes.len() as i32, 4);
+    let slot = (2..40i32)
+        .flat_map(|r| (-r..=r).flat_map(move |dy| (-r..=r).map(move |dx| home.offset(dx, dy))))
+        .find(|&o| {
+            // Open ground, nothing built, and no pawn standing on it; plants
+            // are cleared below.
+            (-1..=sw).all(|x| {
+                (-1..=sh).all(|y| {
+                    let p = o.offset(x, y);
+                    t.w().map.inb(p)
+                        && t.w().map.passable(p)
+                        && t.w()
+                            .map
+                            .fixture_at(p)
+                            .is_none_or(|e| t.w().thing(e).is_some_and(|th| t.w().defs.thing(th.def).natural))
+                })
+            }) && t
+                .w()
+                .pawns
+                .iter()
+                .filter_map(|&e| t.w().pawn_pos(e))
+                .all(|p| !(o.x - 2..=o.x + sw + 2).contains(&p.x) || !(o.y - 2..=o.y + sh + 2).contains(&p.y))
+        })
+        .expect("a clear strip for the join shapes");
+    for x in -1..=sw {
+        for y in -1..=sh {
+            if let Some(e) = t.w().map.fixture_at(slot.offset(x, y)) {
+                t.app.sim.world.despawn_thing(e);
+            }
+        }
+    }
+    for (i, cells) in shapes.iter().enumerate() {
+        for &(x, y) in cells.iter() {
+            t.app
+                .sim
+                .world
+                .spawn_fixture_of(wall, slot.offset(4 * i as i32 + x, y), false, Some(wood))
+                .expect("a wall");
+        }
+    }
+    let zoom = t.app.cam.zoom;
+    t.app.cam.zoom = 40.0;
+    t.focus(slot.offset(sw / 2, 1));
+    let img = t.grab().await;
+    let z = t.app.cam.zoom;
+    let at = |t: &T, p: IVec, fx: f32, fy: f32| t.app.cam.to_screen(p.x as f32 + fx, p.y as f32 + fy);
+    let post = slot.offset(1, 1);
+    let fill = px(&img, at(&t, post, 0.5, 0.5));
+    let corner = px(&img, at(&t, post, 2.0 / z, 2.0 / z));
+    t.check(dist(corner, fill) > 0.12, format!("a lone post's corner is rounded off ({corner:?} vs fill {fill:?})"));
+    // The corner shape's inner corner stays square: just inside it is wall.
+    let l = slot.offset(4 * 2 + 1, 1);
+    let inner = px(&img, at(&t, l, 1.0 - 2.0 / z, 1.0 - 2.0 / z));
+    t.check(dist(inner, fill) < 0.1, format!("an inner corner is square ({inner:?} vs fill {fill:?})"));
+    // Where a run meets its neighbour there is no round and no seam.
+    let run = slot.offset(4 + 1, 1);
+    let joint = px(&img, at(&t, run, 1.0 - 1.0 / z, 2.0 / z));
+    t.check(dist(joint, fill) < 0.1, format!("a joined corner is square and seamless ({joint:?} vs fill {fill:?})"));
+    t.shot("joins").await;
+    t.app.cam.zoom = zoom;
 
     // ---------------------------------------------------------- 0215 materials
     println!("\n# pick the material before you place it (0215)");
@@ -1529,6 +1611,9 @@ fn tally(app: &App, e: Entity, cell: IVec, z: f32) -> usize {
             self.1 += 1;
         }
         fn line(&mut self, _: f32, _: f32, _: f32, _: f32, _: f32, _: Color) {
+            self.1 += 1;
+        }
+        fn tri(&mut self, _: [[f32; 2]; 3], _: Color) {
             self.1 += 1;
         }
         fn image(&mut self, _: f32, _: f32, _: f32, _: f32, _: crate::atlas::Slot, _: Color) {

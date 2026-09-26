@@ -43,10 +43,9 @@ blocks_wind = 1.0
 label = "granite"
 color = "#7d776f"
 category = "rock"
-look.layers = [
-    { draw = "fill", vary = 0.2 },
-    { draw = "fill", y = 0.8, h = 0.2, shade = 0.8, vary = 0.2 },
-]
+# Rock is a mass too: an outcrop reads as one body, rounded at its edges.
+look.join = { group = "rock", round = 0.3 }
+look.layers = [{ draw = "mass", vary = 0.12 }, { draw = "edges", width = 1.5, shade = 0.6 }]
 natural = true
 blocks = true
 hp = 500
