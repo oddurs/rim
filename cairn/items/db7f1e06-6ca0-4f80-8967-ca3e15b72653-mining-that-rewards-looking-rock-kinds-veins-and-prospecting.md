@@ -5,10 +5,11 @@ type: content
 status: backlog
 milestone: crafting
 depends_on:
+- 8cc6252d-67a0-4652-b764-851f3e6bc72a
 - d77d9e1f-f0ae-4e30-ae9c-95cd35c1346b
 - e3846c47-f425-46f5-8e96-fec056074052
 created: 2026-09-24
-updated: 2026-09-25
+updated: 2026-09-26
 priority: p1
 api: none
 effort: m
@@ -57,3 +58,7 @@ are a separate mechanism and this ticket is content.
 - [ ] Flint is minable, and chalk yields it as a vein
 - [ ] A veined cell is visible in an overlay once seen
 - [ ] Determinism test passes
+
+## 2026-09-26
+
+DESIGN.md §6c (Depth) rules that rock is terrain. Build rock kinds and veins as solid [[terrain]] with a mine block on top of 8cc6252d-67a0-4652-b764-851f3e6bc72a, not as more rock things. Rock kinds per level come from [[stratum]] defs (3f90e043-bf62-48c8-ac67-d043dc755b6e). The seen bit for prospecting is part of 5689930d-2bd1-4838-b403-a72bc61c31e9.
