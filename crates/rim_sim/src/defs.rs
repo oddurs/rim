@@ -961,6 +961,51 @@ pub struct NamesDef {
     pub names: Vec<String>,
 }
 
+// ---------------------------------------------------------------- item categories
+
+/// A shelf in the tree players filter items by (DESIGN.md §4f). An item is
+/// in it by tag, by id, or by what it is (`with = ["food"]`, `stuff =
+/// ["structural"]`), so a mod's new food lands under Food without a patch.
+/// An item can sit in several. The sim never walks the tree: toggling one
+/// sets the items under it, once.
+#[derive(Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct ItemCategoryDef {
+    pub id: String,
+    pub label: String,
+    #[serde(default)]
+    pub parent: Option<String>,
+    /// Where it sits among its siblings: lower first.
+    #[serde(default)]
+    pub order: i32,
+    /// Items carrying any of these tags.
+    #[serde(default)]
+    pub tags: Vec<String>,
+    /// These items, by id.
+    #[serde(default)]
+    pub things: Vec<String>,
+    /// Items that have any of these blocks: "food", "tool" or "stuff".
+    #[serde(default)]
+    pub with: Vec<String>,
+    /// Items that are material of any of these stuff categories.
+    #[serde(default)]
+    pub stuff: Vec<String>,
+    /// Items no other category claims land here. At most one says so.
+    #[serde(default)]
+    pub rest: bool,
+    #[serde(skip)]
+    pub parent_r: Option<DefId>,
+    /// Its children, in `order` order.
+    #[serde(skip)]
+    pub children: Vec<DefId>,
+    /// The items directly in it, in def order.
+    #[serde(skip)]
+    pub items: Vec<DefId>,
+}
+
+/// The blocks a category's `with` can name.
+const CATEGORY_WITH: &[&str] = &["food", "tool", "stuff"];
+
 // ---------------------------------------------------------------- database
 
 #[derive(Default, Debug)]
@@ -999,6 +1044,10 @@ pub struct DefDb {
     pub sky: SkyDef,
     pub start: Option<StartDef>,
     pub names: Vec<String>,
+    /// The item category tree, in load order; `category_roots` has the top
+    /// level in `order` order.
+    pub item_categories: Vec<ItemCategoryDef>,
+    pub category_roots: Vec<DefId>,
     /// Entries of the kinds mods declare (`[[kind]]`), by qualified kind
     /// ("weather:type"), in load order: plain data for scripts.
     pub mod_defs: BTreeMap<String, Vec<crate::data::Data>>,
@@ -1073,6 +1122,25 @@ impl DefDb {
         self.factor_declared(made_of, name).unwrap_or(1.0)
     }
 
+    /// A stack's hp when it's whole: its def's, scaled by its material.
+    pub fn full_hp(&self, def: DefId, made_of: Option<DefId>) -> i32 {
+        (self.thing(def).hp as f64 * self.factor(made_of, "hp")).round().max(1.0) as i32
+    }
+
+    /// Every item in a category and the categories under it, sorted.
+    pub fn category_items(&self, c: DefId) -> Vec<DefId> {
+        let mut out = Vec::new();
+        let mut open = vec![c];
+        while let Some(c) = open.pop() {
+            let cd = &self.item_categories[c as usize];
+            out.extend_from_slice(&cd.items);
+            open.extend_from_slice(&cd.children);
+        }
+        out.sort_unstable();
+        out.dedup();
+        out
+    }
+
     /// Does `item` satisfy a buildable asking for `category`?
     pub fn is_material_for(&self, item: DefId, category: &str) -> bool {
         self.thing(item).stuff.as_ref().is_some_and(|s| s.categories.iter().any(|c| c == category))
@@ -1096,6 +1164,7 @@ pub const KINDS: &[&str] = &[
     "sky",
     "start",
     "names",
+    "item_category",
 ];
 
 impl DefDb {
@@ -1131,6 +1200,7 @@ impl DefDb {
             "work_style" => self.work_styles[i].id.clone(),
             "skill" => self.skills[i].id.clone(),
             "field" => self.fields[i].id.clone(),
+            "item_category" => self.item_categories[i].id.clone(),
             _ => String::new(),
         }
     }
@@ -1191,6 +1261,9 @@ impl DefDb {
         }
         for (i, d) in self.fields.iter().enumerate() {
             index.insert(("field", d.id.clone()), i as DefId);
+        }
+        for (i, d) in self.item_categories.iter().enumerate() {
+            index.insert(("item_category", d.id.clone()), i as DefId);
         }
         let mut bare: HashMap<(&'static str, String), Vec<DefId>> = HashMap::new();
         for ((kind, id), &d) in &index {
@@ -1545,6 +1618,92 @@ impl DefDb {
                 }
             }
         }
+        // The item category tree (DESIGN.md §4f).
+        let mut rest: Option<usize> = None;
+        for i in 0..self.item_categories.len() {
+            let c = &self.item_categories[i];
+            let ctx = format!("item_category/{}", c.id);
+            let parent = c.parent.as_ref().map(|p| get("item_category", p, &ctx)).transpose()?;
+            if let Some(w) = c.with.iter().find(|w| !CATEGORY_WITH.contains(&w.as_str())) {
+                return Err(format!("{ctx}: `with` names \"{w}\"; it takes {}", CATEGORY_WITH.join(", ")));
+            }
+            let mut named = Vec::new();
+            for t in &c.things {
+                let d = get("thing", t, &ctx)?;
+                if self.things[d as usize].category != Category::Item {
+                    return Err(format!("{ctx}: {t} isn't an item, so it can't be stored or filtered"));
+                }
+                named.push(d);
+            }
+            if c.rest {
+                if let Some(r) = rest {
+                    return Err(format!(
+                        "{ctx}: only one category takes the rest, and item_category/{} already does",
+                        self.item_categories[r].id
+                    ));
+                }
+                rest = Some(i);
+            }
+            let has = |t: &ThingDef, w: &str| match w {
+                "food" => t.food.is_some(),
+                "tool" => t.tool.is_some(),
+                _ => t.stuff.is_some(),
+            };
+            let items: Vec<DefId> = (0..self.things.len() as DefId)
+                .filter(|&d| {
+                    let t = &self.things[d as usize];
+                    t.category == Category::Item
+                        && (named.contains(&d)
+                            || t.tags.iter().any(|g| c.tags.contains(g))
+                            || c.with.iter().any(|w| has(t, w))
+                            || t.stuff.as_ref().is_some_and(|s| s.categories.iter().any(|k| c.stuff.contains(k))))
+                })
+                .collect();
+            let c = &mut self.item_categories[i];
+            c.parent_r = parent;
+            c.items = items;
+        }
+        for i in 0..self.item_categories.len() {
+            let mut up = self.item_categories[i].parent_r;
+            for _ in 0..self.item_categories.len() {
+                match up {
+                    Some(p) if p as usize == i => {
+                        return Err(format!(
+                            "item_category/{}: it is its own ancestor; parents must form a tree",
+                            self.item_categories[i].id
+                        ))
+                    }
+                    Some(p) => up = self.item_categories[p as usize].parent_r,
+                    None => break,
+                }
+            }
+        }
+        if let Some(r) = rest {
+            let claimed: std::collections::BTreeSet<DefId> =
+                self.item_categories.iter().flat_map(|c| c.items.iter().copied()).collect();
+            let things = &self.things;
+            self.item_categories[r].items.extend(
+                (0..things.len() as DefId)
+                    .filter(|&d| things[d as usize].category == Category::Item && !claimed.contains(&d)),
+            );
+            self.item_categories[r].items.sort_unstable();
+        }
+        let cats = &self.item_categories;
+        let by_order = |v: &mut Vec<DefId>| v.sort_by_key(|&c| (cats[c as usize].order, c));
+        let mut children: Vec<Vec<DefId>> = vec![Vec::new(); cats.len()];
+        let mut roots = Vec::new();
+        for (i, c) in cats.iter().enumerate() {
+            match c.parent_r {
+                Some(p) => children[p as usize].push(i as DefId),
+                None => roots.push(i as DefId),
+            }
+        }
+        children.iter_mut().for_each(&by_order);
+        by_order(&mut roots);
+        for (c, kids) in self.item_categories.iter_mut().zip(children) {
+            c.children = kids;
+        }
+        self.category_roots = roots;
         if self.terrain.is_empty() {
             return Err("no terrain defined — is the core mod installed?".into());
         }

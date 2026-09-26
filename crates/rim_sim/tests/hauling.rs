@@ -6,32 +6,8 @@ use rim_sim::hecs::Entity;
 use rim_sim::world::{Blueprint, Job, Pawn, Thing};
 use rim_sim::{Command, IVec, Sim};
 
-/// A colony whose only work is hauling unless a test adds more: every
-/// other work type is set to 0, and there's an open patch for a stockpile.
 fn colony() -> (Sim, Entity, IVec) {
-    let mut sim = Sim::new(&common::mods(), 5).unwrap();
-    let pawn = sim.world.colonists().next().unwrap();
-    let defs = sim.world.defs.clone();
-    for (w, d) in defs.work_types.iter().enumerate() {
-        let level = if d.id == "core:haul" { 1 } else { 0 };
-        sim.push(Command::SetPriority { pawn, work: w as rim_sim::defs::DefId, level });
-    }
-    let c = sim.world.pawn_pos(pawn).unwrap();
-    // Room for items: open, and nothing standing there (tall grass is
-    // passable, but no stack goes under it).
-    let open = |s: &Sim, o: IVec| {
-        (0..3).all(|x| {
-            (0..3).all(|y| {
-                let p = o.offset(x, y);
-                s.world.map.passable(p) && s.world.map.item_at(p).is_none() && s.world.map.fixture_at(p).is_none()
-            })
-        })
-    };
-    let site = (3..40)
-        .flat_map(|r| [c.offset(r, 0), c.offset(-r, 0), c.offset(0, r), c.offset(0, -r)])
-        .find(|&o| open(&sim, o))
-        .expect("open ground");
-    (sim, pawn, site)
+    common::hauling_colony(5)
 }
 
 /// How many of `def` lie inside zone `zone`.

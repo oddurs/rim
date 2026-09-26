@@ -997,12 +997,14 @@ pub fn work_waiting(w: &World) -> Vec<u32> {
         n[o.work_type as usize] += 1;
     }
     if let Some(hw) = defs.haul_work.filter(|_| !w.zones.list.is_empty()) {
-        let mut taken: BTreeMap<DefId, bool> = BTreeMap::new();
+        let mut taken: BTreeMap<(DefId, Option<DefId>, i32), bool> = BTreeMap::new();
         for (te, t) in w.ecs.query::<(Entity, &Thing)>().without::<&Blueprint>().iter() {
-            if w.map.item_at(t.pos) != Some(te) || w.zones.at(&w.map, t.pos).is_some_and(|z| z.takes(t.def)) {
+            let of = w.made_of(te);
+            let keeps = |z: &crate::zone::Zone| z.keeps(&w.defs, t.def, of, Some(t.hp));
+            if w.map.item_at(t.pos) != Some(te) || w.zones.at(&w.map, t.pos).is_some_and(keeps) {
                 continue;
             }
-            if *taken.entry(t.def).or_insert_with(|| w.zones.list.iter().any(|z| z.takes(t.def))) {
+            if *taken.entry((t.def, of, t.hp)).or_insert_with(|| w.zones.list.iter().any(keeps)) {
                 n[hw as usize] += 1;
             }
         }
@@ -1036,16 +1038,17 @@ fn find_haul(w: &World, e: Entity, from: IVec) -> Option<(u32, Job, Entity)> {
     // Whether any zone has room for a thing at all, worked out once per def
     // and material: with every stockpile full, that's all an idle hauler
     // has to learn.
-    let mut room: BTreeMap<(DefId, Option<DefId>), bool> = BTreeMap::new();
+    let mut room: BTreeMap<(DefId, Option<DefId>, i32), bool> = BTreeMap::new();
     let mut best: Option<(u32, Entity, IVec)> = None;
     for (te, t) in w.ecs.query::<(Entity, &Thing)>().without::<&Blueprint>().iter() {
-        if w.map.item_at(t.pos) != Some(te) || w.zones.at(&w.map, t.pos).is_some_and(|z| z.takes(t.def)) {
+        let of = w.made_of(te);
+        let keeps = |z: &crate::zone::Zone| z.keeps(&w.defs, t.def, of, Some(t.hp));
+        if w.map.item_at(t.pos) != Some(te) || w.zones.at(&w.map, t.pos).is_some_and(keeps) {
             continue;
         }
-        let of = w.made_of(te);
-        let any_room = *room.entry((t.def, of)).or_insert_with(|| {
-            w.zones.members().any(|(z, c)| z.takes(t.def) && free(t.def, of, w.map.pos(c as usize)))
-        });
+        let any_room = *room
+            .entry((t.def, of, t.hp))
+            .or_insert_with(|| w.zones.members().any(|(z, c)| keeps(z) && free(t.def, of, w.map.pos(c as usize))));
         if !any_room {
             continue;
         }
@@ -1059,7 +1062,7 @@ fn find_haul(w: &World, e: Entity, from: IVec) -> Option<(u32, Job, Entity)> {
         let dest = w
             .zones
             .members()
-            .filter(|(z, _)| z.takes(t.def))
+            .filter(|(z, _)| keeps(z))
             .map(|(_, c)| w.map.pos(c as usize))
             .filter(|&c| free(t.def, of, c))
             .map(|c| (c.octile(t.pos), c))

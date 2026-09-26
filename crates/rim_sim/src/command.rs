@@ -2,9 +2,11 @@
 //! boundary; this is what makes replays and lockstep multiplayer possible.
 
 use crate::ai;
-use crate::defs::{Category, DefId, Targets};
+use crate::defs::{DefId, Targets};
+use crate::filter::FilterEdit;
 use crate::order;
 use crate::world::*;
+use crate::zone::StoreRef;
 use crate::IVec;
 use hecs::Entity;
 
@@ -75,6 +77,12 @@ pub enum Command {
         zone: u32,
         thing: DefId,
         on: bool,
+    },
+    /// Change what a store takes: things, categories of them, materials,
+    /// condition (DESIGN.md §4f).
+    StoreFilter {
+        store: StoreRef,
+        edit: FilterEdit,
     },
     /// Set how much a colonist wants to do a kind of work: 1 first, 0 never,
     /// up to the priority scale's `levels` (DESIGN.md §4d).
@@ -221,11 +229,8 @@ pub fn apply(w: &mut World, c: Command) {
         }
         Command::Stockpile { a, b, zone: Some(id) } => w.zones.paint(&w.map, a, b, Some(id)),
         Command::ClearZone { a, b } => w.zones.paint(&w.map, a, b, None),
-        Command::ZoneAllow { zone, thing, on } => {
-            if (thing as usize) < defs.things.len() && defs.thing(thing).category == Category::Item {
-                w.zones.allow(zone, thing, on);
-            }
-        }
+        Command::ZoneAllow { zone, thing, on } => w.zones.edit(&defs, zone, FilterEdit::Thing { thing, on }),
+        Command::StoreFilter { store: StoreRef::Zone(zone), edit } => w.zones.edit(&defs, zone, edit),
         Command::SetPriority { pawn, work, level } => {
             if !is_colonist(w, pawn) || work as usize >= defs.work_types.len() {
                 return;

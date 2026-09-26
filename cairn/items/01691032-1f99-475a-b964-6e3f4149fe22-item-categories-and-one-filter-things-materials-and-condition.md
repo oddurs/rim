@@ -2,8 +2,10 @@
 id: 01691032-1f99-475a-b964-6e3f4149fe22
 title: 'Item categories and one filter: things, materials and condition'
 type: feature
-status: backlog
+status: review
 milestone: crafting
+assignee: Oddur Sigurdsson
+claimed: 2026-09-26
 created: 2026-09-26
 updated: 2026-09-26
 priority: p1
@@ -27,8 +29,12 @@ Stores, stockpile zones and bills all ask one question: may this stack go here? 
 
 ## Acceptance criteria
 
-- [ ] Core declares categories and `bulky`; every item def lands in exactly the categories it should (test)
-- [ ] A zone can refuse a material (bone) while taking the thing's other materials (test)
-- [ ] A zone can refuse stacks below a condition (test)
-- [ ] Zone filters survive save and load, and a missing def drops out with a note
-- [ ] Determinism test passes
+- [x] Core declares categories and `bulky`; every item def lands in exactly the categories it should (test)
+- [x] A zone can refuse a material (bone) while taking the thing's other materials (test)
+- [x] A zone can refuse stacks below a condition (test)
+- [x] Zone filters survive save and load, and a missing def drops out with a note
+- [x] Determinism test passes
+
+## 2026-09-26
+
+Filter is sorted sets (things allowed, materials refused, a condition range), not interned bitsets as first planned: the levels item's accepts index lists stores per thing, so a filter is only read to check one stack's material and condition. DESIGN §4f corrected. Categories match by tag, id, or mechanism (with = food/tool/stuff, stuff = [categories]) so mods' items land without patches. Zone keeps its serde shape (filter flattened), so older saves load unchanged.

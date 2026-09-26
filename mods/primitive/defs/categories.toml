@@ -1,0 +1,28 @@
+# The stone age's shelves in core's item tree (DESIGN.md §4f).
+
+[[item_category]]
+id = "knapping"
+label = "Knapping stone"
+parent = "core:materials"
+order = 30
+stuff = ["lithic"]
+
+[[item_category]]
+id = "stones"
+label = "Loose stones"
+parent = "core:materials"
+order = 35
+tags = ["stone_raw"]
+
+[[item_category]]
+id = "fibres"
+label = "Fibre and cordage"
+parent = "core:materials"
+order = 40
+tags = ["fibre", "cordage"]
+
+[[item_category]]
+id = "vessels"
+label = "Vessels"
+order = 40
+tags = ["vessel"]

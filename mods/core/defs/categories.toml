@@ -1,0 +1,27 @@
+# The item category tree stores and bills filter by (DESIGN.md §4f). An
+# item joins by tag, by id, or by what it is, so a mod's new food is under
+# Food with no patch. A mod adds its own shelves with `parent`.
+
+[[item_category]]
+id = "food"
+label = "Food"
+order = 10
+with = ["food"]
+
+[[item_category]]
+id = "materials"
+label = "Materials"
+order = 20
+stuff = ["structural"]
+
+[[item_category]]
+id = "tools"
+label = "Tools"
+order = 30
+with = ["tool"]
+
+[[item_category]]
+id = "other"
+label = "Other"
+order = 90
+rest = true

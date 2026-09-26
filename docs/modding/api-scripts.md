@@ -31,6 +31,7 @@ are in [Scripting rules](scripting.md).
 | `rim.has_tool` | `(tags: { string }) -> boolean` | Whether some tool in the colony, lying about or in a hand, has every one of these tool tags. False for a tag no tool has. |
 | `rim.hour` | `() -> number` | Hour of the day, 0 to 24 (tick 0 is 06:00). |
 | `rim.indoors` | `(x: number, y: number) -> boolean` | Whether a cell is inside an enclosed room. |
+| `rim.item_categories` | `{ItemCategoryInfo}` | The item category tree stores and bills filter by, in load order. Each lists its children and the items directly in it, by id. |
 | `rim.leave_after` | `(id: number, ticks: number) -> ()` | Make a pawn give up and walk off the map after `ticks`. |
 | `rim.log` | `(message: string) -> ()` | Print a line to the console, tagged with your mod. |
 | `rim.map_size` | `() -> (number, number)` | Map width and height in cells. |
@@ -71,6 +72,7 @@ type Faction = "player" | "hostile" | "wild"
 type MessageKind = "info" | "good" | "threat" | "bad"
 type CreatureInfo = { id: string, label: string, intelligent: boolean, aggressive: boolean, flees: boolean, plural: string, market_value: number, max_hp: number, wild: boolean }
 type ThingInfo = { id: string, label: string, market_value: number, food: boolean, item: boolean, tags: { string } }
+type ItemCategoryInfo = { id: string, label: string, parent: string?, order: number, children: { string }, items: { string } }
 type Date = { year: number, season: string, season_index: number, day: number, day_of_year: number, year_days: number, year_fraction: number }
 type Room = { id: number, cells: number, enclosed: boolean }
 type PriorityPart = { label: string, delta: number }

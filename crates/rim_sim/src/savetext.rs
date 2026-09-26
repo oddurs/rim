@@ -67,7 +67,11 @@ const DEF_REFS: &[(&str, &str, &str)] = &[
     ("log", "*.commands.*.1.SetStance.stance", "stance"),
     ("engine:world", "stance", "stance"),
     ("engine:zones", "list.*.allows.*", "thing"),
+    ("engine:zones", "list.*.refuses.*", "thing"),
     ("log", "*.commands.*.1.ZoneAllow.thing", "thing"),
+    ("log", "*.commands.*.1.StoreFilter.edit.Thing.thing", "thing"),
+    ("log", "*.commands.*.1.StoreFilter.edit.Material.material", "thing"),
+    ("log", "*.commands.*.1.StoreFilter.edit.Category.category", "item_category"),
 ];
 
 /// A section's bytes as JSON and back, through the type it holds.
