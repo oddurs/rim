@@ -2,12 +2,14 @@
 id: 4c9fc19b-3b7b-4bc3-93b4-7b5d600cbc8d
 title: 'Work lenses: the board''s views register like screens'
 type: feature
-status: backlog
+status: done
 milestone: work
+assignee: Oddur Sigurdsson
 depends_on:
 - 166a4cc9-fee8-4cd4-9384-4ec243f74031
 created: 2026-09-26
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p1
 api: additive
 effort: s
@@ -28,6 +30,10 @@ The Work screen will carry the board, the Roles lens and one person as shelves, 
 
 ## Acceptance criteria
 
-- [ ] A fixture mod's lens appears as a tab, and its writes show on the board (UI test)
-- [ ] Board and Person are lenses; the separate ranked window is gone
-- [ ] `docs/modding/api-ui.md` documents `lens`
+- [x] A fixture mod's lens appears as a tab, and its writes show on the board (UI test)
+- [x] Board and Person are lenses; the separate ranked window is gone
+- [x] `docs/modding/api-ui.md` documents `lens`
+
+## 2026-09-26
+
+Dropped the Tab key for the next lens: with nothing focused, Tab belongs to the game (next colonist), and taking it inside the Work window would make Tab mean two things. Tabs are clickable, and a binding can come later if players ask.

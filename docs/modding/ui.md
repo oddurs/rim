@@ -460,6 +460,24 @@ screens.add({ id = "my_mod:herds", label = "Herds", key = "h" })
 Buttons are `core:screens.<id>`, sorted by `order` (core's are 10, 20
 and 30; the default is 100) and then by when they were added.
 
+### Work lenses
+
+The Work screen shows one lens at a time: core's Board and Person, and any a
+mod adds (DESIGN.md §4d). A lens draws from the same `view.board()` data and
+writes only through `act`, so it can't disagree with the board. A headcount
+view or a labour list is a lens, not a replacement screen:
+
+```lua
+local work = require("@core/ui/work")
+work.lens({ id = "my_mod:crews", label = "Crews", order = 40, draw = function(view, board)
+	return build_crews(board)
+end })
+```
+
+Tabs are `core:work.lens.<id>`, sorted by `order` (core's are 10 and 20;
+the default is 100). Registering the same id again replaces the lens and
+keeps its place.
+
 ### The dock
 
 The bottom edge holds verbs only (`core:toolbar`, in
