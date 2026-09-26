@@ -1720,14 +1720,21 @@ impl World {
             if cells.is_empty() {
                 continue;
             }
+            // What each piece is and is made of, once for every field. Rock
+            // nobody has touched bounds a room as its thing does.
+            let pieces: Vec<(Option<DefId>, Option<DefId>)> = cells
+                .iter()
+                .map(|&c| {
+                    let made_of =
+                        self.map.fixture[c as usize].and_then(|e| self.ecs.get::<&MadeOf>(e).ok().map(|m| m.0));
+                    (self.fixture_def_at(self.map.pos(c as usize)), made_of)
+                })
+                .collect();
             for (fi, fd) in defs.fields.iter().enumerate() {
                 let (mut leak_sum, mut pass_sum) = (0.0, 0.0);
-                for &c in cells {
-                    // Rock nobody has touched bounds a room as its thing does.
-                    let piece = self.fixture_def_at(self.map.pos(c as usize)).and_then(|d| {
+                for &(def, made_of) in &pieces {
+                    let piece = def.and_then(|d| {
                         let b = defs.thing(d).boundary.iter().find(|b| b.field_r as usize == fi)?;
-                        let made_of =
-                            self.map.fixture[c as usize].and_then(|e| self.ecs.get::<&MadeOf>(e).ok().map(|m| m.0));
                         Some((b.leak, b.pass, made_of))
                     });
                     match piece {
