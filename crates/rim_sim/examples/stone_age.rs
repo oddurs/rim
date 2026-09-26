@@ -17,7 +17,8 @@
 //!   walls beside the hut.
 //!
 //! Each morning it marks what has regrown to be gathered again. `--show
-//! SEED` prints that run's messages.
+//! SEED` prints that run's messages. `--defaults` leaves every priority at
+//! its default, to measure what the colonist does unprompted.
 
 use rim_sim::data::{Data, Key};
 use rim_sim::hecs::Entity;
@@ -124,8 +125,11 @@ fn run(mods: &Path, seed: u64, days: u64, hut: i32) -> Report {
             s.push(Command::SetPriority { pawn, work, level });
         }
     };
-    priority(&mut s, "core:build", 1);
-    priority(&mut s, "crafting:craft", 2);
+    let defaults = std::env::args().any(|a| a == "--defaults");
+    if !defaults {
+        priority(&mut s, "core:build", 1);
+        priority(&mut s, "crafting:craft", 2);
+    }
     s.push(Command::Designate { designation: des("core:gather"), a: c.offset(-20, -20), b: c.offset(20, 20) });
     s.push(Command::Designate { designation: des("core:harvest"), a: c.offset(-20, -20), b: c.offset(20, 20) });
     for p in nearest(&s, "primitive:flint_nodule", c, 3).into_iter().chain(nearest(&s, "primitive:loose_stones", c, 2))
@@ -276,7 +280,9 @@ fn run(mods: &Path, seed: u64, days: u64, hut: i32) -> Report {
             }
             if axe && !*chopping {
                 *chopping = true;
-                priority(&mut s, "core:chop", 2);
+                if !defaults {
+                    priority(&mut s, "core:chop", 2);
+                }
                 let oak = thing("core:tree_oak");
                 marked = s
                     .world

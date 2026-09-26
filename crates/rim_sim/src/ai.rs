@@ -632,6 +632,10 @@ fn find_work(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
     Some(job)
 }
 
+/// Added to the distance of work that isn't urgent, so any urgent job at a
+/// level comes first; no walk on a map comes near it.
+const CALM: u32 = 1 << 24;
+
 /// Why a kind of work was or wasn't taken: the why panel (DESIGN.md §4d).
 #[derive(Clone, Debug)]
 pub enum Why {
@@ -746,14 +750,26 @@ fn choose_work(w: &World, e: Entity, p: &Pawn, mut why: Option<&mut Refusals>) -
     let level: Vec<u8> =
         (0..defs.work_types.len() as DefId).map(|t| crate::rules::effective(&defs, &w.rules, p, t)).collect();
     let wanted = |t: DefId| level[t as usize] > 0;
-    // The nearest job of each work type: (distance, job, what to reserve).
+    // Within a level, urgent work comes before calm work, and then the
+    // nearest (DESIGN.md §4d): the key is the distance, plus CALM for work
+    // that isn't urgent. Urgent: raising a shelter (walls, doors, a bed)
+    // while the colony has none, and a comfort (a fire) while it has none,
+    // and clearing the ground for either.
+    let (shelterless, comfortless) = (std::cell::OnceCell::new(), std::cell::OnceCell::new());
+    let urgent_build = |thing: DefId| {
+        let td = defs.thing(thing);
+        ((td.blocks || td.door || td.bed.is_some()) && *shelterless.get_or_init(|| !w.has_shelter()))
+            || (td.comforts && *comfortless.get_or_init(|| !w.has_comfort()))
+    };
+    let key = |d: u32, urgent: bool| if urgent { d } else { d.saturating_add(CALM) };
+    // The best job of each work type: (key, job, what to reserve).
     let mut best: Vec<Option<(u32, Job, Entity)>> = vec![None; defs.work_types.len()];
     let nearer =
         |b: &Option<(u32, Job, Entity)>, d: u32, r: Entity| b.as_ref().is_none_or(|b| (d, r.id()) < (b.0, b.2.id()));
 
     // Blueprints, nearest first; stop at the first that yields a job.
     if let Some(bw) = defs.build_work.filter(|&t| wanted(t)) {
-        /// (distance, blueprint, where to stand, first missing material and how many)
+        /// (key, blueprint, where to stand, first missing material and how many)
         type Candidate = (u32, Entity, Goal, Option<(DefId, u32)>);
         let mut bps: Vec<Candidate> = Vec::new();
         for (be, t, bp) in w.ecs.query::<(Entity, &Thing, &Blueprint)>().iter() {
@@ -764,13 +780,14 @@ fn choose_work(w: &World, e: Entity, p: &Pawn, mut why: Option<&mut Refusals>) -
                 continue;
             }
             let missing = bp.cost.iter().zip(&bp.delivered).find(|(c, d)| **d < c.1).map(|(c, d)| (c.0, c.1 - d));
-            bps.push((t.pos.octile(p.pos), be, w.reach_goal(t), missing));
+            bps.push((key(t.pos.octile(p.pos), urgent_build(t.def)), be, w.reach_goal(t), missing));
         }
         bps.sort_by_key(|b| (b.0, b.1.id()));
         // A material with nothing to bring for one plan has nothing for
         // the next: asked once, not once per plan across the whole map.
         let mut none_of: Vec<DefId> = Vec::new();
-        for (d, be, goal, missing) in bps {
+        for (k, be, goal, missing) in bps {
+            let d = k % CALM;
             if !w.map.can_reach(p.pos, goal) {
                 if let Some(r) = why.as_deref_mut() {
                     r.note(bw, d, Why::Unreachable);
@@ -779,13 +796,13 @@ fn choose_work(w: &World, e: Entity, p: &Pawn, mut why: Option<&mut Refusals>) -
             }
             match missing {
                 None => {
-                    best[bw as usize] = Some((d, Job::Construct { bp: be }, be));
+                    best[bw as usize] = Some((k, Job::Construct { bp: be }, be));
                     break;
                 }
                 Some((mdef, want)) => {
                     if !none_of.contains(&mdef) {
                         if let Some((sd, src)) = nearest_item(w, e, p.pos, mdef) {
-                            best[bw as usize] = Some((sd + d, Job::Deliver { bp: be, src, want, stage: 0 }, be));
+                            best[bw as usize] = Some((k + sd, Job::Deliver { bp: be, src, want, stage: 0 }, be));
                             break;
                         }
                         none_of.push(mdef);
@@ -806,7 +823,9 @@ fn choose_work(w: &World, e: Entity, p: &Pawn, mut why: Option<&mut Refusals>) -
         let dd = &defs.designations[des.0 as usize];
         let wt = designated_work(w, te, dd.work_r);
         let d = t.pos.octile(p.pos);
-        if !wanted(wt) || !nearer(&best[wt as usize], d, te) {
+        let urgent = w.ecs.get::<&Planned>(te).is_ok_and(|pl| urgent_build(pl.thing));
+        let k = key(d, urgent);
+        if !wanted(wt) || !nearer(&best[wt as usize], k, te) {
             continue;
         }
         if w.reserved_by_other(te, e) {
@@ -831,9 +850,9 @@ fn choose_work(w: &World, e: Entity, p: &Pawn, mut why: Option<&mut Refusals>) -
                 _ => continue,
             },
         };
-        let nearest = detour == 0 || nearer(&best[wt as usize], d + detour, te);
+        let nearest = detour == 0 || nearer(&best[wt as usize], k + detour, te);
         if nearest && w.map.can_reach(p.pos, w.reach_goal(t)) {
-            best[wt as usize] = Some((d + detour, job, te));
+            best[wt as usize] = Some((k + detour, job, te));
         } else if nearest {
             if let Some(r) = why.as_deref_mut() {
                 r.note(wt, d, Why::Unreachable);
@@ -845,7 +864,7 @@ fn choose_work(w: &World, e: Entity, p: &Pawn, mut why: Option<&mut Refusals>) -
     for (se, t, o) in w.ecs.query::<(Entity, &Thing, &Order)>().without::<&Blueprint>().iter() {
         let wt = o.work_type;
         let d = t.pos.octile(p.pos);
-        if !wanted(wt) || !nearer(&best[wt as usize], d, se) {
+        if !wanted(wt) || !nearer(&best[wt as usize], key(d, false), se) {
             continue;
         }
         let reserved = w.reserved_by_other(se, e);
@@ -866,8 +885,8 @@ fn choose_work(w: &World, e: Entity, p: &Pawn, mut why: Option<&mut Refusals>) -
                 .and_then(|need| tool_for(w, e, p, need, have))
                 .map(|(extra, tool)| (d + extra, Job::Craft { site: se, tool })),
         };
-        match job {
-            Some((dist, job)) if nearer(&best[wt as usize], dist, se) => best[wt as usize] = Some((dist, job, se)),
+        match job.map(|(dist, job)| (key(dist, false), job)) {
+            Some((k, job)) if nearer(&best[wt as usize], k, se) => best[wt as usize] = Some((k, job, se)),
             Some(_) => {}
             None => {
                 if let Some(r) = why.as_deref_mut() {
@@ -892,9 +911,9 @@ fn choose_work(w: &World, e: Entity, p: &Pawn, mut why: Option<&mut Refusals>) -
             }
         }
         if beaten.is_none() {
-            if let Some(h) = find_haul(w, e, p.pos) {
-                if nearer(&best[hw as usize], h.0, h.2) {
-                    best[hw as usize] = Some(h);
+            if let Some((d, job, src)) = find_haul(w, e, p.pos) {
+                if nearer(&best[hw as usize], key(d, false), src) {
+                    best[hw as usize] = Some((key(d, false), job, src));
                 }
             }
         }
@@ -915,9 +934,9 @@ fn choose_work(w: &World, e: Entity, p: &Pawn, mut why: Option<&mut Refusals>) -
             }
             continue;
         }
-        if nearer(&best[wt as usize], d, o) {
+        if nearer(&best[wt as usize], key(d, false), o) {
             if w.map.can_reach(p.pos, Goal::Touch(op)) {
-                best[wt as usize] = Some((d, Job::Attack { target: o, until: w.tick + 2400 }, o));
+                best[wt as usize] = Some((key(d, false), Job::Attack { target: o, until: w.tick + 2400 }, o));
             } else if let Some(r) = why.as_deref_mut() {
                 r.note(wt, d, Why::Unreachable);
             }
@@ -935,7 +954,7 @@ fn choose_work(w: &World, e: Entity, p: &Pawn, mut why: Option<&mut Refusals>) -
     if let Some(r) = why {
         for (t, b) in best.iter().enumerate().filter(|(t, _)| *t as DefId != chosen) {
             if let Some(b) = b {
-                r.0[t] = Some((b.0, Why::Beaten(chosen)));
+                r.0[t] = Some((b.0 % CALM, Why::Beaten(chosen)));
             }
         }
     }
