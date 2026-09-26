@@ -8,6 +8,7 @@ depends_on:
 - 5689930d-2bd1-4838-b403-a72bc61c31e9
 - 6fd6b13b-1186-46f4-876e-743d173e03d7
 - 8f4f1de8-5784-4377-8cee-25bcf223275e
+- acd85584-7f3d-4348-8d56-5242a0bdb620
 - e311c029-499c-4764-a4d6-6d1f933f00f9
 - f2a8ffc7-9aa8-46cd-9c78-97c3a28001bd
 created: 2026-09-26
@@ -40,3 +41,7 @@ Light has to be continuous across levels: no edge where one level's light stops,
 - [ ] Changing level with all three levels cached runs no bake and no occluder rebuild, and mean frame brightness changes by less than 10% per frame during the switch (test)
 - [ ] A pit at noon is sunlit on its floor; a cellar beside it is dark (screenshot)
 - [ ] Bench on the stacked scene (5689930d) recorded here, inside budget
+
+## 2026-09-26
+
+Agreed with the Depth session. e311c029 keeps every level in one Map's flat arrays (surface is slice 0, then −1…−3, then the levels above; idx(p) includes z). Openings arrive with the portals item acd85584, now a dependency: Map::portals() -> &[Portal { top, bottom }], sorted by top index and bumped in Map::revision; World::air_at(p), where air always opens to (x, y, z−1); and Map::air_cells(z) -> &[u32], kept per level, so compose never scans a level for openings. 5689930d keeps caches for the viewed level ±1.
