@@ -33,7 +33,12 @@ A torch in a hut and a torch in a field should look different, and a window shou
 - [ ] A hut with a west window shows a beam on the floor at 18:40 and none at 12:00 (autotest screenshots)
 - [ ] One brazier lights a 3×3 hut to its corners and leaves the corners of a 12×10 hall dim (screenshots)
 - [ ] Room fill rebuilds only with rooms (test)
+- [ ] Across a sweep of sun angles, no roofed texel sees the sky except along a ray through a window: a ray from under a roof stops at any wall or door whatever its height (readback test)
 
 ## 2026-09-26
 
 Agreed with Houses: the window daylight fan and the fire's warm wash belong to this item. 4791e24b drops both and keeps only the gap marker and the open-sky hatch. The plan draws nothing for either, so there's no second fan to replace.
+
+## 2026-09-26
+
+Found in the concept demo: the indoor ray blocked at a wall only while the ray was below the wall's height. A ray that reached a wall exactly at roof height slipped between the roof and the wall top, which lit a thin band of full sun at a fixed distance (wall height / tan elevation) from every wall. It showed on 141 of the daylight hours sampled at the low preset. The roof rests on the walls, so a ray from under it must stop at any wall or door. The new criterion tests for this.
