@@ -556,6 +556,13 @@ impl Snapshot {
         }
         if self.header.format >= 2 {
             for (e, mut k) in dec::<Vec<(Entity, Work)>>(self, "engine:work")? {
+                // Shelved work toward a designation that is gone is dropped.
+                k.other = k.other.and_then(|mut o| {
+                    if let Some(d) = o.designation {
+                        o.designation = Some(remap.get("designation", d)?);
+                    }
+                    Some(o)
+                });
                 if let Some(d) = k.designation {
                     // Progress toward a designation that is gone starts over.
                     let Some(d) = remap.get("designation", d) else { continue };
@@ -568,8 +575,7 @@ impl Snapshot {
         } else {
             for (e, old) in dec::<Vec<(Entity, PlanProgress)>>(self, "engine:blueprint")? {
                 let total = old.work.max(1);
-                let k =
-                    Work { done: total.saturating_sub(old.work_left), total, designation: None, side: Side::default() };
+                let k = Work { done: total.saturating_sub(old.work_left), ..Work::new(total, None) };
                 add(e, &|b| {
                     b.add(k);
                 });
@@ -684,12 +690,7 @@ impl Snapshot {
                     .map(|d| (d.0, w.stat(target, "work").map_or(1, |x| x.round().max(1.0) as u32))),
             };
             let Some((designation, total)) = found else { continue };
-            let k = Work {
-                done: done.min(total),
-                total: total.max(1),
-                designation: Some(designation),
-                side: Side::default(),
-            };
+            let k = Work { done: done.min(total), ..Work::new(total, Some(designation)) };
             let _ = w.ecs.insert_one(target, k);
         }
 

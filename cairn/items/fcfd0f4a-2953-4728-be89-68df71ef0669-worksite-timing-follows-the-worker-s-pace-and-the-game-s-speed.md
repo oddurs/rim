@@ -2,12 +2,12 @@
 id: fcfd0f4a-2953-4728-be89-68df71ef0669
 title: Worksite timing follows the worker's pace and the game's speed
 type: bug
-status: doing
+status: done
 milestone: building
 assignee: Oddur Sigurdsson
-claimed: 2026-09-25
 created: 2026-09-25
 updated: 2026-09-25
+closed_at: 2026-09-25
 priority: p1
 api: none
 effort: s

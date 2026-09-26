@@ -975,8 +975,7 @@ fn run_harvest(
                 } else {
                     let ready_at = w.tick + (hd.regrow_days * crate::TICKS_PER_DAY as f64) as u64;
                     w.regrow(target, harvest, ready_at);
-                    // What grows back is harvested from scratch.
-                    let _ = w.ecs.remove_one::<Work>(target);
+                    w.finish_work(target);
                     w.map.touch(t.pos);
                 }
                 for &(yd, n) in &hd.yields_r {

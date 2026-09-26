@@ -280,7 +280,7 @@ fn stage_reads_work_and_lost_hp() {
     let max = s.world.stat(w, "hp").unwrap().round() as i32;
     s.world.ecs.get::<&mut Thing>(w).unwrap().hp = max / 2;
     assert_eq!(s.world.stage(w), 4, "half its hp gone");
-    s.world.ecs.insert_one(w, Work { done: 7, total: 8, designation: None, side: Side::East }).unwrap();
+    s.world.ecs.insert_one(w, Work { done: 7, side: Side::East, ..Work::new(8, None) }).unwrap();
     assert_eq!(s.world.stage(w), 7, "the larger of the two");
 }
 
@@ -292,4 +292,44 @@ fn side_is_where_the_worker_stands() {
     assert_eq!(Side::of(at, IVec::new(5, 4)), Side::North);
     assert_eq!(Side::of(at, IVec::new(5, 6)), Side::South);
     assert_eq!(Side::of(at, IVec::new(6, 6)), Side::East, "a diagonal tie counts east or west");
+}
+
+/// The primitive mod gives the oak a gather harvest beside core's chop:
+/// gathering from a half-felled tree must not undo the felling.
+#[test]
+fn gathering_between_chops_keeps_the_chop() {
+    // Every mod: the stone age is what gives the oak its second harvest.
+    let mut s = Sim::new(&mods(), 21).expect("mods load");
+    s.step();
+    let founder = s.world.colonists().next().expect("a founder");
+    let (tree, at) = nearest_oak(&mut s, founder);
+    let hs = s.world.defs.thing(thing(&s, "tree_oak")).harvest.clone();
+    let chop = hs.iter().find(|h| h.destroy).expect("an oak is felled").clone();
+    let gather = hs.iter().find(|h| !h.destroy).expect("the primitive mod gathers from oaks").clone();
+    let from = at.offset(-1, 0);
+    let work_at = |s: &mut Sim, h: &rim_sim::defs::HarvestDef, n: u32| {
+        for _ in 0..n {
+            s.world.work_on(tree, at, from, Some(h.desig_r), 1, |_| h.work);
+        }
+        work(s, tree).unwrap()
+    };
+
+    work_at(&mut s, &chop, 50);
+    let k = work_at(&mut s, &gather, 10);
+    assert_eq!((k.designation, k.done), (Some(gather.desig_r), 10), "gathering counts on its own");
+    assert_eq!(k.other.map(|o| (o.designation, o.done)), Some((Some(chop.desig_r), 50)), "the chop is shelved");
+
+    let loaded = Snapshot::capture(&s).restore(&mods(), &|_| true).expect("restores");
+    assert_eq!(work(&loaded, tree), Some(k), "and stays shelved through a save");
+
+    // Back to chopping: it carries on, and the gather waits its turn.
+    let k = work_at(&mut s, &chop, 1);
+    assert_eq!((k.designation, k.done), (Some(chop.desig_r), 51));
+    assert_eq!(k.other.map(|o| o.done), Some(10));
+
+    // A gather finishing hands the tree back to the chop.
+    work_at(&mut s, &gather, 1);
+    s.world.finish_work(tree);
+    let k = work(&s, tree).unwrap();
+    assert_eq!((k.designation, k.done, k.other), (Some(chop.desig_r), 51, None));
 }

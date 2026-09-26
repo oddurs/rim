@@ -151,12 +151,12 @@ Exposure makes shelter matter: warmth, enclosed rooms, day/night, weather. Get f
 
 ## building — Building
 
-`#########·` 88% · 15 of 17 done · due 2026-11-15
+`#########·` 89% · 16 of 18 done · due 2026-11-15
 
 A one-week sprint inside Colony. Building stops being a fixed list of defs
 
 - [ ] `ff97096d` A wall planned over loose items buries them <sup>bug · p2 · s · engine</sup>
-- [ ] `fcfd0f4a` Worksite timing follows the worker's pace and the game's speed <sup>bug · p1 · s · client</sup>
+- [ ] `58f8cfb3` Gathering from a half-felled tree keeps the felling's progress <sup>bug · p2 · s · engine</sup>
 - [x] `3f4c257d` Rooms made of something: leak and daylight from the boundary <sup>feature · p0 · l · engine</sup>
 - [x] `419a24ab` Interaction spots: furniture a pawn uses <sup>feature · p1 · m · engine</sup>
 - [x] `49e5e583` Walls that look joined, in the colour of what they are made of <sup>feature · p1 · m · client</sup>
@@ -172,6 +172,7 @@ A one-week sprint inside Colony. Building stops being a fixed list of defs
 - [x] `ab0599d2` Do room properties come from the boundary? <sup>spike · p0 · s · engine</sup>
 - [x] `cecf0ba9` Core collapses to one wall, one door, one bed <sup>content · p1 · s · core</sup>
 - [x] `cf55217a` Strikes and exits on worksites <sup>feature · p2 · m · client</sup>
+- [x] `fcfd0f4a` Worksite timing follows the worker's pace and the game's speed <sup>bug · p1 · s · client</sup>
 
 ## persistence — Persistence
 

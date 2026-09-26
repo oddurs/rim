@@ -312,9 +312,26 @@ pub struct Work {
     pub designation: Option<DefId>,
     /// Which side the last unit of work came from.
     pub side: Side,
+    /// Progress toward another designation, shelved when this work took
+    /// its place: gathering branches from a half-felled tree doesn't undo
+    /// the felling. Coming back to that work picks it up again.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub other: Option<Shelved>,
+}
+
+/// Work put aside for other work on the same thing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Shelved {
+    pub designation: Option<DefId>,
+    pub done: u32,
+    pub total: u32,
 }
 
 impl Work {
+    pub fn new(total: u32, designation: Option<DefId>) -> Work {
+        Work { done: 0, total: total.max(1), designation, side: Side::default(), other: None }
+    }
+
     pub fn finished(&self) -> bool {
         self.done >= self.total
     }
@@ -912,7 +929,7 @@ impl World {
             };
             let total = (b.work as f64 * defs.factor(made_of, "work")).round().max(1.0) as u32;
             let bp = Blueprint { delivered: vec![0; cost.len()], cost };
-            self.spawn((t, bp, Work { done: 0, total, designation: None, side: Side::default() }))
+            self.spawn((t, bp, Work::new(total, None)))
         } else {
             self.spawn((t,))
         };
@@ -1259,14 +1276,39 @@ impl World {
         let w = match same {
             Some(w) => w,
             None => {
-                let total = total(self).max(1);
-                let w = Work { done: amount.min(total), total, designation, side };
+                // Other work was here: it goes on the shelf if it got
+                // anywhere, and this work comes off it if it was there.
+                let was = self.ecs.get::<&Work>(e).ok().map(|k| *k);
+                let back = was.and_then(|k| k.other).filter(|o| o.designation == designation);
+                let shelf = match was {
+                    Some(k) if k.done > 0 => Some(Shelved { designation: k.designation, done: k.done, total: k.total }),
+                    Some(k) => k.other.filter(|o| o.designation != designation),
+                    None => None,
+                };
+                let (done, total) = back.map_or_else(|| (0, total(self).max(1)), |b| (b.done, b.total));
+                let w = Work { done: (done + amount).min(total), total, designation, side, other: shelf };
                 self.ecs.insert_one(e, w).ok()?;
                 w
             }
         };
         self.mark_worksite(e, at);
         Some(w)
+    }
+
+    /// The work on `e` is done but `e` stays (a bush picked, a tree's
+    /// branches gathered): what grows back starts from scratch, and any
+    /// work shelved for this comes back.
+    pub fn finish_work(&mut self, e: Entity) {
+        let shelved = self.ecs.get::<&Work>(e).ok().and_then(|k| k.other.map(|o| (o, k.side)));
+        match shelved {
+            Some((o, side)) => {
+                let k = Work { done: o.done, total: o.total, designation: o.designation, side, other: None };
+                let _ = self.ecs.insert_one(e, k);
+            }
+            None => {
+                let _ = self.ecs.remove_one::<Work>(e);
+            }
+        }
     }
 
     /// `e`, at `at`, is being worked this tick. The map is touched only when
