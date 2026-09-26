@@ -166,7 +166,10 @@ fn a_colonist_panel_has_overview_skills_and_work_tabs() {
     sim.push(Command::SetStance { stance: siege });
     sim.step();
     frame(&mut ui, &sim, &cv, Input { time: 10.0, ..Default::default() });
-    assert_eq!(tip(&mut ui, &sim, &mut cv, "core:inspector.work.core:build", 10.0), "Build 1 = base 3, Siege -2");
+    assert_eq!(
+        tip(&mut ui, &sim, &mut cv, "core:inspector.work.core:build", 10.0),
+        "Build: First = default Later · Siege −2"
+    );
 
     // Anyone else's panel has no tabs.
     cv.selected = sim.world.pawns.iter().copied().find(|&e| e != founder);

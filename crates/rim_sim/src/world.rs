@@ -213,6 +213,10 @@ pub struct Pawn {
     /// work type not here is at its def's default (DESIGN.md §4d).
     #[serde(default)]
     pub priorities: Vec<(DefId, u8)>,
+    /// The colonist's work role, by index into `World::work_roles`; none
+    /// for a colonist from before roles, who is in the default one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub work_role: Option<u16>,
     /// The tool it holds, off the map while it's held (DESIGN.md §4e).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hand: Option<Entity>,
@@ -244,13 +248,6 @@ impl Pawn {
     }
     pub fn need(&self, need: DefId) -> Option<i32> {
         self.needs.iter().find(|n| n.0 == need).map(|n| n.1)
-    }
-
-    /// This pawn's priority for a work type: 1 first, 0 never. A level
-    /// saved above a scale a mod has since shrunk counts as the last level.
-    pub fn priority(&self, defs: &DefDb, work: DefId) -> u8 {
-        let set = self.priorities.iter().find(|p| p.0 == work).map(|p| p.1);
-        set.unwrap_or(defs.work_types[work as usize].priority).min(defs.priority_scale.levels)
     }
 
     /// A skill's level, 0 to `SKILL_MAX`.
@@ -763,6 +760,9 @@ pub struct World {
     /// Colony readings, the standing orders they switched on, and the rules
     /// the colony switched off. Saved.
     pub standing: crate::rules::Standing,
+    /// The colony's work roles: copies of the defs' and the player's own.
+    /// Colonists name them by index. Saved.
+    pub work_roles: Vec<crate::rules::WorkRole>,
     /// For each mod whose script data is here but which isn't loaded, the
     /// version it wrote that data with: when it comes back, it migrates
     /// from there (0139).
@@ -774,7 +774,7 @@ impl World {
         let fields = Fields::new(&defs, (w * h) as usize);
         let stance = defs.default_stance;
         let things = defs.things.len();
-        World {
+        let mut world = World {
             defs,
             seed,
             ecs: hecs::World::new(),
@@ -806,8 +806,11 @@ impl World {
             stance,
             rules: crate::rules::Rules::default(),
             standing: crate::rules::Standing::default(),
+            work_roles: Vec::new(),
             data_versions: BTreeMap::new(),
-        }
+        };
+        world.seed_work_roles();
+        world
     }
 
     // ------------------------------------------------------------ entities
@@ -924,6 +927,7 @@ impl World {
             needs: cd.needs_r.iter().map(|&n| (n, NEED_MAX * 8 / 10)).collect(),
             next_think: self.tick + self.rng.below(30) as u64,
             skills,
+            work_role: if faction == Faction::Player { self.default_work_role() } else { None },
             ..Default::default()
         };
         let e = self.spawn((p,));
@@ -1754,6 +1758,7 @@ impl World {
                 for &(w, l) in &p.priorities {
                     h = crate::rng::mix(h ^ (w as u64) << 8 ^ l as u64);
                 }
+                h = crate::rng::mix(h ^ p.work_role.map_or(0xf0f0, |r| r as u64));
                 for &(s, xp) in &p.skills {
                     h = crate::rng::mix(h ^ (s as u64) << 40 ^ xp as u64);
                 }
@@ -1776,6 +1781,14 @@ impl World {
         h = self.zones.hash(h);
         h = crate::rng::mix(h ^ self.stance.map_or(0x57a2, |s| s as u64));
         h = self.standing.hash(h);
+        for r in &self.work_roles {
+            h = r.label.bytes().fold(crate::rng::mix(h ^ r.edited as u64 ^ (r.order as u64) << 1), |h, b| {
+                crate::rng::mix(h ^ b as u64)
+            });
+            for &(w, l) in &r.priorities {
+                h = crate::rng::mix(h ^ (w as u64) << 8 ^ l as u64 ^ 0x77);
+            }
+        }
         for (k, v) in &self.data {
             h = v.hash(k.bytes().fold(h, |h, b| crate::rng::mix(h ^ b as u64)));
         }

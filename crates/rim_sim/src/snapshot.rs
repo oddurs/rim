@@ -96,6 +96,10 @@ pub(crate) struct WorldSection {
     /// Readings and standing orders; a save from before them has none.
     #[serde(default)]
     standing: crate::rules::Standing,
+    /// The colony's work roles; a save from before roles has none, and its
+    /// colonists join the default role.
+    #[serde(default)]
+    work_roles: Vec<crate::rules::WorkRole>,
 }
 
 /// Each def kind's qualified ids, in `DefId` order: the table the raw ids in
@@ -250,6 +254,7 @@ impl Snapshot {
             data_versions: w.data_versions.clone(),
             stance: w.stance,
             standing: w.standing.clone(),
+            work_roles: w.work_roles.clone(),
         };
         let (disabled_hooks, disabled_handlers) = sim.scripts.disabled();
         let mut sections = BTreeMap::from([
@@ -822,6 +827,20 @@ impl Snapshot {
         let known: std::collections::BTreeSet<&str> = defs.priority_rules.iter().map(|r| r.id.as_str()).collect();
         w.standing.on.retain(|r| known.contains(r.as_str()));
         w.standing.off.retain(|r| known.contains(r.as_str()));
+        // The colony's roles as saved, by index, since colonists name them
+        // so; a level for a work type that's gone is dropped. Then roles a
+        // mod added since join, and unedited ones follow their defs.
+        w.work_roles = ws
+            .work_roles
+            .into_iter()
+            .map(|mut r| {
+                r.priorities =
+                    r.priorities.iter().filter_map(|&(t, l)| Some((remap.get("work_type", t)?, l))).collect();
+                r.priorities.sort_unstable();
+                r
+            })
+            .collect();
+        w.seed_work_roles();
         w.update_rules();
         let sc: ScriptsSection = dec(self, "engine:scripts")?;
         w.update_shelter();

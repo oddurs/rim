@@ -1,8 +1,9 @@
-//! Priority rules and stances (DESIGN.md §4d): a colonist's effective
-//! priority is the one the player set plus the rules that hold, and each
-//! value can say how it got there. The colony-wide half of a rule (hours,
-//! season, stance) is worked out when one of those changes; the colonist's
-//! half (a need) is checked when the colonist looks for work.
+//! Work roles, priority rules and stances (DESIGN.md §4d): a colonist's
+//! effective priority starts at their work role's level (or the work type's
+//! default), takes the pin the player set, then the rules that hold, and
+//! each value can say how it got there. The colony-wide half of a rule
+//! (hours, season, stance) is worked out when one of those changes; the
+//! colonist's half (a need) is checked when the colonist looks for work.
 
 use crate::defs::{DefDb, DefId};
 use crate::world::{GameEvent, Pawn, World, NEED_MAX};
@@ -62,8 +63,71 @@ impl Standing {
 }
 
 /// One step of an explanation: what moved the value, and by how much.
+/// What the colony keeps of a work role: a copy of a `[[work_role]]`, or
+/// one the player made. Colonists name it by its index here, and the
+/// player edits the copy, never the def. Saved.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkRole {
+    /// The def it was seeded from, by qualified id; none for the player's.
+    pub def: Option<String>,
+    pub label: String,
+    pub order: i32,
+    /// The levels it sets, by work type, sorted; what it leaves out is the
+    /// work type's default.
+    pub priorities: Vec<(DefId, u8)>,
+    /// The player changed it, so it no longer follows its def.
+    pub edited: bool,
+}
+
+impl WorkRole {
+    /// The level the role sets for a work type, if it sets one.
+    pub fn level(&self, work: DefId) -> Option<u8> {
+        self.priorities.binary_search_by_key(&work, |p| p.0).ok().map(|i| self.priorities[i].1)
+    }
+
+    /// Set a work type's level, or leave it to the default with `None`,
+    /// keeping the list sorted so the state doesn't depend on edit order.
+    pub fn set(&mut self, work: DefId, level: Option<u8>) {
+        match (self.priorities.binary_search_by_key(&work, |p| p.0), level) {
+            (Ok(i), Some(l)) => self.priorities[i].1 = l,
+            (Err(i), Some(l)) => self.priorities.insert(i, (work, l)),
+            (Ok(i), None) => {
+                self.priorities.remove(i);
+            }
+            (Err(_), None) => {}
+        }
+    }
+}
+
+/// What kind of step an explanation part is.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PartKind {
+    /// The work type's default: the first part, always.
+    Default,
+    /// The colonist's work role set it.
+    Role,
+    /// The player pinned it for this colonist.
+    Pin,
+    /// A rule or the stance moved it.
+    Rule,
+}
+
+impl PartKind {
+    pub fn name(self) -> &'static str {
+        match self {
+            PartKind::Default => "default",
+            PartKind::Role => "role",
+            PartKind::Pin => "pin",
+            PartKind::Rule => "rule",
+        }
+    }
+}
+
+/// One step of an explanation: what moved the value, and by how much. A
+/// role's part is labelled with the role, a pin's with the colonist.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Part {
+    pub kind: PartKind,
     pub label: String,
     pub delta: i32,
 }
@@ -143,25 +207,97 @@ impl World {
     }
 }
 
-/// A colonist's effective priority for a work type: 1 first, 0 never.
-pub fn effective(defs: &DefDb, rules: &Rules, p: &Pawn, work: DefId) -> u8 {
-    eval(defs, rules, p, work, &mut |_, _| {})
+impl World {
+    /// Copy work roles in from the defs: a new one joins the colony's, one
+    /// the player never edited follows its def, and an edited one stays
+    /// the player's. At a new game and on every load.
+    pub fn seed_work_roles(&mut self) {
+        let defs = self.defs.clone();
+        for d in &defs.work_roles {
+            match self.work_roles.iter_mut().find(|r| r.def.as_deref() == Some(d.id.as_str())) {
+                Some(r) if r.edited => {}
+                Some(r) => {
+                    r.label = d.label.clone();
+                    r.order = d.order;
+                    r.priorities = d.priorities_r.clone();
+                }
+                None => self.work_roles.push(WorkRole {
+                    def: Some(d.id.clone()),
+                    label: d.label.clone(),
+                    order: d.order,
+                    priorities: d.priorities_r.clone(),
+                    edited: false,
+                }),
+            }
+        }
+    }
+
+    /// The role colonists start in: the colony's copy of the first role by
+    /// order, or its first role; none when no mod defines any.
+    pub fn default_work_role(&self) -> Option<u16> {
+        let first = self.defs.default_work_role.map(|d| self.defs.work_roles[d as usize].id.as_str());
+        first
+            .and_then(|id| self.work_roles.iter().position(|r| r.def.as_deref() == Some(id)))
+            .or((!self.work_roles.is_empty()).then_some(0))
+            .map(|i| i as u16)
+    }
+
+    /// A colonist's work role: theirs, or the default for a colonist from
+    /// before roles.
+    pub fn work_role_of(&self, p: &Pawn) -> Option<u16> {
+        p.work_role.filter(|&r| (r as usize) < self.work_roles.len()).or_else(|| self.default_work_role())
+    }
+
+    /// Where a colonist's level for a work type starts: their role's, or
+    /// the work type's default. A pin is measured against this.
+    pub fn inherited_priority(&self, p: &Pawn, work: DefId) -> u8 {
+        let role = self.work_role_of(p).and_then(|r| self.work_roles[r as usize].level(work));
+        role.unwrap_or(self.defs.work_types[work as usize].priority).min(self.defs.priority_scale.levels)
+    }
+
+    /// A colonist's level before the rules: their pin, or what they
+    /// inherit. A level saved above a scale a mod has since shrunk counts
+    /// as the last level.
+    pub fn base_priority(&self, p: &Pawn, work: DefId) -> u8 {
+        match p.own_priority(work) {
+            Some(l) => l.min(self.defs.priority_scale.levels),
+            None => self.inherited_priority(p, work),
+        }
+    }
 }
 
-/// The effective priority and its parts, which sum to it: the base the
-/// player set (or the work type's default), then each rule that moved it.
-/// A rule that holds but can't move it (a shift past the last level)
-/// shows as 0, so the player sees it was considered.
-pub fn explain(defs: &DefDb, rules: &Rules, p: &Pawn, work: DefId) -> (u8, Vec<Part>) {
+/// A colonist's effective priority for a work type: 1 first, 0 never.
+pub fn effective(w: &World, p: &Pawn, work: DefId) -> u8 {
+    eval(w, p, work, &mut |_, _, _| {})
+}
+
+/// The effective priority and its parts, which sum to it: the work type's
+/// default, the role if it sets one, the pin if there is one, then each
+/// rule that moved it. A rule that holds but can't move it (a shift past
+/// the last level) shows as 0, so the player sees it was considered.
+pub fn explain(w: &World, p: &Pawn, work: DefId) -> (u8, Vec<Part>) {
     let mut parts = Vec::new();
-    let v = eval(defs, rules, p, work, &mut |label, delta| parts.push(Part { label: label.to_string(), delta }));
+    let v = eval(w, p, work, &mut |kind, label, delta| parts.push(Part { kind, label: label.to_string(), delta }));
     (v, parts)
 }
 
-fn eval(defs: &DefDb, rules: &Rules, p: &Pawn, work: DefId, part: &mut dyn FnMut(&str, i32)) -> u8 {
+fn eval(w: &World, p: &Pawn, work: DefId, part: &mut dyn FnMut(PartKind, &str, i32)) -> u8 {
+    let (defs, rules) = (&w.defs, &w.rules);
     let levels = defs.priority_scale.levels as i32;
-    let mut v = p.priority(defs, work) as i32;
-    part("base", v);
+    let mut v = defs.work_types[work as usize].priority.min(defs.priority_scale.levels) as i32;
+    part(PartKind::Default, "default", v);
+    if let Some(role) = w.work_role_of(p).map(|r| &w.work_roles[r as usize]) {
+        if let Some(l) = role.level(work) {
+            let n = (l as i32).min(levels);
+            part(PartKind::Role, &role.label, n - v);
+            v = n;
+        }
+    }
+    if let Some(l) = p.own_priority(work) {
+        let n = (l as i32).min(levels);
+        part(PartKind::Pin, &p.name, n - v);
+        v = n;
+    }
     for &r in &rules.on {
         let rd = &defs.priority_rules[r as usize];
         let set = rd.set_r.binary_search_by_key(&work, |s| s.0).ok().map(|i| rd.set_r[i].1 as i32);
@@ -174,7 +310,7 @@ fn eval(defs: &DefDb, rules: &Rules, p: &Pawn, work: DefId, part: &mut dyn FnMut
         if let Some(d) = shift.filter(|_| n > 0) {
             n = (n + d).clamp(1, levels);
         }
-        part(label, n - v);
+        part(PartKind::Rule, label, n - v);
         v = n;
     }
     v as u8

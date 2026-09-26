@@ -5,19 +5,24 @@ mod common;
 
 use rim_sim::data::Data;
 use rim_sim::defs::DefId;
-use rim_sim::rules::{explain, Part};
+use rim_sim::rules::{explain, Part, PartKind};
 use rim_sim::snapshot::Snapshot;
 use rim_sim::world::{Pawn, NEED_MAX};
 use rim_sim::{Command, Sim};
 
 fn part(label: &str, delta: i32) -> Part {
-    Part { label: label.into(), delta }
+    let kind = if label == "default" { PartKind::Default } else { PartKind::Rule };
+    Part { kind, label: label.into(), delta }
+}
+
+fn pin(name: &str, delta: i32) -> Part {
+    Part { kind: PartKind::Pin, label: name.into(), delta }
 }
 
 fn explained(s: &Sim, work: &str) -> (u8, Vec<Part>) {
     let pawn = s.world.colonists().next().unwrap();
     let p = s.world.ecs.get::<&Pawn>(pawn).unwrap();
-    explain(&s.world.defs, &s.world.rules, &p, s.world.defs.lookup("work_type", work).unwrap())
+    explain(&s.world, &p, s.world.defs.lookup("work_type", work).unwrap())
 }
 
 fn stance(s: &Sim, id: &str) -> DefId {
@@ -28,25 +33,26 @@ fn stance(s: &Sim, id: &str) -> DefId {
 fn effective_priorities_explain_themselves() {
     let mut s = Sim::new(&common::mods(), 1).unwrap();
     assert_eq!(s.world.stance, Some(stance(&s, "core:normal")), "a colony starts in the first stance");
-    assert_eq!(explained(&s, "core:build"), (3, vec![part("base", 3)]));
+    assert_eq!(explained(&s, "core:build"), (3, vec![part("default", 3)]));
 
     s.push(Command::SetStance { stance: stance(&s, "core:siege") });
     s.step();
-    assert_eq!(explained(&s, "core:build"), (1, vec![part("base", 3), part("Siege", -2)]));
-    assert_eq!(explained(&s, "core:hunt"), (0, vec![part("base", 3), part("Siege", -3)]), "set to never");
-    assert_eq!(explained(&s, "core:mine"), (4, vec![part("base", 3), part("Siege", 1)]));
+    assert_eq!(explained(&s, "core:build"), (1, vec![part("default", 3), part("Siege", -2)]));
+    assert_eq!(explained(&s, "core:hunt"), (0, vec![part("default", 3), part("Siege", -3)]), "set to never");
+    assert_eq!(explained(&s, "core:mine"), (4, vec![part("default", 3), part("Siege", 1)]));
 
     // Past the first level: the rule held but couldn't move it.
     let pawn = s.world.colonists().next().unwrap();
     let build = s.world.defs.lookup("work_type", "core:build").unwrap();
     s.push(Command::SetPriority { pawn, work: build, level: 1 });
     s.step();
-    assert_eq!(explained(&s, "core:build"), (1, vec![part("base", 1), part("Siege", 0)]));
+    let name = s.world.ecs.get::<&Pawn>(pawn).unwrap().name.clone();
+    assert_eq!(explained(&s, "core:build"), (1, vec![part("default", 3), pin(&name, -2), part("Siege", 0)]));
     // A player's never survives a shift.
     let mine = s.world.defs.lookup("work_type", "core:mine").unwrap();
     s.push(Command::SetPriority { pawn, work: mine, level: 0 });
     s.step();
-    assert_eq!(explained(&s, "core:mine"), (0, vec![part("base", 0), part("Siege", 0)]));
+    assert_eq!(explained(&s, "core:mine"), (0, vec![part("default", 3), pin(&name, -3), part("Siege", 0)]));
 
     for w in &s.world.defs.work_types {
         let (v, parts) = explained(&s, &w.id);
@@ -112,7 +118,7 @@ fn a_mod_adds_a_stance_and_rules_with_data_alone() {
     set_rest(&mut s, NEED_MAX);
     assert_eq!(explained(&s, "core:chop").0, 3);
     set_rest(&mut s, NEED_MAX / 4);
-    assert_eq!(explained(&s, "core:chop"), (4, vec![part("base", 3), part("Tired", 1)]));
+    assert_eq!(explained(&s, "core:chop"), (4, vec![part("default", 3), part("Tired", 1)]));
     let _ = std::fs::remove_dir_all(dir);
 }
 

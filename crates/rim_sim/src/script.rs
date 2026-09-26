@@ -126,7 +126,8 @@ type StockQuery = { thing: string?, tag: string?, category: string? }
 type ItemCategoryInfo = { id: string, label: string, parent: string?, order: number, children: { string }, items: { string } }
 type Date = { year: number, season: string, season_index: number, day: number, day_of_year: number, year_days: number, year_fraction: number }
 type Room = { id: number, cells: number, enclosed: boolean, role: string?, role_label: string? }
-type PriorityPart = { label: string, delta: number }
+type PriorityPart = { kind: "default" | "role" | "pin" | "rule", label: string, delta: number }
+type WorkRoleInfo = { index: number, id: string?, label: string, edited: boolean }
 type WorkWhy = { work: string, level: number, why: string, dist: number? }
 type Taker = { id: number, ticks: number }
 type Part = { label: string, value: number }
@@ -1123,7 +1124,7 @@ impl ScriptHost {
             |w, from, (id, work)| {
                 let t = def_id(w, "work_type", &work, &from)?;
                 let e = rim_sim_entity(id)?;
-                Ok(w.ecs.get::<&Pawn>(e).ok().map(|p| crate::rules::effective(&w.defs, &w.rules, &p, t)))
+                Ok(w.ecs.get::<&Pawn>(e).ok().map(|p| crate::rules::effective(w, &p, t)))
             }
         );
         // Why a priority is what it is: the base, then each rule that moved it.
@@ -1134,12 +1135,13 @@ impl ScriptHost {
                 let parts = with_world(&ptr, |w| {
                     let t = def_id(w, "work_type", &work, &from)?;
                     let e = rim_sim_entity(id)?;
-                    Ok(w.ecs.get::<&Pawn>(e).ok().map(|p| crate::rules::explain(&w.defs, &w.rules, &p, t).1))
+                    Ok(w.ecs.get::<&Pawn>(e).ok().map(|p| crate::rules::explain(w, &p, t).1))
                 })?;
                 let Some(parts) = parts else { return Ok(Value::Nil) };
                 let t = lua.create_table()?;
                 for p in parts {
                     let row = lua.create_table()?;
+                    row.set("kind", p.kind.name())?;
                     row.set("label", p.label)?;
                     row.set("delta", p.delta)?;
                     t.push(row)?;
@@ -1198,9 +1200,44 @@ impl ScriptHost {
             self.declare(
                 "priority_parts",
                 "(id: number, work: string) -> { PriorityPart }?",
-                "How a colonist's priority came about: the base, then each rule that moved it. The deltas sum to rim.priority.",
+                "How a colonist's priority came about: the work type's default, their work role if it sets one, their pin if they have one, then each rule that moved it. The deltas sum to rim.priority.",
             );
         }
+        // Work roles (DESIGN.md §4d): the colony's copies, by index.
+        {
+            let ptr = self.world.clone();
+            let f = lua.create_function(move |lua, ()| {
+                let rows: Vec<(Option<String>, String, bool)> = with_world(&ptr, |w| {
+                    Ok(w.work_roles.iter().map(|r| (r.def.clone(), r.label.clone(), r.edited)).collect())
+                })?;
+                let t = lua.create_table()?;
+                for (i, (id, label, edited)) in rows.into_iter().enumerate() {
+                    let row = lua.create_table()?;
+                    row.set("index", i + 1)?;
+                    row.set("id", id)?;
+                    row.set("label", label)?;
+                    row.set("edited", edited)?;
+                    t.push(row)?;
+                }
+                Ok(t)
+            })?;
+            rim.set("work_roles", f)?;
+            self.declare(
+                "work_roles",
+                "() -> { WorkRoleInfo }",
+                "The colony's work roles in its own order, each with its index (what a colonist's role names), the def it came from (nil for the player's own) and whether the player edited it.",
+            );
+        }
+        api!(
+            "work_role",
+            "(id: number) -> number?",
+            "A colonist's work role, as an index into rim.work_roles(). Nil if it isn't a colonist or the colony has no roles.",
+            u64,
+            |w, id| {
+                let e = rim_sim_entity(id)?;
+                Ok(w.ecs.get::<&Pawn>(e).ok().and_then(|p| w.work_role_of(&p)).map(|r| r as u32 + 1))
+            }
+        );
         api!("stance", "() -> string?", "The colony's stance, or nil if no mod defines any.", (), |w, _a| Ok(w
             .stance
             .map(|s| w.defs.stances[s as usize].id.clone())));

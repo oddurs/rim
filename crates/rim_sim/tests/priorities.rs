@@ -107,7 +107,7 @@ fn a_priority_is_clamped_to_the_scale_and_only_colonists_take_one() {
     let wild = sim.world.pawns.iter().copied().find(|&e| e != pawn).expect("wildlife");
     sim.push(Command::SetPriority { pawn: wild, work: bw, level: 1 });
     sim.step();
-    let p = sim.world.ecs.get::<&Pawn>(pawn).unwrap().priority(&sim.world.defs, bw);
+    let p = sim.world.base_priority(&sim.world.ecs.get::<&Pawn>(pawn).unwrap(), bw);
     assert_eq!(p, 4, "core has four levels");
     assert!(sim.world.ecs.get::<&Pawn>(wild).unwrap().priorities.is_empty(), "only colonists take priorities");
 }
@@ -122,7 +122,7 @@ fn a_priority_above_a_shrunk_scale_is_the_last_level() {
     let pawn = sim.world.colonists().next().unwrap();
     let hunt = sim.world.defs.lookup("work_type", "core:hunt").unwrap();
     sim.world.ecs.get::<&mut Pawn>(pawn).unwrap().set_priority(hunt, 4);
-    assert_eq!(sim.world.ecs.get::<&Pawn>(pawn).unwrap().priority(&sim.world.defs, hunt), 2);
+    assert_eq!(sim.world.base_priority(&sim.world.ecs.get::<&Pawn>(pawn).unwrap(), hunt), 2);
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -165,7 +165,7 @@ fn a_pin_handed_back_is_forgotten() {
     twin.step();
     let p = sim.world.ecs.get::<&Pawn>(pawn).unwrap();
     assert_eq!(p.own_priority(hunt), None);
-    assert_eq!(p.priority(&sim.world.defs, hunt), 3, "back to core's default");
+    assert_eq!(sim.world.base_priority(&p, hunt), 3, "back to core's default");
     drop(p);
     assert_eq!(sim.world.state_hash(), twin.world.state_hash(), "no trace of the pin");
 }

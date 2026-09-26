@@ -49,6 +49,20 @@ skill = "crafting"
 priority = 3
 order = 45
 
+# A crew for the benches, and builders who craft when nothing else waits
+# (DESIGN.md §4d).
+[[work_role]]
+id = "crafter"
+label = "Crafter"
+order = 40
+priorities = { craft = 1, "core:chop" = 2, "core:haul" = 3 }
+
+[[patch]]
+target = "work_role/core:builder"
+
+[patch.set.priorities]
+"crafting:craft" = 4
+
 # A patch of ground marked for handwork. Free, like a campfire without the
 # fire, so that every recipe has a station and the cheapest costs nothing.
 [[thing]]
