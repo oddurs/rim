@@ -11,6 +11,7 @@ mod bench;
 mod cli;
 mod draw;
 mod mesh;
+mod pattern;
 mod pinch;
 mod save;
 mod sky;

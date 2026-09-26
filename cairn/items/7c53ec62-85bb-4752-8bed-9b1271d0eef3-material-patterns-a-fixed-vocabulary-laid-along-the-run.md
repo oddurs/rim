@@ -2,8 +2,10 @@
 id: 7c53ec62-85bb-4752-8bed-9b1271d0eef3
 title: 'Material patterns: a fixed vocabulary, laid along the run'
 type: feature
-status: backlog
+status: doing
 milestone: houses
+assignee: Oddur Sigurdsson
+claimed: 2026-09-26
 depends_on:
 - 3fe8c3cb-dcba-4882-b623-0468ea9fe697
 created: 2026-09-26
@@ -28,6 +30,10 @@ A cob wall and a stone wall differ only in tint. A plan tells materials apart by
 
 ## Acceptance criteria
 
-- [ ] Every structural material in core and primitive declares a pattern, and `rim check` rejects an unknown one
-- [ ] A pattern crosses a cell boundary in a run without a break (screenshot)
-- [ ] Render bench: the whole-map-zoomed-out case is unchanged; the close-zoom case is within budget
+- [x] Every structural material in core and primitive declares a pattern, and `rim check` rejects an unknown one
+- [x] A pattern crosses a cell boundary in a run without a break (screenshot)
+- [x] Render bench: the whole-map-zoomed-out case is unchanged; the close-zoom case is within budget
+
+## 2026-09-26
+
+Render bench: whole map at zoom 4 draws no patterns (world 0.9-1.0 ms); mid (zoom 12) is below the fade, 0.77 ms; close (zoom 28) 0.78-0.92 ms, about +30% indices. Budget 4 ms whole map. The fade starts at 14 points a cell: at 10, mid zoom paid ~35% more indices for hairlines too faint to read.

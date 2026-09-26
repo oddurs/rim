@@ -117,3 +117,24 @@ fn a_glyph_that_is_not_one_character_names_the_def() {
     .unwrap();
     assert!(s.world.defs.glyphs.contains(&"\u{16b1}".to_string()));
 }
+
+/// Every structural material shipped declares how its walls look
+/// (DESIGN.md §6c), and a pattern outside the vocabulary doesn't load.
+#[test]
+fn materials_declare_a_pattern_from_the_vocabulary() {
+    let s = Sim::new(&common::mods(), 1).unwrap();
+    let d = &s.world.defs;
+    for t in &d.things {
+        let Some(st) = &t.stuff else { continue };
+        if st.categories.iter().any(|c| c == "structural") {
+            assert_ne!(st.look.pattern_r, rim_sim::look::Pattern::None, "{} has no wall pattern", t.id);
+        }
+    }
+    let e = with_defs(
+        "looks-tartan",
+        "[[thing]]\nid = \"felt\"\nlabel = \"felt\"\ncolor = \"#886644\"\ncategory = \"item\"\nstuff = { categories = [\"structural\"], look = { pattern = \"tartan\" } }\n",
+    )
+    .err()
+    .expect("an unknown pattern doesn't load");
+    assert!(e.contains("thing/probe:felt") && e.contains("unknown pattern 'tartan'"), "{e}");
+}

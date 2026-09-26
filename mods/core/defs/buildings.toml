@@ -13,7 +13,12 @@ category = "building"
 # something else (DESIGN.md §6c).
 look.join = { group = "wall", round = 0.22 }
 # It rises as it is built, and gets its outline as it's finished.
-look.layers = [{ draw = "mass", grow = [0.0, 0.85] }, { draw = "edges", width = 1.5, shade = 0.55, grow = [0.85, 1.0] }]
+# The material shows as a pattern once it stands: logs, courses, weave.
+look.layers = [
+    { draw = "mass", grow = [0.0, 0.8] },
+    { draw = "pattern", grow = [0.8, 0.9] },
+    { draw = "edges", width = 1.5, shade = 0.55, grow = [0.9, 1.0] },
+]
 blocks = true
 hp = 200
 market_value = 8
@@ -66,6 +71,7 @@ look.join = { group = "wall", round = 0.22 }
 look.orient = "run"
 look.layers = [
     { draw = "mass" },
+    { draw = "pattern" },
     { draw = "fill", y = 0.36, h = 0.28, color = "#c4e4ffe6" },
     { draw = "fill", y = 0.36, h = 0.0, min_px = 1.0, shade = 0.5 },
     { draw = "fill", y = 0.64, h = 0.0, min_px = 1.0, shade = 0.5 },
@@ -102,12 +108,9 @@ id = "floor"
 label = "floor"
 color = "#a08a6a"
 category = "floor"
-# Flat, in the material's colour, with a faint tile seam.
-look.layers = [
-    { draw = "fill", shade = 0.92 },
-    { draw = "fill", y = 0.5, h = 0.0, min_px = 1.0, shade = 0.82 },
-    { draw = "fill", x = 0.5, w = 0.0, min_px = 1.0, shade = 0.82 },
-]
+# Flat, in the material's colour, laid in its floor pattern: planks,
+# flagstones, strewn rushes.
+look.layers = [{ draw = "fill", shade = 0.92 }, { draw = "pattern", pattern = "floor" }]
 path_cost = 70
 hp = 60
 market_value = 3

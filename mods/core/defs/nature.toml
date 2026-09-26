@@ -45,7 +45,7 @@ color = "#7d776f"
 category = "rock"
 # Rock is a mass too: an outcrop reads as one body, rounded at its edges.
 look.join = { group = "rock", round = 0.3 }
-look.layers = [{ draw = "mass", vary = 0.12 }, { draw = "edges", width = 1.5, shade = 0.6 }]
+look.layers = [{ draw = "mass", vary = 0.12 }, { draw = "pattern", pattern = "crag" }, { draw = "edges", width = 1.5, shade = 0.6 }]
 natural = true
 blocks = true
 # Overhead rock holds a cave's roof: a room dug into it is sheltered.

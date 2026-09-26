@@ -84,5 +84,6 @@ fn layers_share_the_work_when_no_window_is_given() {
     assert_eq!(oak[0].window(0, n), [0.0, 1.0 / n as f32]);
     assert_eq!(oak[n - 1].window(n - 1, n), [(n - 1) as f32 / n as f32, 1.0]);
     let wall = &d.thing(d.thing_id("wall").unwrap()).look_r.layers;
-    assert_eq!(wall[1].window(1, 2), [0.85, 1.0], "the wall says its own");
+    assert_eq!(wall[1].window(1, 3), [0.8, 0.9], "the wall says its own");
+    assert_eq!(wall[2].window(2, 3), [0.9, 1.0]);
 }

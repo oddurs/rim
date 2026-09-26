@@ -753,6 +753,37 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         format!("the leaf swings into the room ({east} wood samples east of the hinge, {west_half} west)"),
     );
     t.shot("door").await;
+
+    // ---------------------------------------------------------- material patterns
+    println!("\n# a material shows as a pattern, running on along the wall (DESIGN.md §6c)");
+    let run_mid = slot.offset(4 + 1, 1);
+    t.focus(run_mid);
+    let img = t.grab().await;
+    let z = t.app.cam.zoom;
+    // A log course is a dark line a third of the way down; where two
+    // joined walls meet it carries straight across.
+    let line_y = 1.0 / 3.0;
+    let darkest = |t: &T, img: &Image, fx: f32| {
+        [-1.5f32, -0.75, 0.0, 0.75, 1.5]
+            .iter()
+            .map(|dy| px(img, at(t, run_mid, fx, line_y + dy / z)).iter().sum::<f32>())
+            .fold(f32::INFINITY, f32::min)
+    };
+    // Between the courses, the wood itself.
+    let body = px(&img, at(&t, run_mid, 0.5, 0.5)).iter().sum::<f32>();
+    let (before, across) = (darkest(&t, &img, 0.96), darkest(&t, &img, 1.04));
+    t.check(
+        before < body - 0.1 && across < body - 0.1,
+        format!("a log course runs across the joint ({before:.2} and {across:.2} against the wood's {body:.2})"),
+    );
+    // Zoomed right out, a pattern would be noise: it isn't drawn.
+    t.app.cam.zoom = 6.0;
+    let img = t.grab().await;
+    let row: Vec<f32> = (0..8).map(|i| px(&img, at(&t, run_mid, 0.3 + i as f32 * 0.05, line_y)).iter().sum()).collect();
+    let spread = row.iter().cloned().fold(f32::MIN, f32::max) - row.iter().cloned().fold(f32::MAX, f32::min);
+    t.check(spread < 0.08, format!("no pattern zoomed out (brightness spread {spread:.2} across a wall)"));
+    t.app.cam.zoom = 40.0;
+    t.shot("patterns").await;
     t.app.cam.zoom = zoom;
 
     // ---------------------------------------------------------- 0215 materials
