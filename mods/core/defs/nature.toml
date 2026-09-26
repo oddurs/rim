@@ -50,4 +50,3 @@ natural = true
 blocks = true
 hp = 500
 harvest = { designation = "mine", work = 500, yields = [{ thing = "stone", count = 10 }] }
-spawn = { terrain = ["rock_floor"], density = 1.0 }

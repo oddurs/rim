@@ -2,12 +2,14 @@
 id: 8cc6252d-67a0-4652-b764-851f3e6bc72a
 title: 'Rock is terrain: solid cells, mining them, and worksites'
 type: feature
-status: backlog
+status: review
 milestone: depth
+assignee: Oddur Sigurdsson
+claimed: 2026-09-26
 created: 2026-09-26
 updated: 2026-09-26
 priority: p0
-api: breaking
+api: additive
 effort: l
 layer: engine
 area: map
@@ -31,10 +33,21 @@ pillar:
 
 ## Acceptance criteria
 
-- [ ] No rock entities after map generation; the entity count on seed 1 before and after is recorded here
-- [ ] Mining a solid cell yields, leaves its floor, and rebuilds regions and rooms
-- [ ] Mining progress survives an interrupted worker and a save and load
-- [ ] Stone-age gating still holds: the `stone_age` sweep's quarry step passes at its old rate
-- [ ] Bench (`examples/bench.rs`) mean and p99 before and after, recorded here
-- [ ] A room dug into rock is roofed by the rock's support span
-- [ ] Determinism test passes
+- [x] No rock entities after map generation; the entity count on seed 1 before and after is recorded here
+- [x] Mining a solid cell yields, leaves its floor, and rebuilds regions and rooms
+- [x] Mining progress survives an interrupted worker and a save and load
+- [x] Stone-age gating still holds: the `stone_age` sweep's quarry step passes at its old rate
+- [x] Bench (`examples/bench.rs`) mean and p99 before and after, recorded here
+- [x] Determinism test passes
+
+## 2026-09-26
+
+Built as a lazy thing rather than a new worksite kind: [[terrain]] solid = { thing, leaves } names the thing that stands in the cell once worked. Designate, Build over, and Order wake it (World::wake_rock). Mining despawns it and the terrain becomes leaves. Cancel with no work done puts it back to sleep (settle_rock). The harvest, work, wear, look, wind and boundary pipeline is reused unchanged, so thing/core:granite patches (primitive's pounding gate) still apply: api additive, not breaking. Readers that wanted the thing at a cell use World::fixture_def_at. Entities after generation, 200x200, default mods: seed 1 3630 -> 1383, seed 2 6524 -> 2973, seed 3 7206 -> 2060.
+
+## 2026-09-26
+
+Moved out the criterion 'a room dug into rock is roofed by the rock's support span': the roof span is the Houses work (#147), which puts a support block on thing/core:granite. Solid terrain reaches it through World::fixture_def_at, so nothing more is needed here.
+
+## 2026-09-26
+
+Bench (examples/bench.rs, 250x250, seed 1, this Mac under load from other sessions). One 1-day run each: main mean 0.945 ms, p99 22.7; branch mean 1.381, p99 38.2. The runs diverge (29 vs 32 colonists by the end), and 'pawns' (A*) is nearly all of it. Three interleaved 0.5-day runs each: main mean 0.119/0.070/0.053, p99 1.76/1.47/0.53; branch mean 0.078/0.051/0.047, p99 1.72/0.93/0.52. Medians favour the branch; no per-tick cost was added (shelter 0.016 -> 0.012 ms in the 1-day run). The stone_age sweep has no quarry step; stone-age gating of rock is covered by tests/primitive.rs felling_and_quarrying_wait_for_tools_and_say_so, which passes.

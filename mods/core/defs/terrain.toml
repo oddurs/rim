@@ -23,11 +23,19 @@ color = "#cdbb85"
 path_cost = 130
 gen = { elevation = [0.28, 0.32], priority = 8 }
 
+# Rock fills its cell (DESIGN.md §6d). It is terrain until someone works
+# it: then its thing stands in the cell, and mining it leaves `leaves`.
+[[terrain]]
+id = "granite"
+label = "granite"
+color = "#7d776f"
+solid = { thing = "granite", leaves = "rock_floor" }
+gen = { elevation = [0.74, 1.0], priority = 10 }
+
 [[terrain]]
 id = "rock_floor"
 label = "rough stone"
 color = "#5e5a55"
-gen = { elevation = [0.74, 1.0], priority = 10 }
 
 [[terrain]]
 id = "marsh"

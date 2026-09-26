@@ -218,21 +218,18 @@ impl Map {
     pub fn set_fixture(&mut self, p: IVec, e: Option<Entity>, blocks: bool, cost: u32, door: bool) {
         let i = self.idx(p);
         self.fixture[i] = e;
-        if self.fix_block[i] != blocks {
-            self.regions_dirty = true;
-            self.rooms_dirty = true;
-        }
-        if self.fix_door[i] != door {
-            self.rooms_dirty = true;
-            // An owned door is a wall to everyone but its owner, so gaining
-            // or losing one changes who can reach what.
-            self.regions_dirty = true;
-        }
-        if self.fix_block[i] != blocks || self.fix_door[i] != door {
-            self.changed.push(i as u32);
-        }
+        // Only what changes passage matters: a thing standing up in rock,
+        // which nothing could walk into anyway, rebuilds nothing. An owned
+        // door is a wall to everyone but its owner, so gaining or losing
+        // one changes who can reach what.
+        let was = (self.passable_i(i), self.fix_door[i]);
         self.fix_block[i] = blocks;
         self.fix_door[i] = door;
+        if (self.passable_i(i), self.fix_door[i]) != was {
+            self.regions_dirty = true;
+            self.rooms_dirty = true;
+            self.changed.push(i as u32);
+        }
         self.fix_cost[i] = cost.min(u16::MAX as u32) as u16;
         self.revision += 1;
         self.touch(p);

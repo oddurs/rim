@@ -15,7 +15,7 @@
 //! buildable thing gets working orders without touching the engine.
 
 use crate::ai;
-use crate::defs::{HarvestDef, Targets};
+use crate::defs::{HarvestDef, HarvestKey, Targets, ThingDef};
 use crate::path::Goal;
 use crate::world::*;
 use crate::IVec;
@@ -77,6 +77,14 @@ pub fn options(w: &World, pawn: Entity, cell: IVec, on: Option<Entity>) -> Vec<C
     if !drafted {
         for f in [w.map.fixture_at(cell), w.map.floor_at(cell)].into_iter().flatten() {
             fixture(w, pawn, from, f, &mut out);
+        }
+        if w.map.fixture_at(cell).is_none() {
+            if let Some(s) = w.solid_at(cell) {
+                let td = w.defs.thing(s.thing_r);
+                if w.map.can_reach(from, Goal::Touch(cell)) {
+                    harvests(w, pawn, td, Entity::DANGLING, None, "rock".into(), &mut out);
+                }
+            }
         }
         if let Some(o) = w.map.item_at(cell).and_then(|i| item(w, from, i)) {
             out.push(Choice::ready("eat".into(), false, o));
@@ -186,41 +194,13 @@ fn fixture(w: &World, pawn: Entity, from: IVec, f: Entity, out: &mut Vec<Choice>
         }
         return;
     }
-    // Every harvest that's ready. One the player marked, or one that leaves
-    // the thing standing, is safe; felling what nobody marked is damaging.
-    // A harvest needing a tool this pawn can't get is listed with why.
-    let Ok(p) = w.ecs.get::<&Pawn>(pawn) else { return };
-    let have = w.colony_tools();
+    // Every harvest that's ready.
     let marked = w.ecs.get::<&Designated>(f).ok().and_then(|d| td.harvest_for(d.0)).map(|h| h.key());
-    // The marked harvest first, so a click on a tree marked for chopping
-    // still chops it.
-    let mut harvests: Vec<&HarvestDef> = td.harvest.iter().collect();
-    harvests.sort_by_key(|h| marked != Some(h.key()));
-    for h in harvests {
-        if !w.harvest_ready(f, h.key()) {
-            continue;
-        }
-        let label = format!("{} {}", w.defs.designations[h.desig_r as usize].label, td.label);
-        let key = format!("harvest:{}:{id}", h.key().map_or(0, |k| k as u32 + 1));
-        let damaging = h.destroy && marked != Some(h.key());
-        match ai::tool_for(w, pawn, &p, h.requires_r, have) {
-            Some((_, tool)) => out.push(Choice::ready(
-                key,
-                damaging,
-                Order {
-                    label,
-                    job: Job::Harvest { target: f, forced: true, harvest: h.key(), tool },
-                    reserve: std::iter::once(f).chain(tool).collect(),
-                },
-            )),
-            None => {
-                let tags = w.defs.tool_tag_names(h.requires_r).join(" and ");
-                let reason = if tags.is_empty() { "needs a tool".to_string() } else { format!("no {tags}") };
-                out.push(Choice { key, label, damaging, order: None, reason: Some(reason) });
-            }
-        }
-    }
-    drop(p);
+    // Rock is offered from its terrain before it is a thing (DESIGN.md
+    // §6d), so its key can't name the entity: the menu and the order it
+    // sends must agree.
+    let id = if w.is_rock(f) { "rock".to_string() } else { id.to_string() };
+    harvests(w, pawn, td, f, marked, id.clone(), out);
     if !td.harvest.is_empty() {
         return;
     }
@@ -237,6 +217,51 @@ fn fixture(w: &World, pawn: Entity, from: IVec, f: Entity, out: &mut Vec<Choice>
                 reserve: vec![f],
             },
         ));
+    }
+}
+
+/// Each harvest of `td` that's ready, as orders on `target`. The one the
+/// player marked, or one that leaves the thing standing, is safe; felling
+/// what nobody marked is damaging. A harvest needing a tool this pawn can't
+/// get is listed with why.
+fn harvests(
+    w: &World,
+    pawn: Entity,
+    td: &ThingDef,
+    target: Entity,
+    marked: Option<HarvestKey>,
+    id: String,
+    out: &mut Vec<Choice>,
+) {
+    let Ok(p) = w.ecs.get::<&Pawn>(pawn) else { return };
+    let have = w.colony_tools();
+    // The marked harvest first, so a click on a tree marked for chopping
+    // still chops it.
+    let mut list: Vec<&HarvestDef> = td.harvest.iter().collect();
+    list.sort_by_key(|h| marked != Some(h.key()));
+    for h in list {
+        if !w.harvest_ready(target, h.key()) {
+            continue;
+        }
+        let label = format!("{} {}", w.defs.designations[h.desig_r as usize].label, td.label);
+        let key = format!("harvest:{}:{id}", h.key().map_or(0, |k| k as u32 + 1));
+        let damaging = h.destroy && marked != Some(h.key());
+        match ai::tool_for(w, pawn, &p, h.requires_r, have) {
+            Some((_, tool)) => out.push(Choice::ready(
+                key,
+                damaging,
+                Order {
+                    label,
+                    job: Job::Harvest { target, forced: true, harvest: h.key(), tool },
+                    reserve: std::iter::once(target).chain(tool).collect(),
+                },
+            )),
+            None => {
+                let tags = w.defs.tool_tag_names(h.requires_r).join(" and ");
+                let reason = if tags.is_empty() { "needs a tool".to_string() } else { format!("no {tags}") };
+                out.push(Choice { key, label, damaging, order: None, reason: Some(reason) });
+            }
+        }
     }
 }
 

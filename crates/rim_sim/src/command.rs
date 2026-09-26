@@ -133,6 +133,13 @@ pub fn apply(w: &mut World, c: Command) {
         Command::Designate { designation, a, b } => match defs.designations[designation as usize].targets {
             Targets::Thing => {
                 for p in cells(w, a, b).collect::<Vec<_>>() {
+                    // Rock that can be marked this way is stood up to take
+                    // the mark; any other rock stays terrain.
+                    let wake = w.map.fixture_at(p).is_none()
+                        && w.solid_at(p).is_some_and(|s| defs.thing(s.thing_r).harvest_for(designation).is_some());
+                    if wake {
+                        w.wake_rock(p);
+                    }
                     let Some(f) = w.map.fixture_at(p) else { continue };
                     let Some(t) = w.thing(f) else { continue };
                     // A thing cleared for a building keeps the mark that
@@ -187,8 +194,13 @@ pub fn apply(w: &mut World, c: Command) {
                 // silently left out: a wall with a gap is no wall.
                 // (On ground that can be built on: nothing is planned over water.)
                 let ground = w.map.inb(p) && w.map.terrain_cost[w.map.idx(p)] > 0;
-                let natural =
-                    w.map.fixture_at(p).filter(|&f| ground && w.thing(f).is_some_and(|t| defs.thing(t.def).natural));
+                // Rock is cleared by mining it, so it stands up to be marked.
+                let natural = match w.solid_at(p).is_some() && !floor {
+                    true => w.wake_rock(p),
+                    false => {
+                        w.map.fixture_at(p).filter(|&f| ground && w.thing(f).is_some_and(|t| defs.thing(t.def).natural))
+                    }
+                };
                 match natural {
                     Some(f) if !floor => w.plan_over(f, thing, stuff),
                     _ if w.map.passable(p) => {
@@ -206,6 +218,8 @@ pub fn apply(w: &mut World, c: Command) {
                 let planned = w.ecs.remove_one::<Planned>(f).is_ok();
                 if w.ecs.remove_one::<Designated>(f).is_ok() || planned {
                     w.touch(f);
+                    // Rock nobody will work goes back to being terrain.
+                    w.settle_rock(f);
                 }
                 // Refund what was actually delivered, of whatever it was
                 // made of -- not what the def says it costs.
@@ -301,11 +315,18 @@ pub fn apply(w: &mut World, c: Command) {
             if !is_colonist(w, pawn) {
                 return;
             }
+            // Rock is listed from its terrain; the order needs the thing.
+            let rock = (on.is_none() && w.map.fixture_at(cell).is_none()).then(|| w.wake_rock(cell)).flatten();
             let o = match &pick {
                 Some(key) => order::choose(w, pawn, cell, on, key),
                 None => order::resolve(w, pawn, cell, on),
             };
-            let Some(o) = o else { return };
+            let Some(o) = o else {
+                if let Some(r) = rock {
+                    w.settle_rock(r);
+                }
+                return;
+            };
             // The player outranks whoever was already on this work.
             let held: Vec<Entity> =
                 o.reserve.iter().filter_map(|t| w.reservations.get(t).copied()).filter(|&h| h != pawn).collect();

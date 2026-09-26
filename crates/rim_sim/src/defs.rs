@@ -72,8 +72,27 @@ pub struct TerrainDef {
     pub path_cost: u32,
     #[serde(default)]
     pub gen: Option<TerrainGen>,
+    /// Rock: the terrain fills its cell (DESIGN.md §6d). It blocks and bounds
+    /// rooms like a wall, and costs nothing until someone works it.
+    #[serde(default)]
+    pub solid: Option<SolidDef>,
     #[serde(skip)]
     pub rgb: [u8; 3],
+}
+
+/// What a solid terrain is when someone works it, and what it leaves.
+#[derive(Deserialize, Clone, Debug)]
+pub struct SolidDef {
+    /// The thing that stands in the cell once a pawn is set to work it: its
+    /// harvests, look, wear and wind all come from there, so a patch to the
+    /// thing reaches every cell of the rock.
+    pub thing: String,
+    /// The terrain left when that thing is gone.
+    pub leaves: String,
+    #[serde(skip)]
+    pub thing_r: DefId,
+    #[serde(skip)]
+    pub leaves_r: DefId,
 }
 
 /// Map generation band: the highest-priority terrain whose ranges contain
@@ -1390,7 +1409,28 @@ impl DefDb {
         };
 
         for d in &mut self.terrain {
-            d.rgb = parse_color(&d.color).map_err(|e| format!("terrain/{}: {e}", d.id))?;
+            let ctx = format!("terrain/{}", d.id);
+            d.rgb = parse_color(&d.color).map_err(|e| format!("{ctx}: {e}"))?;
+            if let Some(s) = &mut d.solid {
+                s.thing_r = get("thing", &s.thing, &ctx)?;
+                s.leaves_r = get("terrain", &s.leaves, &ctx)?;
+                // Nothing walks into rock, whatever the def says.
+                d.path_cost = 0;
+            }
+        }
+        for (i, d) in self.terrain.iter().enumerate() {
+            let Some(s) = &d.solid else { continue };
+            let ctx = format!("terrain/{}", d.id);
+            let td = &self.things[s.thing_r as usize];
+            if !td.blocks || td.size != [1, 1] || !td.harvest.iter().any(|h| h.destroy) {
+                return Err(format!(
+                    "{ctx}: solid.thing '{}' must block, cover one cell and have a harvest that removes it",
+                    s.thing
+                ));
+            }
+            if s.leaves_r as usize == i || self.terrain[s.leaves_r as usize].solid.is_some() {
+                return Err(format!("{ctx}: solid.leaves '{}' must be ground, not rock", s.leaves));
+            }
         }
         let field_in = |home: &str, id: &str| get("field", id, &format!("field/{home}:")).ok().map(|i| i as usize);
         for d in &mut self.fields {

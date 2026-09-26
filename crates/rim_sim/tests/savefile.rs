@@ -110,7 +110,9 @@ fn an_unchanged_section_is_stored_once() {
     save.snapshot(&mut sim).unwrap();
     let second = std::fs::metadata(&path).unwrap().len() - first;
     // The terrain, the defs and most of the fields didn't change in a tick.
-    assert!(second * 2 < first, "a snapshot one tick later added {second} bytes; the first was {first}");
+    // (Only smaller, not much smaller: with rock as terrain the first
+    // snapshot no longer carries thousands of rock entities.)
+    assert!(second < first, "a snapshot one tick later added {second} bytes; the first was {first}");
     let (epochs, _) = savefile::read(&path).unwrap();
     assert_eq!(epochs[0].snapshots.len(), 2);
     assert_eq!(epochs[0].snapshots[0].sections["engine:map"], epochs[0].snapshots[1].sections["engine:map"]);
