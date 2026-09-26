@@ -18,7 +18,7 @@
 //! Room values cost O(rooms) per update, not O(cells). Values are stored in
 //! hundredths as integers so the simulation stays deterministic.
 
-use crate::defs::{DefDb, DefId, IndoorMode};
+use crate::defs::{DefDb, DefId, FieldKind, IndoorMode};
 use crate::map::{Map, NEIGHBORS8};
 use crate::terms::{self, Env, Q};
 use crate::{IVec, TICKS_PER_DAY};
@@ -148,6 +148,10 @@ pub struct Layer {
     /// Per-room fraction of the outdoor value that gets in through the
     /// boundary, for fields that are otherwise dark indoors.
     pub pass: Vec<f64>,
+    /// Shelter fields: each cell's exposure in percent, and the wind octant
+    /// and map revision it was worked out for (`World::update_shelter`).
+    pub exposure: Vec<u8>,
+    pub exposure_for: Option<(u8, u64)>,
 }
 
 pub struct Fields {
@@ -181,6 +185,8 @@ impl Fields {
                     rooms: Vec::new(),
                     leak_mult: Vec::new(),
                     pass: Vec::new(),
+                    exposure: Vec::new(),
+                    exposure_for: None,
                 })
                 .collect(),
             atmos: defs.fields.iter().map(|f| Atmos { value: terms::to_q(f.base), ..Default::default() }).collect(),
@@ -537,8 +543,12 @@ impl Fields {
             return 0;
         }
         let layer = &self.layers[field];
-        let stamped = layer.stamped[map.idx(p)];
         let indoors = map.room_at(p).filter(|r| r.enclosed());
+        if defs.fields[field].kind == FieldKind::Shelter {
+            let open = layer.exposure.get(map.idx(p)).copied().unwrap_or(100) as i32;
+            return if indoors.is_some() { 0 } else { open * FIXED as i32 };
+        }
+        let stamped = layer.stamped[map.idx(p)];
         match (defs.fields[field].indoor, indoors) {
             (_, None) | (IndoorMode::Outdoor, _) => layer.ambient + stamped,
             // Dark inside, except for what the boundary lets through.

@@ -613,6 +613,9 @@ pub struct World {
     pub data: BTreeMap<String, Data>,
     /// Stockpile zones the player painted.
     pub zones: crate::zone::Zones,
+    /// How many times shelter has been worked out: for tests and profiling,
+    /// not simulation state.
+    pub shelter_recomputes: u64,
     /// For each mod whose script data is here but which isn't loaded, the
     /// version it wrote that data with: when it comes back, it migrates
     /// from there (0139).
@@ -645,6 +648,7 @@ impl World {
             seen_room_rebuilds: u64::MAX,
             data: BTreeMap::new(),
             zones: crate::zone::Zones::new((w * h) as usize),
+            shelter_recomputes: 0,
             data_versions: BTreeMap::new(),
         }
     }

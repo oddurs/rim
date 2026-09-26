@@ -119,6 +119,10 @@ pub struct ThingDef {
     /// Blocks movement (walls, rocks).
     #[serde(default)]
     pub blocks: bool,
+    /// How much of the wind it stops, 0 to 1: walls and rock all of it,
+    /// trees some. What's behind it downwind is sheltered.
+    #[serde(default)]
+    pub blocks_wind: f64,
     /// Extra movement cost in percent (doors, trees).
     #[serde(default)]
     pub path_cost: u32,
@@ -445,6 +449,26 @@ pub struct NeedDef {
 
 // ---------------------------------------------------------------- fields
 
+/// The longest lee a shelter field may cast, in cells.
+pub const MAX_LEE: u32 = 64;
+
+/// Where a field's per-cell value comes from.
+#[derive(Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum FieldKind {
+    /// Its outdoor value, emitters' stamps and rooms.
+    #[default]
+    Ambient,
+    /// How exposed a cell is to the wind, in percent: 100 in the open, less
+    /// in the lee of what blocks the wind, 0 in an enclosed room. The
+    /// direction comes from the field named in `from`.
+    Shelter,
+}
+
+fn d6() -> u32 {
+    6
+}
+
 /// What a field is inside an enclosed room.
 #[derive(Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
 #[serde(rename_all = "lowercase")]
@@ -484,6 +508,17 @@ pub struct FieldDef {
     pub ambient: AmbientDef,
     #[serde(default)]
     pub indoor: IndoorMode,
+    #[serde(default)]
+    pub kind: FieldKind,
+    /// Shelter fields: the field whose outdoor value is the wind's
+    /// direction, in degrees it blows toward (0 east, 90 south).
+    #[serde(default)]
+    pub from: String,
+    #[serde(skip)]
+    pub from_r: usize,
+    /// Shelter fields: how many cells a full blocker's lee reaches.
+    #[serde(default = "d6")]
+    pub lee: u32,
     /// Room fields: fraction of the gap to outdoors closed per hour.
     #[serde(default)]
     pub leak_per_hour: f64,
@@ -1050,6 +1085,19 @@ impl DefDb {
             match &d.ambient {
                 AmbientDef::Const(v) => d.base = *v,
                 AmbientDef::Terms(t) => d.terms = Terms::compile(t, &format!("field/{}", d.id), &field_index)?,
+            }
+            if d.kind == FieldKind::Shelter {
+                d.from_r = field_index(&d.from)
+                    .ok_or_else(|| format!("field/{}: a shelter field needs `from`, the wind direction field", d.id))?;
+                if !d.terms.is_empty() || !(1..=MAX_LEE).contains(&d.lee) {
+                    return Err(format!(
+                        "field/{}: a shelter field is worked out from the map: no ambient terms, and a lee of 1 to {MAX_LEE} cells",
+                        d.id
+                    ));
+                }
+                // Out in the open is fully exposed, so that's what it reads
+                // wherever the map doesn't say otherwise.
+                d.base = 100.0;
             }
         }
         let reads: Vec<Vec<usize>> = self.fields.iter().map(|f| f.terms.reads()).collect();

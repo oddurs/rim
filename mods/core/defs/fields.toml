@@ -123,3 +123,17 @@ range = [0.0, 100.0]
 color_low = "#1b2230"
 color_high = "#c8ccd4"
 overlay = false
+
+# How exposed a cell is to the wind: 100% in the open, less in the lee of
+# walls, rock and trees (their `blocks_wind`), 0 in an enclosed room. The
+# engine works it out from the wind's direction when it turns, not per tick.
+[[field]]
+id = "wind_exposure"
+label = "wind exposure"
+kind = "shelter"
+from = "wind_dir"
+lee = 6
+unit = "%"
+range = [0.0, 100.0]
+color_low = "#3a6e4a"
+color_high = "#d8e8f0"
