@@ -21,6 +21,10 @@ use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
+
+/// Room labels show from this zoom in, in logical pixels a cell. Further
+/// out they would crowd the plan (and roofs take over there).
+const ROOM_LABEL_ZOOM: f32 = 14.0;
 use std::time::Instant;
 
 /// Extra read-only facts the UI engine itself provides (devtools, stats).
@@ -969,6 +973,74 @@ impl UiVm {
                 row.raw_set("hovered", l.client.hover_pawn == Some(e))?;
                 // Logical pixels, like every size a component writes.
                 row.raw_set("radius", cd.size * l.client.cam.2 / l.client.scale.max(0.1))?;
+                t.raw_push(row)?;
+            }
+            Ok(t)
+        });
+        // Walled rooms on screen, for their labels (DESIGN.md §6c). Each
+        // label goes on the free cell nearest the middle of what's on
+        // screen of the room, so it stays in view as the camera moves.
+        view!("visible_rooms", (), |lua, l, _a| {
+            let t = lua.create_table()?;
+            let (w, cv) = (l.world, l.client);
+            let (cx, cy, z) = cv.cam;
+            if z / cv.scale.max(0.1) < ROOM_LABEL_ZOOM {
+                return Ok(t);
+            }
+            let (sw, sh) = cv.screen;
+            let x0 = ((cx - sw / 2.0 / z).floor() as i32).max(0);
+            let y0 = ((cy - sh / 2.0 / z).floor() as i32).max(0);
+            let x1 = ((cx + sw / 2.0 / z).ceil() as i32).min(w.map.w - 1);
+            let y1 = ((cy + sh / 2.0 / z).ceil() as i32).min(w.map.h - 1);
+            // Room id -> (sum x, sum y, cells on screen), then the nearest cell.
+            let mut seen: std::collections::BTreeMap<u32, (i64, i64, i64)> = Default::default();
+            for y in y0..=y1 {
+                for x in x0..=x1 {
+                    let p = rim_sim::IVec::new(x, y);
+                    let Some(r) = w.map.room_at(p).filter(|r| !r.touches_edge) else { continue };
+                    let e = seen.entry(r.id).or_default();
+                    *e = (e.0 + x as i64, e.1 + y as i64, e.2 + 1);
+                }
+            }
+            let mut best: std::collections::BTreeMap<u32, (f32, rim_sim::IVec)> = Default::default();
+            for y in y0..=y1 {
+                for x in x0..=x1 {
+                    let p = rim_sim::IVec::new(x, y);
+                    let Some(r) = w.map.room_at(p).filter(|r| !r.touches_edge) else { continue };
+                    let (sx, sy, n) = seen[&r.id];
+                    let (mx, my) = (sx as f32 / n as f32, sy as f32 / n as f32);
+                    // Furniture is in the way of a label; bare floor isn't.
+                    let busy = if w.map.fixture_at(p).is_some() { 4.0 } else { 0.0 };
+                    let d = (x as f32 - mx).powi(2) + (y as f32 - my).powi(2) + busy;
+                    let b = best.entry(r.id).or_insert((f32::MAX, p));
+                    if d < b.0 {
+                        *b = (d, p);
+                    }
+                }
+            }
+            let temp = w.defs.lookup("field", "temperature");
+            for (id, (_, p)) in best {
+                let r = w.map.room_by_id(id);
+                // A sliver of a room at the screen's edge gets no label.
+                if seen[&id].2 < 4 && r.cells >= 4 {
+                    continue;
+                }
+                let row = lua.create_table_with_capacity(0, 8)?;
+                row.raw_set("id", id)?;
+                row.raw_set("x", p.x)?;
+                row.raw_set("y", p.y)?;
+                row.raw_set("cells", r.cells)?;
+                row.raw_set("open", !r.enclosed())?;
+                if let Some(d) = w.room_role(p) {
+                    let role = &w.defs.room_roles[d as usize];
+                    row.raw_set("role", role.label.as_str())?;
+                    row.raw_set("role_id", role.id.as_str())?;
+                }
+                if let Some(fi) = temp {
+                    let fd = &w.defs.fields[fi as usize];
+                    let v = w.fields.value(&w.defs, &w.map, fi as usize, p);
+                    row.raw_set("temperature", format!("{v:.0}{}", fd.unit))?;
+                }
                 t.raw_push(row)?;
             }
             Ok(t)

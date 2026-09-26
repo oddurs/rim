@@ -784,6 +784,21 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.check(spread < 0.08, format!("no pattern zoomed out (brightness spread {spread:.2} across a wall)"));
     t.app.cam.zoom = 40.0;
     t.shot("patterns").await;
+
+    // ---------------------------------------------------------- room labels
+    println!("\n# rooms are labelled on the plan (DESIGN.md §6c)");
+    let inside = west.offset(2, 0);
+    t.app.sim.world.ensure_roles();
+    let room = t.w().map.room_at(inside).expect("the hut's room");
+    let label = format!("core:rooms.{}", room.id);
+    t.app.cam.zoom = 40.0;
+    t.focus(inside);
+    t.grab().await;
+    t.check(t.ui_rect(&label).is_some(), "the hut's room is labelled, zoomed in");
+    t.app.cam.zoom = 8.0;
+    t.grab().await;
+    t.check(t.ui_rect(&label).is_none(), "no room labels zoomed out");
+    t.app.cam.zoom = 40.0;
     t.app.cam.zoom = zoom;
 
     // ---------------------------------------------------------- 0215 materials
