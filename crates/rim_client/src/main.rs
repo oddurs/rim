@@ -46,6 +46,9 @@ pub struct ToolDef {
     pub label: String,
     pub tool: Tool,
     pub color: Color,
+    /// The dock's category and group; see `ToolView`.
+    pub category: &'static str,
+    pub group: String,
 }
 
 /// The lowest zoom, in points per tile: a 250-cell map fits a 1080p screen.
@@ -589,39 +592,43 @@ pub fn markable(defs: &rim_sim::defs::DefDb, d: DefId) -> bool {
 /// buildable thing gets a button without touching the client.
 fn toolbar(sim: &Sim) -> Vec<ToolDef> {
     let defs = &sim.world.defs;
-    let mut items = vec![ToolDef { key: "select".into(), label: "Select".into(), tool: Tool::Select, color: GRAY }];
+    let tool = |key: String, label: &str, tool, color, category, group: &str| ToolDef {
+        key,
+        label: label.into(),
+        tool,
+        color,
+        category,
+        group: group.into(),
+    };
+    let mut items = vec![tool("select".into(), "Select", Tool::Select, GRAY, "", "")];
     for (i, d) in defs.designations.iter().enumerate().filter(|(i, _)| markable(defs, *i as DefId)) {
-        items.push(ToolDef {
-            key: format!("designate:{}", d.id),
-            label: d.label.clone(),
-            tool: Tool::Designate(i as DefId),
-            color: rgb(d.rgb),
-        });
+        items.push(tool(
+            format!("designate:{}", d.id),
+            &d.label,
+            Tool::Designate(i as DefId),
+            rgb(d.rgb),
+            "orders",
+            "",
+        ));
     }
-    let mut builds: Vec<(usize, &rim_sim::defs::ThingDef)> =
-        defs.things.iter().enumerate().filter(|(_, t)| t.build.is_some()).collect();
-    builds.sort_by_key(|(i, t)| (t.build.as_ref().unwrap().menu.clone(), *i));
-    for (i, t) in builds {
-        items.push(ToolDef {
-            key: format!("build:{}", t.id),
-            label: t.label.clone(),
-            tool: Tool::Build(i as DefId),
-            color: rgb(t.rgb),
-        });
+    items.push(tool("cancel".into(), "Cancel", Tool::Cancel, Color::from_rgba(200, 80, 80, 255), "orders", ""));
+    let mut builds: Vec<(usize, &rim_sim::defs::ThingDef, &str)> =
+        defs.things.iter().enumerate().filter_map(|(i, t)| Some((i, t, t.build.as_ref()?.menu.as_str()))).collect();
+    // Menus in the order their first thing is defined, so core's come first
+    // and a mod's new menu lands after them.
+    let mut menus: Vec<&str> = Vec::new();
+    for &(_, _, menu) in &builds {
+        if !menus.contains(&menu) {
+            menus.push(menu);
+        }
     }
-    items.push(ToolDef { key: "stockpile".into(), label: "Stockpile".into(), tool: Tool::Stockpile, color: ZONE });
-    items.push(ToolDef {
-        key: "clear_zone".into(),
-        label: "Clear zone".into(),
-        tool: Tool::ClearZone,
-        color: Color::from_rgba(150, 150, 170, 255),
-    });
-    items.push(ToolDef {
-        key: "cancel".into(),
-        label: "Cancel".into(),
-        tool: Tool::Cancel,
-        color: Color::from_rgba(200, 80, 80, 255),
-    });
+    builds.sort_by_key(|&(i, _, menu)| (menus.iter().position(|m| *m == menu), i));
+    for (i, t, menu) in builds {
+        items.push(tool(format!("build:{}", t.id), &t.label, Tool::Build(i as DefId), rgb(t.rgb), "build", menu));
+    }
+    items.push(tool("stockpile".into(), "Stockpile", Tool::Stockpile, ZONE, "zones", ""));
+    let clear = Color::from_rgba(150, 150, 170, 255);
+    items.push(tool("clear_zone".into(), "Clear zone", Tool::ClearZone, clear, "zones", ""));
     items
 }
 
@@ -853,6 +860,8 @@ pub fn client_view(app: &mut App, mouse: (f32, f32), time: f64) -> ClientView {
                 label: t.label.clone(),
                 color: to_u8(t.color),
                 active: t.tool == app.tool,
+                category: t.category.into(),
+                group: t.group.clone(),
             })
             .collect(),
         stuff: stuff_view(app),
@@ -921,15 +930,17 @@ pub fn frame(app: &mut App, raw: &RawInput) {
         apply_ui(app, a);
     }
 
+    // Escape always gives the keyboard back; what else it does (close the
+    // dock's palette, drop the tool, deselect) is core's `core:escape`
+    // binding, so a mod can put its own step in front.
+    if raw.keys.contains(&KeyCode::Escape) {
+        app.ui.blur();
+    }
     // Keys, unless the UI used them (a focused text input takes them all;
     // Tab/Enter go to a focused control).
     // Everything else with a key is a core binding (mods/core/ui/keys.luau).
     for k in raw.keys.iter().filter(|_| !out.captured_keys) {
         let action = match k {
-            KeyCode::Escape => {
-                app.ui.blur();
-                Action::Escape
-            }
             KeyCode::Tab => Action::NextColonist,
             _ => continue,
         };
@@ -1336,7 +1347,6 @@ pub enum Action {
     ToggleDevtools,
     /// Cycle the field overlay: off, then each field the mods define.
     CycleOverlay,
-    Escape,
     ToggleDraft,
     NextColonist,
     CenterSelected,
@@ -1367,14 +1377,6 @@ pub fn apply(app: &mut App, action: Action) {
             let fields = &app.sim.world.defs.fields;
             let from = app.overlay.map_or(0, |i| i + 1);
             app.overlay = (from..fields.len()).find(|&i| fields[i].overlay);
-        }
-        Action::Escape => {
-            if app.tool != Tool::Select {
-                app.tool = Tool::Select;
-            } else {
-                app.selected = None;
-            }
-            app.drag_start = None;
         }
         Action::ToggleDraft => {
             if let Some(e) = app.selected {

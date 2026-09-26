@@ -2,12 +2,12 @@
 id: 8cead892-3d3e-483f-9a60-84fe8c1c7e79
 title: 'Pawns speak: a speech system for needs, scripts and greetings'
 type: feature
-status: doing
+status: done
 milestone: interface
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 created: 2026-09-26
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p1
 api: additive
 effort: m

@@ -23,14 +23,21 @@ pub fn ui_for(sim: &Sim) -> Ui {
 pub fn client(sim: &Sim) -> ClientView {
     let c = sim.world.colony_center().unwrap();
     let defs = &sim.world.defs;
-    let mut tools =
-        vec![ToolView { key: "select".into(), label: "Select".into(), color: [128, 128, 128], active: true }];
+    let mut tools = vec![ToolView {
+        key: "select".into(),
+        label: "Select".into(),
+        color: [128, 128, 128],
+        active: true,
+        ..Default::default()
+    }];
     for d in &defs.designations {
         tools.push(ToolView {
             key: format!("designate:{}", d.id),
             label: d.label.clone(),
             color: d.rgb,
             active: false,
+            category: "orders".into(),
+            group: String::new(),
         });
     }
     ClientView {

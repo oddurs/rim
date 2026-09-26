@@ -1129,6 +1129,8 @@ impl UiVm {
                 row.set("label", tool.label.as_str())?;
                 row.set("color", format!("#{:02x}{:02x}{:02x}", tool.color[0], tool.color[1], tool.color[2]))?;
                 row.set("active", tool.active)?;
+                row.set("category", tool.category.as_str())?;
+                row.set("group", tool.group.as_str())?;
                 t.push(row)?;
             }
             Ok(t)

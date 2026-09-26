@@ -217,6 +217,33 @@ readouts), `core:inspector.sections` (sections in the colonist
 inspector) and `core:inspector.thing` (sections in the inspector of a
 selected thing: a station's bills, a tool's wear).
 
+### The dock
+
+The bottom bar (`core:toolbar`, in [`toolbar.luau`](../../mods/core/ui/toolbar.luau))
+files every tool by category: Orders (Q), Build (B) and Zones (Z). The client
+gives each row of `view.tools()` a `category` and a `group`; a buildable's
+group is its `build.menu`. A mod's new designation, building or menu shows up
+in the right palette with no UI code, and the dock stays one row wide however
+many mods are loaded.
+
+Only the open palette is built. A palette with more than one group shows its
+groups as tabs (`core:dock.groups.<group>`); tool buttons keep the ids
+`core:toolbar.<key>`, in the row `core:toolbar.buttons`. For mods, the bar
+has `core:dock.right`, and each palette has `core:dock.palette.<category>`
+after its tools, built only while that palette is open. Core's stockpile
+list is a button there:
+
+```lua
+ui.extend("core:dock.palette.zones", function(view)
+	return kit.button({ id = "core:zones.open", label = "All stockpiles…", on_click = function()
+		ui.toggle("core:zones")
+	end })
+end)
+```
+
+Escape is the binding `core:escape`: it drops the tool and closes its
+palette, else closes a palette opened by hand, else clears the selection.
+
 If two mods replace or remove the same id, that's reported as a conflict
 naming both, and load order decides which wins. Operating on an id nobody
 defines is reported as a warning. Both show in the F3 profiler.

@@ -13,6 +13,11 @@ pub struct ToolView {
     pub label: String,
     pub color: [u8; 3],
     pub active: bool,
+    /// Where the dock files it: "orders", "build", "zones", or "" for a
+    /// tool that is always on the dock (select).
+    pub category: String,
+    /// Its row inside the category: a buildable's `build.menu`, or "".
+    pub group: String,
 }
 
 /// One material the active build tool could use.

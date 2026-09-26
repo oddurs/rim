@@ -100,7 +100,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `view.tick` | `() -> number` | The current tick. |
 | `view.ticks_per_day` | `() -> number` | Ticks in a game day. |
 | `view.time` | `() -> number` | Wall-clock seconds, for animation. |
-| `view.tools` | `() -> { Tool }` | The toolbar's tools. |
+| `view.tools` | `() -> { Tool }` | Every tool, with the dock category and group it is filed under. |
 | `view.ui_stats` | `() -> UiStats` | The UI's own timings. |
 | `view.ui_tree` | `() -> { TreeRow }` | The node tree (devtools). |
 | `view.visible_pawns` | `() -> { VisiblePawn }` | Pawns on screen, for anchored labels. |
