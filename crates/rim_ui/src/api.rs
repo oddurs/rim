@@ -81,7 +81,10 @@ type FieldInfo = {
 }
 type UiDate = { year: number, season: string, season_index: number, day: number, day_of_year: number, year_days: number }
 type Part = { label: string, value: number }
-type Tool = { key: string, label: string, color: string, active: boolean, category: string, group: string }
+type Tool = {
+    key: string, label: string, color: string, active: boolean, category: string, group: string,
+    cost: string, work: number, hp: number,
+}
 type Zone = { id: number, name: string, cells: number, allows: { [string]: boolean } }
 type Item = { id: string, label: string, color: string }
 type WorkType = { id: string, label: string, icon: string, order: number, default: number }
@@ -120,6 +123,7 @@ pub const UI_API: &[UiDoc] = &[
     d!("act.focus", "(id: number) -> ()", "Move the camera to a pawn or thing."),
     d!("act.load", "(path: string) -> ()", "Play a save from view.saves() (the title screen)."),
     d!("act.new_colony", "() -> ()", "Start a new colony (the title screen)."),
+    d!("act.preview", "(key: string?) -> ()", "Point the materials view (view.stuff) at a buildable by its tool key, for a card describing it; nil goes back to the tool in hand."),
     d!(
         "act.render_scale",
         "(scale: number) -> ()",
@@ -235,6 +239,7 @@ pub const UI_API: &[UiDoc] = &[
     d!("view.hover", "() -> Hover?", "What's under the cursor."),
     d!("view.inspect", "() -> Inspect?", "The node under the cursor (devtools)."),
     d!("view.items", "() -> { Item }", "Every item def, which a stockpile can take or refuse."),
+    d!("view.marked", "() -> { [string]: number }", "How many things each designation has marked, by designation id; ones with none are left out."),
     d!("view.message_count", "() -> number", "How many messages the log holds."),
     d!("view.messages", "(max: number, skip: number?) -> { Message }", "The newest messages, newest first; skip that many of the newest to page back through the log."),
     d!("view.mods", "() -> { ModInfo }", "Loaded mods, in load order."),

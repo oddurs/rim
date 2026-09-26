@@ -2,12 +2,12 @@
 id: 236d1860-820d-4025-b742-9a95eb1231ac
 title: Sheets float at fixed proportions, and don't jump when the side columns change
 type: bug
-status: review
+status: done
 milestone: interface
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 created: 2026-09-26
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p1
 api: none
 effort: m

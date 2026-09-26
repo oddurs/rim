@@ -49,6 +49,9 @@ pub struct ToolDef {
     /// The dock's category and group; see `ToolView`.
     pub category: &'static str,
     pub group: String,
+    /// A buildable's work and hit points before material factors.
+    pub work: u32,
+    pub hp: u32,
 }
 
 /// The lowest zoom, in points per tile: a 250-cell map fits a 1080p screen.
@@ -85,6 +88,9 @@ pub struct App {
     /// The material last picked for each buildable, so nobody picks wood
     /// forty times. Falls back to whatever the colony has most of.
     pub stuff_for: Vec<(DefId, DefId)>,
+    /// The buildable the build tray is describing, when it isn't the tool
+    /// in hand: its materials go to the UI in place of the tool's.
+    pub preview: Option<DefId>,
     /// What the inspector shows: the one selected thing, or the first of
     /// `group`.
     pub selected: Option<Entity>,
@@ -542,6 +548,7 @@ async fn game() {
         overlay: None,
         hint: None,
         stuff_for: Vec::new(),
+        preview: None,
         hint_key: None,
         order_flash: None,
         mouse_over_ui: false,
@@ -638,6 +645,8 @@ fn toolbar(sim: &Sim) -> Vec<ToolDef> {
         color,
         category,
         group: group.into(),
+        work: 0,
+        hp: 0,
     };
     let mut items = vec![tool("select".into(), "Select", Tool::Select, GRAY, "", "")];
     for (i, d) in defs.designations.iter().enumerate().filter(|(i, _)| markable(defs, *i as DefId)) {
@@ -663,7 +672,12 @@ fn toolbar(sim: &Sim) -> Vec<ToolDef> {
     }
     builds.sort_by_key(|&(i, _, menu)| (menus.iter().position(|m| *m == menu), i));
     for (i, t, menu) in builds {
-        items.push(tool(format!("build:{}", t.id), &t.label, Tool::Build(i as DefId), rgb(t.rgb), "build", menu));
+        let b = t.build.as_ref().expect("a buildable");
+        items.push(ToolDef {
+            work: b.work,
+            hp: t.hp,
+            ..tool(format!("build:{}", t.id), &t.label, Tool::Build(i as DefId), rgb(t.rgb), "build", menu)
+        });
     }
     items.push(tool("stockpile".into(), "Stockpile", Tool::Stockpile, ZONE, "zones", ""));
     let clear = Color::from_rgba(150, 150, 170, 255);
@@ -903,6 +917,12 @@ pub fn client_view(app: &mut App, mouse: (f32, f32), time: f64) -> ClientView {
                 active: t.tool == app.tool,
                 category: t.category.into(),
                 group: t.group.clone(),
+                cost: match t.tool {
+                    Tool::Build(d) => build_cost(app, d),
+                    _ => String::new(),
+                },
+                work: t.work,
+                hp: t.hp,
             })
             .collect(),
         stuff: stuff_view(app),
@@ -1263,8 +1283,19 @@ fn apply_ui(app: &mut App, a: UiAction) {
                 app.drag_start = None;
             }
         }
+        UiAction::Preview(key) => {
+            app.preview = key.and_then(|k| match app.tools.iter().find(|t| t.key == k)?.tool {
+                Tool::Build(d) => Some(d),
+                _ => None,
+            });
+        }
+        // The material for the thing the tray describes, else the tool's.
         UiAction::Stuff(id) => {
-            if let (Tool::Build(t), Some(m)) = (app.tool, app.sim.world.defs.thing_id(&id)) {
+            let target = app.preview.or(match app.tool {
+                Tool::Build(t) => Some(t),
+                _ => None,
+            });
+            if let (Some(t), Some(m)) = (target, app.sim.world.defs.thing_id(&id)) {
                 let sc = app.sim.world.defs.thing(t).build.as_ref().and_then(|b| b.stuff.as_ref());
                 if sc.is_some_and(|sc| app.sim.world.defs.is_material_for(m, &sc.category)) {
                     app.stuff_for.retain(|(b, _)| *b != t);
@@ -1628,8 +1659,27 @@ fn chosen_material(app: &App, thing: DefId) -> Option<DefId> {
 
 /// The material row for the active build tool: every material its def
 /// accepts, with stock and what the result would be, or nothing at all.
+/// A buildable's cost in words, in the material it would use now.
+fn build_cost(app: &App, t: DefId) -> String {
+    let defs = &app.sim.world.defs;
+    let Some(b) = defs.thing(t).build.as_ref() else { return String::new() };
+    if b.free {
+        return "free".into();
+    }
+    let mut parts: Vec<String> = b.cost_r.iter().map(|&(d, n)| format!("{n} {}", defs.thing(d).label)).collect();
+    if let Some(sc) = &b.stuff {
+        let label = chosen_material(app, t).map_or_else(|| sc.category.clone(), |m| defs.thing(m).label.clone());
+        parts.insert(0, format!("{} {label}", sc.count));
+    }
+    parts.join(" · ")
+}
+
 fn stuff_view(app: &App) -> Vec<rim_ui::view::StuffView> {
-    let Tool::Build(t) = app.tool else { return Vec::new() };
+    let t = match (app.preview, app.tool) {
+        (Some(p), _) => p,
+        (None, Tool::Build(t)) => t,
+        _ => return Vec::new(),
+    };
     let w = &app.sim.world;
     let td = w.defs.thing(t);
     let Some(b) = td.build.as_ref() else { return Vec::new() };

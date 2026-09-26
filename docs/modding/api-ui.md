@@ -13,6 +13,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `act.focus` | `(id: number) -> ()` | Move the camera to a pawn or thing. |
 | `act.load` | `(path: string) -> ()` | Play a save from view.saves() (the title screen). |
 | `act.new_colony` | `() -> ()` | Start a new colony (the title screen). |
+| `act.preview` | `(key: string?) -> ()` | Point the materials view (view.stuff) at a buildable by its tool key, for a card describing it; nil goes back to the tool in hand. |
 | `act.render_scale` | `(scale: number) -> ()` | Draw the world at this fraction of the screen's pixels, 0.25 to 1; the UI stays sharp. Saved for the player. |
 | `act.select` | `(id: number?, add: boolean?) -> ()` | Select a pawn or thing, or nothing. With add, put a colonist into the selection or take them out of it (a shift-click). |
 | `act.send` | `(name: string, data: {[string]: any}?) -> ()` | Send an event to your mod's own sim scripts ("your_mod:event"), as a player command. |
@@ -80,6 +81,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `view.hover` | `() -> Hover?` | What's under the cursor. |
 | `view.inspect` | `() -> Inspect?` | The node under the cursor (devtools). |
 | `view.items` | `() -> { Item }` | Every item def, which a stockpile can take or refuse. |
+| `view.marked` | `() -> { [string]: number }` | How many things each designation has marked, by designation id; ones with none are left out. |
 | `view.message_count` | `() -> number` | How many messages the log holds. |
 | `view.messages` | `(max: number, skip: number?) -> { Message }` | The newest messages, newest first; skip that many of the newest to page back through the log. |
 | `view.mods` | `() -> { ModInfo }` | Loaded mods, in load order. |

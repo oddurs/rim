@@ -108,6 +108,7 @@ ui.mount("windows", "my_mod:greeting")
 | `size`, `weight`, `wrap`, `tracking` | Text: `size` token (`caption`, `small`, `body`, `heading`, `title`), `weight` (`regular`, `strong`), wrap to width, letter spacing (a `tracking` token or em) |
 | `hover`, `press`, `focus` | Colour changes for each state: `{ bg = "surface_hover" }` |
 | `on_click`, `on_right_click` | Functions called when clicked |
+| `on_hover` | Function called once when the pointer comes onto the node |
 | `tooltip` | Text shown after a short hover |
 | `handle` | Window chrome: `move`, `resize` or `close` (see Windows) |
 | `src`, `tint` | Image: `src = "mod:name"` names a PNG under that mod's `ui/img/`; `tint = true` draws it in the text colour (see Images) |
@@ -361,7 +362,7 @@ still are, and stay open over a sheet. Every window casts a soft shadow
 and fades in as it opens, an offset of its draws that costs no layout.
 
 Register a screen and it gets a key binding (so the command palette finds
-it) and a button at the right of the dock, beside core's Work (P),
+it) and a tab at the right of the top bar (`core:topbar.views`), beside core's Work (P),
 Stockpiles and News (N):
 
 ```lua
@@ -377,19 +378,30 @@ and 30; the default is 100) and then by when they were added.
 
 ### The dock
 
-The bottom bar (`core:toolbar`, in [`toolbar.luau`](../../mods/core/ui/toolbar.luau))
-files every tool by category: Orders (Q), Build (B) and Zones (Z). The client
-gives each row of `view.tools()` a `category` and a `group`; a buildable's
-group is its `build.menu`. A mod's new designation, building or menu shows up
-in the right palette with no UI code, and the dock stays one row wide however
-many mods are loaded.
+The bottom edge holds verbs only (`core:toolbar`, in
+[`toolbar.luau`](../../mods/core/ui/toolbar.luau)): Select, then Orders (Q),
+Build (B) and Zones (Z). The client gives each row of `view.tools()` a
+`category` and a `group` (a buildable's group is its `build.menu`), and a
+buildable its `cost` in the material it would use, `work` and `hp`. A mod's
+new designation, building or menu shows up in the right tray with no UI
+code.
 
-Only the open palette is built. A palette with more than one group shows its
-groups as tabs (`core:dock.groups.<group>`); tool buttons keep the ids
-`core:toolbar.<key>`, in the row `core:toolbar.buttons`. For mods, the bar
-has `core:dock.right`, and each palette has `core:dock.palette.<category>`
-after its tools, built only while that palette is open. Core's stockpile
-list is a button there:
+A verb raises a tray (`core:dock.tray`, built with `kit.tray`) that reads
+in the order the player decides. Build has a group rail
+(`core:dock.groups.<group>`, stepped with `[` and `]`), its things as tiles
+(`core:toolbar.<key>` in `core:toolbar.buttons`, each with a number key),
+and a card for the thing under the pointer: its cost, work, hit points and
+the materials it can be made of (`core:stuff.<id>`). Orders lists the orders
+with how many things each has marked (`view.marked()`); Zones lists the zone
+tools and the colony's stockpiles. `/` finds a thing by name across groups.
+Picking a thing folds the tray to a pill (`core:dock.pill`) that says what
+the next click places, in what, and at what cost. The number keys pick in
+an open tray; 1 to 3 set the speed when none is open.
+
+Only the open tray is built, at a fixed height so the card changing under
+the pointer never moves the tiles. For mods, the bar has `core:dock.right`,
+and each tray has `core:dock.palette.<category>` at the foot of its list,
+built only while that tray is open. Core's stockpile list is a button there:
 
 ```lua
 ui.extend("core:dock.palette.zones", function(view)
@@ -399,9 +411,8 @@ ui.extend("core:dock.palette.zones", function(view)
 end)
 ```
 
-Escape is the binding `core:escape`: it drops the tool and closes its
-palette, else closes a palette opened by hand, else closes the open sheet,
-else clears the selection.
+Escape is the binding `core:escape`: it stops placing (back to the tray),
+else closes the tray, else closes the open sheet, else clears the selection.
 
 If two mods replace or remove the same id, that's reported as a conflict
 naming both, and load order decides which wins. Operating on an id nobody

@@ -186,6 +186,21 @@ impl T {
         self.click_ui(&id).await
     }
 
+    /// Back out of the dock: stop placing, close its tray and any sheet,
+    /// leaving the selection alone.
+    async fn clear_dock(&mut self) {
+        for _ in 0..4 {
+            self.frame().await;
+            let busy = self.app.tool != Tool::Select
+                || self.ui_rect("core:dock.tray").is_some()
+                || self.ui_rect("core:dock.pill").is_some();
+            if !busy {
+                return;
+            }
+            self.key(KeyCode::Escape).await;
+        }
+    }
+
     fn ui_text(&self) -> String {
         self.app.ui.snapshot()
     }
@@ -269,29 +284,47 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.check(keys.len() == n_expected, format!("one tool per markable designation and buildable def ({})", keys.len()));
     for k in &keys {
         t.click_tool(k).await;
-        let found = t.app.ui.find(&format!("core:toolbar.{k}")).is_some();
-        t.check(found, format!("toolbar button for '{k}'"));
+        t.frame().await;
+        let picked = t.app.tools.iter().find(|b| b.key == *k).is_some_and(|b| b.tool == t.app.tool);
+        t.check(picked, format!("the dock picks '{k}'"));
     }
-    // The dock is one row whatever is loaded, and every palette, group by
+    // The dock is one row whatever is loaded, and every tray, group by
     // group, fits a 1280-point screen with room to spare.
     let dock = t.ui_rect("core:dock").map(|r| r[3]);
     t.check(dock.is_some_and(|h| h < 60.0), format!("the dock is one row ({dock:?})"));
     let mut widest = 0.0f32;
-    for tool in t.app.tools.iter().map(|t| t.key.clone()).collect::<Vec<_>>() {
-        t.click_tool(&tool).await;
-        if let Some(r) = t.ui_rect("core:toolbar.buttons") {
-            widest = widest.max(r[2]);
+    let groups: Vec<String> = t.app.tools.iter().filter(|b| b.category == "build").map(|b| b.group.clone()).collect();
+    for (key, category) in [(KeyCode::Q, "orders"), (KeyCode::B, "build"), (KeyCode::Z, "zones")] {
+        t.clear_dock().await;
+        t.key(key).await;
+        t.frame().await;
+        let group_list: Vec<String> = if category == "build" { groups.clone() } else { vec![String::new()] };
+        for g in group_list {
+            if !g.is_empty() {
+                t.click_ui(&format!("core:dock.groups.{g}")).await;
+                t.frame().await;
+            }
+            match t.ui_rect("core:dock.tray") {
+                Some(r) => widest = widest.max(r[2]),
+                None => t.check(false, format!("the {category} tray opens")),
+            }
         }
     }
-    t.check(widest > 0.0 && widest < 1280.0 - 64.0, format!("the widest palette fits at 1280 ({widest:.0} pt)"));
+    t.clear_dock().await;
+    t.click_tool("build:core:wall").await;
+    t.check(widest > 0.0 && widest < 1280.0 - 64.0, format!("the widest tray fits at 1280 ({widest:.0} pt)"));
     t.key(KeyCode::Escape).await;
     t.frame().await;
     t.check(t.app.tool == Tool::Select, "Escape drops the tool");
-    t.check(t.ui_rect("core:toolbar.buttons").is_none(), "and closes its palette");
+    t.check(t.ui_rect("core:dock.tray").is_some(), "and brings its tray back");
+    t.key(KeyCode::Escape).await;
+    t.frame().await;
+    t.check(t.ui_rect("core:dock.tray").is_none(), "a second Escape closes the tray");
     let selected = t.app.selected;
     t.key(KeyCode::B).await;
     t.frame().await;
     t.check(t.ui_rect("core:dock.palette.build").is_some(), "B opens the Build palette");
+    t.shot("build_tray").await;
     t.key(KeyCode::Escape).await;
     t.frame().await;
     t.check(
@@ -577,13 +610,12 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
 
     // ---------------------------------------------------------- 0215 materials
     println!("\n# pick the material before you place it (0215)");
-    t.key(KeyCode::Escape).await;
-    t.frame().await;
+    t.clear_dock().await;
     t.check(t.ui_rect("core:stuff").is_none(), "no material row while nothing is being built");
     t.click_tool("build:core:wall").await;
     t.frame().await;
     t.check(t.ui_rect("core:stuff").is_some(), "the wall tool brings up the material row");
-    t.check(t.ui_rect("core:toolbar.buttons").is_some(), "and the toolbar is still there under it");
+    t.check(t.ui_rect("core:dock.pill").is_some(), "in the placing pill, over the dock");
     t.check(t.ui_rect("core:stuff.core:wood").is_some(), "the wall tool offers wood");
     t.check(t.ui_rect("core:stuff.core:stone").is_some(), "and stone, whether or not there is any");
     let have_stone: u32 = t
@@ -596,7 +628,7 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         .map(|th| th.count)
         .sum();
     t.check(
-        have_stone > 0 || t.ui_text().contains("stone blocks · none"),
+        have_stone > 0 || (t.ui_rect("core:stuff.core:stone").is_some() && t.ui_text().contains("\"none\"")),
         format!("a material you have none of says so ({have_stone} stone on the map)"),
     );
     let clicked = t.click_ui("core:stuff.core:stone").await;
@@ -806,7 +838,7 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     println!("\n# select, draft, move, attack (0047)");
     t.act(Action::Speed(1));
     t.focus(t.pawn(founder).pos);
-    t.key(KeyCode::Escape).await;
+    t.clear_dock().await;
     t.key(KeyCode::Escape).await;
     t.check(t.app.selected.is_none(), "escape clears the selection");
     t.frame().await;
@@ -947,7 +979,7 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         t.w().zones.list.len() == 1 && t.w().zones.at(&t.w().map, spot.offset(5, 0)).map(|z| z.id) == zone,
         "a touching drag extends it",
     );
-    t.key(KeyCode::Escape).await;
+    t.clear_dock().await;
     t.focus(spot);
     t.shot("stockpile").await;
     t.key(KeyCode::Z).await;
@@ -1247,7 +1279,7 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     // Last, since it adds colonists.
     println!("\n# several selected (86dcd0ca)");
     t.app.paused = true;
-    t.key(KeyCode::Escape).await;
+    t.clear_dock().await;
     t.key(KeyCode::Escape).await;
     let at = t.pawn(founder).pos;
     let human = defs.creature_id("human").expect("humans");
