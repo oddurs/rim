@@ -2,7 +2,7 @@
 id: e3846c47-f425-46f5-8e96-fec056074052
 title: 'mods/primitive: the stone age as a plugin'
 type: content
-status: backlog
+status: done
 milestone: stone-age
 depends_on:
 - 049e2f73-0d64-48ff-bf2e-21264f765d35
@@ -14,6 +14,7 @@ depends_on:
 - ccd44902-24d5-4855-9def-406d1ed39f4a
 created: 2026-09-24
 updated: 2026-09-25
+closed_at: 2026-09-25
 priority: p0
 api: none
 effort: l
@@ -88,7 +89,7 @@ Hunting stays barehanded (a spear waits for equipment, d5d0ea1f).
 - [x] A branch shelter and campfire are buildable with no tools
 - [x] Clay is dug with a digging stick, builds cob walls, and fires into a pot at a campfire
 - [x] A `rim test` scene goes from bare hands to a felled tree
-- [ ] Core alone still plays with the plugin removed (§5 CI smoke test)
+- [x] Core alone still plays with the plugin removed (§5 CI smoke test)
 
 ## 2026-09-25
 
@@ -101,3 +102,11 @@ Split into three: stone tools and the gates (4675019b), clay (89f6d138) and bone
 ## 2026-09-25
 
 The materials table above lists the clay pot's stuff as none. As built (89f6d138), the pot is made of its clay: a clay pot, at clay's hp. The hammerstone is its own item, shaped from a stone (4675019b).
+
+## 2026-09-25
+
+Done in four parts: gathering by hand (#98), stone tools and the gates (#113), clay (#119) and bone (this one). Core alone is checked by core_alone_is_untouched and by CI's headless --core run.
+
+## 2026-09-25
+
+Left out of what this item's body describes: the day-two 'no flint within reach' nudge, which bone makes less needed; flint on rock edges (it spawns only on sand); and loose stones on rock floor (rock floor is all granite). None of them was a criterion.

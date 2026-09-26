@@ -2,14 +2,14 @@
 id: 89f6d138-26e0-4d93-ad32-39c320d6e76f
 title: 'Clay: banks, cob walls, and pots fired at the campfire'
 type: content
-status: doing
+status: done
 milestone: stone-age
 assignee: Oddur Sigurdsson
-claimed: 2026-09-25
 depends_on:
 - 4675019b-c017-47e7-b148-b12e4be58bda
 created: 2026-09-25
 updated: 2026-09-25
+closed_at: 2026-09-25
 priority: p1
 api: none
 effort: m

@@ -1,0 +1,32 @@
+# Bone: a hunted animal gives something to make tools from as well as
+# meat. It knaps like flint, only worse: a bone hand axe is the same def as
+# a flint one, slower and weaker because of what it's made of.
+
+[[thing]]
+id = "bone"
+label = "bone"
+color = "#e2dccb"
+category = "item"
+look.layers = [
+    { draw = "fill", x = 0.22, y = 0.46, w = 0.56, h = 0.08 },
+    { draw = "disc", x = 0.24, y = 0.44, r = 0.07 },
+    { draw = "disc", x = 0.24, y = 0.56, r = 0.07 },
+    { draw = "disc", x = 0.76, y = 0.44, r = 0.07 },
+    { draw = "disc", x = 0.76, y = 0.56, r = 0.07 },
+]
+market_value = 0.8
+stack_limit = 50
+tags = ["knappable"]
+stuff = { categories = ["lithic"], factors = { hp = 0.8, tool_speed = 0.7 } }
+
+[[patch]]
+target = "creature/core:deer"
+append = { butcher = [{ thing = "primitive:bone", count = 4 }] }
+
+[[patch]]
+target = "creature/core:wolf"
+append = { butcher = [{ thing = "primitive:bone", count = 3 }] }
+
+[[patch]]
+target = "creature/core:hare"
+append = { butcher = [{ thing = "primitive:bone", count = 1 }] }

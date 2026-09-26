@@ -616,7 +616,9 @@ not from a research screen.
   behind `pounding`. The third is clay: banks on the marsh, dug with a
   digging stick and dug out for a few days at a time, build cob walls
   that hold heat better than branches and don't burn, and fire into pots
-  at the campfire, which is a crafting station too. Bone comes next.
+  at the campfire, which is a crafting station too. The fourth is bone,
+  from butchering: it knaps like flint, only worse, so a bone hand axe is
+  the same def, slower and weaker.
 
 ### The first days
 

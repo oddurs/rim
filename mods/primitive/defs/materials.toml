@@ -60,7 +60,7 @@ market_value = 1.5
 stack_limit = 50
 tags = ["knappable"]
 # Lithic: what an edge is made of. What's knapped from flint is flint, and
-# takes its hp and its tool_speed from it (bone, poorer, comes later).
+# takes its hp and its tool_speed from it (bone.toml has a poorer one).
 stuff = { categories = ["lithic"], factors = { hp = 1.0, tool_speed = 1.0 } }
 
 # Dug from the banks on marsh with a digging stick. Built into walls it's

@@ -2,8 +2,10 @@
 id: 61c93a4e-e2d6-4422-9c53-5a3412d0a6f2
 title: Bone from butchering, a second knappable
 type: content
-status: backlog
+status: doing
 milestone: stone-age
+assignee: Oddur Sigurdsson
+claimed: 2026-09-25
 depends_on:
 - 4675019b-c017-47e7-b148-b12e4be58bda
 created: 2026-09-25
@@ -26,5 +28,9 @@ Split from e3846c47. A hunted animal should give you something to make tools fro
 
 ## Acceptance criteria
 
-- [ ] Butchering a boar or deer yields bone
-- [ ] A hand axe knapped from bone is slower and weaker than a flint one
+- [x] Butchering a boar or deer yields bone
+- [x] A hand axe knapped from bone is slower and weaker than a flint one
+
+## 2026-09-25
+
+Bone lives in its own defs/bone.toml. Deer give 4, wolves 3, hares 1. wildlife_plus's boar isn't patched, because primitive doesn't depend on that mod, and a patch on a def that isn't loaded warns. The hand-axe test knaps from bone and from flint through the same bill: hp 48 against 60, and tool speed 0.42 against 0.6.

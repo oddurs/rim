@@ -2,12 +2,12 @@
 id: 3ccab46f-32d5-4248-a23d-88cdc8b3ec70
 title: Carried things keep what they're made of
 type: bug
-status: doing
+status: done
 milestone: stone-age
 assignee: Oddur Sigurdsson
-claimed: 2026-09-25
 created: 2026-09-25
 updated: 2026-09-25
+closed_at: 2026-09-25
 priority: p1
 api: additive
 effort: m
