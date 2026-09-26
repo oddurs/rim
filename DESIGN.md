@@ -402,7 +402,8 @@ namespace (`weather:changed`).
   day), and firelight is the brighter of sky and fire rather than added, so a
   campfire glows at night and hardly shows at noon. Indoors gets a
   share of daylight, as if through windows. It's drawn as a multiplied
-  lightmap, so campfires glow and storms darken the map. The sky tint is a
+  lightmap, so campfires glow and storms darken the map. (§6e replaces
+  this with shadows, flicker and exposure; the sim side is unchanged.) The sky tint is a
   colour curve over the day in data, keyed by label so sky mods can add to it.
 - **Weather:** the renderer reads channels, never weather names:
   precipitation (rain, or snow below freezing), wind (slant and drift), fog,
@@ -1214,7 +1215,8 @@ reference for the Rust renderer.
     cheap.
   - **One light.** Every mass casts the same short shadow down and to the
     right, and its top and left edges catch a highlight. That gives height
-    without perspective.
+    without perspective. (§6e: the shadow is a contact shadow drawn with the
+    light, and it yields to the sun's.)
   - **The look never lies (§6b), extended to rooms.** A window facing an
     enclosed room throws a fan of daylight into it. A fire fills its room
     with a warm wash that stops at the walls. The one gap that keeps a ring
@@ -1569,6 +1571,149 @@ becomes its explicit roof. A floor that loses its span falls.
 - One cell of height per level: no ramps or slopes, and hilltops are flat.
 - Cross-level pathing, drawing the level below and generating a level are
   not yet measured. Each ticket that adds one records its number here.
+
+---
+
+## 6e. Light: at the rate it changes
+
+Today the renderer multiplies the world by one lightmap: firelight stamps,
+an indoors bit, and the sky as a uniform (§4c, "Seeing the weather"). It
+costs 3 µs, and it has no shadows, no flicker, and no difference between a
+torch in a hut and a torch in a field. A concept with a live WebGL demo of
+everything below is at
+<https://claude.ai/artifact/SC5Coj3UKKjxVCSxLKEq1t>.
+
+### Tension: whose light is it?
+
+- **For moving light into the sim:** gameplay would see the same shadows the
+  player does.
+- **Against:** shadows depend on sun angle, window glass and flame size,
+  none of which the sim should pay for or hash.
+- **Ruling:** **the sim keeps its scalar `light` field; everything here is
+  the renderer's.** Gameplay (plants, mood, sight in 713009ac) reads the
+  field. The picture adds direction, colour, softness and flicker. The two
+  agree wherever walls block both and differ at windows, doors and tree
+  shade, so any overlay that informs a decision shows the field, never the
+  picture.
+
+### Tension: what does a frame pay for?
+
+Most light in a colony barely changes. Walls stand for days, torches stay
+where they were built, and the sun moves a fraction of a degree a second.
+
+- **Ruling:** **each kind of light is computed at the rate it changes**, into
+  a light buffer at 1, 2 or 4 texels per cell, and a frame is a sum of cached
+  textures and a few uniforms.
+  - **Occluders**, one texel per cell (height, roofed, opening, sky opacity,
+    light opacity): rebuilt when walls, terrain or rooms change.
+  - **Sky shadows:** each light texel steps toward a sky body through the
+    height map, rising `tan(elevation)` per cell, and stops at the first thing
+    taller than the ray. Rebuilt when a body moves past a threshold (0.25° by
+    default), otherwise free. The penumbra widens with distance from the
+    occluder, and cloud widens it further.
+  - **Static lights** (anything that emits `light` and doesn't move): soft
+    shadows baked once, with 8 rays, into one of four **flicker channels**.
+    Flicker is then four colours a frame, for one torch or a thousand.
+    Rebaked only for lights within reach of a change, the rule the sim
+    already uses to re-stamp emitters.
+  - **Dynamic lights** (carried, burning, moving): the same march every frame,
+    up to a cap per preset; past it they glow without shadows.
+  - **Compose** at light resolution, then **multiply** the world, as today.
+- **Falloff** is `I · (1 − (d/r)⁴)² / (1 + 0.08·d²)`: close to inverse-square
+  near the flame and exactly zero at the radius, so a light's quad is tight.
+  **Flicker** is smooth noise with rare gusts, redder when dimmer, never a
+  fresh random value per frame.
+- **Exposure** follows the sky (0.8 at noon, up to 2.6 on a moonless night,
+  eased), which replaces `max(sky, fire)`: a torch reads strong at night and
+  weak at noon because the eye adapts, not because of a special case.
+
+### Indoors
+
+- A cell under a roof sees the sky only along a ray that leaves through a
+  window between its sill and lintel. That one rule gives §6c's daylight fan:
+  a strip under the window at noon, a bar across the floor at dusk, nothing
+  through a north wall. "Under a roof" is the per-cell `roofed(z, c)` of §6c,
+  so a hall beyond its span gets sky where the plan hatches it.
+- A closed room returns its lights' flux from its walls:
+  `fill = 0.3 · Σ(I·r²) / area`, flat over the room, in each light's channel.
+  That is §6c's "warm wash that stops at the walls". Outdoors there is nothing
+  to bounce off, so a campfire falls off into the dark.
+- A room's diffuse sky share comes from its boundary `daylight`, which room
+  rebuild already sums (§4, 0211).
+
+### Tension: the plan's one light, or the sun?
+
+§6c gives every mass the same short shadow down and to the right (ae5c3807),
+baked into the chunk mesh. Sky shadows point wherever the sun is.
+
+- **For the fixed shadow:** it is a drawing convention; it reads the same at
+  every hour and on every machine, and it costs nothing per frame.
+- **For the sun's:** it is the atmosphere this section exists for, and two
+  shadows on one wall at dusk contradict each other.
+- **Ruling (0779def9):** the fixed shadow becomes a short **contact
+  shadow**, down and to the right, that fades as direct sky light reaches
+  the cell. By day the sun's shadow does the work; at night, indoors,
+  underground and on `low` the plan convention remains, so a wall never
+  has two shadows and never has none.
+  - It is drawn by the lighting compose pass, not baked into the chunk
+    mesh, because the fade needs the per-texel sky visibility that only
+    compose has. It costs one occluder read. The top-and-left highlight
+    stays in the mesh (ae5c3807).
+  - Roofs (df049dac) shade their facets by the real sun direction instead
+    of a fixed one.
+
+### Depth
+
+Light is per level, like everything else in §6d, and it has to be
+**continuous across levels**: no edge where one level's light stops and the
+next begins, and no pop when the view changes level.
+
+- Buffers are keyed by `z`. The viewed level and its neighbours above and
+  below stay cached; the rest are evicted with their chunk meshes.
+- **Light crosses openings.** Every air cell, stairwell and ladder is an
+  opening. Each level's compose adds the light of the level above through
+  its openings, and the level below's through its own air cells, from a
+  blurred, half-resolution copy of that level's composed light, attenuated
+  per level (0.5 by default). So a torch at the top of a stairwell lights
+  the steps below and fades out around them, and a fire in a pit glows on
+  its rim. The cost is one read of a small texture per texel, and it is
+  skipped on a level with no openings.
+- **Sky down a shaft falls off with depth.** A column open to the sky gets
+  direct sun only while the sun is inside the shaft's cone, which the same
+  height-map march gives when the levels above count as solid height. The
+  diffuse sky share falls with the solid angle of open sky seen from the
+  bottom (`width / (width + 2·depth)`), so light fades smoothly down a
+  shaft instead of stopping at the surface.
+- **The level below, through air, is lit by its own light** and dimmed by a
+  depth tint per level, the same curve at every step down, so looking down
+  a shaft three levels deep reads as one gradient.
+- **Exposure is one continuous value.** It blends between sky-driven and
+  firelight-driven by how much sky reaches the view, and eases over about a
+  second, including when the view changes level. Changing level crossfades
+  the two cached buffers for 150 ms.
+
+### Presets
+
+`low`, `medium` (the default), `high`, `ultra`, and `auto`, which times the
+lighting passes on first launch and drops a preset if they exceed 1 ms.
+Any setting overrides its preset. Static lights bake at 8 rays in every
+preset, because the bake runs only on edits. A light texel never gets smaller
+than 4 screen pixels: at the minimum zoom (4 px a cell) the buffer drops to
+1 texel per cell, so zooming out doesn't raise the cost.
+
+### Cost and constraints
+
+- macroquad already has what this needs: a `render_target` per pass, additive
+  and multiply `BlendState`s, and GLSL 100 with constant loop bounds and a
+  uniform `break`. Targets are RGBA8 with square-root encoding and dither.
+- Modelled at `medium` for a 1080p view of 120 × 68 cells: about 0.4 M
+  texture reads a frame beyond today's multiply, and 1.9 M more on a frame
+  where the sky rebuilds. Unmeasured; the first ticket puts every pass in
+  `rim --bench-render` with GPU time, and each later ticket records its
+  number here.
+- **Costs we accept:** height-map shadows are 2.5D (a canopy shades like a
+  column); four flicker channels share colours; a static torch's shadow never
+  sways; 8-bit buffers need dither in the dark.
 
 ---
 

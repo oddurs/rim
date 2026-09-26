@@ -37,3 +37,11 @@ Depth is only as good as moving through it. The player sees one level, knows whe
 - [ ] Render bench on the stacked scene inside the 4 ms CPU budget, recorded here and in §6d
 - [ ] Changing level with both levels cached costs no chunk rebuilds (test on the mesh cache)
 - [ ] Tray groups work from Tab and Shift+Tab
+
+## 2026-09-26
+
+Lighting keys its buffers by z the same way as the chunk meshes (3124bd7b): the viewed level and the one below are cached, and the level below through air is drawn with its own light, dimmed. Evict them together.
+
+## 2026-09-26
+
+The user requires lighting to be smooth across z (DESIGN.md §6e, Depth). Lighting reads the neighbouring levels' light through openings, so 3124bd7b caches the level above as well as the one below. If the mesh cache keeps only z and z−1, eviction has to account for z+1. The level switch crossfades the two lighting buffers for 150 ms, so draw both levels' meshes during that window.
