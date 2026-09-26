@@ -142,6 +142,9 @@ struct Chunk {
     live: [Vec<IVec>; 3],
     /// Stack counts to label: cell and count.
     counts: Vec<(IVec, u32)>,
+    /// Something anchored here reaches past its right or bottom edge, so it
+    /// is drawn when the chunk beside or below it is on screen.
+    spills: bool,
 }
 
 pub struct Meshes {
@@ -279,6 +282,7 @@ impl Meshes {
         chunk.free(ctx);
         chunk.live = Default::default();
         chunk.counts.clear();
+        chunk.spills = false;
         for layer in 0..3 {
             let mut b = Builder::new(atlas);
             for y in y0..(y0 + CHUNK).min(w.map.h) {
@@ -286,6 +290,10 @@ impl Meshes {
                     let cell = IVec::new(x, y);
                     let i = w.map.idx(cell);
                     let Some(e) = w.map.layers_at(i)[layer] else { continue };
+                    if let Some(t) = w.thing(e).filter(|t| t.pos == cell) {
+                        let [sw, sh] = w.defs.thing(t.def).size;
+                        chunk.spills |= x + sw as i32 > x0 + CHUNK || y + sh as i32 > y0 + CHUNK;
+                    }
                     if live(w, e) {
                         chunk.live[layer].push(cell);
                         continue;
@@ -366,6 +374,24 @@ impl Meshes {
                 self.build(ctx, w, atlas, c, cam.zoom, t);
             }
         }
+        // A thing is drawn from its anchor, and its footprint reaches right
+        // and down (at most `MAX_SIZE` cells, less than a chunk): a chunk
+        // just above or left of the view may hold one reaching into it. It
+        // is drawn only if it does.
+        if w.defs.things.iter().any(|d| d.size != [1, 1]) {
+            let left = (c0x > 0).then(|| (c0y.max(1) - 1..=c1y).map(|y| (y * cx + c0x - 1) as usize));
+            let above = (c0y > 0).then(|| (c0x..=c1x).map(|x| ((c0y - 1) * cx + x) as usize));
+            for c in left.into_iter().flatten().chain(above.into_iter().flatten()) {
+                // Only when what's in it changed: at another zoom it is drawn
+                // scaled, like any chunk, and it's off screen anyway.
+                if self.chunks[c].built.is_none_or(|(r, _)| r != w.map.things_rev(c)) {
+                    self.build(ctx, w, atlas, c, cam.zoom, t);
+                }
+                if self.chunks[c].spills {
+                    self.visible.push(c);
+                }
+            }
+        }
     }
 
     /// Draw one layer (floors, items, fixtures) of every visible chunk from
@@ -409,6 +435,11 @@ impl Meshes {
     /// Cells of `layer` in the visible chunks to draw live this frame.
     pub fn live(&self, layer: usize) -> impl Iterator<Item = IVec> + '_ {
         self.visible.iter().flat_map(move |&c| self.chunks[c].live[layer].iter().copied())
+    }
+
+    /// Is chunk `c` drawn this frame?
+    pub fn drawn(&self, c: usize) -> bool {
+        self.visible.contains(&c)
     }
 
     /// How many things the visible chunks leave to be drawn live.

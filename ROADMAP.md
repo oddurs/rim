@@ -151,19 +151,19 @@ Exposure makes shelter matter: warmth, enclosed rooms, day/night, weather. Get f
 
 ## building — Building
 
-`########··` 76% · 16 of 21 done · due 2026-11-15
+`#########·` 81% · 17 of 21 done · due 2026-11-15
 
 A one-week sprint inside Colony. Building stops being a fixed list of defs
 
 - [ ] `26ba97aa` Plan a multi-cell building over grass, trees and rock <sup>feature · p2 · m · engine</sup>
 - [ ] `9ebfa104` Work Board: hovering a column lights its waiting jobs on the map <sup>feature · p3 · s · client</sup>
-- [ ] `f607a83d` Draw a multi-cell thing's look once, over its footprint <sup>feature · p2 · m · client</sup>
 - [ ] `ff97096d` A wall planned over loose items buries them <sup>bug · p2 · s · engine</sup>
-- [ ] `58f8cfb3` Gathering from a half-felled tree keeps the felling's progress <sup>bug · p2 · s · engine</sup>
+- [ ] `f607a83d` Draw a multi-cell thing's look once, over its footprint <sup>feature · p2 · m · client</sup>
 - [x] `3f4c257d` Rooms made of something: leak and daylight from the boundary <sup>feature · p0 · l · engine</sup>
 - [x] `419a24ab` Interaction spots: furniture a pawn uses <sup>feature · p1 · m · engine</sup>
 - [x] `49e5e583` Walls that look joined, in the colour of what they are made of <sup>feature · p1 · m · client</sup>
 - [x] `579f8374` Furniture: table, chair, stove <sup>content · p2 · s · core</sup>
+- [x] `58f8cfb3` Gathering from a half-felled tree keeps the felling's progress <sup>bug · p2 · s · engine</sup>
 - [x] `74ff83ce` Work styles and staged looks <sup>feature · p1 · m · client</sup>
 - [x] `763d8d64` Stuff: one buildable, many materials <sup>feature · p0 · m · engine</sup>
 - [x] `7937ae04` Busy sites live, idle sites cached <sup>perf · p1 · s · client</sup>

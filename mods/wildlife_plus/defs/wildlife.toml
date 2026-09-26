@@ -35,6 +35,24 @@ look.layers = [
     { draw = "sprite", sprite = "salt_lick", x = 0.1, y = 0.05, w = 0.8, h = 0.8 },
 ]
 
+# Tier 1 — a footprint. Two cells wide and one entity: the look is laid
+# out across both and drawn once, from its anchor (DESIGN.md §6a).
+[[thing]]
+id = "feeding_trough"
+label = "feeding trough"
+color = "#8a6a45"
+category = "building"
+size = [2, 1]
+path_cost = 60
+market_value = 10
+build = { menu = "furniture", work = 150, stuff = { category = "structural", count = 8 } }
+look.layers = [
+    { draw = "fill", x = 0.05, y = 0.32, w = 0.93, h = 0.5, color = "#00000030" },
+    { draw = "fill", x = 0.02, y = 0.25, w = 0.96, h = 0.5 },
+    { draw = "fill", x = 0.06, y = 0.34, w = 0.88, h = 0.28, color = "#c9b36a" },
+    { draw = "outline", x = 0.02, y = 0.25, w = 0.96, h = 0.5, width = 1.0, shade = 0.6 },
+]
+
 # Tier 1 — a glyph. A character as a look, rasterised once at load into the
 # world atlas: legible at any zoom, and no art to ship.
 [[thing]]
