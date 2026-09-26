@@ -31,7 +31,7 @@ declare rim: {
     colonists: () -> number,
     -- The colonists' average cell, or nil if there are none.
     colony_center: () -> (number?, number?),
-    -- Rough melee output of the colony, which raids are weighed against.
+    -- Rough melee output of the colony, which raids are weighed against: each colonist's damage (skill and the founder's edge included) per second, by health.
     colony_strength: () -> number,
     -- Items lying on the map, by thing ({ thing = "core:wood" }) or by tag ({ tag = "knappable" }).
     count_items: (what: ItemQuery) -> number,

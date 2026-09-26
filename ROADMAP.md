@@ -206,15 +206,15 @@ The log is the save and snapshots are a cache (DESIGN.md §7a): a colony is alwa
 
 ## colony — Colony
 
-`##########` 96% · 23 of 24 done · due 2026-12-15
+`##########` 100% · 24 of 24 done · due 2026-12-15
 
 Running more than one person: stockpiles, hauling, work priorities, skills, colonist panels.
 
-- [ ] `21fc9ea3` Storyteller pressure on a lone stone-age colony <sup>chore · p1 · m · core</sup>
 - [x] `03ad3e3a` Work types and priorities per colonist <sup>feature · p0 · m · engine</sup>
 - [x] `03b9b791` Derived fields and feels-like temperature <sup>feature · p1 · s · engine</sup>
 - [x] `0cb48faf` Priority rules and colony stances <sup>feature · p1 · m · engine</sup>
 - [x] `1e977052` Floating windows and a saved UI layout <sup>feature · p0 · m · engine</sup>
+- [x] `21fc9ea3` Storyteller pressure on a lone stone-age colony <sup>chore · p1 · m · core</sup>
 - [x] `29c323f5` Skills learned by doing <sup>feature · p1 · m · engine</sup>
 - [x] `3ab05834` Floors: built ground that remembers what it is made of <sup>feature · p1 · m · engine</sup>
 - [x] `46416c29` Orders apply while paused <sup>feature · p1 · s · engine</sup>
@@ -349,10 +349,11 @@ Mods reach players without a closed store: versioned dependencies, a modlist loc
 
 ## defense — Defense
 
-`··········` 0% · 0 of 8 done · due 2027-04-10
+`··········` 0% · 0 of 9 done · due 2027-04-10
 
 Combat depth: ranged weapons, apparel and armor, equipment, downed and rescue, raid tactics, turrets.
 
+- [ ] `019148c8` Lone stone-age colonies collapse in autumn (days 30-45) <sup>chore · p1 · l · core</sup>
 - [ ] `3503525f` Raid AI: groups, building targets and retreat <sup>feature · p1 · l · engine</sup>
 - [ ] `41006a46` Apparel and armor <sup>feature · p0 · l · engine</sup>
 - [ ] `6499049f` Siege and sapper raids <sup>content · p2 · m · core</sup>
