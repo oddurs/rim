@@ -222,6 +222,9 @@ fn walk(
             None => p.draw.push(Draw::Rect { rect, color: fade([0.8, 0.2, 0.5, 0.6], alpha), radius: 0.0 }),
         }
     }
+    if let Some(t) = &n.token {
+        crate::token::paint(t, rect, alpha, p.text, p.draw);
+    }
     if let Some(g) = &n.grid {
         // Cells are painted here, not laid out: one node's worth of tree
         // however many there are. Text sits inset from the cell's corner.
@@ -233,6 +236,9 @@ fn walk(
                 let cr = g.cell_rect(rect, r, c);
                 if let Some(bg) = cell.bg {
                     p.draw.push(Draw::Rect { rect: cr, color: fade(bg, alpha), radius: 0.0 });
+                }
+                if let Some(t) = &cell.token {
+                    crate::token::paint(t, cr, alpha, p.text, p.draw);
                 }
                 if cell.bar > 0.0 {
                     let h = (g.cell_h * 0.12).max(2.0);

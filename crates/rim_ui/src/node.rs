@@ -34,6 +34,8 @@ pub enum Kind {
     /// A line of text the player edits; the buffer is the engine's, keyed
     /// by the node's id. See `InputData`.
     Input,
+    /// An item: its world look, count, condition and state. See `token.rs`.
+    Token,
 }
 
 /// What an image node shows: the picture by name and which variant, and
@@ -77,6 +79,8 @@ pub struct GridCell {
     pub dot: Option<Rgba>,
     /// A small ring in the same corner, in this colour.
     pub ring: Option<Rgba>,
+    /// An item token filling the cell, so a contents grid stays one node.
+    pub token: Option<Rc<crate::token::Token>>,
 }
 
 /// A grid's shape and its cells. The node is laid out as one leaf of
@@ -238,6 +242,8 @@ pub struct Node {
     pub handle: Option<Handle>,
     /// Image nodes: the picture.
     pub image: Option<Image>,
+    /// Token nodes: the item.
+    pub token: Option<Rc<crate::token::Token>>,
     /// Input nodes: the buffer's seed and handlers.
     pub input: Option<InputData>,
     /// Called while the pointer is held on this node: (fx, fy) across it.
@@ -330,6 +336,7 @@ impl Node {
             (Kind::Grid, _) => "grid",
             (Kind::Image, _) => "image",
             (Kind::Input, _) => "input",
+            (Kind::Token, _) => "token",
         };
         out.push_str(kind);
         if let Some(i) = &self.image {
@@ -340,6 +347,9 @@ impl Node {
         }
         if let Some(id) = &self.id {
             out.push_str(&format!(" #{id}"));
+        }
+        if let Some(t) = &self.token {
+            out.push_str(&format!(" {:?} {:?}{}", t.count, t.state, if t.full { " full" } else { "" }));
         }
         if let Some(t) = &self.text {
             out.push_str(&format!(" {:?}", t.text));
@@ -364,6 +374,8 @@ pub struct Ctx<'a> {
     pub images: &'a crate::image::Images,
     /// Text inputs' buffers, so an input shows what the player typed.
     pub edits: &'a std::collections::HashMap<String, crate::edit::EditState>,
+    /// Item looks by the index `view.look` gave out.
+    pub looks: &'a std::cell::RefCell<crate::token::Looks>,
 }
 
 /// A node with nothing in it, for engine-built containers.
@@ -395,6 +407,7 @@ pub fn blank(key: u64, owner: Rc<str>) -> Node {
         grid: None,
         handle: None,
         image: None,
+        token: None,
         input: None,
         on_drag: None,
         children: Vec::new(),
@@ -538,6 +551,7 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
     let mut value = String::new();
     let mut placeholder = String::new();
     let (mut on_change, mut on_submit, mut on_key) = (None, None, None);
+    let mut token_field: Option<String> = None;
     let mut n = Node {
         kind: Kind::Box,
         id: None,
@@ -565,6 +579,7 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
         grid: None,
         handle: None,
         image: None,
+        token: None,
         input: None,
         on_drag: None,
         children: Vec::new(),
@@ -596,6 +611,7 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
                     "grid" => (Kind::Grid, false),
                     "image" => (Kind::Image, false),
                     "input" => (Kind::Input, false),
+                    "token" => (Kind::Token, false),
                     other => return Err(format!("unknown node kind '{other}'")),
                 }
             }
@@ -699,6 +715,7 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
                 })
             }
             "src" => src = Some(string("src", &v)?),
+            "look" | "count" | "full" | "hp" | "state" => token_field = Some(k.to_string()),
             "tint" => tint = matches!(v, Value::Boolean(true)),
             other => return Err(format!("unknown property '{other}'")),
         }
@@ -835,7 +852,12 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
                             Value::Nil => None,
                             v => Some(color(theme, "ring", &v)?),
                         };
-                        GridCell { text, bg, color: col, bar, bar_color, tip, weight, dot, ring }
+                        let token = match ct.get::<Value>("token").map_err(|e| e.to_string())? {
+                            Value::Nil => None,
+                            Value::Table(tt) => Some(Rc::new(token(ctx, &tt)?)),
+                            _ => return Err("a cell's token is a table: { look, count, full, hp, state }".into()),
+                        };
+                        GridCell { text, bg, color: col, bar, bar_color, tip, weight, dot, ring, token }
                     }
                     _ => return Err(format!("cell({}, {}) must return text, a table or nil", r + 1, c + 1)),
                 });
@@ -892,6 +914,11 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
         n.image = Some(Image { name, factor: img.factor, tint: tint_color });
         n.text = None;
     }
+    if kind == Kind::Token {
+        n.token = Some(Rc::new(token(ctx, t)?));
+    } else if let Some(k) = &token_field {
+        return Err(format!("'{k}' is for a token (kind = \"token\")"));
+    }
     if kind == Kind::Anchored {
         n.anchor = Some(match (entity, cell) {
             (Some(e), _) => Anchor::Entity(e),
@@ -902,6 +929,57 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
     n.kind = kind;
     n.style = style;
     Ok(n)
+}
+
+/// A token's fields, read from its table: `look` (an index from
+/// `view.look`), `count` (text), `full`, `hp` (0 to 1) and `state`
+/// ("incoming", "leaving" or "empty"). Colours and sizes come from the
+/// theme, worked out once per theme (token.rs).
+fn token(ctx: &Ctx, t: &Table) -> Result<crate::token::Token, String> {
+    use crate::token::{State, Token};
+    let get = |k: &str| t.raw_get::<Value>(k).map_err(|e| e.to_string());
+    let mut looks = ctx.looks.borrow_mut();
+    let style = looks.style(ctx.theme)?;
+    let mut out = Token {
+        look: None,
+        count: String::new(),
+        full: false,
+        hp: None,
+        state: State::Plain,
+        scale: ctx.theme.scale,
+        count_size: style.0,
+        count_weight: style.1,
+        colors: style.2,
+    };
+    match get("look")? {
+        Value::Nil => {}
+        v => {
+            let id = num("look", &v)? as u32;
+            out.look = Some(looks.get(id).ok_or("'look' must be an index from view.look")?);
+        }
+    }
+    match get("count")? {
+        Value::Nil => {}
+        v => out.count = string("count", &v)?,
+    }
+    out.full = matches!(get("full")?, Value::Boolean(true));
+    match get("hp")? {
+        Value::Nil => {}
+        v => out.hp = Some(num("hp", &v)?.clamp(0.0, 1.0)),
+    }
+    match get("state")? {
+        Value::Nil => {}
+        v => {
+            out.state = match string("state", &v)?.as_str() {
+                "incoming" => State::Incoming,
+                "leaving" => State::Leaving,
+                "empty" => State::Empty,
+                "plain" => State::Plain,
+                other => return Err(format!("unknown token state '{other}' (incoming, leaving, empty)")),
+            }
+        }
+    }
+    Ok(out)
 }
 
 /// A context menu subject: `{ kind = "zone", id = 3 }`. The id may be a
@@ -972,6 +1050,7 @@ pub fn error_node(theme: &Theme, owner: Rc<str>, key: u64, what: &str, err: &str
         grid: None,
         handle: None,
         image: None,
+        token: None,
         input: None,
         on_drag: None,
         children: vec![],
@@ -1009,6 +1088,7 @@ pub fn error_node(theme: &Theme, owner: Rc<str>, key: u64, what: &str, err: &str
         grid: None,
         handle: None,
         image: None,
+        token: None,
         input: None,
         on_drag: None,
         children: vec![text],

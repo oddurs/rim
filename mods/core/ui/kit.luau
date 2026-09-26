@@ -345,6 +345,54 @@ function kit.icon(name: string, size: any, opts: { [string]: any }?)
 	return { kind = "image", src = name, w = size, h = size, tint = true, color = o.color, tooltip = o.tooltip, id = o.id }
 end
 
+-- ─── The item token (DESIGN.md §4f, Showing contents) ─────────────────────
+-- One component draws every item on every screen, from the thing's own
+-- world look tinted by its material, so a modded item needs no icon.
+
+-- Sizes in logical px: s in lines, lists and tooltips (no count drawn), m in
+-- grids, l as a selected stack's header.
+local ITEM_SIZE = { s = 20, m = 32, l = 48 }
+
+-- A count as a token shows it: exact to 999, then 1.0k and 12k. A count of
+-- one is never drawn. Lists have room for the exact number.
+function kit.item_count(n: number): string
+	if n <= 1 then
+		return ""
+	elseif n < 1000 then
+		return tostring(n)
+	elseif n < 10000 then
+		return string.format("%.1fk", math.floor(n / 100) / 10)
+	end
+	return tostring(math.floor(n / 1000)) .. "k"
+end
+
+-- The fields of a token, for `kit.item` and for a grid cell's `token`, so
+-- a contents grid stays one node. p: thing, made_of (qualified ids), count,
+-- limit (full at it) or full, hp (0 to 1), state ("incoming", "leaving",
+-- "empty"), size.
+function kit.item_token(p)
+	local count = p.count or 1
+	return {
+		look = p.thing and view.look(p.thing, p.made_of) or nil,
+		count = (p.size or "m") ~= "s" and kit.item_count(count) or "",
+		full = p.full or (p.limit ~= nil and p.limit > 1 and count >= p.limit),
+		hp = p.hp,
+		state = p.state,
+	}
+end
+
+-- An item token. p: as `kit.item_token`, plus id and tooltip.
+function kit.item(p)
+	local px = ITEM_SIZE[p.size or "m"] or ITEM_SIZE.m
+	local t = kit.item_token(p)
+	t.kind = "token"
+	t.w = px
+	t.h = px
+	t.id = p.id
+	t.tooltip = p.tooltip
+	return t
+end
+
 -- A picture as shipped: its own colours and, unless w/h say otherwise,
 -- its own size.
 function kit.image(name: string, opts: { [string]: any }?)

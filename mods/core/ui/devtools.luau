@@ -82,6 +82,30 @@ ui.window("core:gallery", { title = t("core:gallery.title", "Kit gallery"), w = 
 				ui.set_state("core:gallery.slider", v)
 			end }),
 		}),
+		-- Item tokens: sizes, then every state.
+		row({ gap = "s", align = "end" }, {
+			kit.item({ thing = "core:wood", count = 140, size = "s" }),
+			kit.item({ thing = "core:wood", count = 140 }),
+			kit.item({ thing = "core:wood", count = 140, size = "l" }),
+			kit.item({ id = "core:gallery.item.full", thing = "core:stone", count = 75, limit = 75 }),
+			kit.item({ thing = "core:stone", count = 34, limit = 75 }),
+			kit.item({ thing = "core:berries", count = 1020 }),
+			kit.item({ id = "core:gallery.item.worn", thing = "core:raw_meat", count = 12, hp = 0.4 }),
+			kit.item({ id = "core:gallery.item.incoming", thing = "core:wood", count = 8, state = "incoming" }),
+			kit.item({ id = "core:gallery.item.leaving", thing = "core:berries", count = 12, state = "leaving" }),
+			kit.item({ id = "core:gallery.item.empty", state = "empty" }),
+		}),
+		-- Every item the loaded mods define, as a grid of small tokens: one
+		-- node however many there are.
+		(function()
+			local items = view.items()
+			local cols = 16
+			return kit.grid({ id = "core:gallery.items", rows = math.ceil(#items / cols), cols = cols, cell_w = 22, cell_h = 22, gap = 2,
+				cell = function(r, c)
+					local it = items[(r - 1) * cols + c]
+					return it and { token = kit.item_token({ thing = it.id, size = "s" }), tip = it.label } or nil
+				end })
+		end)(),
 		row({ gap = "xs" }, {
 			kit.toggle({ label = t("core:gallery.toggle_off", "Toggle off"), on = false }),
 			kit.toggle({ label = t("core:gallery.toggle_on", "Toggle on"), on = true }),

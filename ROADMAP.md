@@ -470,7 +470,6 @@ Production chains: workbenches and bills, cooking, farming, tailoring, research 
 - [ ] `4f3e5d8d` mods/timber: planks, plank walls, crates, shelves, racks and a granary <sup>content · p2 · m · plugin</sup>
 - [ ] `5e323021` Store inspector: Contents and Accepts tabs <sup>feature · p1 · m · core</sup>
 - [ ] `63811969` Spoilage, and keeping things by where they're stored <sup>feature · p3 · m · engine</sup>
-- [ ] `6ce26632` The UI draws a thing's look: the item token <sup>feature · p1 · m · client</sup>
 - [ ] `6dd4891c` Ground wetness and snow in core <sup>content · p0 · m · core</sup>
 - [ ] `6ec6da26` primitive: baskets, pots as stores, a woodpile and a stone bin <sup>content · p2 · s · plugin</sup>
 - [ ] `6f1e7410` Snow and mud slow movement <sup>feature · p3 · s · engine</sup>
@@ -485,6 +484,7 @@ Production chains: workbenches and bills, cooking, farming, tailoring, research 
 - [ ] `e953d711` Store levels: sorting that only climbs, and room reserved by count <sup>feature · p1 · l · engine</sup>
 - [ ] `f22f1a62` Stores sheet, storage overlay and hover card <sup>feature · p2 · m · core</sup>
 - [ ] `629e1fa7` Nothing is lost when a carried stack doesn't fit where it's set down <sup>bug · p1 · s · engine</sup>
+- [ ] `6ce26632` The UI draws a thing's look: the item token <sup>feature · p1 · m · client</sup>
 - [ ] `ac643c1f` Stock ledger and holdings: counts by thing, material and chunk <sup>perf · p1 · m · engine</sup>
 - [ ] `9bd9e8ab` Fire: burning, spread by wind, put out by rain <sup>feature · p1 · l · engine</sup>
 - [x] `01691032` Item categories and one filter: things, materials and condition <sup>feature · p1 · m · engine</sup>
