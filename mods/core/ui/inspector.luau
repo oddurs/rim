@@ -20,6 +20,11 @@
 -- with the action's id, so the palette lists it; it runs on the selection
 -- when it applies.
 --
+-- With several colonists selected the panel sums them up, and shows the
+-- actions marked `group = true` that apply to every one of them. Such an
+-- action's label, active and run get a second argument, `all`, the list
+-- of selected pawns, and run is called once for each of them.
+--
 -- Ids: tabs `core:inspector.tabs.<id>` (only shown when more than one
 -- applies), actions `core:inspector.action.<id>`. Extension points:
 -- `core:inspector.sections` (under a pawn's overview) and
@@ -47,8 +52,8 @@ local function put(list, def)
 	end)
 end
 
-local function text_of(v, sel): string
-	return if type(v) == "function" then v(sel) else v
+local function text_of(v, sel, all): string
+	return if type(v) == "function" then v(sel, all or { sel }) else v
 end
 
 -- The selection as the registries see it, or nil.
@@ -77,15 +82,53 @@ function inspector.tab(def)
 	put(tabs, def)
 end
 
+-- The selected pawns when several are, else nil.
+local function group(view)
+	local ids = view.selection()
+	if #ids < 2 then
+		return nil
+	end
+	local all = {}
+	for _, id in ids do
+		local p = view.pawn(id)
+		if p then
+			p.kind = "pawn"
+			table.insert(all, p)
+		end
+	end
+	return all
+end
+
+local function applies_to_all(def, all): boolean
+	if not def.group then
+		return false
+	end
+	for _, p in all do
+		if def.applies and not def.applies(p) then
+			return false
+		end
+	end
+	return true
+end
+
 function inspector.action(def)
 	assert(type(def) == "table" and type(def.id) == "string", "inspector.action: needs an id")
 	assert(type(def.run) == "function", `inspector.action('{def.id}'): needs run = fn(sel)`)
 	put(actions, def)
 	if def.key or def.bind_label then
 		ui.bind(def.id, { key = def.key, label = def.bind_label or text_of(def.label, {}) }, function()
+			local all = group(view)
+			if all then
+				if applies_to_all(def, all) then
+					for _, p in all do
+						def.run(p, all)
+					end
+				end
+				return
+			end
 			local sel = selection(view)
 			if sel and (not def.applies or def.applies(sel)) then
-				def.run(sel)
+				def.run(sel, { sel })
 			end
 		end)
 	end
@@ -189,20 +232,31 @@ inspector.tab({
 
 -- ─── Core's actions ─────────────────────────────────────────────────────────
 
+-- Several at once all go the same way: drafted unless every one already is.
+local function all_drafted(all): boolean
+	for _, p in all do
+		if not p.drafted then
+			return false
+		end
+	end
+	return true
+end
+
 inspector.action({
 	id = "core:draft",
 	order = 10,
 	key = "r",
-	bind_label = t("core:keys.draft", "Draft or undraft the selected colonist"),
-	label = function(p)
-		return if p.drafted then t("core:inspector.undraft", "Undraft") else t("core:inspector.draft", "Draft")
+	group = true,
+	bind_label = t("core:keys.draft", "Draft or undraft the selected colonists"),
+	label = function(p, all)
+		return if all_drafted(all) then t("core:inspector.undraft", "Undraft") else t("core:inspector.draft", "Draft")
 	end,
 	applies = colonist,
-	active = function(p)
-		return p.drafted
+	active = function(p, all)
+		return all_drafted(all)
 	end,
-	run = function(p)
-		act.draft(p.id, not p.drafted)
+	run = function(p, all)
+		act.draft(p.id, not all_drafted(all))
 	end,
 })
 
@@ -228,9 +282,9 @@ local function action_row(sel)
 				id = "core:inspector.action." .. a.id,
 				label = text_of(a.label, sel),
 				hint = a.key and string.upper(a.key),
-				active = a.active and a.active(sel) or false,
+				active = a.active and a.active(sel, { sel }) or false,
 				on_click = function()
-					a.run(sel)
+					a.run(sel, { sel })
 				end,
 			})
 		)
@@ -318,7 +372,58 @@ local function thing_panel(view, th)
 	})
 end
 
+-- Several colonists: who they are, how they are, and what they can all do.
+local function group_panel(view, all)
+	local buttons = {}
+	for _, a in actions do
+		if applies_to_all(a, all) then
+			table.insert(
+				buttons,
+				kit.button({
+					id = "core:inspector.action." .. a.id,
+					label = text_of(a.label, all[1], all),
+					hint = a.key and string.upper(a.key),
+					active = a.active and a.active(all[1], all) or false,
+					on_click = function()
+						for _, p in all do
+							a.run(p, all)
+						end
+					end,
+				})
+			)
+		end
+	end
+	local members = {}
+	for _, p in all do
+		table.insert(
+			members,
+			row({
+				id = "core:inspector.member." .. p.name,
+				gap = "s",
+				align = "center",
+				hover = { bg = "surface_hover" },
+				on_click = function()
+					act.select(p.id)
+				end,
+			}, {
+				row({ w = 90 }, { label(p.name, { size = "small", color = if p.drafted then "player" else nil }) }),
+				kit.bar({ value = p.health, color = if p.health > 0.5 then "good" else "bad", width = 170 }),
+			})
+		)
+	end
+	return kit.panel({ id = "core:inspector.group", w = 300, gap = "m" }, {
+		label(string.format(t("core:inspector.group", "%d colonists"), #all), { size = "heading", weight = "strong" }),
+		#buttons > 0 and row({ id = "core:inspector.actions", gap = "xs" }, buttons),
+		col({ gap = "xxs" }, members),
+		label(t("core:inspector.group_hint", "right-click to order them all · shift-click to add or remove"), { size = "small", color = "faint", wrap = true }),
+	})
+end
+
 ui.define("core:inspector", function(view)
+	local all = group(view)
+	if all then
+		return group_panel(view, all)
+	end
 	local sel = selection(view)
 	if not sel then
 		return nil

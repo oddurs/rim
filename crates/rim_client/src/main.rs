@@ -85,8 +85,16 @@ pub struct App {
     /// The material last picked for each buildable, so nobody picks wood
     /// forty times. Falls back to whatever the colony has most of.
     pub stuff_for: Vec<(DefId, DefId)>,
+    /// What the inspector shows: the one selected thing, or the first of
+    /// `group`.
     pub selected: Option<Entity>,
+    /// Every selected colonist when more than one is; empty otherwise.
+    pub group: Vec<Entity>,
+    /// Shift is held this frame: a click adds to the selection.
+    pub shift: bool,
     pub drag_start: Option<IVec>,
+    /// Where a drag began on screen, to tell a click from a box.
+    pub drag_from: (f32, f32),
     pub paused: bool,
     pub speed: u32,
     pub show_profiler: bool,
@@ -495,7 +503,10 @@ async fn game() {
         cam: Cam { x: center.x as f32 + 0.5, y: center.y as f32 + 0.5, zoom: 28.0 },
         tool: Tool::Select,
         selected: None,
+        group: Vec::new(),
+        shift: false,
         drag_start: None,
+        drag_from: (0.0, 0.0),
         paused: false,
         speed: 1,
         show_profiler: false,
@@ -837,7 +848,7 @@ pub fn client_view(app: &mut App, mouse: (f32, f32), time: f64) -> ClientView {
     }
     let hover_cell = (!app.mouse_over_ui).then(|| app.cam.tile_at(mouse.0, mouse.1));
     let hover_pawn = if app.mouse_over_ui { None } else { pawn_under(app, mouse.0, mouse.1) };
-    let drag = app.drag_start.map(|a| {
+    let drag = app.drag_start.filter(|_| app.tool != Tool::Select).map(|a| {
         let b = app.cam.tile_at(mouse.0, mouse.1);
         format!("{} × {}", (a.x - b.x).abs() + 1, (a.y - b.y).abs() + 1)
     });
@@ -847,6 +858,8 @@ pub fn client_view(app: &mut App, mouse: (f32, f32), time: f64) -> ClientView {
         cam: (app.cam.x, app.cam.y, app.cam.zoom * dpi),
         mouse: (mouse.0 * dpi, mouse.1 * dpi),
         selected: app.selected,
+        group: app.group.clone(),
+        shift: app.shift,
         paused: app.paused,
         speed: app.speed,
         overlay: app.overlay,
@@ -918,6 +931,7 @@ fn ui_input(raw: &RawInput, dpi: f32) -> rim_ui::Input {
 /// One frame of input: UI first, then the world gets what the UI didn't take.
 pub fn frame(app: &mut App, raw: &RawInput) {
     let dpi = screen_dpi_scale();
+    app.shift = raw.shift;
     app.ui.set_dpi(dpi);
     app.ui.check_reload(raw.time);
     let cv = client_view(app, raw.mouse, raw.time);
@@ -1202,7 +1216,8 @@ fn upload_atlas(ui: &mut Ui, atlas: &Texture2D) {
 
 fn apply_ui(app: &mut App, a: UiAction) {
     match a {
-        UiAction::Select(e) => app.selected = e,
+        UiAction::Select(e) => select(app, e.into_iter().collect()),
+        UiAction::ToggleSelect(e) => toggle_selected(app, e),
         UiAction::Focus(e) => focus(app, e),
         UiAction::Tool(key) => {
             if let Some(t) = app.tools.iter().find(|t| t.key == key) {
@@ -1291,9 +1306,45 @@ fn step(app: &mut App) {
     let w = &app.sim.world;
     // A thing someone picked up is in their hand, not on the map.
     let gone = |e| !w.pawn_alive(e) && (w.thing(e).is_none() || w.ecs.get::<&rim_sim::world::Held>(e).is_ok());
-    if app.selected.is_some_and(gone) {
-        app.selected = None;
+    if app.selected.is_some_and(gone) || app.group.iter().any(|&e| gone(e)) {
+        let keep: Vec<Entity> = selection(app).into_iter().filter(|&e| !gone(e)).collect();
+        select(app, keep);
     }
+}
+
+/// Every selected id: the group, or the one thing.
+pub fn selection(app: &App) -> Vec<Entity> {
+    if app.group.is_empty() {
+        app.selected.into_iter().collect()
+    } else {
+        app.group.clone()
+    }
+}
+
+/// Select these: nothing, one pawn or thing, or several colonists (the
+/// first is the one the inspector shows).
+pub fn select(app: &mut App, v: Vec<Entity>) {
+    app.selected = v.first().copied();
+    app.group = if v.len() > 1 { v } else { Vec::new() };
+}
+
+/// A shift-click: put a colonist into the selection or take them out. A
+/// selected thing, or anything that isn't a colonist, starts it afresh.
+pub fn toggle_selected(app: &mut App, e: Entity) {
+    let colonist = |app: &App, e: Entity| {
+        app.sim.world.ecs.get::<&Pawn>(e).is_ok_and(|p| p.faction == Faction::Player && p.active && !p.dead)
+    };
+    if !colonist(app, e) {
+        return select(app, vec![e]);
+    }
+    let mut v: Vec<Entity> = selection(app).into_iter().filter(|&s| colonist(app, s)).collect();
+    match v.iter().position(|&s| s == e) {
+        Some(i) => {
+            v.remove(i);
+        }
+        None => v.push(e),
+    }
+    select(app, v);
 }
 
 /// Label the cursor with what a right-click would do. Resolving an order
@@ -1391,7 +1442,7 @@ pub fn apply(app: &mut App, action: Action) {
             if !cols.is_empty() {
                 let i =
                     app.selected.and_then(|s| cols.iter().position(|&c| c == s)).map_or(0, |i| (i + 1) % cols.len());
-                app.selected = Some(cols[i]);
+                select(app, vec![cols[i]]);
                 focus(app, cols[i]);
             }
         }
@@ -1411,10 +1462,12 @@ pub fn apply(app: &mut App, action: Action) {
             app.cam.x += before.0 - after.0;
             app.cam.y += before.1 - after.1;
         }
-        Action::LeftDown(x, y) => match app.tool {
-            Tool::Select => app.selected = pawn_under(app, x, y).or_else(|| thing_under(app, x, y)),
-            _ => app.drag_start = Some(app.cam.tile_at(x, y)),
-        },
+        // Select acts on release: a click picks what's under it, a drag
+        // picks the colonists in the box.
+        Action::LeftDown(x, y) => {
+            app.drag_start = Some(app.cam.tile_at(x, y));
+            app.drag_from = (x, y);
+        }
         Action::LeftUp(x, y) => {
             let Some(a) = app.drag_start.take() else { return };
             let b = app.cam.tile_at(x, y);
@@ -1441,7 +1494,35 @@ pub fn apply(app: &mut App, action: Action) {
                 }
                 Tool::ClearZone => app.sim.push(Command::ClearZone { a, b }),
                 Tool::Cancel => app.sim.push(Command::Cancel { a, b }),
-                Tool::Select => {}
+                Tool::Select => {
+                    let (fx, fy) = app.drag_from;
+                    if (x - fx).abs().max((y - fy).abs()) < 6.0 {
+                        match pawn_under(app, fx, fy).or_else(|| thing_under(app, fx, fy)) {
+                            Some(e) if app.shift => toggle_selected(app, e),
+                            under => select(app, under.into_iter().collect()),
+                        }
+                    } else {
+                        let (lo, hi) = (IVec::new(a.x.min(b.x), a.y.min(b.y)), IVec::new(a.x.max(b.x), a.y.max(b.y)));
+                        let w = &app.sim.world;
+                        let mut boxed: Vec<Entity> = w
+                            .colonists()
+                            .filter(|&e| {
+                                w.ecs.get::<&Pawn>(e).is_ok_and(|p| {
+                                    let (px, py) = draw::pawn_pos(&p);
+                                    let c = IVec::new(px.floor() as i32, py.floor() as i32);
+                                    (lo.x..=hi.x).contains(&c.x) && (lo.y..=hi.y).contains(&c.y)
+                                })
+                            })
+                            .collect();
+                        if app.shift {
+                            let mut v = selection(app);
+                            boxed.retain(|e| !v.contains(e));
+                            v.extend(boxed);
+                            boxed = v;
+                        }
+                        select(app, boxed);
+                    }
+                }
             }
         }
         Action::RightClick(x, y) => {
@@ -1450,14 +1531,19 @@ pub fn apply(app: &mut App, action: Action) {
                 app.drag_start = None;
                 return;
             }
-            let Some(e) = app.selected else { return };
+            // Every selected pawn the order means something to gets it.
             let cell = app.cam.tile_at(x, y);
             let on = pawn_under(app, x, y);
-            if order::resolve(&app.sim.world, e, cell, on).is_none() {
-                return;
+            let mut ordered = false;
+            for e in selection(app) {
+                if order::resolve(&app.sim.world, e, cell, on).is_some() {
+                    app.sim.push(Command::Order { pawn: e, cell, on });
+                    ordered = true;
+                }
             }
-            app.sim.push(Command::Order { pawn: e, cell, on });
-            app.order_flash = Some((cell, get_time()));
+            if ordered {
+                app.order_flash = Some((cell, get_time()));
+            }
         }
     }
     let (mw, mh) = (app.sim.world.map.w as f32, app.sim.world.map.h as f32);

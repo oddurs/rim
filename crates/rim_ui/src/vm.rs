@@ -674,7 +674,10 @@ impl UiVm {
                 )?;
             }};
         }
-        act!("select", Option<u64>, |id| UiAction::Select(id.and_then(Entity::from_bits)));
+        act!("select", (Option<u64>, Option<bool>), |(id, add)| match (id.and_then(Entity::from_bits), add) {
+            (Some(e), Some(true)) => UiAction::ToggleSelect(e),
+            (e, _) => UiAction::Select(e),
+        });
         act!("focus", u64, |id| match Entity::from_bits(id) {
             Some(e) => UiAction::Focus(e),
             None => return Err(rt("bad entity id")),
@@ -781,6 +784,21 @@ impl UiVm {
         view!("time", (), |_lua, l, _a| Ok(l.client.time));
         view!("colony_lost", (), |_lua, l, _a| Ok(l.world.colony_lost));
         view!("selected", (), |_lua, l, _a| Ok(l.client.selected.map(|e| e.to_bits().get())));
+        // Every selected id: the group when several are, else the one.
+        view!("selection", (), |lua, l, _a| {
+            let t = lua.create_table()?;
+            if l.client.group.is_empty() {
+                if let Some(e) = l.client.selected {
+                    t.raw_push(e.to_bits().get())?;
+                }
+            } else {
+                for e in &l.client.group {
+                    t.raw_push(e.to_bits().get())?;
+                }
+            }
+            Ok(t)
+        });
+        view!("shift", (), |_lua, l, _a| Ok(l.client.shift));
         view!("show_profiler", (), |_lua, l, _a| Ok(l.client.show_profiler));
         view!("show_devtools", (), |_lua, l, _a| Ok(l.client.show_devtools));
         view!("hint", (), |_lua, l, _a| Ok(l.client.hint.clone()));
@@ -814,7 +832,7 @@ impl UiVm {
                 row.raw_set("health", (p.hp.max(0) as f64 / cd.max_hp as f64).clamp(0.0, 1.0))?;
                 row.raw_set("job", rim_sim::order::job_text(l.world, &p))?;
                 row.raw_set("idle", matches!(p.job, Job::Idle | Job::Wander { .. }))?;
-                row.raw_set("selected", l.client.selected == Some(e))?;
+                row.raw_set("selected", l.client.is_selected(e))?;
                 t.raw_push(row)?;
             }
             Ok(t)
@@ -858,7 +876,7 @@ impl UiVm {
                 row.raw_set("faction", p.faction.name())?;
                 row.raw_set("intelligent", cd.intelligent)?;
                 row.raw_set("asleep", p.asleep)?;
-                row.raw_set("selected", l.client.selected == Some(e))?;
+                row.raw_set("selected", l.client.is_selected(e))?;
                 row.raw_set("hovered", l.client.hover_pawn == Some(e))?;
                 // Logical pixels, like every size a component writes.
                 row.raw_set("radius", cd.size * l.client.cam.2 / l.client.scale.max(0.1))?;
@@ -1929,7 +1947,7 @@ fn pawn_table(lua: &Lua, w: &World, client: &ClientView, e: Entity) -> mlua::Res
     t.raw_set("max_hp", cd.max_hp)?;
     t.raw_set("health", (p.hp.max(0) as f64 / cd.max_hp as f64).clamp(0.0, 1.0))?;
     t.raw_set("job", rim_sim::order::job_text(w, &p))?;
-    t.raw_set("selected", client.selected == Some(e))?;
+    t.raw_set("selected", client.is_selected(e))?;
     let needs = lua.create_table_with_capacity(p.needs.len(), 0)?;
     for &(nid, v) in &p.needs {
         let nd = defs.need(nid);

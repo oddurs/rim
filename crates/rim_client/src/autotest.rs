@@ -1243,6 +1243,77 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         t.app.sim.world.fields.set_ambient(f, None);
     }
 
+    // ---------------------------------------------------------- 86dcd0ca several selected
+    // Last, since it adds colonists.
+    println!("\n# several selected (86dcd0ca)");
+    t.app.paused = true;
+    t.key(KeyCode::Escape).await;
+    t.key(KeyCode::Escape).await;
+    let at = t.pawn(founder).pos;
+    let human = defs.creature_id("human").expect("humans");
+    let spots: Vec<IVec> = [(1, 0), (0, 1), (-1, 0), (0, -1), (1, 1), (-1, -1)]
+        .iter()
+        .map(|&(x, y)| at.offset(x, y))
+        .filter(|&p| t.w().map.passable(p))
+        .take(2)
+        .collect();
+    let mut squad = vec![founder];
+    for p in spots {
+        squad.push(t.app.sim.world.spawn_pawn(human, Faction::Player, p, None));
+    }
+    t.check(squad.len() == 3, format!("two colonists join the founder ({})", squad.len()));
+    // Everyone starts undrafted, so R below shows who it reached.
+    let everyone: Vec<Entity> = t.w().colonists().collect();
+    for e in everyone {
+        t.app.sim.push(Command::Draft { pawn: e, on: false });
+    }
+    t.ticks(1);
+    t.focus(at);
+    t.frame().await;
+    t.drag(at.offset(-2, -2), at.offset(2, 2)).await;
+    let boxed = crate::selection(&t.app);
+    t.check(
+        squad.iter().all(|e| boxed.contains(e)),
+        format!("a drag with Select picks the colonists in the box ({} of {})", boxed.len(), squad.len()),
+    );
+    t.frame().await;
+    t.check(t.app.ui.find("core:inspector.group").is_some(), "the inspector sums the group up");
+    t.shot("several_selected").await;
+    // Shift-click takes one out again: whoever is under the pointer.
+    let at_screen = t.pawn_screen(squad[2]);
+    let taken = crate::pawn_under(&t.app, at_screen.0, at_screen.1).expect("a colonist there");
+    for (pressed, released) in [(false, false), (true, false), (false, true)] {
+        let raw = RawInput {
+            mouse: at_screen,
+            left_pressed: pressed,
+            left_released: released,
+            shift: true,
+            ..Default::default()
+        };
+        t.input(raw).await;
+    }
+    let left = crate::selection(&t.app);
+    t.check(
+        left.len() + 1 == boxed.len() && !left.contains(&taken),
+        format!("shift-click takes a colonist out ({} of {} left)", left.len(), boxed.len()),
+    );
+    t.key(KeyCode::R).await;
+    t.ticks(1);
+    t.check(
+        left.iter().all(|&e| t.pawn(e).drafted) && !t.pawn(taken).drafted,
+        "R drafts every selected colonist, and only them",
+    );
+    let to = (3..12).map(|d| at.offset(d, 0)).find(|&p| t.w().map.passable(p)).expect("open ground east");
+    let dest = t.screen(to);
+    t.right_click(dest).await;
+    t.ticks(1);
+    t.check(
+        left.iter().all(|&e| matches!(t.pawn(e).job, Job::MoveTo { .. })),
+        "a right-click orders every selected colonist",
+    );
+    t.key(KeyCode::Escape).await;
+    t.check(t.app.selected.is_none() && t.app.group.is_empty(), "Escape clears the whole selection");
+
     println!("\n{} passed, {} failed; screenshots in {}", t.passed, t.failed.len(), t.dir.display());
     for f in &t.failed {
         println!("  FAIL {f}");

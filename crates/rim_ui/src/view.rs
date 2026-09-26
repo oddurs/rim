@@ -35,6 +35,13 @@ pub struct StuffView {
     pub work: u32,
 }
 
+impl ClientView {
+    /// Whether `e` is selected, alone or with others.
+    pub fn is_selected(&self, e: Entity) -> bool {
+        self.selected == Some(e) || self.group.contains(&e)
+    }
+}
+
 /// Client state the UI can read, rebuilt by the client every frame.
 #[derive(Clone, Debug, Default)]
 pub struct ClientView {
@@ -46,7 +53,13 @@ pub struct ClientView {
     pub cam: (f32, f32, f32),
     /// Mouse in physical pixels.
     pub mouse: (f32, f32),
+    /// What the inspector shows: the one selected thing, or the first of
+    /// several selected colonists.
     pub selected: Option<Entity>,
+    /// Every selected colonist when more than one is; empty otherwise.
+    pub group: Vec<Entity>,
+    /// Shift is held, so a click adds to the selection.
+    pub shift: bool,
     pub paused: bool,
     pub speed: u32,
     pub overlay: Option<usize>,
@@ -94,6 +107,8 @@ pub struct SaveView {
 #[derive(Clone, Debug, PartialEq)]
 pub enum UiAction {
     Select(Option<Entity>),
+    /// Add a colonist to the selection, or take them out of it.
+    ToggleSelect(Entity),
     /// Centre the camera on a pawn.
     Focus(Entity),
     /// Pick a toolbar tool by key.

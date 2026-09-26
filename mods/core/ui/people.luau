@@ -87,9 +87,14 @@ local function person(p, compact: boolean)
 		hover = { bg = if p.selected then nil else "surface_hover" },
 		press = { bg = "surface_press" },
 		tooltip = string.format(t("core:colonists.tooltip", "%s · %s · health %s"), p.label, p.job, pct(p.health)),
+		-- Shift adds to the selection; a plain click picks one and looks.
 		on_click = function()
-			act.select(p.id)
-			act.focus(p.id)
+			if view.shift() then
+				act.select(p.id, true)
+			else
+				act.select(p.id)
+				act.focus(p.id)
+			end
 		end,
 	}, {
 		{ kind = "row", w = 3, h = if compact then 12 else 26, bg = if p.health > 0.5 then "good" else "bad", radius = 1 },

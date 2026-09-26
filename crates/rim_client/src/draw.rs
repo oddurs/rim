@@ -531,7 +531,7 @@ pub fn pawns(app: &App) {
         if let Some(rc) = ring {
             draw_circle_lines(sx, sy, r, 2.0, rc);
         }
-        if app.selected == Some(e) {
+        if app.selected == Some(e) || app.group.contains(&e) {
             draw_circle_lines(sx, sy, r + 4.0, 2.0, YELLOW);
             // Remaining path.
             let mut prev = (sx, sy);
@@ -594,9 +594,10 @@ pub fn world_ui(app: &App) {
         let (sx, sy) = cam.to_screen(t.pos.x as f32, t.pos.y as f32);
         draw_rectangle_lines(sx - 1.0, sy - 1.0, z + 2.0, z + 2.0, 2.0, YELLOW);
     }
-    // Drag rectangle preview.
-    if let Some(a) = app.drag_start {
-        let (mx, my) = mouse_position();
+    // Drag rectangle preview; a select drag shows once it leaves its cell.
+    let (mx, my) = mouse_position();
+    let dragging = app.drag_start.filter(|&a| app.tool != Tool::Select || a != cam.tile_at(mx, my));
+    if let Some(a) = dragging {
         let b = cam.tile_at(mx, my);
         let (ax, ay) = (a.x.min(b.x) as f32, a.y.min(b.y) as f32);
         let (bx, by) = (a.x.max(b.x) as f32 + 1.0, a.y.max(b.y) as f32 + 1.0);
