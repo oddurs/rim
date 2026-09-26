@@ -83,6 +83,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `view.overlay` | `() -> string?` | The label of the field overlay shown, if any. |
 | `view.paused` | `() -> boolean` | Whether the game is paused. |
 | `view.pawn` | `(id: number) -> Pawn?` | One pawn, or nil if it's gone. |
+| `view.people` | `() -> { Person }` | Every colonist, lean: what a list of them needs (name, job, health, drafted, idle, selected) and none of the needs or skills view.colonists carries. |
 | `view.priorities` | `(id: number) -> { [string]: number }?` | A colonist's priority per work type, by work type id: 1 first, 0 never. Nil if it isn't a pawn. |
 | `view.priority_levels` | `() -> number` | How many priority levels there are; 0 means never. |
 | `view.profile` | `() -> { ProfileRow }` | Smoothed time per system and mod, in µs. |

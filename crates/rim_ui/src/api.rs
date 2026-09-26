@@ -63,6 +63,10 @@ type Pawn = {
     drafted: boolean, asleep: boolean, hp: number, max_hp: number, health: number, job: string,
     selected: boolean, needs: { Need }, skills: { Skill }, hand: string?, carrying: string?,
 }
+type Person = {
+    id: number, name: string, label: string, drafted: boolean, asleep: boolean, health: number,
+    job: string, idle: boolean, selected: boolean,
+}
 type Skill = { id: string, label: string, level: number, progress: number, trains: string }
 type VisiblePawn = {
     id: number, name: string, faction: string, intelligent: boolean, asleep: boolean,
@@ -233,6 +237,7 @@ pub const UI_API: &[UiDoc] = &[
     d!("view.overlay", "() -> string?", "The label of the field overlay shown, if any."),
     d!("view.paused", "() -> boolean", "Whether the game is paused."),
     d!("view.pawn", "(id: number) -> Pawn?", "One pawn, or nil if it's gone."),
+    d!("view.people", "() -> { Person }", "Every colonist, lean: what a list of them needs (name, job, health, drafted, idle, selected) and none of the needs or skills view.colonists carries."),
     d!("view.priorities", "(id: number) -> { [string]: number }?", "A colonist's priority per work type, by work type id: 1 first, 0 never. Nil if it isn't a pawn."),
     d!("view.priority_levels", "() -> number", "How many priority levels there are; 0 means never."),
     d!("view.profile", "() -> { ProfileRow }", "Smoothed time per system and mod, in µs."),

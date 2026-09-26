@@ -24,8 +24,10 @@ fn shell_docks_regions_to_the_edges() {
     let inspector = ui.find("core:inspector").unwrap();
     assert!(inspector[0] < 12.0, "inspector docks left: {inspector:?}");
     assert!(near(inspector[1] + inspector[3], bottom[1]), "inspector sits on the toolbar: {inspector:?} vs {bottom:?}");
+    let people = ui.find("core:colonists").unwrap();
+    assert!(people[0] < 12.0 && near(people[1], top[1] + top[3]), "people start just under the top bar: {people:?}");
     let messages = ui.find("core:messages").unwrap();
-    assert!(near(messages[1], top[1] + top[3]), "messages start just under the top bar: {messages:?}");
+    assert!(near(messages[1], people[1] + people[3]), "messages sit under the people: {messages:?}");
     let hover = ui.find("core:hover").unwrap();
     assert!(near(hover[0] + hover[2], 1600.0), "hover readout docks right: {hover:?}");
     assert!(near(hover[1] + hover[3], bottom[1]), "hover readout sits on the toolbar: {hover:?}");
@@ -188,7 +190,7 @@ ui.extend("core:nothing_here", ui.text { "lost" })
         n.children.iter().find_map(|c| find(c, id))
     }
     assert_eq!(&*find(&top.1, "alpha:note").unwrap().owner, "alpha");
-    assert_eq!(&*find(&top.1, "core:colonists").unwrap().owner, "core");
+    assert_eq!(&*find(&top.1, "core:status").unwrap().owner, "core");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -1993,4 +1995,105 @@ fn a_stockpile_toggle_changes_what_it_takes() {
         vec![UiAction::ZoneAllow(1, "core:wood".into(), false)],
         "a new zone takes wood; the click stops it"
     );
+}
+
+/// A colony of forty fits the left edge of a small screen: the people
+/// column groups its lines, stops above the inspector, and builds only the
+/// lines in view.
+#[test]
+fn forty_colonists_fit_the_left_edge_at_1280_by_720() {
+    let mut sim = sim_at(&mods());
+    let human = sim.world.defs.creature_id("human").unwrap();
+    let c = sim.world.colony_center().unwrap();
+    for i in 0..40 {
+        let p = c.offset(i % 7 - 3, i / 7 - 3);
+        if sim.world.map.passable(p) {
+            sim.world.spawn_pawn(human, rim_sim::world::Faction::Player, p, None);
+        }
+    }
+    let n = sim.world.colonists().count();
+    assert!(n >= 40, "spawned {n}");
+    let mut ui = ui_for(&sim);
+    let mut cv = client(&sim);
+    cv.screen = (1280.0, 720.0);
+    for i in 0..3 {
+        frame(&mut ui, &sim, &cv, Input { time: i as f64, ..Default::default() });
+    }
+    let list = ui.find("core:colonists.list").expect("the people column is there");
+    let inspector = ui.find("core:inspector").expect("and the inspector");
+    let top = ui.find("core:topbar").unwrap();
+    println!("list {list:?} inspector {inspector:?}");
+    assert!(list[0] < 12.0, "people dock left: {list:?}");
+    assert!(list[1] >= top[1] + top[3], "under the top bar: {list:?}");
+    assert!(list[1] + list[3] <= inspector[1], "above the inspector: {list:?} vs {inspector:?}");
+    assert!(top[2] <= 1280.0 + 0.5, "the top bar no longer grows with the colony: {top:?}");
+    let snap = ui.snapshot();
+    assert!(snap.contains("Idle ·") || snap.contains("Working ·"), "forty are grouped:\n{snap}");
+    let rows = snap.matches("#core:colonists.").count();
+    assert!(rows < n, "only the lines in view are built ({rows} of {n})");
+    // Wheeled far past the end, the list clamps to it: the last lines are
+    // built and one notch back up still shows lines, not empty space.
+    let at = centre(list);
+    let mut t = 10.0;
+    for _ in 0..60 {
+        t += 0.1;
+        frame(&mut ui, &sim, &cv, Input { mouse: at, wheel: -1.0, time: t, ..Default::default() });
+    }
+    for _ in 0..2 {
+        t += 0.1;
+        frame(&mut ui, &sim, &cv, Input { mouse: at, time: t, ..Default::default() });
+    }
+    let bottom = ui.snapshot();
+    assert!(bottom.matches("#core:colonists.").count() > 5, "the end of the list shows lines:\n{bottom}");
+    t += 0.1;
+    frame(&mut ui, &sim, &cv, Input { mouse: at, wheel: 1.0, time: t, ..Default::default() });
+    t += 0.1;
+    frame(&mut ui, &sim, &cv, Input { mouse: at, time: t, ..Default::default() });
+    let rows_up = ui.snapshot().matches("#core:colonists.").count();
+    assert!(rows_up > 5, "one notch up from a clamped end still shows lines ({rows_up})");
+    // A colonist in view still selects by its id.
+    let first = sim.world.colonists().next().unwrap();
+    let name = sim.world.ecs.get::<&rim_sim::world::Pawn>(first).unwrap().name.clone();
+    if let Some(r) = ui.find(&format!("core:colonists.{name}")) {
+        let actions = click(&mut ui, &sim, &mut cv, centre(r));
+        assert!(actions.iter().any(|a| matches!(a, UiAction::Select(Some(e)) if *e == first)), "{actions:?}");
+    }
+}
+
+/// A mod badges every colonist's row through core's people module, without
+/// replacing or wrapping the column.
+#[test]
+fn a_mod_badges_each_colonist_through_the_people_module() {
+    let dir = scratch_mods(
+        "badge",
+        &[(
+            "probe",
+            "",
+            &[(
+                "ui/badge.luau",
+                r#"
+local kit = require("@core/ui/kit")
+local people = require("@core/ui/people")
+people.badge(function(p)
+    return kit.label("★" .. p.name, { id = "probe:star." .. p.name, size = "small" })
+end)
+"#,
+            )],
+        )],
+    );
+    let sim = sim_at(&dir);
+    let mut ui = ui_for(&sim);
+    let cv = client(&sim);
+    frame(&mut ui, &sim, &cv, Default::default());
+    assert!(ui.warnings().is_empty(), "{:?}", ui.warnings());
+    for e in sim.world.colonists() {
+        let name = sim.world.ecs.get::<&rim_sim::world::Pawn>(e).unwrap().name.clone();
+        let row = ui.find(&format!("core:colonists.{name}")).expect("the colonist's row");
+        let star = ui.find(&format!("probe:star.{name}")).expect("the mod's badge");
+        assert!(
+            star[0] >= row[0] && star[0] + star[2] <= row[0] + row[2] + 0.5,
+            "the badge is in the row: {star:?} {row:?}"
+        );
+    }
+    let _ = std::fs::remove_dir_all(&dir);
 }

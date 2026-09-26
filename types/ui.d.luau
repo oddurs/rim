@@ -42,6 +42,10 @@ type Pawn = {
     drafted: boolean, asleep: boolean, hp: number, max_hp: number, health: number, job: string,
     selected: boolean, needs: { Need }, skills: { Skill }, hand: string?, carrying: string?,
 }
+type Person = {
+    id: number, name: string, label: string, drafted: boolean, asleep: boolean, health: number,
+    job: string, idle: boolean, selected: boolean,
+}
 type Skill = { id: string, label: string, level: number, progress: number, trains: string }
 type VisiblePawn = {
     id: number, name: string, faction: string, intelligent: boolean, asleep: boolean,
@@ -239,6 +243,8 @@ declare view: {
     paused: () -> boolean,
     -- One pawn, or nil if it's gone.
     pawn: (id: number) -> Pawn?,
+    -- Every colonist, lean: what a list of them needs (name, job, health, drafted, idle, selected) and none of the needs or skills view.colonists carries.
+    people: () -> { Person },
     -- A colonist's priority per work type, by work type id: 1 first, 0 never. Nil if it isn't a pawn.
     priorities: (id: number) -> { [string]: number }?,
     -- How many priority levels there are; 0 means never.

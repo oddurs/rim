@@ -2,8 +2,10 @@
 id: c969b6da-0ee7-4ad0-bde0-e0ca0bf18448
 title: 'People column: colonists move to the left edge and scale to 40'
 type: feature
-status: backlog
+status: review
 milestone: interface
+assignee: Oddur Sigurdsson
+claimed: 2026-09-26
 created: 2026-09-26
 updated: 2026-09-26
 priority: p1
@@ -27,7 +29,11 @@ Colonists sit in the top bar, one button each, capped at 24. The top bar also ho
 
 ## Acceptance criteria
 
-- [ ] 40 colonists fit at 1280×720 without pushing anything off screen
-- [ ] The top bar no longer grows with the colony
-- [ ] `core:colonists.<name>` ids still select their pawn
-- [ ] The UI budget stays under 1 ms with 40 colonists
+- [x] 40 colonists fit at 1280×720 without pushing anything off screen
+- [x] The top bar no longer grows with the colony
+- [x] `core:colonists.<name>` ids still select their pawn
+- [x] The UI budget stays under 1 ms with 40 colonists
+
+## 2026-09-26
+
+Left edge, virtual list, lean view.people. Needed two engine fixes: the band between the bars had min-height auto, so an overfull side column ran off screen; and clamp_scroll laid out every scroll area every frame even unscrolled (0.3 ms at 200 colonists). 200-pawn frame: paint-only 0.2 ms vs 0.15 before, rebuild 0.87 vs ~1.1 ms.

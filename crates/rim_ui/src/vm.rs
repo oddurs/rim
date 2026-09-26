@@ -15,7 +15,7 @@ use crate::view::{ClientView, UiAction};
 use mlua::{Function, Lua, Table, Value};
 use rim_sim::defs::{DefId, Satisfier};
 use rim_sim::hecs::Entity;
-use rim_sim::world::{skill_xp, Blueprint, Faction, MsgKind, Pawn, Regrow, Thing, World, NEED_MAX, SKILL_MAX};
+use rim_sim::world::{skill_xp, Blueprint, Faction, Job, MsgKind, Pawn, Regrow, Thing, World, NEED_MAX, SKILL_MAX};
 use rim_sim::TICKS_PER_DAY;
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
@@ -788,6 +788,30 @@ impl UiVm {
                 if let Some(p) = pawn_table(lua, l.world, l.client, e)? {
                     t.raw_push(p)?;
                 }
+            }
+            Ok(t)
+        });
+        // The colonists as the people column needs them: no needs or skills,
+        // so a colony of two hundred costs a fraction of `view.colonists`.
+        view!("people", (), |lua, l, _a| {
+            let t = lua.create_table()?;
+            for e in l.world.colonists() {
+                let Ok(p) = l.world.ecs.get::<&Pawn>(e) else { continue };
+                if !p.active || p.dead {
+                    continue;
+                }
+                let cd = l.world.defs.creature(p.def);
+                let row = lua.create_table_with_capacity(0, 9)?;
+                row.raw_set("id", e.to_bits().get())?;
+                row.raw_set("name", p.name.as_str())?;
+                row.raw_set("label", cd.label.as_str())?;
+                row.raw_set("drafted", p.drafted)?;
+                row.raw_set("asleep", p.asleep)?;
+                row.raw_set("health", (p.hp.max(0) as f64 / cd.max_hp as f64).clamp(0.0, 1.0))?;
+                row.raw_set("job", rim_sim::order::job_text(l.world, &p))?;
+                row.raw_set("idle", matches!(p.job, Job::Idle | Job::Wander { .. }))?;
+                row.raw_set("selected", l.client.selected == Some(e))?;
+                t.raw_push(row)?;
             }
             Ok(t)
         });
