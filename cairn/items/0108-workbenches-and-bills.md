@@ -2,15 +2,15 @@
 id: 049e2f73-0d64-48ff-bf2e-21264f765d35
 title: 'Crafting as a plugin: recipes, stations and bills'
 type: feature
-status: doing
+status: done
 milestone: stone-age
 assignee: Oddur Sigurdsson
-claimed: 2026-09-25
 depends_on:
 - 74b6fa7e-7a36-44ba-a15d-d42c9a04dc19
 - 5305a161-c3e2-44b7-93bc-bf06016c11a0
 created: 2026-09-22
 updated: 2026-09-25
+closed_at: 2026-09-25
 priority: p0
 api: additive
 effort: l

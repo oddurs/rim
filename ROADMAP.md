@@ -44,15 +44,15 @@ A sprint: fast on a little old laptop with mods loaded. The reference machine is
 
 ## stone-age — Stone age
 
-`#####·····` 50% · 5 of 10 done
+`######····` 60% · 6 of 10 done
 
 Hands first. The colonist wakes with nothing (pillar 93f291d5), and today nothing asks what they hold: a naked warrior fells an oak and quarries granite bare-handed. This milestone makes the first days a climb. You gather branches, fibre, stones and berries with your hands. You find flint and knap it into a flake and a hand axe on the ground. Branch walls and a campfire see you through the first night. A digging stick opens the clay banks, for warm cob walls and fired pots. Then the axe fells trees and a stone maul quarries rock.
 
-- [ ] `3ccab46f` Carried things keep what they're made of <sup>bug · p1 · m · engine</sup>
 - [ ] `4bd94457` Balance: the first three days with only your hands <sup>chore · p0 · m · plugin</sup>
 - [ ] `af17cc1d` Blueprints on plants: say so, or clear them <sup>bug · p1 · s · engine</sup>
 - [ ] `e3846c47` mods/primitive: the stone age as a plugin <sup>content · p0 · l · plugin</sup>
-- [ ] `049e2f73` Crafting as a plugin: recipes, stations and bills <sup>feature · p0 · l · plugin</sup>
+- [ ] `3ccab46f` Carried things keep what they're made of <sup>bug · p1 · m · engine</sup>
+- [x] `049e2f73` Crafting as a plugin: recipes, stations and bills <sup>feature · p0 · l · plugin</sup>
 - [x] `4e9d5a12` Several harvests on one thing: gather without felling <sup>feature · p0 · s · engine</sup>
 - [x] `5305a161` Select and inspect things, with a slot for mods <sup>feature · p0 · m · client</sup>
 - [x] `7016d86b` Tools in hand: work that needs a tool <sup>feature · p0 · l · engine</sup>

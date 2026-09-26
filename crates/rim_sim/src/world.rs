@@ -195,7 +195,7 @@ pub struct Pawn {
     pub next_think: u64,
     pub cooldown: u32,
     pub drafted: bool,
-    pub carry: Option<(DefId, u32)>,
+    pub carry: Option<Lot>,
     pub last_attacker: Option<Entity>,
     pub asleep: bool,
     /// Rest-recovery multiplier in percent while asleep.
@@ -394,6 +394,54 @@ pub struct Order {
     pub total: u32,
 }
 
+/// Some of one thing off the map: in a pawn's hands, or brought to a work
+/// order. It keeps what it's made of and its hp, so a flint axe hauled to a
+/// stockpile is set down as that flint axe, and flint and bone stacks stay
+/// apart.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(from = "LotRepr")]
+pub struct Lot {
+    pub def: DefId,
+    pub count: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub made_of: Option<DefId>,
+    /// The hp of the stack it came from. None only in older saves: set down,
+    /// it takes its def's hp.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hp: Option<i32>,
+}
+
+impl Lot {
+    /// Plain things: no material, the def's own hp.
+    pub fn new(def: DefId, count: u32) -> Lot {
+        Lot { def, count, made_of: None, hp: None }
+    }
+}
+
+/// Saves before lots carried `(def, count)`.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum LotRepr {
+    Pair(DefId, u32),
+    Lot {
+        def: DefId,
+        count: u32,
+        #[serde(default)]
+        made_of: Option<DefId>,
+        #[serde(default)]
+        hp: Option<i32>,
+    },
+}
+
+impl From<LotRepr> for Lot {
+    fn from(r: LotRepr) -> Lot {
+        match r {
+            LotRepr::Pair(def, count) => Lot::new(def, count),
+            LotRepr::Lot { def, count, made_of, hp } => Lot { def, count, made_of, hp },
+        }
+    }
+}
+
 /// One input of a work order: a thing by def, or anything with a tag.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Need {
@@ -402,14 +450,14 @@ pub struct Need {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tag: Option<String>,
     pub count: u32,
-    /// What has arrived so far, by def.
+    /// What has arrived so far, one lot per def and material.
     #[serde(default)]
-    pub delivered: Vec<(DefId, u32)>,
+    pub delivered: Vec<Lot>,
 }
 
 impl Need {
     pub fn have(&self) -> u32 {
-        self.delivered.iter().map(|d| d.1).sum()
+        self.delivered.iter().map(|d| d.count).sum()
     }
     pub fn missing(&self) -> u32 {
         self.count.saturating_sub(self.have())
@@ -545,13 +593,14 @@ pub enum GameEvent {
         index: u32,
         year: u64,
     },
-    /// A work order was worked to the end: what went into it, and the
-    /// material of the first input that has one, for what it makes.
+    /// A work order was worked to the end: what went into it, and what
+    /// it makes should be made of: the first input that is a material, or
+    /// else the first input's own material.
     OrderDone {
         site: Entity,
         owner: String,
         label: String,
-        inputs: Vec<(DefId, u32)>,
+        inputs: Vec<Lot>,
         stuff: Option<DefId>,
     },
     /// A work order's site was destroyed before it was done. What had been
@@ -871,55 +920,74 @@ impl World {
     /// rest of the stack if it holds the same one, else none. A cell with a
     /// fixture on it, even a blueprint, has none: a wall would go up over
     /// the stack and nobody could reach it again.
-    pub fn room_for(&self, def: DefId, p: IVec) -> u32 {
+    pub fn room_for(&self, def: DefId, made_of: Option<DefId>, p: IVec) -> u32 {
         if !self.map.inb(p) || !self.map.passable(p) || self.map.fixture_at(p).is_some() {
             return 0;
         }
         let limit = self.defs.thing(def).stack_limit;
         match self.map.item_at(p) {
             None => limit,
-            Some(e) => self.thing(e).filter(|t| t.def == def).map_or(0, |t| limit.saturating_sub(t.count)),
+            Some(e) => self
+                .thing(e)
+                .filter(|t| t.def == def && self.made_of(e) == made_of)
+                .map_or(0, |t| limit.saturating_sub(t.count)),
         }
     }
 
-    /// Put up to `count` of `def` on exactly this cell, as a new stack or on
-    /// the one there. Returns what didn't fit.
-    pub fn put_item(&mut self, def: DefId, p: IVec, count: u32) -> u32 {
-        let n = count.min(self.room_for(def, p));
-        if n == 0 {
-            return count;
+    /// What a thing is made of, if it was made of anything.
+    pub fn made_of(&self, e: Entity) -> Option<DefId> {
+        self.ecs.get::<&MadeOf>(e).ok().map(|m| m.0)
+    }
+
+    /// Put as much of a lot as fits on exactly this cell, as a new stack or
+    /// on the same one there. Returns how many didn't fit.
+    pub fn put_lot(&mut self, lot: Lot, p: IVec) -> u32 {
+        let n = lot.count.min(self.room_for(lot.def, lot.made_of, p));
+        if n > 0 {
+            self.add_to_cell(Lot { count: n, ..lot }, p);
         }
-        match self.map.item_at(p) {
-            Some(e) => {
-                if let Ok(mut t) = self.ecs.get::<&mut Thing>(e) {
-                    t.count += n;
-                }
-                self.map.touch(p);
+        lot.count - n
+    }
+
+    /// Put a lot's worth on a cell that has room for it: onto the stack
+    /// there, which keeps its hp, or as a new stack with the lot's.
+    fn add_to_cell(&mut self, lot: Lot, p: IVec) {
+        if let Some(e) = self.map.item_at(p) {
+            if let Ok(mut t) = self.ecs.get::<&mut Thing>(e) {
+                t.count += lot.count;
             }
-            None => {
-                let td = self.defs.thing(def);
-                let (hp, tool) = (td.hp as i32, td.tool.is_some());
-                let e = self.spawn((Thing { def, pos: p, count: n, hp },));
-                if tool {
-                    self.tools.insert(e);
-                }
-                self.map.set_item(p, Some(e));
-                let defs = self.defs.clone();
-                self.fields.add_emitters(&defs, &self.map, e, def, p);
-            }
+            self.map.touch(p);
+            return;
         }
-        count - n
+        let td = self.defs.thing(lot.def);
+        let hp = lot.hp.unwrap_or_else(|| (td.hp as f64 * self.defs.factor(lot.made_of, "hp")).round().max(1.0) as i32);
+        let tool = td.tool.is_some();
+        let e = self.spawn((Thing { def: lot.def, pos: p, count: lot.count, hp },));
+        if let Some(m) = lot.made_of {
+            let _ = self.ecs.insert_one(e, MadeOf(m));
+        }
+        if tool {
+            self.tools.insert(e);
+        }
+        self.map.set_item(p, Some(e));
+        let defs = self.defs.clone();
+        self.fields.add_emitters(&defs, &self.map, e, lot.def, p);
     }
 
     pub fn place_item(&mut self, def: DefId, near: IVec, count: u32) -> u32 {
-        self.place_item_of(def, near, count, None)
+        self.place_lot(Lot::new(def, count), near)
     }
 
-    /// `place_item`, made of `stuff`: a flint axe, a bone one. Stacks merge
-    /// only with the same thing of the same material, and a new one takes
-    /// its material's hp.
-    pub fn place_item_of(&mut self, def: DefId, near: IVec, mut count: u32, stuff: Option<DefId>) -> u32 {
-        let limit = self.defs.thing(def).stack_limit;
+    /// `place_item`, made of `stuff`: a flint axe, a bone one.
+    pub fn place_item_of(&mut self, def: DefId, near: IVec, count: u32, stuff: Option<DefId>) -> u32 {
+        self.place_lot(Lot { made_of: stuff, ..Lot::new(def, count) }, near)
+    }
+
+    /// Drop a lot near `near`, merging into stacks of the same thing of the
+    /// same material. Returns how many didn't fit.
+    pub fn place_lot(&mut self, lot: Lot, near: IVec) -> u32 {
+        let limit = self.defs.thing(lot.def).stack_limit;
+        let mut count = lot.count;
         for r in 0..=8i32 {
             for dy in -r..=r {
                 for dx in -r..=r {
@@ -933,42 +1001,30 @@ impl World {
                     if !self.map.passable(p) {
                         continue;
                     }
-                    let i = self.map.idx(p);
-                    match self.map.item[i] {
-                        None => {
-                            let n = count.min(limit);
-                            let td = self.defs.thing(def);
-                            let hp = (td.hp as f64 * self.defs.factor(stuff, "hp")).round().max(1.0) as i32;
-                            let tool = td.tool.is_some();
-                            let e = self.spawn((Thing { def, pos: p, count: n, hp },));
-                            if let Some(m) = stuff {
-                                let _ = self.ecs.insert_one(e, MadeOf(m));
-                            }
-                            if tool {
-                                self.tools.insert(e);
-                            }
-                            self.map.set_item(p, Some(e));
-                            let defs = self.defs.clone();
-                            self.fields.add_emitters(&defs, &self.map, e, def, p);
-                            count -= n;
-                        }
-                        Some(e) => {
-                            let same = self.ecs.get::<&MadeOf>(e).ok().map(|m| m.0) == stuff;
-                            if let Ok(mut t) = self.ecs.get::<&mut Thing>(e) {
-                                if t.def == def && t.count < limit && same {
-                                    let n = count.min(limit - t.count);
-                                    t.count += n;
-                                    count -= n;
-                                    drop(t);
-                                    self.map.touch(p);
-                                }
-                            }
-                        }
+                    let room = match self.map.item_at(p) {
+                        None => limit,
+                        Some(e) => self
+                            .thing(e)
+                            .filter(|t| t.def == lot.def && self.made_of(e) == lot.made_of)
+                            .map_or(0, |t| limit.saturating_sub(t.count)),
+                    };
+                    let n = count.min(room);
+                    if n > 0 {
+                        self.add_to_cell(Lot { count: n, ..lot }, p);
+                        count -= n;
                     }
                 }
             }
         }
         count
+    }
+
+    /// Take up to `n` from a stack, as a lot that remembers it.
+    pub fn pick_up(&mut self, e: Entity, n: u32) -> Option<Lot> {
+        let t = self.thing(e)?;
+        let made_of = self.made_of(e);
+        let count = self.take_from_stack(e, n);
+        (count > 0).then_some(Lot { def: t.def, count, made_of, hp: Some(t.hp) })
     }
 
     /// Whether a harvest of thing `e`, by key, can be worked: it isn't
@@ -991,8 +1047,8 @@ impl World {
         // A site taken down mid-order: what was brought stays, and the mod
         // that posted it hears.
         if let Ok(o) = self.ecs.remove_one::<Order>(e) {
-            for &(d, n) in o.needs.iter().flat_map(|n| &n.delivered) {
-                self.place_item(d, t.pos, n);
+            for &lot in o.needs.iter().flat_map(|n| &n.delivered) {
+                self.place_lot(lot, t.pos);
             }
             self.events.push(GameEvent::OrderLost { site: e, owner: o.owner, label: o.label });
         }

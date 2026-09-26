@@ -34,6 +34,9 @@ use std::path::{Path, PathBuf};
 const DEF_REFS: &[(&str, &str, &str)] = &[
     ("engine:pawn", "*.1.def", "creature"),
     ("engine:pawn", "*.1.needs.*.0", "need"),
+    ("engine:pawn", "*.1.carry.def", "thing"),
+    ("engine:pawn", "*.1.carry.made_of", "thing"),
+    // Saves from before carried things kept their material: `(def, count)`.
     ("engine:pawn", "*.1.carry.0", "thing"),
     ("engine:pawn", "*.1.job.Comfort.need", "need"),
     ("engine:pawn", "*.1.priorities.*.0", "work_type"),
@@ -46,9 +49,13 @@ const DEF_REFS: &[(&str, &str, &str)] = &[
     ("engine:world", "events.*.PawnDied.def", "creature"),
     ("engine:world", "events.*.PawnLeft.def", "creature"),
     ("engine:world", "events.*.BuildingComplete.def", "thing"),
+    ("engine:world", "events.*.OrderDone.inputs.*.def", "thing"),
+    ("engine:world", "events.*.OrderDone.inputs.*.made_of", "thing"),
     ("engine:world", "events.*.OrderDone.inputs.*.0", "thing"),
     ("engine:world", "events.*.OrderDone.stuff", "thing"),
     ("engine:order", "*.1.needs.*.thing", "thing"),
+    ("engine:order", "*.1.needs.*.delivered.*.def", "thing"),
+    ("engine:order", "*.1.needs.*.delivered.*.made_of", "thing"),
     ("engine:order", "*.1.needs.*.delivered.*.0", "thing"),
     ("engine:order", "*.1.work_type", "work_type"),
     ("log", "*.commands.*.1.Designate.designation", "designation"),

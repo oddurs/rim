@@ -22,7 +22,9 @@ use std::path::Path;
 /// 2: a thing's progress moved to `engine:work`; Blueprint lost `work` and
 /// `work_left`.
 /// 3: `engine:held`, the tools in pawns' hands.
-pub const FORMAT: u32 = 3;
+/// 4: what a pawn carries, an order's deliveries and `OrderDone` inputs are
+/// lots, keeping material and hp. Older `(def, count)` pairs still read.
+pub const FORMAT: u32 = 4;
 
 /// Where a format-1 plan kept its progress.
 #[derive(Deserialize)]
@@ -119,6 +121,13 @@ fn lock_matches(saved: &[(String, String)], loaded: &[crate::modloader::ModManif
     saved.len() == loaded.len() && saved.iter().zip(loaded).all(|(s, m)| s.0 == m.id && s.1 == m.version)
 }
 
+/// A lot with its def ids mapped, or `None` if its thing no longer exists.
+/// A material that's gone leaves it made of nothing in particular, as it
+/// does a thing on the map.
+fn remap_lot(r: &Remap, lot: Lot) -> Option<Lot> {
+    Some(Lot { def: r.get("thing", lot.def)?, made_of: lot.made_of.and_then(|m| r.get("thing", m)), ..lot })
+}
+
 /// An event with its def ids mapped, or `None` if one no longer exists.
 fn remap_event(r: &Remap, e: GameEvent) -> Option<GameEvent> {
     Some(match e {
@@ -133,7 +142,7 @@ fn remap_event(r: &Remap, e: GameEvent) -> Option<GameEvent> {
             GameEvent::BuildingComplete { id, def: r.get("thing", def)?, pos }
         }
         GameEvent::OrderDone { site, owner, label, inputs, stuff } => {
-            let inputs = inputs.into_iter().map(|(d, n)| Some((r.get("thing", d)?, n))).collect::<Option<_>>()?;
+            let inputs = inputs.into_iter().map(|l| remap_lot(r, l)).collect::<Option<_>>()?;
             let stuff = match stuff {
                 Some(d) => Some(r.get("thing", d)?),
                 None => None,
@@ -449,13 +458,10 @@ impl Snapshot {
             }
             skills.sort_unstable_by_key(|s| s.0);
             p.skills = skills;
-            if let Some((t, _)) = p.carry {
-                match remap.get("thing", t) {
-                    Some(now) => p.carry = p.carry.map(|(_, n)| (now, n)),
-                    None => {
-                        *dropped.entry(format!("carried {}", remap.name("thing", t))).or_default() += 1;
-                        p.carry = None;
-                    }
+            if let Some(lot) = p.carry {
+                p.carry = remap_lot(&remap, lot);
+                if p.carry.is_none() {
+                    *dropped.entry(format!("carried {}", remap.name("thing", lot.def))).or_default() += 1;
                 }
             }
             if let Job::Comfort { need, .. } = &mut p.job {
@@ -584,8 +590,8 @@ impl Snapshot {
                     if let Some(d) = n.thing {
                         kept &= remap.get("thing", d).map(|d| n.thing = Some(d)).is_some();
                     }
-                    for (d, _) in &mut n.delivered {
-                        kept &= remap.get("thing", *d).map(|x| *d = x).is_some();
+                    for lot in &mut n.delivered {
+                        kept &= remap_lot(&remap, *lot).map(|l| *lot = l).is_some();
                     }
                 }
                 if !kept {

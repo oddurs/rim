@@ -9,6 +9,7 @@ use crate::path::Goal;
 use crate::world::*;
 use crate::IVec;
 use hecs::Entity;
+use std::collections::BTreeMap;
 
 pub fn tick_pawns(w: &mut World) {
     let mut i = 0;
@@ -69,8 +70,8 @@ fn tick_pawn(w: &mut World, e: Entity, p: &mut Pawn) {
 
 fn end_job(w: &mut World, e: Entity, p: &mut Pawn, delay: u64) {
     w.release_all(e);
-    if let Some((def, n)) = p.carry.take() {
-        w.place_item(def, p.pos, n);
+    if let Some(lot) = p.carry.take() {
+        w.place_lot(lot, p.pos);
     }
     p.job = Job::Idle;
     p.path.clear();
@@ -772,17 +773,19 @@ fn find_haul(w: &World, e: Entity, from: IVec) -> Option<(u32, Job, Entity)> {
             _ => None,
         })
         .collect();
-    let free = |def: DefId, c: IVec| !claimed.contains(&c) && w.room_for(def, c) > 0;
-    // Whether any zone has room for a def at all, worked out once per def:
-    // with every stockpile full, that's all an idle hauler has to learn.
-    let mut room: Vec<Option<bool>> = vec![None; w.defs.things.len()];
+    let free = |def: DefId, of: Option<DefId>, c: IVec| !claimed.contains(&c) && w.room_for(def, of, c) > 0;
+    // Whether any zone has room for a thing at all, worked out once per def
+    // and material: with every stockpile full, that's all an idle hauler
+    // has to learn.
+    let mut room: BTreeMap<(DefId, Option<DefId>), bool> = BTreeMap::new();
     let mut best: Option<(u32, Entity, IVec)> = None;
     for (te, t) in w.ecs.query::<(Entity, &Thing)>().without::<&Blueprint>().iter() {
         if w.map.item_at(t.pos) != Some(te) || w.zones.at(&w.map, t.pos).is_some_and(|z| z.takes(t.def)) {
             continue;
         }
-        let any_room = *room[t.def as usize].get_or_insert_with(|| {
-            w.zones.members().any(|(z, c)| z.takes(t.def) && free(t.def, w.map.pos(c as usize)))
+        let of = w.made_of(te);
+        let any_room = *room.entry((t.def, of)).or_insert_with(|| {
+            w.zones.members().any(|(z, c)| z.takes(t.def) && free(t.def, of, w.map.pos(c as usize)))
         });
         if !any_room {
             continue;
@@ -799,7 +802,7 @@ fn find_haul(w: &World, e: Entity, from: IVec) -> Option<(u32, Job, Entity)> {
             .members()
             .filter(|(z, _)| z.takes(t.def))
             .map(|(_, c)| w.map.pos(c as usize))
-            .filter(|&c| free(t.def, c))
+            .filter(|&c| free(t.def, of, c))
             .map(|c| (c.octile(t.pos), c))
             .filter(|&(_, c)| w.map.can_reach(t.pos, Goal::Cell(c)))
             .min();
@@ -973,12 +976,9 @@ fn run_supply(w: &mut World, p: &mut Pawn, site: Entity, src: Entity, need: u8, 
             Go::Failed => None,
             Go::Moving => Some(Job::Supply { site, src, need, want, stage }),
             Go::Arrived => {
-                let n = w.take_from_stack(src, want.min(CARRY_CAPACITY));
-                if n == 0 {
-                    return None;
-                }
+                let lot = w.pick_up(src, want.min(CARRY_CAPACITY))?;
                 w.reservations.remove(&src);
-                p.carry = Some((s.def, n));
+                p.carry = Some(lot);
                 Some(Job::Supply { site, src, need, want, stage: 1 })
             }
         };
@@ -988,16 +988,21 @@ fn run_supply(w: &mut World, p: &mut Pawn, site: Entity, src: Entity, need: u8, 
         Go::Failed => None,
         Go::Moving => Some(Job::Supply { site, src, need, want, stage }),
         Go::Arrived => {
-            let (cdef, cn) = p.carry?;
+            let lot = p.carry?;
             let defs = w.defs.clone();
             if let Ok(mut o) = w.ecs.get::<&mut Order>(site) {
-                if let Some(n) = o.needs.get_mut(need as usize).filter(|n| n.takes(&defs, cdef)) {
-                    let add = cn.min(n.missing());
-                    match n.delivered.iter_mut().find(|d| d.0 == cdef) {
-                        Some(d) => d.1 += add,
-                        None => n.delivered.push((cdef, add)),
+                if let Some(n) = o.needs.get_mut(need as usize).filter(|n| n.takes(&defs, lot.def)) {
+                    let add = lot.count.min(n.missing());
+                    if add > 0 {
+                        // Lots alike in every way share a row; two axes worn
+                        // differently stay two, and come back so if it's cancelled.
+                        let same = |d: &&mut Lot| d.def == lot.def && d.made_of == lot.made_of && d.hp == lot.hp;
+                        match n.delivered.iter_mut().find(same) {
+                            Some(d) => d.count += add,
+                            None => n.delivered.push(Lot { count: add, ..lot }),
+                        }
                     }
-                    p.carry = (cn > add).then_some((cdef, cn - add));
+                    p.carry = (lot.count > add).then_some(Lot { count: lot.count - add, ..lot });
                 }
             }
             w.map.touch(at);
@@ -1054,14 +1059,20 @@ fn run_craft(w: &mut World, e: Entity, p: &mut Pawn, site: Entity, tool: Option<
 /// hears what went in, to make what it makes.
 pub fn finish_order(w: &mut World, site: Entity) {
     let Ok(o) = w.ecs.remove_one::<Order>(site) else { return };
-    let mut inputs: Vec<(DefId, u32)> = Vec::new();
-    for (d, n) in o.needs.iter().flat_map(|n| &n.delivered) {
-        match inputs.iter_mut().find(|i| i.0 == *d) {
-            Some(i) => i.1 += n,
-            None => inputs.push((*d, *n)),
+    let mut inputs: Vec<Lot> = Vec::new();
+    for lot in o.needs.iter().flat_map(|n| &n.delivered) {
+        match inputs.iter_mut().find(|i| i.def == lot.def && i.made_of == lot.made_of) {
+            Some(i) => i.count += lot.count,
+            None => inputs.push(*lot),
         }
     }
-    let stuff = inputs.iter().map(|i| i.0).find(|&d| w.defs.thing(d).stuff.is_some());
+    // A material that went in as itself (flint), or else what the first
+    // made thing that went in was made of (a flint axe, rehafted).
+    let stuff = inputs
+        .iter()
+        .map(|i| i.def)
+        .find(|&d| w.defs.thing(d).stuff.is_some())
+        .or_else(|| inputs.iter().find_map(|i| i.made_of));
     if let Some(t) = w.thing(site) {
         w.map.touch(t.pos);
     }
@@ -1078,12 +1089,9 @@ fn run_deliver(w: &mut World, p: &mut Pawn, bp: Entity, src: Entity, want: u32, 
             Go::Failed => None,
             Go::Moving => Some(Job::Deliver { bp, src, want, stage }),
             Go::Arrived => {
-                let n = w.take_from_stack(src, want.min(CARRY_CAPACITY));
-                if n == 0 {
-                    return None;
-                }
+                let lot = w.pick_up(src, want.min(CARRY_CAPACITY))?;
                 w.reservations.remove(&src);
-                p.carry = Some((s.def, n));
+                p.carry = Some(lot);
                 Some(Job::Deliver { bp, src, want, stage: 1 })
             }
         };
@@ -1093,12 +1101,12 @@ fn run_deliver(w: &mut World, p: &mut Pawn, bp: Entity, src: Entity, want: u32, 
         Go::Failed => None,
         Go::Moving => Some(Job::Deliver { bp, src, want, stage }),
         Go::Arrived => {
-            let (cdef, cn) = p.carry?;
+            let lot = p.carry?;
             if let Ok(mut bpc) = w.ecs.get::<&mut Blueprint>(bp) {
-                if let Some(i) = bpc.cost.iter().position(|c| c.0 == cdef) {
-                    let add = cn.min(bpc.cost[i].1.saturating_sub(bpc.delivered[i]));
+                if let Some(i) = bpc.cost.iter().position(|c| c.0 == lot.def) {
+                    let add = lot.count.min(bpc.cost[i].1.saturating_sub(bpc.delivered[i]));
                     bpc.delivered[i] += add;
-                    p.carry = (cn > add).then_some((cdef, cn - add));
+                    p.carry = (lot.count > add).then_some(Lot { count: lot.count - add, ..lot });
                 }
             }
             // Nothing else about the map changed: tell whoever draws it
@@ -1119,13 +1127,10 @@ fn run_haul(w: &mut World, p: &mut Pawn, src: Entity, to: IVec, stage: u8) -> Op
             Go::Failed => None,
             Go::Moving => Some(Job::Haul { src, to, stage }),
             Go::Arrived => {
-                let want = s.count.min(CARRY_CAPACITY).min(w.room_for(s.def, to));
-                let n = w.take_from_stack(src, want);
-                if n == 0 {
-                    return None;
-                }
+                let want = s.count.min(CARRY_CAPACITY).min(w.room_for(s.def, w.made_of(src), to));
+                let lot = w.pick_up(src, want)?;
                 w.reservations.remove(&src);
-                p.carry = Some((s.def, n));
+                p.carry = Some(lot);
                 Some(Job::Haul { src, to, stage: 1 })
             }
         };
@@ -1134,9 +1139,9 @@ fn run_haul(w: &mut World, p: &mut Pawn, src: Entity, to: IVec, stage: u8) -> Op
         Go::Failed => None,
         Go::Moving => Some(Job::Haul { src, to, stage }),
         Go::Arrived => {
-            let (def, n) = p.carry?;
-            let left = w.put_item(def, to, n);
-            p.carry = (left > 0).then_some((def, left));
+            let lot = p.carry?;
+            let left = w.put_lot(lot, to);
+            p.carry = (left > 0).then_some(Lot { count: left, ..lot });
             None
         }
     }
@@ -1284,7 +1289,7 @@ fn run_eat(w: &mut World, p: &mut Pawn, src: Entity, t: u32, seat: Option<(Entit
         let (se, cell) = seat?;
         if w.thing(se).is_none() {
             // The chair went away: eat standing up, right here.
-            let (food, _) = p.carry.take()?;
+            let food = p.carry.take()?.def;
             eat(p, food);
             return None;
         }
@@ -1295,7 +1300,7 @@ fn run_eat(w: &mut World, p: &mut Pawn, src: Entity, t: u32, seat: Option<(Entit
                 if t < 90 {
                     return Some(Job::Eat { src, t: t + 1, seat, stage });
                 }
-                let (food, _) = p.carry.take()?;
+                let food = p.carry.take()?.def;
                 let full = eat(p, food);
                 if full || w.thing(src).is_none() {
                     None
@@ -1314,10 +1319,7 @@ fn run_eat(w: &mut World, p: &mut Pawn, src: Entity, t: u32, seat: Option<(Entit
         Go::Arrived => {
             if let Some(seat) = seat {
                 // Pick one portion up and take it to the seat.
-                if w.take_from_stack(src, 1) == 0 {
-                    return None;
-                }
-                p.carry = Some((s.def, 1));
+                p.carry = Some(w.pick_up(src, 1)?);
                 return Some(Job::Eat { src, t: 0, seat: Some(seat), stage: 1 });
             }
             if t < 90 {
