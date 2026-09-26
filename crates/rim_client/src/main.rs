@@ -243,7 +243,7 @@ fn typed_char(c: char) -> Option<char> {
 
 #[cfg(test)]
 mod tests {
-    use super::{markable, save_setting, saved_render_scale};
+    use super::{markable, save_setting, saved_render_scale, saved_ui_scale};
 
     /// Core names `gather` for plugins but has nothing to gather, so its
     /// toolbar has no Gather button; chop and the rest stay.
@@ -271,6 +271,20 @@ mod tests {
         assert!(saved_render_scale("render_scale = \"half\"").is_err());
         assert!(saved_render_scale("render_scale = nan").is_err());
         assert!(saved_render_scale("render_scale = ").is_err());
+    }
+
+    #[test]
+    fn the_ui_scale_round_trips_clamped() {
+        assert_eq!(saved_ui_scale("ui_scale = 1.25"), Ok(Some(1.25)));
+        assert_eq!(saved_ui_scale("ui_scale = 5"), Ok(Some(2.0)), "clamped");
+        assert_eq!(saved_ui_scale("render_scale = 0.5"), Ok(None));
+        assert!(saved_ui_scale("ui_scale = \"big\"").is_err());
+        let p = std::env::temp_dir().join(format!("rim-ui-scale-{}.toml", std::process::id()));
+        std::fs::write(&p, "render_scale = 0.5\n").unwrap();
+        save_setting(&p, "ui_scale", toml::Value::Float(1.5)).unwrap();
+        let text = std::fs::read_to_string(&p).unwrap();
+        assert_eq!((saved_ui_scale(&text), saved_render_scale(&text)), (Ok(Some(1.5)), Ok(Some(0.5))));
+        let _ = std::fs::remove_file(&p);
     }
 
     #[test]
@@ -403,7 +417,7 @@ async fn game() {
             std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs()
         }
     });
-    let ui_scale: f32 = args.windows(2).find(|w| w[0] == "--ui-scale").and_then(|w| w[1].parse().ok()).unwrap_or(1.0);
+    let ui_scale_arg: Option<f32> = args.windows(2).find(|w| w[0] == "--ui-scale").and_then(|w| w[1].parse().ok());
 
     let bench = args.iter().any(|a| a == "--bench-render");
     // The autotest and the benchmark are tests: they don't touch the saves.
@@ -414,6 +428,20 @@ async fn game() {
         Ok(l) => l,
         Err(e) => return fail(e).await,
     };
+    // The player's UI scale, unless the command line names one; the
+    // autotest and the benchmark measure at 1.
+    let tests = args.iter().any(|a| a == "--autotest" || a == "--bench-render");
+    let ui_scale = ui_scale_arg.unwrap_or_else(|| {
+        let saved =
+            (!tests).then(|| player_file("settings.toml")).flatten().and_then(|p| std::fs::read_to_string(p).ok());
+        saved
+            .map_or(Ok(None), |text| saved_ui_scale(&text))
+            .unwrap_or_else(|e| {
+                eprintln!("  warning: settings file: {e}");
+                None
+            })
+            .unwrap_or(1.0)
+    });
     let mut ui = match Ui::new(rim_ui::vm::mod_dirs(&loaded.mods), screen_dpi_scale(), ui_scale) {
         Ok(u) => u,
         Err(e) => return fail(format!("UI failed to start: {e}")).await,
@@ -1033,15 +1061,25 @@ pub fn valid_render_scale(s: f64) -> Option<f32> {
 /// The render scale a settings file holds, if any. A file or value that
 /// doesn't parse is an error to report, not a default.
 fn saved_render_scale(text: &str) -> Result<Option<f32>, String> {
+    saved_scale(text, "render_scale", valid_render_scale, "0.25 to 1")
+}
+
+/// The UI scale a settings file holds, if any.
+fn saved_ui_scale(text: &str) -> Result<Option<f32>, String> {
+    let valid = |s: f64| s.is_finite().then(|| (s as f32).clamp(rim_ui::vm::UI_SCALE.0, rim_ui::vm::UI_SCALE.1));
+    saved_scale(text, "ui_scale", valid, "0.75 to 2")
+}
+
+fn saved_scale(text: &str, key: &str, valid: impl Fn(f64) -> Option<f32>, range: &str) -> Result<Option<f32>, String> {
     let t: toml::Table = toml::from_str(text).map_err(|e| e.to_string())?;
-    match t.get("render_scale") {
+    match t.get(key) {
         None => Ok(None),
         Some(v) => v
             .as_float()
             .or(v.as_integer().map(|i| i as f64))
-            .and_then(valid_render_scale)
+            .and_then(valid)
             .map(Some)
-            .ok_or_else(|| format!("render_scale should be a number from 0.25 to 1, not {v}")),
+            .ok_or_else(|| format!("{key} should be a number from {range}, not {v}")),
     }
 }
 
@@ -1265,6 +1303,15 @@ fn apply_ui(app: &mut App, a: UiAction) {
             app.render_scale = Some(s);
             if let Some(p) = &app.settings_file {
                 if let Err(e) = save_setting(p, "render_scale", toml::Value::Float(s as f64)) {
+                    eprintln!("rim: could not save settings: {e}");
+                }
+            }
+        }
+        UiAction::UiScale(s) => {
+            app.ui.set_user_scale(s);
+            let s = app.ui.user_scale();
+            if let Some(p) = &app.settings_file {
+                if let Err(e) = save_setting(p, "ui_scale", toml::Value::Float(s as f64)) {
                     eprintln!("rim: could not save settings: {e}");
                 }
             }

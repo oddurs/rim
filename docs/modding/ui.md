@@ -224,6 +224,20 @@ readouts), `core:inspector.sections` (sections in the colonist
 inspector) and `core:inspector.thing` (sections in the inspector of a
 selected thing: a station's bills, a tool's wear).
 
+### Small screens and UI scale
+
+`view.compact()` is true when the screen is under 1440 logical pixels wide.
+Logical pixels count the player's UI scale, so a big interface on a big
+screen is compact too. `view.screen()` returns logical pixels. Core's
+panels take narrower widths when compact: people in one line each, three
+news lines, and no key line in the top bar. A mod's panel can do the same.
+
+The player's UI scale goes on top of the display's, from 0.75 to 2:
+Ctrl+= and Ctrl+- step it and Ctrl+0 resets it. It is saved as `ui_scale`
+in the player's `settings.toml`, and `--ui-scale` on the command line
+overrides it for a run. `view.ui_scale()` reads it and `act.ui_scale(s)`
+sets it. Layout and hit testing both follow the scale.
+
 ### The inspector
 
 The selected pawn or thing shows bottom left (`core:inspector`, in

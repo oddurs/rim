@@ -23,6 +23,17 @@ end)
 ui.bind("core:devtools", { key = "f12", label = t("core:keys.devtools", "Devtools") }, function()
 	act.toggle_devtools()
 end)
+-- UI scale, on top of the display's: saved with the player's settings.
+local UI_STEP = 0.125
+ui.bind("core:ui_bigger", { key = "ctrl+=", label = t("core:keys.ui_bigger", "Bigger interface") }, function()
+	act.ui_scale(view.ui_scale() + UI_STEP)
+end)
+ui.bind("core:ui_smaller", { key = "ctrl+-", label = t("core:keys.ui_smaller", "Smaller interface") }, function()
+	act.ui_scale(view.ui_scale() - UI_STEP)
+end)
+ui.bind("core:ui_normal", { key = "ctrl+0", label = t("core:keys.ui_normal", "Interface at normal size") }, function()
+	act.ui_scale(1)
+end)
 -- Render scale: the world at fewer pixels than the screen has, for a
 -- laptop whose integrated GPU can't fill a high-DPI screen. No keys; the
 -- palette finds them.

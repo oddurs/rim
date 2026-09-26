@@ -214,6 +214,11 @@ pub struct ModDir {
     pub deps: Vec<String>,
 }
 
+/// Below this many logical pixels wide, `view.compact()` is true.
+pub const COMPACT_BELOW: f32 = 1440.0;
+/// The player's UI scale stays in this range.
+pub const UI_SCALE: (f32, f32) = (0.75, 2.0);
+
 pub struct UiVm {
     lua: Lua,
     reg: Rc<RefCell<Registry>>,
@@ -227,6 +232,8 @@ pub struct UiVm {
     /// Microseconds spent in each mod's UI code, smoothed.
     pub mod_time: HashMap<String, f64>,
     seen_ids: RefCell<HashSet<String>>,
+    /// The player's UI scale, for `view.ui_scale`; set by the engine.
+    pub(crate) ui_scale: Rc<Cell<f32>>,
     unknown_checked: bool,
 }
 
@@ -298,6 +305,7 @@ impl UiVm {
             mod_time: HashMap::new(),
             seen_ids: RefCell::new(HashSet::new()),
             unknown_checked: false,
+            ui_scale: Rc::new(Cell::new(1.0)),
         };
         if let Err(e) = vm.install(mods) {
             vm.warnings.push(format!("UI API setup failed: {e}"));
@@ -701,6 +709,10 @@ impl UiVm {
         act!("toggle_profiler", (), |_a| UiAction::ToggleProfiler);
         act!("toggle_devtools", (), |_a| UiAction::ToggleDevtools);
         act!("toggle_outlines", (), |_a| UiAction::ToggleOutlines);
+        act!("ui_scale", f32, |s| match s.is_finite() {
+            true => UiAction::UiScale(s.clamp(UI_SCALE.0, UI_SCALE.1)),
+            false => return Err(rt("act.ui_scale: wants a number from 0.75 to 2")),
+        });
         act!("render_scale", f32, |s| match s.is_finite() {
             true => UiAction::RenderScale(s.clamp(0.25, 1.0)),
             false => return Err(rt("act.render_scale: wants a number from 0.25 to 1")),
@@ -802,7 +814,15 @@ impl UiVm {
         view!("show_profiler", (), |_lua, l, _a| Ok(l.client.show_profiler));
         view!("show_devtools", (), |_lua, l, _a| Ok(l.client.show_devtools));
         view!("hint", (), |_lua, l, _a| Ok(l.client.hint.clone()));
-        view!("screen", (), |_lua, l, _a| Ok((l.client.screen.0, l.client.screen.1)));
+        view!("screen", (), |_lua, l, _a| {
+            let s = l.client.scale.max(0.01);
+            Ok((l.client.screen.0 / s, l.client.screen.1 / s))
+        });
+        // A small screen, in logical pixels (a big UI scale makes any
+        // screen small): core's components pick denser layouts.
+        view!("compact", (), |_lua, l, _a| Ok(l.client.screen.0 / l.client.scale.max(0.01) < COMPACT_BELOW));
+        let scale = self.ui_scale.clone();
+        view.set("ui_scale", lua.create_function(move |_, ()| Ok(scale.get()))?)?;
 
         view!("colonists", Option<usize>, |lua, l, max| {
             let t = lua.create_table()?;

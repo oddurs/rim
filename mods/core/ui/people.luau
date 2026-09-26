@@ -20,6 +20,8 @@ local people = {}
 local COMPACT = 9
 local GROUPED = 20
 local WIDTH = 210
+-- On a small screen: narrower, and a line each at any count.
+local COMPACT_WIDTH = 170
 local ROW_H = 24
 local CARD_H = 44
 
@@ -53,7 +55,7 @@ local function group_of(p): string
 	return "working"
 end
 
-local function person(p, compact: boolean)
+local function person(p, compact: boolean, w: number)
 	local name = label(p.name, { weight = if p.selected then "strong" else "regular", color = if p.drafted then "player" else nil })
 	local extra = {}
 	for _, b in badges do
@@ -78,7 +80,7 @@ local function person(p, compact: boolean)
 	end
 	return row({
 		id = "core:colonists." .. p.name,
-		w = WIDTH,
+		w = w,
 		padx = "m",
 		gap = "s",
 		align = "center",
@@ -108,7 +110,9 @@ ui.define("core:colonists", function(view)
 	if n == 0 then
 		return nil
 	end
-	local compact = n >= COMPACT
+	local small = view.compact()
+	local compact = small or n >= COMPACT
+	local w = if small then COMPACT_WIDTH else WIDTH
 	-- One entry per line: a person, or a group's heading. The list builds
 	-- only the lines in view, so the column costs the same at 200 as at 20.
 	local entries = all
@@ -132,7 +136,7 @@ ui.define("core:colonists", function(view)
 	end
 	-- minh = 0: the panel shrinks to the room the inspector leaves, and the
 	-- list scrolls.
-	return kit.panel({ w = WIDTH + 10, pad = "s", gap = "xs", minh = 0 }, {
+	return kit.panel({ w = w + 10, pad = "s", gap = "xs", minh = 0 }, {
 		label(string.format(t("core:colonists.title", "Colonists · %d"), n), { size = "small", color = "muted" }),
 		{
 			kind = "list",
@@ -144,7 +148,7 @@ ui.define("core:colonists", function(view)
 				if e.heading then
 					return row({ padx = "xs", align = "end" }, { label(e.heading, { size = "small", color = "faint" }) })
 				end
-				return person(e, compact)
+				return person(e, compact, w)
 			end,
 		},
 	})

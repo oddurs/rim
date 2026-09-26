@@ -2,8 +2,10 @@
 id: 93071dfd-02c7-4942-9a07-55fac10276cf
 title: Compact mode and UI scale
 type: feature
-status: backlog
+status: review
 milestone: interface
+assignee: Oddur Sigurdsson
+claimed: 2026-09-26
 created: 2026-09-26
 updated: 2026-09-26
 priority: p2
@@ -24,6 +26,10 @@ The same layout has to work from 1280×720 to 4K. Below about 1440 px the column
 
 ## Acceptance criteria
 
-- [ ] At 1280×720 the compact layout keeps the map at least half the screen
-- [ ] UI scale steps with a key and survives a restart
-- [ ] Hit testing matches drawing at every scale
+- [x] At 1280×720 the compact layout keeps the map at least half the screen
+- [x] UI scale steps with a key and survives a restart
+- [x] Hit testing matches drawing at every scale
+
+## 2026-09-26
+
+view.compact is logical width < 1440 (UI scale included); view.screen now returns logical pixels as its doc said (it returned physical; nothing read it). UI scale 0.75-2 via Ctrl+=/-/0, saved as ui_scale in settings.toml. 1280x720 with 10 colonists, a selection and news: panels cover 26%.

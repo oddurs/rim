@@ -26,6 +26,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `act.toggle_pause` | `() -> ()` | Pause or resume. |
 | `act.toggle_profiler` | `() -> ()` | Show or hide the profiler. |
 | `act.tool` | `(key: string) -> ()` | Pick a toolbar tool ("designate:core:chop", "build:core:wall"). |
+| `act.ui_scale` | `(scale: number) -> ()` | Set the player's UI scale, 0.75 to 2 on top of the display's; it is saved with their settings. |
 | `act.zone_allow` | `(zone: number, item: string, on: boolean) -> ()` | Let a stockpile take an item, or stop it. |
 | `ui.anchored` | `(node: Node?) -> Node` | A node attached to a pawn (entity) or cell, on the anchored layer. |
 | `ui.bind` | `(id: string, opts: { key: string?, label: string? }, run: () -> ()) -> ()` | A named action with a default key ("space", "f3", "ctrl+k"): it fires from the key when no text input is typing, and from the command palette. With no key it is in the palette alone. The player's keybinds file overrides the key. Two mods binding one id or one key is reported. |
@@ -63,6 +64,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `view.clock` | `() -> string` | The time of day, "HH:MM". |
 | `view.colonists` | `(max: number?) -> { Pawn }` | The colonists, or the first max of them (a bar that shows a few should not pay for all of them; view.count_pawns("player") has the total). |
 | `view.colony_lost` | `() -> boolean` | Whether every colonist is gone. |
+| `view.compact` | `() -> boolean` | Whether the screen is small (under 1440 logical pixels wide, UI scale included): core picks denser layouts. |
 | `view.count_pawns` | `(faction: string) -> number` | Living pawns of "player", "hostile" or "wild". |
 | `view.data` | `(key: string) -> any` | A copy of data a sim script stored with rim.set_data, or nil. |
 | `view.date` | `() -> UiDate` | The calendar date, counted from 1. |
@@ -105,6 +107,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `view.ticks_per_day` | `() -> number` | Ticks in a game day. |
 | `view.time` | `() -> number` | Wall-clock seconds, for animation. |
 | `view.tools` | `() -> { Tool }` | Every tool, with the dock category and group it is filed under. |
+| `view.ui_scale` | `() -> number` | The player's UI scale, on top of the display's (1 is normal). |
 | `view.ui_stats` | `() -> UiStats` | The UI's own timings. |
 | `view.ui_tree` | `() -> { TreeRow }` | The node tree (devtools). |
 | `view.visible_pawns` | `() -> { VisiblePawn }` | Pawns on screen, for anchored labels. |
