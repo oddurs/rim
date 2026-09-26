@@ -76,6 +76,9 @@ pub struct ClientView {
     pub stuff: Vec<StuffView>,
     /// What a right-click would do here, if anything.
     pub hint: Option<String>,
+    /// The last order given and how long ago, in seconds: what an undo
+    /// would take back.
+    pub last_order: Option<(String, f64)>,
     /// The world cell under the mouse, when it isn't over the UI.
     pub hover_cell: Option<IVec>,
     pub hover_pawn: Option<Entity>,
@@ -131,6 +134,8 @@ pub enum UiAction {
         cell: IVec,
         on: Option<Entity>,
     },
+    /// Take back the last order given.
+    Undo,
     /// A colonist's priority for a work type, by its qualified id.
     SetPriority(Entity, String, u8),
     /// Put the colony in a stance, by its qualified id.

@@ -202,6 +202,8 @@ declare act: {
     tool: (key: string) -> (),
     -- Set the player's UI scale, 0.75 to 2 on top of the display's; it is saved with their settings.
     ui_scale: (scale: number) -> (),
+    -- Take back the last order given: the colonists stop the job it gave them, and a mark it put on something goes.
+    undo: () -> (),
     -- Let a stockpile take an item, or stop it.
     zone_allow: (zone: number, item: string, on: boolean) -> (),
     -- Zoom the map by a factor about the middle of the screen (1.12 is one wheel notch in).
@@ -251,6 +253,8 @@ declare view: {
     inspect: () -> Inspect?,
     -- Every item def, which a stockpile can take or refuse.
     items: () -> { Item },
+    -- The last order given ("Gunnar will deconstruct wall") and how many seconds ago, or nil once it's been undone.
+    last_order: () -> { label: string, age: number }?,
     -- How many things each designation has marked, by designation id; ones with none are left out.
     marked: () -> { [string]: number },
     -- How many messages the log holds.

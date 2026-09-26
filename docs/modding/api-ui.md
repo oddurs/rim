@@ -30,6 +30,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `act.toggle_profiler` | `() -> ()` | Show or hide the profiler. |
 | `act.tool` | `(key: string) -> ()` | Pick a toolbar tool ("designate:core:chop", "build:core:wall"). |
 | `act.ui_scale` | `(scale: number) -> ()` | Set the player's UI scale, 0.75 to 2 on top of the display's; it is saved with their settings. |
+| `act.undo` | `() -> ()` | Take back the last order given: the colonists stop the job it gave them, and a mark it put on something goes. |
 | `act.zone_allow` | `(zone: number, item: string, on: boolean) -> ()` | Let a stockpile take an item, or stop it. |
 | `act.zoom` | `(factor: number) -> ()` | Zoom the map by a factor about the middle of the screen (1.12 is one wheel notch in). |
 | `ui.anchored` | `(node: Node?) -> Node` | A node attached to a pawn (entity) or cell, on the anchored layer. |
@@ -85,6 +86,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `view.hover` | `() -> Hover?` | What's under the cursor. |
 | `view.inspect` | `() -> Inspect?` | The node under the cursor (devtools). |
 | `view.items` | `() -> { Item }` | Every item def, which a stockpile can take or refuse. |
+| `view.last_order` | `() -> { label: string, age: number }?` | The last order given ("Gunnar will deconstruct wall") and how many seconds ago, or nil once it's been undone. |
 | `view.marked` | `() -> { [string]: number }` | How many things each designation has marked, by designation id; ones with none are left out. |
 | `view.message_count` | `() -> number` | How many messages the log holds. |
 | `view.messages` | `(max: number, skip: number?) -> { Message }` | The newest messages, newest first; skip that many of the newest to page back through the log. |

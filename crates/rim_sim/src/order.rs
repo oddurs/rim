@@ -94,6 +94,17 @@ pub fn options(w: &World, pawn: Entity, cell: IVec, on: Option<Entity>) -> Vec<C
     out
 }
 
+/// The thing a job is aimed at, if any: what an undo checks the pawn is
+/// still busy with.
+pub fn target_of(job: &Job) -> Option<Entity> {
+    match *job {
+        Job::Harvest { target, .. } | Job::Deconstruct { target, .. } | Job::Attack { target, .. } => Some(target),
+        Job::Construct { bp } | Job::Deliver { bp, .. } => Some(bp),
+        Job::Eat { src, .. } => Some(src),
+        _ => None,
+    }
+}
+
 /// What a plain right-click at `cell` makes `pawn` do: the first safe
 /// order there, if any. Never a damaging one.
 pub fn resolve(w: &World, pawn: Entity, cell: IVec, on: Option<Entity>) -> Option<Order> {

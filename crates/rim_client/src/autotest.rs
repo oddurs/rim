@@ -1410,8 +1410,21 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
             t.w().ecs.get::<&Designated>(wall).is_ok() && matches!(t.pawn(founder).job, Job::Deconstruct { .. }),
             "picking Deconstruct from the menu gives it",
         );
-        t.app.sim.push(Command::Cancel { a: at, b: at });
+        // The toast says what was ordered; Cmd/Ctrl+Z takes it back.
+        t.frame().await;
+        t.check(
+            t.app.ui.find("core:undo").is_some() && t.ui_text().contains("will deconstruct wall"),
+            "the order's toast says what it was",
+        );
+        t.shot("undo_toast").await;
+        t.input(RawInput { mouse: t.mouse, pressed: vec!["ctrl+z".into()], ..Default::default() }).await;
         t.ticks(1);
+        t.frame().await;
+        t.check(
+            t.w().ecs.get::<&Designated>(wall).is_err() && !matches!(t.pawn(founder).job, Job::Deconstruct { .. }),
+            "Cmd/Ctrl+Z takes the deconstruct back: unmarked, and nobody on it",
+        );
+        t.check(t.app.ui.find("core:undo").is_none(), "and the toast goes");
         // Held on open ground: the menu, with Go here in it.
         let ground = (1..8).map(|d| at.offset(d, 0)).find(|&p| t.w().map.passable(p)).unwrap_or(at);
         t.right_hold(t.screen(ground)).await;

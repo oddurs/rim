@@ -68,6 +68,7 @@ cargo dist                                                        # a shipping b
 | R                    | draft the selected colonist        |
 | Right-click          | the safe order there: go, hunt, eat, gather (never deconstruct or fell) |
 | Hold right-click     | every order there, damaging ones last |
+| Cmd/Ctrl+Z           | take back the last order (for a few seconds its toast says what it was) |
 | Tab / C              | next colonist / center on selected |
 | O                    | cycle field overlays (temperature, light, ...) |
 | F3                   | profiler, load order, mod warnings |

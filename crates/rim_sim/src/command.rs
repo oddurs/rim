@@ -47,6 +47,17 @@ pub enum Command {
         #[serde(default)]
         pick: Option<String>,
     },
+    /// Take back an order: if the pawn is still on the job an order gave it
+    /// (aimed at `target`, or walking to `cell` when there's no target), it
+    /// stops and goes back to choosing its own work; `unmark` loses the
+    /// designation the order put on it (a deconstruct marks what it takes
+    /// down). What the order already did stays done.
+    UndoOrder {
+        pawn: Entity,
+        target: Option<Entity>,
+        cell: IVec,
+        unmark: Option<Entity>,
+    },
     /// Paint cells into a stockpile: into `zone`, or a new zone taking every
     /// item when it's `None`.
     Stockpile {
@@ -228,6 +239,23 @@ pub fn apply(w: &mut World, c: Command) {
             if (stance as usize) < defs.stances.len() {
                 w.stance = Some(stance);
                 w.update_rules();
+            }
+        }
+        Command::UndoOrder { pawn, target, cell, unmark } => {
+            if !is_colonist(w, pawn) {
+                return;
+            }
+            let still = w.ecs.get::<&Pawn>(pawn).is_ok_and(|p| match target {
+                Some(t) => order::target_of(&p.job) == Some(t),
+                None => matches!(p.job, Job::MoveTo { to } if to == cell),
+            });
+            if still {
+                ai::interrupt(w, pawn);
+            }
+            if let Some(t) = unmark {
+                if w.ecs.remove_one::<Designated>(t).is_ok() {
+                    w.touch(t);
+                }
             }
         }
         Command::Order { pawn, cell, on, pick } => {

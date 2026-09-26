@@ -729,6 +729,7 @@ impl UiVm {
         act!("stuff", String, |id| UiAction::Stuff(id));
         act!("speed", u32, |s| UiAction::Speed(s));
         act!("toggle_pause", (), |_a| UiAction::TogglePause);
+        act!("undo", (), |_a| UiAction::Undo);
         act!("order", (String, i32, i32, Option<u64>), |(key, x, y, on)| UiAction::Order {
             key,
             cell: rim_sim::IVec::new(x, y),
@@ -996,6 +997,14 @@ impl UiVm {
             Ok(t)
         });
         view!("message_count", (), |_lua, l, _a| Ok(l.world.messages.len()));
+        // The last order and its age in seconds, or nil.
+        view!("last_order", (), |lua, l, _a| {
+            let Some((label, age)) = &l.client.last_order else { return Ok(None) };
+            let t = lua.create_table()?;
+            t.set("label", label.as_str())?;
+            t.set("age", *age)?;
+            Ok(Some(t))
+        });
         // Every order the selected colonists could be given at a spot, for
         // the orders menu: merged by key, with how many of them it's on
         // offer to. Walks the map (reachability), so call it once per

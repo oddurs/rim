@@ -193,3 +193,53 @@ fn a_tree_offers_chop_not_deconstruct() {
         assert!(o.label.starts_with("Chop"), "{}", o.label);
     }
 }
+
+/// An order taken back: the pawn stops, the mark the order put on the wall
+/// goes, and the wall stands.
+#[test]
+fn an_undone_deconstruct_leaves_the_wall_unmarked() {
+    let (mut s, founder) = sim();
+    let (wall, stone) = (thing(&s, "wall"), thing(&s, "stone"));
+    let at = open_cells(&s, 1)[0];
+    let w = built(&mut s, wall, stone, at);
+    let key =
+        order::options(&s.world, founder, at, None).into_iter().find(|c| c.label == "Deconstruct wall").unwrap().key;
+    s.push(Command::Order { pawn: founder, cell: at, on: None, pick: Some(key) });
+    s.step();
+    assert!(designated(&s, w) && matches!(s.world.ecs.get::<&Pawn>(founder).unwrap().job, Job::Deconstruct { .. }));
+    s.push(Command::UndoOrder { pawn: founder, target: Some(w), cell: at, unmark: Some(w) });
+    s.step();
+    assert!(!designated(&s, w), "the order's mark is gone");
+    assert!(
+        !matches!(s.world.ecs.get::<&Pawn>(founder).unwrap().job, Job::Deconstruct { .. }),
+        "and the pawn is off it"
+    );
+    for _ in 0..600 {
+        s.step();
+    }
+    assert!(s.world.thing(w).is_some(), "the wall stands");
+}
+
+/// Undo only stops the job the order gave: a pawn that has moved on to
+/// something else keeps doing it.
+#[test]
+fn undo_leaves_a_pawn_that_moved_on_alone() {
+    let (mut s, founder) = sim();
+    let here = s.world.pawn_pos(founder).unwrap();
+    let there = open_cells(&s, 1)[0];
+    s.push(Command::Order { pawn: founder, cell: there, on: None, pick: Some("move".into()) });
+    s.step();
+    // Undoing a walk to somewhere else, which this pawn isn't doing.
+    s.push(Command::UndoOrder { pawn: founder, target: None, cell: here.offset(40, 40), unmark: None });
+    s.step();
+    assert!(
+        matches!(s.world.ecs.get::<&Pawn>(founder).unwrap().job, Job::MoveTo { to } if to == there),
+        "still walking there"
+    );
+    s.push(Command::UndoOrder { pawn: founder, target: None, cell: there, unmark: None });
+    s.step();
+    assert!(
+        !matches!(s.world.ecs.get::<&Pawn>(founder).unwrap().job, Job::MoveTo { to } if to == there),
+        "the walk undone"
+    );
+}
