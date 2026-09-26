@@ -58,6 +58,9 @@ pub fn shapes(defs: &DefDb, def: DefId, made_of: Option<DefId>) -> Vec<Shape> {
                 Some(text) => Shape::Glyph { text: text.clone(), at, size, color },
                 None => continue,
             },
+            // A door's swing: detail a token's few pixels can't show, and
+            // it has no line to draw one with.
+            Prim::Arc { .. } => continue,
         });
     }
     out
