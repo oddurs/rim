@@ -59,9 +59,6 @@ pub struct ClientView {
     pub cam: (f32, f32, f32),
     /// Mouse in physical pixels.
     pub mouse: (f32, f32),
-    /// How far into the next sim tick this frame falls (0 to 1): pawns and
-    /// what's anchored to them are drawn that far along their step.
-    pub frac: f32,
     /// What the inspector shows: the one selected thing, or the first of
     /// several selected colonists.
     pub selected: Option<Entity>,
@@ -178,7 +175,7 @@ pub enum UiAction {
 /// Screen position of a pawn (physical pixels), interpolated between cells
 /// the same way the world renderer draws it.
 pub fn pawn_screen(p: &rim_sim::world::Pawn, cv: &ClientView) -> (f32, f32) {
-    let (x, y) = p.drawn_at(cv.frac);
+    let (x, y) = pawn_cell(p);
     cell_screen(x, y, cv)
 }
 
@@ -197,15 +194,27 @@ pub fn anchor_screen(
     world: &rim_sim::world::World,
     cam: (f32, f32, f32),
     screen: (f32, f32),
-    frac: f32,
 ) -> Option<(f32, f32)> {
     match anchor {
         crate::node::Anchor::Entity(bits) => {
             let e = rim_sim::hecs::Entity::from_bits(bits)?;
             let p = world.ecs.get::<&rim_sim::world::Pawn>(e).ok()?;
-            let (x, y) = p.drawn_at(frac);
+            let (x, y) = pawn_cell(&p);
             Some(to_screen(x, y, cam, screen))
         }
         crate::node::Anchor::Cell(x, y) => Some(to_screen(x as f32 + 0.5, y as f32 + 0.5, cam, screen)),
+    }
+}
+
+/// A pawn's centre in cells, interpolated between cells the way the world
+/// renderer draws it.
+fn pawn_cell(p: &rim_sim::world::Pawn) -> (f32, f32) {
+    let (x, y) = (p.pos.x as f32 + 0.5, p.pos.y as f32 + 0.5);
+    match p.next {
+        Some(n) => {
+            let t = p.progress as f32 / p.step_ticks.max(1) as f32;
+            (x + (n.x as f32 + 0.5 - x) * t, y + (n.y as f32 + 0.5 - y) * t)
+        }
+        None => (x, y),
     }
 }

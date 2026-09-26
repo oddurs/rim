@@ -2,8 +2,10 @@
 id: 3fe8c3cb-dcba-4882-b623-0468ea9fe697
 title: 'Joins in quarters: a wall run draws as one mass'
 type: feature
-status: backlog
+status: doing
 milestone: houses
+assignee: Oddur Sigurdsson
+claimed: 2026-09-26
 created: 2026-09-26
 updated: 2026-09-26
 priority: p0
@@ -28,7 +30,11 @@ Walls join today by leaving out the edges that face a joined neighbour (0220). A
 
 ## Acceptance criteria
 
-- [ ] Post, end, run, corner, tee, cross and a 2×2 block each draw as in the prototype (autotest screenshots)
-- [ ] No seam between two joined walls of one material; a hairline between two materials (pixel check, like 0220's)
-- [ ] A string `look.join` still loads and draws as today
-- [ ] Render bench within budget with every wall on the bench map as a mass
+- [x] Post, end, run, corner, tee, cross and a 2×2 block each draw as in the prototype (autotest screenshots)
+- [x] No seam between two joined walls of one material; a hairline between two materials (pixel check, like 0220's)
+- [x] A string `look.join` still loads and draws as today
+- [x] Render bench within budget with every wall on the bench map as a mass
+
+## 2026-09-26
+
+Render bench, whole map at zoom 4: world 1.50 ms against main's 2.03 ms on the same machine (noise dominates; budget 4 ms), indices 1.50M vs 1.42M (+6%).

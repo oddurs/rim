@@ -103,6 +103,15 @@ impl Sink for Builder<'_> {
         self.solid([[x0 + tx, y0 + ty], [x0 - tx, y0 - ty], [x1 - tx, y1 - ty], [x1 + tx, y1 + ty]], c);
     }
 
+    fn tri(&mut self, p: [[f32; 2]; 3], c: Color) {
+        let color: [u8; 4] = c.into();
+        let uv = self.atlas.white(0);
+        let (v, i) = self.room(0, 3);
+        let n = v.len() as u16;
+        v.extend(p.map(|pos| Vert { pos, uv, color }));
+        i.extend([n, n + 1, n + 2]);
+    }
+
     fn atlas(&self) -> &WorldAtlas {
         self.atlas
     }

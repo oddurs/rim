@@ -324,14 +324,13 @@ A house is drawn as its plan and built as an order (DESIGN.md §6c). Walls join 
 - [ ] `24100bb9` A roof span replaces the room size cap, and pillars hold it <sup>feature · p0 · m · engine</sup>
 - [ ] `26a69a8e` Pipe joins: fences and palisades connect like Minecraft's <sup>feature · p2 · s · client</sup>
 - [ ] `26ba97aa` Plan a multi-cell building over grass, trees and rock <sup>feature · p2 · m · engine</sup>
-- [ ] `3fe8c3cb` Joins in quarters: a wall run draws as one mass <sup>feature · p0 · m · client</sup>
 - [ ] `454f4bde` Draw a room: drag a rectangle into a ring of walls <sup>feature · p2 · s · client</sup>
 - [ ] `4791e24b` Room state on the plan: daylight, firelight, gaps and open sky <sup>feature · p2 · m · client</sup>
 - [ ] `5643976c` Room labels on the plan <sup>feature · p2 · s · client</sup>
 - [ ] `7129a537` Openings turn to their wall and face the room <sup>feature · p0 · m · client</sup>
 - [ ] `7c53ec62` Material patterns: a fixed vocabulary, laid along the run <sup>feature · p1 · m · client</sup>
 - [ ] `827b2421` House plans as data: an ASCII grid placed with one command <sup>feature · p2 · m · engine</sup>
-- [ ] `ae5c3807` One light: every mass casts the same short shadow <sup>feature · p2 · s · client</sup>
+- [ ] `ae5c3807` Lit edges: a mass catches the light on its top and left <sup>feature · p2 · s · client</sup>
 - [ ] `b3ffbae1` Replace in place: upgrade a wall without opening the room <sup>feature · p1 · m · engine</sup>
 - [ ] `ba18a8e4` Facing: things turn in four directions <sup>feature · p1 · m · engine</sup>
 - [ ] `df049dac` Roofs from far away, hipped by the span field <sup>feature · p2 · m · client</sup>
@@ -340,6 +339,7 @@ A house is drawn as its plan and built as an order (DESIGN.md §6c). Walls join 
 - [ ] `fbab2877` Core's looks in the plan style <sup>content · p1 · m · core</sup>
 - [ ] `ff479390` The building ladder: dry stone, logs, bricks and a kiln <sup>content · p1 · m · plugin</sup>
 - [ ] `fff4fb42` A material names the tool it is built with <sup>feature · p1 · s · engine</sup>
+- [ ] `3fe8c3cb` Joins in quarters: a wall run draws as one mass <sup>feature · p0 · m · client</sup>
 - [x] `eb469f44` Houses concept: drawn as their plan, built as orders <sup>spike · p0 · m · tooling</sup>
 
 ## mood — Mood
@@ -376,7 +376,7 @@ Making a mod feels like publishing a small open-source library: rim new, typed L
 
 ## scale — Scale
 
-`###·······` 23% · 3 of 13 done · due 2027-03-15
+`##········` 17% · 2 of 12 done · due 2027-03-15
 
 Hit the performance budget: benchmark harness, hierarchical pathing, flow fields, spatial indices, incremental regions, render caching.
 
@@ -390,7 +390,6 @@ Hit the performance budget: benchmark harness, hierarchical pathing, flow fields
 - [ ] `dab55ea2` Meet the budget: 6x speed at 60 fps <sup>perf · p0 · l · engine</sup>
 - [ ] `e8673d3f` scripting test a_slow_mod_is_named_in_the_warnings flakes under load <sup>bug · p2 · s · engine</sup>
 - [ ] `fbf3ee1c` Spatial index for things by def <sup>perf · p1 · m · engine</sup>
-- [x] `8baaf318` Pawns jitter as they walk: draw them at the fraction of a tick <sup>bug · p0 · s · client</sup>
 - [x] `8ee7a610` Anchored labels capped by priority inside the viewport <sup>perf · p2 · s · engine</sup>
 - [x] `ee7fe7fd` Benchmark harness: target map, 30 colonists, 200 pawns <sup>perf · p0 · m · tooling</sup>
 

@@ -21,6 +21,7 @@ is the middle. Line widths are in screen points.
 | `outline` | `x`, `y`, `w`, `h`, `width` (1) | a rectangle's outline |
 | `disc` | `x`, `y` (0.5, 0.5), `r` (0.4), `min_px`, `pulse` | a disc |
 | `edges` | `width` (1.5) | the cell's border, left open toward joined neighbours |
+| `mass` | | the whole cell, rounded at its outer corners (see [Joining](#joining)) |
 | `sprite` | see [Sprites](#sprites) | a mod's picture |
 | `glyph` | see [Glyphs](#glyphs) | one character |
 
@@ -144,6 +145,26 @@ look.layers = [
 ]
 ```
 
+`look.join` can also be a table, `{ group, round }`. `round` rounds a
+corner whose two sides both face away from anything joined, by that
+fraction of a cell (0 to 0.5). A `mass` layer fills the cell a quarter at
+a time: each quarter is rounded at an outer corner and square everywhere
+else. Joined sides meet without a seam, so a run, a corner, a tee or a
+block reads as one body, rounded only where it ends. Where two joined
+things are made of different materials, a hairline marks the change. An
+`edges` layer on the same look rounds its outline to match. A hedge:
+
+```toml
+[[thing]]
+id = "hedge"
+label = "hedge"
+color = "#3f6b35"
+category = "building"
+blocks = true
+look.join = { group = "hedge", round = 0.35 }
+look.layers = [{ draw = "mass" }, { draw = "edges", width = 1.5, shade = 0.55 }]
+```
+
 ## States
 
 `look.regrowing` is drawn instead of `layers` while a harvested plant grows
@@ -161,14 +182,15 @@ takes an even share of the work in paint order, so every look builds up
 without edits.
 
 Until it stands, a plan draws at 55% with a blueprint hatch, because it
-doesn't block and mustn't look as if it does. Core's wall rises, then
-gets its edges:
+doesn't block and mustn't look as if it does. A rising `mass` is a plain
+block: a plan joins nothing, so it has nothing to round toward. Core's
+wall rises, then gets its edges:
 
 <!-- not a sample -->
 ```toml
 look.layers = [
-    { draw = "fill", grow = [0.0, 0.85] },
-    { draw = "edges", width = 1.5, shade = 0.65, grow = [0.85, 1.0] },
+    { draw = "mass", grow = [0.0, 0.85] },
+    { draw = "edges", width = 1.5, shade = 0.55, grow = [0.85, 1.0] },
 ]
 ```
 

@@ -101,6 +101,13 @@ pub fn grown(layers: &[Layer], f: f32, own: Color, alpha: f32) -> (Vec<Layer>, f
                 *r *= g;
                 *min_px *= g;
             }
+            // A rising mass is a plain block until it stands: a plan joins
+            // nothing, so it has nothing to round toward.
+            Prim::Mass if g < 1.0 => {
+                l.prim = Prim::Fill { rect: [0.0, 1.0 - g, 1.0, g], min_px: 0.0 };
+                top = top.min(1.0 - g);
+            }
+            Prim::Mass => {}
             // Clipping a picture would squash it: it fades in instead.
             Prim::Edges { .. } | Prim::Sprite { .. } | Prim::Glyph { .. } => fade *= g,
         }

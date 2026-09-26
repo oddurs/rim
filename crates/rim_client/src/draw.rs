@@ -19,8 +19,15 @@ const PLAYER: Color = Color::new(0.35, 0.8, 1.0, 1.0);
 const HOSTILE: Color = Color::new(1.0, 0.3, 0.25, 1.0);
 
 /// Interpolated position of a pawn's center, in tiles.
-pub fn pawn_pos(p: &Pawn, frac: f32) -> (f32, f32) {
-    p.drawn_at(frac)
+pub fn pawn_pos(p: &Pawn) -> (f32, f32) {
+    let (x, y) = (p.pos.x as f32 + 0.5, p.pos.y as f32 + 0.5);
+    match p.next {
+        Some(n) => {
+            let t = p.progress as f32 / p.step_ticks.max(1) as f32;
+            (x + (n.x as f32 + 0.5 - x) * t, y + (n.y as f32 + 0.5 - y) * t)
+        }
+        None => (x, y),
+    }
 }
 
 fn shade(c: Color, f: f32) -> Color {
@@ -93,6 +100,7 @@ pub trait Sink {
     fn rect(&mut self, x: f32, y: f32, w: f32, h: f32, c: Color);
     fn poly(&mut self, x: f32, y: f32, sides: u8, r: f32, c: Color);
     fn line(&mut self, x0: f32, y0: f32, x1: f32, y1: f32, t: f32, c: Color);
+    fn tri(&mut self, p: [[f32; 2]; 3], c: Color);
     /// A world atlas slot (a sprite, a glyph) stretched over a rectangle.
     fn image(&mut self, x: f32, y: f32, w: f32, h: f32, slot: Slot, c: Color);
     fn atlas(&self) -> &WorldAtlas;
@@ -110,6 +118,9 @@ impl Sink for Immediate<'_> {
     }
     fn line(&mut self, x0: f32, y0: f32, x1: f32, y1: f32, t: f32, c: Color) {
         draw_line(x0, y0, x1, y1, t, c);
+    }
+    fn tri(&mut self, [a, b, c2]: [[f32; 2]; 3], c: Color) {
+        draw_triangle(vec2(a[0], a[1]), vec2(b[0], b[1]), vec2(c2[0], c2[1]), c);
     }
     fn atlas(&self) -> &WorldAtlas {
         self.0
@@ -227,14 +238,14 @@ pub fn thing(
                     s.rect(sx + fx * k * z, sy + fy * k * z, z, z, Color::new(1.0, 0.84, 0.47, a));
                 }
             }
-            paint(s, w, layers, look.join, c, cell, (sx - tx * k, sy - ty * k), z, t, span);
+            paint(s, w, layers, join_of(look), c, cell, (sx - tx * k, sy - ty * k), z, t, span);
         }
         Some(Wear::Cracks) => {
             let toward = wear::toward(w, e);
             if w.ecs.get::<&Work>(e).is_ok() {
                 wear::draw_chips(s, cell, toward, f, at, z, chip_color(w, e, td, c));
             }
-            paint(s, w, layers, look.join, shade(c, 1.0 - 0.16 * f), cell, at, z, t, span);
+            paint(s, w, layers, join_of(look), shade(c, 1.0 - 0.16 * f), cell, at, z, t, span);
             // Every cell cracks from its own seed, so a boulder isn't copies.
             for q in td.footprint(cell) {
                 let at = (sx + (q.x - cell.x) as f32 * z, sy + (q.y - cell.y) as f32 * z);
@@ -245,9 +256,9 @@ pub fn thing(
         // don't block: the loader refuses it for those that do.
         Some(Wear::Grow) => {
             let (grown, _) = wear::grown(layers, 1.0 - f, c, 1.0);
-            paint(s, w, &grown, look.join, c, cell, at, z, t, span);
+            paint(s, w, &grown, join_of(look), c, cell, at, z, t, span);
         }
-        Some(Wear::None) | None => paint(s, w, layers, look.join, c, cell, at, z, t, span),
+        Some(Wear::None) | None => paint(s, w, layers, join_of(look), c, cell, at, z, t, span),
     }
     if let Ok(d) = w.ecs.get::<&Designated>(e) {
         let dc = rgb(defs.designations[d.0 as usize].rgb);
@@ -504,7 +515,7 @@ pub fn pawns(app: &App) {
             continue;
         }
         let cd = defs.creature(p.def);
-        let (mut px, mut py) = pawn_pos(&p, app.tick_frac());
+        let (mut px, mut py) = pawn_pos(&p);
         if z >= DETAIL_ZOOM {
             let (lx, ly) = app.worksites.lunge(w, &p);
             (px, py) = (px + lx, py + ly);
@@ -658,7 +669,7 @@ fn paint(
     s: &mut impl Sink,
     w: &World,
     layers: &[Layer],
-    join: Option<u16>,
+    join: Join,
     own: Color,
     cell: IVec,
     at: (f32, f32),
@@ -702,6 +713,7 @@ fn paint(
                 disc(s, sx + x * zx, sy + y * zy, (r * zr).max(min_px) * f, c);
             }
             Prim::Edges { width } => edges(s, w, cell, span, join, (sx, sy), z, width, c),
+            Prim::Mass => mass(s, w, cell, span, join, (sx, sy), z, c),
             Prim::Sprite { rect, id } => {
                 let (x, y, rw, rh) = px(rect);
                 let slot = s.atlas().slot(id);
@@ -721,10 +733,17 @@ fn paint(
     }
 }
 
+/// A look's join group and how round its outer corners are.
+pub type Join = Option<(u16, f32)>;
+
+pub fn join_of(look: &rim_sim::look::Look) -> Join {
+    look.join.map(|g| (g, look.round))
+}
+
 /// Does the built fixture at `p` join group `join`? Plans don't: a wall
 /// planned next to one doesn't open it up until it stands.
-fn joins(w: &World, p: IVec, join: Option<u16>) -> bool {
-    let Some(g) = join else { return false };
+fn joins(w: &World, p: IVec, join: Join) -> bool {
+    let Some((g, _)) = join else { return false };
     let Some(e) = w.map.fixture_at(p) else { return false };
     if w.ecs.get::<&Blueprint>(e).is_ok() {
         return false;
@@ -732,16 +751,126 @@ fn joins(w: &World, p: IVec, join: Option<u16>) -> bool {
     w.ecs.get::<&Thing>(e).is_ok_and(|t| w.defs.thing(t.def).look_r.join == Some(g))
 }
 
+/// Which sides of the footprint face a joined neighbour, and which of its
+/// corners are outer corners: both sides open.
+struct Sides {
+    n: bool,
+    e: bool,
+    s: bool,
+    w: bool,
+}
+
+impl Sides {
+    /// A side counts as joined if its first cell faces a joined neighbour.
+    fn of(w: &World, p: IVec, [sw, sh]: [u32; 2], join: Join) -> Self {
+        let (sw, sh) = (sw as i32, sh as i32);
+        Sides {
+            n: joins(w, p.offset(0, -1), join),
+            e: joins(w, p.offset(sw, 0), join),
+            s: joins(w, p.offset(0, sh), join),
+            w: joins(w, p.offset(-1, 0), join),
+        }
+    }
+    /// Outer corners, NW NE SE SW: rounded when both of their sides are open.
+    fn outer(&self) -> [bool; 4] {
+        [!self.n && !self.w, !self.n && !self.e, !self.s && !self.e, !self.s && !self.w]
+    }
+}
+
+/// A pie slice about `(cx, cy)` from angle `a0` to `a1`, in radians.
+fn fan(s: &mut impl Sink, (cx, cy): (f32, f32), r: f32, a0: f32, a1: f32, c: Color) {
+    let n = if r < 4.0 { 3 } else { 6 };
+    let at = |k: usize| {
+        let a = a0 + (a1 - a0) * k as f32 / n as f32;
+        [cx + r * a.cos(), cy + r * a.sin()]
+    };
+    for k in 0..n {
+        s.tri([[cx, cy], at(k), at(k + 1)], c);
+    }
+}
+
+/// An arc about `(cx, cy)` `t` thick, as short straight lines.
+fn arc(s: &mut impl Sink, (cx, cy): (f32, f32), r: f32, a0: f32, a1: f32, t: f32, c: Color) {
+    let n = if r < 4.0 { 2 } else { 5 };
+    let at = |k: usize| {
+        let a = a0 + (a1 - a0) * k as f32 / n as f32;
+        (cx + r * a.cos(), cy + r * a.sin())
+    };
+    for k in 0..n {
+        let ((x0, y0), (x1, y1)) = (at(k), at(k + 1));
+        s.line(x0, y0, x1, y1, t, c);
+    }
+}
+
+/// The corner angles of a rounded corner, NW NE SE SW, as (a0, a1) about
+/// its centre, and which way the centre sits from the corner.
+const CORNERS: [(f32, f32, f32, f32); 4] = [
+    (std::f32::consts::PI, 1.5 * std::f32::consts::PI, 1.0, 1.0),
+    (1.5 * std::f32::consts::PI, std::f32::consts::TAU, -1.0, 1.0),
+    (0.0, 0.5 * std::f32::consts::PI, -1.0, -1.0),
+    (0.5 * std::f32::consts::PI, std::f32::consts::PI, 1.0, -1.0),
+];
+
+/// The footprint filled, a quarter at a time (DESIGN.md §6c). A quarter
+/// whose two sides are both open is rounded; everything else is square, so
+/// a run of joined cells reads as one body with round ends. Joined sides
+/// reach half a point into the neighbour so no hairline shows between
+/// them, except where the material changes, which gets a thin seam.
+#[allow(clippy::too_many_arguments)]
+fn mass(s: &mut impl Sink, w: &World, p: IVec, span: [u32; 2], join: Join, (sx, sy): (f32, f32), z: f32, c: Color) {
+    let (zx, zy) = (z * span[0] as f32, z * span[1] as f32);
+    let sides = Sides::of(w, p, span, join);
+    let r = join.map_or(0.0, |(_, r)| r) * z;
+    let pad = |on: bool| if on { 0.5 } else { 0.0 };
+    let (x0, y0) = (sx - pad(sides.w), sy - pad(sides.n));
+    let (x1, y1) = (sx + zx + pad(sides.e), sy + zy + pad(sides.s));
+    let (mx, my) = (sx + zx / 2.0, sy + zy / 2.0);
+    // Quarters NW NE SE SW, each from the middle out to its corner.
+    let quarters = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)];
+    for (k, (round, &(ox, oy))) in sides.outer().iter().zip(&quarters).enumerate() {
+        let (qx, qw) = (ox.min(mx), (ox - mx).abs());
+        let (qy, qh) = (oy.min(my), (oy - my).abs());
+        if !round || r <= 0.0 {
+            s.rect(qx, qy, qw, qh, c);
+            continue;
+        }
+        let r = r.min(qw).min(qh);
+        let (a0, a1, dx, dy) = CORNERS[k];
+        // The quarter less an r-square at its corner: a strip clear of the
+        // corner's row, then the rest of that row, then the round.
+        let (strip_y, strip_h) = if dy > 0.0 { (qy + r, qh - r) } else { (qy, qh - r) };
+        s.rect(qx, strip_y, qw, strip_h, c);
+        let row_y = if dy > 0.0 { qy } else { qy + qh - r };
+        let row_x = if dx > 0.0 { qx + r } else { qx };
+        s.rect(row_x, row_y, qw - r, r, c);
+        fan(s, (ox + dx * r, oy + dy * r), r, a0, a1, c);
+    }
+    // A seam where the material changes, on the west and north sides: the
+    // neighbours there are painted first, so it isn't covered.
+    if span == [1, 1] {
+        let made = |q: IVec| w.map.fixture_at(q).and_then(|e| w.ecs.get::<&MadeOf>(e).ok().map(|m| m.0));
+        let own = made(p);
+        let seam = shade(c, 0.62);
+        if sides.w && made(p.offset(-1, 0)) != own {
+            s.rect(sx, sy, 1.0, zy, seam);
+        }
+        if sides.n && made(p.offset(0, -1)) != own {
+            s.rect(sx, sy, zx, 1.0, seam);
+        }
+    }
+}
+
 /// The border of the footprint (`span` cells from `p`, right and down),
 /// a cell's length at a time, left open where it faces a joined neighbour.
-/// Corners and junctions come out joined for free.
+/// Corners and junctions come out joined for free, and an outer corner is
+/// rounded like its `mass`.
 #[allow(clippy::too_many_arguments)]
 fn edges(
     s: &mut impl Sink,
     w: &World,
     p: IVec,
     span: [u32; 2],
-    join: Option<u16>,
+    join: Join,
     (sx, sy): (f32, f32),
     z: f32,
     t: f32,
@@ -749,25 +878,44 @@ fn edges(
 ) {
     let (sw, sh) = (span[0] as i32, span[1] as i32);
     let (x0, y0, x1, y1) = (sx + 0.5, sy + 0.5, sx + z * sw as f32 - 0.5, sy + z * sh as f32 - 0.5);
-    // Each step's ends, inset at the footprint's corners.
-    let run =
-        |k: i32, lo: f32, hi: f32, base: f32| ((base + k as f32 * z).max(lo), (base + (k + 1) as f32 * z).min(hi));
+    let outer = Sides::of(w, p, span, join).outer();
+    let r = join.map_or(0.0, |(_, r)| r) * z;
+    let r = if r > 0.0 { (r - 0.5).max(0.0) } else { 0.0 };
+    // How far each corner cuts into the lines that meet at it: NW NE SE SW.
+    let cut = outer.map(|o| if o { r } else { 0.0 });
+    // Each step's ends, inset at the footprint's corners and cut short
+    // where a corner is rounded.
+    let run = |k: i32, n: i32, lo: f32, hi: f32, base: f32, cut_lo: f32, cut_hi: f32| {
+        let a = (base + k as f32 * z).max(lo) + if k == 0 { cut_lo } else { 0.0 };
+        let b = (base + (k + 1) as f32 * z).min(hi) - if k == n - 1 { cut_hi } else { 0.0 };
+        (a, b)
+    };
     for k in 0..sw {
-        let (a, b) = run(k, x0, x1, sx);
         if !joins(w, p.offset(k, -1), join) {
+            let (a, b) = run(k, sw, x0, x1, sx, cut[0], cut[1]);
             s.line(a, y0, b, y0, t, c);
         }
         if !joins(w, p.offset(k, sh), join) {
+            let (a, b) = run(k, sw, x0, x1, sx, cut[3], cut[2]);
             s.line(a, y1, b, y1, t, c);
         }
     }
     for k in 0..sh {
-        let (a, b) = run(k, y0, y1, sy);
         if !joins(w, p.offset(-1, k), join) {
+            let (a, b) = run(k, sh, y0, y1, sy, cut[0], cut[3]);
             s.line(x0, a, x0, b, t, c);
         }
         if !joins(w, p.offset(sw, k), join) {
+            let (a, b) = run(k, sh, y0, y1, sy, cut[1], cut[2]);
             s.line(x1, a, x1, b, t, c);
+        }
+    }
+    if r > 0.0 {
+        for (k, &(ox, oy)) in [(x0, y0), (x1, y0), (x1, y1), (x0, y1)].iter().enumerate() {
+            if outer[k] {
+                let (a0, a1, dx, dy) = CORNERS[k];
+                arc(s, (ox + dx * r, oy + dy * r), r, a0, a1, t, c);
+            }
         }
     }
 }

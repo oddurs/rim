@@ -17,10 +17,43 @@ pub struct LookDef {
     /// Drawn instead of `layers` while a harvested plant grows back.
     #[serde(default)]
     pub regrowing: Vec<LayerDef>,
-    /// A free label. Built things with the same `join` join up: an
-    /// `edges` layer leaves out the sides that face one.
+    /// A free label, or a table with one. Built things with the same
+    /// label join up: an `edges` layer leaves out the sides that face one,
+    /// and a `mass` fills toward them.
     #[serde(default)]
-    pub join: Option<String>,
+    pub join: Option<JoinDef>,
+}
+
+/// `look.join` as written: `"wall"`, or `{ group = "wall", round = 0.2 }`.
+#[derive(Deserialize, Clone, Debug)]
+#[serde(untagged)]
+pub enum JoinDef {
+    Label(String),
+    Table(JoinTable),
+}
+
+#[derive(Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct JoinTable {
+    pub group: String,
+    /// How far an outer corner is rounded, as a fraction of the cell. A
+    /// `mass` and its `edges` round alike, so the outline follows the fill.
+    #[serde(default)]
+    pub round: Option<f32>,
+}
+
+impl JoinDef {
+    fn group(&self) -> &str {
+        match self {
+            JoinDef::Label(g) | JoinDef::Table(JoinTable { group: g, .. }) => g,
+        }
+    }
+    fn round(&self) -> f32 {
+        match self {
+            JoinDef::Label(_) => 0.0,
+            JoinDef::Table(t) => t.round.unwrap_or(0.0),
+        }
+    }
 }
 
 /// One layer as written. Which fields apply depends on `draw`; the rest
@@ -75,6 +108,10 @@ pub enum Prim {
     Disc { at: [f32; 2], r: f32, min_px: f32, pulse: f32 },
     /// The cell's border on the sides that don't face a joined neighbour.
     Edges { width: f32 },
+    /// The whole cell, drawn a quarter at a time from its neighbours: an
+    /// outer corner is rounded by the join's `round`, and everything that
+    /// faces a joined neighbour is square, so a run reads as one body.
+    Mass,
     /// A mod's picture over a rectangle in cell units. `id` indexes
     /// `DefDb::sprites`.
     Sprite { rect: [f32; 4], id: u16 },
@@ -100,6 +137,8 @@ pub struct Look {
     pub regrowing: Vec<Layer>,
     /// Index into `DefDb::join_groups`.
     pub join: Option<u16>,
+    /// Outer corners' rounding, as a fraction of the cell (`look.join`).
+    pub round: f32,
 }
 
 impl Look {
@@ -194,9 +233,12 @@ impl LayerDef {
             "outline" => &["x", "y", "w", "h", "width"],
             "disc" => &["x", "y", "r", "min_px", "pulse"],
             "edges" => &["width"],
+            "mass" => &[],
             "sprite" => &["x", "y", "w", "h", "sprite", "tint"],
             "glyph" => &["x", "y", "glyph", "size"],
-            other => return Err(format!("unknown draw '{other}' (want fill, outline, disc, edges, sprite or glyph)")),
+            other => {
+                return Err(format!("unknown draw '{other}' (want fill, outline, disc, edges, mass, sprite or glyph)"))
+            }
         };
         let given = [
             ("x", self.x.is_some()),
@@ -265,6 +307,7 @@ impl LayerDef {
                 let at = [self.x.unwrap_or(0.5), self.y.unwrap_or(0.5)];
                 Prim::Glyph { at, size: self.size.unwrap_or(0.8), id: intern(art.glyphs, g.to_string()) }
             }
+            "mass" => Prim::Mass,
             _ => Prim::Edges { width: self.width.unwrap_or(1.5) },
         };
         if let Some([from, to]) = self.grow {
@@ -294,15 +337,23 @@ impl LookDef {
                 .map(|(i, l)| l.compile(art).map_err(|e| format!("look.{what}[{}]: {e}", i + 1)))
                 .collect::<Result<Vec<_>, _>>()
         };
-        let join = self.join.as_ref().map(|j| match groups.iter().position(|g| g == j) {
+        let join = self.join.as_ref().map(|j| match groups.iter().position(|g| g == j.group()) {
             Some(i) => i as u16,
             None => {
-                groups.push(j.clone());
+                groups.push(j.group().to_string());
                 (groups.len() - 1) as u16
             }
         });
-        let mut look =
-            Look { layers: layers(&self.layers, "layers")?, regrowing: layers(&self.regrowing, "regrowing")?, join };
+        let round = self.join.as_ref().map_or(0.0, JoinDef::round);
+        if !(0.0..=0.5).contains(&round) {
+            return Err(format!("look.join: `round` = {round} is out of range (want from 0 to 0.5)"));
+        }
+        let mut look = Look {
+            layers: layers(&self.layers, "layers")?,
+            regrowing: layers(&self.regrowing, "regrowing")?,
+            join,
+            round,
+        };
         if look.layers.is_empty() {
             look.layers = plain();
         }
@@ -405,9 +456,21 @@ mod tests {
         let mut groups = Vec::new();
         let (mut keys, mut glyphs) = (Vec::new(), Vec::new());
         let mut sp = Art { sprites: &mut keys, glyphs: &mut glyphs, home: "m" };
-        let a = LookDef { join: Some("wall".into()), ..Default::default() }.compile(&mut groups, &mut sp).unwrap();
-        let b = LookDef { join: Some("wall".into()), ..Default::default() }.compile(&mut groups, &mut sp).unwrap();
+        let label = Some(JoinDef::Label("wall".into()));
+        let table = toml::from_str::<LookDef>("join = { group = \"wall\", round = 0.2 }").unwrap();
+        let a = LookDef { join: label, ..Default::default() }.compile(&mut groups, &mut sp).unwrap();
+        let b = table.compile(&mut groups, &mut sp).unwrap();
         assert_eq!(a.layers, plain());
         assert_eq!((a.join, b.join, groups.len()), (Some(0), Some(0), 1));
+        assert_eq!((a.round, b.round), (0.0, 0.2));
+        let far = toml::from_str::<LookDef>("join = { group = \"wall\", round = 0.8 }").unwrap();
+        assert!(far.compile(&mut groups, &mut sp).unwrap_err().contains("`round` = 0.8 is out of range"));
+        assert!(toml::from_str::<LookDef>("join = { group = \"wall\", rnd = 0.2 }").is_err(), "unknown keys");
+    }
+
+    #[test]
+    fn a_mass_takes_no_geometry() {
+        assert_eq!(layer("draw = \"mass\"").unwrap().prim, Prim::Mass);
+        assert!(layer("draw = \"mass\"\nw = 0.5").unwrap_err().contains("does not apply"));
     }
 }

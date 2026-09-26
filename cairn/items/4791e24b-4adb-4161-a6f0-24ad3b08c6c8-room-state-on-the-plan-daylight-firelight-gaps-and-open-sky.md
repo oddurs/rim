@@ -31,3 +31,7 @@ The look never lies (§6b). What the sim knows about a room should be visible wi
 
 - [ ] Knocking one wall out of a hut shows the gap mark at that cell (autotest)
 - [ ] Gap search stays under 1 ms on the bench map, and runs only when rooms rebuild
+
+## 2026-09-26
+
+Window fans and fire washes move to lighting (2f13e01d, PR #151), drawn as light. This item keeps only the gap marker and the open-sky hatch.
