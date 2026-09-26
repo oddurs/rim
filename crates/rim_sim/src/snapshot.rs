@@ -711,8 +711,12 @@ impl Snapshot {
                 _ => {
                     let (blocks, cost, door) =
                         if *blueprint { (false, 0, false) } else { (td.blocks, td.path_cost, td.door) };
-                    w.map.set_fixture(t.pos, Some(*e), blocks, cost, door);
-                    w.map.set_owner(t.pos, *owner);
+                    for c in td.footprint(t.pos) {
+                        if w.map.inb(c) {
+                            w.map.set_fixture(c, Some(*e), blocks, cost, door);
+                            w.map.set_owner(c, *owner);
+                        }
+                    }
                 }
             }
         }

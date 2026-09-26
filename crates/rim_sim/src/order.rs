@@ -86,7 +86,7 @@ fn creature(w: &World, from: IVec, target: Entity, drafted: bool) -> Option<Orde
 fn fixture(w: &World, pawn: Entity, from: IVec, f: Entity) -> Option<Order> {
     let t = w.thing(f)?;
     let td = w.defs.thing(t.def);
-    if !w.map.can_reach(from, Goal::Touch(t.pos)) {
+    if !w.map.can_reach(from, w.reach_goal(&t)) {
         return None;
     }
     if let Ok(bp) = w.ecs.get::<&Blueprint>(f) {

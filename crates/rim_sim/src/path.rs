@@ -15,6 +15,9 @@ pub enum Goal {
     Cell(IVec),
     /// Stand on or next to this cell (to work on it, attack it, etc.).
     Touch(IVec),
+    /// Stand on or next to any cell of a thing covering `size` cells from
+    /// `at`, right and down: its far side counts as much as its anchor.
+    Area { at: IVec, size: [u8; 2] },
 }
 
 impl Goal {
@@ -22,12 +25,25 @@ impl Goal {
         match self {
             Goal::Cell(c) => p == c,
             Goal::Touch(c) => p.chebyshev(c) <= 1,
+            Goal::Area { .. } => p.chebyshev(self.nearest(p)) <= 1,
         }
     }
-    pub fn target(self) -> IVec {
+    /// The goal's cell nearest `p`: what the search heads for.
+    pub fn nearest(self, p: IVec) -> IVec {
         match self {
             Goal::Cell(c) | Goal::Touch(c) => c,
+            Goal::Area { at, size } => {
+                IVec::new(p.x.clamp(at.x, at.x + size[0] as i32 - 1), p.y.clamp(at.y, at.y + size[1] as i32 - 1))
+            }
         }
+    }
+    /// Every cell the goal covers (one, or a footprint).
+    pub fn cells(self) -> impl Iterator<Item = IVec> {
+        let (at, [w, h]) = match self {
+            Goal::Cell(c) | Goal::Touch(c) => (c, [1, 1]),
+            Goal::Area { at, size } => (at, size),
+        };
+        (0..h as i32).flat_map(move |y| (0..w as i32).map(move |x| at.offset(x, y)))
     }
 }
 
@@ -62,7 +78,6 @@ impl Pathfinder {
         }
         self.searches += 1;
         let gen = self.gen;
-        let target = goal.target();
         self.heap.clear();
 
         let si = map.idx(start);
@@ -70,7 +85,7 @@ impl Pathfinder {
         self.parent[si] = si as u32;
         self.open_gen[si] = gen;
         let mut seq = 0u32;
-        self.heap.push(Reverse((start.octile(target), seq, si as u32)));
+        self.heap.push(Reverse((start.octile(goal.nearest(start)), seq, si as u32)));
         let mut expanded = 0;
 
         while let Some(Reverse((_, _, ci))) = self.heap.pop() {
@@ -117,7 +132,7 @@ impl Pathfinder {
                     self.g[qi] = ng;
                     self.parent[qi] = ci as u32;
                     seq += 1;
-                    self.heap.push(Reverse((ng + q.octile(target), seq, qi as u32)));
+                    self.heap.push(Reverse((ng + q.octile(goal.nearest(q)), seq, qi as u32)));
                 }
             }
         }

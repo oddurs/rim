@@ -904,6 +904,14 @@ impl World {
 
     /// `stuff` is the material chosen for a buildable that takes one. It is
     /// ignored for anything with a fixed recipe.
+    /// Where a pawn stands to work on a thing: next to any cell it covers.
+    pub fn reach_goal(&self, t: &Thing) -> crate::path::Goal {
+        match self.defs.thing(t.def).size {
+            [1, 1] => crate::path::Goal::Touch(t.pos),
+            [w, h] => crate::path::Goal::Area { at: t.pos, size: [w as u8, h as u8] },
+        }
+    }
+
     pub fn spawn_fixture_of(&mut self, def: DefId, pos: IVec, blueprint: bool, stuff: Option<DefId>) -> Option<Entity> {
         if !self.map.inb(pos) {
             return None;
@@ -913,6 +921,13 @@ impl World {
         // A floor wants its own layer free; anything else, the fixture layer.
         let is_floor = td.category == Category::Floor;
         if (is_floor && self.map.floor_at(pos).is_some()) || (!is_floor && self.map.fixture_at(pos).is_some()) {
+            return None;
+        }
+        // The rest of a bigger thing's footprint must be open ground too.
+        let more = td.size != [1, 1];
+        if more
+            && !td.footprint(pos).all(|c| self.map.inb(c) && self.map.passable(c) && self.map.fixture_at(c).is_none())
+        {
             return None;
         }
         let made_of = stuff.filter(|_| td.build.as_ref().is_some_and(|b| b.stuff.is_some()));
@@ -940,7 +955,9 @@ impl World {
             self.map.set_floor(pos, Some(e), if blueprint { 0 } else { td.path_cost });
         } else {
             let (blocks, cost, door) = if blueprint { (false, 0, false) } else { (td.blocks, td.path_cost, td.door) };
-            self.map.set_fixture(pos, Some(e), blocks, cost, door);
+            for c in td.footprint(pos) {
+                self.map.set_fixture(c, Some(e), blocks, cost, door);
+            }
         }
         if !blueprint {
             self.fields.add_emitters(&defs, &self.map, e, def, pos);
@@ -1120,8 +1137,13 @@ impl World {
                 self.map.set_item(t.pos, None);
             }
             if self.map.fixture[i] == Some(e) {
-                self.map.set_fixture(t.pos, None, false, 0, false);
-                self.map.set_owner(t.pos, None);
+                let defs = self.defs.clone();
+                for c in defs.thing(t.def).footprint(t.pos) {
+                    if self.map.inb(c) && self.map.fixture_at(c) == Some(e) {
+                        self.map.set_fixture(c, None, false, 0, false);
+                        self.map.set_owner(c, None);
+                    }
+                }
             }
             if self.map.floor[i] == Some(e) {
                 self.map.set_floor(t.pos, None, 0);

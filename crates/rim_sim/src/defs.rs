@@ -102,6 +102,13 @@ pub enum Category {
     Floor,
 }
 
+fn one_cell() -> [u32; 2] {
+    [1, 1]
+}
+
+/// The largest side a thing may have, in cells.
+pub const MAX_SIZE: u32 = 8;
+
 #[derive(Deserialize, Clone, Debug)]
 pub struct ThingDef {
     pub id: String,
@@ -119,6 +126,11 @@ pub struct ThingDef {
     /// Blocks movement (walls, rocks).
     #[serde(default)]
     pub blocks: bool,
+    /// Cells it covers, [w, h] from its anchor (its `pos`) right and down.
+    /// It occupies every one in the fixture layer, so pathing, rooms and
+    /// fields never learn about footprints (DESIGN.md §6a).
+    #[serde(default = "one_cell")]
+    pub size: [u32; 2],
     /// How much of the wind it stops, 0 to 1: walls and rock all of it,
     /// trees some. What's behind it downwind is sheltered.
     #[serde(default)]
@@ -228,6 +240,12 @@ impl HarvestDef {
 }
 
 impl ThingDef {
+    /// Every cell it covers with its anchor at `at`, row by row.
+    pub fn footprint(&self, at: crate::IVec) -> impl Iterator<Item = crate::IVec> {
+        let [w, h] = self.size;
+        (0..h as i32).flat_map(move |y| (0..w as i32).map(move |x| at.offset(x, y)))
+    }
+
     /// The harvest a designation marks this thing for.
     pub fn harvest_for(&self, designation: DefId) -> Option<&HarvestDef> {
         self.harvest.iter().find(|h| h.desig_r == designation)
@@ -1384,6 +1402,13 @@ impl DefDb {
         for d in &mut self.things {
             let ctx = format!("thing/{}", d.id);
             d.rgb = parse_color(&d.color).map_err(|e| format!("{ctx}: {e}"))?;
+            let [sw, sh] = d.size;
+            if !(1..=MAX_SIZE).contains(&sw) || !(1..=MAX_SIZE).contains(&sh) {
+                return Err(format!("{ctx}: size is [w, h], each 1 to {MAX_SIZE}, not [{sw}, {sh}]"));
+            }
+            if d.size != [1, 1] && matches!(d.category, Category::Item | Category::Floor) {
+                return Err(format!("{ctx}: items and floors are one cell; only fixtures have a size"));
+            }
             if d.shape.is_some() {
                 return Err(format!("{ctx}: `shape` was replaced by `look` in API 0.4; see docs/modding/looks.md"));
             }
