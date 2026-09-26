@@ -34,20 +34,64 @@ function kit.col(props, children)
 	return node("col", props or {}, children)
 end
 
--- Text. `opts`: size ("small"/"body"/"heading"/"title"), weight, color, wrap.
+-- Text. `opts`: size ("caption"/"small"/"body"/"heading"/"title"), weight,
+-- color, wrap, tracking (em, or a [tracking] token), id, minw, grow.
 function kit.label(text: string, opts: { [string]: any }?)
 	local o = opts or {}
-	return { kind = "text", text, size = o.size, weight = o.weight, color = o.color, wrap = o.wrap, id = o.id, minw = o.minw, grow = o.grow }
+	return {
+		kind = "text",
+		text,
+		size = o.size,
+		weight = o.weight,
+		color = o.color,
+		wrap = o.wrap,
+		tracking = o.tracking,
+		id = o.id,
+		minw = o.minw,
+		grow = o.grow,
+	}
 end
 
--- A surface: panels, cards, popovers.
+-- A caption: the small, tracked, uppercase label that names a section or
+-- a reading. `opts` as kit.label's.
+function kit.caption(text: string, opts: { [string]: any }?)
+	local o = opts or {}
+	return kit.label(string.upper(text), { size = "caption", tracking = "caption", color = o.color or "faint", id = o.id })
+end
+
+-- A surface: panels, cards, popovers. Inset `item` top and bottom and
+-- `inset` at the sides unless `pad` (or padx / pady) says otherwise.
 function kit.panel(props, children)
 	local p = props or {}
 	p.bg = p.bg or "surface"
 	p.border = p.border or "line"
-	p.pad = p.pad or "l"
+	if p.pad == nil then
+		p.padx = p.padx or "inset"
+		p.pady = p.pady or "item"
+	end
 	p.gap = p.gap or "s"
 	return node(p.dir == "row" and "row" or "col", p, children)
+end
+
+-- A section's header: its caption, and on the right whatever belongs to
+-- the whole section (a count, a link). Give the column it heads gap `item`.
+function kit.section(label: string, right: any?, props: { [string]: any }?)
+	local p = props or {}
+	return node("row", { id = p.id, align = "center", gap = "item" }, {
+		kit.caption(label),
+		{ kind = "spacer" },
+		right,
+	})
+end
+
+-- A reading: a caption naming it over its value, as the tile readout lays
+-- them out. `opts`: color (the value's), id.
+function kit.reading(name: string, value: string, opts: { [string]: any }?)
+	local o = opts or {}
+	return node("col", { id = o.id, gap = "hair" }, {
+		kit.caption(name),
+		kit.label(value, { color = o.color }),
+	})
 end
 
 function kit.divider()

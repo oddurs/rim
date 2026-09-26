@@ -105,7 +105,7 @@ ui.mount("windows", "my_mod:greeting")
 | `align`, `justify` | `start`, `center`, `end`, `stretch`, `between` |
 | `bg`, `border`, `color` | A `color` token (`"surface"`, `"accent"`) or `"#rrggbb[aa]"` |
 | `radius` | A `shape` token or a number (defaults to `radius` on anything with a background) |
-| `size`, `weight`, `wrap` | Text: `size` token (`small`, `body`, `heading`, `title`), `weight` (`regular`, `strong`), wrap to width |
+| `size`, `weight`, `wrap`, `tracking` | Text: `size` token (`caption`, `small`, `body`, `heading`, `title`), `weight` (`regular`, `strong`), wrap to width, letter spacing (a `tracking` token or em) |
 | `hover`, `press`, `focus` | Colour changes for each state: `{ bg = "surface_hover" }` |
 | `on_click`, `on_right_click` | Functions called when clicked |
 | `tooltip` | Text shown after a short hover |
@@ -121,9 +121,30 @@ the component would be, naming your mod, and the rest of the UI keeps running.
 ## The kit
 
 `require("@core/ui/kit")` gives you the components core is built from:
-`panel`, `row`, `col`, `label`, `button`, `toggle`, `bar`, `tabs`, `list`,
-`menu`, `toast`, `bubble`, `divider` and `heading`. They take their colours
-and sizes only from theme tokens, so they follow whatever theme is loaded.
+`panel`, `row`, `col`, `label`, `caption`, `section`, `reading`, `button`,
+`toggle`, `bar`, `tabs`, `list`, `menu`, `toast`, `bubble`, `divider` and
+`heading`. They take their colours and sizes only from theme tokens, so they
+follow whatever theme is loaded.
+
+Spacing has named roles on the 4 px grid, so a gap says what it separates:
+`hair` (2) between a label and its sub-line, `tight` (4) between rows in a
+list, `item` (8) between separate things, `inset` (12) at a panel's sides,
+`panel` (8) between panels in a region and `group` (16) between groups in a
+sheet. `kit.panel` pads `item` top and bottom and `inset` at the sides unless
+you give `pad`. A panel's header is `kit.section(label, right?)`: a caption,
+and on the right whatever belongs to the whole section (a count, a link).
+`kit.reading(name, value)` is a caption over a value, the way the tile
+readout shows each field:
+
+```lua
+local kit = require("@core/ui/kit")
+ui.define("my_mod:herd", function(view)
+	return kit.panel({ gap = "item" }, {
+		kit.section("Herd", kit.label("12", { size = "caption", color = "faint" })),
+		ui.row({ gap = "inset", kit.reading("Grazing", "8"), kit.reading("Hungry", "4") }),
+	})
+end)
+```
 
 Press **F12** and then **Kit gallery** to see every component in every state.
 
@@ -161,7 +182,7 @@ Every function in `ui`, `act` and `view`, with its types, is in the
 | `view.visible_pawns()` | Pawns on screen, for anchored labels |
 | `view.messages(n, skip?)`, `view.message_count()` | The message log, newest first (`text`, `kind`, `age`, `day`); `skip` pages back through it |
 | `view.events(since_tick)` | Recent joins, deaths and departures |
-| `view.fields()`, `view.hover()`, `view.overlay()` | Field layers; what's under the cursor; the active overlay |
+| `view.fields()`, `view.hover()`, `view.overlay()` | Field layers; what's under the cursor (with `values`, each field's `label` and `value`); the active overlay |
 | `view.tools()`, `view.hint()` | Toolbar entries; what a right-click would do |
 | `view.profile()`, `view.stats()`, `view.mods()`, `view.warnings()` | Profiler and load information |
 | `view.date()` | `{ year, season, day, day_of_year, year_days }` |
@@ -579,7 +600,10 @@ m = 10
 family = "My Serif"   # empty uses the system UI font
 ```
 
-Sections are `space`, `text`, `weight`, `shape`, `color` and `font`. Core
+Sections are `space`, `text`, `weight`, `shape`, `color`, `font`,
+`leading` and `tracking`. `leading` is line height over text size: `line`
+for a single line and `wrap` for text that wraps (core: 1.3 and 1.4).
+`tracking` is letter spacing in em, by name (core's `caption` is 0.06). Core
 names Inter, which it ships. A mod can ship fonts too: TrueType, OpenType
 or collections under its `ui/fonts/`, loaded before any theme is read, so
 its theme (or another mod's) can name the family. A family that isn't

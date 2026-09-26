@@ -1219,14 +1219,14 @@ pub fn render(app: &mut App) {
     let mut labels = Vec::with_capacity(counts.len() * 2 + readouts.len() * 2);
     for (x, y, text) in readouts {
         for (dx, color) in [(1.0, [0.0, 0.0, 0.0, 0.7]), (0.0, [0.91, 0.93, 0.9, 1.0])] {
-            let quads = app.ui.text.quads(&text, 12.0 * dpi, 600, None, (x + dx) * dpi, (y + dx) * dpi);
+            let quads = app.ui.text.quads(&text, 12.0 * dpi, 600, 0.0, None, (x + dx) * dpi, (y + dx) * dpi);
             labels.push(rim_ui::paint::Draw::Glyphs { quads, color });
         }
     }
     for (x, y, n) in counts {
         let text = n.to_string();
         for (dx, color) in [(1.0, [0.0, 0.0, 0.0, 0.6]), (0.0, [1.0, 1.0, 1.0, 1.0])] {
-            let quads = app.ui.text.quads(&text, 13.0 * dpi, 600, None, (x + dx) * dpi, (y + dx) * dpi);
+            let quads = app.ui.text.quads(&text, 13.0 * dpi, 600, 0.0, None, (x + dx) * dpi, (y + dx) * dpi);
             labels.push(rim_ui::paint::Draw::Glyphs { quads, color });
         }
     }

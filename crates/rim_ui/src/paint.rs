@@ -176,7 +176,7 @@ fn walk(
         let width = if t.wrap { Some(rect[2] - s.pad[1] - s.pad[3]) } else { None };
         // Text sits inside its padding (layout measured the box with it).
         let (tx, ty) = (rect[0] + s.pad[3], rect[1] + s.pad[0]);
-        let quads = p.text.quads(&t.text, t.size, t.weight, width, tx, ty);
+        let quads = p.text.quads(&t.text, t.size, t.weight, t.tracking, width, tx, ty);
         if !quads.is_empty() {
             p.draw.push(Draw::Glyphs { quads, color: fade(color, alpha) });
         }
@@ -184,12 +184,12 @@ fn walk(
         // and a caret in the text colour.
         if let (Some(inp), true) = (&n.input, focused) {
             if let Some(e) = n.id.as_deref().and_then(|id| p.state.edits.get(id)) {
-                let line_h = p.text.shape(&t.text, t.size, t.weight, None).height.max(t.size);
+                let line_h = p.text.shape(&t.text, t.size, t.weight, t.tracking, None).height.max(t.size);
                 let mut x_at = |ch: usize| -> f32 {
                     if inp.placeholder {
                         return tx;
                     }
-                    tx + p.text.shape(e.prefix(ch), t.size, t.weight, None).width
+                    tx + p.text.shape(e.prefix(ch), t.size, t.weight, t.tracking, None).width
                 };
                 let (lo, hi) = e.selection();
                 let sel = (lo != hi).then(|| (x_at(lo), x_at(hi)));
@@ -241,7 +241,7 @@ fn walk(
                     p.draw.push(Draw::Rect { rect: bar, color: fade(color, alpha * 0.8), radius: 0.0 });
                 }
                 if !cell.text.is_empty() {
-                    let quads = p.text.quads(&cell.text, g.size, g.weight, None, cr[0] + inset, cr[1] + inset);
+                    let quads = p.text.quads(&cell.text, g.size, g.weight, 0.0, None, cr[0] + inset, cr[1] + inset);
                     if !quads.is_empty() {
                         p.draw.push(Draw::Glyphs { quads, color: fade(cell.color.unwrap_or(default_color), alpha) });
                     }

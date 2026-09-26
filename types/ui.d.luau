@@ -9,7 +9,7 @@ type Node = {
     w: Size?, h: Size?, minw: Size?, maxw: Size?, minh: Size?, maxh: Size?,
     grow: number?, align: string?, justify: string?, clip: boolean?,
     bg: string?, border: string?, color: string?, radius: Size?,
-    size: string?, weight: string?, wrap: boolean?,
+    size: string?, weight: string?, wrap: boolean?, tracking: Size?,
     hover: Colors?, press: Colors?, focus: Colors?, focusable: boolean?,
     on_click: (() -> ())?, on_right_click: (() -> ())?, tooltip: string?, disabled: boolean?,
     entity: number?, cell: { number }?, priority: number?, offset: number?,
@@ -52,7 +52,7 @@ type VisiblePawn = {
     selected: boolean, hovered: boolean, radius: number,
 }
 type Speech = { id: number, text: string, age: number, priority: number }
-type Message = { text: string, kind: string, age: number, day: number }
+type Message = { text: string, kind: string, age: number, day: number, clock: string }
 type WorldEvent = { tick: number, kind: string, id: number, name: string }
 type FieldInfo = {
     index: number, id: string, label: string, unit: string, hud: boolean, overlay: boolean,
@@ -71,7 +71,8 @@ type Board = { levels: number, high: number, cols: { BoardCol }, rows: { BoardRo
 type Stance = { id: string, label: string, icon: string, active: boolean }
 type Effective = { value: number, why: string }
 type Stuff = { id: string, label: string, color: string, have: number, active: boolean, hp: number, work: number }
-type Hover = { x: number, y: number, terrain: string, shelter: string, readings: { string }, things: { string }, takes: string? }
+type Hover = { x: number, y: number, terrain: string, shelter: string, readings: { string }, values: { Reading }, things: { string }, takes: string? }
+type Reading = { label: string, value: string }
 type WorkWhy = { work: string, level: number, why: string, picked: boolean, dist: number? }
 type ProfileRow = { name: string, us: number, mod: boolean }
 type ModInfo = { id: string, version: string, name: string }

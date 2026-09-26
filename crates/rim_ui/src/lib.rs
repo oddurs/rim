@@ -366,7 +366,9 @@ impl Ui {
         let user_scale = user_scale.clamp(vm::UI_SCALE.0, vm::UI_SCALE.1);
         let dirs: Vec<(String, &std::path::Path)> = mods.iter().map(|m| (m.id.clone(), m.dir.as_path())).collect();
         let mut theme = Theme::load(&dirs, total_scale(dpi, user_scale));
-        let text = Text::new(if theme.font.is_empty() { None } else { Some(theme.font.as_str()) }, &mod_fonts(&dirs))?;
+        let mut text =
+            Text::new(if theme.font.is_empty() { None } else { Some(theme.font.as_str()) }, &mod_fonts(&dirs))?;
+        text.set_leading(theme.leading(false), theme.leading(true));
         theme.warnings.extend(text.info.load_errors.iter().map(|e| format!("font file ignored: {e}")));
         let mut images = image::Images::load(&dirs);
         theme.warnings.append(&mut images.warnings);
@@ -721,6 +723,7 @@ impl Ui {
         self.built.clear();
         self.layers.clear();
         self.last_trees.clear();
+        self.text.set_leading(theme.leading(false), theme.leading(true));
         self.theme = theme;
         vm.ui_scale.set(self.user_scale);
         self.vm = vm;
@@ -1554,7 +1557,9 @@ impl Ui {
             v.sort_by_key(|(m, _)| m.order);
             v.into_iter().map(|(_, n)| n.clone()).collect()
         };
-        let gap = self.theme.space.get("s").copied().unwrap_or(4.0) * self.theme.scale;
+        // Between panels stacked in a region: the theme's `panel` space.
+        let gap =
+            self.theme.space.get("panel").or(self.theme.space.get("s")).copied().unwrap_or(4.0) * self.theme.scale;
         let side = |region: &str, key: u64| -> Node {
             // The start stack may shrink below its content, so a panel that
             // scrolls (and says `minh = 0`) takes the room the end stack
@@ -1698,6 +1703,7 @@ impl Ui {
                 weight: th.weight(&Token::Name("regular".into())).unwrap_or(400),
                 color: th.color("text").unwrap_or([1.0; 4]),
                 wrap: true,
+                tracking: 0.0,
             }),
             kind: Kind::Text,
             ..plain(3, Style::default(), vec![])

@@ -21,6 +21,11 @@ pub struct Theme {
     pub weight: HashMap<String, u16>,
     pub color: HashMap<String, Rgba>,
     pub shape: HashMap<String, f32>,
+    /// Line height as a multiple of the text size: `line` for a single
+    /// line, `wrap` for text that wraps. Ratios, so never scaled.
+    pub leading: HashMap<String, f32>,
+    /// Letter spacing in em, by name (`tracking = "caption"` on a label).
+    pub tracking: HashMap<String, f32>,
     /// Font family; empty means the system UI font.
     pub font: String,
     /// DPI factor times the player's UI scale.
@@ -83,6 +88,20 @@ impl Theme {
                                 true
                             }
                             None => false,
+                        },
+                        "leading" => match v.as_float().or(v.as_integer().map(|i| i as f64)) {
+                            Some(n) if n > 0.5 && n < 4.0 => {
+                                theme.leading.insert(name.clone(), n as f32);
+                                true
+                            }
+                            _ => false,
+                        },
+                        "tracking" => match v.as_float().or(v.as_integer().map(|i| i as f64)) {
+                            Some(n) if n.abs() <= 1.0 => {
+                                theme.tracking.insert(name.clone(), n as f32);
+                                true
+                            }
+                            _ => false,
                         },
                         "weight" => match v.as_integer() {
                             Some(n) => {
@@ -147,6 +166,21 @@ impl Theme {
             _ => &self.shape,
         };
         map.get(name).map(|x| x * self.scale).ok_or_else(|| format!("unknown {section} token '{name}'"))
+    }
+
+    /// Line height over text size: for wrapped text if `wrap`, else a
+    /// single line. 1.3 when the theme doesn't say.
+    pub fn leading(&self, wrap: bool) -> f32 {
+        let line = self.leading.get("line").copied().unwrap_or(1.3);
+        if wrap {
+            self.leading.get("wrap").copied().unwrap_or(line)
+        } else {
+            line
+        }
+    }
+
+    pub fn tracking_named(&self, name: &str) -> Result<f32, String> {
+        self.tracking.get(name).copied().ok_or_else(|| format!("unknown tracking token '{name}'"))
     }
 
     pub fn weight_named(&self, name: &str) -> Result<u16, String> {
