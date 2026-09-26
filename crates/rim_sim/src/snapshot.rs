@@ -802,6 +802,8 @@ impl Snapshot {
             zones.tidy();
             w.zones = zones;
         }
+        // Derived from the stacks and the zones, both now in place.
+        w.recount_stock();
         // A stance a removed mod added falls back to the first there is.
         w.stance = match ws.stance {
             Some(s) => remap.get("stance", s).filter(|&s| (s as usize) < defs.stances.len()).or_else(|| {

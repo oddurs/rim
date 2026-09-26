@@ -5,11 +5,12 @@
 //! inactive placeholder, so the job code has `&mut World` freely.
 
 use crate::defs::*;
+use crate::map::CHUNK;
 use crate::path::Goal;
 use crate::world::*;
 use crate::IVec;
 use hecs::Entity;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 pub fn tick_pawns(w: &mut World) {
     let mut i = 0;
@@ -1076,20 +1077,54 @@ pub fn nearest_item(w: &World, e: Entity, from: IVec, def: DefId) -> Option<(u32
 }
 
 /// `nearest_item`, of whatever `takes` accepts: a work order's input by tag.
+/// It looks only in the chunks that hold something it takes (the stock's
+/// holdings), nearest first, and stops once no chunk left could hold
+/// anything nearer. The same answer as walking every stack: the nearest,
+/// ties to the lowest id.
 pub fn nearest_item_where(w: &World, e: Entity, from: IVec, takes: impl Fn(DefId) -> bool) -> Option<(u32, Entity)> {
+    let mut chunks: BTreeSet<u32> = BTreeSet::new();
+    for d in 0..w.defs.things.len() as DefId {
+        if w.stock.on_map(d) > 0 && takes(d) {
+            chunks.extend(w.stock.chunks(d).map(|(c, _)| c));
+        }
+    }
+    let (mw, mh) = (w.map.w, w.map.h);
+    let corner = |c: u32| {
+        let o = w.map.chunk_origin(c as usize);
+        (o, IVec::new((o.x + CHUNK).min(mw) - 1, (o.y + CHUNK).min(mh) - 1))
+    };
+    let mut order: Vec<(u32, u32)> = chunks
+        .into_iter()
+        .map(|c| {
+            let (lo, hi) = corner(c);
+            (IVec::new(from.x.clamp(lo.x, hi.x), from.y.clamp(lo.y, hi.y)).octile(from), c)
+        })
+        .collect();
+    order.sort_unstable();
     let mut best: Option<(u32, Entity)> = None;
-    for (te, t) in w.ecs.query::<(Entity, &Thing)>().without::<&Blueprint>().iter() {
-        if !takes(t.def) || w.map.item_at(t.pos) != Some(te) {
-            continue;
+    for (near, c) in order {
+        if best.is_some_and(|b| near > b.0) {
+            break;
         }
-        let d = t.pos.octile(from);
-        if best.is_some_and(|b| (b.0, b.1.id()) <= (d, te.id()))
-            || w.reserved_by_other(te, e)
-            || !w.map.can_reach(from, Goal::Cell(t.pos))
-        {
-            continue;
+        let (lo, hi) = corner(c);
+        for y in lo.y..=hi.y {
+            for x in lo.x..=hi.x {
+                let p = IVec::new(x, y);
+                let Some(te) = w.map.item_at(p) else { continue };
+                let Ok(def) = w.ecs.get::<&Thing>(te).map(|t| t.def) else { continue };
+                if !takes(def) {
+                    continue;
+                }
+                let d = p.octile(from);
+                if best.is_some_and(|b| (b.0, b.1.id()) <= (d, te.id()))
+                    || w.reserved_by_other(te, e)
+                    || !w.map.can_reach(from, Goal::Cell(p))
+                {
+                    continue;
+                }
+                best = Some((d, te));
+            }
         }
-        best = Some((d, te));
     }
     best
 }

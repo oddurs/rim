@@ -232,11 +232,24 @@ pub fn apply(w: &mut World, c: Command) {
         Command::ModEvent { name, data } => w.events.push(GameEvent::Script { name, data }),
         Command::Stockpile { a, b, zone: None } => {
             w.zones.create(&defs, &w.map, a, b);
+            w.recount_stored();
         }
-        Command::Stockpile { a, b, zone: Some(id) } => w.zones.paint(&w.map, a, b, Some(id)),
-        Command::ClearZone { a, b } => w.zones.paint(&w.map, a, b, None),
-        Command::ZoneAllow { zone, thing, on } => w.zones.edit(&defs, zone, FilterEdit::Thing { thing, on }),
-        Command::StoreFilter { store: StoreRef::Zone(zone), edit } => w.zones.edit(&defs, zone, edit),
+        Command::Stockpile { a, b, zone: Some(id) } => {
+            w.zones.paint(&w.map, a, b, Some(id));
+            w.recount_stored();
+        }
+        Command::ClearZone { a, b } => {
+            w.zones.paint(&w.map, a, b, None);
+            w.recount_stored();
+        }
+        Command::ZoneAllow { zone, thing, on } => {
+            w.zones.edit(&defs, zone, FilterEdit::Thing { thing, on });
+            w.recount_stored();
+        }
+        Command::StoreFilter { store: StoreRef::Zone(zone), edit } => {
+            w.zones.edit(&defs, zone, edit);
+            w.recount_stored();
+        }
         Command::SetPriority { pawn, work, level } => {
             if !is_colonist(w, pawn) || work as usize >= defs.work_types.len() {
                 return;

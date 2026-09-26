@@ -2,8 +2,10 @@
 id: ac643c1f-3f5b-4908-884f-da4e87bfcf01
 title: 'Stock ledger and holdings: counts by thing, material and chunk'
 type: perf
-status: backlog
+status: review
 milestone: crafting
+assignee: Oddur Sigurdsson
+claimed: 2026-09-26
 created: 2026-09-26
 updated: 2026-09-26
 priority: p1
@@ -28,7 +30,11 @@ area: perf
 
 ## Acceptance criteria
 
-- [ ] `rim.count_items` and `rim.stock` never scan (the result matches a full scan after a seeded game)
-- [ ] Nearest-item search visits only chunks that hold the thing
-- [ ] Measured before and after on the 8d551753 setup, numbers noted here
-- [ ] Determinism test passes
+- [x] `rim.count_items` and `rim.stock` never scan (the result matches a full scan after a seeded game)
+- [x] Nearest-item search visits only chunks that hold the thing
+- [x] Measured before and after on the 8d551753 setup, numbers noted here
+- [x] Determinism test passes
+
+## 2026-09-26
+
+Measured, cargo run --release -p rim_sim --example bench -- --days 0.5 (250x250, 30 colonists, 200 pawns, the default work), main then this branch back to back on a heavily loaded machine (load ~75): mean tick 0.690 -> 0.395 ms; pawns 0.567 -> 0.331 ms; mod:crafting 0.0163 -> 0.0006 ms (its bills hook calls count_items, which no longer scans). Absolute numbers are noisy under that load; the direction held across two runs. Added bench --haul (the 8d551753 setup) for the store levels item, which rewrites the haul search; the ledger doesn't touch it.

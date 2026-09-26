@@ -189,6 +189,11 @@ impl Sim {
         }
         self.scripts.run_hooks(w, prof);
         self.scripts.dispatch_events(w, prof);
+        // The ledger is kept, not counted; a debug build checks the keeping.
+        #[cfg(debug_assertions)]
+        if w.tick.is_multiple_of(1_000) {
+            assert_eq!(w.stock, w.counted_stock(), "the stock ledger drifted from the stacks on the map");
+        }
         w.tick += 1;
         prof.add("tick", t0.elapsed().as_secs_f64() * 1e6);
         if w.tick.is_multiple_of(600) {

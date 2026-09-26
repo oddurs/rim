@@ -738,6 +738,9 @@ pub struct World {
     pub data: BTreeMap<String, Data>,
     /// Stockpile zones the player painted.
     pub zones: crate::zone::Zones,
+    /// What the colony has on the map, kept as stacks change (stock.rs).
+    /// Derived: rebuilt on load.
+    pub stock: crate::stock::Stock,
     /// How many times shelter has been worked out: for tests and profiling,
     /// not simulation state.
     pub shelter_recomputes: u64,
@@ -755,6 +758,7 @@ impl World {
     pub fn new(defs: Arc<DefDb>, w: i32, h: i32, seed: u64) -> Self {
         let fields = Fields::new(&defs, (w * h) as usize);
         let stance = defs.default_stance;
+        let things = defs.things.len();
         World {
             defs,
             seed,
@@ -782,6 +786,7 @@ impl World {
             roles_seen: (u64::MAX, u64::MAX),
             data: BTreeMap::new(),
             zones: crate::zone::Zones::new((w * h) as usize),
+            stock: crate::stock::Stock::new(things),
             shelter_recomputes: 0,
             stance,
             rules: crate::rules::Rules::default(),
@@ -1152,6 +1157,7 @@ impl World {
             if let Ok(mut t) = self.ecs.get::<&mut Thing>(e) {
                 t.count += lot.count;
             }
+            self.stock_change(e, lot.count as i64, 0);
             self.map.touch(p);
             return;
         }
@@ -1166,6 +1172,7 @@ impl World {
             self.tools.insert(e);
         }
         self.map.set_item(p, Some(e));
+        self.stock_change(e, lot.count as i64, 1);
         let defs = self.defs.clone();
         self.fields.add_emitters(&defs, &self.map, e, lot.def, p);
     }
@@ -1282,6 +1289,7 @@ impl World {
         if self.map.inb(t.pos) {
             let i = self.map.idx(t.pos);
             if self.map.item[i] == Some(e) {
+                self.stock_change(e, -(t.count as i64), -1);
                 self.map.set_item(t.pos, None);
             }
             if self.map.fixture[i] == Some(e) {
@@ -1356,8 +1364,10 @@ impl World {
 
     /// `by` picks up `tool` from the map, putting down what it held there.
     pub fn take_tool(&mut self, by: Entity, p: &mut Pawn, tool: Entity) {
-        let Some(at) = self.thing(tool).map(|t| t.pos) else { return };
+        let Some(t) = self.thing(tool) else { return };
+        let at = t.pos;
         if self.map.item_at(at) == Some(tool) {
+            self.stock_change(tool, -(t.count as i64), -1);
             self.map.set_item(at, None);
         }
         // Held is its claim now; nobody else can take it. What it emits
@@ -1390,6 +1400,7 @@ impl World {
                     return;
                 };
                 self.map.set_item(p, Some(tool));
+                self.stock_change(tool, 1, 1);
                 let defs = self.defs.clone();
                 self.fields.add_emitters(&defs, &self.map, tool, def, p);
                 return;
@@ -1525,6 +1536,60 @@ impl World {
         worked.max(hurt)
     }
 
+    /// A stack on the item layer gained or lost `units`, and appeared
+    /// (`stacks` 1) or went (-1): the one way the stock ledger changes.
+    fn stock_change(&mut self, e: Entity, units: i64, stacks: i64) {
+        let Some(t) = self.thing(e) else { return };
+        let made_of = self.made_of(e);
+        let kept = self.zones.at(&self.map, t.pos).is_some_and(|z| z.keeps(&self.defs, t.def, made_of, Some(t.hp)));
+        let chunk = self.map.chunk_of(t.pos) as u32;
+        self.stock.change(crate::stock::Change { def: t.def, made_of, chunk, kept, units, stacks });
+    }
+
+    /// The stock counted from scratch, by walking every stack: what the
+    /// ledger must equal.
+    pub fn counted_stock(&self) -> crate::stock::Stock {
+        let mut s = crate::stock::Stock::new(self.defs.things.len());
+        let mut on_map: Vec<(Entity, Thing)> = self
+            .ecs
+            .query::<(Entity, &Thing)>()
+            .iter()
+            .filter(|(e, t)| self.map.item_at(t.pos) == Some(*e))
+            .map(|(e, t)| (e, t.clone()))
+            .collect();
+        on_map.sort_by_key(|(e, _)| e.id());
+        for (e, t) in on_map {
+            let made_of = self.made_of(e);
+            let kept = self.zones.at(&self.map, t.pos).is_some_and(|z| z.keeps(&self.defs, t.def, made_of, Some(t.hp)));
+            let chunk = self.map.chunk_of(t.pos) as u32;
+            s.change(crate::stock::Change { def: t.def, made_of, chunk, kept, units: t.count as i64, stacks: 1 });
+        }
+        s
+    }
+
+    /// Count the stock again from scratch: on load.
+    pub fn recount_stock(&mut self) {
+        self.stock = self.counted_stock();
+    }
+
+    /// Count what's stored again: after zones were painted or their
+    /// filters changed, which moves stacks in or out of being kept.
+    pub fn recount_stored(&mut self) {
+        self.stock.clear_stored();
+        let mut kept = Vec::new();
+        for (z, c) in self.zones.members() {
+            let p = self.map.pos(c as usize);
+            let Some(e) = self.map.item_at(p) else { continue };
+            let Some(t) = self.thing(e) else { continue };
+            if z.keeps(&self.defs, t.def, self.made_of(e), Some(t.hp)) {
+                kept.push((t.def, t.count));
+            }
+        }
+        for (def, n) in kept {
+            self.stock.add_stored(def, n);
+        }
+    }
+
     /// Take up to `n` from a stack, despawning it when empty.
     pub fn take_from_stack(&mut self, e: Entity, n: u32) -> u32 {
         let (taken, empty, pos) = match self.ecs.get::<&mut Thing>(e) {
@@ -1535,6 +1600,9 @@ impl World {
             }
             Err(_) => return 0,
         };
+        if self.map.item_at(pos) == Some(e) {
+            self.stock_change(e, -(taken as i64), 0);
+        }
         self.map.touch(pos);
         if empty {
             self.despawn_thing(e);

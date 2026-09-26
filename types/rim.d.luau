@@ -5,6 +5,7 @@ type Faction = "player" | "hostile" | "wild"
 type MessageKind = "info" | "good" | "threat" | "bad"
 type CreatureInfo = { id: string, label: string, intelligent: boolean, aggressive: boolean, flees: boolean, plural: string, market_value: number, max_hp: number, wild: boolean }
 type ThingInfo = { id: string, label: string, market_value: number, food: boolean, item: boolean, tags: { string } }
+type StockQuery = { thing: string?, tag: string?, category: string? }
 type ItemCategoryInfo = { id: string, label: string, parent: string?, order: number, children: { string }, items: { string } }
 type Date = { year: number, season: string, season_index: number, day: number, day_of_year: number, year_days: number, year_fraction: number }
 type Room = { id: number, cells: number, enclosed: boolean, role: string?, role_label: string? }
@@ -118,6 +119,8 @@ declare rim: {
     stance: () -> string?,
     -- A thing's stat by name: its def's base times its material's factor.
     stat: (id: number, name: string) -> number?,
+    -- How many the colony has on the map, read from the stock ledger (never counted): a thing by id, or { thing = }, { tag = } or { category = } (an item category and those under it). `place` narrows it to what lies where a stockpile keeps it, or to what doesn't.
+    stock: (what: string | StockQuery, place: ("stored" | "loose")?) -> number,
     -- A thing by id: what it is and where, or nil if it's gone.
     thing: (id: number) -> ThingAt?,
     -- Every thing def.

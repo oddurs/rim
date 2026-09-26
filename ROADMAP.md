@@ -376,7 +376,7 @@ Making a mod feels like publishing a small open-source library: rim new, typed L
 
 ## scale — Scale
 
-`###·······` 23% · 3 of 13 done · due 2027-03-15
+`####······` 31% · 4 of 13 done · due 2027-03-15
 
 Hit the performance budget: benchmark harness, hierarchical pathing, flow fields, spatial indices, incremental regions, render caching.
 
@@ -389,10 +389,10 @@ Hit the performance budget: benchmark harness, hierarchical pathing, flow fields
 - [ ] `da558444` Ground renderer: terrain, wetness and snow in one shader pass <sup>perf · p2 · m · client</sup>
 - [ ] `dab55ea2` Meet the budget: 6x speed at 60 fps <sup>perf · p0 · l · engine</sup>
 - [ ] `e8673d3f` scripting test a_slow_mod_is_named_in_the_warnings flakes under load <sup>bug · p2 · s · engine</sup>
-- [ ] `fbf3ee1c` Spatial index for things by def <sup>perf · p1 · m · engine</sup>
 - [x] `4819db9c` Pathfinding and movement: measure the spikes, then cut them <sup>perf · p1 · m · engine</sup>
 - [x] `8ee7a610` Anchored labels capped by priority inside the viewport <sup>perf · p2 · s · engine</sup>
 - [x] `ee7fe7fd` Benchmark harness: target map, 30 colonists, 200 pawns <sup>perf · p0 · m · tooling</sup>
+- [x] `fbf3ee1c` Spatial index for things by def <sup>perf · p1 · m · engine</sup>
 
 ## platform — Modding platform
 
@@ -476,7 +476,6 @@ Production chains: workbenches and bills, cooking, farming, tailoring, research 
 - [ ] `6f1e7410` Snow and mud slow movement <sup>feature · p3 · s · engine</sup>
 - [ ] `704889c9` Research as a plugin <sup>feature · p1 · l · plugin</sup>
 - [ ] `9b569a33` Terrain properties, tags and distance-to inputs <sup>feature · p0 · s · engine</sup>
-- [ ] `ac643c1f` Stock ledger and holdings: counts by thing, material and chunk <sup>perf · p1 · m · engine</sup>
 - [ ] `b1444a26` Farming: growing zones and crops <sup>feature · p0 · l · engine</sup>
 - [ ] `ca22f222` Bills pick their ingredients: one material per order, and a filter <sup>feature · p2 · m · plugin</sup>
 - [ ] `d77d9e1f` Stock fields: per-cell state with staggered updates <sup>feature · p0 · l · engine</sup>
@@ -486,6 +485,7 @@ Production chains: workbenches and bills, cooking, farming, tailoring, research 
 - [ ] `e953d711` Store levels: sorting that only climbs, and room reserved by count <sup>feature · p1 · l · engine</sup>
 - [ ] `f22f1a62` Stores sheet, storage overlay and hover card <sup>feature · p2 · m · core</sup>
 - [ ] `629e1fa7` Nothing is lost when a carried stack doesn't fit where it's set down <sup>bug · p1 · s · engine</sup>
+- [ ] `ac643c1f` Stock ledger and holdings: counts by thing, material and chunk <sup>perf · p1 · m · engine</sup>
 - [ ] `9bd9e8ab` Fire: burning, spread by wind, put out by rain <sup>feature · p1 · l · engine</sup>
 - [x] `01691032` Item categories and one filter: things, materials and condition <sup>feature · p1 · m · engine</sup>
 

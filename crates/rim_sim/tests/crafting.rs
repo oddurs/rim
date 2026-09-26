@@ -264,12 +264,9 @@ fn until_you_have_n_stops_and_starts_again() {
     steps(&mut s, 3_000);
     assert_eq!(count(&s, "kit:blade"), 2, "it stops at two");
     assert_eq!(field(&first_bill(&s, spot), "why"), Some(&Data::Str("have 2".into())));
-    let (e, n, _, _) = blades(&s)[0];
-    if n == 1 {
-        s.world.despawn_thing(e);
-    } else {
-        s.world.ecs.get::<&mut Thing>(e).unwrap().count -= 1;
-    }
+    // One used: through the world, so the stock ledger hears of it.
+    let (e, _, _, _) = blades(&s)[0];
+    s.world.take_from_stack(e, 1);
     assert!(run_until(&mut s, 12_000, |s| count(s, "kit:blade") == 2), "one used, one made");
     assert_eq!(bills(&s, spot).len(), 1, "the bill stays");
 }
