@@ -545,6 +545,26 @@ impl UiVm {
             "is_open",
             lua.create_function(move |_, id: String| Ok(r.borrow().window_open.get(&id).copied().unwrap_or(false)))?,
         )?;
+        // ui.sheet(): the open sheet's id, or nil. The last declaration of
+        // an id decides whether it is a sheet, as everywhere.
+        let r = self.reg.clone();
+        ui.set(
+            "sheet",
+            lua.create_function(move |_, ()| {
+                let reg = r.borrow();
+                let mut seen: Vec<&str> = Vec::new();
+                for w in reg.windows.iter().rev() {
+                    if seen.contains(&w.id.as_str()) {
+                        continue;
+                    }
+                    seen.push(&w.id);
+                    if w.sheet && reg.window_open.get(&w.id).copied().unwrap_or(false) {
+                        return Ok(Some(w.id.clone()));
+                    }
+                }
+                Ok(None)
+            })?,
+        )?;
         // ui.bind(id, { key, label }, fn): a named action reachable from
         // its key and from the command palette. With no key it is the
         // palette's alone, until the player gives it one.
@@ -1406,10 +1426,10 @@ impl UiVm {
     }
 
     /// Declared windows, one per id: the last declaration wins.
-    /// A sheet's widest width, or None if `id` isn't a sheet. The last
+    /// A sheet's size as declared, or None if `id` isn't a sheet. The last
     /// declaration wins, as in `windows`.
-    pub fn sheet_width(&self, id: &str) -> Option<f32> {
-        self.reg.borrow().windows.iter().rev().find(|w| w.id == id).filter(|w| w.sheet).map(|w| w.w)
+    pub fn sheet_size(&self, id: &str) -> Option<(f32, f32)> {
+        self.reg.borrow().windows.iter().rev().find(|w| w.id == id).filter(|w| w.sheet).map(|w| (w.w, w.h))
     }
 
     pub fn windows(&self) -> Vec<WindowDecl> {
@@ -1510,7 +1530,8 @@ impl UiVm {
                             let _ = win.set("title", decl.title.as_str());
                             let _ = win.set("w", size.0);
                             let _ = win.set("h", size.1);
-                            let _ = win.set("resizable", decl.resizable);
+                            let _ = win.set("resizable", decl.resizable && !decl.sheet);
+                            let _ = win.set("sheet", decl.sheet);
                             let _ = win.set("comp", decl.comp.as_str());
                             match b.call(chrome_owner, f, win) {
                                 Ok(Value::Table(t)) => b.convert(&t, key, chrome_owner, None),

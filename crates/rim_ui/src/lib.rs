@@ -220,8 +220,21 @@ type CachedLayout = (u64, (f32, f32), Vec<Rect>);
 /// Layers bottom to top.
 const LAYERS: &[&str] = &["anchored", "docked", "title", "windows", "cursor", "modal", "tooltip"];
 const TOOLTIP_DELAY: f64 = 0.45;
-/// The id of the band between the docked columns, where sheets go.
-pub const CENTER: &str = "rim:center";
+/// A sheet's share of the screen at most: wide enough for a board, narrow
+/// enough to leave both side columns clear at 1280 wide and up.
+const SHEET_MAX_W: f32 = 0.6;
+/// Room kept clear for each side column, in logical pixels: the inspector
+/// and the Now panels are at most this wide with their gaps.
+const SHEET_SIDE: f32 = 280.0;
+/// Room kept above and below for the top bar and the dock (with a gap),
+/// in logical pixels: fixed, since a palette opening mustn't move a sheet.
+const SHEET_TOP: f32 = 48.0;
+const SHEET_BOTTOM: f32 = 56.0;
+/// Where a sheet's spare height goes: a little more below than above, so
+/// it sits at the optical centre rather than the measured one.
+const SHEET_RISE: f32 = 0.45;
+/// How long a window takes to open (fade and rise), in seconds.
+const OPEN_SECS: f64 = 0.14;
 /// How many slots away from its anchor a label may move to avoid overlap.
 const ANCHOR_SLOTS: usize = 12;
 /// How many anchored labels are placed per frame, by priority, inside the
@@ -314,6 +327,10 @@ pub struct Ui {
     built_wins: Vec<(String, Node)>,
     /// Last frame's window rectangles (physical), in stacking order.
     win_rects: Vec<(String, Rect)>,
+    /// When each window last opened (frame time), for its open animation.
+    opened_at: HashMap<String, f64>,
+    /// This frame's time.
+    now: f64,
     /// A window moved, resized, opened or closed since the layout was last taken.
     layout_dirty: bool,
     /// The mods' PNGs, placed in the atlas as they are drawn.
@@ -404,6 +421,8 @@ impl Ui {
             win_drag: None,
             built_wins: Vec::new(),
             win_rects: Vec::new(),
+            opened_at: HashMap::new(),
+            now: 0.0,
             layout_dirty: false,
             images,
             edits: HashMap::new(),
@@ -572,15 +591,18 @@ impl Ui {
         if self.windows[i].open != open {
             self.windows[i].open = open;
             self.layout_dirty = true;
+            if open {
+                self.opened_at.insert(id.clone(), self.now);
+            }
         }
         if open {
             self.raise_window(id);
             // One sheet at a time: opening one closes the one that was up.
-            if self.vm.sheet_width(id).is_some() {
+            if self.vm.sheet_size(id).is_some() {
                 let others: Vec<String> = self
                     .windows
                     .iter()
-                    .filter(|w| w.open && w.id != *id && self.vm.sheet_width(&w.id).is_some())
+                    .filter(|w| w.open && w.id != *id && self.vm.sheet_size(&w.id).is_some())
                     .map(|w| w.id.clone())
                     .collect();
                 for other in others {
@@ -591,15 +613,19 @@ impl Ui {
         self.vm.set_window_open(id, open);
     }
 
-    /// Sheets fill the band between the docked columns, as it was laid out
-    /// last frame (this frame's, unless the screen or a column just changed).
+    /// Sheets float at fixed proportions of the screen: centred, as big as
+    /// they ask up to a share of it, set a little above the middle. Nothing
+    /// docked moves them, so a hover readout or an open palette on a side
+    /// can't nudge the screen the player is working in.
     fn place_sheets(&mut self) {
-        let Some(&[x, y, w, h]) = self.ids.get(CENTER) else { return };
         let s = self.theme.scale;
+        let (sw, sh) = (self.screen.0 / s, self.screen.1 / s);
         for win in &mut self.windows {
-            let Some(widest) = self.vm.sheet_width(&win.id) else { continue };
-            let width = widest.min(w / s);
-            (win.x, win.y, win.w, win.h) = (x / s + (w / s - width) / 2.0, y / s, width, h / s);
+            let Some((w, h)) = self.vm.sheet_size(&win.id) else { continue };
+            let w = w.min(sw * SHEET_MAX_W).min((sw - 2.0 * SHEET_SIDE).max(sw * 0.4));
+            let room = (sh - SHEET_TOP - SHEET_BOTTOM).max(sh * 0.5);
+            let h = h.min(room);
+            (win.x, win.y, win.w, win.h) = ((sw - w) / 2.0, SHEET_TOP + (room - h) * SHEET_RISE, w, h);
         }
     }
 
@@ -813,7 +839,7 @@ impl Ui {
                     Some(node::Handle::Resize) => Some(true),
                     _ => None,
                 };
-                let placed = self.vm.sheet_width(id).is_some();
+                let placed = self.vm.sheet_size(id).is_some();
                 if let (Some(resize), Some(w), false) = (resize, self.windows.iter().find(|w| w.id == *id), placed) {
                     self.win_drag =
                         Some(WinDrag { id: id.clone(), resize, start: (mx, my), from: (w.x, w.y, w.w, w.h) });
@@ -1015,6 +1041,7 @@ impl Ui {
 
     pub fn frame(&mut self, world: &rim_sim::world::World, client: &ClientView, input: &Input) -> Output {
         let mut out = Output::default();
+        self.now = input.time;
         self.text.begin_frame();
         if input.time - self.shown_at >= 0.25 {
             self.shown_at = input.time;
@@ -1322,8 +1349,26 @@ impl Ui {
             let t = Instant::now();
             for (ri, (root, rects)) in placed.into_iter().enumerate() {
                 let mut hits = Vec::new();
+                // A managed window floats: a shadow under it, and for its
+                // first moments a fade and rise, done on its draws alone so
+                // opening costs no layout.
+                let win = lo.wins.get(ri).cloned().flatten();
+                let under = draw.len();
+                if let (Some(_), Some(&r)) = (&win, rects.first()) {
+                    let radius = self.theme.shape.get("radius").copied().unwrap_or(4.0) * self.theme.scale;
+                    paint::shadow(&mut draw, r, radius, self.theme.scale);
+                }
                 let from = draw.len();
                 paint::paint(&root, &rects, (0.0, 0.0), &state, &mut self.text, &self.images, &mut draw, &mut hits);
+                let opening = win.as_ref().and_then(|id| self.opened_at.get(id)).map(|&t0| (self.now - t0) / OPEN_SECS);
+                if let Some(t) = opening.filter(|t| (0.0..1.0).contains(t)) {
+                    let ease = 1.0 - (1.0 - t as f32).powi(3);
+                    let dy = (1.0 - ease) * 10.0 * self.theme.scale;
+                    for d in &mut draw[under..] {
+                        paint::translate(d, 0.0, dy);
+                        paint::fade_draw(d, ease);
+                    }
+                }
                 if let Some(&(anchor, at)) = anchors.get(ri) {
                     anchored_draws.push(AnchoredDraw { anchor, at, draws: from..draw.len() });
                 }
@@ -1535,8 +1580,7 @@ impl Ui {
         };
         let top = plain(10, Style { w: Len::Frac(1.0), ..Default::default() }, group("top", None));
         let bottom = plain(20, Style { w: Len::Frac(1.0), ..Default::default() }, group("bottom", None));
-        let mut center = plain(30, Style { grow: 1.0, ..Default::default() }, vec![]);
-        center.id = Some(CENTER.into());
+        let center = plain(30, Style { grow: 1.0, ..Default::default() }, vec![]);
         let middle = plain(
             40,
             // min_h 0: the band between the bars is the screen's, not its

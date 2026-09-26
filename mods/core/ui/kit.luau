@@ -263,8 +263,19 @@ function kit.window(win)
 		border = "line_strong",
 		clip = true,
 	}, {
-		node("row", { id = win.id .. ".title", handle = "move", align = "center", gap = "s", pad = "s", padx = "l", bg = "surface_hover", radius = 0 }, {
-			kit.label(win.title, { weight = "strong" }),
+		-- A sheet is placed by the engine: no move handle, and a title with
+		-- more room, since it is a screen rather than a note.
+		node("row", {
+			id = win.id .. ".title",
+			handle = if win.sheet then nil else "move",
+			align = "center",
+			gap = "s",
+			pad = if win.sheet then "m" else "s",
+			padx = "l",
+			bg = "surface_hover",
+			radius = 0,
+		}, {
+			kit.label(win.title, { weight = "strong", size = if win.sheet then "heading" else nil }),
 			{ kind = "spacer" },
 			node("row", {
 				id = win.id .. ".close",

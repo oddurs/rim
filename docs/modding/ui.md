@@ -329,12 +329,15 @@ shows as a bad alert naming it. Each alert's row has the id
 
 ### Screens
 
-A screen is a window declared with `sheet = true`. The engine places it in
-the band between the docked columns (the node `rim:center`), as wide as its
-`w` allows and as tall as the band, so it never covers the people, the
-alerts or the bars. One sheet is open at a time: opening another closes it.
-A sheet isn't dragged or resized; ordinary windows still are, and stay open
-over a sheet.
+A screen is a window declared with `sheet = true`. The engine floats it at
+fixed proportions of the screen: centred, as big as its `w` and `h` ask up
+to 60% of the width and the height between the bars, and set a little
+above the middle. Nothing docked moves it, so a hover readout or an open palette
+never nudges it, and at 1280 wide and up it leaves the side columns clear.
+One sheet is open at a time: opening another closes it, and `ui.sheet()`
+names the open one. A sheet isn't dragged or resized; ordinary windows
+still are, and stay open over a sheet. Every window casts a soft shadow
+and fades in as it opens, an offset of its draws that costs no layout.
 
 Register a screen and it gets a key binding (so the command palette finds
 it) and a button at the right of the dock, beside core's Work (P),
@@ -376,7 +379,8 @@ end)
 ```
 
 Escape is the binding `core:escape`: it drops the tool and closes its
-palette, else closes a palette opened by hand, else clears the selection.
+palette, else closes a palette opened by hand, else closes the open sheet,
+else clears the selection.
 
 If two mods replace or remove the same id, that's reported as a conflict
 naming both, and load order decides which wins. Operating on an id nobody

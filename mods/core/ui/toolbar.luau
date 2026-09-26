@@ -81,7 +81,7 @@ for _, c in CATEGORIES do
 end
 
 -- Escape backs out one step at a time: the tool (and its palette), then a
--- palette opened by hand, then the selection. A mod that binds `core:escape`
+-- palette opened by hand, then an open sheet, then the selection. A mod that binds `core:escape`
 -- itself replaces these steps whole, and the conflict is reported.
 ui.bind("core:escape", { key = "escape", label = t("core:keys.escape", "Back out: drop the tool, close the palette, deselect") }, function()
 	local tools = view.tools()
@@ -91,8 +91,11 @@ ui.bind("core:escape", { key = "escape", label = t("core:keys.escape", "Back out
 			return
 		end
 	end
+	local sheet = ui.sheet()
 	if ui.state("core:dock.open") then
 		ui.set_state("core:dock.open", nil)
+	elseif sheet then
+		ui.close(sheet)
 	else
 		act.select(nil)
 	end
