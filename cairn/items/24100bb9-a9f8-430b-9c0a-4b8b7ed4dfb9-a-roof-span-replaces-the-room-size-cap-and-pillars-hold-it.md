@@ -35,3 +35,7 @@ A room is indoors when it is enclosed and at most 400 cells (§4). The cap can't
 ## 2026-09-26
 
 Depth (DESIGN §6d, milestone e58c8ff7) stacks levels. Span is computed per Map as covered(z,c); roofed(z,c) also holds when the cell above is solid or floored, and building up reuses covered() to allow a floor at z+1 (§6c Storeys). Keep it a pure function of one Map.
+
+## 2026-09-26
+
+When the cap goes, update the building milestone's body (0210-building.md), which still says 'enclosure plus the 400-cell cap'.
