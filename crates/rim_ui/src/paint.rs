@@ -30,6 +30,19 @@ pub enum Draw {
     Unclip,
 }
 
+/// Move a draw command by `(dx, dy)` pixels.
+pub fn translate(d: &mut Draw, dx: f32, dy: f32) {
+    let shift = |r: &mut Rect| {
+        r[0] += dx;
+        r[1] += dy;
+    };
+    match d {
+        Draw::Rect { rect, .. } | Draw::Outline { rect, .. } | Draw::Clip(rect) => shift(rect),
+        Draw::Glyphs { quads, .. } => quads.iter_mut().for_each(|q| shift(&mut q.dst)),
+        Draw::Unclip => {}
+    }
+}
+
 /// Something the pointer can land on, in draw order (last is topmost).
 #[derive(Clone, Debug)]
 pub struct Hit {
