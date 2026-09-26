@@ -138,6 +138,8 @@ pub enum UiAction {
     Undo,
     /// A colonist's priority for a work type, by its qualified id.
     SetPriority(Entity, String, u8),
+    /// Hand a colonist's work type back to what they'd inherit.
+    ClearPriority(Entity, String),
     /// Put the colony in a stance, by its qualified id.
     SetStance(String),
     /// Let a stockpile take an item (by qualified id), or stop it.

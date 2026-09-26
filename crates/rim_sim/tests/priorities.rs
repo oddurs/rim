@@ -12,7 +12,7 @@ fn work_types_load_from_core_and_a_mod_can_patch_them() {
     let defs = r#"
 [[patch]]
 target = "priority_scale/core:core"
-set = { levels = 9 }
+set = { levels = 9, labels = [] }
 
 [[patch]]
 target = "work_type/core:mine"
@@ -116,7 +116,7 @@ fn a_priority_is_clamped_to_the_scale_and_only_colonists_take_one() {
 /// two: a 4 counts as the last level, not as a level below it.
 #[test]
 fn a_priority_above_a_shrunk_scale_is_the_last_level() {
-    let defs = "[[patch]]\ntarget = \"priority_scale/core:core\"\nset = { levels = 2 }\n";
+    let defs = "[[patch]]\ntarget = \"priority_scale/core:core\"\nset = { levels = 2, labels = [] }\n";
     let dir = common::test_mods("work-shrink", &["core"], &[("probe", &[("defs/scale.toml", defs)])]);
     let sim = Sim::new(&dir, 1).unwrap();
     let pawn = sim.world.colonists().next().unwrap();
@@ -124,6 +124,50 @@ fn a_priority_above_a_shrunk_scale_is_the_last_level() {
     sim.world.ecs.get::<&mut Pawn>(pawn).unwrap().set_priority(hunt, 4);
     assert_eq!(sim.world.ecs.get::<&Pawn>(pawn).unwrap().priority(&sim.world.defs, hunt), 2);
     let _ = std::fs::remove_dir_all(dir);
+}
+
+/// Core names its levels, and a name is what the UI shows; a scale without
+/// names shows numbers.
+#[test]
+fn levels_have_names() {
+    let sim = Sim::with_mods(&common::mods(), 1, &|m| m == "core").unwrap();
+    let scale = &sim.world.defs.priority_scale;
+    assert_eq!(scale.labels, ["First", "Soon", "Later", "Spare time"]);
+    assert_eq!((scale.name(1), scale.name(4), scale.name(0)), ("First".into(), "Spare time".into(), "never".into()));
+    let unnamed = rim_sim::defs::PriorityScaleDef { levels: 9, ..Default::default() };
+    assert_eq!(unnamed.name(7), "7");
+}
+
+/// A mod that grows the scale without renaming it fails to load, naming
+/// the scale, rather than showing four names over nine levels.
+#[test]
+fn labels_must_match_the_levels() {
+    let defs = "[[patch]]\ntarget = \"priority_scale/core:core\"\nset = { levels = 9 }\n";
+    let dir = common::test_mods("work-labels", &["core"], &[("probe", &[("defs/scale.toml", defs)])]);
+    let err = Sim::new(&dir, 1).err().expect("four labels for nine levels");
+    assert!(err.contains("priority_scale") && err.contains("4 labels for 9 levels"), "{err}");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// Handing a work type back forgets the pin: the colonist is exactly one
+/// who never had it, in the state and so in the save.
+#[test]
+fn a_pin_handed_back_is_forgotten() {
+    let (mut sim, pawn) = busy_colony(3, 3);
+    let (mut twin, _) = busy_colony(3, 3);
+    let hunt = sim.world.defs.lookup("work_type", "core:hunt").unwrap();
+    sim.push(Command::SetPriority { pawn, work: hunt, level: 1 });
+    sim.step();
+    assert_eq!(sim.world.ecs.get::<&Pawn>(pawn).unwrap().own_priority(hunt), Some(1));
+    sim.push(Command::ClearPriority { pawn, work: hunt });
+    sim.step();
+    twin.step();
+    twin.step();
+    let p = sim.world.ecs.get::<&Pawn>(pawn).unwrap();
+    assert_eq!(p.own_priority(hunt), None);
+    assert_eq!(p.priority(&sim.world.defs, hunt), 3, "back to core's default");
+    drop(p);
+    assert_eq!(sim.world.state_hash(), twin.world.state_hash(), "no trace of the pin");
 }
 
 /// The text form of a save names work types by id, like every other def.
@@ -134,6 +178,8 @@ fn a_text_save_names_work_types_by_id() {
     let (mut sim, pawn) = busy_colony(3, 3);
     let mut save = rim_sim::savefile::SaveFile::create(&path, &mut sim).unwrap();
     let hunt = sim.world.defs.lookup("work_type", "core:hunt").unwrap();
+    sim.push(Command::SetPriority { pawn, work: hunt, level: 1 });
+    sim.push(Command::ClearPriority { pawn, work: hunt });
     sim.push(Command::SetPriority { pawn, work: hunt, level: 1 });
     for _ in 0..10 {
         sim.step();
@@ -150,7 +196,10 @@ fn a_text_save_names_work_types_by_id() {
             .collect()
     };
     assert!(read("pawn.json").contains("\"core:hunt\""), "a pawn's priorities name their work type");
-    assert!(read("log.json").contains("\"core:hunt\""), "SetPriority names its work type");
+    let log = read("log.json");
+    assert!(log.contains("\"core:hunt\""), "SetPriority names its work type");
+    assert!(log.contains("ClearPriority"), "the hand-back is in the log");
+    assert_eq!(log.matches("\"core:hunt\"").count(), 3, "ClearPriority names its work type too:\n{log}");
     let _ = std::fs::remove_dir_all(dir);
     let _ = std::fs::remove_file(path);
 }

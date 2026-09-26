@@ -493,7 +493,8 @@ with winter or a siege, and it doesn't show how much work is waiting.
   and `order`, the tie-break, which the UI shows and lets you drag.
 - **`[[priority_scale]]`:** `levels = 4` in core, named
   `labels = ["First", "Soon", "Later", "Spare time"]`. A mod that wants 9
-  changes one line and the UI follows with numbers. 0 means never.
+  patches `levels = 9, labels = []` and the UI follows with numbers; a
+  label count that doesn't match fails to load. 0 means never.
 - **`[[work_role]]`:** a partial set of levels that colonists belong to,
   one role each. What a role leaves out falls to the work type's default.
   Roles are seeded from defs into the save and edited there; one the player

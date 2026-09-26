@@ -70,6 +70,13 @@ pub struct GridCell {
     pub bar_color: Option<Rgba>,
     /// Shown when the pointer rests on this cell.
     pub tip: Option<String>,
+    /// The cell's own text weight, over the grid's.
+    pub weight: Option<u16>,
+    /// A small filled dot in the top-right corner, in this colour: a mark
+    /// for who set a value.
+    pub dot: Option<Rgba>,
+    /// A small ring in the same corner, in this colour.
+    pub ring: Option<Rgba>,
 }
 
 /// A grid's shape and its cells. The node is laid out as one leaf of
@@ -92,6 +99,10 @@ pub struct Grid {
     pub on_paint: Option<Function>,
     /// The wheel over a cell: (r, c, steps, shift). Up is positive.
     pub on_wheel: Option<Function>,
+    /// A key pressed while the pointer is over a cell: (r, c, key). Only
+    /// the keys in `keys` come here, and a binding on them doesn't fire.
+    pub on_key: Option<Function>,
+    pub keys: Vec<String>,
 }
 
 impl Grid {
@@ -521,6 +532,7 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
     let (mut cell_w, mut cell_h) = (None, None);
     let mut cell_fn: Option<Function> = None;
     let (mut on_press, mut on_paint, mut on_wheel) = (None, None, None);
+    let mut keys: Vec<String> = Vec::new();
     let mut src: Option<String> = None;
     let mut tint = false;
     let mut value = String::new();
@@ -666,6 +678,12 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
             "on_press" => on_press = Some(function("on_press", v)?),
             "on_paint" => on_paint = Some(function("on_paint", v)?),
             "on_wheel" => on_wheel = Some(function("on_wheel", v)?),
+            "keys" => {
+                let Value::Table(t) = v else { return Err("keys is a list of key names".into()) };
+                for k in t.sequence_values::<Value>() {
+                    keys.push(string("keys", &k.map_err(|e| e.to_string())?)?);
+                }
+            }
             "value" => value = string("value", &v)?,
             "placeholder" => placeholder = string("placeholder", &v)?,
             "on_change" => on_change = Some(function("on_change", v)?),
@@ -727,11 +745,12 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
             wrap: false,
             tracking,
         });
-        n.input = Some(InputData { value, placeholder: empty, on_change, on_submit, on_key });
+        n.input = Some(InputData { value, placeholder: empty, on_change, on_submit, on_key: on_key.take() });
         n.focusable = true;
-    } else {
-        // Not an input: a popup's keys (see `Node::on_key`).
-        n.on_key = on_key;
+    } else if kind != Kind::Grid {
+        // Not an input: a popup's keys (see `Node::on_key`). A grid's go to
+        // its cells (see `Grid::on_key`).
+        n.on_key = on_key.take();
     }
     if kind == Kind::Text {
         n.text = Some(TextStyle {
@@ -804,7 +823,19 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
                             Value::Nil => None,
                             v => Some(string("tip", &v)?),
                         };
-                        GridCell { text, bg, color: col, bar, bar_color, tip }
+                        let weight = match ct.get::<Value>("weight").map_err(|e| e.to_string())? {
+                            Value::Nil => None,
+                            v => Some(weight(theme, &v)?),
+                        };
+                        let dot = match ct.get::<Value>("dot").map_err(|e| e.to_string())? {
+                            Value::Nil => None,
+                            v => Some(color(theme, "dot", &v)?),
+                        };
+                        let ring = match ct.get::<Value>("ring").map_err(|e| e.to_string())? {
+                            Value::Nil => None,
+                            v => Some(color(theme, "ring", &v)?),
+                        };
+                        GridCell { text, bg, color: col, bar, bar_color, tip, weight, dot, ring }
                     }
                     _ => return Err(format!("cell({}, {}) must return text, a table or nil", r + 1, c + 1)),
                 });
@@ -825,6 +856,8 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
             on_press,
             on_paint,
             on_wheel,
+            on_key: on_key.take(),
+            keys,
         }));
         n.text = None;
     }

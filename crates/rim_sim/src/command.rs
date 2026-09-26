@@ -91,6 +91,12 @@ pub enum Command {
         work: DefId,
         level: u8,
     },
+    /// Hand a colonist's work type back: forget their own setting, so they
+    /// follow what they'd inherit again (DESIGN.md §4d).
+    ClearPriority {
+        pawn: Entity,
+        work: DefId,
+    },
     /// Put the colony in a stance: its priority rules hold until another.
     SetStance {
         stance: DefId,
@@ -238,6 +244,14 @@ pub fn apply(w: &mut World, c: Command) {
             let level = level.min(defs.priority_scale.levels);
             if let Ok(mut p) = w.ecs.get::<&mut Pawn>(pawn) {
                 p.set_priority(work, level);
+            }
+        }
+        Command::ClearPriority { pawn, work } => {
+            if !is_colonist(w, pawn) || work as usize >= defs.work_types.len() {
+                return;
+            }
+            if let Ok(mut p) = w.ecs.get::<&mut Pawn>(pawn) {
+                p.clear_priority(work);
             }
         }
         Command::SetStance { stance } => {

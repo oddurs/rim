@@ -64,11 +64,10 @@ Hands first. The colonist wakes with nothing (pillar 93f291d5), and today nothin
 
 ## work — Work priorities
 
-`··········` 0% · 0 of 13 done
+`#·········` 8% · 1 of 13 done
 
 Who does what, without a spreadsheet. New colonists start on Auto and the colony plans its own work. The player takes control one rung at a time: Focus for the colony, Urgent for one job, a pin for one cell, work roles for a group. Design: DESIGN.md §4d.
 
-- [ ] `166a4cc9` Named levels and pins: First, Soon, Later, Spare time <sup>feature · p0 · s · core</sup>
 - [ ] `2e145c65` Modding docs: work types, roles, Auto, readings, orders and lenses <sup>docs · p2 · s · core</sup>
 - [ ] `4c9fc19b` Work lenses: the board's views register like screens <sup>feature · p1 · s · core</sup>
 - [ ] `5dc8f858` Auto on the board: rings, reasons, and the one-colonist plan <sup>feature · p0 · m · core</sup>
@@ -81,6 +80,7 @@ Who does what, without a spreadsheet. New colonists start on Auto and the colony
 - [ ] `d41e504f` Auto, the mechanism: planned roles and the two-plan rule <sup>feature · p0 · l · engine</sup>
 - [ ] `f5295002` Core's planner: Auto fills the gaps the colony leaves <sup>feature · p0 · m · core</sup>
 - [ ] `fc50a63f` Roles on the board: grouped rows, the Roles lens, and making a role from two <sup>feature · p1 · m · core</sup>
+- [x] `166a4cc9` Named levels and pins: First, Soon, Later, Spare time <sup>feature · p0 · s · core</sup>
 
 ## pointer — Pointer and Orders
 

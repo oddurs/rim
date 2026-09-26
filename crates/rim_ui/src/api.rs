@@ -41,12 +41,13 @@ type Node = {
     on_drag: ((fx: number, fy: number) -> ())?,
     [number]: any,
 }
-type Cell = string | number | { text: string?, bg: string?, color: string?, bar: number?, bar_color: string?, tip: string? } | nil
+type Cell = string | number | { text: string?, bg: string?, color: string?, bar: number?, bar_color: string?, tip: string?, weight: string?, dot: string?, ring: string? } | nil
 type GridProps = {
     rows: number, cols: number, cell: (r: number, c: number) -> Cell,
     cell_w: Size?, cell_h: Size?, gap: Size?, size: string?, weight: string?,
     on_press: ((r: number, c: number) -> any)?, on_paint: ((r: number, c: number, value: any) -> ())?,
     on_wheel: ((r: number, c: number, steps: number, shift: boolean) -> ())?,
+    on_key: ((r: number, c: number, key: string) -> ())?, keys: { string }?,
     id: string?, bg: string?, border: string?,
 }
 type ListProps = {
@@ -89,9 +90,9 @@ type Zone = { id: number, name: string, cells: number, allows: { [string]: boole
 type Item = { id: string, label: string, color: string }
 type WorkType = { id: string, label: string, icon: string, order: number, default: number }
 type BoardCol = { id: string, label: string, icon: string, skill: string?, waiting: number, on: number, high: number }
-type BoardCell = { base: number, value: number, why: string, skill: number?, skill_frac: number? }
+type BoardCell = { base: number, value: number, inherit: number, pinned: boolean, why: string, skill: number?, skill_frac: number? }
 type BoardRow = { id: number, name: string, job: string, cells: { BoardCell } }
-type Board = { levels: number, high: number, cols: { BoardCol }, rows: { BoardRow } }
+type Board = { levels: number, labels: { string }, high: number, cols: { BoardCol }, rows: { BoardRow } }
 type Stance = { id: string, label: string, icon: string, active: boolean }
 type Effective = { value: number, why: string }
 type Stuff = { id: string, label: string, color: string, have: number, active: boolean, hp: number, work: number }
@@ -118,6 +119,7 @@ macro_rules! d {
 /// Every member, sorted by name.
 pub const UI_API: &[UiDoc] = &[
     d!("act.advance", "(hours: number) -> ()", "Run the game forward (devtools)."),
+    d!("act.clear_priority", "(id: number, work: string) -> ()", "Hand a colonist's work type back: forget their own setting, so they follow what they'd inherit."),
     d!("act.cycle_overlay", "() -> ()", "Show the next field overlay."),
     d!("act.draft", "(id: number, on: boolean) -> ()", "Draft or undraft a colonist."),
     d!("act.focus", "(id: number) -> ()", "Move the camera to a pawn or thing."),
@@ -165,7 +167,7 @@ pub const UI_API: &[UiDoc] = &[
     d!(
         "ui.grid",
         "(props: GridProps) -> Node",
-        "Rows by cols of cells the engine paints as one node. cell(r, c) describes each cell at build; on_press(r, c) returns the value a drag paints and on_paint(r, c, value) runs once per cell the drag enters; on_wheel(r, c, steps, shift) takes the wheel over a cell. A cell can carry a bar (0 to 1) along its bottom and its own tooltip (tip)."
+        "Rows by cols of cells the engine paints as one node. cell(r, c) describes each cell at build; on_press(r, c) returns the value a drag paints and on_paint(r, c, value) runs once per cell the drag enters; on_wheel(r, c, steps, shift) takes the wheel over a cell; on_key(r, c, key) takes the keys named in keys while the pointer is over a cell, ahead of any binding on them. A cell can carry a bar (0 to 1) along its bottom, its own tooltip (tip), its own text weight, and a dot or ring in its corner (a colour) marking who set it."
     ),
     d!(
         "ui.image",

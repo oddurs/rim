@@ -4,11 +4,15 @@
 --
 -- Painted, not typed: a press picks a value (the brush, or the cell's next
 -- level) and a drag paints it; the wheel nudges a cell, shift-wheel its
--- column. A cell is brighter the sooner it comes, carries the colonist's
--- skill as a bar, and reads `3→1` when a rule or the stance moves it; its
--- tooltip says why. Column headers show the work waiting and mark a column
--- nobody is on at a high priority. A colonist's name opens their ranked
--- view, which writes the same numbers.
+-- column; over a cell, a number sets it, N sets never and A hands it back.
+-- A cell is brighter the sooner it comes, carries the colonist's skill as a
+-- bar, and reads `3→1` when a rule or the stance moves it; its tooltip says
+-- why. A value the player set is a pin, drawn bold with a dot; it exists
+-- only while it differs from what the colonist would inherit, so painting
+-- the inherited value back hands the cell back. Column headers show the
+-- work waiting and mark a column nobody is on at a high priority. A
+-- colonist's name opens their levels as shelves, which write the same
+-- settings.
 local kit = require("@core/ui/kit")
 local row, col, label, button = kit.row, kit.col, kit.label, kit.button
 local t = ui.t
@@ -36,6 +40,33 @@ local function nudge(level: number, steps: number, levels: number): number
 		return 0
 	end
 	return math.clamp(level - steps, 1, levels)
+end
+
+-- Set a cell, or hand it back when the value is what it would inherit:
+-- the colonist keeps a setting only while it differs.
+local function put(id: number, work: string, cell, level: number)
+	if level == cell.inherit then
+		if cell.pinned then
+			act.clear_priority(id, work)
+		end
+	elseif level ~= cell.base or not cell.pinned then
+		act.set_priority(id, work, level)
+	end
+end
+
+-- The keys a hovered cell takes: a level's number, N for never, A to hand
+-- it back.
+local function cell_keys(levels: number): { string }
+	local keys = { "n", "a" }
+	for l = 1, levels do
+		table.insert(keys, tostring(l))
+	end
+	return keys
+end
+
+-- What a level is called: its label, or "never".
+local function level_name(labels: { string }, level: number): string
+	return if level == 0 then t("core:work.never_short", "never") else labels[level] or tostring(level)
 end
 
 -- Brighter the sooner it comes: the accent at an alpha by level.
@@ -66,7 +97,7 @@ local function stance_bar(view)
 end
 
 -- The brush: what a press paints. Unset, a press steps the cell.
-local function brush_bar(levels: number)
+local function brush_bar(levels: number, labels: { string })
 	local brush = ui.state("core:work.brush", -1)
 	local items = { label(t("core:work.paint", "Paint"), { size = "small", color = "muted" }) }
 	local function add(value: number, text: string)
@@ -84,15 +115,15 @@ local function brush_bar(levels: number)
 	end
 	add(-1, t("core:work.step", "Step"))
 	for l = 1, levels do
-		add(l, tostring(l))
+		add(l, labels[l] or tostring(l))
 	end
-	add(0, "–")
+	add(0, t("core:work.never", "Never"))
 	return row({ gap = "xs", align = "center" }, items)
 end
 
 ui.window("core:work", { title = t("core:work.title", "Work"), w = 760, h = 860, sheet = true }, function(view)
 	local b = view.board()
-	local levels, cols, rows = b.levels, b.cols, b.rows
+	local levels, labels, cols, rows = b.levels, b.labels, b.cols, b.rows
 
 	-- Column headers: the label, then what's waiting.
 	local header = ui.grid({
@@ -134,13 +165,19 @@ ui.window("core:work", { title = t("core:work.title", "Work"), w = 760, h = 860,
 		gap = 2,
 		cell = function(r, c)
 			local x = rows[r].cells[c]
+			local tip = if x.skill then string.format(t("core:work.cell_skill", "%s (skill %d)"), x.why, x.skill) else x.why
+			if x.pinned then
+				tip ..= "\n" .. string.format(t("core:work.pinned", "Pinned. A hands it back to %s."), level_name(labels, x.inherit))
+			end
 			return {
 				text = if x.base == x.value then show(x.base) else show(x.base) .. "→" .. show(x.value),
 				bg = shade(x.value, levels) or "track",
 				color = if x.value == 0 then "faint" else "text",
+				weight = if x.pinned then "strong" else nil,
+				dot = if x.pinned then "text" else nil,
 				bar = x.skill_frac,
 				bar_color = "good",
-				tip = if x.skill then string.format(t("core:work.cell_skill", "%s (skill %d)"), x.why, x.skill) else x.why,
+				tip = tip,
 			}
 		end,
 		on_press = function(r, c)
@@ -148,17 +185,28 @@ ui.window("core:work", { title = t("core:work.title", "Work"), w = 760, h = 860,
 			return if brush >= 0 then brush else next_level(rows[r].cells[c].base, levels)
 		end,
 		on_paint = function(r, c, value)
-			act.set_priority(rows[r].id, cols[c].id, value)
+			put(rows[r].id, cols[c].id, rows[r].cells[c], value)
 		end,
 		on_wheel = function(r, c, steps, shift)
 			local targets = if shift then rows else { rows[r] }
 			for _, p in targets do
-				local base = p.cells[c].base
-				local now = nudge(base, steps, levels)
-				if now ~= base then
-					act.set_priority(p.id, cols[c].id, now)
+				local cell = p.cells[c]
+				local now = nudge(cell.base, steps, levels)
+				if now ~= cell.base then
+					put(p.id, cols[c].id, cell, now)
 				end
 			end
+		end,
+		keys = cell_keys(levels),
+		on_key = function(r, c, key)
+			local cell = rows[r].cells[c]
+			if key == "a" then
+				if cell.pinned then
+					act.clear_priority(rows[r].id, cols[c].id)
+				end
+				return
+			end
+			put(rows[r].id, cols[c].id, cell, if key == "n" then 0 else tonumber(key) or cell.base)
 		end,
 	})
 
@@ -193,16 +241,18 @@ ui.window("core:work", { title = t("core:work.title", "Work"), w = 760, h = 860,
 
 	return col({ gap = "s", pad = "m" }, {
 		stance_bar(view),
-		brush_bar(levels),
+		brush_bar(levels, labels),
 		row({ gap = "s" }, { row({ w = NAME_W }), header }),
 		-- The window scrolls; the wheel over a cell nudges it instead.
 		row({ gap = "s" }, { names, grid, jobs }),
 	})
 end)
 
--- One colonist's work in order: the same numbers as the board, read as a
--- list. ▲ moves a work type a level sooner, ▼ later; – is never.
-ui.window("core:work.ranked", { title = t("core:work.ranked", "Ranked"), w = 280, h = 380, resizable = true }, function(view)
+-- One colonist's work as shelves: a row per level, first to never, each
+-- work type a token on the shelf it's on. The same settings as the board:
+-- a click moves a token to the next level, bold tokens are pins, and a
+-- token set back to what it would inherit is handed back.
+ui.window("core:work.ranked", { title = t("core:work.shelves", "Levels"), w = 480, h = 300, resizable = true }, function(view)
 	local id = ui.state("core:work.ranked", nil)
 	local b = view.board()
 	local who
@@ -214,46 +264,37 @@ ui.window("core:work.ranked", { title = t("core:work.ranked", "Ranked"), w = 280
 	if not who then
 		return col({ pad = "m" }, { label(t("core:work.pick", "Pick a colonist on the Work board."), { color = "muted" }) })
 	end
-	local order = {}
-	for c, k in b.cols do
-		table.insert(order, { col = k, cell = who.cells[c], rank = c })
-	end
-	table.sort(order, function(x, y)
-		local a = if x.cell.base == 0 then 99 else x.cell.base
-		local z = if y.cell.base == 0 then 99 else y.cell.base
-		if a ~= z then
-			return a < z
-		end
-		return x.rank < y.rank
-	end)
 	local items = { label(who.name, { size = "heading", weight = "strong" }) }
-	local last = nil
-	for _, o in order do
-		local base = o.cell.base
-		if base ~= last then
-			table.insert(items, label(if base == 0 then t("core:work.never", "Never") else string.format(t("core:work.level", "Level %d"), base), { size = "small", color = "muted" }))
-			last = base
+	for shelf = 1, b.levels + 1 do
+		local level = if shelf > b.levels then 0 else shelf
+		local tokens = {}
+		for c, k in b.cols do
+			local cell = who.cells[c]
+			if cell.base == level then
+				table.insert(
+					tokens,
+					button({
+						id = "core:work.ranked." .. k.id,
+						label = k.label,
+						strong = cell.pinned,
+						tooltip = cell.why,
+						on_click = function()
+							put(who.id, k.id, cell, next_level(cell.base, b.levels))
+						end,
+					})
+				)
+			end
 		end
-		local set = function(level: number)
-			act.set_priority(who.id, o.col.id, level)
-		end
+		local name = if level == 0 then t("core:work.never", "Never") else b.labels[level] or tostring(level)
 		table.insert(
 			items,
-			row({ id = "core:work.ranked." .. o.col.id, gap = "xs", align = "center" }, {
-				row({ w = 110 }, { label(o.col.label) }),
-				button({ id = "core:work.ranked." .. o.col.id .. ".up", label = "▲", disabled = base == 1, on_click = function()
-					set(if base == 0 then b.levels else base - 1)
-				end }),
-				button({ id = "core:work.ranked." .. o.col.id .. ".down", label = "▼", disabled = base == 0 or base == b.levels, on_click = function()
-					set(base + 1)
-				end }),
-				button({ id = "core:work.ranked." .. o.col.id .. ".never", label = "–", disabled = base == 0, on_click = function()
-					set(0)
-				end }),
+			row({ id = "core:work.shelf." .. level, gap = "xs", align = "center" }, {
+				row({ w = 80 }, { label(name, { size = "small", color = "muted" }) }),
+				row({ gap = "xs" }, tokens),
 			})
 		)
 	end
-	return ui.scroll({ pad = "m", gap = "xs", table.unpack(items) })
+	return ui.scroll({ pad = "m", gap = "s", table.unpack(items) })
 end)
 
 require("@core/ui/screens").add({ id = "core:work", label = t("core:keys.work", "Work"), key = "p", order = 10 })

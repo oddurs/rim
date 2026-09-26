@@ -8,6 +8,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | Name | Type | What it does |
 |---|---|---|
 | `act.advance` | `(hours: number) -> ()` | Run the game forward (devtools). |
+| `act.clear_priority` | `(id: number, work: string) -> ()` | Hand a colonist's work type back: forget their own setting, so they follow what they'd inherit. |
 | `act.cycle_overlay` | `() -> ()` | Show the next field overlay. |
 | `act.draft` | `(id: number, on: boolean) -> ()` | Draft or undraft a colonist. |
 | `act.focus` | `(id: number) -> ()` | Move the camera to a pawn or thing. |
@@ -40,7 +41,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `ui.define` | `(id: string, build: (view: any) -> Node?) -> ()` | Define a component under a namespaced id. |
 | `ui.extend` | `(id: string, add: any) -> ()` | Add children to another component's extension point. |
 | `ui.focus` | `(id: string) -> ()` | Give a node (a text input) the keyboard once it is laid out. |
-| `ui.grid` | `(props: GridProps) -> Node` | Rows by cols of cells the engine paints as one node. cell(r, c) describes each cell at build; on_press(r, c) returns the value a drag paints and on_paint(r, c, value) runs once per cell the drag enters; on_wheel(r, c, steps, shift) takes the wheel over a cell. A cell can carry a bar (0 to 1) along its bottom and its own tooltip (tip). |
+| `ui.grid` | `(props: GridProps) -> Node` | Rows by cols of cells the engine paints as one node. cell(r, c) describes each cell at build; on_press(r, c) returns the value a drag paints and on_paint(r, c, value) runs once per cell the drag enters; on_wheel(r, c, steps, shift) takes the wheel over a cell; on_key(r, c, key) takes the keys named in keys while the pointer is over a cell, ahead of any binding on them. A cell can carry a bar (0 to 1) along its bottom, its own tooltip (tip), its own text weight, and a dot or ring in its corner (a colour) marking who set it. |
 | `ui.image` | `(node: Node) -> Node` | A picture from a mod's ui/img: { src = "mod:name", tint = true }. Its own size unless w/h say otherwise; tint draws it in the text colour. A name@2x.png beside name.png is used on dense displays. |
 | `ui.input` | `(node: Node) -> Node` | A line of text the player edits: { id = ..., value = ..., placeholder = ..., on_change = fn(text), on_submit = fn(text), on_key = fn("up" \| "down") }. The engine keeps the buffer by id across rebuilds and reloads; click to focus, Escape to leave. |
 | `ui.is_open` | `(id: string) -> boolean` | Whether a window is open. |

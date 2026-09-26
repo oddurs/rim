@@ -743,6 +743,10 @@ impl UiVm {
             Some(e) => UiAction::SetPriority(e, work, level),
             None => return Err(rt("bad entity id")),
         });
+        act!("clear_priority", (u64, String), |(id, work)| match Entity::from_bits(id) {
+            Some(e) => UiAction::ClearPriority(e, work),
+            None => return Err(rt("bad entity id")),
+        });
         act!("set_stance", String, |id| UiAction::SetStance(id));
         act!("zone_allow", (u32, String, bool), |(zone, item, on)| UiAction::ZoneAllow(zone, item, on));
         act!("cycle_overlay", (), |_a| UiAction::CycleOverlay);
@@ -1247,6 +1251,8 @@ impl UiVm {
             let waiting = rim_sim::ai::work_waiting(w);
             let t = lua.create_table()?;
             t.set("levels", levels)?;
+            let scale = &defs.priority_scale;
+            t.set("labels", (1..=levels).map(|l| scale.name(l)).collect::<Vec<_>>())?;
             t.set("high", high)?;
             let cols = lua.create_table()?;
             let rows = lua.create_table()?;
@@ -1263,20 +1269,25 @@ impl UiVm {
                     let d = &defs.work_types[wt as usize];
                     let skill = d.skill_r.map(|k| p.skill(k));
                     let cell = lua.create_table()?;
+                    let pinned = p.own_priority(wt).is_some();
                     cell.set("base", p.priority(defs, wt))?;
                     cell.set("value", value)?;
+                    cell.set("inherit", d.priority.min(levels))?;
+                    cell.set("pinned", pinned)?;
+                    // "Chop: Soon = Ana's setting Later · Harvest −1": the
+                    // base says whose it is, each rule how far it moved it.
                     let steps: Vec<String> = parts
                         .iter()
                         .enumerate()
-                        .map(|(i, s)| {
-                            if i == 0 {
-                                format!("{} {}", s.label, s.delta)
-                            } else {
-                                format!("{} {:+}", s.label, s.delta)
-                            }
+                        .map(|(i, s)| match i {
+                            0 if pinned => format!("{}'s setting {}", p.name, scale.name(s.delta as u8)),
+                            0 => format!("default {}", scale.name(s.delta as u8)),
+                            _ if s.delta < 0 => format!("{} −{}", s.label, -s.delta),
+                            _ if s.delta > 0 => format!("{} +{}", s.label, s.delta),
+                            _ => format!("{} ±0", s.label),
                         })
                         .collect();
-                    cell.set("why", format!("{} {value} = {}", d.label, steps.join(", ")))?;
+                    cell.set("why", format!("{}: {} = {}", d.label, scale.name(value), steps.join(" · ")))?;
                     if let Some(s) = skill {
                         cell.set("skill", s)?;
                         cell.set("skill_frac", s as f64 / rim_sim::world::SKILL_MAX as f64)?;
