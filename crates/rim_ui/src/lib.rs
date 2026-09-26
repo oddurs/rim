@@ -22,6 +22,7 @@ pub mod node;
 pub mod paint;
 pub mod text;
 pub mod theme;
+pub mod token;
 pub mod view;
 pub mod vm;
 
@@ -1896,6 +1897,7 @@ fn plain(key: u64, style: Style, children: Vec<Node>) -> Node {
         grid: None,
         handle: None,
         image: None,
+        token: None,
         input: None,
         on_drag: None,
         children,
@@ -1930,6 +1932,7 @@ fn flatten(n: &Node, depth: usize, out: &mut Vec<(usize, String, String, String)
         (Kind::Grid, _) => "grid",
         (Kind::Image, _) => "image",
         (Kind::Input, _) => "input",
+        (Kind::Token, _) => "token",
     };
     out.push((depth, kind.to_string(), n.id.as_deref().unwrap_or("").to_string(), n.owner.to_string()));
     for c in &n.children {

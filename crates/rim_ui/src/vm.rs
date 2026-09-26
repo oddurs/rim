@@ -236,6 +236,8 @@ pub struct UiVm {
     seen_ids: RefCell<HashSet<String>>,
     /// The player's UI scale, for `view.ui_scale`; set by the engine.
     pub(crate) ui_scale: Rc<Cell<f32>>,
+    /// Item looks handed to scripts by index (`view.look`, token.rs).
+    looks: Rc<RefCell<crate::token::Looks>>,
     unknown_checked: bool,
 }
 
@@ -308,6 +310,7 @@ impl UiVm {
             seen_ids: RefCell::new(HashSet::new()),
             unknown_checked: false,
             ui_scale: Rc::new(Cell::new(1.0)),
+            looks: Rc::new(RefCell::new(crate::token::Looks::default())),
         };
         if let Err(e) = vm.install(mods) {
             vm.warnings.push(format!("UI API setup failed: {e}"));
@@ -877,6 +880,17 @@ impl UiVm {
         view!("compact", (), |_lua, l, _a| Ok(l.client.screen.0 / l.client.scale.max(0.01) < COMPACT_BELOW));
         let scale = self.ui_scale.clone();
         view.set("ui_scale", lua.create_function(move |_, ()| Ok(scale.get()))?)?;
+        // A thing's look, for an item token: made once per thing and
+        // material, and handed out by index (token.rs).
+        let (lent, looks) = (self.lent.clone(), self.looks.clone());
+        view.set(
+            "look",
+            lua.create_function(move |_, (thing, made_of): (mlua::LuaString, Option<mlua::LuaString>)| {
+                let l = lease(&lent)?;
+                let made_of = made_of.as_ref().map(|m| m.to_str()).transpose()?;
+                looks.borrow_mut().id(&l.world.defs, &thing.to_str()?, made_of.as_deref().unwrap_or("")).map_err(rt)
+            })?,
+        )?;
 
         view!("colonists", Option<usize>, |lua, l, max| {
             let t = lua.create_table()?;
@@ -1723,6 +1737,7 @@ impl UiVm {
         f: impl FnOnce(&mut Builder) -> R,
     ) -> R {
         let view: Table = self.lua.globals().get("view").unwrap();
+        self.looks.borrow_mut().new_build();
         let mut times: HashMap<Rc<str>, f64> = HashMap::new();
         let mut errors = Vec::new();
         let out = self.lend(world, client, engine, || {
@@ -1989,7 +2004,13 @@ impl Builder<'_> {
         for k in ["count", "row", "row_h"] {
             let _ = t.raw_set(k, Value::Nil);
         }
-        let ctx = Ctx { theme: self.theme, owner: owner.clone(), images: self.lists.images, edits: self.lists.edits };
+        let ctx = Ctx {
+            theme: self.theme,
+            owner: owner.clone(),
+            images: self.lists.images,
+            edits: self.lists.edits,
+            looks: &self.vm.looks,
+        };
         let mut node = match node_from_table(&ctx, t, key) {
             Ok(n) => n,
             Err(e) => return self.fail(owner, key, what, e),
@@ -2087,7 +2108,13 @@ impl Builder<'_> {
         if kind.as_deref() == Some("list") {
             return Some(self.expand_list(t, key, owner, id.as_deref()));
         }
-        let ctx = Ctx { theme: self.theme, owner: owner.clone(), images: self.lists.images, edits: self.lists.edits };
+        let ctx = Ctx {
+            theme: self.theme,
+            owner: owner.clone(),
+            images: self.lists.images,
+            edits: self.lists.edits,
+            looks: &self.vm.looks,
+        };
         let mut node = match node_from_table(&ctx, t, key) {
             Ok(n) => n,
             Err(e) => return Some(self.fail(owner, key, id.as_deref().unwrap_or("node"), e)),

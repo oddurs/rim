@@ -561,6 +561,37 @@ dense displays: the engine picks it from 1.5x up. No SVG, no nine-slice, no
 animation. A `src` nobody ships is a named warning and a red placeholder
 where the image would be, so the rest of the panel still works.
 
+## Items
+
+Every item on every screen is one component, the **item token**
+(DESIGN.md §4f): the thing's own world look tinted by its material, the
+count bottom right, a notch when the stack is full, and a condition bar
+when it is worn. A mod's new item gets a token without an icon.
+
+```lua
+local kit = require("@core/ui/kit")
+ui.define("my_mod:shelf", function(view)
+    return kit.row({ gap = "xs" }, {
+        kit.item({ thing = "core:wood", count = 140, limit = 75 }),   -- full notch
+        kit.item({ thing = "core:stone", count = 12, hp = 0.6, size = "l" }),
+        kit.item({ state = "empty" }),                                -- an empty slot
+    })
+end)
+ui.mount("windows", "my_mod:shelf")
+```
+
+`size` is `"s"` (20, no count), `"m"` (32) or `"l"` (48). `state` is
+`"incoming"` (a hauler has reserved it), `"leaving"` (its store no longer
+takes it) or `"empty"`. Counts read exact to 999, then `1.0k` and `12k`;
+a count of one is never drawn.
+
+Underneath, `view.look(thing, made_of?)` returns an index into the looks
+the engine has made, and a node `{ kind = "token", look, count, full, hp,
+state }` paints it. A grid cell takes the same fields as `token = {...}`,
+so a contents grid of two hundred items is still one node. A look's
+sprite layers draw as a fill in their colour: the UI can't reach the
+world's atlas.
+
 ## Text input and sliders
 
 The tree is rebuilt twenty times a second, so a caret cannot live in a

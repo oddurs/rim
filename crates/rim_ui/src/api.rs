@@ -247,6 +247,7 @@ pub const UI_API: &[UiDoc] = &[
     d!("view.inspect", "() -> Inspect?", "The node under the cursor (devtools)."),
     d!("view.items", "() -> { Item }", "Every item def, which a stockpile can take or refuse."),
     d!("view.last_order", "() -> { label: string, age: number }?", "The last order given (\"Gunnar will deconstruct wall\") and how many seconds ago, or nil once it's been undone."),
+    d!("view.look", "(thing: string, made_of: string?) -> number", "A thing's world look, tinted by what it's made of, as an index a token node's `look` takes (kind = \"token\"; `kit.item` builds one). Made once per thing and material."),
     d!("view.marked", "() -> { [string]: number }", "How many things each designation has marked, by designation id; ones with none are left out."),
     d!("view.message_count", "() -> number", "How many messages the log holds."),
     d!("view.messages", "(max: number, skip: number?) -> { Message }", "The newest messages, newest first; skip that many of the newest to page back through the log."),

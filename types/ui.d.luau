@@ -258,6 +258,8 @@ declare view: {
     items: () -> { Item },
     -- The last order given ("Gunnar will deconstruct wall") and how many seconds ago, or nil once it's been undone.
     last_order: () -> { label: string, age: number }?,
+    -- A thing's world look, tinted by what it's made of, as an index a token node's `look` takes (kind = "token"; `kit.item` builds one). Made once per thing and material.
+    look: (thing: string, made_of: string?) -> number,
     -- How many things each designation has marked, by designation id; ones with none are left out.
     marked: () -> { [string]: number },
     -- How many messages the log holds.
