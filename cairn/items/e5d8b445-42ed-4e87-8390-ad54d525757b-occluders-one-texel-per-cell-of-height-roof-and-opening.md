@@ -30,3 +30,7 @@ Every shadow in §6e is a march through one small texture. It has to say, per ce
 - [ ] A frame with no map change does no occluder work (test on the cache key)
 - [ ] Rebuild time on 192 × 192 and 250 × 250 recorded here
 - [ ] A window, a door and a tree read back with the expected channels (unit test on the packer)
+
+## 2026-09-26
+
+Agreed with Houses: 24100bb9 exposes Map::roofed(i) per cell (and covered(i) for span alone), computed at room rebuild and per level through Depth. The occluder packer calls roofed(i) in place of map.indoors once it lands. df049dac keeps the roof height as a per-cell array rebuilt with rooms; the name comes when it lands. The occluder texture doesn't go through draw.rs's Sink.

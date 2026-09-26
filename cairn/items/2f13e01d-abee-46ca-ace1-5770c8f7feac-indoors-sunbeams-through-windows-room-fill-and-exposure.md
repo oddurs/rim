@@ -33,3 +33,7 @@ A torch in a hut and a torch in a field should look different, and a window shou
 - [ ] A hut with a west window shows a beam on the floor at 18:40 and none at 12:00 (autotest screenshots)
 - [ ] One brazier lights a 3×3 hut to its corners and leaves the corners of a 12×10 hall dim (screenshots)
 - [ ] Room fill rebuilds only with rooms (test)
+
+## 2026-09-26
+
+Agreed with Houses: the window daylight fan and the fire's warm wash belong to this item. 4791e24b drops both and keeps only the gap marker and the open-sky hatch. The plan draws nothing for either, so there's no second fan to replace.
