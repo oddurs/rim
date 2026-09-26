@@ -675,6 +675,111 @@ order costs one script call when it completes. Nothing here scans the map.
 
 ---
 
+## 4f. Stores and sorting
+
+Mining is the first work that makes things faster than the colony uses
+them: one 10×10 room dug out of granite is 1,000 stone, 14 stacks at the
+75 limit. Storage has three jobs: **keep** more stacks per cell than the
+ground does, **sort** each stack to the best place that takes it, and
+**show** what is where.
+
+### Tension: containers as a second item layer, or slots on a fixture?
+
+- **For more stacks per cell:** it's the obvious model, and every system
+  that finds items would find a crate's contents.
+- **Against:** pathing, rooms, the renderer, `room_for` and the save's
+  rebuild of `map.item` all assume one stack per cell (§6a).
+- **Ruling:** a **store** is anything that owns slots, a filter and a
+  level. A stockpile zone is a store whose slots are its cells. A container
+  is a fixture with a `store` block, and its slots live in it; its cell
+  has nothing in the item layer. Pawns reach it from its `spots`, so
+  pathing learns nothing new.
+
+### Tension: stored stacks as entities, or values?
+
+- **For entities:** scripts can hold an id, and reservations and `MadeOf`
+  already work on them.
+- **Against:** every stored stack would land in every ECS scan, and
+  merging two partial stacks despawns one. Slots would fragment the ECS
+  for data that never moves by itself.
+- **Ruling:** a slot holds a `Lot`, the value carries and deliveries
+  already use, addressed as `(store, slot)`. Loose and zone stacks stay
+  entities, so nothing that exists today changes shape.
+
+### Sorting only climbs
+
+- A store takes a stack if its filter passes the thing, material and
+  condition, and it has room: a free slot, or a partial stack of the same
+  thing and material.
+- The highest level wins; within a level, the nearest, ties by id.
+- A stored stack moves only to a **strictly higher** level. Two stores at
+  one level never trade, whatever the distance, so nothing thrashes. To
+  pull berries into the kitchen, raise the kitchen's level.
+- A store that stops taking something lets it go, to any level.
+- Room is reserved by count: a hauler bound for a store holds the room it
+  will fill, so nobody scans other pawns' jobs.
+- Nothing is lost. A hauler that finds no room goes to the next best
+  store, then the nearest open cell.
+- Levels are data: `[[store_priority]]` in core, five levels with Normal in
+  the middle, like `[[priority_scale]]`.
+
+### One filter
+
+Stores, zones and bills ask the same question, so there is one filter:
+things, materials and a condition range. It is authored in
+`[[item_category]]` defs (a tree; an item joins by tag or by id, and
+anything unclaimed is under Other) and compiled to bitsets over def ids,
+interned so stores that share one share it. The sim never walks the tree.
+
+### What goes where
+
+- **Core** owns the mechanism's shared names: the categories, the level
+  scale and the `bulky` tag. Core alone stores in zones.
+- **Bulky** things (wood, stone, ore) never go in baskets, crates or
+  shelves: the ground, zones, and bulk stores at 2–3× the stack. Mining
+  fills yards and bins; crafting fills shelves.
+- **Plugins** own every container: `primitive` (basket, pots, woodpile,
+  stone bin), `timber` (planks, plank walls, crates, shelves, racks,
+  granary) and `iron` (bog iron, charcoal, the bloomery and forge, nails,
+  fittings, the saw and the pick). Timber plays without iron: planks are
+  hewn with an axe, slowly, and nothing needs nails. With iron installed,
+  iron patches timber's builds to add them. Deep ore is §6d's: iron sits
+  at −3 behind `mining`, and bog iron is the surface's poor early source.
+- A build may take a material **and** parts (`stuff` and `cost`), and may
+  require a tool, so a plank wall is planks and nails.
+
+### Cost
+
+Every question storage asks is answered from an index kept by the change
+that affects it, through one choke point for stack changes:
+
+| Index | Answers | Updated when |
+|---|---|---|
+| ledger, by thing and material | how much the colony has (`rim.stock`) | a stack changes count |
+| holdings, by thing and chunk | the nearest flint for a bill | a stack changes count |
+| accepts, by thing and level | which stores take this | a filter or level changes |
+| room | which stores have space | a slot fills or empties |
+| unsorted, by chunk | which stacks have a better place | a stack is dropped, a store changes |
+| waiting, by thing | stacks with nowhere to go | a store gains room for that thing |
+
+An idle store costs nothing. A hauler with nowhere to go waits under the
+thing's id and wakes only when a store gains room for it. The indexes are
+derived and rebuilt on load (§7a). Before this, the haul search cost
+0.33 ms a step on 250 × 250 with 30 colonists and 300 loose stacks, over
+the 0.2 ms work-choice budget (§4d).
+
+### Showing contents
+
+One **item token** draws every item everywhere: the def's own look, the
+count bottom right, a notch for a full stack, a condition bar when
+damaged. Containers show their slots; zones show totals by thing and
+material, because cells are their limit. The inspector gets Contents and
+Accepts tabs, the map a hover card and a storage overlay, and a Stores
+sheet shows the colony's totals. Sort orders are registered in the UI VM,
+so a mod's order can never desync a game.
+
+---
+
 ## 5. What's in `core` and what isn't
 
 `core` is the smallest complete game. Everything else is a plugin, including
