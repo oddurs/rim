@@ -789,6 +789,12 @@ impl Ui {
         if hovered != self.hovered {
             self.hovered = hovered;
             self.hovered_since = input.time;
+            // Coming onto a node that wants to know: once, not per frame.
+            if let Some((layer, h)) = &top {
+                if let Some(f) = self.node_at(layer, h.path[0], &h.path[1..]).and_then(|n| n.on_hover.clone()) {
+                    handlers.push(Call::Click(f));
+                }
+            }
         }
 
         self.mouse = input.mouse;
@@ -1749,6 +1755,7 @@ fn plain(key: u64, style: Style, children: Vec<Node>) -> Node {
         disabled: false,
         on_click: None,
         on_right_click: None,
+        on_hover: None,
         tooltip: None,
         focusable: false,
         anchor: None,

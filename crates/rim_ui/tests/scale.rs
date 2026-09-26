@@ -84,7 +84,7 @@ fn the_ui_scales_and_clicks_land_where_it_draws() {
         settle(&mut ui, &sim, &cv, &mut t);
         let chop = ui.find("core:toolbar.designate:core:chop").unwrap_or_else(|| panic!("at {s}: {}", ui.snapshot()));
         let actions = click(&mut ui, &sim, &mut cv, centre(chop));
-        assert_eq!(actions, vec![UiAction::Tool("designate:core:chop".into())], "at {s}");
+        assert!(actions.contains(&UiAction::Tool("designate:core:chop".into())), "at {s}: {actions:?}");
         // Close it again for the next scale.
         let orders = ui.find("core:dock.orders").unwrap();
         click(&mut ui, &sim, &mut cv, centre(orders));

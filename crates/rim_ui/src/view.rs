@@ -18,6 +18,12 @@ pub struct ToolView {
     pub category: String,
     /// Its row inside the category: a buildable's `build.menu`, or "".
     pub group: String,
+    /// A buildable's cost in the material it would use ("5 stone blocks",
+    /// "15 wood", "free"); empty for other tools.
+    pub cost: String,
+    /// A buildable's work and hit points before its material's factors.
+    pub work: u32,
+    pub hp: u32,
 }
 
 /// One material the active build tool could use.
@@ -141,6 +147,9 @@ pub enum UiAction {
     /// Draw the UI this much bigger (0.75 to 2), on top of the display's
     /// own scale.
     UiScale(f32),
+    /// The buildable the build tray's card is about (by tool key), so the
+    /// materials view describes it; None goes back to the active tool.
+    Preview(Option<String>),
     /// The title screen: play the save at this path.
     Load(String),
     /// The title screen: start a new colony.

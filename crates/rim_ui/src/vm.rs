@@ -729,6 +729,7 @@ impl UiVm {
         act!("toggle_profiler", (), |_a| UiAction::ToggleProfiler);
         act!("toggle_devtools", (), |_a| UiAction::ToggleDevtools);
         act!("toggle_outlines", (), |_a| UiAction::ToggleOutlines);
+        act!("preview", Option<String>, |key| UiAction::Preview(key));
         act!("ui_scale", f32, |s| match s.is_finite() {
             true => UiAction::UiScale(s.clamp(UI_SCALE.0, UI_SCALE.1)),
             false => return Err(rt("act.ui_scale: wants a number from 0.75 to 2")),
@@ -967,6 +968,21 @@ impl UiVm {
             Ok(t)
         });
         view!("message_count", (), |_lua, l, _a| Ok(l.world.messages.len()));
+        // How many things each designation has marked, by designation id:
+        // one pass over the marked things, for the Orders tray.
+        view!("marked", (), |lua, l, _a| {
+            let mut counts = vec![0u32; l.world.defs.designations.len()];
+            for d in l.world.ecs.query::<&rim_sim::world::Designated>().iter() {
+                if let Some(c) = counts.get_mut(d.0 as usize) {
+                    *c += 1;
+                }
+            }
+            let t = lua.create_table()?;
+            for (i, n) in counts.into_iter().enumerate().filter(|(_, n)| *n > 0) {
+                t.set(l.world.defs.designations[i].id.as_str(), n)?;
+            }
+            Ok(t)
+        });
         // Recent world events (joins, deaths...), newest last.
         view!("events", u64, |lua, l, since| {
             let t = lua.create_table()?;
@@ -1223,6 +1239,9 @@ impl UiVm {
                 row.set("active", tool.active)?;
                 row.set("category", tool.category.as_str())?;
                 row.set("group", tool.group.as_str())?;
+                row.set("cost", tool.cost.as_str())?;
+                row.set("work", tool.work)?;
+                row.set("hp", tool.hp)?;
                 t.push(row)?;
             }
             Ok(t)

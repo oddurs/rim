@@ -67,7 +67,7 @@ fn clicks_on_panels_never_reach_the_world() {
     click(&mut ui, &sim, &mut cv, centre(orders));
     let chop = ui.find("core:toolbar.designate:core:chop").expect("Orders opens its palette");
     let actions = click(&mut ui, &sim, &mut cv, centre(chop));
-    assert_eq!(actions, vec![UiAction::Tool("designate:core:chop".into())]);
+    assert!(actions.contains(&UiAction::Tool("designate:core:chop".into())), "{actions:?}");
 
     // A panel's background swallows the click but does nothing.
     let panel = ui.find("core:inspector").unwrap();
@@ -1784,13 +1784,15 @@ fn a_mod_ships_a_font_under_ui_fonts() {
 /// The material row (0215): with a stuff buildable selected, the toolbar
 /// grows a row of materials, what you have none of says so, and the rest
 /// of the toolbar is still there. Headless, so it runs on every platform.
+/// While placing, the materials ride in the dock's pill.
 #[test]
 fn the_material_row_renders_beside_the_toolbar() {
     let sim = sim_at(&mods());
     let mut ui = ui_for(&sim);
     let mut cv = client(&sim);
+    let wall = cv.tools.iter().find(|t| t.key.ends_with(":wall")).expect("a wall tool").key.clone();
     for t in &mut cv.tools {
-        t.active = t.key == "build:wall";
+        t.active = t.key == wall;
     }
     let mat = |id: &str, label: &str, have: u32, active: bool| rim_ui::view::StuffView {
         id: id.into(),
@@ -1810,9 +1812,10 @@ fn the_material_row_renders_beside_the_toolbar() {
         ui.find("core:stuff.core:wood").is_some() && ui.find("core:stuff.core:stone").is_some(),
         "one button per material:\n{snap}"
     );
-    assert!(snap.contains("wood ×12"), "stock is shown:\n{snap}");
-    assert!(snap.contains("stone blocks · none"), "none is a fact, not a gap:\n{snap}");
-    assert!(snap.contains("hp 140"), "the active material's stats are shown:\n{snap}");
+    assert!(ui.find("core:dock.pill").is_some(), "placing shows the pill:\n{snap}");
+    assert!(snap.contains("\"12\""), "stock is shown:\n{snap}");
+    assert!(snap.contains("\"none\""), "none is a fact, not a gap:\n{snap}");
+    assert!(snap.contains("wall in wood"), "the pill says what the next click places:\n{snap}");
 
     // Nothing selected: no row. The tree rebuilds on a clock, so time has
     // to move for the change to show.

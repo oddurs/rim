@@ -23,23 +23,45 @@ pub fn ui_for(sim: &Sim) -> Ui {
 pub fn client(sim: &Sim) -> ClientView {
     let c = sim.world.colony_center().unwrap();
     let defs = &sim.world.defs;
-    let mut tools = vec![ToolView {
-        key: "select".into(),
-        label: "Select".into(),
-        color: [128, 128, 128],
-        active: true,
+    // The client's tools, as `toolbar` in rim_client files them: orders,
+    // buildables by menu in definition order, and zones.
+    let tool = |key: String, label: &str, color: [u8; 3], category: &str, group: &str| ToolView {
+        key,
+        label: label.into(),
+        color,
+        category: category.into(),
+        group: group.into(),
         ..Default::default()
-    }];
+    };
+    let mut tools = vec![ToolView { active: true, ..tool("select".into(), "Select", [128, 128, 128], "", "") }];
     for d in &defs.designations {
-        tools.push(ToolView {
-            key: format!("designate:{}", d.id),
-            label: d.label.clone(),
-            color: d.rgb,
-            active: false,
-            category: "orders".into(),
-            group: String::new(),
-        });
+        tools.push(tool(format!("designate:{}", d.id), &d.label, d.rgb, "orders", ""));
     }
+    tools.push(tool("cancel".into(), "Cancel", [200, 80, 80], "orders", ""));
+    let mut menus: Vec<&str> = Vec::new();
+    for t in defs.things.iter().filter_map(|t| t.build.as_ref()) {
+        if !menus.contains(&t.menu.as_str()) {
+            menus.push(&t.menu);
+        }
+    }
+    for menu in menus {
+        for t in defs.things.iter().filter(|t| t.build.as_ref().is_some_and(|b| b.menu == menu)) {
+            let b = t.build.as_ref().unwrap();
+            let cost = if b.free {
+                "free".to_string()
+            } else {
+                b.stuff.as_ref().map_or(String::new(), |s| format!("{} {}", s.count, s.category))
+            };
+            tools.push(ToolView {
+                cost,
+                work: b.work,
+                hp: t.hp,
+                ..tool(format!("build:{}", t.id), &t.label, t.rgb, "build", menu)
+            });
+        }
+    }
+    tools.push(tool("stockpile".into(), "Stockpile", [115, 166, 242], "zones", ""));
+    tools.push(tool("clear_zone".into(), "Clear zone", [150, 150, 170], "zones", ""));
     ClientView {
         screen: (1600.0, 960.0),
         scale: 1.0,

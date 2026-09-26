@@ -201,6 +201,8 @@ pub struct Node {
     pub disabled: bool,
     pub on_click: Option<Function>,
     pub on_right_click: Option<Function>,
+    /// Called once when the pointer comes onto this node.
+    pub on_hover: Option<Function>,
     pub tooltip: Option<String>,
     pub focusable: bool,
     pub anchor: Option<Anchor>,
@@ -226,6 +228,7 @@ impl Node {
     pub fn is_interactive(&self) -> bool {
         self.on_click.is_some()
             || self.on_right_click.is_some()
+            || self.on_hover.is_some()
             || self.tooltip.is_some()
             || self.focusable
             || self.grid.as_ref().is_some_and(|g| {
@@ -357,6 +360,7 @@ pub fn blank(key: u64, owner: Rc<str>) -> Node {
         disabled: false,
         on_click: None,
         on_right_click: None,
+        on_hover: None,
         tooltip: None,
         focusable: false,
         anchor: None,
@@ -521,6 +525,7 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
         disabled: false,
         on_click: None,
         on_right_click: None,
+        on_hover: None,
         tooltip: None,
         focusable: false,
         anchor: None,
@@ -627,6 +632,7 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
             "disabled" => n.disabled = matches!(v, Value::Boolean(true)),
             "on_click" => n.on_click = Some(function("on_click", v)?),
             "on_right_click" => n.on_right_click = Some(function("on_right_click", v)?),
+            "on_hover" => n.on_hover = Some(function("on_hover", v)?),
             "tooltip" => n.tooltip = Some(string("tooltip", &v)?),
             "focusable" => n.focusable = matches!(v, Value::Boolean(true)),
             "priority" => n.priority = num("priority", &v)? as i32,
@@ -872,6 +878,7 @@ pub fn error_node(theme: &Theme, owner: Rc<str>, key: u64, what: &str, err: &str
         disabled: false,
         on_click: None,
         on_right_click: None,
+        on_hover: None,
         tooltip: None,
         focusable: false,
         anchor: None,
@@ -904,6 +911,7 @@ pub fn error_node(theme: &Theme, owner: Rc<str>, key: u64, what: &str, err: &str
         disabled: false,
         on_click: None,
         on_right_click: None,
+        on_hover: None,
         tooltip: None,
         focusable: false,
         anchor: None,

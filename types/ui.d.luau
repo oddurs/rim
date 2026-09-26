@@ -60,7 +60,10 @@ type FieldInfo = {
 }
 type UiDate = { year: number, season: string, season_index: number, day: number, day_of_year: number, year_days: number }
 type Part = { label: string, value: number }
-type Tool = { key: string, label: string, color: string, active: boolean, category: string, group: string }
+type Tool = {
+    key: string, label: string, color: string, active: boolean, category: string, group: string,
+    cost: string, work: number, hp: number,
+}
 type Zone = { id: number, name: string, cells: number, allows: { [string]: boolean } }
 type Item = { id: string, label: string, color: string }
 type WorkType = { id: string, label: string, icon: string, order: number, default: number }
@@ -163,6 +166,8 @@ declare act: {
     load: (path: string) -> (),
     -- Start a new colony (the title screen).
     new_colony: () -> (),
+    -- Point the materials view (view.stuff) at a buildable by its tool key, for a card describing it; nil goes back to the tool in hand.
+    preview: (key: string?) -> (),
     -- Draw the world at this fraction of the screen's pixels, 0.25 to 1; the UI stays sharp. Saved for the player.
     render_scale: (scale: number) -> (),
     -- Select a pawn or thing, or nothing. With add, put a colonist into the selection or take them out of it (a shift-click).
@@ -238,6 +243,8 @@ declare view: {
     inspect: () -> Inspect?,
     -- Every item def, which a stockpile can take or refuse.
     items: () -> { Item },
+    -- How many things each designation has marked, by designation id; ones with none are left out.
+    marked: () -> { [string]: number },
     -- How many messages the log holds.
     message_count: () -> number,
     -- The newest messages, newest first; skip that many of the newest to page back through the log.

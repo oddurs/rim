@@ -1,7 +1,7 @@
 -- Screens: the sheets a player opens by name. Registering one gives it a
--- key binding (and so a place in the command palette) and a button at the
--- right of the dock, so a mod's screen sits beside Work and Stockpiles with
--- one call:
+-- key binding (and so a place in the command palette) and a tab at the
+-- right of the top bar, so a mod's screen sits beside Work and Stockpiles
+-- with one call:
 --
 --     local screens = require("@core/ui/screens")
 --     ui.window("my_mod:herds", { title = "Herds", w = 640, h = 600, sheet = true }, build)
@@ -46,7 +46,7 @@ function screens.add(def)
 	end)
 end
 
-ui.extend("core:dock.right", function(view)
+ui.extend("core:topbar.views", function(view)
 	local items = {}
 	for _, s in list do
 		table.insert(

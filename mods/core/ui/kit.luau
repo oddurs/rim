@@ -451,4 +451,23 @@ function kit.heading(text: string, note: string?)
 	})
 end
 
+-- A tray: columns side by side on one surface with a hairline between
+-- them, rising from the dock. Nil columns are left out. props: id, w, and
+-- anything a row takes.
+function kit.tray(props, columns)
+	local children = {}
+	for _, c in columns do
+		if c then
+			if #children > 0 then
+				table.insert(children, node("row", { w = 1, bg = "line" }))
+			end
+			table.insert(children, c)
+		end
+	end
+	props.bg = props.bg or "surface"
+	props.border = props.border or "line"
+	props.radius = props.radius or "radius"
+	return node("row", props, children)
+end
+
 return kit

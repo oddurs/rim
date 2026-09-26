@@ -49,6 +49,9 @@ ui.define("core:topbar", function(view)
 		row({ id = "core:topbar.right", gap = "l", align = "center" }),
 		-- On a small screen the keys are on their buttons; the line goes.
 		not view.compact() and label(t("core:topbar.help", "Space pause · 1/2/3 speed · R draft · O overlay · F3 profiler · F12 devtools"), { size = "small", color = "faint" }),
+		-- The screens, as tabs: views of the colony live up here, beside its
+		-- state, and the dock keeps to verbs (mods/core/ui/screens.luau).
+		row({ id = "core:topbar.views", gap = "xs", align = "center" }),
 	})
 end)
 ui.mount("top", "core:topbar")

@@ -3,19 +3,27 @@
 -- file without core drawing a button for it. A mod adds its own the same
 -- way; two mods on one key is reported.
 local kit = require("@core/ui/kit")
+-- 1 to 3 pick a thing while a dock tray is open, and set the speed otherwise.
+local dock = require("@core/ui/toolbar")
 local t = ui.t
 
 ui.bind("core:pause", { key = "space", label = t("core:keys.pause", "Pause or resume") }, function()
 	act.toggle_pause()
 end)
 ui.bind("core:speed1", { key = "1", label = t("core:keys.speed1", "Normal speed") }, function()
-	act.speed(1)
+	if not dock.number(1) then
+		act.speed(1)
+	end
 end)
 ui.bind("core:speed2", { key = "2", label = t("core:keys.speed2", "Fast") }, function()
-	act.speed(3)
+	if not dock.number(2) then
+		act.speed(3)
+	end
 end)
 ui.bind("core:speed3", { key = "3", label = t("core:keys.speed3", "Fastest") }, function()
-	act.speed(6)
+	if not dock.number(3) then
+		act.speed(6)
+	end
 end)
 ui.bind("core:profiler", { key = "f3", label = t("core:keys.profiler", "Profiler") }, function()
 	act.toggle_profiler()
