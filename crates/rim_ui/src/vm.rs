@@ -838,6 +838,23 @@ impl UiVm {
             }
             Ok(t)
         });
+        view!("speech", (), |lua, l, _a| {
+            let t = lua.create_table()?;
+            let now = l.world.tick;
+            for s in &l.world.speech {
+                let age = now.saturating_sub(s.tick);
+                if age >= s.ticks as u64 {
+                    continue;
+                }
+                let row = lua.create_table_with_capacity(0, 4)?;
+                row.raw_set("id", s.pawn.to_bits().get())?;
+                row.raw_set("text", s.text.as_str())?;
+                row.raw_set("age", age as f64 / s.ticks as f64)?;
+                row.raw_set("priority", s.priority)?;
+                t.raw_push(row)?;
+            }
+            Ok(t)
+        });
         view!("messages", usize, |lua, l, max| {
             let t = lua.create_table()?;
             for m in l.world.messages.iter().rev().take(max) {

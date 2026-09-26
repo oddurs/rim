@@ -463,10 +463,30 @@ pub struct NeedDef {
     /// comfort; this is how fast it refills inside comfort.
     #[serde(default = "d01")]
     pub recover_days: f64,
+    /// What a pawn who can talk says as the need drops below a level.
+    #[serde(default)]
+    pub say: Option<NeedSay>,
     #[serde(skip)]
     pub rgb: [u8; 3],
     #[serde(skip)]
     pub field_r: DefId,
+}
+
+/// Lines a need speaks: one, picked by the pawn and the moment, each time
+/// the need drops below `below`. Not again until it has been above it.
+#[derive(Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct NeedSay {
+    /// A fraction of full, 0 to 1.
+    pub below: f64,
+    pub lines: Vec<String>,
+    /// How long a line stays up, in ticks.
+    #[serde(default = "d_say_ticks")]
+    pub ticks: u32,
+}
+
+fn d_say_ticks() -> u32 {
+    600
 }
 
 // ---------------------------------------------------------------- fields
@@ -1264,6 +1284,14 @@ impl DefDb {
         }
         for d in &mut self.needs {
             d.rgb = parse_color(&d.color).map_err(|e| format!("need/{}: {e}", d.id))?;
+            if let Some(say) = &d.say {
+                if !(0.0..=1.0).contains(&say.below) || say.lines.is_empty() || say.ticks == 0 {
+                    return Err(format!(
+                        "need/{}: say wants `below` from 0 to 1, at least one line, and `ticks` above 0",
+                        d.id
+                    ));
+                }
+            }
             if d.satisfier == Satisfier::Field {
                 d.field_r = get("field", &d.field, &format!("need/{}", d.id))?;
             }

@@ -47,6 +47,7 @@ type VisiblePawn = {
     id: number, name: string, faction: string, intelligent: boolean, asleep: boolean,
     selected: boolean, hovered: boolean, radius: number,
 }
+type Speech = { id: number, text: string, age: number, priority: number }
 type Message = { text: string, kind: string, age: number }
 type WorldEvent = { tick: number, kind: string, id: number, name: string }
 type FieldInfo = {
@@ -254,6 +255,8 @@ declare view: {
     show_devtools: () -> boolean,
     -- Whether the profiler is open.
     show_profiler: () -> boolean,
+    -- What pawns are saying now, oldest first: a need's line or a script's rim.say. `age` runs 0 to 1 over the line's life.
+    speech: () -> { Speech },
     -- The game speed.
     speed: () -> number,
     -- The colony's stances, in bar order; `active` is the one it's in.

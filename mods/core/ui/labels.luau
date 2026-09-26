@@ -2,6 +2,11 @@
 --
 -- The engine places anchored nodes at their pawns and nudges overlapping
 -- ones apart by priority, so names never pile on top of each other.
+--
+-- Speech comes from view.speech(): a need's line as it runs low, a
+-- script's rim.say, and here, a greeting when someone joins. A pawn shows
+-- one line at a time, its most important, and only a few bubbles show at
+-- once: a crowd all talking is noise, and each is a laid-out panel.
 
 local kit = require("@core/ui/kit")
 local t = ui.t
@@ -15,13 +20,27 @@ local COLOR = { player = "player", hostile = "hostile", wild = "text" }
 -- it places too, but not building the rest is where the time goes.
 local LABEL_CAP = 48
 
+-- How many speech bubbles show at once, most important first.
+local BUBBLE_CAP = 6
+
 ui.define("core:labels", function(view)
 	local out = {}
-	local recent = {}
-	local since = math.max(0, view.tick() - BUBBLE_TICKS)
-	for _, ev in view.events(since) do
+	-- What each pawn is saying: its most important line, the newest on a tie.
+	local said = {}
+	local function hear(id, line)
+		local cur = said[id]
+		if not cur or line.priority > cur.priority or (line.priority == cur.priority and line.age < cur.age) then
+			said[id] = line
+		end
+	end
+	for _, s in view.speech() do
+		hear(s.id, s)
+	end
+	local now = view.tick()
+	for _, ev in view.events(math.max(0, now - BUBBLE_TICKS)) do
 		if ev.kind == "joined" then
-			recent[ev.id] = ev.name
+			local text = string.format(t("core:labels.hello", "Hello! I'm %s."), ev.name)
+			hear(ev.id, { text = text, age = (now - ev.tick) / BUBBLE_TICKS, priority = 3 })
 		end
 	end
 	-- Pick who gets a label before building any: the selected and hovered
@@ -29,15 +48,32 @@ ui.define("core:labels", function(view)
 	local cands = {}
 	for _, p in view.visible_pawns() do
 		local named = p.faction == "player" or p.selected or p.hovered
-		local greeted = recent[p.id] ~= nil
-		if named or greeted or p.asleep then
-			local priority = if greeted then 4 elseif p.selected or p.hovered then 3 elseif p.faction == "player" then 2 elseif p.faction == "hostile" then 1 else 0
-			table.insert(cands, { p = p, named = named, priority = priority })
+		local line = said[p.id]
+		if named or line or p.asleep then
+			local priority = if line then 4 elseif p.selected or p.hovered then 3 elseif p.faction == "player" then 2 elseif p.faction == "hostile" then 1 else 0
+			table.insert(cands, { p = p, named = named, priority = priority, line = line })
 		end
 	end
 	table.sort(cands, function(a, b)
 		return a.priority > b.priority
 	end)
+	-- Which speakers get a bubble: the most important lines, then the newest.
+	local speakers = {}
+	for _, c in cands do
+		if c.line then
+			table.insert(speakers, c)
+		end
+	end
+	table.sort(speakers, function(a, b)
+		if a.line.priority ~= b.line.priority then
+			return a.line.priority > b.line.priority
+		end
+		return a.line.age < b.line.age
+	end)
+	local bubble = {}
+	for i = 1, math.min(BUBBLE_CAP, #speakers) do
+		bubble[speakers[i].p.id] = speakers[i].line
+	end
 	for i, c in cands do
 		if i > LABEL_CAP then
 			break
@@ -55,13 +91,14 @@ ui.define("core:labels", function(view)
 		if p.asleep then
 			table.insert(out, { kind = "anchored", entity = p.id, priority = -1, offset = -(p.radius + 2), kit.label(t("core:labels.sleep", "z"), { weight = "strong" }) })
 		end
-		if recent[p.id] then
+		local line = bubble[p.id]
+		if line then
 			table.insert(out, {
 				kind = "anchored",
 				entity = p.id,
-				priority = 4,
+				priority = 4 + line.priority,
 				offset = -(p.radius + 4),
-				kit.bubble({ text = string.format(t("core:labels.hello", "Hello! I'm %s."), recent[p.id]) }),
+				kit.bubble({ text = line.text, age = line.age }),
 			})
 		end
 	end

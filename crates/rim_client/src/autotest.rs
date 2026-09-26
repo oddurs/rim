@@ -691,6 +691,28 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         t.app.cam.zoom = 28.0;
     }
 
+    // Speech (DESIGN.md §11): a bubble sits on its speaker, even on the
+    // frame a wheel zoom lands, when the UI was laid out for the old zoom.
+    {
+        println!("\n# a speech bubble sits on its speaker");
+        t.app.sim.world.recent_events.clear();
+        t.app.sim.world.say(founder, "Over here!", 600, 5);
+        t.focus(t.pawn(founder).pos);
+        t.app.cam.zoom = 40.0;
+        t.frame().await;
+        t.frame().await;
+        let at = t.pawn_screen(founder);
+        // A wheel step about a point away from the pawn moves it on screen.
+        t.input(RawInput { mouse: (at.0 + 200.0, at.1 + 150.0), wheel: 1.0, ..Default::default() }).await;
+        let off = bubble_offset(&t, founder);
+        t.check(
+            off.is_some_and(|d| d.abs() < 2.0),
+            format!("the bubble is centred on its speaker the frame a zoom lands ({off:?} px off)"),
+        );
+        t.shot("speech").await;
+        t.app.cam.zoom = 28.0;
+    }
+
     // Render scale: the world at half the pixels, the UI still full. The
     // same frame at both scales must look alike: a flipped or darkened
     // world (translucent plans are on screen) would not.
@@ -1193,4 +1215,25 @@ fn tally(app: &App, e: Entity, cell: IVec, z: f32) -> usize {
     let mut s = Tally(&app.world_atlas, 0);
     draw::thing(&mut s, &app.sim.world, e, cell, (0.0, 0.0), z, 0.0, Default::default());
     s.1
+}
+
+/// How far, in points, `e`'s speech bubble's centre is from `e` across the
+/// screen, as last drawn: the anchored label above it with a panel.
+fn bubble_offset(t: &T, e: Entity) -> Option<f32> {
+    let dpi = screen_dpi_scale();
+    let anchor = rim_ui::node::Anchor::Entity(e.to_bits().get());
+    let bubble = t
+        .app
+        .last_anchored
+        .iter()
+        .filter(|a| a.anchor == anchor)
+        .filter_map(|a| {
+            t.app.last_draw[a.draws.clone()].iter().find_map(|d| match d {
+                rim_ui::paint::Draw::Rect { rect, .. } => Some(*rect),
+                _ => None,
+            })
+        })
+        .min_by(|a, b| a[1].total_cmp(&b[1]))?;
+    let (x, _) = t.pawn_screen(e);
+    Some((bubble[0] + bubble[2] / 2.0) / dpi - x)
 }

@@ -6,6 +6,7 @@ satisfier = "food"
 days_to_empty = 2.0
 seek_below = 0.35
 empty_damage_per_day = 30
+say = { below = 0.2, lines = ["I'm starving.", "So hungry…", "When did I last eat?"] }
 
 [[need]]
 id = "rest"
@@ -14,6 +15,7 @@ color = "#6a8fd6"
 satisfier = "rest"
 days_to_empty = 1.2
 seek_below = 0.25
+say = { below = 0.12, lines = ["I can barely keep my eyes open.", "So tired…", "I need to lie down."] }
 
 # Warmth drains when it's too cold (or hot), faster the further outside
 # comfort; days_to_empty is the rate at 10° outside it.
@@ -27,6 +29,7 @@ field = "feels_like"
 comfort = [10.0, 32.0]
 days_to_empty = 0.2
 recover_days = 0.1
+say = { below = 0.3, lines = ["I'm freezing.", "Can't feel my fingers.", "It's so cold."] }
 seek_below = 0.35
 empty_damage_per_day = 40
 

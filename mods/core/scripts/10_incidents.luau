@@ -16,7 +16,7 @@ local function spawn_group(creature: string, faction: "player" | "hostile" | "wi
 	if not x then
 		return 0, nil
 	end
-	local got, name = 0, nil
+	local got, name, first = 0, nil, nil
 	for _ = 1, n do
 		local cx, cy = rim.near_cell(x, y, 3)
 		if cx then
@@ -27,10 +27,11 @@ local function spawn_group(creature: string, faction: "player" | "hostile" | "wi
 				end
 				got += 1
 				name = nm
+				first = first or id
 			end
 		end
 	end
-	return got, name
+	return got, name, first
 end
 
 local function pick_creature(pred: (any) -> boolean)
@@ -57,10 +58,12 @@ storyteller.register_incident({
 		return 1 + ctx.wealth / 3000
 	end,
 	execute = function(ctx)
-		local got = spawn_group("human", "hostile", math.max(1, math.floor(ctx.points / POINTS_PER_RAIDER)))
+		local got, _, leader = spawn_group("human", "hostile", math.max(1, math.floor(ctx.points / POINTS_PER_RAIDER)))
 		if got == 0 then
 			return false
 		end
+		-- Whoever leads them says why they came, as they come over the edge.
+		rim.say(leader, if got == 1 then "Nobody needs to get hurt." else "Take everything!", 600, 3)
 		rim.message(`Raid! {count(got, "raider", "raiders")} approaching.`, "threat")
 		return true
 	end,

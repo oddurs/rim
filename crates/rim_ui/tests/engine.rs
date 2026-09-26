@@ -1201,6 +1201,45 @@ fn a_name_follows_its_pawn_when_the_camera_and_the_pawn_move() {
     assert_eq!(first(&out), moved);
 }
 
+/// A pawn with something to say gets a bubble over it, and a crowd all
+/// talking gets only a few: the most important lines.
+#[test]
+fn speakers_get_bubbles_and_a_crowd_only_a_few() {
+    use rim_ui::node::Anchor;
+    let mut sim = sim_at(&mods());
+    let human = sim.world.defs.creature_id("human").unwrap();
+    let c = sim.world.colony_center().unwrap();
+    let mut crowd = vec![sim.world.colonists().next().unwrap()];
+    for i in 0..9 {
+        let p = c.offset(i % 3 - 1, i / 3 - 1);
+        let p = if sim.world.map.passable(p) { p } else { c };
+        crowd.push(sim.world.spawn_pawn(human, rim_sim::world::Faction::Player, p, None));
+    }
+    // Each look a second later: trees rebuild on the UI's own clock.
+    let clock = std::cell::Cell::new(0.0);
+    let bubbles = |ui: &mut rim_ui::Ui, sim: &rim_sim::Sim| {
+        clock.set(clock.get() + 1.0);
+        let out = frame(ui, sim, &client(sim), Input { time: clock.get(), ..Default::default() });
+        // A speaker has two anchored labels: its name and its bubble.
+        crowd
+            .iter()
+            .filter(|e| out.anchored.iter().filter(|a| a.anchor == Anchor::Entity(e.to_bits().get())).count() == 2)
+            .count()
+    };
+    // Newcomers greet: that's a line too, and not this test's.
+    sim.world.recent_events.clear();
+    let mut ui = ui_for(&sim);
+    assert_eq!(bubbles(&mut ui, &sim), 0, "nobody is talking yet");
+
+    sim.world.say(crowd[0], "Over here!", 600, 2);
+    assert_eq!(bubbles(&mut ui, &sim), 1, "the one speaker gets a bubble");
+
+    for (i, &e) in crowd.iter().enumerate() {
+        sim.world.say(e, &format!("Line {i}"), 600, i as i32);
+    }
+    assert_eq!(bubbles(&mut ui, &sim), 6, "ten talking, six bubbles");
+}
+
 fn ui_rects_of_labels(ui: &mut rim_ui::Ui, sim: &rim_sim::Sim, cv: &rim_ui::view::ClientView) -> Vec<[f32; 4]> {
     let out = frame(ui, sim, cv, Default::default());
     let mut rects = Vec::new();

@@ -373,11 +373,14 @@ function kit.toast(props)
 	})
 end
 
--- A speech bubble for the anchored layer: text above a small tail.
+-- A speech bubble for the anchored layer: text above a small tail, the
+-- tail on the speaker. props: text, age (0..1 through its life; it fades
+-- at the end). A long line wraps rather than spanning the screen.
 function kit.bubble(props)
+	local fading = (props.age or 0) > 0.8
 	return node("col", { align = "center", gap = 0 }, {
-		kit.panel({ pad = "s", padx = "m", bg = "surface_raised", border = "line_strong" }, {
-			kit.label(props.text, { size = "small" }),
+		kit.panel({ pad = "s", padx = "m", bg = "surface_raised", border = "line_strong", maxw = 240 }, {
+			kit.label(props.text, { size = "small", wrap = true, color = if fading then "muted" else nil }),
 		}),
 		{ kind = "row", w = 6, h = 4, bg = "line_strong", radius = 0 },
 	})

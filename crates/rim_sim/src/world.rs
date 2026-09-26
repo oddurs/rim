@@ -583,6 +583,24 @@ pub struct Message {
     pub kind: MsgKind,
 }
 
+/// A line a pawn says (DESIGN.md §11): presentation only, like a message.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Speech {
+    pub tick: u64,
+    pub pawn: Entity,
+    pub text: String,
+    /// How long it stays up.
+    pub ticks: u32,
+    /// Which line shows when a pawn has several, and which bubbles win a
+    /// crowded screen.
+    pub priority: i32,
+}
+
+/// How many lines the speech log keeps: far more than can show at once.
+pub const SPEECH_LOG: usize = 64;
+/// A line longer than this is cut: a bubble is a line or two, not a letter.
+pub const SPEECH_CHARS: usize = 120;
+
 /// Things scripts can listen to with `rim.on(name, fn)`.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum GameEvent {
@@ -682,6 +700,9 @@ pub struct World {
     /// The last few notable events (tick, kind, pawn, name) for the UI:
     /// "joined", "died", "left". Not part of the simulation state.
     pub recent_events: Vec<(u64, &'static str, Entity, String)>,
+    /// What pawns are saying, newest last, for renderers: a need's line, or
+    /// a script's `rim.say`. Not saved and read by nothing in the sim.
+    pub speech: std::collections::VecDeque<Speech>,
     pub colony_lost: bool,
     /// The room rebuild the boundary sums were last computed for.
     seen_room_rebuilds: u64,
@@ -725,6 +746,7 @@ impl World {
             worksites: BTreeMap::new(),
             tools: BTreeSet::new(),
             recent_events: Vec::new(),
+            speech: std::collections::VecDeque::new(),
             colony_lost: false,
             seen_room_rebuilds: u64::MAX,
             data: BTreeMap::new(),
@@ -867,6 +889,19 @@ impl World {
         if self.recent_events.len() > 32 {
             self.recent_events.remove(0);
         }
+    }
+
+    /// `pawn` says `text` for `ticks` ticks. Presentation only: the sim never
+    /// reads it back, so it needs no RNG and changes nothing a save holds.
+    pub fn say(&mut self, pawn: Entity, text: &str, ticks: u32, priority: i32) {
+        let text = match text.char_indices().nth(SPEECH_CHARS) {
+            Some((cut, _)) => format!("{}…", text[..cut].trim_end()),
+            None => text.to_string(),
+        };
+        if self.speech.len() == SPEECH_LOG {
+            self.speech.pop_front();
+        }
+        self.speech.push_back(Speech { tick: self.tick, pawn, text, ticks: ticks.max(1), priority });
     }
 
     pub fn pawn_alive(&self, e: Entity) -> bool {

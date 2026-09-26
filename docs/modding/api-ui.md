@@ -91,6 +91,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `view.selected` | `() -> number?` | The selected pawn or thing's id: view.pawn or view.thing says which. |
 | `view.show_devtools` | `() -> boolean` | Whether devtools are open. |
 | `view.show_profiler` | `() -> boolean` | Whether the profiler is open. |
+| `view.speech` | `() -> { Speech }` | What pawns are saying now, oldest first: a need's line or a script's rim.say. `age` runs 0 to 1 over the line's life. |
 | `view.speed` | `() -> number` | The game speed. |
 | `view.stances` | `() -> { Stance }` | The colony's stances, in bar order; `active` is the one it's in. |
 | `view.stats` | `() -> { string }` | Client statistics lines. |
