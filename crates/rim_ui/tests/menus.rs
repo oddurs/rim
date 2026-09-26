@@ -188,3 +188,127 @@ fn providers_run_once_per_opening_and_a_gone_subject_closes_it() {
     t.idle();
     assert!(t.ui.find("core:menu").is_none(), "a menu about nothing closes");
 }
+
+/// Core's surfaces all answer a right-click with the same menu.
+mod surfaces {
+    use super::common::*;
+    use rim_ui::view::UiAction;
+    use rim_ui::Input;
+
+    struct S {
+        ui: rim_ui::Ui,
+        sim: rim_sim::Sim,
+        cv: rim_ui::view::ClientView,
+        t: f64,
+    }
+
+    impl S {
+        fn new() -> S {
+            let sim = sim_at(&mods());
+            let ui = ui_for(&sim);
+            let cv = client(&sim);
+            let mut s = S { ui, sim, cv, t: 0.0 };
+            s.idle();
+            s
+        }
+        fn frame(&mut self, input: Input) -> rim_ui::Output {
+            self.t += 0.05;
+            self.cv.mouse = input.mouse;
+            rim_ui::Ui::frame(&mut self.ui, &self.sim.world, &self.cv, &Input { time: self.t, ..input })
+        }
+        fn idle(&mut self) {
+            let m = self.cv.mouse;
+            for _ in 0..3 {
+                self.frame(Input { mouse: m, ..Default::default() });
+            }
+        }
+        fn right_click(&mut self, id: &str) {
+            let at = centre(self.ui.find(id).unwrap_or_else(|| panic!("{id} is shown:\n{}", self.ui.snapshot())));
+            self.frame(Input { mouse: at, ..Default::default() });
+            self.frame(Input { mouse: at, right_pressed: true, ..Default::default() });
+            self.frame(Input { mouse: at, right_released: true, ..Default::default() });
+            self.idle();
+        }
+        fn key(&mut self, k: &str) -> Vec<UiAction> {
+            let m = self.cv.mouse;
+            let out = self.frame(Input { mouse: m, pressed: vec![k.into()], ..Default::default() });
+            self.idle();
+            out.actions
+        }
+        fn menu(&self) -> String {
+            let snap = self.ui.snapshot();
+            let start = snap.find("#core:menu").unwrap_or_else(|| panic!("a menu is open:\n{snap}"));
+            snap[start..].to_string()
+        }
+    }
+
+    #[test]
+    fn a_colonist_row() {
+        let mut s = S::new();
+        let founder = s.sim.world.colonists().next().unwrap();
+        let name = s.sim.world.ecs.get::<&rim_sim::world::Pawn>(founder).unwrap().name.clone();
+        s.right_click(&format!("core:colonists.{name}"));
+        let menu = s.menu();
+        for row in ["Select", "Centre on", "Draft", "Work priorities…"] {
+            assert!(menu.contains(row), "{row}:\n{menu}");
+        }
+        assert!(menu.contains(&name.to_uppercase()), "the caption names them:\n{menu}");
+        // Draft is the third row that can run.
+        let actions = s.key("3");
+        assert!(actions.contains(&UiAction::Draft(founder, true)), "{actions:?}");
+    }
+
+    #[test]
+    fn a_tray_tile() {
+        let mut s = S::new();
+        s.key("b");
+        let wall = s.cv.tools.iter().find(|t| t.key.ends_with(":wall")).unwrap().key.clone();
+        s.right_click(&format!("core:toolbar.{wall}"));
+        let menu = s.menu();
+        assert!(menu.contains("Place") && menu.contains("Find in tray"), "{menu}");
+        let actions = s.key("1");
+        assert!(actions.contains(&UiAction::Tool(wall)), "Place picks the tool: {actions:?}");
+    }
+
+    #[test]
+    fn a_news_line_and_an_alert() {
+        let mut s = S::new();
+        s.sim.world.message("A trader passes by.", rim_sim::world::MsgKind::Info);
+        s.idle();
+        let place = s.sim.world.messages.len();
+        let line = format!("core:news.line.{place}");
+        s.right_click(&line);
+        let menu = s.menu();
+        assert!(menu.contains("All news…") && menu.contains("Hide here"), "{menu}");
+        s.key("2");
+        assert!(s.ui.find(&line).is_none(), "Hide here takes it out of the column");
+        // Core's no-stockpile alert has no subject: only Hide for today.
+        s.right_click("core:alerts.core:no_stockpile");
+        let menu = s.menu();
+        assert!(menu.contains("Hide for today") && !menu.contains("Go to"), "{menu}");
+        s.key("1");
+        s.cv.time += 1.0;
+        s.idle();
+        assert!(s.ui.find("core:alerts.core:no_stockpile").is_none(), "hidden until tomorrow");
+    }
+
+    #[test]
+    fn a_stockpile() {
+        let mut s = S::new();
+        let c = s.sim.world.colony_center().unwrap();
+        s.sim.push(rim_sim::Command::Stockpile { a: c.offset(2, 2), b: c.offset(4, 4), zone: None });
+        s.sim.step();
+        s.key("z");
+        let z = s.sim.world.zones.list[0].id;
+        s.right_click(&format!("core:dock.zone.{z}"));
+        let menu = s.menu();
+        for row in ["What it takes…", "Take everything", "Take nothing"] {
+            assert!(menu.contains(row), "{row}:\n{menu}");
+        }
+        let actions = s.key("3");
+        assert!(
+            actions.iter().all(|a| matches!(a, UiAction::ZoneAllow(_, _, false))) && !actions.is_empty(),
+            "{actions:?}"
+        );
+    }
+}

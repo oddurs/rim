@@ -42,9 +42,23 @@ function alerts.add(def)
 	table.insert(registry, def)
 end
 
+-- Alerts hidden until a game tick, by id.
+local snoozed: { [string]: number } = {}
+
+-- Hide an alert until the game reaches a tick; it comes back if it still
+-- holds then.
+function alerts.snooze(id: string, until_tick: number)
+	snoozed[id] = until_tick
+	last = -math.huge
+end
+
 local function evaluate(view)
 	local out = {}
+	local tick = view.tick()
 	for order, a in registry do
+		if (snoozed[a.id] or -1) > tick then
+			continue
+		end
 		local ok, r = pcall(a.check, view)
 		local item = nil
 		if not ok then

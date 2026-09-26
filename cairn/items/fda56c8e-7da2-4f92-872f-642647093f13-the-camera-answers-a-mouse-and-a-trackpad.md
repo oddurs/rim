@@ -2,12 +2,12 @@
 id: fda56c8e-7da2-4f92-872f-642647093f13
 title: The camera answers a mouse and a trackpad
 type: feature
-status: review
+status: done
 milestone: pointer
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 created: 2026-09-26
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p0
 api: none
 effort: m

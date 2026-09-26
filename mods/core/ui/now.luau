@@ -5,8 +5,82 @@
 
 local kit = require("@core/ui/kit")
 local alerts = require("@core/ui/alerts")
+local menus = require("@core/ui/menus")
 local row, col, label = kit.row, kit.col, kit.label
 local t = ui.t
+
+-- News lines hidden from the column (by their place in the log, counted
+-- from the oldest): they stay in the full log.
+local hidden: { [number]: boolean } = {}
+
+-- ─── Context menus for alerts and news ────────────────────────────────────
+menus.kind("alert", {
+	resolve = function(id)
+		for _, a in alerts.active(view) do
+			if a.id == id then
+				return a
+			end
+		end
+		return nil
+	end,
+	caption = function(ctx)
+		return t("core:alerts.caption", "Alert")
+	end,
+})
+menus.add("alert", {
+	id = "core:alert.go",
+	label = t("core:alert.go", "Go to"),
+	applies = function(ctx)
+		return ctx.subject.subject ~= nil
+	end,
+	run = function(ctx)
+		act.select(ctx.subject.subject)
+		act.focus(ctx.subject.subject)
+	end,
+})
+menus.add("alert", {
+	id = "core:alert.snooze",
+	label = t("core:alert.snooze", "Hide for today"),
+	group = "manage",
+	run = function(ctx)
+		alerts.snooze(ctx.id, view.tick() + view.ticks_per_day())
+	end,
+})
+
+-- A news line's id is its place in the log, counted from the oldest, so
+-- it holds while newer lines arrive.
+menus.kind("message", {
+	resolve = function(id)
+		local skip = view.message_count() - id
+		return if skip >= 0 then view.messages(1, skip)[1] else nil
+	end,
+	caption = function(ctx)
+		return t("core:news.caption", "News")
+	end,
+	actor = function(ctx)
+		return string.format(t("core:news.when", "Day %d · %s"), ctx.subject.day, ctx.subject.clock)
+	end,
+})
+menus.add("message", {
+	id = "core:message.all",
+	label = t("core:message.all", "All news…"),
+	group = "manage",
+	key = "n",
+	primary = function()
+		return true
+	end,
+	run = function()
+		ui.open("core:news")
+	end,
+})
+menus.add("message", {
+	id = "core:message.hide",
+	label = t("core:message.hide", "Hide here"),
+	group = "manage",
+	run = function(ctx)
+		hidden[ctx.id] = true
+	end,
+})
 
 local WIDTH = 300
 local COMPACT_WIDTH = 240
@@ -117,6 +191,7 @@ ui.define("core:alerts", function(view)
 			items,
 			row({
 				id = "core:alerts." .. a.id,
+				menu = { kind = "alert", id = a.id },
 				gap = "item",
 				align = "center",
 				radius = "radius",
@@ -136,9 +211,9 @@ local KIND_COLOR = { good = "good", threat = "threat", bad = "bad" }
 
 -- A message: a stripe in its kind's colour, the text, and when it happened
 -- under it. Older than half a day, the text steps back to muted.
-local function news_line(m)
+local function news_line(m, place: number)
 	local old = m.age > 0.5
-	return row({ gap = "item", align = "stretch" }, {
+	return row({ id = "core:news.line." .. place, menu = { kind = "message", id = place }, gap = "item", align = "stretch" }, {
 		{ kind = "row", w = 3, bg = KIND_COLOR[m.kind] or "faint", radius = 1 },
 		-- minw = 0: a flex item keeps its content's width by default, and
 		-- the text would never be offered a width to wrap at.
@@ -151,11 +226,15 @@ end
 
 ui.define("core:messages", function(view)
 	local lines = {}
-	for _, m in view.messages(if view.compact() then COMPACT_NEWS else NEWS) do
+	local total = view.message_count()
+	for i, m in view.messages(if view.compact() then COMPACT_NEWS else NEWS) do
 		if m.age > 1 then
 			break
 		end
-		table.insert(lines, news_line(m))
+		local place = total - i + 1
+		if not hidden[place] then
+			table.insert(lines, news_line(m, place))
+		end
 	end
 	if #lines == 0 then
 		return nil

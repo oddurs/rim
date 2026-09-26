@@ -335,7 +335,7 @@ local function pawn_panel(view, p)
 		else nil
 	local bar, body = tab_body(view, p)
 	return kit.panel({ w = width(view), gap = "m" }, {
-		col({ gap = "xxs" }, {
+		col({ gap = "xxs", menu = if p.player then { kind = "colonist", id = p.id } else nil }, {
 			label(title, { size = "heading", weight = "strong" }),
 			label(string.format(t("core:inspector.sub", "%s · %s · %s"), p.label, p.faction, doing), { size = "small", color = "muted" }),
 		}),
