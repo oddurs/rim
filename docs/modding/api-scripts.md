@@ -46,12 +46,14 @@ are in [Scripting rules](scripting.md).
 | `rim.push_ambient` | `(field: string, key: string, value: number, hours: number?, ease_hours: number?) -> ()` | Add a named contribution to a field's outdoor value, easing in over ease_hours and expiring after hours (nil: until cleared). |
 | `rim.random` | `() -> number` | A number in [0, 1) from the world's random numbers: the same on every machine. |
 | `rim.random_int` | `(lo: number, hi: number) -> number` | A whole number from lo to hi inclusive, from the world's random numbers. |
+| `rim.reading` | `(id: string) -> number?` | A colony reading, by qualified id ("core:food_days"); a bare name is your own mod's. Nil until published. |
 | `rim.room_at` | `(x: number, y: number) -> Room?` | The room at a cell, or nil on a wall or door. `role` is the first [[room_role]] it meets, if any. |
 | `rim.say` | `(id: number, text: string, ticks: number?, priority: number?) -> ()` | A pawn says something: a speech bubble over it for `ticks` ticks (600 unless given). Higher `priority` wins when it has several lines or the screen is crowded; needs speak at 1, and 2 is the default. Only presentation: nothing in the sim reads it back. |
 | `rim.season` | `() -> string` | The current season's name. |
 | `rim.seasons` | `{string}` | The calendar's season names, in order. |
 | `rim.set_ambient` | `(id: string, value: number?) -> ()` | Pin a field's outdoor value, overriding its terms and pushes; nil unpins. For tests and tools: mods push instead. |
 | `rim.set_data` | `(key: string, value: any) -> ()` | Keep plain data in the world (hashed, saved, readable by the UI as view.data). A bare key is your mod's ("state" is "your_mod:state"); you can't write another mod's. |
+| `rim.set_reading` | `(id: string, value: number) -> ()` | Publish a colony reading, like "food_days", under your mod's name (kept to thousandths). Rules with `when = { reading = "mod:id", below = ..., until = ... }` switch on and off as it crosses their marks, firing `rule_started` and `rule_stopped`. Publish on your own cadence: hourly is plenty. |
 | `rim.set_stance` | `(stance: string) -> ()` | Put the colony in a stance: its priority rules hold until another. For incidents; the player's comes as a command. |
 | `rim.spawn_item` | `(thing: string, x: number, y: number, count: number, stuff: string?) -> number` | Drop items near a cell, merging into stacks; returns how many didn't fit. stuff is what they're made of (a flint axe): it sets their hp and quality, and they stack only with the same. |
 | `rim.spawn_pawn` | `(creature: string, faction: Faction, x: number, y: number, name: string?) -> (number?, string?)` | Spawn a creature; returns its id and name, or nil if the cell is blocked. |

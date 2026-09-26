@@ -93,6 +93,9 @@ pub(crate) struct WorldSection {
     /// The colony's stance; a save from before stances has none.
     #[serde(default)]
     stance: Option<DefId>,
+    /// Readings and standing orders; a save from before them has none.
+    #[serde(default)]
+    standing: crate::rules::Standing,
 }
 
 /// Each def kind's qualified ids, in `DefId` order: the table the raw ids in
@@ -167,6 +170,7 @@ fn def_table(defs: &DefDb) -> DefsSection {
         kind("work_type", defs.work_types.len()),
         kind("skill", defs.skills.len()),
         kind("stance", defs.stances.len()),
+        kind("priority_rule", defs.priority_rules.len()),
         kind("field", defs.fields.len()),
         kind("item_category", defs.item_categories.len()),
     ])
@@ -245,6 +249,7 @@ impl Snapshot {
             events: w.events.clone(),
             data_versions: w.data_versions.clone(),
             stance: w.stance,
+            standing: w.standing.clone(),
         };
         let (disabled_hooks, disabled_handlers) = sim.scripts.disabled();
         let mut sections = BTreeMap::from([
@@ -812,6 +817,11 @@ impl Snapshot {
             }),
             None => defs.default_stance,
         };
+        // Rules are named by id; one a removed mod added holds nothing.
+        w.standing = ws.standing;
+        let known: std::collections::BTreeSet<&str> = defs.priority_rules.iter().map(|r| r.id.as_str()).collect();
+        w.standing.on.retain(|r| known.contains(r.as_str()));
+        w.standing.off.retain(|r| known.contains(r.as_str()));
         w.update_rules();
         let sc: ScriptsSection = dec(self, "engine:scripts")?;
         w.update_shelter();
