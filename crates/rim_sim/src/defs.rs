@@ -950,6 +950,11 @@ impl DefDb {
     pub fn thing(&self, d: DefId) -> &ThingDef {
         &self.things[d as usize]
     }
+    /// Tag names as a mask, or `None` if one isn't any tool's: work that
+    /// asks for it can't be done.
+    pub fn tool_mask(&self, tags: &[String]) -> Option<ToolMask> {
+        tags.iter().try_fold(0, |m, t| Some(m | 1 << self.tool_tags.iter().position(|n| n == t)?))
+    }
     /// The tag names a mask holds, in tag order.
     pub fn tool_tag_names(&self, mask: ToolMask) -> Vec<&str> {
         self.tool_tags.iter().enumerate().filter(|(i, _)| mask & 1 << i != 0).map(|(_, n)| n.as_str()).collect()

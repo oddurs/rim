@@ -20,7 +20,7 @@ use crate::defs::DefId;
 use crate::field::SavedFields;
 use crate::savefile::{self, Epoch, EpochRead, Log, Root};
 use crate::snapshot::{DefsSection, Header, ScriptsSection, Snapshot, WorldSection};
-use crate::world::{Blueprint, Designated, Held, MadeOf, Owner, Pawn, Regrow, Thing, Work};
+use crate::world::{Blueprint, Designated, Held, MadeOf, Order, Owner, Pawn, Regrow, Thing, Work};
 use hecs::Entity;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -45,6 +45,11 @@ const DEF_REFS: &[(&str, &str, &str)] = &[
     ("engine:world", "events.*.PawnDied.def", "creature"),
     ("engine:world", "events.*.PawnLeft.def", "creature"),
     ("engine:world", "events.*.BuildingComplete.def", "thing"),
+    ("engine:world", "events.*.OrderDone.inputs.*.0", "thing"),
+    ("engine:world", "events.*.OrderDone.stuff", "thing"),
+    ("engine:order", "*.1.needs.*.thing", "thing"),
+    ("engine:order", "*.1.needs.*.delivered.*.0", "thing"),
+    ("engine:order", "*.1.work_type", "work_type"),
     ("log", "*.commands.*.1.Designate.designation", "designation"),
     ("log", "*.commands.*.1.Build.thing", "thing"),
     ("log", "*.commands.*.1.Build.stuff", "thing"),
@@ -88,6 +93,7 @@ fn codec_of(section: &str) -> Result<Codec, String> {
         "engine:designated" => codec::<Vec<(Entity, Designated)>>(),
         "engine:regrow" => codec::<Vec<(Entity, Regrow)>>(),
         "engine:held" => codec::<Vec<(Entity, Held)>>(),
+        "engine:order" => codec::<Vec<(Entity, Order)>>(),
         "engine:work" => codec::<Vec<(Entity, Work)>>(),
         "log" => codec::<Vec<Log>>(),
         s if s.ends_with(":data") => codec::<BTreeMap<String, Data>>(),

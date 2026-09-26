@@ -1,7 +1,7 @@
 id = "wildlife_plus"
 name = "Wildlife+"
 version = "0.1.0"
-api = "0.5"
+api = "0.6"
 ui_api = "0.5"
 description = "Example plugin: a new animal (data), a balance patch to core, and a scripted incident."
 depends = ["core"]

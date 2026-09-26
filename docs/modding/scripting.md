@@ -107,6 +107,41 @@ The standard libraries and the global table are read-only too:
 environment, so two mods can both have a `local function update()` or a
 global `state` without colliding.
 
+## Work orders
+
+A mod makes things by posting a work order on a site, usually a station it
+defines: "bring these, then work here". Colonists fetch the inputs, work the
+order, and the mod hears `order_done` and makes what the order was for. The
+engine knows nothing of recipes or bills: those are the mod's.
+
+```lua
+rim.post_order(bench_id, {
+    label = "hand axe",
+    work_type = "craft",          -- a [[work_type]], so the Work Board has a column for it
+    work = 240,                   -- ticks at bare hands' pace
+    requires = { "pounding" },    -- the worker holds a tool with every tag
+    needs = {
+        { tag = "knappable", count = 2 },          -- anything with the tag
+        { thing = "core:wood", count = 1 },        -- or one thing
+    },
+})
+
+rim.on("order_done", function(e)
+    if e.owner ~= "my_mod" then return end
+    rim.spawn_item("hand_axe", e.x, e.y, 1, e.stuff)  -- made of the first material in
+end)
+```
+
+`order_done` carries `site`, `x`, `y`, `owner`, `label`, `inputs` (`{ thing,
+count }` each) and `stuff`, the first input that is a material. If the site
+is torn down first, `order_lost` (`site`, `owner`, `label`) says so, and what
+was brought is back on the ground. A site is a building or station, and
+takes one order at a time. Inputs are counted by thing: an input's own
+material (a flint axe as an ingredient) isn't carried through. `rim.order(site)` says how far one has got,
+`rim.cancel_order(site)` puts back down what was brought, and
+`rim.count_items({ tag = "knappable" })` counts what lies about, for "make
+until there are five".
+
 ## Events
 
 `rim.on(name, fn)` hears engine events (`pawn_died`, `season_changed`, ...)

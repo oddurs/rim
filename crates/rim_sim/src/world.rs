@@ -80,6 +80,21 @@ pub enum Job {
     Construct {
         bp: Entity,
     },
+    /// Bring a work order's input: pick up at `src` (stage 0), carry it to
+    /// the site (stage 1) and add it to need `need`.
+    Supply {
+        site: Entity,
+        src: Entity,
+        need: u8,
+        want: u32,
+        stage: u8,
+    },
+    /// Work a work order whose inputs are all in, fetching its tool first.
+    Craft {
+        site: Entity,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tool: Option<Entity>,
+    },
     /// Take a built thing down and get some of it back.
     Deconstruct {
         target: Entity,
@@ -139,6 +154,8 @@ impl Job {
             Job::Harvest { .. } => "harvesting",
             Job::Deliver { .. } => "hauling materials",
             Job::Construct { .. } => "building",
+            Job::Supply { .. } => "fetching materials",
+            Job::Craft { .. } => "working",
             Job::Deconstruct { .. } => "deconstructing",
             Job::Eat { .. } => "eating",
             Job::Sleep { stage: 1, .. } => "sleeping",
@@ -311,6 +328,69 @@ pub struct Owner(pub Faction);
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct Designated(pub DefId);
 
+/// Bring these things to a site, then work there (DESIGN.md §4e). A mod
+/// posts one on a site (a station) for anything made, cooked or studied,
+/// and hears `order_done` when it's worked through. One at a time per site.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Order {
+    /// The mod that posted it.
+    pub owner: String,
+    /// What it makes, for the player ("hand axe").
+    pub label: String,
+    pub needs: Vec<Need>,
+    /// Work ticks at bare hands' pace.
+    pub work: u32,
+    /// Tool tags the worker must hold (core's shared names).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub requires: Vec<String>,
+    /// Who does it: the work type it's posted under.
+    pub work_type: DefId,
+    /// Progress, kept on the order and not in `Work`, which on a finished
+    /// building means taking it down. `total` is set when work starts,
+    /// scaled by the worker's tool.
+    #[serde(default)]
+    pub done: u32,
+    #[serde(default)]
+    pub total: u32,
+}
+
+/// One input of a work order: a thing by def, or anything with a tag.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Need {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thing: Option<DefId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tag: Option<String>,
+    pub count: u32,
+    /// What has arrived so far, by def.
+    #[serde(default)]
+    pub delivered: Vec<(DefId, u32)>,
+}
+
+impl Need {
+    pub fn have(&self) -> u32 {
+        self.delivered.iter().map(|d| d.1).sum()
+    }
+    pub fn missing(&self) -> u32 {
+        self.count.saturating_sub(self.have())
+    }
+    /// Whether a thing of `def` meets this need.
+    pub fn takes(&self, defs: &DefDb, def: DefId) -> bool {
+        match (&self.thing, &self.tag) {
+            (Some(t), _) => *t == def,
+            (None, Some(tag)) => defs.thing(def).tags.contains(tag),
+            (None, None) => false,
+        }
+    }
+}
+
+impl Order {
+    /// The first need still short, and by how much.
+    pub fn missing(&self) -> Option<(usize, u32)> {
+        self.needs.iter().enumerate().find_map(|(i, n)| (n.missing() > 0).then(|| (i, n.missing())))
+    }
+}
+
 /// On a tool a pawn holds: it is off the map until put down.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct Held {
@@ -424,6 +504,22 @@ pub enum GameEvent {
         season: String,
         index: u32,
         year: u64,
+    },
+    /// A work order was worked to the end: what went into it, and the
+    /// material of the first input that has one, for what it makes.
+    OrderDone {
+        site: Entity,
+        owner: String,
+        label: String,
+        inputs: Vec<(DefId, u32)>,
+        stuff: Option<DefId>,
+    },
+    /// A work order's site was destroyed before it was done. What had been
+    /// brought is back on the ground there.
+    OrderLost {
+        site: Entity,
+        owner: String,
+        label: String,
     },
     /// Sent by a script with `rim.emit(name, data)`.
     Script {
@@ -751,7 +847,12 @@ impl World {
                 self.map.touch(p);
             }
             None => {
-                let e = self.spawn((Thing { def, pos: p, count: n, hp: 100 },));
+                let td = self.defs.thing(def);
+                let (hp, tool) = (td.hp as i32, td.tool.is_some());
+                let e = self.spawn((Thing { def, pos: p, count: n, hp },));
+                if tool {
+                    self.tools.insert(e);
+                }
                 self.map.set_item(p, Some(e));
                 let defs = self.defs.clone();
                 self.fields.add_emitters(&defs, &self.map, e, def, p);
@@ -760,7 +861,14 @@ impl World {
         count - n
     }
 
-    pub fn place_item(&mut self, def: DefId, near: IVec, mut count: u32) -> u32 {
+    pub fn place_item(&mut self, def: DefId, near: IVec, count: u32) -> u32 {
+        self.place_item_of(def, near, count, None)
+    }
+
+    /// `place_item`, made of `stuff`: a flint axe, a bone one. Stacks merge
+    /// only with the same thing of the same material, and a new one takes
+    /// its material's hp.
+    pub fn place_item_of(&mut self, def: DefId, near: IVec, mut count: u32, stuff: Option<DefId>) -> u32 {
         let limit = self.defs.thing(def).stack_limit;
         for r in 0..=8i32 {
             for dy in -r..=r {
@@ -780,8 +888,12 @@ impl World {
                         None => {
                             let n = count.min(limit);
                             let td = self.defs.thing(def);
-                            let (hp, tool) = (td.hp as i32, td.tool.is_some());
+                            let hp = (td.hp as f64 * self.defs.factor(stuff, "hp")).round().max(1.0) as i32;
+                            let tool = td.tool.is_some();
                             let e = self.spawn((Thing { def, pos: p, count: n, hp },));
+                            if let Some(m) = stuff {
+                                let _ = self.ecs.insert_one(e, MadeOf(m));
+                            }
                             if tool {
                                 self.tools.insert(e);
                             }
@@ -791,8 +903,9 @@ impl World {
                             count -= n;
                         }
                         Some(e) => {
+                            let same = self.ecs.get::<&MadeOf>(e).ok().map(|m| m.0) == stuff;
                             if let Ok(mut t) = self.ecs.get::<&mut Thing>(e) {
-                                if t.def == def && t.count < limit {
+                                if t.def == def && t.count < limit && same {
                                     let n = count.min(limit - t.count);
                                     t.count += n;
                                     count -= n;
@@ -825,6 +938,14 @@ impl World {
 
     pub fn despawn_thing(&mut self, e: Entity) {
         let Ok(t) = self.ecs.get::<&Thing>(e).map(|t| (*t).clone()) else { return };
+        // A site taken down mid-order: what was brought stays, and the mod
+        // that posted it hears.
+        if let Ok(o) = self.ecs.remove_one::<Order>(e) {
+            for &(d, n) in o.needs.iter().flat_map(|n| &n.delivered) {
+                self.place_item(d, t.pos, n);
+            }
+            self.events.push(GameEvent::OrderLost { site: e, owner: o.owner, label: o.label });
+        }
         if self.map.inb(t.pos) {
             let i = self.map.idx(t.pos);
             if self.map.item[i] == Some(e) {

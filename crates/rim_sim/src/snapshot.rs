@@ -132,6 +132,14 @@ fn remap_event(r: &Remap, e: GameEvent) -> Option<GameEvent> {
         GameEvent::BuildingComplete { id, def, pos } => {
             GameEvent::BuildingComplete { id, def: r.get("thing", def)?, pos }
         }
+        GameEvent::OrderDone { site, owner, label, inputs, stuff } => {
+            let inputs = inputs.into_iter().map(|(d, n)| Some((r.get("thing", d)?, n))).collect::<Option<_>>()?;
+            let stuff = match stuff {
+                Some(d) => Some(r.get("thing", d)?),
+                None => None,
+            };
+            GameEvent::OrderDone { site, owner, label, inputs, stuff }
+        }
         other => other,
     })
 }
@@ -239,6 +247,7 @@ impl Snapshot {
             ("engine:regrow".to_string(), component::<Regrow>(w)),
             ("engine:work".to_string(), component::<Work>(w)),
             ("engine:held".to_string(), component::<Held>(w)),
+            ("engine:order".to_string(), component::<Order>(w)),
         ]);
         // Script data, one section per mod: every key is "mod:key" (0062).
         let mut by_mod: BTreeMap<&str, BTreeMap<&str, &Data>> = BTreeMap::new();
@@ -541,6 +550,30 @@ impl Snapshot {
             for (e, h) in dec::<Vec<(Entity, Held)>>(self, "engine:held")? {
                 add(e, &|b| {
                     b.add(h);
+                });
+            }
+        }
+        // Work orders are optional: a save made before them has none. One
+        // whose work type or input went with a removed mod goes.
+        if self.sections.contains_key("engine:order") {
+            for (e, mut o) in dec::<Vec<(Entity, Order)>>(self, "engine:order")? {
+                // Its tool tags must still be some tool's, or it could never be worked.
+                let mut kept = remap.get("work_type", o.work_type).map(|wt| o.work_type = wt).is_some()
+                    && defs.tool_mask(&o.requires).is_some();
+                for n in &mut o.needs {
+                    if let Some(d) = n.thing {
+                        kept &= remap.get("thing", d).map(|d| n.thing = Some(d)).is_some();
+                    }
+                    for (d, _) in &mut n.delivered {
+                        kept &= remap.get("thing", *d).map(|x| *d = x).is_some();
+                    }
+                }
+                if !kept {
+                    notes.push(format!("dropped the work order for {}", o.label));
+                    continue;
+                }
+                add(e, &|b| {
+                    b.add(o.clone());
                 });
             }
         }

@@ -8,12 +8,19 @@ type ThingInfo = { id: string, label: string, market_value: number, food: boolea
 type Date = { year: number, season: string, season_index: number, day: number, day_of_year: number, year_days: number, year_fraction: number }
 type Room = { id: number, cells: number, enclosed: boolean }
 type Part = { label: string, value: number }
+type OrderNeed = { thing: string?, tag: string?, count: number }
+type OrderSpec = { label: string, needs: { OrderNeed }, work: number, work_type: string, requires: { string }? }
+type OrderInput = { thing: string?, tag: string?, count: number, have: number }
+type OrderInfo = { owner: string, label: string, needs: { OrderInput }, work: number, done: number, total: number, requires: { string } }
+type ItemQuery = { thing: string?, tag: string? }
 
 declare rim: {
     -- A field's outdoor value.
     ambient: (id: string) -> number,
     -- The engine's plugin API version, "MAJOR.MINOR".
     api_version: string,
+    -- Take your work order off its site. What was brought is put back down there. False if it had none.
+    cancel_order: (site: number) -> boolean,
     -- Ease a named contribution out and remove it.
     clear_ambient: (field: string, key: string, ease_hours: number?) -> (),
     -- How many colonists are alive.
@@ -22,6 +29,8 @@ declare rim: {
     colony_center: () -> (number?, number?),
     -- Rough melee output of the colony, which raids are weighed against.
     colony_strength: () -> number,
+    -- Items lying on the map, by thing ({ thing = "core:wood" }) or by tag ({ tag = "knappable" }).
+    count_items: (what: ItemQuery) -> number,
     -- Living pawns of a faction.
     count_pawns: (faction: Faction) -> number,
     -- Every creature def.
@@ -62,6 +71,10 @@ declare rim: {
     on: (event: string, fn: (event: {[string]: any}) -> ()) -> (),
     -- Upgrade your script data from a save made with a different version of your mod: fn gets that version and your data (bare keys) and returns the data to keep. It sees no world: only your data. Runs on load, before any hook. Register at load time.
     on_migrate: (fn: (from_version: string, data: {[string]: any}) -> {[string]: any}) -> (),
+    -- The work order on a thing and how far it's got, or nil.
+    order: (site: number) -> OrderInfo?,
+    -- Post a work order on a thing (a station): bring what `needs` lists, by thing or by tag, then work `work` ticks there, holding a tool with every tag in `requires`. Colonists take it as `work_type` work. When it's done, `order_done` names what went in; make what it makes then. One order a site at a time.
+    post_order: (site: number, order: OrderSpec) -> (),
     -- A colonist's priority for a work type: 1 first, 0 never. Nil if it isn't a pawn.
     priority: (id: number, work: string) -> number?,
     -- Add a named contribution to a field's outdoor value, easing in over ease_hours and expiring after hours (nil: until cleared).
@@ -80,8 +93,8 @@ declare rim: {
     set_ambient: (id: string, value: number?) -> (),
     -- Keep plain data in the world (hashed, saved, readable by the UI as view.data). A bare key is your mod's ("state" is "your_mod:state"); you can't write another mod's.
     set_data: (key: string, value: any) -> (),
-    -- Drop items near a cell, merging into stacks; returns how many didn't fit.
-    spawn_item: (thing: string, x: number, y: number, count: number) -> number,
+    -- Drop items near a cell, merging into stacks; returns how many didn't fit. stuff is what they're made of (a flint axe): it sets their hp and quality, and they stack only with the same.
+    spawn_item: (thing: string, x: number, y: number, count: number, stuff: string?) -> number,
     -- Spawn a creature; returns its id and name, or nil if the cell is blocked.
     spawn_pawn: (creature: string, faction: Faction, x: number, y: number, name: string?) -> (number?, string?),
     -- A thing's stat by name: its def's base times its material's factor.

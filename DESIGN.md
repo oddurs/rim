@@ -583,9 +583,11 @@ not from a research screen.
   harvest or an order `requires` tags. Held tools are a component, which is
   the hand slot equipment reuses.
 - **Work orders.** "Bring these things, by def or by tag, to this place, then
-  work there." Blueprints become one kind of order. A mod posts the rest from
-  Luau and hears `order_done` with the inputs and their material. Recipes and
-  bills are not an engine concept (§10). Orders are the job they need.
+  work there." A mod posts one from Luau on a site (a station), under a work
+  type it names, and hears `order_done` with the inputs and their material.
+  Recipes and bills are not an engine concept (§10). Orders are the job they
+  need. Blueprints do the same job for building and could become one kind of
+  order; they stay as they are until orders have proven themselves.
 - **Selecting things.** Any thing can be selected and inspected, and the
   inspector has a slot a mod fills: a station's bills, a tool's wear.
 
