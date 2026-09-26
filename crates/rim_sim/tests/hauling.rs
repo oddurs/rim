@@ -17,9 +17,14 @@ fn colony() -> (Sim, Entity, IVec) {
         sim.push(Command::SetPriority { pawn, work: w as rim_sim::defs::DefId, level });
     }
     let c = sim.world.pawn_pos(pawn).unwrap();
+    // Room for items: open, and nothing standing there (tall grass is
+    // passable, but no stack goes under it).
     let open = |s: &Sim, o: IVec| {
         (0..3).all(|x| {
-            (0..3).all(|y| s.world.map.passable(o.offset(x, y)) && s.world.map.item_at(o.offset(x, y)).is_none())
+            (0..3).all(|y| {
+                let p = o.offset(x, y);
+                s.world.map.passable(p) && s.world.map.item_at(p).is_none() && s.world.map.fixture_at(p).is_none()
+            })
         })
     };
     let site = (3..40)

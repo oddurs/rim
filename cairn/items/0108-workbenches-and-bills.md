@@ -2,8 +2,10 @@
 id: 049e2f73-0d64-48ff-bf2e-21264f765d35
 title: 'Crafting as a plugin: recipes, stations and bills'
 type: feature
-status: backlog
+status: doing
 milestone: stone-age
+assignee: Oddur Sigurdsson
+claimed: 2026-09-25
 depends_on:
 - 74b6fa7e-7a36-44ba-a15d-d42c9a04dc19
 - 5305a161-c3e2-44b7-93bc-bf06016c11a0
@@ -31,12 +33,12 @@ Production chains, which DESIGN.md §5 places outside core: "crafting benches, b
 
 ## Acceptance criteria
 
-- [ ] Recipe defs, declared by the plugin as a kind
-- [ ] Bills with repeat modes: N times, until you have N, forever
-- [ ] A free ground station, so recipes need no special "no station" case
-- [ ] The bills panel on a selected station, with the reason a bill is stalled
-- [ ] Outputs carry their input's material
-- [ ] Core alone plays unchanged with the plugin removed
+- [x] Recipe defs, declared by the plugin as a kind
+- [x] Bills with repeat modes: N times, until you have N, forever
+- [x] A free ground station, so recipes need no special "no station" case
+- [x] The bills panel on a selected station, with the reason a bill is stalled
+- [x] Outputs carry their input's material
+- [x] Core alone plays unchanged with the plugin removed
 
 ## 2026-09-24
 
@@ -45,3 +47,11 @@ Shaped by the stone age tier (e3846c47), which is its first consumer. What that 
 ## 2026-09-25
 
 Replanned as a plugin on work orders (74b6fa7e), per §5 and §10: the engine owns the job, and this plugin owns recipes and bills. "No station" became a free ground station rather than an optional field. Moved from crafting to stone-age, since the stone age needs it first.
+
+## 2026-09-25
+
+Built as specified, with three changes. (1) stuff_from became stuff = true|false: outputs are made of the order's first material input (what order_done's stuff already carries), and a recipe chooses which by ordering its inputs. An index into tag inputs couldn't say which delivered thing it meant. (2) Station speed is a [[crafting.station]] entry (thing, speed); a station is still just a tag on a thing. (3) The scenes are Rust tests (tests/crafting.rs) with a fixture mod: crafting ships no recipes of its own, so a rim test in mods/crafting would have nothing to make. The engine gained BuildDef.free (a build must say cost, stuff or free), rim.thing(id), and tags on rim.thing_defs, all additive.
+
+## 2026-09-25
+
+Review fixes: hooks run before events in a tick, so an order finishing on the hook tick left the station looking idle before order_done was heard. It posted again, and credited the wrong bill or left an orphan order. The station now keeps { bill, recipe } in making and waits one hook before treating a vanished order as dropped. A refused post_order pauses the bill with a one-line reason. Other mods' orders on the site are left alone.

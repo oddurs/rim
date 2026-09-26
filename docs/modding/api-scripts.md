@@ -50,6 +50,7 @@ are in [Scripting rules](scripting.md).
 | `rim.spawn_item` | `(thing: string, x: number, y: number, count: number, stuff: string?) -> number` | Drop items near a cell, merging into stacks; returns how many didn't fit. stuff is what they're made of (a flint axe): it sets their hp and quality, and they stack only with the same. |
 | `rim.spawn_pawn` | `(creature: string, faction: Faction, x: number, y: number, name: string?) -> (number?, string?)` | Spawn a creature; returns its id and name, or nil if the cell is blocked. |
 | `rim.stat` | `(id: number, name: string) -> number?` | A thing's stat by name: its def's base times its material's factor. |
+| `rim.thing` | `(id: number) -> ThingAt?` | A thing by id: what it is and where, or nil if it's gone. |
 | `rim.thing_defs` | `{ThingInfo}` | Every thing def. |
 | `rim.tick` | `() -> number` | The current tick. A day is `rim.ticks_per_day` ticks. |
 | `rim.ticks_per_day` | `number` | Ticks in a game day. |
@@ -62,7 +63,7 @@ Types used above:
 type Faction = "player" | "hostile" | "wild"
 type MessageKind = "info" | "good" | "threat" | "bad"
 type CreatureInfo = { id: string, label: string, intelligent: boolean, aggressive: boolean, flees: boolean, plural: string, market_value: number, max_hp: number, wild: boolean }
-type ThingInfo = { id: string, label: string, market_value: number, food: boolean, item: boolean }
+type ThingInfo = { id: string, label: string, market_value: number, food: boolean, item: boolean, tags: { string } }
 type Date = { year: number, season: string, season_index: number, day: number, day_of_year: number, year_days: number, year_fraction: number }
 type Room = { id: number, cells: number, enclosed: boolean }
 type Part = { label: string, value: number }
@@ -71,4 +72,5 @@ type OrderSpec = { label: string, needs: { OrderNeed }, work: number, work_type:
 type OrderInput = { thing: string?, tag: string?, count: number, have: number }
 type OrderInfo = { owner: string, label: string, needs: { OrderInput }, work: number, done: number, total: number, requires: { string } }
 type ItemQuery = { thing: string?, tag: string? }
+type ThingAt = { id: number, thing: string, x: number, y: number, count: number, blueprint: boolean }
 ```

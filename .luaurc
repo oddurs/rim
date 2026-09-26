@@ -2,6 +2,7 @@
   "languageMode": "nonstrict",
   "aliases": {
     "core": "./mods/core",
+    "crafting": "./mods/crafting",
     "primitive": "./mods/primitive",
     "weather": "./mods/weather",
     "wildlife_plus": "./mods/wildlife_plus"

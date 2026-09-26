@@ -197,6 +197,10 @@ struct Registry {
     focus_req: Option<String>,
     /// A handler set an input's text; the engine replaces its buffer.
     input_sets: Vec<(String, String)>,
+    /// Node ids the scripts write as `id = "..."`. A node can exist only
+    /// sometimes (the thing inspector's slot, while a thing is selected), so
+    /// a target counts as real if it was seen or is declared here.
+    declared_ids: HashSet<String>,
 }
 
 /// A loaded mod: id, directory, and which mods it may `require`.
@@ -384,6 +388,7 @@ impl UiVm {
             }
             let src_path = target.dir.join("ui").join(format!("{file}.luau"));
             let src = std::fs::read_to_string(&src_path).map_err(|e| rt(format!("{}: {e}", src_path.display())))?;
+            reg.borrow_mut().declared_ids.extend(declared_ids(&src));
             let prev = std::mem::replace(&mut reg.borrow_mut().current, mod_id.to_string());
             let env = lua.create_table()?;
             let mt = lua.create_table()?;
@@ -1376,7 +1381,7 @@ impl UiVm {
                 ("remove", reg.removes.keys().collect()),
             ] {
                 for id in ids {
-                    if !seen.contains(id) && !reg.comps.contains_key(id) {
+                    if !seen.contains(id) && !reg.comps.contains_key(id) && !reg.declared_ids.contains(id) {
                         warn.push(format!("ui.{op}('{id}'): no component or node has that id"));
                     }
                 }
@@ -1444,6 +1449,27 @@ impl UiVm {
 
 fn first_line(s: &str) -> String {
     s.lines().next().unwrap_or("").to_string()
+}
+
+/// The string literals a script assigns to `id`: `id = "core:inspector.thing"`.
+fn declared_ids(src: &str) -> Vec<String> {
+    let b = src.as_bytes();
+    let mut out = Vec::new();
+    let mut from = 0;
+    while let Some(i) = src[from..].find("id").map(|i| i + from) {
+        from = i + 2;
+        if i > 0 && (b[i - 1].is_ascii_alphanumeric() || b[i - 1] == b'_') {
+            continue;
+        }
+        let rest = src[from..].trim_start();
+        let Some(rest) = rest.strip_prefix('=').filter(|r| !r.starts_with('=')) else { continue };
+        let rest = rest.trim_start();
+        let Some(q) = rest.chars().next().filter(|c| *c == '"' || *c == '\'') else { continue };
+        if let Some(end) = rest[1..].find(q) {
+            out.push(rest[1..1 + end].to_string());
+        }
+    }
+    out
 }
 
 /// What a virtual list needs from last frame to know its visible span:

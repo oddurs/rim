@@ -1009,12 +1009,12 @@ fn run_supply(w: &mut World, p: &mut Pawn, site: Entity, src: Entity, need: u8, 
 /// Work a work order that has everything, with its tool.
 fn run_craft(w: &mut World, e: Entity, p: &mut Pawn, site: Entity, tool: Option<Entity>) -> Option<Job> {
     let t = w.thing(site)?;
-    let (requires, work) = {
+    let (requires, work, skill) = {
         let o = w.ecs.get::<&Order>(site).ok()?;
         if o.missing().is_some() {
             return None;
         }
-        (o.requires.clone(), o.work)
+        (o.requires.clone(), o.work, w.defs.work_types[o.work_type as usize].skill_r)
     };
     let need = w.defs.tool_mask(&requires)?;
     if let Some(tl) = tool {
@@ -1034,7 +1034,7 @@ fn run_craft(w: &mut World, e: Entity, p: &mut Pawn, site: Entity, tool: Option<
                 if o.total == 0 {
                     o.total = ((work as f64 / speed.max(0.01)).ceil() as u32).max(1);
                 }
-                o.done = (o.done + 1).min(o.total);
+                o.done = (o.done + p.work_amount(skill)).min(o.total);
                 o.done >= o.total
             };
             w.mark_worksite(site, t.pos);

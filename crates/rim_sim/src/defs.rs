@@ -276,6 +276,10 @@ pub struct BuildDef {
     /// Toolbar group.
     #[serde(default)]
     pub menu: String,
+    /// Costs nothing: a crafting spot marked on the ground. Said outright,
+    /// so a forgotten `cost` isn't a free building.
+    #[serde(default)]
+    pub free: bool,
     #[serde(skip)]
     pub cost_r: Vec<(DefId, u32)>,
 }
@@ -1234,7 +1238,12 @@ impl DefDb {
             if let Some(b) = &mut d.build {
                 b.cost_r = counts(&b.cost, &ctx)?;
                 match (b.cost.is_empty(), b.stuff.is_some()) {
-                    (true, false) => return Err(format!("{ctx}: build needs either `cost` or `stuff`")),
+                    (true, false) if !b.free => {
+                        return Err(format!("{ctx}: build needs `cost`, `stuff`, or `free = true`"))
+                    }
+                    (false, _) | (_, true) if b.free => {
+                        return Err(format!("{ctx}: build is `free` and has a cost; pick one"))
+                    }
                     (false, true) => return Err(format!("{ctx}: build has both `cost` and `stuff`; pick one")),
                     _ => {}
                 }

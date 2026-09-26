@@ -9,13 +9,14 @@ The design behind these milestones is in [DESIGN.md](DESIGN.md). Every milestone
 
 ## foundations — Foundations
 
-`##########` 100% · 13 of 13 done · due 2026-09-30
+`##########` 100% · 14 of 14 done · due 2026-09-30
 
 The headless engine: defs, mod loading and patching, map, pathing, AI skeleton, commands, Luau host. Ends when the determinism test passes.
 
 - [x] `4504c561` Mod loader: discovery, API version check, deterministic load order <sup>feature · p0 · m · engine</sup>
 - [x] `69816584` Declarative def patches with conflict detection <sup>feature · p0 · m · engine</sup>
 - [x] `6a2574b0` Deterministic RNG owned by the world <sup>feature · p0 · s · engine</sup>
+- [x] `7acef0c0` Autotest: "no seam between joined walls" fails about one run in four <sup>bug · p2 · s · client</sup>
 - [x] `7e68156c` Cargo workspace: headless sim crate and client crate <sup>chore · p0 · s · tooling</sup>
 - [x] `8dcec2bf` Data-driven map generation <sup>feature · p1 · m · engine</sup>
 - [x] `aaaae5e7` Luau host: sandbox, per-script environments, rim.every and rim.on <sup>feature · p0 · l · engine</sup>
@@ -47,11 +48,11 @@ A sprint: fast on a little old laptop with mods loaded. The reference machine is
 
 Hands first. The colonist wakes with nothing (pillar 93f291d5), and today nothing asks what they hold: a naked warrior fells an oak and quarries granite bare-handed. This milestone makes the first days a climb. You gather branches, fibre, stones and berries with your hands. You find flint and knap it into a flake and a hand axe on the ground. Branch walls and a campfire see you through the first night. A digging stick opens the clay banks, for warm cob walls and fired pots. Then the axe fells trees and a stone maul quarries rock.
 
-- [ ] `049e2f73` Crafting as a plugin: recipes, stations and bills <sup>feature · p0 · l · plugin</sup>
 - [ ] `3ccab46f` Carried things keep what they're made of <sup>bug · p1 · m · engine</sup>
 - [ ] `4bd94457` Balance: the first three days with only your hands <sup>chore · p0 · m · plugin</sup>
 - [ ] `af17cc1d` Blueprints on plants: say so, or clear them <sup>bug · p1 · s · engine</sup>
 - [ ] `e3846c47` mods/primitive: the stone age as a plugin <sup>content · p0 · l · plugin</sup>
+- [ ] `049e2f73` Crafting as a plugin: recipes, stations and bills <sup>feature · p0 · l · plugin</sup>
 - [x] `4e9d5a12` Several harvests on one thing: gather without felling <sup>feature · p0 · s · engine</sup>
 - [x] `5305a161` Select and inspect things, with a slot for mods <sup>feature · p0 · m · client</sup>
 - [x] `7016d86b` Tools in hand: work that needs a tool <sup>feature · p0 · l · engine</sup>
@@ -84,10 +85,11 @@ First playable vertical slice. One warrior, harvest, build, eat, sleep, animals,
 
 ## interface — Interface
 
-`##########` 100% · 16 of 16 done · due 2026-10-09
+`##########` 94% · 16 of 17 done · due 2026-10-09
 
 A two-week sprint. The whole HUD moves out of Rust into `mods/core/ui/`, written in Luau on a small UI engine, so any mod can extend, replace, wrap or remove any part of the interface. Design: DESIGN.md §11.
 
+- [ ] `1b85ddb0` Build toolbar: group by menu so mods don't push it off screen <sup>bug · p2 · m · client</sup>
 - [x] `16eecb22` Anchored layer: world-attached labels, bars and bubbles without overlap <sup>feature · p1 · m · client</sup>
 - [x] `17505800` Theme tokens: ui/theme.toml, mod patches and UI scale <sup>feature · p0 · s · client</sup>
 - [x] `36d3ea49` UI stack: taffy layout, cosmic-text and a second Luau VM on macroquad <sup>spike · p0 · s · client</sup>
