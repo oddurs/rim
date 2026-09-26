@@ -259,6 +259,7 @@ impl Snapshot {
             ("engine:made_of".to_string(), component::<MadeOf>(w)),
             ("engine:owner".to_string(), component::<Owner>(w)),
             ("engine:designated".to_string(), component::<Designated>(w)),
+            ("engine:planned".to_string(), component::<Planned>(w)),
             ("engine:regrow".to_string(), component::<Regrow>(w)),
             ("engine:work".to_string(), component::<Work>(w)),
             ("engine:held".to_string(), component::<Held>(w)),
@@ -581,6 +582,24 @@ impl Snapshot {
             for (e, h) in dec::<Vec<(Entity, Held)>>(self, "engine:held")? {
                 add(e, &|b| {
                     b.add(h);
+                });
+            }
+        }
+        // Optional: saves from before plans over natural things lack it. A
+        // plan whose building or material is gone is forgotten, like a
+        // blueprint would be: the thing keeps its mark, and stays.
+        if self.sections.contains_key("engine:planned") {
+            for (e, p) in dec::<Vec<(Entity, Planned)>>(self, "engine:planned")? {
+                let Some(thing) = remap.get("thing", p.thing) else { continue };
+                let stuff = match p.stuff {
+                    Some(m) => match remap.get("thing", m) {
+                        Some(m) => Some(m),
+                        None => continue,
+                    },
+                    None => None,
+                };
+                add(e, &|b| {
+                    b.add(Planned { thing, stuff });
                 });
             }
         }

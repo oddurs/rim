@@ -368,6 +368,16 @@ pub struct Owner(pub Faction);
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct Designated(pub DefId);
 
+/// On a natural thing (grass, a tree, rock) where the player planned a
+/// building: it's marked to be cleared, and when it's gone the blueprint
+/// goes up in its place.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub struct Planned {
+    pub thing: DefId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stuff: Option<DefId>,
+}
+
 /// Bring these things to a site, then work there (DESIGN.md §4e). A mod
 /// posts one on a site (a station) for anything made, cooked or studied,
 /// and hears `order_done` when it's worked through. One at a time per site.
@@ -1005,7 +1015,13 @@ impl World {
                         continue;
                     }
                     let p = near.offset(dx, dy);
-                    if !self.map.passable(p) {
+                    // Not under a plan, or where one will go once the grass
+                    // is cleared: a wall would go up over the stack.
+                    let planned = self
+                        .map
+                        .fixture_at(p)
+                        .is_some_and(|f| self.ecs.get::<&Blueprint>(f).is_ok() || self.ecs.get::<&Planned>(f).is_ok());
+                    if !self.map.passable(p) || planned {
                         continue;
                     }
                     let room = match self.map.item_at(p) {
@@ -1049,8 +1065,30 @@ impl World {
         let _ = self.ecs.insert_one(e, Regrow::new(harvest, ready_at));
     }
 
+    /// Plan a building over a natural thing: mark it to be cleared with the
+    /// harvest that removes it (gather grass, chop an oak, mine rock), and
+    /// the blueprint follows. With no such harvest, something underfoot (a
+    /// berry bush, which regrows) is cleared now; something that blocks is
+    /// left, as there's no work that would clear it.
+    pub fn plan_over(&mut self, e: Entity, thing: DefId, stuff: Option<DefId>) {
+        let Some(t) = self.thing(e) else { return };
+        let td = self.defs.thing(t.def);
+        match td.harvest.iter().find(|h| h.destroy).map(|h| h.desig_r) {
+            Some(d) => {
+                let _ = self.ecs.insert(e, (Designated(d), Planned { thing, stuff }));
+                self.map.touch(t.pos);
+            }
+            None if !td.blocks => {
+                self.despawn_thing(e);
+                self.spawn_fixture_of(thing, t.pos, true, stuff);
+            }
+            None => {}
+        }
+    }
+
     pub fn despawn_thing(&mut self, e: Entity) {
         let Ok(t) = self.ecs.get::<&Thing>(e).map(|t| (*t).clone()) else { return };
+        let planned = self.ecs.get::<&Planned>(e).ok().map(|p| *p);
         // A site taken down mid-order: what was brought stays, and the mod
         // that posted it hears.
         if let Ok(o) = self.ecs.remove_one::<Order>(e) {
@@ -1077,6 +1115,10 @@ impl World {
         self.tools.remove(&e);
         self.fields.remove_emitters(e);
         let _ = self.ecs.despawn(e);
+        // Cleared for a building: it goes up in its place.
+        if let Some(p) = planned {
+            self.spawn_fixture_of(p.thing, t.pos, true, p.stuff);
+        }
     }
 
     // ------------------------------------------------------------ tools
