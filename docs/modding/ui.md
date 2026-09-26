@@ -74,6 +74,11 @@ animation). Give a live readout a fixed `w` and its neighbours keep their
 layout while it changes; only a change of size lays the panel out again. The world stays visible
 behind translucent panels, and clicks on empty screen go to the world.
 
+A side column's `start` stack gives way before its `end` stack: a panel
+there that says `minh = 0` and holds a `scroll` or `list` shrinks to the
+room left and scrolls, instead of running under the panels at the bottom.
+Core's people column does this above the inspector.
+
 ## Nodes
 
 A node is a plain table. `ui.row`, `ui.col` and `ui.text` just set its `kind`:
@@ -150,6 +155,7 @@ Every function in `ui`, `act` and `view`, with its types, is in the
 | `view.day()`, `view.clock()`, `view.tick()`, `view.hour()` | Game time |
 | `view.paused()`, `view.speed()`, `view.wealth()` | Colony state |
 | `view.colonists()` | Pawn tables: `id`, `name`, `label`, `health`, `job`, `drafted`, `needs`... |
+| `view.people()` | Every colonist, lean: `id`, `name`, `job`, `health`, `drafted`, `idle`, `selected`; for a list of them |
 | `view.pawn(id)`, `view.thing(id)`, `view.selected()` | One pawn; one thing (label, count, hp, material, what stops its work); the selection, a pawn or a thing |
 | `view.count_pawns(faction)` | Living pawns of `"player"`, `"hostile"` or `"wild"` |
 | `view.visible_pawns()` | Pawns on screen, for anchored labels |
@@ -216,6 +222,22 @@ plugin. Core's extension points include `core:topbar.right` (top-bar
 readouts), `core:inspector.sections` (sections in the colonist
 inspector) and `core:inspector.thing` (sections in the inspector of a
 selected thing: a station's bills, a tool's wear).
+
+### People
+
+The colonists run down the left edge (`core:colonists`, in
+[`people.luau`](../../mods/core/ui/people.luau)), one button each with the
+id `core:colonists.<name>`. The column changes density with the colony: a
+card each up to 8, a line each from 9, and from 20 lines grouped as
+Drafted, Hurt, Idle and Working. It is a virtual `list`, so only the lines
+in view are built. A mod adds a badge to every row through the module:
+
+```lua
+local people = require("@core/ui/people")
+people.badge(function(p)
+	return p.asleep and kit.label("z", { size = "small", color = "muted" })
+end)
+```
 
 ### The dock
 

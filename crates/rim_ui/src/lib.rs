@@ -1425,6 +1425,11 @@ impl Ui {
     fn clamp_scroll(&mut self, layers: &[LayerOut]) {
         for l in layers {
             for h in l.hits.iter().filter(|h| h.scroll) {
+                // Only an area scrolled down can be past its end; the rest
+                // would cost a layout each, every frame, to learn nothing.
+                if !self.scroll.get(&h.key).is_some_and(|&v| v > 0.0) {
+                    continue;
+                }
                 let mut n = &l.roots[h.path[0]];
                 for &i in &h.path[1..] {
                     n = &n.children[i];
@@ -1453,7 +1458,11 @@ impl Ui {
         };
         let gap = self.theme.space.get("s").copied().unwrap_or(4.0) * self.theme.scale;
         let side = |region: &str, key: u64| -> Node {
-            let start = plain(key + 1, Style { gap, ..Default::default() }, group(region, Some("start")));
+            // The start stack may shrink below its content, so a panel that
+            // scrolls (and says `minh = 0`) takes the room the end stack
+            // leaves rather than running under it.
+            let start =
+                plain(key + 1, Style { gap, min_h: Some(0.0), ..Default::default() }, group(region, Some("start")));
             let end = plain(
                 key + 2,
                 Style { gap, justify: Some(node::Align::End), ..Default::default() },
@@ -1471,7 +1480,16 @@ impl Ui {
         let center = plain(30, Style { grow: 1.0, ..Default::default() }, vec![]);
         let middle = plain(
             40,
-            Style { row: true, grow: 1.0, w: Len::Frac(1.0), align: Some(node::Align::Stretch), ..Default::default() },
+            // min_h 0: the band between the bars is the screen's, not its
+            // content's, so an overfull side column shrinks instead.
+            Style {
+                row: true,
+                grow: 1.0,
+                w: Len::Frac(1.0),
+                min_h: Some(0.0),
+                align: Some(node::Align::Stretch),
+                ..Default::default()
+            },
             vec![side("left", 50), center, side("right", 60)],
         );
         plain(1, Style { w: Len::Px(screen.0), h: Len::Px(screen.1), ..Default::default() }, vec![top, middle, bottom])

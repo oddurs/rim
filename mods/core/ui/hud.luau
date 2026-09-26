@@ -4,12 +4,8 @@
 -- or remove it (ui.extend("core:topbar.right", ...), ui.remove("core:hover")).
 
 local kit = require("@core/ui/kit")
-local row, col, label, button = kit.row, kit.col, kit.label, kit.button
+local row, col, label = kit.row, kit.col, kit.label
 local t = ui.t
-
-local function pct(v: number): string
-	return tostring(math.floor(v * 100 + 0.5)) .. "%"
-end
 
 -- ─── Top bar: clock, wealth, weather, colonists ─────────────────────────────
 
@@ -44,42 +40,10 @@ ui.define("core:status", function(view)
 	return row({ gap = "l", align = "center" }, parts)
 end)
 
--- The bar shows this many colonists and counts the rest: two hundred
--- buttons is neither readable nor within the frame budget.
-local COLONIST_BAR_MAX = 24
-
-ui.define("core:colonists", function(view)
-	local items = {}
-	for _, p in view.colonists(COLONIST_BAR_MAX) do
-		local health = if p.health > 0.5 then "good" else "bad"
-		table.insert(
-			items,
-			button({
-				id = "core:colonists." .. p.name,
-				label = p.name,
-				active = p.selected,
-				swatch = health,
-				color = if p.drafted then "player" else nil,
-				tooltip = string.format(t("core:colonists.tooltip", "%s · %s · health %s"), p.label, p.job, pct(p.health)),
-				on_click = function()
-					act.select(p.id)
-					act.focus(p.id)
-				end,
-			})
-		)
-	end
-	local total = view.count_pawns("player")
-	if total > COLONIST_BAR_MAX then
-		table.insert(items, label(string.format(t("core:colonists.more", "+%d"), total - COLONIST_BAR_MAX), { size = "small", color = "muted" }))
-	end
-	return row({ gap = "xs", align = "center" }, items)
-end)
-
 ui.define("core:topbar", function(view)
 	return row({ padx = "l", pady = "s", gap = "xl", align = "center", bg = "surface", radius = 0 }, {
 		ui.slot("core:clock"),
 		ui.slot("core:status"),
-		ui.slot("core:colonists"),
 		{ kind = "spacer" },
 		-- Extension point: mods add readouts here.
 		row({ id = "core:topbar.right", gap = "l", align = "center" }),
