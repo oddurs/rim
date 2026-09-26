@@ -11,6 +11,7 @@ mod bench;
 mod cli;
 mod draw;
 mod mesh;
+mod pinch;
 mod save;
 mod sky;
 mod title;
@@ -536,6 +537,10 @@ async fn game() {
     let atlas = Texture2D::from_rgba8(ui.text.atlas.size as u16, ui.text.atlas.size as u16, &ui.text.atlas.pixels);
     atlas.set_filter(FilterMode::Linear);
     let wheel_sub = macroquad::input::utils::register_input_subscriber();
+    // The window is up: its view can learn to hear a pinch (macOS).
+    if cfg!(target_os = "macos") && !pinch::install() {
+        eprintln!("  warning: pinch to zoom unavailable; Cmd+scroll zooms");
+    }
 
     // The command line can name the game; otherwise the player picks one.
     let named = |a: &String| matches!(a.as_str(), "--seed" | "--load" | "--continue");
@@ -880,6 +885,9 @@ pub struct RawInput {
     pub scroll: Scroll,
     /// Cmd or Ctrl is held: any scroll zooms.
     pub zoom_mod: bool,
+    /// A trackpad pinch this frame: how far the fingers spread (0.1 is 10%
+    /// apart; negative pinches in). macOS only.
+    pub pinch: f32,
     pub keys: Vec<KeyCode>,
     /// Characters typed this frame, for a focused text input.
     pub chars: Vec<char>,
@@ -984,6 +992,7 @@ impl RawInput {
             wheel,
             scroll,
             zoom_mod: ctrl,
+            pinch: pinch::take(),
             keys,
             chars,
             pressed,
@@ -1599,6 +1608,11 @@ pub fn toggle_selected(app: &mut App, e: Entity) {
 /// step; Cmd or Ctrl with either zooms. The scroll setting can pin one.
 fn scroll_camera(app: &mut App, raw: &RawInput) {
     let (mx, my) = raw.mouse;
+    // A pinch zooms around the pointer, which is where the fingers are, as
+    // far as the fingers spread: continuous, so a slow pinch is slow.
+    if raw.pinch != 0.0 {
+        apply(app, Action::Zoom((1.0 + raw.pinch).clamp(0.5, 2.0), mx, my));
+    }
     let mut s = raw.scroll;
     if s.travel != (0.0, 0.0) {
         app.last_precise = raw.time;
