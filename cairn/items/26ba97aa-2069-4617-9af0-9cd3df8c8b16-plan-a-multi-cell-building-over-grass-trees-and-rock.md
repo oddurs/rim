@@ -3,11 +3,11 @@ id: 26ba97aa-2069-4617-9af0-9cd3df8c8b16
 title: Plan a multi-cell building over grass, trees and rock
 type: feature
 status: backlog
-milestone: building
+milestone: crafting
 depends_on:
 - 8cf4db07-217d-42f9-aed0-8c119d5acf0c
 created: 2026-09-25
-updated: 2026-09-25
+updated: 2026-09-26
 priority: p2
 api: none
 effort: m
@@ -29,3 +29,7 @@ Planning a building over a natural thing (#116) marks it to be cleared and puts 
 
 - [ ] A 2x1 planned over grass and a tree goes up once both are cleared (test)
 - [ ] Cancelling leaves the grass and the tree unmarked
+
+## 2026-09-26
+
+Moved from building, which had already shipped when this was filed: multi-cell workbenches arrive with crafting.
