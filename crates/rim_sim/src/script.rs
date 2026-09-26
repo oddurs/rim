@@ -122,6 +122,7 @@ pub const RIM_TYPES: &str = r#"type Faction = "player" | "hostile" | "wild"
 type MessageKind = "info" | "good" | "threat" | "bad"
 type CreatureInfo = { id: string, label: string, intelligent: boolean, aggressive: boolean, flees: boolean, plural: string, market_value: number, max_hp: number, wild: boolean }
 type ThingInfo = { id: string, label: string, market_value: number, food: boolean, item: boolean, tags: { string } }
+type ItemCategoryInfo = { id: string, label: string, parent: string?, order: number, children: { string }, items: { string } }
 type Date = { year: number, season: string, season_index: number, day: number, day_of_year: number, year_days: number, year_fraction: number }
 type Room = { id: number, cells: number, enclosed: boolean }
 type PriorityPart = { label: string, delta: number }
@@ -643,6 +644,24 @@ impl ScriptHost {
         }
         rim.set("thing_defs", things)?;
         self.declare("thing_defs", "{ThingInfo}", "Every thing def.");
+        let cats = lua.create_table()?;
+        for c in &defs.item_categories {
+            let t = lua.create_table()?;
+            t.set("id", c.id.as_str())?;
+            t.set("label", c.label.as_str())?;
+            t.set("parent", c.parent_r.map(|p| defs.item_categories[p as usize].id.as_str()))?;
+            t.set("order", c.order)?;
+            let children = c.children.iter().map(|&d| defs.item_categories[d as usize].id.as_str());
+            t.set("children", lua.create_sequence_from(children)?)?;
+            t.set("items", lua.create_sequence_from(c.items.iter().map(|&d| defs.thing(d).id.as_str()))?)?;
+            cats.push(t)?;
+        }
+        rim.set("item_categories", cats)?;
+        self.declare(
+            "item_categories",
+            "{ItemCategoryInfo}",
+            "The item category tree stores and bills filter by, in load order. Each lists its children and the items directly in it, by id.",
+        );
 
         // ---- registration
         let reg = self.reg.clone();

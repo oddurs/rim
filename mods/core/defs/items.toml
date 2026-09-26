@@ -9,6 +9,8 @@ look.layers = [
 ]
 market_value = 1.2
 stack_limit = 75
+# Too big for a basket, a crate or a shelf (DESIGN.md §4f).
+tags = ["bulky"]
 stuff = { categories = ["structural"], factors = { hp = 0.7, work = 0.8, insulation = 1.0, flammability = 3.0, beauty = 1.0 } }
 
 [[thing]]
@@ -22,6 +24,7 @@ look.layers = [
 ]
 market_value = 1.0
 stack_limit = 75
+tags = ["bulky"]
 stuff = { categories = ["structural"], factors = { hp = 1.6, work = 1.8, insulation = 1.5, flammability = 0.0, beauty = 1.1 } }
 
 [[thing]]

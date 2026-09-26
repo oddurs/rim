@@ -1,6 +1,8 @@
 //! Helpers for tests that need their own mods folder.
 #![allow(dead_code)]
 
+use rim_sim::hecs::Entity;
+use rim_sim::{Command, IVec, Sim};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -74,4 +76,32 @@ pub fn respawn_reversed(sim: &mut rim_sim::Sim) {
         new.spawn_at(e, taken);
     }
     sim.world.ecs = new;
+}
+
+/// A colony whose only work is hauling unless a test adds more: every
+/// other work type is set to 0, and there's an open patch for a stockpile.
+pub fn hauling_colony(seed: u64) -> (Sim, Entity, IVec) {
+    let mut sim = Sim::new(&mods(), seed).unwrap();
+    let pawn = sim.world.colonists().next().unwrap();
+    let defs = sim.world.defs.clone();
+    for (w, d) in defs.work_types.iter().enumerate() {
+        let level = if d.id == "core:haul" { 1 } else { 0 };
+        sim.push(Command::SetPriority { pawn, work: w as rim_sim::defs::DefId, level });
+    }
+    let c = sim.world.pawn_pos(pawn).unwrap();
+    // Room for items: open, and nothing standing there (tall grass is
+    // passable, but no stack goes under it).
+    let open = |s: &Sim, o: IVec| {
+        (0..3).all(|x| {
+            (0..3).all(|y| {
+                let p = o.offset(x, y);
+                s.world.map.passable(p) && s.world.map.item_at(p).is_none() && s.world.map.fixture_at(p).is_none()
+            })
+        })
+    };
+    let site = (3..40)
+        .flat_map(|r| [c.offset(r, 0), c.offset(-r, 0), c.offset(0, r), c.offset(0, -r)])
+        .find(|&o| open(&sim, o))
+        .expect("open ground");
+    (sim, pawn, site)
 }

@@ -843,10 +843,15 @@ ground does, **sort** each stack to the best place that takes it, and
 ### One filter
 
 Stores, zones and bills ask the same question, so there is one filter:
-things, materials and a condition range. It is authored in
-`[[item_category]]` defs (a tree; an item joins by tag or by id, and
-anything unclaimed is under Other) and compiled to bitsets over def ids,
-interned so stores that share one share it. The sim never walks the tree.
+the things it takes, the materials it refuses, and a condition range. It
+is authored in `[[item_category]]` defs (a tree; an item joins by tag, by
+id, or by what it is, and anything unclaimed is under Other); toggling a
+category sets the things under it once, so the sim never walks the tree.
+Refusing materials rather than listing them means a material a mod adds
+later is taken. The filter is small sorted sets, not bitsets: the store
+index lists stores by thing, so no search tests a filter against every
+thing, and a store's filter is only read to check a stack's material and
+condition.
 
 ### What goes where
 

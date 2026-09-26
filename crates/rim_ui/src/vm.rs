@@ -1227,7 +1227,7 @@ impl UiVm {
                 row.set("name", z.name.as_str())?;
                 row.set("cells", zones.cells.iter().filter(|&&c| c == z.id).count())?;
                 let allows = lua.create_table()?;
-                for &d in &z.allows {
+                for &d in &z.filter.allows {
                     allows.set(l.world.defs.thing(d).id.as_str(), true)?;
                 }
                 row.set("allows", allows)?;

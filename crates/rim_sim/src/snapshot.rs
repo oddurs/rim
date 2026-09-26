@@ -168,6 +168,7 @@ fn def_table(defs: &DefDb) -> DefsSection {
         kind("skill", defs.skills.len()),
         kind("stance", defs.stances.len()),
         kind("field", defs.fields.len()),
+        kind("item_category", defs.item_categories.len()),
     ])
 }
 
@@ -785,14 +786,15 @@ impl Snapshot {
             let mut lost: BTreeMap<String, u32> = BTreeMap::new();
             for z in &mut zones.list {
                 let mut allows = Vec::new();
-                for &d in &z.allows {
+                for &d in &z.filter.allows {
                     match remap.get("thing", d) {
                         Some(d) => allows.push(d),
                         None => *lost.entry(remap.name("thing", d).to_string()).or_default() += 1,
                     }
                 }
-                allows.sort_unstable();
-                z.allows = allows;
+                z.filter.allows = allows;
+                // A refused material that's gone refuses nothing.
+                z.filter.refuses = z.filter.refuses.iter().filter_map(|&d| remap.get("thing", d)).collect();
             }
             for (id, n) in lost {
                 notes.push(format!("{n} stockpiles no longer take {id}"));

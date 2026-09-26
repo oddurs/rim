@@ -8,6 +8,7 @@ pub mod command;
 pub mod data;
 pub mod defs;
 pub mod field;
+pub mod filter;
 pub mod look;
 pub mod map;
 pub mod mapgen;

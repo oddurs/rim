@@ -5,6 +5,7 @@ type Faction = "player" | "hostile" | "wild"
 type MessageKind = "info" | "good" | "threat" | "bad"
 type CreatureInfo = { id: string, label: string, intelligent: boolean, aggressive: boolean, flees: boolean, plural: string, market_value: number, max_hp: number, wild: boolean }
 type ThingInfo = { id: string, label: string, market_value: number, food: boolean, item: boolean, tags: { string } }
+type ItemCategoryInfo = { id: string, label: string, parent: string?, order: number, children: { string }, items: { string } }
 type Date = { year: number, season: string, season_index: number, day: number, day_of_year: number, year_days: number, year_fraction: number }
 type Room = { id: number, cells: number, enclosed: boolean }
 type PriorityPart = { label: string, delta: number }
@@ -65,6 +66,8 @@ declare rim: {
     hour: () -> number,
     -- Whether a cell is inside an enclosed room.
     indoors: (x: number, y: number) -> boolean,
+    -- The item category tree stores and bills filter by, in load order. Each lists its children and the items directly in it, by id.
+    item_categories: {ItemCategoryInfo},
     -- Make a pawn give up and walk off the map after `ticks`.
     leave_after: (id: number, ticks: number) -> (),
     -- Print a line to the console, tagged with your mod.

@@ -69,3 +69,27 @@ and a selected thing says so: "Needs a chopping tool."
 | Tag | Means |
 |---|---|
 | `table` | Something to eat at: a chair's spot with `beside = "table"` faces it |
+| `bulky` | Too big for a basket, a crate or a shelf: wood, stone blocks, branches. Bulk stores and the ground take it |
+
+## Item categories
+
+The tree stores, stockpiles and bills filter by (DESIGN.md §4f). Core's
+top level is `food`, `materials`, `tools` and `other`; add your own shelf
+under one with `parent`. An item is in a category by tag, by id, or by what
+it is, so a new food or tool lands in the right place without a patch.
+
+```toml
+[[item_category]]
+id = "metal"
+label = "Metal"
+parent = "core:materials"
+order = 50
+tags = ["metal"]          # items with any of these tags
+things = ["ingot"]        # and these, by id
+with = []                 # items with a "food", "tool" or "stuff" block
+stuff = []                # items that are material of these stuff categories
+```
+
+An item can be in several categories. One category may say `rest = true`
+(core's `other`): items no category claims land there, so every item can be
+filtered. Scripts read the tree as `rim.item_categories`.

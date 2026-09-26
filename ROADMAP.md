@@ -462,7 +462,6 @@ Dig down. The map becomes a stack of 2D levels joined only at stairs, ladders an
 
 Production chains: workbenches and bills, cooking, farming, tailoring, research as a plugin.
 
-- [ ] `01691032` Item categories and one filter: things, materials and condition <sup>feature · p1 · m · engine</sup>
 - [ ] `0927f0af` Tailoring: make apparel <sup>content · p2 · s · core</sup>
 - [ ] `27d51e02` mods/iron: bog iron, charcoal, bloomery and forge, nails, fittings, saw and pick <sup>content · p2 · l · plugin</sup>
 - [ ] `282efef8` Containers: a store block with slots <sup>feature · p1 · l · engine</sup>
@@ -487,6 +486,7 @@ Production chains: workbenches and bills, cooking, farming, tailoring, research 
 - [ ] `e1be8ebd` Plants grow in the weather <sup>feature · p0 · m · engine</sup>
 - [ ] `e953d711` Store levels: sorting that only climbs, and room reserved by count <sup>feature · p1 · l · engine</sup>
 - [ ] `f22f1a62` Stores sheet, storage overlay and hover card <sup>feature · p2 · m · core</sup>
+- [ ] `01691032` Item categories and one filter: things, materials and condition <sup>feature · p1 · m · engine</sup>
 - [ ] `9bd9e8ab` Fire: burning, spread by wind, put out by rain <sup>feature · p1 · l · engine</sup>
 
 ## 1.0 — 1.0

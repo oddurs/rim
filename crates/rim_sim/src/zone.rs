@@ -2,23 +2,39 @@
 //! They are the player's, so they change only by commands; hauling fills
 //! them.
 
-use crate::defs::{Category, DefDb, DefId};
+use crate::defs::{DefDb, DefId};
+use crate::filter::{Filter, FilterEdit};
 use crate::map::Map;
 use crate::IVec;
 use serde::{Deserialize, Serialize};
+
+/// A store a command names. Zones today; containers join with the store
+/// block (DESIGN.md §4f).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum StoreRef {
+    Zone(u32),
+}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Zone {
     /// Stable for the zone's life, never reused.
     pub id: u32,
     pub name: String,
-    /// The item defs it takes, sorted.
-    pub allows: Vec<DefId>,
+    /// What it takes. Flattened, so a save from before filters (a zone with
+    /// only `allows`) loads as one that takes any material and condition.
+    #[serde(flatten)]
+    pub filter: Filter,
 }
 
 impl Zone {
+    /// Whether it takes this thing in some material and condition.
     pub fn takes(&self, def: DefId) -> bool {
-        self.allows.binary_search(&def).is_ok()
+        self.filter.takes_thing(def)
+    }
+
+    /// Whether it takes a stack of `def` made of `made_of` at `hp`.
+    pub fn keeps(&self, defs: &DefDb, def: DefId, made_of: Option<DefId>, hp: Option<i32>) -> bool {
+        self.filter.takes(defs, def, made_of, hp)
     }
 }
 
@@ -61,8 +77,7 @@ impl Zones {
     pub fn create(&mut self, defs: &DefDb, map: &Map, a: IVec, b: IVec) -> u32 {
         let id = self.next_id;
         self.next_id += 1;
-        let allows = (0..defs.things.len() as DefId).filter(|&d| defs.thing(d).category == Category::Item).collect();
-        self.list.push(Zone { id, name: format!("Stockpile {id}"), allows });
+        self.list.push(Zone { id, name: format!("Stockpile {id}"), filter: Filter::everything(defs) });
         self.paint(map, a, b, Some(id));
         id
     }
@@ -109,15 +124,10 @@ impl Zones {
         self.members = members;
     }
 
-    /// Let a zone take an item, or stop it.
-    pub fn allow(&mut self, id: u32, def: DefId, on: bool) {
-        let Some(z) = self.list.iter_mut().find(|z| z.id == id) else { return };
-        match (z.allows.binary_search(&def), on) {
-            (Err(i), true) => z.allows.insert(i, def),
-            (Ok(i), false) => {
-                z.allows.remove(i);
-            }
-            _ => {}
+    /// Change what a zone takes.
+    pub fn edit(&mut self, defs: &DefDb, id: u32, edit: FilterEdit) {
+        if let Some(z) = self.list.iter_mut().find(|z| z.id == id) {
+            z.filter.edit(defs, edit);
         }
     }
 
@@ -144,8 +154,7 @@ impl Zones {
     /// no zone without cells, and ids that won't be handed out again.
     pub fn tidy(&mut self) {
         for z in &mut self.list {
-            z.allows.sort_unstable();
-            z.allows.dedup();
+            z.filter.tidy();
         }
         let mut seen = Vec::new();
         self.list.retain(|z| {
@@ -169,10 +178,7 @@ impl Zones {
         use crate::rng::mix;
         h = mix(h ^ self.next_id as u64);
         for z in &self.list {
-            h = mix(h ^ z.id as u64);
-            for &d in &z.allows {
-                h = mix(h ^ d as u64);
-            }
+            h = z.filter.hash(mix(h ^ z.id as u64));
         }
         for (i, &c) in self.cells.iter().enumerate().filter(|(_, &c)| c != 0) {
             h = mix(h ^ (i as u64) << 20 ^ c as u64);
