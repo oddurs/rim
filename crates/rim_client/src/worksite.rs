@@ -83,6 +83,11 @@ struct Site {
     toward: (f32, f32),
     done: u32,
     total: u32,
+    /// Work a tick, as last seen: skill and tools set it, so it is measured
+    /// rather than assumed.
+    pace: f32,
+    /// The tick `done` was last read at.
+    seen: u64,
     hp: i32,
     plan: bool,
     strikes: u32,
@@ -177,6 +182,8 @@ impl Worksites {
                     toward: crate::wear::toward(w, e),
                     done,
                     total,
+                    pace: 1.0,
+                    seen: now,
                     hp: t.hp,
                     plan,
                     strikes: 0,
@@ -204,6 +211,13 @@ impl Worksites {
                 if detail {
                     self.settle_dust(&site);
                 }
+            }
+            let ticks = now.saturating_sub(site.seen);
+            if ticks > 0 {
+                if done > site.done {
+                    site.pace = (done - site.done) as f32 / ticks as f32;
+                }
+                site.seen = now;
             }
             (site.done, site.total, site.hp, site.plan) = (done, total.max(1), t.hp, plan);
             self.sites.insert(e, site);
@@ -487,8 +501,11 @@ impl Worksites {
         let reach = if a < 8 {
             0.17 * (1.0 - a as f32 / 8.0).powi(2)
         } else {
-            let next =
-                if w.ecs.get::<&Work>(target).is_ok() && every > 0 { every - site.done % every } else { p.cooldown };
+            let next = if w.ecs.get::<&Work>(target).is_ok() && every > 0 {
+                ticks_to_strike(site.done, every, site.pace)
+            } else {
+                p.cooldown
+            };
             if next <= 6 {
                 -0.07 * (1.0 - next as f32 / 6.0).powi(2)
             } else {
@@ -507,6 +524,11 @@ impl Worksites {
         self.tick.saturating_sub(l.start) as f32 / span as f32
     }
 
+    /// Work a tick on `e`, as last seen.
+    pub fn pace(&self, e: Entity) -> f32 {
+        self.sites.get(&e).map_or(1.0, |s| s.pace)
+    }
+
     /// Progress of a live site as the readout shows it, and whether it is
     /// damage (hp) rather than work.
     pub fn readout(&self, w: &World, e: Entity) -> Option<(IVec, f32, bool)> {
@@ -521,6 +543,11 @@ impl Worksites {
     pub fn sites(&self) -> impl Iterator<Item = Entity> + '_ {
         self.sites.keys().copied()
     }
+}
+
+/// Ticks until work at `pace` a tick next crosses a multiple of `every`.
+pub fn ticks_to_strike(done: u32, every: u32, pace: f32) -> u32 {
+    ((every - done % every) as f32 / pace.max(0.01)).ceil() as u32
 }
 
 fn shade(c: Color, k: f32) -> Color {
@@ -629,6 +656,32 @@ mod tests {
         let (a, b) = (run(), run());
         assert!(!a.is_empty(), "something was thrown");
         assert_eq!(a, b);
+    }
+
+    #[test]
+    fn a_skilled_worker_winds_up_for_the_blow_that_is_coming() {
+        assert_eq!(ticks_to_strike(0, 30, 1.0), 30);
+        assert_eq!(ticks_to_strike(0, 30, 2.0), 15, "twice the pace, half the wait");
+        assert_eq!(ticks_to_strike(29, 30, 2.0), 1);
+        assert_eq!(ticks_to_strike(10, 30, 0.5), 40);
+    }
+
+    #[test]
+    fn a_sites_pace_is_measured_not_assumed() {
+        let (mut s, _, _) = chopping(21);
+        let wall = s.world.defs.thing_id("wall").unwrap();
+        let stuff = s.world.defs.materials("structural").first().copied();
+        let at = s.world.colony_center().unwrap().offset(3, 3);
+        let plan = s.world.spawn_fixture_of(wall, at, true, stuff).expect("a plan");
+        let mut ws = Worksites::default();
+        // Two work a tick, read every frame at 1x, then every third tick at 3x.
+        for step in [1, 1, 1, 3, 3] {
+            s.world.tick += step;
+            s.world.ecs.get::<&mut Work>(plan).unwrap().done += 2 * step as u32;
+            s.world.mark_worksite(plan, at);
+            ws.update(&s.world, true);
+        }
+        assert_eq!(ws.pace(plan), 2.0);
     }
 
     #[test]

@@ -465,8 +465,14 @@ pub fn readouts(app: &App) -> Vec<(f32, f32, String)> {
                 Some(d) => w.defs.designations[d as usize].label.clone(),
                 None => "Build".to_string(),
             };
-            let secs = k.map_or(0, |k| (k.total - k.done).div_ceil(60));
-            format!("{verb} · {}% · {secs} s", (f * 100.0).round())
+            // Wall-clock time left: the worker's pace, at the game's speed.
+            let left = if app.paused {
+                "paused".to_string()
+            } else {
+                let ticks = k.map_or(0.0, |k| (k.total - k.done) as f32 / ws.pace(e).max(0.01));
+                format!("{} s", (ticks / (60.0 * app.speed.max(1) as f32)).ceil())
+            };
+            format!("{verb} · {}% · {left}", (f * 100.0).round())
         };
         // Under the bar: above the cell is where a worker's speech goes.
         out.push((x + z * 0.1, y + z + 9.0, text));
