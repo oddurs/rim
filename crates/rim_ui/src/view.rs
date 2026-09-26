@@ -124,6 +124,13 @@ pub enum UiAction {
     Speed(u32),
     TogglePause,
     Draft(Entity, bool),
+    /// The orders menu's pick at a spot, by option key, for every selected
+    /// colonist it's on offer to.
+    Order {
+        key: String,
+        cell: IVec,
+        on: Option<Entity>,
+    },
     /// A colonist's priority for a work type, by its qualified id.
     SetPriority(Entity, String, u8),
     /// Put the colony in a stance, by its qualified id.

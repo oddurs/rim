@@ -729,6 +729,11 @@ impl UiVm {
         act!("stuff", String, |id| UiAction::Stuff(id));
         act!("speed", u32, |s| UiAction::Speed(s));
         act!("toggle_pause", (), |_a| UiAction::TogglePause);
+        act!("order", (String, i32, i32, Option<u64>), |(key, x, y, on)| UiAction::Order {
+            key,
+            cell: rim_sim::IVec::new(x, y),
+            on: on.and_then(Entity::from_bits),
+        });
         act!("draft", (u64, bool), |(id, on)| match Entity::from_bits(id) {
             Some(e) => UiAction::Draft(e, on),
             None => return Err(rt("bad entity id")),
@@ -983,6 +988,71 @@ impl UiVm {
             Ok(t)
         });
         view!("message_count", (), |_lua, l, _a| Ok(l.world.messages.len()));
+        // Every order the selected colonists could be given at a spot, for
+        // the orders menu: merged by key, with how many of them it's on
+        // offer to. Walks the map (reachability), so call it once per
+        // opening, not per frame.
+        view!("orders", (i32, i32, Option<u64>), |lua, l, (x, y, on)| {
+            let w = l.world;
+            let cell = rim_sim::IVec::new(x, y);
+            let on = on.and_then(Entity::from_bits);
+            let actors: Vec<Entity> = if l.client.group.is_empty() {
+                l.client.selected.into_iter().collect()
+            } else {
+                l.client.group.clone()
+            }
+            .into_iter()
+            .filter(|&e| w.ecs.get::<&Pawn>(e).is_ok_and(|p| p.faction == Faction::Player && p.active && !p.dead))
+            .collect();
+            // (key, label, damaging, how many can, a reason if one can't).
+            let mut merged: Vec<(String, String, bool, usize, Option<String>)> = Vec::new();
+            for &a in &actors {
+                for c in rim_sim::order::options(w, a, cell, on) {
+                    let can = usize::from(c.order.is_some());
+                    match merged.iter_mut().find(|m| m.0 == c.key) {
+                        Some(m) => {
+                            m.3 += can;
+                            if m.4.is_none() {
+                                m.4 = c.reason;
+                            }
+                        }
+                        None => merged.push((c.key, c.label, c.damaging, can, c.reason)),
+                    }
+                }
+            }
+            let rows = lua.create_table()?;
+            for (key, label, damaging, can, reason) in merged {
+                let r = lua.create_table()?;
+                r.set("key", key)?;
+                r.set("label", label)?;
+                r.set("group", if damaging { "damaging" } else { "do" })?;
+                if can == 0 {
+                    r.set("disabled", reason.unwrap_or_else(|| "can't now".into()))?;
+                } else if can < actors.len() {
+                    r.set("trailing", format!("{can} of {}", actors.len()))?;
+                }
+                rows.raw_push(r)?;
+            }
+            let caption = on
+                .and_then(|e| w.ecs.get::<&Pawn>(e).ok().map(|p| w.defs.creature(p.def).label.clone()))
+                .or_else(|| {
+                    [w.map.fixture_at(cell), w.map.item_at(cell), w.map.floor_at(cell)]
+                        .into_iter()
+                        .flatten()
+                        .find_map(|e| w.thing(e).map(|t| w.defs.thing(t.def).label.clone()))
+                })
+                .or_else(|| {
+                    w.map.inb(cell).then(|| w.defs.terrain[w.map.terrain[w.map.idx(cell)] as usize].label.clone())
+                });
+            let t = lua.create_table()?;
+            t.set("rows", rows)?;
+            t.set("caption", caption)?;
+            t.set("actors", actors.len())?;
+            if let [one] = actors.as_slice() {
+                t.set("actor", w.ecs.get::<&Pawn>(*one).map(|p| p.name.clone()).ok())?;
+            }
+            Ok(t)
+        });
         // How many things each designation has marked, by designation id:
         // one pass over the marked things, for the Orders tray.
         view!("marked", (), |lua, l, _a| {

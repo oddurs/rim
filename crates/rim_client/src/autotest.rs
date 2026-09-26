@@ -119,7 +119,17 @@ impl T {
 
     async fn right_click(&mut self, at: (f32, f32)) {
         self.input(RawInput { mouse: at, ..Default::default() }).await;
-        self.input(RawInput { mouse: at, right_pressed: true, ..Default::default() }).await;
+        self.input(RawInput { mouse: at, right_pressed: true, right_down: true, ..Default::default() }).await;
+        self.input(RawInput { mouse: at, right_released: true, ..Default::default() }).await;
+    }
+
+    /// Press the right button and hold it still, past the menu's delay.
+    async fn right_hold(&mut self, at: (f32, f32)) {
+        self.input(RawInput { mouse: at, ..Default::default() }).await;
+        self.input(RawInput { mouse: at, right_pressed: true, right_down: true, ..Default::default() }).await;
+        for _ in 0..30 {
+            self.input(RawInput { mouse: at, right_down: true, ..Default::default() }).await;
+        }
     }
 
     /// Press a key, then let the UI catch up: actions apply after the UI's
@@ -1273,6 +1283,62 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     for id in pins {
         let f = field(&t, id);
         t.app.sim.world.fields.set_ambient(f, None);
+    }
+
+    // ---------------------------------------------------------- 9aa55d96 safe right-click
+    println!("\n# a right-click never takes a wall down (9aa55d96)");
+    t.clear_dock().await;
+    t.app.paused = true;
+    let ours = {
+        let w = t.w();
+        w.ecs
+            .query::<(Entity, &Thing, &Owner)>()
+            .without::<&Blueprint>()
+            .iter()
+            .filter(|(_, th, o)| {
+                o.0 == Faction::Player && w.defs.thing(th.def).build.is_some() && w.defs.thing(th.def).blocks
+            })
+            .map(|(e, th, _)| (e, th.pos))
+            .next()
+    };
+    if let Some((wall, at)) = ours {
+        crate::select(&mut t.app, vec![founder]);
+        t.app.sim.push(Command::Draft { pawn: founder, on: false });
+        t.ticks(1);
+        t.focus(at);
+        t.frame().await;
+        let before = t.count::<(&Thing, &Designated)>();
+        t.right_click(t.screen(at)).await;
+        t.ticks(1);
+        t.frame().await;
+        t.check(
+            t.count::<(&Thing, &Designated)>() == before && !matches!(t.pawn(founder).job, Job::Deconstruct { .. }),
+            "a right-click on our wall takes nothing down",
+        );
+        t.check(t.app.ui.find("core:menu").is_some(), "it opens the orders menu instead");
+        t.shot("orders_menu").await;
+        t.check(t.ui_text().contains("\"Deconstruct\""), "its row says Deconstruct, the caption names the wall");
+        // The only row that can run is Deconstruct: 1 picks it.
+        t.key(KeyCode::Key1).await;
+        t.ticks(1);
+        t.check(
+            t.w().ecs.get::<&Designated>(wall).is_ok() && matches!(t.pawn(founder).job, Job::Deconstruct { .. }),
+            "picking Deconstruct from the menu gives it",
+        );
+        t.app.sim.push(Command::Cancel { a: at, b: at });
+        t.ticks(1);
+        // Held on open ground: the menu, with Go here in it.
+        let ground = (1..8).map(|d| at.offset(d, 0)).find(|&p| t.w().map.passable(p)).unwrap_or(at);
+        t.right_hold(t.screen(ground)).await;
+        t.frame().await;
+        t.check(
+            t.app.ui.find("core:menu").is_some() && t.ui_text().contains("Go here"),
+            "holding right-click opens every order, going there among them",
+        );
+        t.key(KeyCode::Escape).await;
+        t.check(t.app.ui.find("core:menu").is_none(), "Escape closes the menu");
+    } else {
+        t.check(false, "a wall of ours to right-click");
     }
 
     // ---------------------------------------------------------- 86dcd0ca several selected

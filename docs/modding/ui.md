@@ -312,6 +312,14 @@ row. Providers run once, when it opens; a closed menu builds nothing. Rows
 are verbs first and three words at most, and name the object only when the
 caption doesn't.
 
+The map is a subject too, kind `tile` (id `"x,y"`, or `"x,y,<creature>"`),
+opened by a held right-click or a plain one where nothing safe can be done
+([`orders.luau`](../../mods/core/ui/orders.luau)). Its rows come from the
+sim through `view.orders(x, y, on)`: every order the selected colonists
+could be given there, damaging ones (deconstruct, felling an unmarked tree)
+in the last group. `act.order(key, x, y, on)` gives a row by its key. A
+plain right-click only ever gives a safe order.
+
 The engine side is general: any node's `menu` subject calls the handler
 `ui.on_context` set (core's menus), and a `popup` layer places a root at
 its `at`, taking keys through `on_key` and hearing a press elsewhere

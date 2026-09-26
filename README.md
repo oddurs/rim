@@ -63,7 +63,8 @@ cargo dist                                                        # a shipping b
 | WASD, wheel, middle  | pan, zoom, drag                    |
 | Click / drag         | select, or apply the toolbar tool  |
 | R                    | draft the selected colonist        |
-| Right-click          | drafted: move or attack            |
+| Right-click          | the safe order there: go, hunt, eat, gather (never deconstruct or fell) |
+| Hold right-click     | every order there, damaging ones last |
 | Tab / C              | next colonist / center on selected |
 | O                    | cycle field overlays (temperature, light, ...) |
 | F3                   | profiler, load order, mod warnings |

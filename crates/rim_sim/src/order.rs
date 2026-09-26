@@ -1,12 +1,18 @@
-//! Right-click orders: one click, one pawn, one job.
+//! Right-click orders: every order a spot offers a pawn, and which one a
+//! plain click gives.
 //!
-//! `resolve` is the only place that decides what a right-click means. The
-//! client calls it each frame to label the cursor and `Command::Order` calls
-//! it again when the click lands, so the cursor cannot promise something the
-//! click won't do.
+//! `options` is the only place that decides what a right-click can mean.
+//! The client reads it to label the cursor and fill the orders menu, and
+//! `Command::Order` reads it again when the click lands, so neither can
+//! promise something the order won't do.
+//!
+//! A plain right-click gives the first *safe* option (`resolve`). An option
+//! that takes something away (deconstructing what the colony built, felling
+//! a tree nobody marked) is `damaging`: it is only ever given when the
+//! player picks it by name, from the menu.
 //!
 //! Orders are read out of the defs. A mod that adds a harvestable plant or a
-//! buildable thing gets a working right-click without touching the engine.
+//! buildable thing gets working orders without touching the engine.
 
 use crate::ai;
 use crate::defs::{HarvestDef, Targets};
@@ -28,42 +34,76 @@ pub struct Order {
     pub reserve: Vec<Entity>,
 }
 
-/// What a right-click at `cell` would make `pawn` do, if anything. `on` is
+/// One thing a pawn could be ordered to do at a spot.
+pub struct Choice {
+    /// Stable for this spot and these things: what `Command::Order` names
+    /// to give this choice rather than the default ("move",
+    /// "deconstruct:<entity>").
+    pub key: String,
+    pub label: String,
+    /// Takes something away: never a plain click's order.
+    pub damaging: bool,
+    /// The order, or `None` when it can't be given now, with `reason`.
+    pub order: Option<Order>,
+    pub reason: Option<String>,
+}
+
+impl Choice {
+    fn ready(key: String, damaging: bool, order: Order) -> Choice {
+        Choice { key, label: order.label.clone(), damaging, order: Some(order), reason: None }
+    }
+}
+
+/// Every order `pawn` could be given at `cell`, safe ones first. `on` is
 /// the creature the click landed on, which the caller hits first because a
 /// creature stands on a cell rather than occupying it.
 ///
 /// Read-only, and free of RNG: calling it every frame changes nothing.
-pub fn resolve(w: &World, pawn: Entity, cell: IVec, on: Option<Entity>) -> Option<Order> {
-    let (from, drafted) = {
-        let p = w.ecs.get::<&Pawn>(pawn).ok()?;
-        if !p.active || p.dead || p.faction != Faction::Player {
-            return None;
-        }
-        (p.pos, p.drafted)
-    };
+pub fn options(w: &World, pawn: Entity, cell: IVec, on: Option<Entity>) -> Vec<Choice> {
+    let mut out = Vec::new();
+    let Ok(p) = w.ecs.get::<&Pawn>(pawn) else { return out };
+    if !p.active || p.dead || p.faction != Faction::Player {
+        return out;
+    }
+    let (from, drafted) = (p.pos, p.drafted);
+    drop(p);
 
     if let Some(target) = on.filter(|&t| t != pawn) {
         if let Some(o) = creature(w, from, target, drafted) {
-            return Some(o);
+            out.push(Choice::ready(format!("attack:{}", target.to_bits()), false, o));
         }
     }
     // A drafted pawn is a soldier: it moves and it fights, and nothing else.
     if !drafted {
-        if let Some(o) = w.map.fixture_at(cell).and_then(|f| fixture(w, pawn, from, f)) {
-            return Some(o);
-        }
-        if let Some(o) = w.map.floor_at(cell).and_then(|f| fixture(w, pawn, from, f)) {
-            return Some(o);
+        for f in [w.map.fixture_at(cell), w.map.floor_at(cell)].into_iter().flatten() {
+            fixture(w, pawn, from, f, &mut out);
         }
         if let Some(o) = w.map.item_at(cell).and_then(|i| item(w, from, i)) {
-            return Some(o);
+            out.push(Choice::ready("eat".into(), false, o));
         }
     }
-    (w.map.passable(cell) && w.map.can_reach(from, Goal::Cell(cell))).then(|| Order {
-        label: "Go here".into(),
-        job: Job::MoveTo { to: cell },
-        reserve: Vec::new(),
-    })
+    if w.map.passable(cell) && w.map.can_reach(from, Goal::Cell(cell)) {
+        out.push(Choice::ready(
+            "move".into(),
+            false,
+            Order { label: "Go here".into(), job: Job::MoveTo { to: cell }, reserve: Vec::new() },
+        ));
+    }
+    // Safe first, keeping each kind's own order.
+    out.sort_by_key(|c| c.damaging);
+    out
+}
+
+/// What a plain right-click at `cell` makes `pawn` do: the first safe
+/// order there, if any. Never a damaging one.
+pub fn resolve(w: &World, pawn: Entity, cell: IVec, on: Option<Entity>) -> Option<Order> {
+    options(w, pawn, cell, on).into_iter().filter(|c| !c.damaging).find_map(|c| c.order)
+}
+
+/// The order named `key` at this spot, if it can be given now: what a pick
+/// from the orders menu gives, damaging or not.
+pub fn choose(w: &World, pawn: Entity, cell: IVec, on: Option<Entity>, key: &str) -> Option<Order> {
+    options(w, pawn, cell, on).into_iter().find(|c| c.key == key).and_then(|c| c.order)
 }
 
 fn creature(w: &World, from: IVec, target: Entity, drafted: bool) -> Option<Order> {
@@ -83,73 +123,92 @@ fn creature(w: &World, from: IVec, target: Entity, drafted: bool) -> Option<Orde
     })
 }
 
-fn fixture(w: &World, pawn: Entity, from: IVec, f: Entity) -> Option<Order> {
-    let t = w.thing(f)?;
+/// A fixture's or floor's orders: build or supply its blueprint, each
+/// harvest that's ready, and taking down what the colony built.
+fn fixture(w: &World, pawn: Entity, from: IVec, f: Entity, out: &mut Vec<Choice>) {
+    let Some(t) = w.thing(f) else { return };
     let td = w.defs.thing(t.def);
     if !w.map.can_reach(from, w.reach_goal(&t)) {
-        return None;
+        return;
     }
+    let id = f.to_bits();
     if let Ok(bp) = w.ecs.get::<&Blueprint>(f) {
         let missing = bp.cost.iter().zip(&bp.delivered).find(|(c, d)| **d < c.1).map(|(c, d)| (c.0, c.1 - d));
         drop(bp);
-        return Some(match missing {
-            None => Order { label: format!("Build {}", td.label), job: Job::Construct { bp: f }, reserve: vec![f] },
+        match missing {
+            None => out.push(Choice::ready(
+                format!("build:{id}"),
+                false,
+                Order { label: format!("Build {}", td.label), job: Job::Construct { bp: f }, reserve: vec![f] },
+            )),
             Some((def, want)) => {
-                let (_, src) = ai::nearest_item(w, pawn, from, def)?;
-                Order {
-                    label: format!("Haul {} to {}", w.defs.thing(def).label, td.label),
-                    job: Job::Deliver { bp: f, src, want, stage: 0 },
-                    reserve: vec![f, src],
+                if let Some((_, src)) = ai::nearest_item(w, pawn, from, def) {
+                    out.push(Choice::ready(
+                        format!("haul:{id}"),
+                        false,
+                        Order {
+                            label: format!("Haul {} to {}", w.defs.thing(def).label, td.label),
+                            job: Job::Deliver { bp: f, src, want, stage: 0 },
+                            reserve: vec![f, src],
+                        },
+                    ));
                 }
             }
-        });
+        }
+        return;
     }
-    // The harvest it's designated for, and only that. Otherwise a gentle
-    // one (the thing stays), so a click gathers from a tree rather than
-    // felling it, even while those branches grow back. Something with no
-    // gentle harvest is taken as the click says. Either way it must be
-    // ready, and a harvest that needs a tool this pawn can't get isn't on
-    // offer.
-    let p = w.ecs.get::<&Pawn>(pawn).ok()?;
+    // Every harvest that's ready. One the player marked, or one that leaves
+    // the thing standing, is safe; felling what nobody marked is damaging.
+    // A harvest needing a tool this pawn can't get is listed with why.
+    let Ok(p) = w.ecs.get::<&Pawn>(pawn) else { return };
     let have = w.colony_tools();
-    // The tool to fetch for a harvest on offer: Some(None) when none is needed.
-    let offer = |h: &HarvestDef| {
-        w.harvest_ready(f, h.key()).then(|| ai::tool_for(w, pawn, &p, h.requires_r, have)).flatten().map(|t| t.1)
-    };
-    let gentle = td.harvest.iter().any(|h| !h.destroy);
-    let pick = match w.ecs.get::<&Designated>(f).ok().and_then(|d| td.harvest_for(d.0)) {
-        Some(h) => offer(h).map(|t| (h, t)),
-        None => td.harvest.iter().filter(|h| !gentle || !h.destroy).find_map(|h| offer(h).map(|t| (h, t))),
-    };
-    if let Some((hd, tool)) = pick {
-        return Some(Order {
-            label: format!("{} {}", w.defs.designations[hd.desig_r as usize].label, td.label),
-            job: Job::Harvest { target: f, forced: true, harvest: hd.key(), tool },
-            reserve: std::iter::once(f).chain(tool).collect(),
-        });
+    let marked = w.ecs.get::<&Designated>(f).ok().and_then(|d| td.harvest_for(d.0)).map(|h| h.key());
+    // The marked harvest first, so a click on a tree marked for chopping
+    // still chops it.
+    let mut harvests: Vec<&HarvestDef> = td.harvest.iter().collect();
+    harvests.sort_by_key(|h| marked != Some(h.key()));
+    for h in harvests {
+        if !w.harvest_ready(f, h.key()) {
+            continue;
+        }
+        let label = format!("{} {}", w.defs.designations[h.desig_r as usize].label, td.label);
+        let key = format!("harvest:{}:{id}", h.key().map_or(0, |k| k as u32 + 1));
+        let damaging = h.destroy && marked != Some(h.key());
+        match ai::tool_for(w, pawn, &p, h.requires_r, have) {
+            Some((_, tool)) => out.push(Choice::ready(
+                key,
+                damaging,
+                Order {
+                    label,
+                    job: Job::Harvest { target: f, forced: true, harvest: h.key(), tool },
+                    reserve: std::iter::once(f).chain(tool).collect(),
+                },
+            )),
+            None => {
+                let tags = w.defs.tool_tag_names(h.requires_r).join(" and ");
+                let reason = if tags.is_empty() { "needs a tool".to_string() } else { format!("no {tags}") };
+                out.push(Choice { key, label, damaging, order: None, reason: Some(reason) });
+            }
+        }
     }
+    drop(p);
     if !td.harvest.is_empty() {
-        return None;
+        return;
     }
     // Something the colony built, if any mod offers a way to take it down.
     let ours = w.ecs.get::<&Owner>(f).is_ok_and(|o| o.0 == Faction::Player);
-    let take_down = w.defs.designations.iter().find(|d| d.targets == Targets::Built)?;
-    (ours && td.build.is_some()).then(|| Order {
-        label: format!("{} {}", take_down.label, td.label),
-        job: Job::Deconstruct { target: f },
-        reserve: vec![f],
-    })
-}
-
-fn item(w: &World, from: IVec, i: Entity) -> Option<Order> {
-    let t = w.thing(i)?;
-    let td = w.defs.thing(t.def);
-    td.food.as_ref()?;
-    w.map.can_reach(from, Goal::Cell(t.pos)).then(|| Order {
-        label: format!("Eat {}", td.label),
-        job: Job::Eat { src: i, t: 0, seat: None, stage: 0 },
-        reserve: vec![i],
-    })
+    let Some(take_down) = w.defs.designations.iter().find(|d| d.targets == Targets::Built) else { return };
+    if ours && td.build.is_some() {
+        out.push(Choice::ready(
+            format!("deconstruct:{id}"),
+            true,
+            Order {
+                label: format!("{} {}", take_down.label, td.label),
+                job: Job::Deconstruct { target: f },
+                reserve: vec![f],
+            },
+        ));
+    }
 }
 
 /// The pawn's current job in the same words the order that started it used,
@@ -180,7 +239,17 @@ pub fn why_text(w: &World, why: &crate::ai::Why) -> String {
     }
 }
 
-/// A job in words: "Chop oak tree", "Build wall".
+fn item(w: &World, from: IVec, i: Entity) -> Option<Order> {
+    let t = w.thing(i)?;
+    let td = w.defs.thing(t.def);
+    td.food.as_ref()?;
+    w.map.can_reach(from, Goal::Cell(t.pos)).then(|| Order {
+        label: format!("Eat {}", td.label),
+        job: Job::Eat { src: i, t: 0, seat: None, stage: 0 },
+        reserve: vec![i],
+    })
+}
+
 pub fn describe(w: &World, job: &Job) -> String {
     let thing_label = |e: Entity| w.thing(e).map(|t| w.defs.thing(t.def).label.clone());
     let named = match job {

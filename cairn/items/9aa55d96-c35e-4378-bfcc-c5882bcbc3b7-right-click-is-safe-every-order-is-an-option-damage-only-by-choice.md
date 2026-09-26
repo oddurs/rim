@@ -2,8 +2,10 @@
 id: 9aa55d96-c35e-4378-bfcc-c5882bcbc3b7
 title: 'Right-click is safe: every order is an option, damage only by choice'
 type: bug
-status: backlog
+status: review
 milestone: pointer
+assignee: Oddur Sigurdsson
+claimed: 2026-09-26
 depends_on:
 - 3b1726ff-ded5-45f6-968f-cb0a5e6a2577
 created: 2026-09-26
@@ -28,7 +30,11 @@ With a colonist selected, right-clicking anything the colony built resolves to D
 
 ## Acceptance criteria
 
-- [ ] Right-clicking your own wall with a colonist selected orders nothing and opens the menu
-- [ ] The menu's Deconstruct issues the deconstruct order
-- [ ] Open ground still means go here; a tool in hand still drops
-- [ ] Holding right-click opens every order for the spot
+- [x] Right-clicking your own wall with a colonist selected orders nothing and opens the menu
+- [x] The menu's Deconstruct issues the deconstruct order
+- [x] Open ground still means go here; a tool in hand still drops
+- [x] Holding right-click opens every order for the spot
+
+## 2026-09-26
+
+order::options lists every order with a stable key and a damaging flag; resolve takes the first safe; Command::Order gained pick (serde default, old logs load). The floor case was the likeliest accident: right-clicking your own floor to walk there deconstructed it. Felling an unmarked tree, which a plain click used to do, is now damaging too; a tree marked for chopping still chops on a plain click.
