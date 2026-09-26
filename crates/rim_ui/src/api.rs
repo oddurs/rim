@@ -73,7 +73,7 @@ type VisiblePawn = {
     selected: boolean, hovered: boolean, radius: number,
 }
 type Speech = { id: number, text: string, age: number, priority: number }
-type Message = { text: string, kind: string, age: number }
+type Message = { text: string, kind: string, age: number, day: number }
 type WorldEvent = { tick: number, kind: string, id: number, name: string }
 type FieldInfo = {
     index: number, id: string, label: string, unit: string, hud: boolean, overlay: boolean,
@@ -231,7 +231,8 @@ pub const UI_API: &[UiDoc] = &[
     d!("view.hover", "() -> Hover?", "What's under the cursor."),
     d!("view.inspect", "() -> Inspect?", "The node under the cursor (devtools)."),
     d!("view.items", "() -> { Item }", "Every item def, which a stockpile can take or refuse."),
-    d!("view.messages", "(max: number) -> { Message }", "The newest messages, newest first."),
+    d!("view.message_count", "() -> number", "How many messages the log holds."),
+    d!("view.messages", "(max: number, skip: number?) -> { Message }", "The newest messages, newest first; skip that many of the newest to page back through the log."),
     d!("view.mods", "() -> { ModInfo }", "Loaded mods, in load order."),
     d!("view.outlines", "() -> boolean", "Whether layout outlines are on."),
     d!("view.overlay", "() -> string?", "The label of the field overlay shown, if any."),

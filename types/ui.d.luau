@@ -52,7 +52,7 @@ type VisiblePawn = {
     selected: boolean, hovered: boolean, radius: number,
 }
 type Speech = { id: number, text: string, age: number, priority: number }
-type Message = { text: string, kind: string, age: number }
+type Message = { text: string, kind: string, age: number, day: number }
 type WorldEvent = { tick: number, kind: string, id: number, name: string }
 type FieldInfo = {
     index: number, id: string, label: string, unit: string, hud: boolean, overlay: boolean,
@@ -231,8 +231,10 @@ declare view: {
     inspect: () -> Inspect?,
     -- Every item def, which a stockpile can take or refuse.
     items: () -> { Item },
-    -- The newest messages, newest first.
-    messages: (max: number) -> { Message },
+    -- How many messages the log holds.
+    message_count: () -> number,
+    -- The newest messages, newest first; skip that many of the newest to page back through the log.
+    messages: (max: number, skip: number?) -> { Message },
     -- Loaded mods, in load order.
     mods: () -> { ModInfo },
     -- Whether layout outlines are on.

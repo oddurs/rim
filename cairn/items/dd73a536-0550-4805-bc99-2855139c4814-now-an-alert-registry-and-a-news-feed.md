@@ -2,10 +2,12 @@
 id: dd73a536-0550-4805-bc99-2855139c4814
 title: 'Now: an alert registry and a news feed'
 type: feature
-status: backlog
+status: done
 milestone: interface
+assignee: Oddur Sigurdsson
 created: 2026-09-26
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p1
 api: additive
 effort: m
@@ -26,7 +28,11 @@ Messages are toasts that scroll away. Standing problems (nobody can cook, a colo
 
 ## Acceptance criteria
 
-- [ ] Alerts are registered, not hard-coded: core and a mod each add one through `alerts.add`
-- [ ] Checks run at the slow refresh, and the budget stays under 1 ms
-- [ ] News replaces the toast column; nothing is lost when many arrive
-- [ ] docs/modding/ui.md shows how to add an alert
+- [x] Alerts are registered, not hard-coded: core and a mod each add one through `alerts.add`
+- [x] Checks run at the slow refresh, and the budget stays under 1 ms
+- [x] News replaces the toast column; nothing is lost when many arrive
+- [x] docs/modding/ui.md shows how to add an alert
+
+## 2026-09-26
+
+Registry in mods/core/ui/alerts.luau; checks throttle themselves on view.time (a mount's refresh=slow is no throttle: any hover change forces every component to rebuild). Core registers hurt, needs (any need under 15%, so mods' needs count), idle and no-stockpile; weather registers storm and freezing. News pages the log lazily (view.messages skip, view.message_count). Right-edge panels now align to the screen edge.

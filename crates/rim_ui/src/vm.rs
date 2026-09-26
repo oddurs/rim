@@ -879,9 +879,11 @@ impl UiVm {
             }
             Ok(t)
         });
-        view!("messages", usize, |lua, l, max| {
+        // Newest first; `skip` pages back through the log, so a list of it
+        // fetches only the lines in view.
+        view!("messages", (usize, Option<usize>), |lua, l, (max, skip)| {
             let t = lua.create_table()?;
-            for m in l.world.messages.iter().rev().take(max) {
+            for m in l.world.messages.iter().rev().skip(skip.unwrap_or(0)).take(max) {
                 let age = l.world.tick.saturating_sub(m.tick) as f64 / TICKS_PER_DAY as f64;
                 let row = lua.create_table()?;
                 row.set("text", m.text.as_str())?;
@@ -895,10 +897,12 @@ impl UiVm {
                     },
                 )?;
                 row.set("age", age)?;
+                row.set("day", m.tick / TICKS_PER_DAY + 1)?;
                 t.push(row)?;
             }
             Ok(t)
         });
+        view!("message_count", (), |_lua, l, _a| Ok(l.world.messages.len()));
         // Recent world events (joins, deaths...), newest last.
         view!("events", u64, |lua, l, since| {
             let t = lua.create_table()?;
