@@ -38,7 +38,7 @@ fn shipped_mods_load_and_patch_applies() {
     let s = sim(1);
     assert_eq!(
         s.mods.iter().map(|m| m.id.as_str()).collect::<Vec<_>>(),
-        ["core", "primitive", "weather", "wildlife_plus"]
+        ["core", "crafting", "primitive", "weather", "wildlife_plus"]
     );
     let d = &s.world.defs;
     assert!(d.creature_id("boar").is_some(), "plugin creature missing");

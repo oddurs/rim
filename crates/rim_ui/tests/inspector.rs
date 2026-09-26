@@ -86,6 +86,22 @@ end)
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// The thing slot exists only while a thing is selected. Extending it with
+/// nothing selected is no mistake, so it isn't reported as one.
+#[test]
+fn extending_a_slot_that_is_only_sometimes_there_is_no_warning() {
+    let extra = r#"ui.extend("core:inspector.thing", function(view) return nil end)"#;
+    let dir = image_free_mods("inspector-sometimes", extra);
+    let sim = sim_at(&dir);
+    let mut ui = ui_for(&sim);
+    let mut cv = client(&sim);
+    cv.selected = None;
+    frame(&mut ui, &sim, &cv, Input::default());
+    assert!(ui.find("core:inspector.thing").is_none(), "the slot isn't there");
+    assert!(ui.warnings().iter().all(|w| !w.contains("core:inspector.thing")), "{:?}", ui.warnings());
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 /// Core plus a UI-only mod whose script is `ui`.
 fn image_free_mods(name: &str, ui: &str) -> std::path::PathBuf {
     let dir = std::env::temp_dir().join(format!("rim-ui-{name}-{}", std::process::id()));

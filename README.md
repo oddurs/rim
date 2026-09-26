@@ -31,6 +31,8 @@ core's mild climate remains. See [Modding climate and weather](docs/modding/weat
 The stone age is another: `mods/primitive` has you gather branches, fibre,
 stones and flint with your hands, and build a first shelter and campfire out
 of branches. Remove it and core's bare-handed felling and quarrying remain.
+`mods/crafting` gives stations bills, "make five, then stop", on the engine's
+work orders; recipes are data any mod adds. See [Crafting](docs/modding/crafting.md).
 
 The interface is a mod too. The whole HUD lives in `mods/core/ui/`, written in
 Luau on a small UI engine (`crates/rim_ui`), and any mod can extend, replace,
@@ -71,7 +73,7 @@ cargo dist                                                        # a shipping b
 - [Testing a mod](docs/modding/testing.md): `rim test` runs a mod's Luau tests against seeded headless worlds.
 - [Scripting rules](docs/modding/scripting.md): the Luau sandbox, limits and determinism.
 - API references, generated from the engine: [`rim` for sim scripts](docs/modding/api-scripts.md) and [`ui`, `act`, `view` for UI scripts](docs/modding/api-ui.md).
-- [Modding the interface](docs/modding/ui.md) and [climate and weather](docs/modding/weather.md).
+- [Modding the interface](docs/modding/ui.md), [climate and weather](docs/modding/weather.md) and [crafting](docs/modding/crafting.md).
 - [Dependencies and configuration](docs/engineering/dependencies.md): how each library is set up, and what was measured.
 
 ## Design and roadmap

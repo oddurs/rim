@@ -467,6 +467,9 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     for (i, m) in [wood, wood, stone].into_iter().enumerate() {
         t.app.sim.world.spawn_fixture_of(wall, row.offset(i as i32, 0), false, Some(m)).expect("a wall");
     }
+    // The right-click ring from earlier fades on the wall clock: on a slow
+    // frame it's still over the seam when the screenshot is taken.
+    t.app.order_flash = None;
     t.focus(row.offset(1, 0));
     let img = t.grab().await;
     let dpi = screen_dpi_scale();
@@ -817,6 +820,8 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         .expect("open ground for a stockpile");
     t.click_ui("core:toolbar.stockpile").await;
     t.check(t.app.tool == Tool::Stockpile, "clicking Stockpile selects the stockpile tool");
+    // On screen, clear of the HUD: the camera is wherever the last step left it.
+    t.focus(spot.offset(1, 1));
     t.drag(spot, spot.offset(3, 2)).await;
     t.ticks(1);
     let zone = t.w().zones.at(&t.w().map, spot).map(|z| z.id);

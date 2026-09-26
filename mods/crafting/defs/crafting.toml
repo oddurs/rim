@@ -1,0 +1,92 @@
+# Crafting on the engine's work orders (DESIGN.md §4e). A recipe says what
+# a station makes, out of what, and how long it takes; a bill on a station
+# says how many. The bills script turns the top bill into one order at a
+# time and makes the outputs when the order is done.
+#
+# Other mods add recipes as [[crafting.recipe]] and stations by tagging
+# their things; see docs/modding/crafting.md.
+
+[[kind]]
+id = "recipe"
+
+[kind.fields]
+label = "string"
+# A tag: any thing carrying it can make this ("crafting:hand" is anywhere
+# with a crafting spot).
+station = "string"
+# { thing = "id", count = n } or { tag = "t", count = n }, in the order
+# they're brought. The first that is a material is what the outputs are
+# made of.
+inputs = "list"
+# { thing = "id", count = n }
+outputs = "list"
+# Ticks at bare hands' pace, before the station's speed.
+work = "float"
+# Tool tags: the worker holds a tool with every one.
+requires = { type = "list", default = [] }
+work_type = { type = "string", default = "crafting:craft" }
+# Whether the outputs are made of the first material that went in.
+stuff = { type = "bool", default = true }
+
+# How fast a station works, where it isn't 1.
+[[kind]]
+id = "station"
+
+[kind.fields]
+thing = "string"
+speed = "float"
+
+# Better with practice: a trained crafter works faster (DESIGN.md §4d).
+[[skill]]
+id = "crafting"
+label = "Crafting"
+
+[[work_type]]
+id = "craft"
+label = "Craft"
+icon = "R"
+skill = "crafting"
+priority = 3
+order = 45
+
+# A patch of ground marked for handwork. Free, like a campfire without the
+# fire, so that every recipe has a station and the cheapest costs nothing.
+[[thing]]
+id = "spot"
+label = "crafting spot"
+color = "#b39b72"
+category = "building"
+look.layers = [
+    { draw = "disc", r = 0.36, color = "#00000030" },
+    { draw = "disc", x = 0.36, y = 0.44, r = 0.07, shade = 0.8 },
+    { draw = "disc", x = 0.6, y = 0.58, r = 0.09, shade = 0.7 },
+    { draw = "disc", x = 0.52, y = 0.36, r = 0.05 },
+]
+hp = 30
+tags = ["crafting:hand"]
+build = { menu = "production", work = 20, free = true }
+
+# A bench with a place to stand in front: handwork, faster, and the bench
+# recipes that need a surface.
+[[thing]]
+id = "workbench"
+label = "workbench"
+color = "#94704c"
+category = "building"
+look.layers = [
+    { draw = "fill", x = 0.1, y = 0.62, w = 0.1, h = 0.3, shade = 0.6 },
+    { draw = "fill", x = 0.8, y = 0.62, w = 0.1, h = 0.3, shade = 0.6 },
+    { draw = "fill", x = 0.04, y = 0.3, w = 0.92, h = 0.34 },
+    { draw = "fill", x = 0.2, y = 0.36, w = 0.24, h = 0.08, shade = 0.75 },
+]
+blocks = true
+hp = 150
+market_value = 30
+tags = ["crafting:hand", "crafting:bench"]
+spots = [{ dx = 0, dy = 1 }]
+build = { menu = "production", work = 400, stuff = { category = "structural", count = 20 } }
+
+[[station]]
+id = "workbench"
+thing = "crafting:workbench"
+speed = 1.5

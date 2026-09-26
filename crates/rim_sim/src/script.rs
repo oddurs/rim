@@ -121,7 +121,7 @@ pub struct ApiDoc {
 pub const RIM_TYPES: &str = r#"type Faction = "player" | "hostile" | "wild"
 type MessageKind = "info" | "good" | "threat" | "bad"
 type CreatureInfo = { id: string, label: string, intelligent: boolean, aggressive: boolean, flees: boolean, plural: string, market_value: number, max_hp: number, wild: boolean }
-type ThingInfo = { id: string, label: string, market_value: number, food: boolean, item: boolean }
+type ThingInfo = { id: string, label: string, market_value: number, food: boolean, item: boolean, tags: { string } }
 type Date = { year: number, season: string, season_index: number, day: number, day_of_year: number, year_days: number, year_fraction: number }
 type Room = { id: number, cells: number, enclosed: boolean }
 type Part = { label: string, value: number }
@@ -130,6 +130,7 @@ type OrderSpec = { label: string, needs: { OrderNeed }, work: number, work_type:
 type OrderInput = { thing: string?, tag: string?, count: number, have: number }
 type OrderInfo = { owner: string, label: string, needs: { OrderInput }, work: number, done: number, total: number, requires: { string } }
 type ItemQuery = { thing: string?, tag: string? }
+type ThingAt = { id: number, thing: string, x: number, y: number, count: number, blueprint: boolean }
 "#;
 
 /// A work order's needs, at most: a recipe, not a shopping list.
@@ -634,6 +635,7 @@ impl ScriptHost {
             t.set("market_value", td.market_value)?;
             t.set("food", td.food.is_some())?;
             t.set("item", td.category == crate::defs::Category::Item)?;
+            t.set("tags", lua.create_sequence_from(td.tags.iter().map(String::as_str))?)?;
             things.push(t)?;
         }
         rim.set("thing_defs", things)?;
@@ -1233,6 +1235,30 @@ impl ScriptHost {
                 Ok(true)
             }
         );
+        // A thing by id: what it is and where, or nil if it's gone.
+        {
+            let ptr = self.world.clone();
+            let f = lua.create_function(move |lua, id: u64| {
+                let e = rim_sim_entity(id)?;
+                with_world(&ptr, |w| {
+                    let Some(t) = w.thing(e) else { return Ok(Value::Nil) };
+                    let r = lua.create_table()?;
+                    r.set("id", id)?;
+                    r.set("thing", w.defs.thing(t.def).id.as_str())?;
+                    r.set("x", t.pos.x)?;
+                    r.set("y", t.pos.y)?;
+                    r.set("count", t.count)?;
+                    r.set("blueprint", w.ecs.get::<&Blueprint>(e).is_ok())?;
+                    Ok(Value::Table(r))
+                })
+            })?;
+            rim.set("thing", f)?;
+            self.declare(
+                "thing",
+                "(id: number) -> ThingAt?",
+                "A thing by id: what it is and where, or nil if it's gone.",
+            );
+        }
         // The order on a site, and how far it's got, or nil.
         {
             let ptr = self.world.clone();

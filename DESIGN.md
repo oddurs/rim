@@ -640,7 +640,7 @@ things we build ourselves.
 | Needs: food, rest, warmth                     | Mood, mental breaks, relationships      |
 | Calendar, day and night, the atmosphere names | Other biomes, water flow, fire spread   |
 | Harvest, mine, build, haul (via delivery)     | The stone age (`mods/primitive`)        |
-|                                               | Crafting benches, bills, research       |
+|                                               | Bills (`mods/crafting`), research       |
 | Melee combat, health, death                   | Ranged weapons, armour, medicine        |
 | Wild animals, predators, hunting              | Taming, farming animals                 |
 | Storyteller, wealth, eras                     | Trade, factions, diplomacy              |
