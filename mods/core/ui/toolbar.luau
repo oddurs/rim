@@ -197,6 +197,50 @@ end
 -- The nth thing in the open tray, if a tray is open and has one: the
 -- number keys pick it. `keys.luau` asks this first for 1 to 3, which are
 -- the speed keys otherwise.
+-- ─── A tool's context menu ────────────────────────────────────────────────
+-- A tile or row in any tray is the subject "tool".
+local menus = require("@core/ui/menus")
+
+local function tool_by_key(key)
+	for _, tool in view.tools() do
+		if tool.key == key then
+			return tool
+		end
+	end
+	return nil
+end
+
+menus.kind("tool", {
+	resolve = tool_by_key,
+	caption = function(ctx)
+		return ctx.subject.label
+	end,
+	actor = function(ctx)
+		return if ctx.subject.group ~= "" then (MENUS[ctx.subject.group] or cap(ctx.subject.group)) else category_label(ctx.subject.category)
+	end,
+})
+menus.add("tool", {
+	id = "core:tool.use",
+	label = function(ctx)
+		return if ctx.subject.category == "build" then t("core:tool.place", "Place") else t("core:tool.use", "Use")
+	end,
+	run = function(ctx)
+		pick(ctx.subject)
+	end,
+})
+menus.add("tool", {
+	id = "core:tool.find",
+	label = t("core:tool.find", "Find in tray"),
+	group = "manage",
+	key = "/",
+	run = function(ctx)
+		ui.set_state("core:dock.open", ctx.subject.category)
+		ui.set_state("core:dock.find", "")
+		ui.set_input("core:dock.find", "")
+		ui.focus("core:dock.find")
+	end,
+})
+
 function dock.number(n: number): boolean
 	local tools = view.tools()
 	local open = open_category(tools)
@@ -292,6 +336,7 @@ end
 local function tile(tool, n: number?)
 	return row({
 		id = "core:toolbar." .. tool.key,
+		menu = { kind = "tool", id = tool.key },
 		w = 150,
 		padx = "m",
 		pady = "s",
@@ -323,6 +368,7 @@ end
 local function list_row(tool, note: string?, n: number?)
 	return row({
 		id = "core:toolbar." .. tool.key,
+		menu = { kind = "tool", id = tool.key },
 		padx = "m",
 		pady = "s",
 		gap = "m",
@@ -506,6 +552,7 @@ local function tray_frame(view, tools, open: string)
 						rows,
 						row({
 							id = "core:dock.zone." .. z.id,
+							menu = { kind = "zone", id = z.id },
 							padx = "m",
 							pady = "s",
 							gap = "m",

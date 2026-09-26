@@ -2,8 +2,10 @@
 id: 64a0648e-b464-4258-bf66-5aded75ecf8c
 title: 'Context menus across the interface: colonists, zones, tray tiles, news'
 type: feature
-status: backlog
+status: review
 milestone: pointer
+assignee: Oddur Sigurdsson
+claimed: 2026-09-26
 depends_on:
 - 3b1726ff-ded5-45f6-968f-cb0a5e6a2577
 created: 2026-09-26
@@ -29,5 +31,9 @@ Once the map has a context menu, every other thing you can point at should answe
 
 ## Acceptance criteria
 
-- [ ] Right-clicking a colonist row, a stockpile row, a tray tile and a news line each opens the shared menu with core's rows
-- [ ] Damaging rows are last and never primary
+- [x] Right-clicking a colonist row, a stockpile row, a tray tile and a news line each opens the shared menu with core's rows
+- [x] Damaging rows are last and never primary
+
+## 2026-09-26
+
+Each surface registers its own kind in the file that draws it: colonist (people, inspector title), tool (tray tiles and rows), zone (Zones tray, Stockpiles sheet), alert and message (Now). No delete-stockpile row: the sim has no command to remove a zone by id; that would be its own item.

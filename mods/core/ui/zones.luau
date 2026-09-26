@@ -1,8 +1,49 @@
 -- Stockpiles: each zone and the items it takes. Paint zones with the
 -- stockpile tool; here a toggle per item lets a zone take it or not.
 local kit = require("@core/ui/kit")
+local menus = require("@core/ui/menus")
 local row, col, label = kit.row, kit.col, kit.label
 local t = ui.t
+
+-- ─── A stockpile's context menu ────────────────────────────────────────────
+-- A stockpile in any list (this sheet, the Zones tray) is the subject
+-- "zone".
+menus.kind("zone", {
+	resolve = function(id)
+		for _, z in view.zones() do
+			if z.id == id then
+				return z
+			end
+		end
+		return nil
+	end,
+	caption = function(ctx)
+		return ctx.subject.name
+	end,
+	actor = function(ctx)
+		return string.format(t("core:zones.cells", "%d cells"), ctx.subject.cells)
+	end,
+})
+menus.add("zone", {
+	id = "core:zone.edit",
+	label = t("core:zone.edit", "What it takes…"),
+	group = "manage",
+	primary = function()
+		return true
+	end,
+	run = function()
+		ui.open("core:zones")
+	end,
+})
+local function allow_all(on: boolean)
+	return function(ctx)
+		for _, it in view.items() do
+			act.zone_allow(ctx.id, it.id, on)
+		end
+	end
+end
+menus.add("zone", { id = "core:zone.allow_all", label = t("core:zone.allow_all", "Take everything"), group = "manage", run = allow_all(true) })
+menus.add("zone", { id = "core:zone.forbid_all", label = t("core:zone.forbid_all", "Take nothing"), group = "manage", run = allow_all(false) })
 
 local PER_ROW = 4
 
@@ -16,7 +57,12 @@ ui.window("core:zones", { title = t("core:zones.title", "Stockpiles"), w = 460, 
 	local items = view.items()
 	local parts = {}
 	for _, z in zones do
-		table.insert(parts, kit.heading(z.name, string.format(t("core:zones.cells", "%d cells"), z.cells)))
+		table.insert(
+			parts,
+			row({ id = "core:zones.zone." .. z.id, menu = { kind = "zone", id = z.id } }, {
+				kit.heading(z.name, string.format(t("core:zones.cells", "%d cells"), z.cells)),
+			})
+		)
 		local toggles = {}
 		for _, it in items do
 			local on = z.allows[it.id] == true

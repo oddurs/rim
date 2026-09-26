@@ -320,6 +320,18 @@ could be given there, damaging ones (deconstruct, felling an unmarked tree)
 in the last group. `act.order(key, x, y, on)` gives a row by its key. A
 plain right-click only ever gives a safe order.
 
+Core's kinds, each registered in the file that draws it, so a mod can add
+rows to any of them:
+
+| Kind | Where it opens | Core's rows |
+|---|---|---|
+| `colonist` | People column, inspector title | Select, centre on, draft or undraft, work priorities… |
+| `tool` | A tile or row in any dock tray | Place (or use), find in tray |
+| `zone` | Zones tray, the Stockpiles sheet | What it takes…, take everything, take nothing |
+| `alert` | The alerts panel | Go to (when it's about someone), hide for today |
+| `message` | A news line | All news…, hide here |
+| `tile` | The map | Every order the selected colonists could be given there |
+
 The engine side is general: any node's `menu` subject calls the handler
 `ui.on_context` set (core's menus), and a `popup` layer places a root at
 its `at`, taking keys through `on_key` and hearing a press elsewhere

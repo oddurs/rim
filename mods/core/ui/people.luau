@@ -16,6 +16,62 @@ local t = ui.t
 
 local people = {}
 
+-- ─── The colonist's context menu ───────────────────────────────────────────
+-- A colonist anywhere in the interface (this column, the inspector) is the
+-- subject "colonist". Core's rows; a mod adds its own with menus.add.
+local menus = require("@core/ui/menus")
+
+menus.kind("colonist", {
+	resolve = function(id)
+		local p = view.pawn(id)
+		return if p and p.player then p else nil
+	end,
+	caption = function(ctx)
+		return ctx.subject.name
+	end,
+	actor = function(ctx)
+		return ctx.subject.job
+	end,
+})
+menus.add("colonist", {
+	id = "core:colonist.select",
+	label = t("core:colonist.select", "Select"),
+	primary = function()
+		return true
+	end,
+	run = function(ctx)
+		act.select(ctx.id)
+	end,
+})
+menus.add("colonist", {
+	id = "core:colonist.centre",
+	label = t("core:colonist.centre", "Centre on"),
+	key = "c",
+	run = function(ctx)
+		act.select(ctx.id)
+		act.focus(ctx.id)
+	end,
+})
+menus.add("colonist", {
+	id = "core:colonist.draft",
+	label = function(ctx)
+		return if ctx.subject.drafted then t("core:colonist.undraft", "Undraft") else t("core:colonist.draft", "Draft")
+	end,
+	key = "r",
+	run = function(ctx)
+		act.draft(ctx.id, not ctx.subject.drafted)
+	end,
+})
+menus.add("colonist", {
+	id = "core:colonist.work",
+	label = t("core:colonist.work", "Work priorities…"),
+	group = "manage",
+	key = "p",
+	run = function()
+		ui.open("core:work")
+	end,
+})
+
 -- From this many, one line each; from GROUPED, grouped as well.
 local COMPACT = 9
 local GROUPED = 20
@@ -81,6 +137,7 @@ local function person(p, compact: boolean, w: number)
 	end
 	local card = row({
 		id = "core:colonists." .. p.name,
+		menu = { kind = "colonist", id = p.id },
 		w = w,
 		padx = "item",
 		gap = "item",
