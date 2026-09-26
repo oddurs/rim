@@ -264,16 +264,21 @@ mod tests {
     fn a_wheel_steps_and_a_trackpad_travels() {
         // macOS units: a wheel notch is 10, a trackpad reports points.
         assert_eq!(
-            classify(&[(0.0, 10.0), (0.0, 20.0), (0.0, -10.0)], 10.0, false),
+            classify(&[(0.0, 10.0), (0.0, 20.0), (0.0, -10.0)], 10.0, 1.0, false),
             Scroll { notches: 2.0, travel: (0.0, 0.0) }
         );
-        let pad = classify(&[(0.0, 2.5), (1.25, -3.75)], 10.0, false);
+        let pad = classify(&[(0.0, 2.5), (1.25, -3.75)], 10.0, 1.0, false);
         assert_eq!(pad.notches, 0.0, "fractions are a trackpad");
         assert_eq!(pad.travel, (1.25, -1.25), "and travel in points, both axes");
-        let sideways = classify(&[(3.0, 0.0)], 10.0, false);
+        let sideways = classify(&[(3.0, 0.0)], 10.0, 1.0, false);
         assert_eq!(sideways.travel, (3.0, 0.0), "sideways is travel");
-        assert_eq!(classify(&[(10.0, 0.0)], 10.0, true).notches, 1.0, "shift-wheel is still the wheel");
-        assert_eq!(classify(&[(0.0, 10.0), (0.0, 0.5)], 10.0, false), Scroll { notches: 1.0, travel: (0.0, 0.5) });
+        assert_eq!(classify(&[(10.0, 0.0)], 10.0, 1.0, true).notches, 1.0, "shift-wheel is still the wheel");
+        assert_eq!(classify(&[(0.0, 10.0), (0.0, 0.5)], 10.0, 1.0, false), Scroll { notches: 1.0, travel: (0.0, 0.5) });
+        // Windows: 120 a notch, a precision touchpad's units a third of a point.
+        assert_eq!(
+            classify(&[(0.0, 240.0), (0.0, 30.0)], 120.0, 1.0 / 3.0, false),
+            Scroll { notches: 2.0, travel: (0.0, 10.0) }
+        );
     }
 
     #[test]
@@ -786,10 +791,10 @@ pub struct Scroll {
 }
 
 /// Sort a frame's scroll events: a wheel moves in whole notches along one
-/// axis, a trackpad in fractions and often sideways. With shift held, a
-/// sideways whole notch is still the wheel (macOS turns shift-wheel into
-/// a sideways scroll).
-pub fn classify(events: &[(f32, f32)], notch: f32, shift: bool) -> Scroll {
+/// axis, a trackpad in fractions and often sideways, `points` points to a
+/// unit. With shift held, a sideways whole notch is still the wheel (macOS
+/// turns shift-wheel into a sideways scroll).
+pub fn classify(events: &[(f32, f32)], notch: f32, points: f32, shift: bool) -> Scroll {
     let whole = |v: f32| v != 0.0 && ((v / notch) - (v / notch).round()).abs() < 1e-3;
     let mut s = Scroll::default();
     for &(x, y) in events {
@@ -798,8 +803,8 @@ pub fn classify(events: &[(f32, f32)], notch: f32, shift: bool) -> Scroll {
         } else if shift && y == 0.0 && whole(x) {
             s.notches += x / notch;
         } else {
-            s.travel.0 += x * POINTS_PER_UNIT;
-            s.travel.1 += y * POINTS_PER_UNIT;
+            s.travel.0 += x * points;
+            s.travel.1 += y * points;
         }
     }
     s
@@ -813,7 +818,7 @@ impl Wheel {
         macroquad::input::utils::repeat_all_miniquad_input(&mut w, sub);
         let shift =
             macroquad::input::is_key_down(KeyCode::LeftShift) || macroquad::input::is_key_down(KeyCode::RightShift);
-        let scroll = classify(&w.0, NOTCH, shift);
+        let scroll = classify(&w.0, NOTCH, POINTS_PER_UNIT, shift);
         let mut y: f32 = w.0.iter().map(|e| e.1).sum();
         if shift && y == 0.0 {
             y = w.0.iter().map(|e| e.0).sum();
