@@ -68,6 +68,16 @@ fn main() {
         }
     }
 
+    // The stone age gates chopping and mining behind tools: an axe and a
+    // hammerstone for every colonist, so the work below is done.
+    for t in ["primitive:hand_axe", "primitive:hammerstone"].iter().filter_map(|id| defs.thing_id(id)) {
+        for col in s.world.colonists().collect::<Vec<_>>() {
+            if let Some(at) = s.world.pawn_pos(col) {
+                s.world.place_item(t, at, 1);
+            }
+        }
+    }
+
     // Work: chop and mine a large area (or the whole map), plan buildings.
     let des = |id: &str| defs.lookup("designation", id).expect(id);
     let (a, b) = if flag("--designate-all") {

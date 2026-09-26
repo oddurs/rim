@@ -607,8 +607,10 @@ not from a research screen.
 
   It lands in tiers. The first is gathering by hand: the materials, the wild
   things they come from, oak branches, and a shelter and campfire of
-  branches. It gates nothing, so bare-handed felling still works until
-  tools arrive.
+  branches. The second is tools: a hammerstone, a flint flake and hand
+  axe, cordage, and the hafted axe, maul and digging stick, all made at a
+  crafting spot. It gates the oak's chop behind `chopping` and granite
+  behind `pounding`. Clay and bone come next.
 
 ### The first days
 

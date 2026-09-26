@@ -55,6 +55,8 @@ declare rim: {
     field: (id: string, x: number, y: number) -> number,
     -- A copy of stored script data, or nil. A bare key is your mod's; "weather:forecast" reads another's.
     get_data: (key: string) -> any,
+    -- Whether some tool in the colony, lying about or in a hand, has every one of these tool tags. False for a tag no tool has.
+    has_tool: (tags: { string }) -> boolean,
     -- Hour of the day, 0 to 24 (tick 0 is 06:00).
     hour: () -> number,
     -- Whether a cell is inside an enclosed room.

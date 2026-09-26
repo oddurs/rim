@@ -1172,6 +1172,15 @@ impl ScriptHost {
                 Ok(w.place_item_of(def, IVec::new(x, y), count, stuff))
             }
         );
+        // Whether a job needing these tool tags could be worked now: some
+        // tool in the colony, lying about or in hand, covers every one.
+        api!(
+            "has_tool",
+            "(tags: { string }) -> boolean",
+            "Whether some tool in the colony, lying about or in a hand, has every one of these tool tags. False for a tag no tool has.",
+            Vec<String>,
+            |w, tags| Ok(w.defs.tool_mask(&tags).is_some_and(|need| w.colony_tools() & need == need))
+        );
         api!(
             "count_items",
             "(what: ItemQuery) -> number",

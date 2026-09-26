@@ -34,7 +34,8 @@ fn levels_follow_experience() {
 
 /// Ticks for the founder, at a plants level, to fell the nearest oak.
 fn chop_ticks(level: u32) -> (u64, u32) {
-    let mut s = Sim::new(&common::mods(), 3).unwrap();
+    // Core alone: with the stone age on, the oak would wait for an axe.
+    let mut s = Sim::with_mods(&common::mods(), 3, &|m| m == "core").unwrap();
     let defs = s.world.defs.clone();
     let founder = s.world.colonists().next().unwrap();
     let plants = defs.lookup("skill", "core:plants").unwrap();

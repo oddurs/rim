@@ -177,6 +177,11 @@ local function blocked(b, count): string?
 	if not r then
 		return "its recipe is gone"
 	end
+	-- A bill waiting on a tool nobody has would hold the station: the
+	-- bill below it might be the one that makes the tool.
+	if #r.requires > 0 and not rim.has_tool(r.requires) then
+		return `needs a {table.concat(r.requires, " and ")} tool`
+	end
 	if b.mode == "until" then
 		local have = count({ thing = r.outputs[1].thing })
 		if have >= b.target then
@@ -314,6 +319,7 @@ rim.on("order_done", function(e)
 		local stuff = if r.stuff then e.stuff else nil
 		for _, out in r.outputs do
 			rim.spawn_item(out.thing, e.x, e.y, out.count, stuff)
+			rim.emit("crafting:made", { site = e.site, recipe = r.id, thing = out.thing, count = out.count, made_of = stuff })
 		end
 	end
 	local i = bill_index(st, m.bill)

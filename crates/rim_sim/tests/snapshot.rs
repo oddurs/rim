@@ -13,6 +13,7 @@ fn mods() -> PathBuf {
 
 fn colony(seed: u64) -> Sim {
     let mut sim = Sim::new(&mods(), seed).expect("mods load");
+    common::arm(&mut sim);
     let chop = sim.world.defs.lookup("designation", "chop").unwrap();
     let wall = sim.world.defs.thing_id("wall").unwrap();
     let door = sim.world.defs.thing_id("door").unwrap();

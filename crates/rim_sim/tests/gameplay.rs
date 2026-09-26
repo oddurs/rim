@@ -6,10 +6,12 @@ fn sim(seed: u64) -> Sim {
     Sim::new(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mods"), seed).expect("mods load")
 }
 
-/// The first-hour loop: chop trees, haul wood, raise walls.
+/// The first-hour loop: chop trees, haul wood, raise walls. Core's loop, so
+/// core alone: the stone age puts an axe between a colonist and an oak.
 #[test]
 fn warrior_chops_and_builds() {
-    let mut s = sim(3);
+    let mods = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mods");
+    let mut s = Sim::with_mods(&mods, 3, &|m| m == "core").expect("core loads");
     let d = &s.world.defs;
     let (chop, wall) = (d.lookup("designation", "chop").unwrap(), d.thing_id("wall").unwrap());
     let wood = d.thing_id("wood").unwrap();
