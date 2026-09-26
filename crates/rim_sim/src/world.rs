@@ -1294,6 +1294,61 @@ impl World {
     }
 
     pub fn despawn_thing(&mut self, e: Entity) {
+        self.remove_thing(e, true);
+    }
+
+    /// The rock a cell is made of, if its terrain is solid (DESIGN.md §6d).
+    pub fn solid_at(&self, p: IVec) -> Option<&SolidDef> {
+        if !self.map.inb(p) {
+            return None;
+        }
+        self.defs.terrain[self.map.terrain[self.map.idx(p)] as usize].solid.as_ref()
+    }
+
+    /// The thing that stands in a cell: its fixture, or else the thing its
+    /// rock is when worked. Wind, room boundaries and looks read this, so a
+    /// rock nobody has touched behaves exactly as one somebody has.
+    pub fn fixture_def_at(&self, p: IVec) -> Option<DefId> {
+        match self.map.fixture_at(p) {
+            Some(f) => self.thing(f).map(|t| t.def),
+            None => self.solid_at(p).map(|s| s.thing_r),
+        }
+    }
+
+    /// Stand a cell's rock up as a thing so a pawn can work it, and return
+    /// it: the fixture already there if there is one. Rock costs nothing
+    /// until this is called, so only the cells someone cares about are
+    /// entities.
+    pub fn wake_rock(&mut self, p: IVec) -> Option<Entity> {
+        if let Some(f) = self.map.fixture_at(p) {
+            return Some(f);
+        }
+        let thing = self.solid_at(p)?.thing_r;
+        self.spawn_fixture(thing, p, false)
+    }
+
+    /// Whether `e` is rock stood up out of its cell's terrain.
+    pub fn is_rock(&self, e: Entity) -> bool {
+        self.thing(e).is_some_and(|t| {
+            self.map.fixture_at(t.pos) == Some(e) && self.solid_at(t.pos).is_some_and(|s| s.thing_r == t.def)
+        })
+    }
+
+    /// Let rock nobody works any more go back to being terrain: gone from
+    /// the world, and the cell still solid. Rock with work done on it stays,
+    /// so the progress isn't lost.
+    pub fn settle_rock(&mut self, e: Entity) {
+        let idle = self.ecs.get::<&Work>(e).map_or(true, |w| w.done == 0);
+        let free = self.ecs.get::<&Designated>(e).is_err() && self.ecs.get::<&Planned>(e).is_err();
+        if self.is_rock(e) && idle && free && !self.reservations.contains_key(&e) {
+            self.remove_thing(e, false);
+        }
+    }
+
+    /// Take a thing out of the world. `dug`: rock that goes leaves its
+    /// terrain's floor behind; rock put back to sleep leaves the cell solid.
+    fn remove_thing(&mut self, e: Entity, dug: bool) {
+        let rock = dug && self.is_rock(e);
         let Ok(t) = self.ecs.get::<&Thing>(e).map(|t| (*t).clone()) else { return };
         let planned = self.ecs.get::<&Planned>(e).ok().map(|p| *p);
         // A site taken down mid-order: what was brought stays, and the mod
@@ -1331,6 +1386,12 @@ impl World {
             self.touch_roles(t.def);
         }
         let _ = self.ecs.despawn(e);
+        if rock {
+            if let Some(s) = self.solid_at(t.pos) {
+                let leaves = s.leaves_r;
+                self.map.set_terrain(t.pos, leaves, self.defs.terrain[leaves as usize].path_cost);
+            }
+        }
         // Cleared for a building: it goes up in its place.
         if let Some(p) = planned {
             self.spawn_fixture_of(p.thing, t.pos, true, p.stuff);
@@ -1659,13 +1720,21 @@ impl World {
             if cells.is_empty() {
                 continue;
             }
+            // What each piece is and is made of, once for every field. Rock
+            // nobody has touched bounds a room as its thing does.
+            let pieces: Vec<(Option<DefId>, Option<DefId>)> = cells
+                .iter()
+                .map(|&c| {
+                    let made_of =
+                        self.map.fixture[c as usize].and_then(|e| self.ecs.get::<&MadeOf>(e).ok().map(|m| m.0));
+                    (self.fixture_def_at(self.map.pos(c as usize)), made_of)
+                })
+                .collect();
             for (fi, fd) in defs.fields.iter().enumerate() {
                 let (mut leak_sum, mut pass_sum) = (0.0, 0.0);
-                for &c in cells {
-                    let piece = self.map.fixture[c as usize].and_then(|e| {
-                        let t = self.ecs.get::<&Thing>(e).ok()?;
-                        let b = defs.thing(t.def).boundary.iter().find(|b| b.field_r as usize == fi)?;
-                        let made_of = self.ecs.get::<&MadeOf>(e).ok().map(|m| m.0);
+                for &(def, made_of) in &pieces {
+                    let piece = def.and_then(|d| {
+                        let b = defs.thing(d).boundary.iter().find(|b| b.field_r as usize == fi)?;
                         Some((b.leak, b.pass, made_of))
                     });
                     match piece {

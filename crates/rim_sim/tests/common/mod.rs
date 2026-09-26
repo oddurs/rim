@@ -105,3 +105,13 @@ pub fn hauling_colony(seed: u64) -> (Sim, Entity, IVec) {
         .expect("open ground");
     (sim, pawn, site)
 }
+
+/// The rock cell nearest `from` that a pawn there can work from beside it.
+/// Rock is terrain until someone works it (DESIGN.md §6d), so there is no
+/// thing to look for until it is marked.
+pub fn nearest_rock(w: &rim_sim::world::World, from: rim_sim::IVec) -> Option<rim_sim::IVec> {
+    (0..w.map.w * w.map.h)
+        .map(|i| w.map.pos(i as usize))
+        .filter(|&p| w.solid_at(p).is_some() && w.map.can_reach(from, rim_sim::path::Goal::Touch(p)))
+        .min_by_key(|&p| (p.octile(from), w.map.idx(p)))
+}

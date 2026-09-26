@@ -302,7 +302,14 @@ impl Meshes {
                 for x in x0..(x0 + CHUNK).min(w.map.w) {
                     let cell = IVec::new(x, y);
                     let i = w.map.idx(cell);
-                    let Some(e) = w.map.layers_at(i)[layer] else { continue };
+                    let Some(e) = w.map.layers_at(i)[layer] else {
+                        // Rock with nobody on it is terrain, drawn as its thing.
+                        if let Some(solid) = (layer == 2).then(|| w.solid_at(cell)).flatten() {
+                            let at = ((x - x0) as f32 * z, (y - y0) as f32 * z);
+                            draw::rock(&mut b, w, solid.thing_r, cell, at, z, t);
+                        }
+                        continue;
+                    };
                     if let Some(t) = w.thing(e).filter(|t| t.pos == cell) {
                         let td = w.defs.thing(t.def);
                         let [sw, sh] = td.size;

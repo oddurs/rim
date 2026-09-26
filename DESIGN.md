@@ -1460,11 +1460,19 @@ nobody has dug.
 Granite was a thing spawned on every `rock_floor` cell: one entity per rock
 cell. Four levels of that would be 147,456 entities that never act.
 
-- **Ruling:** a terrain may be `solid`: it fills its cell, blocks movement
-  and bounds rooms, which already treat impassable terrain as boundary. Its
-  `mine` block gives work, required tags, yields and the floor it leaves.
-  Progress lives on a thing (§6b), so designating a rock cell spawns a
-  worksite entity that holds the `Work` and is gone with the rock.
+- **Ruling:** a terrain may be `solid = { thing, leaves }`: it fills its
+  cell, blocks movement and bounds rooms, which already treat impassable
+  terrain as boundary. `thing` is what stands in the cell once someone
+  works it. Marking, planning over or ordering work on a rock cell stands
+  that thing up, and mining it leaves the `leaves` terrain. Unmarked with
+  no work done, it goes back to being terrain.
+  - Everything about working rock (harvests and their tool tags, work,
+    wear, the look, wind, room boundaries) comes from the thing, so the
+    whole harvest pipeline is reused, and a patch to `thing/core:granite`
+    still reaches every rock cell.
+  - Measured on seeds 1–3 at 200 × 200 with the default mods: 3,630,
+    6,524 and 7,206 entities after generation became 1,383, 2,973 and
+    2,060.
 - A cell's terrain is **solid**, **floor** or **air**. A floor belongs to
   the cell that stands on it, so mining the rock under a room leaves the
   room's floor. **Dig down** turns an open cell's floor to air and mines
@@ -1554,8 +1562,9 @@ becomes its explicit roof. A floor that loses its span falls.
 
 - Positions gaining `z` touches nearly every file, the commands, the save
   and the Luau surface: one large mechanical change.
-- Rock becoming terrain breaks mods that patch `thing/granite`, and bumps
-  the API.
+- Rock becoming terrain changes what map generation places: a mod that
+  spawned things on `rock_floor`, or looks for granite entities, finds
+  none until a cell is worked.
 - Basins simplify: no currents, no pressure, and water never climbs stairs.
 - One cell of height per level: no ramps or slopes, and hilltops are flat.
 - Cross-level pathing, drawing the level below and generating a level are

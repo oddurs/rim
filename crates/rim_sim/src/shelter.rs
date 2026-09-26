@@ -59,13 +59,13 @@ impl World {
                 continue;
             }
             let mut blocks = vec![0u8; self.map.fixture.len()];
-            for (i, fx) in self.map.fixture.iter().enumerate() {
-                let Some(e) = fx else { continue };
-                if self.ecs.get::<&Blueprint>(*e).is_ok() {
+            for (i, b) in blocks.iter_mut().enumerate() {
+                if self.map.fixture[i].is_some_and(|e| self.ecs.get::<&Blueprint>(e).is_ok()) {
                     continue;
                 }
-                if let Some(t) = self.thing(*e) {
-                    blocks[i] = (defs.thing(t.def).blocks_wind.clamp(0.0, 1.0) * 100.0).round() as u8;
+                // Rock nobody has touched is terrain, and shelters as its thing does.
+                if let Some(d) = self.fixture_def_at(self.map.pos(i)) {
+                    *b = (defs.thing(d).blocks_wind.clamp(0.0, 1.0) * 100.0).round() as u8;
                 }
             }
             let layer = &mut self.fields.layers[f];

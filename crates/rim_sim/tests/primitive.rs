@@ -161,12 +161,14 @@ fn branches_build_walls() {
 fn felling_and_quarrying_wait_for_tools_and_say_so() {
     let (mut s, founder) = alone(3);
     let (oak, at) = nearest(&s, "core:tree_oak").expect("an oak");
-    let (rock, rat) = nearest(&s, "core:granite").expect("granite");
+    let rat = common::nearest_rock(&s.world, s.world.colony_center().unwrap()).expect("granite");
     for (des, p) in [("core:chop", at), ("core:mine", rat)] {
         let designation = s.world.defs.lookup("designation", des).unwrap();
         s.push(Command::Designate { designation, a: p, b: p });
     }
     s.step();
+    // Marking the rock stood it up as a thing.
+    let rock = s.world.map.fixture_at(rat).expect("marked rock is a thing");
     assert_eq!(rim_sim::ai::work_blocked(&s.world, oak).as_deref(), Some("Needs a chopping tool."));
     assert_eq!(rim_sim::ai::work_blocked(&s.world, rock).as_deref(), Some("Needs a pounding tool."));
     for _ in 0..3_000 {

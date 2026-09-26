@@ -148,19 +148,9 @@ fn a_pawn_swaps_tools_for_the_job() {
 
     // Granite needs pounding: the axe goes down where the maul was.
     let maul = place(&mut s, "maul", founder);
-    let granite = s.world.defs.thing_id("granite").unwrap();
-    let c = s.world.colony_center().unwrap();
-    let rock = s
-        .world
-        .ecs
-        .query::<(Entity, &Thing)>()
-        .iter()
-        .filter(|(_, t)| t.def == granite && s.world.map.can_reach(c, rim_sim::path::Goal::Touch(t.pos)))
-        .map(|(e, t)| (e, t.pos))
-        .min_by_key(|(e, p)| (p.octile(c), e.id()))
-        .expect("granite in reach");
+    let rock = common::nearest_rock(&s.world, s.world.colony_center().unwrap()).expect("granite in reach");
     let mine = s.world.defs.lookup("designation", "core:mine").unwrap();
-    s.push(Command::Designate { designation: mine, a: rock.1, b: rock.1 });
+    s.push(Command::Designate { designation: mine, a: rock, b: rock });
     assert!(run_until(&mut s, 4_000, |s| hand(s, founder) == Some(maul)), "takes the maul");
     let put = s.world.thing(axe).expect("the axe is still around").pos;
     assert_eq!(s.world.map.item_at(put), Some(axe), "put down on the map");

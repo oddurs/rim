@@ -327,6 +327,15 @@ fn chip_color(w: &World, e: Entity, td: &rim_sim::defs::ThingDef, own: Color) ->
 /// Stacks show their count once a cell is big enough to read one.
 const LABEL_ZOOM: f32 = 22.0;
 
+/// Rock nobody is working (DESIGN.md §6d): terrain, drawn as the thing it
+/// stands up as, so the cell looks the same before and after it's marked.
+#[allow(clippy::too_many_arguments)]
+pub fn rock(s: &mut impl Sink, w: &World, def: rim_sim::defs::DefId, cell: IVec, at: (f32, f32), z: f32, t: f32) {
+    let td = w.defs.thing(def);
+    let orient = orient_of(w, cell, &td.look_r, td.size);
+    paint(s, w, &td.look_r.layers, join_of(&td.look_r), orient, rgb(td.rgb), cell, at, z, t, td.size);
+}
+
 /// The ground, then floors, items and fixtures: cached per chunk where
 /// they don't change (mesh.rs), live where they do.
 pub fn things(app: &mut App) -> Counts {
@@ -825,11 +834,11 @@ pub fn join_of(look: &rim_sim::look::Look) -> Join {
 /// planned next to one doesn't open it up until it stands.
 fn joins(w: &World, p: IVec, join: Join) -> bool {
     let Some((g, _)) = join else { return false };
-    let Some(e) = w.map.fixture_at(p) else { return false };
-    if w.ecs.get::<&Blueprint>(e).is_ok() {
+    if w.map.fixture_at(p).is_some_and(|e| w.ecs.get::<&Blueprint>(e).is_ok()) {
         return false;
     }
-    w.ecs.get::<&Thing>(e).is_ok_and(|t| w.defs.thing(t.def).look_r.join == Some(g))
+    // Rock nobody has touched is terrain, and joins as its thing does.
+    w.fixture_def_at(p).is_some_and(|d| w.defs.thing(d).look_r.join == Some(g))
 }
 
 /// Which sides of the footprint face a joined neighbour, and which of its
