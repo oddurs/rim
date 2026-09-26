@@ -36,6 +36,96 @@ fn with_world<R>(ptr: &WorldPtr, f: impl FnOnce(&mut World) -> mlua::Result<R>) 
     f(unsafe { &mut *p })
 }
 
+/// What a planner needs in one read (DESIGN.md §4d): the scale, each work
+/// type with what's waiting and its `auto` numbers, and each colonist with
+/// their role, skills, pins and level before the rules. With `role`, its
+/// members are marked: those are the colonists the planner plans.
+fn work_board(lua: &Lua, w: &World, role: Option<u16>) -> mlua::Result<Table> {
+    let defs = &w.defs;
+    let t = lua.create_table()?;
+    t.set("levels", defs.priority_scale.levels)?;
+    t.set("role", role.map(|r| r as u32 + 1))?;
+    let waiting = crate::ai::work_waiting(w);
+    let work = lua.create_table()?;
+    for &wt in &defs.work_order {
+        let d = &defs.work_types[wt as usize];
+        let k = lua.create_table()?;
+        k.set("id", d.id.as_str())?;
+        k.set("label", d.label.as_str())?;
+        k.set("skill", d.skill_r.map(|s| defs.skills[s as usize].id.as_str()))?;
+        k.set("waiting", waiting[wt as usize])?;
+        k.set("per_person", d.auto.per_person)?;
+        k.set("weight", d.auto.weight)?;
+        k.set("default", d.priority.min(defs.priority_scale.levels))?;
+        work.push(k)?;
+    }
+    t.set("work", work)?;
+    let colonists = lua.create_table()?;
+    for e in w.colonists() {
+        let Ok(p) = w.ecs.get::<&Pawn>(e) else { continue };
+        let c = lua.create_table()?;
+        c.set("id", e.to_bits().get())?;
+        c.set("name", p.name.as_str())?;
+        let r = w.work_role_of(&p);
+        c.set("role", r.map(|r| r as u32 + 1))?;
+        c.set("member", role.is_some() && r == role)?;
+        let (skills, pins, base) = (lua.create_table()?, lua.create_table()?, lua.create_table()?);
+        for &wt in &defs.work_order {
+            let d = &defs.work_types[wt as usize];
+            if let Some(s) = d.skill_r {
+                skills.set(d.id.as_str(), p.skill(s))?;
+            }
+            if let Some(l) = p.own_priority(wt) {
+                pins.set(d.id.as_str(), l)?;
+            }
+            base.set(d.id.as_str(), w.base_priority(&p, wt))?;
+        }
+        c.set("skills", skills)?;
+        c.set("pins", pins)?;
+        c.set("base", base)?;
+        colonists.push(c)?;
+    }
+    t.set("colonists", colonists)?;
+    Ok(t)
+}
+
+/// A planner's answer, `{ [colonist id] = { [work] = { level, reason } } }`
+/// (a bare number is a level with no reason), as proposals by colonist.
+#[allow(clippy::type_complexity)]
+fn read_plan(
+    w: &World,
+    from: &str,
+    v: Value,
+) -> Result<Vec<(hecs::Entity, Vec<(crate::defs::DefId, u8, String)>)>, String> {
+    let Value::Table(t) = v else {
+        return Err("a planner returns { [colonist id] = { [work] = { level, reason } } }".into());
+    };
+    let mut out = Vec::new();
+    for pair in t.pairs::<u64, Table>() {
+        let (id, cells) = pair.map_err(|e| e.to_string())?;
+        let e = hecs::Entity::from_bits(id).ok_or(format!("bad colonist id {id}"))?;
+        let mut props = Vec::new();
+        for cell in cells.pairs::<String, Value>() {
+            let (work, v) = cell.map_err(|e| e.to_string())?;
+            let wt = w.defs.resolve("work_type", &work, from)?;
+            let (level, reason) = match v {
+                Value::Integer(l) => (l, String::new()),
+                Value::Number(l) => (l as i64, String::new()),
+                Value::Table(c) => (
+                    c.get::<i64>("level").map_err(|_| format!("{work}: a cell needs a level"))?,
+                    c.get::<Option<String>>("reason").map_err(|e| e.to_string())?.unwrap_or_default(),
+                ),
+                _ => return Err(format!("{work}: a cell is a level or {{ level, reason }}")),
+            };
+            props.push((wt, level.clamp(0, 255) as u8, reason));
+        }
+        props.sort_unstable_by_key(|p| p.0);
+        out.push((e, props));
+    }
+    out.sort_unstable_by_key(|x| x.0.to_bits());
+    Ok(out)
+}
+
 /// A def id a script passed: bare ids are the calling mod's own.
 fn def_id(w: &World, kind: &'static str, id: &str, from: &str) -> mlua::Result<crate::defs::DefId> {
     w.defs.resolve(kind, id, from).map_err(mlua::Error::runtime)
@@ -90,6 +180,9 @@ struct Registry {
     handlers: Vec<Handler>,
     /// Each mod's `rim.on_migrate` function.
     migrators: BTreeMap<String, Function>,
+    /// Planners by qualified name ("core:auto"), with the mod that
+    /// registered them (DESIGN.md §4d).
+    planners: BTreeMap<String, (String, Function)>,
 }
 
 /// Most memory the sim VM may hold. Hitting it fails the allocating script
@@ -128,6 +221,10 @@ type Date = { year: number, season: string, season_index: number, day: number, d
 type Room = { id: number, cells: number, enclosed: boolean, role: string?, role_label: string? }
 type PriorityPart = { kind: "default" | "role" | "pin" | "rule", label: string, delta: number }
 type WorkRoleInfo = { index: number, id: string?, label: string, edited: boolean }
+type BoardWork = { id: string, label: string, skill: string?, waiting: number, per_person: number, weight: number, default: number }
+type BoardColonist = { id: number, name: string, role: number?, member: boolean, skills: { [string]: number }, pins: { [string]: number }, base: { [string]: number } }
+type WorkBoard = { levels: number, role: number?, work: { BoardWork }, colonists: { BoardColonist } }
+type PlanCell = { level: number, reason: string? }
 type WorkWhy = { work: string, level: number, why: string, dist: number? }
 type Taker = { id: number, ticks: number }
 type Part = { label: string, value: number }
@@ -684,6 +781,49 @@ impl ScriptHost {
             "(interval: number, fn: () -> ()) -> ()",
             "Run fn every `interval` ticks (hooks are staggered). Register at load time.",
         );
+        let reg = self.reg.clone();
+        rim.set(
+            "planner",
+            lua.create_function(move |_, (name, func): (String, Function)| {
+                let mut r = reg.borrow_mut();
+                let from = r.current_mod.clone();
+                let name = match name.split_once(':') {
+                    None => format!("{from}:{name}"),
+                    Some((m, _)) if m == from => name,
+                    Some(_) => {
+                        return Err(mlua::Error::runtime(format!(
+                            "{from} can't register another mod's planner '{name}'"
+                        )))
+                    }
+                };
+                r.planners.insert(name, (from, func));
+                Ok(())
+            })?,
+        )?;
+        self.declare(
+            "planner",
+            "(name: string, fn: (board: WorkBoard) -> { [number]: { [string]: PlanCell | number } }) -> ()",
+            "Register a planner under your mod's name, for a planned work role (`planner = \"mod:name\"`). Once an in-game hour the engine calls it with the board (rim.work_board, its members marked) and takes back levels for its members: `{ [colonist id] = { [work] = { level = 2, reason = \"...\" } } }`. A level changes when two plans in a row agree. Never (0) and pinned cells are refused. Register at load time.",
+        );
+        {
+            let ptr = self.world.clone();
+            let f = lua.create_function(move |lua, ()| {
+                let p = ptr.0.get();
+                if p.is_null() {
+                    return Err(mlua::Error::runtime(
+                        "world API is only available inside rim.every / rim.on callbacks",
+                    ));
+                }
+                // SAFETY: as `with_world`; the board only reads.
+                work_board(lua, unsafe { &*p }, None)
+            })?;
+            rim.set("work_board", f)?;
+            self.declare(
+                "work_board",
+                "() -> WorkBoard",
+                "What a planner reads: the scale, each work type (in tie-break order) with what's waiting and its `auto` numbers, and each colonist with their role, skills, pins and level before the rules.",
+            );
+        }
         let reg = self.reg.clone();
         rim.set(
             "on",
@@ -1612,28 +1752,44 @@ impl ScriptHost {
     }
 
     fn call(&self, w: &mut World, prof: &mut Profile, mod_id: &str, f: &Function, args: impl IntoLuaMulti) {
+        self.call_value(w, prof, mod_id, f, args);
+    }
+
+    /// `call`, keeping what the function returned; none if it failed.
+    fn call_value(
+        &self,
+        w: &mut World,
+        prof: &mut Profile,
+        mod_id: &str,
+        f: &Function,
+        args: impl IntoLuaMulti,
+    ) -> Option<Value> {
         self.world.0.set(w as *mut World);
         self.steps.set(STEP_BUDGET);
         self.ran_away.set(false);
         self.reg.borrow_mut().current_mod = mod_id.to_string();
         let t = Instant::now();
-        let r = f.call::<()>(args);
+        let r = f.call::<Value>(args);
         self.world.0.set(std::ptr::null_mut());
         prof.add(&format!("mod:{mod_id}"), t.elapsed().as_secs_f64() * 1e6);
         self.reg.borrow_mut().current_mod.clear();
-        if let Err(e) = r {
-            let text = format!("[{mod_id}] script error: {e}");
-            if self.echo_errors {
-                eprintln!("{text}");
-            }
-            w.message(text, MsgKind::Bad);
-            // A runaway won't behave better next time: stop calling it.
-            if self.ran_away.get() {
-                self.reg.borrow_mut().disabled.insert(f.to_pointer() as usize);
-                w.message(
-                    format!("[{mod_id}] a hook ran past its step budget and has been switched off for this game."),
-                    MsgKind::Bad,
-                );
+        match r {
+            Ok(v) => Some(v),
+            Err(e) => {
+                let text = format!("[{mod_id}] script error: {e}");
+                if self.echo_errors {
+                    eprintln!("{text}");
+                }
+                w.message(text, MsgKind::Bad);
+                // A runaway won't behave better next time: stop calling it.
+                if self.ran_away.get() {
+                    self.reg.borrow_mut().disabled.insert(f.to_pointer() as usize);
+                    w.message(
+                        format!("[{mod_id}] a hook ran past its step budget and has been switched off for this game."),
+                        MsgKind::Bad,
+                    );
+                }
+                None
             }
         }
     }
@@ -1705,6 +1861,53 @@ impl ScriptHost {
         };
         for (f, m) in due {
             self.call(w, prof, &m, &f, ());
+        }
+        self.run_planners(w, prof);
+    }
+
+    /// Once an in-game hour for each planned role, staggered by role: ask
+    /// its planner for its members' levels and apply them (DESIGN.md §4d).
+    fn run_planners(&self, w: &mut World, prof: &mut Profile) {
+        let hour = TICKS_PER_DAY / 24;
+        let due: Vec<(u16, String)> = w
+            .work_roles
+            .iter()
+            .enumerate()
+            .filter(|&(i, _)| (w.tick + i as u64 * 37).is_multiple_of(hour))
+            .filter_map(|(i, r)| Some((i as u16, r.planner.clone()?)))
+            .collect();
+        for (role, name) in due {
+            let Some((m, f)) = self.reg.borrow().planners.get(&name).cloned() else { continue };
+            if self.reg.borrow().disabled.contains(&(f.to_pointer() as usize)) {
+                continue;
+            }
+            let board = match work_board(&self.lua, w, Some(role)) {
+                Ok(b) => b,
+                Err(e) => {
+                    w.message(format!("[{m}] planner {name}: {e}"), MsgKind::Bad);
+                    continue;
+                }
+            };
+            let Some(v) = self.call_value(w, prof, &m, &f, board) else { continue };
+            let plans = match read_plan(w, &m, v) {
+                Ok(p) => p,
+                Err(e) => {
+                    w.message(format!("[{m}] planner {name}: {e}"), MsgKind::Bad);
+                    continue;
+                }
+            };
+            let mut errors = Vec::new();
+            for (e, props) in plans {
+                let in_role = w.ecs.get::<&Pawn>(e).is_ok_and(|p| w.work_role_of(&p) == Some(role));
+                if !in_role {
+                    errors.push(format!("colonist {} isn't in its role", e.to_bits().get()));
+                    continue;
+                }
+                errors.extend(w.apply_plan(e, &props));
+            }
+            if !errors.is_empty() {
+                w.message(format!("[{m}] planner {name}: {}", errors.join("; ")), MsgKind::Bad);
+            }
         }
     }
 

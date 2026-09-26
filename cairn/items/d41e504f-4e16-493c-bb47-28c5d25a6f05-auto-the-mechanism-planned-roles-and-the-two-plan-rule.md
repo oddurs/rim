@@ -2,12 +2,14 @@
 id: d41e504f-4e16-493c-bb47-28c5d25a6f05
 title: 'Auto, the mechanism: planned roles and the two-plan rule'
 type: feature
-status: backlog
+status: done
 milestone: work
+assignee: Oddur Sigurdsson
 depends_on:
 - 992ecb92-f676-4a7b-af03-c6829269c6c2
 created: 2026-09-26
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p0
 api: additive
 effort: l
@@ -32,8 +34,12 @@ DESIGN.md §4d: colonists start on Auto, a work role whose levels a script plans
 
 ## Acceptance criteria
 
-- [ ] A planned level changes on the second agreeing proposal, not the first (test)
-- [ ] A planner returning 0 or a pinned cell gets an error and that cell keeps its plan (test)
-- [ ] A mod patching the Auto role's `planner` replaces core's in a fixture test
-- [ ] A colonist who leaves Auto keeps their pins and drops their plan (test)
-- [ ] Plans survive save and load, and the determinism test passes with a scripted planner
+- [x] A planned level changes on the second agreeing proposal, not the first (test)
+- [x] A planner returning 0 or a pinned cell gets an error and that cell keeps its plan (test)
+- [x] A mod patching the Auto role's `planner` replaces core's in a fixture test
+- [x] A colonist who leaves Auto keeps their pins and drops their plan (test)
+- [x] Plans survive save and load, and the determinism test passes with a scripted planner
+
+## 2026-09-26
+
+A planned role is one with planner = "mod:name"; no separate planned = true flag, since a planner is what makes it planned. A work type with no plan yet takes the first proposal at once, so a new colonist isn't stuck at defaults for two hours. Reasons update whenever the proposed level matches the current one. Planner errors are posted as one message per run. Core's own auto role and planner come in f5295002, so Hand stays the default until then.

@@ -77,6 +77,18 @@ pub struct WorkRole {
     pub priorities: Vec<(DefId, u8)>,
     /// The player changed it, so it no longer follows its def.
     pub edited: bool,
+    /// The planner that sets its members' levels, for a planned role
+    /// (Auto): always its def's, since the player edits levels, not code.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub planner: Option<String>,
+}
+
+/// A level a planner set for a colonist, and why, in the planner's words.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Planned {
+    pub work: DefId,
+    pub level: u8,
+    pub reason: String,
 }
 
 impl WorkRole {
@@ -108,6 +120,8 @@ pub enum PartKind {
     Role,
     /// The player pinned it for this colonist.
     Pin,
+    /// A planned role's planner set it; the label is its reason.
+    Plan,
     /// A rule or the stance moved it.
     Rule,
 }
@@ -118,6 +132,7 @@ impl PartKind {
             PartKind::Default => "default",
             PartKind::Role => "role",
             PartKind::Pin => "pin",
+            PartKind::Plan => "plan",
             PartKind::Rule => "rule",
         }
     }
@@ -215,11 +230,12 @@ impl World {
         let defs = self.defs.clone();
         for d in &defs.work_roles {
             match self.work_roles.iter_mut().find(|r| r.def.as_deref() == Some(d.id.as_str())) {
-                Some(r) if r.edited => {}
+                Some(r) if r.edited => r.planner = d.planner.clone(),
                 Some(r) => {
                     r.label = d.label.clone();
                     r.order = d.order;
                     r.priorities = d.priorities_r.clone();
+                    r.planner = d.planner.clone();
                 }
                 None => self.work_roles.push(WorkRole {
                     def: Some(d.id.clone()),
@@ -227,6 +243,7 @@ impl World {
                     order: d.order,
                     priorities: d.priorities_r.clone(),
                     edited: false,
+                    planner: d.planner.clone(),
                 }),
             }
         }
@@ -248,11 +265,70 @@ impl World {
         p.work_role.filter(|&r| (r as usize) < self.work_roles.len()).or_else(|| self.default_work_role())
     }
 
-    /// Where a colonist's level for a work type starts: their role's, or
-    /// the work type's default. A pin is measured against this.
+    /// Whether a colonist's role is planned (Auto).
+    pub fn is_planned(&self, p: &Pawn) -> bool {
+        self.work_role_of(p).is_some_and(|r| self.work_roles[r as usize].planner.is_some())
+    }
+
+    /// Where a colonist's level for a work type starts: their plan's in a
+    /// planned role, else their role's, or the work type's default. A pin
+    /// is measured against this.
     pub fn inherited_priority(&self, p: &Pawn, work: DefId) -> u8 {
-        let role = self.work_role_of(p).and_then(|r| self.work_roles[r as usize].level(work));
-        role.unwrap_or(self.defs.work_types[work as usize].priority).min(self.defs.priority_scale.levels)
+        let set = match self.work_role_of(p).map(|r| &self.work_roles[r as usize]) {
+            Some(r) if r.planner.is_some() => p.planned(work).map(|x| x.level),
+            Some(r) => r.level(work),
+            None => None,
+        };
+        set.unwrap_or(self.defs.work_types[work as usize].priority).min(self.defs.priority_scale.levels)
+    }
+
+    /// Take a planner's proposal for a colonist in a planned role (DESIGN.md
+    /// §4d). A level changes only when two proposals in a row agree, so
+    /// nobody swaps jobs every hour; a work type with no plan yet takes the
+    /// first. A reason follows the level it explains. The planner may not
+    /// say never, nor plan a pinned cell: each such cell is refused, named
+    /// in the returned errors, and keeps its plan.
+    pub fn apply_plan(&mut self, pawn: hecs::Entity, proposal: &[(DefId, u8, String)]) -> Vec<String> {
+        let levels = self.defs.priority_scale.levels;
+        let defs = self.defs.clone();
+        let planned = self.ecs.get::<&Pawn>(pawn).is_ok_and(|p| self.is_planned(&p));
+        let Ok(mut p) = self.ecs.get::<&mut Pawn>(pawn) else { return vec!["not a pawn".into()] };
+        if !planned {
+            return vec![format!("{} isn't in a planned role", p.name)];
+        }
+        let mut errors = Vec::new();
+        let mut seen = Vec::new();
+        for (work, level, reason) in proposal {
+            let (work, level) = (*work, *level);
+            let wid = &defs.work_types[work as usize].id;
+            if level == 0 || level > levels {
+                errors.push(format!("{wid} for {}: a plan is a level from 1 to {levels}, not {level}", p.name));
+                continue;
+            }
+            if p.own_priority(work).is_some() {
+                errors.push(format!("{wid} for {}: pinned by the player", p.name));
+                continue;
+            }
+            seen.push(work);
+            let before = p.proposal.iter().find(|x| x.0 == work).map(|x| x.1);
+            match p.plan.iter_mut().find(|x| x.work == work) {
+                None => p.plan.push(Planned { work, level, reason: reason.clone() }),
+                Some(x) if x.level == level => x.reason = reason.clone(),
+                Some(x) if before == Some(level) => {
+                    x.level = level;
+                    x.reason = reason.clone();
+                }
+                Some(_) => {}
+            }
+            match p.proposal.iter_mut().find(|x| x.0 == work) {
+                Some(x) => x.1 = level,
+                None => p.proposal.push((work, level)),
+            }
+        }
+        p.plan.sort_unstable_by_key(|x| x.work);
+        p.proposal.retain(|x| seen.contains(&x.0));
+        p.proposal.sort_unstable();
+        errors
     }
 
     /// A colonist's level before the rules: their pin, or what they
@@ -287,7 +363,13 @@ fn eval(w: &World, p: &Pawn, work: DefId, part: &mut dyn FnMut(PartKind, &str, i
     let mut v = defs.work_types[work as usize].priority.min(defs.priority_scale.levels) as i32;
     part(PartKind::Default, "default", v);
     if let Some(role) = w.work_role_of(p).map(|r| &w.work_roles[r as usize]) {
-        if let Some(l) = role.level(work) {
+        if role.planner.is_some() {
+            if let Some(x) = p.planned(work) {
+                let n = (x.level as i32).min(levels);
+                part(PartKind::Plan, &x.reason, n - v);
+                v = n;
+            }
+        } else if let Some(l) = role.level(work) {
             let n = (l as i32).min(levels);
             part(PartKind::Role, &role.label, n - v);
             v = n;
