@@ -107,7 +107,11 @@ fn go_to(w: &mut World, p: &mut Pawn, goal: Goal) -> Go {
     if !w.map.can_reach_for(p.pos, goal, p.faction) {
         return Go::Failed;
     }
-    match w.pf.find(&w.map, p.pos, goal, 30_000, p.faction) {
+    // The regions say a path exists, so the search is sure to find one; a
+    // cap below the whole map would only give up on a long way round and
+    // have the pawn ask again, and again.
+    let cap = (w.map.w * w.map.h) as u32;
+    match w.pf.find(&w.map, p.pos, goal, cap, p.faction) {
         Some(path) => {
             p.path = path;
             p.path_goal = Some(goal);
@@ -177,7 +181,8 @@ fn think_colonist(w: &mut World, e: Entity, p: &mut Pawn) -> Option<Job> {
             }
         }
     }
-    for &(nid, v) in &p.needs {
+    for i in 0..p.needs.len() {
+        let (nid, v) = p.needs[i];
         let nd = defs.need(nid);
         let seek = (nd.seek_below * NEED_MAX as f64) as i32;
         match nd.satisfier {
@@ -546,6 +551,11 @@ fn find_bed(w: &mut World, e: Entity, p: &mut Pawn) -> Job {
 /// How far a pawn will look for somewhere comfortable, in cells explored.
 const COMFORT_SEARCH: usize = 4000;
 
+/// How long a pawn that found nowhere better waits before looking again:
+/// an hour. The land doesn't warm up by the minute, and the look is the
+/// widest search a pawn makes.
+const COMFORT_RETRY: u64 = crate::TICKS_PER_DAY / 24;
+
 /// How much better a spot must be than where the pawn stands (in field units
 /// outside comfort) before it's worth walking to.
 const COMFORT_GAIN: f64 = 2.0;
@@ -555,7 +565,10 @@ const COMFORT_GAIN: f64 = 2.0;
 /// reach, if it's clearly better than here (an unheated hut beats the night
 /// outside). `None` if the pawn is already comfortable or nothing nearby is
 /// better.
-pub fn comfortable_spot(w: &World, p: &Pawn) -> Option<IVec> {
+pub fn comfortable_spot(w: &mut World, p: &mut Pawn) -> Option<IVec> {
+    if w.tick < p.comfort_after {
+        return None;
+    }
     let defs = &w.defs;
     let needs: Vec<&NeedDef> =
         p.needs.iter().map(|n| defs.need(n.0)).filter(|nd| nd.satisfier == Satisfier::Field).collect();
@@ -578,38 +591,18 @@ pub fn comfortable_spot(w: &World, p: &Pawn) -> Option<IVec> {
         return None;
     }
     let mut best = (here, p.pos);
-    let mut seen = std::collections::HashSet::new();
-    let mut queue = std::collections::VecDeque::new();
-    seen.insert(p.pos);
-    queue.push_back(p.pos);
-    while let Some(c) = queue.pop_front() {
+    let comfortable = w.pf.flood(&w.map, p.pos, COMFORT_SEARCH, |c| {
         let o = off(c);
-        if o == 0.0 {
-            return Some(c);
-        }
         if o < best.0 {
             best = (o, c);
         }
-        if seen.len() > COMFORT_SEARCH {
-            break;
-        }
-        for (dx, dy) in crate::map::NEIGHBORS8 {
-            let q = c.offset(dx, dy);
-            if !w.map.passable(q) {
-                continue;
-            }
-            // Check the corner before marking the cell seen: a door is only
-            // ever reached straight on, and marking it on a rejected diagonal
-            // would hide every room behind a door.
-            if dx != 0 && dy != 0 && (!w.map.passable(c.offset(dx, 0)) || !w.map.passable(c.offset(0, dy))) {
-                continue;
-            }
-            if seen.insert(q) {
-                queue.push_back(q);
-            }
-        }
+        (o == 0.0).then_some(c)
+    });
+    let spot = comfortable.or((best.0 + COMFORT_GAIN < here).then_some(best.1));
+    if spot.is_none() {
+        p.comfort_after = w.tick + COMFORT_RETRY;
     }
-    (best.0 + COMFORT_GAIN < here).then_some(best.1)
+    spot
 }
 
 /// The work a colonist should do next (DESIGN.md §4d): of the work types

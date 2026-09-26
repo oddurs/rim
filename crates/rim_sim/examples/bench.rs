@@ -6,8 +6,9 @@
 //! A reproducible scenario from a seed: a 250x250 map, 30 colonists and
 //! wildlife up to 200 pawns, with work to do (a large area designated for
 //! chopping and mining, walls and beds planned). After a warm-up it measures
-//! every tick and reports mean, p50, p99 and max, and each system's mean cost
-//! per tick. `--check` exits non-zero if the mean tick is over budget (2 ms,
+//! every tick and reports mean, p50, p99 and max, each system's mean cost
+//! per tick, what pathfinding cost, and the worst ticks with what they did.
+//! Wall-clock ticks on a busy machine are noisy; the path counts are not. `--check` exits non-zero if the mean tick is over budget (2 ms,
 //! the time a tick has at 6x speed), with 3x slack on shared CI runners.
 //!
 //! Flags: --seed N, --size N, --colonists N, --pawns N, --days F,
@@ -105,10 +106,40 @@ fn main() {
     s.profile.reset_totals();
     let ticks = (days * TICKS_PER_DAY as f64) as usize;
     let mut times = Vec::with_capacity(ticks);
+    // What each tick did, to name the worst ones: (tick, ms, searches,
+    // nodes, path ms, the system that took longest and its ms).
+    let mut worst: Vec<(u64, f64, u64, u64, f64, String, f64)> = Vec::new();
+    let pf0 = (s.world.pf.searches, s.world.pf.expanded, s.world.pf.failed, s.world.pf.micros);
     for _ in 0..ticks {
+        let before = (s.world.pf.searches, s.world.pf.expanded, s.world.pf.micros, s.profile.totals.clone());
         let t = Instant::now();
         s.step();
-        times.push(t.elapsed().as_secs_f64() * 1e3);
+        let ms = t.elapsed().as_secs_f64() * 1e3;
+        times.push(ms);
+        if worst.len() < 8 || ms > worst[worst.len() - 1].1 {
+            let spent = |name: &str| before.3.iter().find(|b| b.0 == name).map_or(0.0, |b| b.1);
+            let (sys, us) = s
+                .profile
+                .totals
+                .iter()
+                .filter(|t| t.0 != "tick")
+                .map(|t| (t.0.clone(), t.1 - spent(&t.0)))
+                .max_by(|a, b| a.1.total_cmp(&b.1))
+                .unwrap_or_default();
+            let pf = &s.world.pf;
+            let row = (
+                s.world.tick,
+                ms,
+                pf.searches - before.0,
+                pf.expanded - before.1,
+                (pf.micros - before.2) / 1e3,
+                sys,
+                us / 1e3,
+            );
+            worst.push(row);
+            worst.sort_by(|a, b| b.1.total_cmp(&a.1));
+            worst.truncate(8);
+        }
     }
     let mut sorted = times.clone();
     sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
@@ -137,6 +168,22 @@ fn main() {
     println!("per system, mean ms per tick:");
     for (name, total_us, calls) in systems.iter().take(12) {
         println!("  {name:<16} {:>8.4}   ({calls} calls)", total_us / 1000.0 / ticks as f64);
+    }
+
+    let pf = &s.world.pf;
+    let searches = pf.searches - pf0.0;
+    println!(
+        "paths: {:.2} searches per tick, {:.0} nodes per search, {:.1}% found nothing, {:.4} ms per tick",
+        searches as f64 / ticks as f64,
+        (pf.expanded - pf0.1) as f64 / searches.max(1) as f64,
+        (pf.failed - pf0.2) as f64 * 100.0 / searches.max(1) as f64,
+        (pf.micros - pf0.3) / 1e3 / ticks as f64
+    );
+    println!("worst ticks:");
+    for (tick, ms, n, nodes, path_ms, sys, sys_ms) in &worst {
+        println!(
+            "  tick {tick:>7}  {ms:>7.3} ms   {n:>3} searches, {nodes:>6} nodes, {path_ms:>7.3} ms   most in {sys} ({sys_ms:.3} ms)"
+        );
     }
 
     if flag("--check") {

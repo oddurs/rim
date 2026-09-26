@@ -219,6 +219,10 @@ pub struct Pawn {
     /// colonist at 150% does three units every two ticks.
     #[serde(default)]
     pub work_frac: u32,
+    /// Its last look for somewhere more comfortable found nothing; it
+    /// doesn't look again before this tick.
+    #[serde(default)]
+    pub comfort_after: u64,
 }
 
 /// The highest skill level.
