@@ -88,11 +88,10 @@ First playable vertical slice. One warrior, harvest, build, eat, sleep, animals,
 
 ## interface — Interface
 
-`##########` 96% · 24 of 25 done · due 2026-10-09
+`##########` 100% · 25 of 25 done · due 2026-10-09
 
 A two-week sprint. The whole HUD moves out of Rust into `mods/core/ui/`, written in Luau on a small UI engine, so any mod can extend, replace, wrap or remove any part of the interface. Design: DESIGN.md §11.
 
-- [ ] `93071dfd` Compact mode and UI scale <sup>feature · p2 · s · client</sup>
 - [x] `16eecb22` Anchored layer: world-attached labels, bars and bubbles without overlap <sup>feature · p1 · m · client</sup>
 - [x] `17505800` Theme tokens: ui/theme.toml, mod patches and UI scale <sup>feature · p0 · s · client</sup>
 - [x] `1b85ddb0` Build toolbar: group by menu so mods don't push it off screen <sup>bug · p2 · m · core</sup>
@@ -106,6 +105,7 @@ A two-week sprint. The whole HUD moves out of Rust into `mods/core/ui/`, written
 - [x] `7497597f` UI layers and input routing <sup>feature · p0 · m · client</sup>
 - [x] `86dcd0ca` Several selected: box and shift selection with shared actions <sup>feature · p2 · m · client</sup>
 - [x] `8cead892` Pawns speak: a speech system for needs, scripts and greetings <sup>feature · p1 · m · engine</sup>
+- [x] `93071dfd` Compact mode and UI scale <sup>feature · p2 · s · client</sup>
 - [x] `959bba6d` UI devtools (F12): inspect any element <sup>feature · p1 · m · tooling</sup>
 - [x] `99648d58` Palette and text input: padding is lost in layout, arrows type garbage <sup>bug · p2</sup>
 - [x] `aaca3f7a` Docking shell: top, bottom, left and right regions <sup>feature · p0 · m · client</sup>

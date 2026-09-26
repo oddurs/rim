@@ -2,12 +2,12 @@
 id: 93071dfd-02c7-4942-9a07-55fac10276cf
 title: Compact mode and UI scale
 type: feature
-status: review
+status: done
 milestone: interface
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 created: 2026-09-26
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p2
 api: additive
 effort: s
