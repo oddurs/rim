@@ -1499,6 +1499,7 @@ fn step_off(w: &mut World, p: &mut Pawn, cell: IVec) -> bool {
 pub fn complete_building(w: &mut World, bp: Entity) {
     let Some(t) = w.thing(bp) else { return };
     let _ = w.ecs.remove_one::<Blueprint>(bp);
+    w.touch_roles(t.def);
     // Taking it down later is work of its own, counted from zero.
     let _ = w.ecs.remove_one::<Work>(bp);
     let td = w.defs.thing(t.def);

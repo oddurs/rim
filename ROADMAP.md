@@ -335,11 +335,11 @@ A house is drawn as its plan and built as an order (DESIGN.md §6c). Walls join 
 - [ ] `ba18a8e4` Facing: things turn in four directions <sup>feature · p1 · m · engine</sup>
 - [ ] `df049dac` Roofs from far away, hipped by the span field <sup>feature · p2 · m · client</sup>
 - [ ] `e7c4a3f6` Blueprints as work orders <sup>feature · p1 · m · engine</sup>
-- [ ] `f709cdd4` Room roles as data <sup>feature · p0 · m · engine</sup>
 - [ ] `fbab2877` Core's looks in the plan style <sup>content · p1 · m · core</sup>
 - [ ] `ff479390` The building ladder: dry stone, logs, bricks and a kiln <sup>content · p1 · m · plugin</sup>
 - [ ] `fff4fb42` A material names the tool it is built with <sup>feature · p1 · s · engine</sup>
 - [ ] `3fe8c3cb` Joins in quarters: a wall run draws as one mass <sup>feature · p0 · m · client</sup>
+- [ ] `f709cdd4` Room roles as data <sup>feature · p0 · m · engine</sup>
 - [x] `eb469f44` Houses concept: drawn as their plan, built as orders <sup>spike · p0 · m · tooling</sup>
 
 ## mood — Mood

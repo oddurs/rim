@@ -711,6 +711,13 @@ pub struct World {
     pub colony_lost: bool,
     /// The room rebuild the boundary sums were last computed for.
     seen_room_rebuilds: u64,
+    /// Each room's role (`[[room_role]]`), by room id less one. Derived:
+    /// worked out again when rooms rebuild or a counted thing comes or goes.
+    room_roles: Vec<Option<DefId>>,
+    /// Bumped when a thing with a counted tag is built or taken away.
+    roles_rev: u64,
+    /// The (room rebuild, roles_rev) the roles were worked out for.
+    roles_seen: (u64, u64),
     /// State that scripts keep in the world (`rim.set_data`), by key.
     pub data: BTreeMap<String, Data>,
     /// Stockpile zones the player painted.
@@ -754,6 +761,9 @@ impl World {
             speech: std::collections::VecDeque::new(),
             colony_lost: false,
             seen_room_rebuilds: u64::MAX,
+            room_roles: Vec::new(),
+            roles_rev: 0,
+            roles_seen: (u64::MAX, u64::MAX),
             data: BTreeMap::new(),
             zones: crate::zone::Zones::new((w * h) as usize),
             shelter_recomputes: 0,
@@ -956,6 +966,68 @@ impl World {
             .any(|t| self.defs.thing(t.def).bed.is_some() && self.map.room_at(t.pos).is_some_and(|r| r.enclosed()))
     }
 
+    /// A thing with a tag some room role counts was built or taken away.
+    pub(crate) fn touch_roles(&mut self, def: DefId) {
+        if !self.defs.thing(def).room_tags_r.is_empty() {
+            self.roles_rev += 1;
+        }
+    }
+
+    /// Work room roles out again if rooms were rebuilt or a counted thing
+    /// came or went since last time. Call `map.ensure_rooms` first.
+    pub fn ensure_roles(&mut self) {
+        let now = (self.map.room_rebuilds, self.roles_rev);
+        if self.roles_seen == now {
+            return;
+        }
+        self.roles_seen = now;
+        let defs = self.defs.clone();
+        let (k, n) = (defs.room_tags.len(), self.map.room_count());
+        let mut counts = vec![0u32; n * k];
+        if k > 0 {
+            for t in self.ecs.query::<&Thing>().without::<&Blueprint>().iter() {
+                let td = defs.thing(t.def);
+                if td.room_tags_r.is_empty() || self.map.fixture_at(t.pos).is_none() {
+                    continue;
+                }
+                // A thing that blocks (a workbench) stands in no room: it
+                // counts for the first room beside it.
+                let room = td
+                    .footprint(t.pos)
+                    .chain(
+                        td.footprint(t.pos)
+                            .flat_map(|c| crate::map::NEIGHBORS8[..4].iter().map(move |&(dx, dy)| c.offset(dx, dy))),
+                    )
+                    .find_map(|c| self.map.room_at(c));
+                let Some(r) = room else { continue };
+                for &tag in &td.room_tags_r {
+                    counts[(r.id as usize - 1) * k + tag as usize] += 1;
+                }
+            }
+        }
+        self.room_roles = (0..n)
+            .map(|i| {
+                let room = self.map.room_by_id(i as u32 + 1);
+                let have = &counts[i * k..(i + 1) * k];
+                defs.room_roles
+                    .iter()
+                    .position(|role| {
+                        (!role.enclosed || room.enclosed())
+                            && room.cells >= role.min_cells
+                            && role.needs_r.iter().all(|&(tag, want)| have[tag as usize] >= want)
+                    })
+                    .map(|i| i as DefId)
+            })
+            .collect();
+    }
+
+    /// The role of the room at `p`, as roles were last worked out
+    /// (`ensure_roles`).
+    pub fn room_role(&self, p: IVec) -> Option<DefId> {
+        let r = self.map.room_at(p)?;
+        self.room_roles.get(r.id as usize - 1).copied().flatten()
+    }
+
     /// Whether the colony has built something that comforts a need (a fire
     /// for warmth). Until it does, raising one is urgent work.
     pub fn has_comfort(&self) -> bool {
@@ -1019,6 +1091,7 @@ impl World {
         }
         if !blueprint {
             self.fields.add_emitters(&defs, &self.map, e, def, pos);
+            self.touch_roles(def);
         }
         Some(e)
     }
@@ -1212,6 +1285,9 @@ impl World {
         self.worksites.remove(&e);
         self.tools.remove(&e);
         self.fields.remove_emitters(e);
+        if self.ecs.get::<&Blueprint>(e).is_err() {
+            self.touch_roles(t.def);
+        }
         let _ = self.ecs.despawn(e);
         // Cleared for a building: it goes up in its place.
         if let Some(p) = planned {

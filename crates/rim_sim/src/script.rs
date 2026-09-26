@@ -124,7 +124,7 @@ type CreatureInfo = { id: string, label: string, intelligent: boolean, aggressiv
 type ThingInfo = { id: string, label: string, market_value: number, food: boolean, item: boolean, tags: { string } }
 type ItemCategoryInfo = { id: string, label: string, parent: string?, order: number, children: { string }, items: { string } }
 type Date = { year: number, season: string, season_index: number, day: number, day_of_year: number, year_days: number, year_fraction: number }
-type Room = { id: number, cells: number, enclosed: boolean }
+type Room = { id: number, cells: number, enclosed: boolean, role: string?, role_label: string? }
 type PriorityPart = { label: string, delta: number }
 type WorkWhy = { work: string, level: number, why: string, dist: number? }
 type Taker = { id: number, ticks: number }
@@ -1081,17 +1081,27 @@ impl ScriptHost {
             let f = lua.create_function(move |lua, (x, y): (i32, i32)| {
                 let room = with_world(&ptr, |w| {
                     w.map.ensure_rooms();
-                    Ok(w.map.room_at(IVec::new(x, y)))
+                    w.ensure_roles();
+                    let p = IVec::new(x, y);
+                    Ok(w.map.room_at(p).map(|r| (r, w.room_role(p).map(|d| w.defs.room_roles[d as usize].clone()))))
                 })?;
-                let Some(r) = room else { return Ok(Value::Nil) };
+                let Some((r, role)) = room else { return Ok(Value::Nil) };
                 let t = lua.create_table()?;
                 t.set("id", r.id)?;
                 t.set("cells", r.cells)?;
                 t.set("enclosed", r.enclosed())?;
+                if let Some(role) = role {
+                    t.set("role", role.id)?;
+                    t.set("role_label", role.label)?;
+                }
                 Ok(Value::Table(t))
             })?;
             rim.set("room_at", f)?;
-            self.declare("room_at", "(x: number, y: number) -> Room?", "The room at a cell, or nil on a wall or door.");
+            self.declare(
+                "room_at",
+                "(x: number, y: number) -> Room?",
+                "The room at a cell, or nil on a wall or door. `role` is the first [[room_role]] it meets, if any.",
+            );
         }
         // A thing's stat by name: the def's base times its material's factor.
         // Names the engine never heard of come back as the bare factor, so a

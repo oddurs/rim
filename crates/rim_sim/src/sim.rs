@@ -156,7 +156,10 @@ impl Sim {
         let w = &mut self.world;
         let prof = &mut self.profile;
         prof.time("regions", || w.map.ensure_regions());
-        prof.time("rooms", || w.map.ensure_rooms());
+        prof.time("rooms", || {
+            w.map.ensure_rooms();
+            w.ensure_roles();
+        });
         prof.time("boundary", || w.refresh_boundaries());
         let defs = w.defs.clone();
         let clock = w.clock();

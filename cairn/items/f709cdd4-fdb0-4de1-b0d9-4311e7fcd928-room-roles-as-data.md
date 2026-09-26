@@ -2,8 +2,10 @@
 id: f709cdd4-fdb0-4de1-b0d9-4311e7fcd928
 title: Room roles as data
 type: feature
-status: backlog
+status: doing
 milestone: houses
+assignee: Oddur Sigurdsson
+claimed: 2026-09-26
 created: 2026-09-26
 updated: 2026-09-26
 priority: p0
@@ -26,6 +28,10 @@ Eras ("Camp: a shelter, a bed and a fire"), mood ("slept in a barracks") and the
 
 ## Acceptance criteria
 
-- [ ] A room with a bed and a fire is a `home`; add a second bed and it becomes a `dormitory` (test)
-- [ ] A mod adds a role by data alone and a script reads it
-- [ ] No per-tick cost: role work runs only at room rebuild and on building changes
+- [x] A room with a bed and a fire is a `home`; add a second bed and it becomes a `dormitory` (test)
+- [x] A mod adds a role by data alone and a script reads it
+- [x] No per-tick cost: role work runs only at room rebuild and on building changes
+
+## 2026-09-26
+
+Deferred the room_changed event: room ids renumber on every rebuild, so 'this room's role changed' has no stable meaning yet, and nothing reads it. Mood can add it with a stable room identity when it needs one. Roles count things in the room of their anchor; a blocking thing (a workbench) counts for the first room beside it.

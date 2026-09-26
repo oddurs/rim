@@ -1,0 +1,25 @@
+# What a room is for (DESIGN.md §6c). In load order, the first role whose
+# needs a room meets names it, so the more particular roles come first.
+# The engine counts tags on the things inside; mood, eras and the
+# storyteller read what it found.
+
+[[room_role]]
+id = "dormitory"
+label = "Dormitory"
+needs = { bed = 2 }
+
+# One bed and a fire: the camp a castaway builds before the second night.
+[[room_role]]
+id = "home"
+label = "Home"
+needs = { bed = 1, fire = 1 }
+
+[[room_role]]
+id = "bedroom"
+label = "Bedroom"
+needs = { bed = 1 }
+
+[[room_role]]
+id = "hall"
+label = "Hall"
+needs = { table = 1, seat = 1 }
