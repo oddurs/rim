@@ -19,8 +19,9 @@ the material you choose changes what the wall is worth. Rooms start caring
 what they are made of, which is what makes a window a real thing rather
 than a wall with a hole drawn on it.
 
-Roofs stay out. 0054 settled it: enclosure plus the 400-cell cap is
-shelter, and that does not change here.
+Roofs stay out. 0054 settled it: enclosure plus the 400-cell cap was
+shelter, and that did not change here. (Houses, DESIGN.md §6c, later
+replaced the cap with a roof span.)
 
 ## Sprint goal
 

@@ -197,6 +197,9 @@ pub struct ThingDef {
     /// leaks a little, a window leaks a lot and lets daylight through.
     #[serde(default)]
     pub boundary: Vec<BoundaryDef>,
+    /// It holds a roof up (DESIGN.md §6c): walls, pillars, rock.
+    #[serde(default)]
+    pub support: Option<SupportDef>,
     /// It warms (or otherwise comforts) what a need reads: it emits a
     /// positive amount into a field a need is satisfied by, or that one is
     /// worked out from. Until the colony has one, building one is urgent.
@@ -375,6 +378,18 @@ pub struct BoundaryDef {
     #[serde(skip)]
     pub field_r: DefId,
 }
+
+/// How far a piece holds the roof up: every cell within `span` of it, by
+/// Chebyshev distance, is roofed. Its material's `span` factor scales it,
+/// so a branch wall holds less than a stone one.
+#[derive(Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct SupportDef {
+    pub span: f64,
+}
+
+/// Longest roof span a piece can have, in cells.
+pub const MAX_SPAN: u8 = 12;
 
 /// An item that things can be built out of.
 #[derive(Deserialize, Clone, Debug, Default)]
@@ -1794,6 +1809,14 @@ impl DefDb {
         for d in &mut self.things {
             let ctx = format!("thing/{}", d.id);
             d.rgb = parse_color(&d.color).map_err(|e| format!("{ctx}: {e}"))?;
+            if let Some(sp) = &d.support {
+                if !(sp.span > 0.0 && sp.span <= MAX_SPAN as f64) {
+                    return Err(format!(
+                        "{ctx}: support.span is cells, above 0 and at most {MAX_SPAN}, not {}",
+                        sp.span
+                    ));
+                }
+            }
             let [sw, sh] = d.size;
             if !(1..=MAX_SIZE).contains(&sw) || !(1..=MAX_SIZE).contains(&sh) {
                 return Err(format!("{ctx}: size is [w, h], each 1 to {MAX_SIZE}, not [{sw}, {sh}]"));

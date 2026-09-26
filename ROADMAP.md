@@ -336,11 +336,10 @@ The API grows up: stat pipeline, script components, custom jobs, needs and def k
 
 ## houses — Houses
 
-`#·········` 10% · 2 of 20 done
+`##········` 15% · 3 of 20 done
 
 A house is drawn as its plan and built as an order (DESIGN.md §6c). Walls join from their neighbours in quarters, with rounded ends and square junctions, and no sprites. Materials show as patterns and climb a ladder of tools from wattle to brick. Doors and windows orient themselves in the run and toward the room. Rooms take roles from what is in them, a roof span set by the materials replaces the 400-cell cap, and from far away the colony is a village of hipped roofs. The prototype, docs/engineering/houses-prototype.html, is the reference.
 
-- [ ] `24100bb9` A roof span replaces the room size cap, and pillars hold it <sup>feature · p0 · m · engine</sup>
 - [ ] `26a69a8e` Pipe joins: fences and palisades connect like Minecraft's <sup>feature · p2 · s · client</sup>
 - [ ] `26ba97aa` Plan a multi-cell building over grass, trees and rock <sup>feature · p2 · m · engine</sup>
 - [ ] `454f4bde` Draw a room: drag a rectangle into a ring of walls <sup>feature · p2 · s · client</sup>
@@ -356,10 +355,11 @@ A house is drawn as its plan and built as an order (DESIGN.md §6c). Walls join 
 - [ ] `fbab2877` Core's looks in the plan style <sup>content · p1 · m · core</sup>
 - [ ] `ff479390` The building ladder: dry stone, logs, bricks and a kiln <sup>content · p1 · m · plugin</sup>
 - [ ] `fff4fb42` A material names the tool it is built with <sup>feature · p1 · s · engine</sup>
+- [ ] `24100bb9` A roof span replaces the room size cap, and pillars hold it <sup>feature · p0 · m · engine</sup>
 - [ ] `7129a537` Openings turn to their wall and face the room <sup>feature · p0 · m · client</sup>
-- [ ] `f709cdd4` Room roles as data <sup>feature · p0 · m · engine</sup>
 - [x] `3fe8c3cb` Joins in quarters: a wall run draws as one mass <sup>feature · p0 · m · client</sup>
 - [x] `eb469f44` Houses concept: drawn as their plan, built as orders <sup>spike · p0 · m · tooling</sup>
+- [x] `f709cdd4` Room roles as data <sup>feature · p0 · m · engine</sup>
 
 ## mood — Mood
 
@@ -395,16 +395,18 @@ Making a mod feels like publishing a small open-source library: rim new, typed L
 
 ## scale — Scale
 
-`####······` 31% · 4 of 13 done · due 2027-03-15
+`###·······` 27% · 4 of 15 done · due 2027-03-15
 
 Hit the performance budget: benchmark harness, hierarchical pathing, flow fields, spatial indices, incremental regions, render caching.
 
 - [ ] `1415721a` Water flow: runoff, puddles and floods <sup>feature · p3 · l · engine</sup>
 - [ ] `277ff6f2` Hierarchical pathfinding <sup>perf · p1 · l · engine</sup>
 - [ ] `66906291` Incremental region updates <sup>perf · p2 · m · engine</sup>
+- [ ] `6b605f27` boundary_refresh_is_cheap asserts wall-clock time and fails under load <sup>bug · p3 · s · engine</sup>
 - [ ] `91de1172` Parallel systems where read and write sets allow <sup>spike · p2 · m · engine</sup>
 - [ ] `a353667b` Flow fields for raid groups <sup>perf · p2 · m · engine</sup>
 - [ ] `c1089360` Pathfinding on a map full of work: long A* searches in forest and rock <sup>perf · p1 · m · engine</sup>
+- [ ] `c3d18fe7` Map generation hashes spawns by def index, so a new def reshapes every map <sup>bug · p2 · s · engine</sup>
 - [ ] `da558444` Ground renderer: terrain, wetness and snow in one shader pass <sup>perf · p2 · m · client</sup>
 - [ ] `dab55ea2` Meet the budget: 6x speed at 60 fps <sup>perf · p0 · l · engine</sup>
 - [ ] `e8673d3f` scripting test a_slow_mod_is_named_in_the_warnings flakes under load <sup>bug · p2 · s · engine</sup>

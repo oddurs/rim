@@ -2250,6 +2250,8 @@ fn hover_table(lua: &Lua, w: &World, client: &ClientView) -> mlua::Result<Value>
         "shelter",
         match w.map.room_at(tp) {
             Some(r) if r.enclosed() => format!("indoors, room of {} cells", r.cells),
+            // Walled in, but too wide for its walls: say what would fix it.
+            Some(r) if !r.touches_edge => format!("open to the sky: {} cells beyond the roof's reach", r.uncovered),
             Some(_) => "outdoors".into(),
             None => String::new(),
         },

@@ -1564,7 +1564,8 @@ pub fn complete_building(w: &mut World, bp: Entity) {
     w.touch_roles(t.def);
     // Taking it down later is work of its own, counted from zero.
     let _ = w.ecs.remove_one::<Work>(bp);
-    let td = w.defs.thing(t.def);
+    let all = w.defs.clone();
+    let td = all.thing(t.def);
     // The colony built it, so the colony owns it. A door only opens for
     // its owner; everyone else has to come through it the hard way.
     let _ = w.ecs.insert_one(bp, Owner(Faction::Player));
@@ -1579,6 +1580,10 @@ pub fn complete_building(w: &mut World, bp: Entity) {
     for c in td.footprint(t.pos) {
         w.map.set_fixture(c, Some(bp), blocks, cost, door);
         w.map.set_owner(c, Some(Faction::Player));
+    }
+    let span = w.support_span(bp);
+    if span > 0 {
+        w.set_support(bp, span);
     }
     let defs = w.defs.clone();
     w.fields.add_emitters(&defs, &w.map, bp, t.def, t.pos);

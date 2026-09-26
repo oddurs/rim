@@ -740,6 +740,12 @@ impl Snapshot {
                             w.map.set_owner(c, *owner);
                         }
                     }
+                    if !*blueprint {
+                        let span = w.support_span(*e);
+                        if span > 0 {
+                            w.set_support(*e, span);
+                        }
+                    }
                 }
             }
         }

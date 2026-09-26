@@ -8,7 +8,7 @@ type ThingInfo = { id: string, label: string, market_value: number, food: boolea
 type StockQuery = { thing: string?, tag: string?, category: string? }
 type ItemCategoryInfo = { id: string, label: string, parent: string?, order: number, children: { string }, items: { string } }
 type Date = { year: number, season: string, season_index: number, day: number, day_of_year: number, year_days: number, year_fraction: number }
-type Room = { id: number, cells: number, enclosed: boolean, role: string?, role_label: string? }
+type Room = { id: number, cells: number, enclosed: boolean, uncovered: number, role: string?, role_label: string? }
 type PriorityPart = { kind: "default" | "role" | "pin" | "rule", label: string, delta: number }
 type WorkRoleInfo = { index: number, id: string?, label: string, edited: boolean }
 type BoardWork = { id: string, label: string, skill: string?, waiting: number, per_person: number, weight: number, default: number }
@@ -106,7 +106,7 @@ declare rim: {
     random_int: (lo: number, hi: number) -> number,
     -- A colony reading, by qualified id ("core:food_days"); a bare name is your own mod's. Nil until published.
     reading: (id: string) -> number?,
-    -- The room at a cell, or nil on a wall or door. `role` is the first [[room_role]] it meets, if any.
+    -- The room at a cell, or nil on a wall or door. `uncovered` counts cells beyond every roof support's span; `role` is the first [[room_role]] it meets, if any.
     room_at: (x: number, y: number) -> Room?,
     -- A pawn says something: a speech bubble over it for `ticks` ticks (600 unless given). Higher `priority` wins when it has several lines or the screen is crowded; needs speak at 1, and 2 is the default. Only presentation: nothing in the sim reads it back.
     say: (id: number, text: string, ticks: number?, priority: number?) -> (),

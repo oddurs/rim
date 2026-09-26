@@ -218,7 +218,7 @@ type ThingInfo = { id: string, label: string, market_value: number, food: boolea
 type StockQuery = { thing: string?, tag: string?, category: string? }
 type ItemCategoryInfo = { id: string, label: string, parent: string?, order: number, children: { string }, items: { string } }
 type Date = { year: number, season: string, season_index: number, day: number, day_of_year: number, year_days: number, year_fraction: number }
-type Room = { id: number, cells: number, enclosed: boolean, role: string?, role_label: string? }
+type Room = { id: number, cells: number, enclosed: boolean, uncovered: number, role: string?, role_label: string? }
 type PriorityPart = { kind: "default" | "role" | "pin" | "rule", label: string, delta: number }
 type WorkRoleInfo = { index: number, id: string?, label: string, edited: boolean }
 type BoardWork = { id: string, label: string, skill: string?, waiting: number, per_person: number, weight: number, default: number }
@@ -1232,6 +1232,7 @@ impl ScriptHost {
                 t.set("id", r.id)?;
                 t.set("cells", r.cells)?;
                 t.set("enclosed", r.enclosed())?;
+                t.set("uncovered", r.uncovered)?;
                 if let Some(role) = role {
                     t.set("role", role.id)?;
                     t.set("role_label", role.label)?;
@@ -1242,7 +1243,7 @@ impl ScriptHost {
             self.declare(
                 "room_at",
                 "(x: number, y: number) -> Room?",
-                "The room at a cell, or nil on a wall or door. `role` is the first [[room_role]] it meets, if any.",
+                "The room at a cell, or nil on a wall or door. `uncovered` counts cells beyond every roof support's span; `role` is the first [[room_role]] it meets, if any.",
             );
         }
         // A thing's stat by name: the def's base times its material's factor.
