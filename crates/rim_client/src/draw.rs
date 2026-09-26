@@ -332,7 +332,8 @@ const LABEL_ZOOM: f32 = 22.0;
 #[allow(clippy::too_many_arguments)]
 pub fn rock(s: &mut impl Sink, w: &World, def: rim_sim::defs::DefId, cell: IVec, at: (f32, f32), z: f32, t: f32) {
     let td = w.defs.thing(def);
-    paint(s, w, &td.look_r.layers, join_of(&td.look_r), rgb(td.rgb), cell, at, z, t, td.size);
+    let orient = orient_of(w, cell, &td.look_r, td.size);
+    paint(s, w, &td.look_r.layers, join_of(&td.look_r), orient, rgb(td.rgb), cell, at, z, t, td.size);
 }
 
 /// The ground, then floors, items and fixtures: cached per chunk where
