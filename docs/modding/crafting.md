@@ -100,6 +100,27 @@ The crafting spot is free because its build says so: `free = true`. A build
 needs a `cost`, a `stuff`, or `free = true`, so a forgotten cost is an error
 rather than a free building.
 
+A build can take a material **and** parts. `stuff` is the material the
+player picks, which sets the factors; `cost` lists what else goes in. The
+material is delivered first, then the parts, and taking it down or
+cancelling it gives back both. `requires` names tool tags the builder must
+hold, fetched like a harvest's:
+
+```toml
+[[thing]]
+id = "palisade"
+label = "palisade"
+color = "#8a6a44"
+category = "building"
+blocks = true
+build = { menu = "structure", work = 90, requires = ["chopping"], stuff = { category = "structural", count = 3 }, cost = [{ thing = "core:stone", count = 1 }] }
+```
+
+A palisade of wood is three wood and a stone, cut to shape with a chopping
+tool; a plank wall is planks and nails the same way. A plan whose materials
+are in but whose tool nobody has says so when selected: "Needs a chopping
+tool."
+
 ## Bills
 
 Selecting a station shows its bills in the inspector. A bill is a recipe and

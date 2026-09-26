@@ -77,8 +77,12 @@ pub enum Job {
         want: u32,
         stage: u8,
     },
+    /// Put up a blueprint whose materials are in, fetching `tool` first
+    /// when the build requires one this pawn doesn't hold.
     Construct {
         bp: Entity,
+        #[serde(default)]
+        tool: Option<Entity>,
     },
     /// Bring a work order's input: pick up at `src` (stage 0), carry it to
     /// the site (stage 1) and add it to need `need`.
@@ -1088,11 +1092,13 @@ impl World {
         let t = Thing { def, pos, count: 1, hp };
         let e = if blueprint {
             let b = td.build.as_ref()?;
-            let cost = match (&b.stuff, made_of) {
-                (Some(sc), Some(m)) => vec![(m, sc.count)],
+            // The material first, then the parts, delivered in that order.
+            let material = match (&b.stuff, made_of) {
+                (Some(sc), Some(m)) => Some((m, sc.count)),
                 (Some(_), None) => return None, // needs a material and was given none
-                (None, _) => b.cost_r.clone(),
+                (None, _) => None,
             };
+            let cost: Vec<(DefId, u32)> = material.into_iter().chain(b.cost_r.iter().copied()).collect();
             let total = (b.work as f64 * defs.factor(made_of, "work")).round().max(1.0) as u32;
             let bp = Blueprint { delivered: vec![0; cost.len()], cost };
             self.spawn((t, bp, Work::new(total, None)))
@@ -1671,15 +1677,16 @@ impl World {
     }
 
     /// What a built thing cost, in what it was made of: the material and
-    /// count for stuff, the recipe otherwise. None for anything not built.
+    /// count for stuff, then the parts. None for anything not built.
     pub fn cost_of(&self, e: Entity) -> Option<Vec<(DefId, u32)>> {
         let t = self.ecs.get::<&Thing>(e).ok()?;
         let b = self.defs.thing(t.def).build.as_ref()?;
-        Some(match (&b.stuff, self.ecs.get::<&MadeOf>(e).ok().map(|m| m.0)) {
-            (Some(sc), Some(m)) => vec![(m, sc.count)],
-            (Some(_), None) => Vec::new(), // built of nothing we know: nothing to give back
-            (None, _) => b.cost_r.clone(),
-        })
+        // The material (unless it's one we no longer know), then the parts.
+        let material = match (&b.stuff, self.ecs.get::<&MadeOf>(e).ok().map(|m| m.0)) {
+            (Some(sc), Some(m)) => Some((m, sc.count)),
+            _ => None,
+        };
+        Some(material.into_iter().chain(b.cost_r.iter().copied()).collect())
     }
 
     // ------------------------------------------------------------ stats
