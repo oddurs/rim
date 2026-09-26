@@ -2,12 +2,14 @@
 id: f607a83d-1e4b-487c-ab55-7cd58b821603
 title: Draw a multi-cell thing's look once, over its footprint
 type: feature
-status: backlog
+status: doing
 milestone: building
+assignee: Oddur Sigurdsson
+claimed: 2026-09-26
 depends_on:
 - 8cf4db07-217d-42f9-aed0-8c119d5acf0c
 created: 2026-09-25
-updated: 2026-09-25
+updated: 2026-09-26
 priority: p2
 api: additive
 effort: m
@@ -27,6 +29,6 @@ A thing can cover several cells (8cf4db07): it is one entity in every cell of it
 
 ## Acceptance criteria
 
-- [ ] A 2x1 thing draws once, across both cells (autotest screenshot)
-- [ ] It crosses a chunk edge without a seam or a double draw
-- [ ] Render benchmark unchanged
+- [x] A 2x1 thing draws once, across both cells (autotest screenshot)
+- [x] It crosses a chunk edge without a seam or a double draw
+- [x] Render benchmark unchanged

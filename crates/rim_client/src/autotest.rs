@@ -661,6 +661,36 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         t.app.cam.zoom = 28.0;
     }
 
+    // A thing wider than a cell (8cf4db07) draws once, from its anchor,
+    // across its footprint, even where it crosses a chunk edge.
+    if let Some(trough) = t.w().defs.thing_id("wildlife_plus:feeding_trough") {
+        println!("\n# a two-cell thing draws once, across a chunk edge");
+        let chunk = rim_sim::map::CHUNK;
+        let open =
+            |w: &World, p: IVec| w.map.passable(p) && w.map.fixture_at(p).is_none() && w.map.item_at(p).is_none();
+        let at = (2..60i32)
+            .flat_map(|r| (-r..=r).flat_map(move |dy| (-r..=r).map(move |dx| home.offset(dx, dy))))
+            .find(|&p| p.x.rem_euclid(chunk) == chunk - 1 && open(t.w(), p) && open(t.w(), p.offset(1, 0)))
+            .expect("two free cells across a chunk edge");
+        let stuff = t.w().defs.materials("structural").first().copied();
+        let e = t.app.sim.world.spawn_fixture_of(trough, at, false, stuff).expect("placed");
+        rim_sim::ai::complete_building(&mut t.app.sim.world, e);
+        t.check(t.w().map.fixture_at(at.offset(1, 0)) == Some(e), "it is one thing in both cells");
+        let z = 48.0;
+        let (a, b) = (tally(&t.app, e, at, z), tally(&t.app, e, at.offset(1, 0), z));
+        t.check(a > 0 && b == 0, format!("drawn from its anchor only ({a} shapes there, {b} beside it)"));
+        // The view's left edge between its two cells: the anchor's chunk is
+        // off screen, and the half in view must still be drawn from it.
+        t.app.cam.zoom = z;
+        t.app.cam.x = at.x as f32 + 0.5 + screen_width() / 2.0 / z;
+        t.app.cam.y = at.y as f32 + 0.5;
+        t.frame().await;
+        let anchor_chunk = t.w().map.chunk_of(at);
+        t.check(t.app.meshes.drawn(anchor_chunk), "its anchor's chunk, off screen, is drawn for the half in view");
+        t.shot("two_cells").await;
+        t.app.cam.zoom = 28.0;
+    }
+
     // Render scale: the world at half the pixels, the UI still full. The
     // same frame at both scales must look alike: a flipped or darkened
     // world (translucent plans are on screen) would not.
@@ -1137,4 +1167,30 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         println!("  FAIL {f}");
     }
     std::process::exit(if t.failed.is_empty() { 0 } else { 1 });
+}
+
+/// How many shapes `draw::thing` paints for `e` in `cell`: a thing wider
+/// than a cell must paint everything at its anchor and nothing elsewhere.
+fn tally(app: &App, e: Entity, cell: IVec, z: f32) -> usize {
+    struct Tally<'a>(&'a crate::atlas::WorldAtlas, usize);
+    impl draw::Sink for Tally<'_> {
+        fn rect(&mut self, _: f32, _: f32, _: f32, _: f32, _: Color) {
+            self.1 += 1;
+        }
+        fn poly(&mut self, _: f32, _: f32, _: u8, _: f32, _: Color) {
+            self.1 += 1;
+        }
+        fn line(&mut self, _: f32, _: f32, _: f32, _: f32, _: f32, _: Color) {
+            self.1 += 1;
+        }
+        fn image(&mut self, _: f32, _: f32, _: f32, _: f32, _: crate::atlas::Slot, _: Color) {
+            self.1 += 1;
+        }
+        fn atlas(&self) -> &crate::atlas::WorldAtlas {
+            self.0
+        }
+    }
+    let mut s = Tally(&app.world_atlas, 0);
+    draw::thing(&mut s, &app.sim.world, e, cell, (0.0, 0.0), z, 0.0, Default::default());
+    s.1
 }

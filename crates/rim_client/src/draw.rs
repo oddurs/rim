@@ -189,7 +189,13 @@ pub fn thing(
 ) -> Option<u32> {
     let defs = &w.defs;
     let th = w.ecs.get::<&Thing>(e).ok()?;
+    // A thing covering several cells is one entity in each of them, and is
+    // drawn once, from its anchor, across them all.
+    if th.pos != cell {
+        return None;
+    }
     let td = defs.thing(th.def);
+    let span = td.size;
     // A thing built of something is drawn in that something's colour, so
     // marble arrives looking like marble with no change here. Anything
     // else keeps its def's colour.
@@ -200,12 +206,13 @@ pub fn thing(
     let c = shade(c, tone.bright);
     // Scaled about the middle of the bottom edge, where it stands.
     let zt = z * tone.scale;
-    let at = (at.0 + tone.shift.0 * z - (zt - z) / 2.0, at.1 + tone.shift.1 * z - (zt - z));
+    let (fw, fh) = (span[0] as f32, span[1] as f32);
+    let at = (at.0 + tone.shift.0 * z - (zt - z) * fw / 2.0, at.1 + tone.shift.1 * z - (zt - z) * fh);
     let z = zt;
     let (sx, sy) = at;
     let look = &td.look_r;
     if let Ok(bp) = w.ecs.get::<&Blueprint>(e) {
-        plan(s, w, e, &bp, &look.layers, c, cell, at, z, t);
+        plan(s, w, e, &bp, &look.layers, c, cell, at, z, t, span);
         return None;
     }
     let layers = match w.ecs.get::<&Regrow>(e) {
@@ -227,28 +234,34 @@ pub fn thing(
                     s.rect(sx + fx * k * z, sy + fy * k * z, z, z, Color::new(1.0, 0.84, 0.47, a));
                 }
             }
-            paint(s, w, layers, look.join, c, cell, (sx - tx * k, sy - ty * k), z, t);
+            paint(s, w, layers, look.join, c, cell, (sx - tx * k, sy - ty * k), z, t, span);
         }
         Some(Wear::Cracks) => {
             let toward = wear::toward(w, e);
             if w.ecs.get::<&Work>(e).is_ok() {
                 wear::draw_chips(s, cell, toward, f, at, z, chip_color(w, e, td, c));
             }
-            paint(s, w, layers, look.join, shade(c, 1.0 - 0.16 * f), cell, at, z, t);
-            wear::draw_cracks(s, cell, toward, f, at, z);
+            paint(s, w, layers, look.join, shade(c, 1.0 - 0.16 * f), cell, at, z, t, span);
+            // Every cell cracks from its own seed, so a boulder isn't copies.
+            for q in td.footprint(cell) {
+                let at = (sx + (q.x - cell.x) as f32 * z, sy + (q.y - cell.y) as f32 * z);
+                wear::draw_cracks(s, q, toward, f, at, z);
+            }
         }
         // Taken down in reverse of how it went up. Only for things that
         // don't block: the loader refuses it for those that do.
         Some(Wear::Grow) => {
             let (grown, _) = wear::grown(layers, 1.0 - f, c, 1.0);
-            paint(s, w, &grown, look.join, c, cell, at, z, t);
+            paint(s, w, &grown, look.join, c, cell, at, z, t, span);
         }
-        Some(Wear::None) | None => paint(s, w, layers, look.join, c, cell, at, z, t),
+        Some(Wear::None) | None => paint(s, w, layers, look.join, c, cell, at, z, t, span),
     }
     if let Ok(d) = w.ecs.get::<&Designated>(e) {
         let dc = rgb(defs.designations[d.0 as usize].rgb);
-        disc(s, sx + z * 0.82, sy + z * 0.18, z * 0.13 + 1.0, BLACK);
-        disc(s, sx + z * 0.82, sy + z * 0.18, z * 0.13, dc);
+        // At the footprint's top-right corner.
+        let dx = sx + z * (fw - 0.18);
+        disc(s, dx, sy + z * 0.18, z * 0.13 + 1.0, BLACK);
+        disc(s, dx, sy + z * 0.18, z * 0.13, dc);
     }
     (th.count > 1).then_some(th.count)
 }
@@ -268,18 +281,21 @@ fn plan(
     at: (f32, f32),
     z: f32,
     t: f32,
+    span: [u32; 2],
 ) {
     const BLUEPRINT: Color = Color::new(0.55, 0.8, 1.0, 0.8);
     let (sx, sy) = at;
+    let (zx, zy) = (z * span[0] as f32, z * span[1] as f32);
     let f = wear::progress(w, e);
     let (grown, top) = if f > 0.0 { wear::grown(layers, f, own, 0.55) } else { (Vec::new(), 1.0) };
-    s.rect(sx + 1.0, sy + 1.0, z - 2.0, (top * z - 1.0).max(0.0), Color::new(0.45, 0.7, 1.0, 0.3));
+    s.rect(sx + 1.0, sy + 1.0, zx - 2.0, (top * zy - 1.0).max(0.0), Color::new(0.45, 0.7, 1.0, 0.3));
     if !grown.is_empty() {
         // A plan joins nothing until it stands.
-        paint(s, w, &grown, None, own, cell, at, z, t);
-        wear::hatch(s, (sx, sy + top * z, z, (1.0 - top) * z), (z / 7.0).max(4.0), Color::new(0.55, 0.8, 1.0, 0.4));
+        paint(s, w, &grown, None, own, cell, at, z, t, span);
+        let hatched = (sx, sy + top * zy, zx, (1.0 - top) * zy);
+        wear::hatch(s, hatched, (z / 7.0).max(4.0), Color::new(0.55, 0.8, 1.0, 0.4));
     }
-    outline(s, sx + 1.0, sy + 1.0, z - 2.0, z - 2.0, 1.5, BLUEPRINT);
+    outline(s, sx + 1.0, sy + 1.0, zx - 2.0, zy - 2.0, 1.5, BLUEPRINT);
     // The materials that have arrived, stacked in the corner until used.
     let need: u32 = bp.cost.iter().map(|c| c.1).sum();
     let have: u32 = bp.delivered.iter().sum();
@@ -289,7 +305,7 @@ fn plan(
         s.rect(sx + 0.08 * z, sy + (0.92 - pile) * z, pile * z, pile * z, mc);
     }
     let frac = if have < need { have as f32 / need.max(1) as f32 * 0.5 } else { 0.5 + 0.5 * f };
-    s.rect(sx + 2.0, sy + z - 4.0, (z - 4.0) * frac, 2.5, Color::new(0.6, 0.9, 1.0, 0.9));
+    s.rect(sx + 2.0, sy + zy - 4.0, (zx - 4.0) * frac, 2.5, Color::new(0.6, 0.9, 1.0, 0.9));
 }
 
 /// What comes off a thing as it is worked: what it yields, or what it was
@@ -378,7 +394,7 @@ fn worksite_motion(app: &App, t: f32) {
                 let alpha = if p < 0.8 { 1.0 } else { (1.0 - p) / 0.2 };
                 let (layers, _) = wear::grown(&w.defs.thing(l.def).look_r.layers, 1.0, l.own, alpha);
                 let o = (z - zt) / 2.0;
-                paint(s, w, &layers, None, l.own, l.cell, (x + o, y + o), zt, t);
+                paint(s, w, &layers, None, l.own, l.cell, (x + o, y + o), zt, t, w.defs.thing(l.def).size);
             }
             // Nine pieces hop away from the worked side, shrinking.
             Exit::Crumble => {
@@ -453,7 +469,8 @@ pub fn readouts(app: &App) -> Vec<(f32, f32, String)> {
         let Some((cell, f, hurt)) = ws.readout(w, e) else { continue };
         let Some(th) = w.thing(e) else { continue };
         let (x, y) = cam.to_screen(cell.x as f32, cell.y as f32);
-        let bar = z * 0.8;
+        let [fw, fh] = w.defs.thing(th.def).size.map(|v| v as f32);
+        let (bar, y) = (z * (fw - 0.2), y + z * (fh - 1.0));
         draw_rectangle(x + z * 0.1, y + z + 3.0, bar, 3.0, Color::new(0.0, 0.0, 0.0, 0.55));
         draw_rectangle(x + z * 0.1, y + z + 3.0, bar * f, 3.0, site_color(w, e));
         let text = if hurt {
@@ -653,14 +670,20 @@ fn paint(
     at: (f32, f32),
     z: f32,
     t: f32,
+    span: [u32; 2],
 ) {
     let (sx, sy) = at;
+    // A look is laid out over the thing's whole footprint (DESIGN.md §6a):
+    // positions and sizes stretch on each axis, round things by the
+    // shorter one so a disc stays a disc.
+    let (zx, zy) = (z * span[0] as f32, z * span[1] as f32);
+    let zr = zx.min(zy);
     // A fill spanning the whole cell overlaps the next one by half a point,
     // so neighbours don't show a hairline seam between them. Only a whole
     // span: a strip along the bottom edge would spill onto the cell below.
     let px = |[x, y, rw, rh]: [f32; 4]| {
         let pad = |a: f32, len: f32| if a == 0.0 && len == 1.0 { 0.5 } else { 0.0 };
-        (sx + x * z, sy + y * z, rw * z + pad(x, rw), rh * z + pad(y, rh))
+        (sx + x * zx, sy + y * zy, rw * zx + pad(x, rw), rh * zy + pad(y, rh))
     };
     for l in layers {
         let base = l.color.map_or(own, |[r, g, b, a]| Color::from_rgba(r, g, b, a));
@@ -678,13 +701,13 @@ fn paint(
             }
             Prim::Outline { rect, width } => {
                 let [x, y, rw, rh] = rect;
-                outline(s, sx + x * z, sy + y * z, rw * z, rh * z, width, c);
+                outline(s, sx + x * zx, sy + y * zy, rw * zx, rh * zy, width, c);
             }
             Prim::Disc { at: [x, y], r, min_px, pulse } => {
                 let f = if pulse > 0.0 { 1.0 + (t * 9.0 + cell.x as f32).sin() * pulse } else { 1.0 };
-                disc(s, sx + x * z, sy + y * z, (r * z).max(min_px) * f, c);
+                disc(s, sx + x * zx, sy + y * zy, (r * zr).max(min_px) * f, c);
             }
-            Prim::Edges { width } => edges(s, w, cell, join, (sx, sy), z, width, c),
+            Prim::Edges { width } => edges(s, w, cell, span, join, (sx, sy), z, width, c),
             Prim::Sprite { rect, id } => {
                 let (x, y, rw, rh) = px(rect);
                 let slot = s.atlas().slot(id);
@@ -694,11 +717,11 @@ fn paint(
                 let Some(g) = s.atlas().glyph(id) else { continue };
                 // `size` is the em: glyphs keep their proportions and share
                 // a baseline, the line's middle on the point.
-                let k = size * z / crate::atlas::GLYPH_PX;
+                let k = size * zr / crate::atlas::GLYPH_PX;
                 let (gw, gh) = (g.w * k, g.h * k);
                 // A colour glyph keeps its colours; shade and vary dim it.
                 let c = if g.painted { shade(Color::new(1.0, 1.0, 1.0, c.a), f) } else { c };
-                s.image(sx + x * z - gw / 2.0, sy + y * z + g.top * k, gw, gh, g.slot, c);
+                s.image(sx + x * zx - gw / 2.0, sy + y * zy + g.top * k, gw, gh, g.slot, c);
             }
         }
     }
@@ -715,22 +738,43 @@ fn joins(w: &World, p: IVec, join: Option<u16>) -> bool {
     w.ecs.get::<&Thing>(e).is_ok_and(|t| w.defs.thing(t.def).look_r.join == Some(g))
 }
 
-/// The cell's border on the sides that don't face a joined neighbour.
+/// The border of the footprint (`span` cells from `p`, right and down),
+/// a cell's length at a time, left open where it faces a joined neighbour.
 /// Corners and junctions come out joined for free.
 #[allow(clippy::too_many_arguments)]
-fn edges(s: &mut impl Sink, w: &World, p: IVec, join: Option<u16>, (sx, sy): (f32, f32), z: f32, t: f32, c: Color) {
-    let (x0, y0, x1, y1) = (sx + 0.5, sy + 0.5, sx + z - 0.5, sy + z - 0.5);
-    if !joins(w, p.offset(0, -1), join) {
-        s.line(x0, y0, x1, y0, t, c);
+fn edges(
+    s: &mut impl Sink,
+    w: &World,
+    p: IVec,
+    span: [u32; 2],
+    join: Option<u16>,
+    (sx, sy): (f32, f32),
+    z: f32,
+    t: f32,
+    c: Color,
+) {
+    let (sw, sh) = (span[0] as i32, span[1] as i32);
+    let (x0, y0, x1, y1) = (sx + 0.5, sy + 0.5, sx + z * sw as f32 - 0.5, sy + z * sh as f32 - 0.5);
+    // Each step's ends, inset at the footprint's corners.
+    let run =
+        |k: i32, lo: f32, hi: f32, base: f32| ((base + k as f32 * z).max(lo), (base + (k + 1) as f32 * z).min(hi));
+    for k in 0..sw {
+        let (a, b) = run(k, x0, x1, sx);
+        if !joins(w, p.offset(k, -1), join) {
+            s.line(a, y0, b, y0, t, c);
+        }
+        if !joins(w, p.offset(k, sh), join) {
+            s.line(a, y1, b, y1, t, c);
+        }
     }
-    if !joins(w, p.offset(0, 1), join) {
-        s.line(x0, y1, x1, y1, t, c);
-    }
-    if !joins(w, p.offset(-1, 0), join) {
-        s.line(x0, y0, x0, y1, t, c);
-    }
-    if !joins(w, p.offset(1, 0), join) {
-        s.line(x1, y0, x1, y1, t, c);
+    for k in 0..sh {
+        let (a, b) = run(k, y0, y1, sy);
+        if !joins(w, p.offset(-1, k), join) {
+            s.line(x0, a, x0, b, t, c);
+        }
+        if !joins(w, p.offset(sw, k), join) {
+            s.line(x1, a, x1, b, t, c);
+        }
     }
 }
 

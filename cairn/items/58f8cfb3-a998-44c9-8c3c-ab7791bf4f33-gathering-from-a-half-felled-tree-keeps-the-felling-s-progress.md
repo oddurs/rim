@@ -2,12 +2,12 @@
 id: 58f8cfb3-a998-44c9-8c3c-ab7791bf4f33
 title: Gathering from a half-felled tree keeps the felling's progress
 type: bug
-status: doing
+status: done
 milestone: building
 assignee: Oddur Sigurdsson
-claimed: 2026-09-25
 created: 2026-09-25
-updated: 2026-09-25
+updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p2
 api: none
 effort: s

@@ -75,6 +75,8 @@ const NONE: Particle = Particle {
 /// A site being followed: what it looked like last frame.
 struct Site {
     cell: IVec,
+    /// Its footprint, in cells from `cell` right and down.
+    size: (f32, f32),
     def: DefId,
     own: Color,
     chip: Color,
@@ -175,6 +177,7 @@ impl Worksites {
                 };
                 let site = Site {
                     cell,
+                    size: (td.size[0] as f32, td.size[1] as f32),
                     def: t.def,
                     own,
                     chip,
@@ -298,12 +301,13 @@ impl Worksites {
         let seed = e.id() as i64 * 4099 + site.strikes as i64;
         let r = |i: i64, k: u64| hash2_f(seed, i, k) as f32;
         let (tx, ty) = site.toward;
-        let c = (site.cell.x as f32 + 0.5, site.cell.y as f32 + 0.5);
+        let (hw, hh) = (site.size.0 / 2.0, site.size.1 / 2.0);
+        let c = (site.cell.x as f32 + hw, site.cell.y as f32 + hh);
         // Where the blow lands: the worked face, or the top of a rising plan.
         let hit = if site.plan {
-            (c.0 + (r(0, 1) - 0.5) * 0.6, c.1 + 0.5 - site.done as f32 / site.total as f32)
+            (c.0 + (r(0, 1) - 0.5) * 0.6 * site.size.0, c.1 + hh - site.size.1 * site.done as f32 / site.total as f32)
         } else {
-            (c.0 + tx * 0.42, c.1 + ty * 0.42)
+            (c.0 + tx * (hw - 0.08), c.1 + ty * (hh - 0.08))
         };
         let before = self.parts.len();
         for s in &st.strike {
