@@ -2,14 +2,14 @@
 id: 4bd94457-33c5-4362-afbd-0aa1cd6acbdb
 title: 'Balance: the first three days with only your hands'
 type: chore
-status: doing
+status: done
 milestone: stone-age
 assignee: Oddur Sigurdsson
-claimed: 2026-09-25
 depends_on:
 - e3846c47-f425-46f5-8e96-fec056074052
 created: 2026-09-25
-updated: 2026-09-25
+updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p0
 api: none
 effort: m
