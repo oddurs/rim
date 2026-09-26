@@ -14,7 +14,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `act.load` | `(path: string) -> ()` | Play a save from view.saves() (the title screen). |
 | `act.new_colony` | `() -> ()` | Start a new colony (the title screen). |
 | `act.render_scale` | `(scale: number) -> ()` | Draw the world at this fraction of the screen's pixels, 0.25 to 1; the UI stays sharp. Saved for the player. |
-| `act.select` | `(id: number?) -> ()` | Select a pawn or thing, or nothing. |
+| `act.select` | `(id: number?, add: boolean?) -> ()` | Select a pawn or thing, or nothing. With add, put a colonist into the selection or take them out of it (a shift-click). |
 | `act.send` | `(name: string, data: {[string]: any}?) -> ()` | Send an event to your mod's own sim scripts ("your_mod:event"), as a player command. |
 | `act.set_overlay` | `(index: number?) -> ()` | Show a field overlay by its index in view.fields(), or none. |
 | `act.set_priority` | `(id: number, work: string, level: number) -> ()` | Set a colonist's priority for a work type: 1 first, 0 never. |
@@ -90,7 +90,9 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `view.profile` | `() -> { ProfileRow }` | Smoothed time per system and mod, in µs. |
 | `view.saves` | `() -> { Save }` | The player's saves, newest first, on the title screen; empty in a game. |
 | `view.screen` | `() -> (number, number)` | Screen width and height in logical pixels. |
-| `view.selected` | `() -> number?` | The selected pawn or thing's id: view.pawn or view.thing says which. |
+| `view.selected` | `() -> number?` | The selected pawn or thing's id: view.pawn or view.thing says which. With several colonists selected, the first of them. |
+| `view.selection` | `() -> { number }` | Every selected id: several colonists, or the one pawn or thing, or none. |
+| `view.shift` | `() -> boolean` | Whether Shift is held: a click on a colonist then adds them to the selection. |
 | `view.show_devtools` | `() -> boolean` | Whether devtools are open. |
 | `view.show_profiler` | `() -> boolean` | Whether the profiler is open. |
 | `view.speech` | `() -> { Speech }` | What pawns are saying now, oldest first: a need's line or a script's rim.say. `age` runs 0 to 1 over the line's life. |

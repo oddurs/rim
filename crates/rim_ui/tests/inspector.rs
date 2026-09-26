@@ -270,3 +270,54 @@ inspector.action({
     assert!(ui.find("core:inspector.action.core:center").is_some(), "centre applies to anything");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// Several colonists selected: the inspector sums them up, drafts them as
+/// one, and a shift-click in the people column adds to the selection.
+#[test]
+fn several_selected_are_summed_up_and_drafted_together() {
+    let mut sim = sim_at(&mods());
+    let human = sim.world.defs.creature_id("human").unwrap();
+    let c = sim.world.colony_center().unwrap();
+    for i in 1..3 {
+        sim.world.spawn_pawn(human, rim_sim::world::Faction::Player, c.offset(i, 0), None);
+    }
+    let all: Vec<Entity> = sim.world.colonists().collect();
+    assert_eq!(all.len(), 3);
+    let mut ui = ui_for(&sim);
+    let mut cv = client(&sim);
+    cv.selected = Some(all[0]);
+    cv.group = all.clone();
+    frame(&mut ui, &sim, &cv, Input::default());
+    let snap = ui.snapshot();
+    assert!(ui.find("core:inspector.group").is_some(), "a group panel:\n{snap}");
+    assert!(snap.contains("3 colonists"), "{snap}");
+    for &e in &all {
+        let name = sim.world.ecs.get::<&rim_sim::world::Pawn>(e).unwrap().name.clone();
+        assert!(ui.find(&format!("core:inspector.member.{name}")).is_some(), "{name} is listed");
+    }
+    // One click drafts them all; the button then undrafts them all.
+    let draft = ui.find("core:inspector.action.core:draft").expect("a shared draft");
+    let actions = click(&mut ui, &sim, &mut cv, centre(draft));
+    for &e in &all {
+        assert!(actions.contains(&rim_ui::view::UiAction::Draft(e, true)), "{e:?} drafted: {actions:?}");
+    }
+    assert!(ui.find("core:inspector.action.core:center").is_none(), "centre isn't a group action");
+    for &e in &all {
+        sim.world.ecs.get::<&mut rim_sim::world::Pawn>(e).unwrap().drafted = true;
+    }
+    frame(&mut ui, &sim, &cv, Input { time: 5.0, ..Default::default() });
+    assert!(ui.snapshot().contains("Undraft"), "all drafted: the button undrafts");
+    let out = frame(&mut ui, &sim, &cv, Input { pressed: vec!["r".into()], time: 6.0, ..Default::default() });
+    for &e in &all {
+        assert!(out.actions.contains(&rim_ui::view::UiAction::Draft(e, false)), "R undrafts {e:?}: {:?}", out.actions);
+    }
+
+    // With one selected, a shift-click on another's row adds them.
+    cv.group.clear();
+    cv.shift = true;
+    frame(&mut ui, &sim, &cv, Input { time: 7.0, ..Default::default() });
+    let name = sim.world.ecs.get::<&rim_sim::world::Pawn>(all[1]).unwrap().name.clone();
+    let row = ui.find(&format!("core:colonists.{name}")).unwrap();
+    let actions = click(&mut ui, &sim, &mut cv, centre(row));
+    assert_eq!(actions, vec![rim_ui::view::UiAction::ToggleSelect(all[1])]);
+}

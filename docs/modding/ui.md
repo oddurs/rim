@@ -256,6 +256,16 @@ selection when the action applies, and the command palette lists it. Tabs
 are `core:inspector.tabs.<id>`, shown when more than one applies; actions
 are `core:inspector.action.<id>`.
 
+Several colonists can be selected: shift-click adds or removes one (on the
+map or in the people column), and a drag with the Select tool picks every
+colonist in the box. `view.selection()` lists the ids and `view.selected()`
+is the first; `act.select(id, true)` is a shift-click. The inspector then
+sums the group up and shows the actions declared with `group = true` that
+apply to every member. Such an action's `label`, `active` and `run` get the
+whole list as a second argument, and `run` is called once per member, so
+core's Draft drafts the lot unless every one already is. A right-click
+orders every selected colonist it means something to.
+
 ### People
 
 The colonists run down the left edge (`core:colonists`, in

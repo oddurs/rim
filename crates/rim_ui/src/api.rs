@@ -124,7 +124,7 @@ pub const UI_API: &[UiDoc] = &[
         "(scale: number) -> ()",
         "Draw the world at this fraction of the screen's pixels, 0.25 to 1; the UI stays sharp. Saved for the player."
     ),
-    d!("act.select", "(id: number?) -> ()", "Select a pawn or thing, or nothing."),
+    d!("act.select", "(id: number?, add: boolean?) -> ()", "Select a pawn or thing, or nothing. With add, put a colonist into the selection or take them out of it (a shift-click)."),
     d!(
         "act.send",
         "(name: string, data: {[string]: any}?) -> ()",
@@ -244,7 +244,9 @@ pub const UI_API: &[UiDoc] = &[
     d!("view.profile", "() -> { ProfileRow }", "Smoothed time per system and mod, in µs."),
     d!("view.saves", "() -> { Save }", "The player's saves, newest first, on the title screen; empty in a game."),
     d!("view.screen", "() -> (number, number)", "Screen width and height in logical pixels."),
-    d!("view.selected", "() -> number?", "The selected pawn or thing's id: view.pawn or view.thing says which."),
+    d!("view.selected", "() -> number?", "The selected pawn or thing's id: view.pawn or view.thing says which. With several colonists selected, the first of them."),
+    d!("view.selection", "() -> { number }", "Every selected id: several colonists, or the one pawn or thing, or none."),
+    d!("view.shift", "() -> boolean", "Whether Shift is held: a click on a colonist then adds them to the selection."),
     d!("view.show_devtools", "() -> boolean", "Whether devtools are open."),
     d!("view.show_profiler", "() -> boolean", "Whether the profiler is open."),
     d!(

@@ -162,8 +162,8 @@ declare act: {
     new_colony: () -> (),
     -- Draw the world at this fraction of the screen's pixels, 0.25 to 1; the UI stays sharp. Saved for the player.
     render_scale: (scale: number) -> (),
-    -- Select a pawn or thing, or nothing.
-    select: (id: number?) -> (),
+    -- Select a pawn or thing, or nothing. With add, put a colonist into the selection or take them out of it (a shift-click).
+    select: (id: number?, add: boolean?) -> (),
     -- Send an event to your mod's own sim scripts ("your_mod:event"), as a player command.
     send: (name: string, data: {[string]: any}?) -> (),
     -- Show a field overlay by its index in view.fields(), or none.
@@ -257,8 +257,12 @@ declare view: {
     saves: () -> { Save },
     -- Screen width and height in logical pixels.
     screen: () -> (number, number),
-    -- The selected pawn or thing's id: view.pawn or view.thing says which.
+    -- The selected pawn or thing's id: view.pawn or view.thing says which. With several colonists selected, the first of them.
     selected: () -> number?,
+    -- Every selected id: several colonists, or the one pawn or thing, or none.
+    selection: () -> { number },
+    -- Whether Shift is held: a click on a colonist then adds them to the selection.
+    shift: () -> boolean,
     -- Whether devtools are open.
     show_devtools: () -> boolean,
     -- Whether the profiler is open.

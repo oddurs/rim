@@ -239,6 +239,10 @@ fn client_hash(c: &ClientView) -> u64 {
     let mut h = std::collections::hash_map::DefaultHasher::new();
     use std::hash::Hash;
     c.selected.map(|e| e.to_bits().get()).hash(&mut h);
+    for e in &c.group {
+        e.to_bits().get().hash(&mut h);
+    }
+    c.shift.hash(&mut h);
     (c.paused, c.speed, c.overlay, c.show_profiler, c.show_devtools).hash(&mut h);
     c.hint.hash(&mut h);
     c.hover_cell.map(|p| (p.x, p.y)).hash(&mut h);
