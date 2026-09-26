@@ -2,12 +2,12 @@
 id: dd73a536-0550-4805-bc99-2855139c4814
 title: 'Now: an alert registry and a news feed'
 type: feature
-status: review
+status: done
 milestone: interface
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 created: 2026-09-26
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p1
 api: additive
 effort: m
