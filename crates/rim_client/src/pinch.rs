@@ -13,7 +13,9 @@ use std::sync::atomic::{AtomicU32, Ordering};
 static PENDING: AtomicU32 = AtomicU32::new(0);
 
 /// Add one gesture step's magnification (the fraction the fingers spread:
-/// 0.05 is 5% apart, negative pinches in).
+/// 0.05 is 5% apart, negative pinches in). Only macOS has a gesture to
+/// hear it from.
+#[cfg(any(target_os = "macos", test))]
 pub fn add(m: f32) {
     let mut cur = PENDING.load(Ordering::Relaxed);
     loop {
