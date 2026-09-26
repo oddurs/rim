@@ -2,15 +2,15 @@
 id: 4675019b-c017-47e7-b148-b12e4be58bda
 title: 'Stone tools: knapping, hafting, and the gates they open'
 type: content
-status: doing
+status: done
 milestone: stone-age
 assignee: Oddur Sigurdsson
-claimed: 2026-09-25
 depends_on:
 - 049e2f73-0d64-48ff-bf2e-21264f765d35
 - 3ccab46f-32d5-4248-a23d-88cdc8b3ec70
 created: 2026-09-25
 updated: 2026-09-25
+closed_at: 2026-09-25
 priority: p0
 api: none
 effort: l

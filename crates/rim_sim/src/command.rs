@@ -99,6 +99,13 @@ pub fn apply(w: &mut World, c: Command) {
                 for p in cells(w, a, b).collect::<Vec<_>>() {
                     let Some(f) = w.map.fixture_at(p) else { continue };
                     let Some(t) = w.thing(f) else { continue };
+                    // A thing cleared for a building keeps the mark that
+                    // clears it: gathering an oak planned over would leave
+                    // the oak, and the wall waiting on it, forever.
+                    let clears = defs.thing(t.def).harvest_for(designation).is_some_and(|h| h.destroy);
+                    if w.ecs.get::<&Planned>(f).is_ok() && !clears {
+                        continue;
+                    }
                     if defs.thing(t.def).harvest_for(designation).is_some() {
                         let _ = w.ecs.insert_one(f, Designated(designation));
                         w.map.touch(p);
@@ -138,9 +145,20 @@ pub fn apply(w: &mut World, c: Command) {
                     _ => return,
                 }
             }
+            let floor = defs.thing(thing).category == crate::defs::Category::Floor;
             for p in cells(w, a, b).collect::<Vec<_>>() {
-                if w.map.passable(p) {
-                    w.spawn_fixture_of(thing, p, true, stuff);
+                // Grass, a tree or rock in the way is cleared first, not
+                // silently left out: a wall with a gap is no wall.
+                // (On ground that can be built on: nothing is planned over water.)
+                let ground = w.map.inb(p) && w.map.terrain_cost[w.map.idx(p)] > 0;
+                let natural =
+                    w.map.fixture_at(p).filter(|&f| ground && w.thing(f).is_some_and(|t| defs.thing(t.def).natural));
+                match natural {
+                    Some(f) if !floor => w.plan_over(f, thing, stuff),
+                    _ if w.map.passable(p) => {
+                        w.spawn_fixture_of(thing, p, true, stuff);
+                    }
+                    _ => {}
                 }
             }
         }
@@ -148,7 +166,9 @@ pub fn apply(w: &mut World, c: Command) {
             let targets: Vec<Entity> =
                 cells(w, a, b).flat_map(|p| [w.map.fixture_at(p), w.map.floor_at(p)]).flatten().collect();
             for f in targets {
-                if w.ecs.remove_one::<Designated>(f).is_ok() {
+                // Cancelling a plan over grass or a tree leaves it be.
+                let planned = w.ecs.remove_one::<Planned>(f).is_ok();
+                if w.ecs.remove_one::<Designated>(f).is_ok() || planned {
                     w.touch(f);
                 }
                 // Refund what was actually delivered, of whatever it was

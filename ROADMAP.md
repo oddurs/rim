@@ -44,18 +44,18 @@ A sprint: fast on a little old laptop with mods loaded. The reference machine is
 
 ## stone-age — Stone age
 
-`#####·····` 46% · 6 of 13 done
+`######····` 54% · 7 of 13 done
 
 Hands first. The colonist wakes with nothing (pillar 93f291d5), and today nothing asks what they hold: a naked warrior fells an oak and quarries granite bare-handed. This milestone makes the first days a climb. You gather branches, fibre, stones and berries with your hands. You find flint and knap it into a flake and a hand axe on the ground. Branch walls and a campfire see you through the first night. A digging stick opens the clay banks, for warm cob walls and fired pots. Then the axe fells trees and a stone maul quarries rock.
 
 - [ ] `4bd94457` Balance: the first three days with only your hands <sup>chore · p0 · m · plugin</sup>
 - [ ] `61c93a4e` Bone from butchering, a second knappable <sup>content · p2 · s · plugin</sup>
 - [ ] `89f6d138` Clay: banks, cob walls, and pots fired at the campfire <sup>content · p1 · m · plugin</sup>
-- [ ] `af17cc1d` Blueprints on plants: say so, or clear them <sup>bug · p1 · s · engine</sup>
 - [ ] `e3846c47` mods/primitive: the stone age as a plugin <sup>content · p0 · l · plugin</sup>
 - [ ] `3ccab46f` Carried things keep what they're made of <sup>bug · p1 · m · engine</sup>
-- [ ] `4675019b` Stone tools: knapping, hafting, and the gates they open <sup>content · p0 · l · plugin</sup>
+- [ ] `af17cc1d` Blueprints on plants: say so, or clear them <sup>bug · p1 · s · engine</sup>
 - [x] `049e2f73` Crafting as a plugin: recipes, stations and bills <sup>feature · p0 · l · plugin</sup>
+- [x] `4675019b` Stone tools: knapping, hafting, and the gates they open <sup>content · p0 · l · plugin</sup>
 - [x] `4e9d5a12` Several harvests on one thing: gather without felling <sup>feature · p0 · s · engine</sup>
 - [x] `5305a161` Select and inspect things, with a slot for mods <sup>feature · p0 · m · client</sup>
 - [x] `7016d86b` Tools in hand: work that needs a tool <sup>feature · p0 · l · engine</sup>
@@ -151,10 +151,11 @@ Exposure makes shelter matter: warmth, enclosed rooms, day/night, weather. Get f
 
 ## building — Building
 
-`##########` 100% · 15 of 15 done · due 2026-11-15
+`##########` 94% · 15 of 16 done · due 2026-11-15
 
 A one-week sprint inside Colony. Building stops being a fixed list of defs
 
+- [ ] `ff97096d` A wall planned over loose items buries them <sup>bug · p2 · s · engine</sup>
 - [x] `3f4c257d` Rooms made of something: leak and daylight from the boundary <sup>feature · p0 · l · engine</sup>
 - [x] `419a24ab` Interaction spots: furniture a pawn uses <sup>feature · p1 · m · engine</sup>
 - [x] `49e5e583` Walls that look joined, in the colour of what they are made of <sup>feature · p1 · m · client</sup>
