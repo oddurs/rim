@@ -2,12 +2,14 @@
 id: 3ccab46f-32d5-4248-a23d-88cdc8b3ec70
 title: Carried things keep what they're made of
 type: bug
-status: backlog
+status: doing
 milestone: stone-age
+assignee: Oddur Sigurdsson
+claimed: 2026-09-25
 created: 2026-09-25
 updated: 2026-09-25
 priority: p1
-api: none
+api: additive
 effort: m
 layer: engine
 area: sim
@@ -25,6 +27,10 @@ A pawn carries `(def, count)` (`Pawn.carry`). Everything carried loses what it's
 
 ## Acceptance criteria
 
-- [ ] A hauled flint axe is still a flint axe, with the hp it had
-- [ ] Stacks of one thing in two materials never merge by hauling
-- [ ] A tool supplied to a work order reports its material in `order_done`
+- [x] A hauled flint axe is still a flint axe, with the hp it had
+- [x] Stacks of one thing in two materials never merge by hauling
+- [x] A tool supplied to a work order reports its material in `order_done`
+
+## 2026-09-25
+
+A Lot { def, count, made_of, hp } is what's carried, delivered and reported. Deliveries merge only when alike in every way, including hp, so two worn tools don't come back at the lower hp. order_done.stuff falls back to the first input's own material, and its inputs gain made_of (api additive). Save format 4; (def, count) pairs from older saves still read.

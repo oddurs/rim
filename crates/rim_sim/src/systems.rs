@@ -96,8 +96,8 @@ pub fn deaths(w: &mut World) {
         w.reservations.remove(&e);
         let defs = w.defs.clone();
         let cd = defs.creature(p.def);
-        if let Some((d, n)) = p.carry {
-            w.place_item(d, p.pos, n);
+        if let Some(lot) = p.carry {
+            w.place_lot(lot, p.pos);
         }
         if let Some(t) = p.hand {
             w.put_down(t, p.pos);

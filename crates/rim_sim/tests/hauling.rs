@@ -70,7 +70,7 @@ fn an_item_a_stockpile_refuses_is_carried_to_one_that_takes_it() {
     sim.push(Command::ZoneAllow { zone: 1, thing: stone, on: false });
     sim.push(Command::Stockpile { a: site.offset(2, 2), b: site.offset(2, 2), zone: None });
     sim.step();
-    sim.world.put_item(stone, site, 10);
+    sim.world.put_lot(rim_sim::world::Lot::new(stone, 10), site);
     for _ in 0..3_000 {
         sim.step();
     }
@@ -120,7 +120,7 @@ fn nothing_is_hauled_onto_a_planned_wall() {
     sim.push(Command::Build { thing: wall, stuff: Some(wood), a: site, b: site });
     sim.world.place_item(wood, sim.world.pawn_pos(pawn).unwrap().offset(-2, -2), 10);
     sim.step();
-    assert_eq!(sim.world.room_for(wood, site), 0);
+    assert_eq!(sim.world.room_for(wood, None, site), 0);
     for _ in 0..6_000 {
         sim.step();
     }

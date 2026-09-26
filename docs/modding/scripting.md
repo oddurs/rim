@@ -133,11 +133,12 @@ end)
 ```
 
 `order_done` carries `site`, `x`, `y`, `owner`, `label`, `inputs` (`{ thing,
-count }` each) and `stuff`, the first input that is a material. If the site
-is torn down first, `order_lost` (`site`, `owner`, `label`) says so, and what
-was brought is back on the ground. A site is a building or station, and
-takes one order at a time. Inputs are counted by thing: an input's own
-material (a flint axe as an ingredient) isn't carried through. `rim.order(site)` says how far one has got,
+count, made_of }` each: a flint axe as an ingredient is `made_of` flint) and
+`stuff`, the first input that is a material, or else the first input's own
+material (a flint axe rehafted is still flint). If the site is torn down first,
+`order_lost` (`site`, `owner`, `label`) says so, and what was brought is back
+on the ground, still made of what it was. A site is a building or station,
+and takes one order at a time. `rim.order(site)` says how far one has got,
 `rim.cancel_order(site)` puts back down what was brought, and
 `rim.count_items({ tag = "knappable" })` counts what lies about, for "make
 until there are five".

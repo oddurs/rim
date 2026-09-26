@@ -1227,8 +1227,8 @@ impl ScriptHost {
                 }
                 let Ok(o) = w.ecs.remove_one::<Order>(site) else { return Ok(false) };
                 if let Some(t) = w.thing(site) {
-                    for &(d, n) in o.needs.iter().flat_map(|n| &n.delivered) {
-                        w.place_item(d, t.pos, n);
+                    for &lot in o.needs.iter().flat_map(|n| &n.delivered) {
+                        w.place_lot(lot, t.pos);
                     }
                     w.map.touch(t.pos);
                 }
@@ -1550,10 +1550,11 @@ impl ScriptHost {
                 t.set("owner", owner.as_str())?;
                 t.set("label", label.as_str())?;
                 let ins = self.lua.create_table()?;
-                for &(d, n) in inputs {
+                for lot in inputs {
                     let row = self.lua.create_table()?;
-                    row.set("thing", defs.thing(d).id.as_str())?;
-                    row.set("count", n)?;
+                    row.set("thing", defs.thing(lot.def).id.as_str())?;
+                    row.set("count", lot.count)?;
+                    row.set("made_of", lot.made_of.map(|m| defs.thing(m).id.clone()))?;
                     ins.push(row)?;
                 }
                 t.set("inputs", ins)?;
