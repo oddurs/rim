@@ -311,8 +311,8 @@ pub struct SpotDef {
 #[derive(Deserialize, Clone, Debug)]
 pub struct BoundaryDef {
     pub field: String,
-    /// How leaky this piece is, as a multiple of the field's `leak_per_hour`.
-    /// 1.0 is exactly the constant; divided by the material factor.
+    /// How leaky this piece is, as a multiple of the field's leak. 1.0 is
+    /// exactly the field's leak; divided by the material factor.
     #[serde(default = "d1f")]
     pub leak: f64,
     /// Fraction of the outdoor value this piece lets into the room, for
@@ -526,6 +526,11 @@ pub struct FieldDef {
     /// Room fields: fraction of the gap to outdoors closed per hour.
     #[serde(default)]
     pub leak_per_hour: f64,
+    /// Room fields: the same as terms over the outdoor values, so wind (or
+    /// anything else a mod adds) can make rooms draftier. Replaces
+    /// `leak_per_hour`; a field gives one or the other.
+    #[serde(default)]
+    pub leak: Option<TermsDef>,
     /// Room fields: how strongly emitters inside push the room's value.
     #[serde(default)]
     pub room_gain: f64,
@@ -548,6 +553,9 @@ pub struct FieldDef {
     /// Compiled `ambient` terms (empty for a constant).
     #[serde(skip)]
     pub terms: Terms,
+    /// Compiled `leak` terms (empty: `leak_per_hour` is the leak).
+    #[serde(skip)]
+    pub leak_terms: Terms,
     /// The constant part of `ambient` (0 when it's terms).
     #[serde(skip)]
     pub base: f64,
@@ -1180,6 +1188,15 @@ impl DefDb {
                 // Out in the open is fully exposed, so that's what it reads
                 // wherever the map doesn't say otherwise.
                 d.base = 100.0;
+            }
+            if let Some(leak) = &d.leak {
+                if d.leak_per_hour != 0.0 {
+                    return Err(format!(
+                        "field/{}: give `leak` or `leak_per_hour`, not both (to change a leak given as terms, patch its terms, such as `leak.sealed`)",
+                        d.id
+                    ));
+                }
+                d.leak_terms = Terms::compile(leak, &format!("field/{}, leak", d.id), &field_index)?;
             }
         }
         let reads: Vec<Vec<usize>> = self.fields.iter().map(|f| f.terms.reads()).collect();
