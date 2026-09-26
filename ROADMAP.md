@@ -159,12 +159,10 @@ Exposure makes shelter matter: warmth, enclosed rooms, day/night, weather. Get f
 
 ## building — Building
 
-`#########·` 81% · 17 of 21 done · due 2026-11-15
+`#########·` 89% · 17 of 19 done · due 2026-11-15
 
 A one-week sprint inside Colony. Building stops being a fixed list of defs
 
-- [ ] `26ba97aa` Plan a multi-cell building over grass, trees and rock <sup>feature · p2 · m · engine</sup>
-- [ ] `9ebfa104` Work Board: hovering a column lights its waiting jobs on the map <sup>feature · p3 · s · client</sup>
 - [ ] `ff97096d` A wall planned over loose items buries them <sup>bug · p2 · s · engine</sup>
 - [ ] `f607a83d` Draw a multi-cell thing's look once, over its footprint <sup>feature · p2 · m · client</sup>
 - [x] `3f4c257d` Rooms made of something: leak and daylight from the boundary <sup>feature · p0 · l · engine</sup>
@@ -283,7 +281,7 @@ The API grows up: stat pipeline, script components, custom jobs, needs and def k
 
 ## mood — Mood
 
-`··········` 0% · 0 of 9 done · due 2027-02-20
+`··········` 0% · 0 of 10 done · due 2027-02-20
 
 rim.mood — the first first-party plugin. Proves the API: if mood cannot be a plugin, fix the API.
 
@@ -293,6 +291,7 @@ rim.mood — the first first-party plugin. Proves the API: if mood cannot be a p
 - [ ] `65399b78` What did mood need that plugins could not do? <sup>spike · p0 · s · engine</sup>
 - [ ] `79e19fa0` Mood panel via UI extension points <sup>feature · p1 · s · plugin</sup>
 - [ ] `871cde5e` Thoughts: raw food, slept outside, colonist died, nice room <sup>content · p1 · m · plugin</sup>
+- [ ] `9ebfa104` Work Board: hovering a column lights its waiting jobs on the map <sup>feature · p3 · s · client</sup>
 - [ ] `c4d85d17` rim.mood plugin: mood need and thoughts <sup>feature · p0 · l · plugin</sup>
 - [ ] `d3cbbd74` Mental breaks: wander, sulk, berserk <sup>feature · p1 · m · plugin</sup>
 - [ ] `f690b16e` Mood from weather and seasons <sup>feature · p2 · s · plugin</sup>
@@ -378,11 +377,12 @@ Lockstep co-op on top of determinism: command broadcast, desync detection, mod-l
 
 ## crafting — Crafting
 
-`··········` 0% · 0 of 14 done · due 2027-05-01
+`··········` 0% · 0 of 15 done · due 2027-05-01
 
 Production chains: workbenches and bills, cooking, farming, tailoring, research as a plugin.
 
 - [ ] `0927f0af` Tailoring: make apparel <sup>content · p2 · s · core</sup>
+- [ ] `26ba97aa` Plan a multi-cell building over grass, trees and rock <sup>feature · p2 · m · engine</sup>
 - [ ] `2c03427e` Cooking: raw food into meals <sup>content · p1 · s · core</sup>
 - [ ] `308074c6` Getting wet: pawn wetness and clothing insulation <sup>feature · p2 · m · engine</sup>
 - [ ] `6dd4891c` Ground wetness and snow in core <sup>content · p0 · m · core</sup>
