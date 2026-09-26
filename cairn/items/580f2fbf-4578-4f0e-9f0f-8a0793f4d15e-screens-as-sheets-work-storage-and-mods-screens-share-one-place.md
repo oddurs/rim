@@ -2,12 +2,12 @@
 id: 580f2fbf-4578-4f0e-9f0f-8a0793f4d15e
 title: 'Screens as sheets: Work, Storage and mods'' screens share one place'
 type: feature
-status: review
+status: done
 milestone: interface
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 created: 2026-09-26
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p1
 api: additive
 effort: m
