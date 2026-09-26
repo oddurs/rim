@@ -167,3 +167,46 @@ fn walk(dir: &std::path::Path) -> Vec<std::path::PathBuf> {
     }
     out
 }
+
+/// The Work Board's demand: jobs waiting per work type, from the same
+/// sources find_work takes them from.
+#[test]
+fn work_waiting_counts_what_there_is_to_do() {
+    let mut sim = Sim::with_mods(&common::mods(), 2, &|m| m == "core").unwrap();
+    let defs = sim.world.defs.clone();
+    let wt = |id: &str| defs.lookup("work_type", id).unwrap() as usize;
+    let waiting = |s: &Sim| rim_sim::ai::work_waiting(&s.world);
+    let before = waiting(&sim);
+    assert_eq!(before[wt("core:build")], 0);
+    assert_eq!(before[wt("core:haul")], 0, "no stockpile, nothing to haul");
+
+    let c = sim.world.colony_center().unwrap();
+    let (wall, wood) = (defs.thing_id("wall").unwrap(), defs.thing_id("wood").unwrap());
+    sim.push(Command::Build { thing: wall, stuff: Some(wood), a: c.offset(-6, 6), b: c.offset(-2, 6) });
+    let chop = defs.lookup("designation", "chop").unwrap();
+    sim.push(Command::Designate { designation: chop, a: c.offset(-20, -20), b: c.offset(20, 20) });
+    sim.step();
+    let blueprints = sim.world.ecs.query::<&Blueprint>().iter().count() as u32;
+    let designated = sim
+        .world
+        .ecs
+        .query::<&rim_sim::world::Designated>()
+        .without::<&Blueprint>()
+        .iter()
+        .filter(|d| defs.designations[d.0 as usize].work_r as usize == wt("core:chop"))
+        .count() as u32;
+    let now = waiting(&sim);
+    assert!(blueprints > 0 && now[wt("core:build")] == blueprints, "a blueprint is a build job");
+    assert!(designated > 0 && now[wt("core:chop")] == designated, "each grown tree marked to chop is a job");
+
+    // Loose items wait for a stockpile that would take them.
+    sim.world.place_item(wood, c.offset(4, -4), 5);
+    sim.push(Command::Stockpile { a: c.offset(8, 8), b: c.offset(10, 10), zone: None });
+    sim.step();
+    let loose = waiting(&sim)[wt("core:haul")];
+    assert!(loose >= 1, "the wood outside waits to be hauled");
+    let zone = sim.world.zones.list[0].id;
+    sim.push(Command::ZoneAllow { zone, thing: wood, on: false });
+    sim.step();
+    assert!(waiting(&sim)[wt("core:haul")] < loose, "not once no stockpile takes wood");
+}

@@ -194,14 +194,13 @@ The log is the save and snapshots are a cache (DESIGN.md §7a): a colony is alwa
 
 ## colony — Colony
 
-`########··` 79% · 19 of 24 done · due 2026-12-15
+`#########·` 83% · 20 of 24 done · due 2026-12-15
 
 Running more than one person: stockpiles, hauling, work priorities, skills, colonist panels.
 
 - [ ] `0e73145a` Work pools: work givers post work, pawns stop scanning <sup>perf · p0 · m · engine</sup>
 - [ ] `8cf4db07` Multi-cell things occupy every cell of their footprint <sup>feature · p3 · m · engine</sup>
 - [ ] `f1924f03` Why a colonist is doing that, and who will take a job <sup>feature · p1 · m · client</sup>
-- [ ] `f1b96df4` The Work Board: a painted priority grid with live demand <sup>feature · p0 · l · core</sup>
 - [ ] `9bd9e8ab` Fire: burning, spread by wind, put out by rain <sup>feature · p1 · l · engine</sup>
 - [x] `03ad3e3a` Work types and priorities per colonist <sup>feature · p0 · m · engine</sup>
 - [x] `03b9b791` Derived fields and feels-like temperature <sup>feature · p1 · s · engine</sup>
@@ -219,6 +218,7 @@ Running more than one person: stockpiles, hauling, work priorities, skills, colo
 - [x] `a7da68e2` Component kit v2: slider, text input and tables <sup>feature · p1 · m · core</sup>
 - [x] `c3c4d136` Grid node and virtual list <sup>feature · p0 · m · engine</sup>
 - [x] `ecd54de8` Stockpile zones with item filters <sup>feature · p0 · l · engine</sup>
+- [x] `f1b96df4` The Work Board: a painted priority grid with live demand <sup>feature · p0 · l · core</sup>
 - [x] `f802c0b4` rim check fails a mod for being slow on a slow machine <sup>bug · p1 · s · tooling</sup>
 - [x] `fa0de3f5` Wind shelter: the lee of walls, rock and trees <sup>feature · p1 · m · engine</sup>
 - [x] `fcb28d0c` Refresh tiers: a node says how often it may change <sup>feature · p1 · m · engine</sup>
@@ -271,10 +271,13 @@ The API grows up: stat pipeline, script components, custom jobs, needs and def k
 
 ## mood — Mood
 
-`··········` 0% · 0 of 6 done · due 2027-02-20
+`··········` 0% · 0 of 9 done · due 2027-02-20
 
 rim.mood — the first first-party plugin. Proves the API: if mood cannot be a plugin, fix the API.
 
+- [ ] `006ef572` Work Board: passion on skills, shown as a flame <sup>feature · p2 · m · engine</sup>
+- [ ] `2787bdc6` Work Board: a schedule strip and time idle per colonist <sup>feature · p2 · m · engine</sup>
+- [ ] `2d44949e` Work Board: drag columns to set the colony's tie-break <sup>feature · p3 · s · engine</sup>
 - [ ] `65399b78` What did mood need that plugins could not do? <sup>spike · p0 · s · engine</sup>
 - [ ] `79e19fa0` Mood panel via UI extension points <sup>feature · p1 · s · plugin</sup>
 - [ ] `871cde5e` Thoughts: raw food, slept outside, colonist died, nice room <sup>content · p1 · m · plugin</sup>

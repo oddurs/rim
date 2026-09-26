@@ -20,11 +20,12 @@ type Node = {
     on_drag: ((fx: number, fy: number) -> ())?,
     [number]: any,
 }
-type Cell = string | number | { text: string?, bg: string?, color: string? } | nil
+type Cell = string | number | { text: string?, bg: string?, color: string?, bar: number?, bar_color: string?, tip: string? } | nil
 type GridProps = {
     rows: number, cols: number, cell: (r: number, c: number) -> Cell,
     cell_w: Size?, cell_h: Size?, gap: Size?, size: string?, weight: string?,
     on_press: ((r: number, c: number) -> any)?, on_paint: ((r: number, c: number, value: any) -> ())?,
+    on_wheel: ((r: number, c: number, steps: number, shift: boolean) -> ())?,
     id: string?, bg: string?, border: string?,
 }
 type ListProps = {
@@ -58,6 +59,10 @@ type Tool = { key: string, label: string, color: string, active: boolean }
 type Zone = { id: number, name: string, cells: number, allows: { [string]: boolean } }
 type Item = { id: string, label: string, color: string }
 type WorkType = { id: string, label: string, icon: string, order: number, default: number }
+type BoardCol = { id: string, label: string, icon: string, skill: string?, waiting: number, on: number, high: number }
+type BoardCell = { base: number, value: number, why: string, skill: number?, skill_frac: number? }
+type BoardRow = { id: number, name: string, job: string, cells: { BoardCell } }
+type Board = { levels: number, high: number, cols: { BoardCol }, rows: { BoardRow } }
 type Stance = { id: string, label: string, icon: string, active: boolean }
 type Effective = { value: number, why: string }
 type Stuff = { id: string, label: string, color: string, have: number, active: boolean, hp: number, work: number }
@@ -88,7 +93,7 @@ declare ui: {
     extend: (id: string, add: any) -> (),
     -- Give a node (a text input) the keyboard once it is laid out.
     focus: (id: string) -> (),
-    -- Rows by cols of cells the engine paints as one node. cell(r, c) describes each cell at build; on_press(r, c) returns the value a drag paints and on_paint(r, c, value) runs once per cell the drag enters.
+    -- Rows by cols of cells the engine paints as one node. cell(r, c) describes each cell at build; on_press(r, c) returns the value a drag paints and on_paint(r, c, value) runs once per cell the drag enters; on_wheel(r, c, steps, shift) takes the wheel over a cell. A cell can carry a bar (0 to 1) along its bottom and its own tooltip (tip).
     grid: (props: GridProps) -> Node,
     -- A picture from a mod's ui/img: { src = "mod:name", tint = true }. Its own size unless w/h say otherwise; tint draws it in the text colour. A name@2x.png beside name.png is used on dense displays.
     image: (node: Node) -> Node,
@@ -184,6 +189,8 @@ declare view: {
     ambient: (field: string) -> number?,
     -- Every bound action with its label and current key, in declaration order.
     binds: () -> { Bind },
+    -- The Work Board in one read: columns in tie-break order with jobs waiting (`waiting`), colonists on it (`on`) and on it at a high priority (`high`, levels 1 to Board.high); a row per colonist with each cell's base, effective value, why, and skill.
+    board: () -> Board,
     -- The time of day, "HH:MM".
     clock: () -> string,
     -- The colonists, or the first max of them (a bar that shows a few should not pay for all of them; view.count_pawns("player") has the total).

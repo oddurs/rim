@@ -1008,6 +1008,76 @@ impl UiVm {
             }
             Ok(t)
         });
+        // Everything the Work Board paints, in one read: columns in
+        // tie-break order with their demand, and a row per colonist.
+        view!("board", (), |lua, l, _a| {
+            let w = l.world;
+            let defs = &w.defs;
+            let levels = defs.priority_scale.levels;
+            // "High" is the better half of the scale: 1-2 of 4, 1-4 of 9.
+            let high = (levels / 2).max(1);
+            let colonists: Vec<Entity> = w.colonists().collect();
+            let waiting = rim_sim::ai::work_waiting(w);
+            let t = lua.create_table()?;
+            t.set("levels", levels)?;
+            t.set("high", high)?;
+            let cols = lua.create_table()?;
+            let rows = lua.create_table()?;
+            let mut on = vec![(0u32, 0u32); defs.work_types.len()];
+            for &e in &colonists {
+                let Ok(p) = w.ecs.get::<&Pawn>(e) else { continue };
+                let row = lua.create_table()?;
+                row.set("id", e.to_bits().get())?;
+                row.set("name", p.name.as_str())?;
+                row.set("job", rim_sim::order::job_text(w, &p))?;
+                let cells = lua.create_table()?;
+                for &wt in &defs.work_order {
+                    let (value, parts) = rim_sim::rules::explain(defs, &w.rules, &p, wt);
+                    let d = &defs.work_types[wt as usize];
+                    let skill = d.skill_r.map(|k| p.skill(k));
+                    let cell = lua.create_table()?;
+                    cell.set("base", p.priority(defs, wt))?;
+                    cell.set("value", value)?;
+                    let steps: Vec<String> = parts
+                        .iter()
+                        .enumerate()
+                        .map(|(i, s)| {
+                            if i == 0 {
+                                format!("{} {}", s.label, s.delta)
+                            } else {
+                                format!("{} {:+}", s.label, s.delta)
+                            }
+                        })
+                        .collect();
+                    cell.set("why", format!("{} {value} = {}", d.label, steps.join(", ")))?;
+                    if let Some(s) = skill {
+                        cell.set("skill", s)?;
+                        cell.set("skill_frac", s as f64 / rim_sim::world::SKILL_MAX as f64)?;
+                    }
+                    cells.push(cell)?;
+                    let o = &mut on[wt as usize];
+                    o.0 += (value > 0) as u32;
+                    o.1 += (value > 0 && value <= high) as u32;
+                }
+                row.set("cells", cells)?;
+                rows.push(row)?;
+            }
+            for &wt in &defs.work_order {
+                let d = &defs.work_types[wt as usize];
+                let col = lua.create_table()?;
+                col.set("id", d.id.as_str())?;
+                col.set("label", d.label.as_str())?;
+                col.set("icon", d.icon.as_str())?;
+                col.set("skill", d.skill_r.map(|k| defs.skills[k as usize].label.clone()))?;
+                col.set("waiting", waiting[wt as usize])?;
+                col.set("on", on[wt as usize].0)?;
+                col.set("high", on[wt as usize].1)?;
+                cols.push(col)?;
+            }
+            t.set("cols", cols)?;
+            t.set("rows", rows)?;
+            Ok(t)
+        });
         view!("priorities", u64, |lua, l, id| {
             let Some(p) = Entity::from_bits(id).and_then(|e| l.world.ecs.get::<&Pawn>(e).ok()) else {
                 return Ok(None);
