@@ -291,7 +291,7 @@ impl Meshes {
                         continue;
                     }
                     let at = ((x - x0) as f32 * z, (y - y0) as f32 * z);
-                    if let Some(n) = draw::thing(&mut b, w, e, cell, at, z, t) {
+                    if let Some(n) = draw::thing(&mut b, w, e, cell, at, z, t, Default::default()) {
                         chunk.counts.push((cell, n));
                     }
                 }

@@ -2,14 +2,14 @@
 id: 74ff83ce-1d16-43f7-a49b-ca3340d509d3
 title: Work styles and staged looks
 type: feature
-status: doing
+status: done
 milestone: building
 assignee: Oddur Sigurdsson
-claimed: 2026-09-25
 depends_on:
 - a14a5ff6-adad-488c-9810-8a02f6409b7c
 created: 2026-09-25
 updated: 2026-09-25
+closed_at: 2026-09-25
 priority: p1
 api: additive
 effort: m

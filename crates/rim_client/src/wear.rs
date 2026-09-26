@@ -51,6 +51,20 @@ pub fn felled_by(td: &ThingDef) -> Option<&HarvestDef> {
     td.harvest.iter().find(|h| h.destroy).or(td.harvest.first())
 }
 
+/// Which way a felled thing at `cell` falls: away from the worker at
+/// `toward`, or to an open side when something stands within its length.
+/// It is decoration and never hurts anything, so it goes around things.
+pub fn fall_way(w: &World, cell: IVec, toward: (f32, f32)) -> (f32, f32) {
+    let away = (-toward.0, -toward.1);
+    let clear = |(dx, dy): (f32, f32)| {
+        (1..=2).all(|k| {
+            let q = cell.offset(dx as i32 * k, dy as i32 * k);
+            w.map.inb(q) && w.map.passable(q) && w.map.fixture_at(q).is_none()
+        })
+    };
+    [away, (away.1, away.0), (-away.1, -away.0)].into_iter().find(|&d| clear(d)).unwrap_or(away)
+}
+
 /// The side the last blow came from, as a step from the thing toward it.
 pub fn toward(w: &World, e: Entity) -> (f32, f32) {
     match w.ecs.get::<&Work>(e).map_or(Side::default(), |k| k.side) {
