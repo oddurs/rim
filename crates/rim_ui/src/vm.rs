@@ -960,6 +960,8 @@ impl UiVm {
                 )?;
                 row.set("age", age)?;
                 row.set("day", m.tick / TICKS_PER_DAY + 1)?;
+                let h = rim_sim::world::hour_at(m.tick);
+                row.set("clock", format!("{:02}:{:02}", h as u32, (h.fract() * 60.0) as u32))?;
                 t.push(row)?;
             }
             Ok(t)
@@ -2069,11 +2071,18 @@ fn hover_table(lua: &Lua, w: &World, client: &ClientView) -> mlua::Result<Value>
         },
     )?;
     let readings = lua.create_table()?;
+    let values = lua.create_table()?;
     // Only fields that vary over the map; the weather readout covers the rest.
     for (fi, fd) in w.defs.fields.iter().enumerate().filter(|(_, fd)| fd.overlay) {
-        readings.push(format!("{} {:.0}{}", fd.label, w.fields.value(&w.defs, &w.map, fi, tp), fd.unit))?;
+        let value = format!("{:.0}{}", w.fields.value(&w.defs, &w.map, fi, tp), fd.unit);
+        readings.push(format!("{} {value}", fd.label))?;
+        let row = lua.create_table()?;
+        row.set("label", fd.label.as_str())?;
+        row.set("value", value)?;
+        values.push(row)?;
     }
     t.set("readings", readings)?;
+    t.set("values", values)?;
     // Who'd take the work waiting here, only for something with work on it.
     let work_on = [w.map.fixture[i], w.map.floor[i]].into_iter().flatten().find(|&e| {
         w.ecs.get::<&rim_sim::world::Designated>(e).is_ok()

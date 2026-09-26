@@ -22,8 +22,9 @@ local GROUPED = 20
 local WIDTH = 210
 -- On a small screen: narrower, and a line each at any count.
 local COMPACT_WIDTH = 170
-local ROW_H = 24
-local CARD_H = 44
+-- A list line's height, card and its `tight` gap to the next together.
+local ROW_H = 28
+local CARD_H = 48
 
 local badges: { (any) -> any } = {}
 
@@ -73,16 +74,17 @@ local function person(p, compact: boolean, w: number)
 			table.unpack(extra),
 		})
 	else
-		body = col({ gap = "xxs", grow = 1 }, {
+		body = col({ gap = "hair", grow = 1 }, {
 			row({ gap = "s", align = "center" }, { name, { kind = "spacer" }, table.unpack(extra) }),
 			label(p.job, { size = "small", color = "muted" }),
 		})
 	end
-	return row({
+	local card = row({
 		id = "core:colonists." .. p.name,
 		w = w,
-		padx = "m",
-		gap = "s",
+		padx = "item",
+		gap = "item",
+		radius = "radius",
 		align = "center",
 		bg = if p.selected then "accent_soft" else nil,
 		border = if p.selected then "accent" else nil,
@@ -102,6 +104,9 @@ local function person(p, compact: boolean, w: number)
 		{ kind = "row", w = 3, h = if compact then 12 else 26, bg = if p.health > 0.5 then "good" else "bad", radius = 1 },
 		body,
 	})
+	-- The list sets every line's height; the card sits inside it with the
+	-- `tight` gap split above and below.
+	return row({ pady = "hair" }, { card })
 end
 
 ui.define("core:colonists", function(view)
@@ -136,8 +141,8 @@ ui.define("core:colonists", function(view)
 	end
 	-- minh = 0: the panel shrinks to the room the inspector leaves, and the
 	-- list scrolls.
-	return kit.panel({ w = w + 10, pad = "s", gap = "xs", minh = 0 }, {
-		label(string.format(t("core:colonists.title", "Colonists · %d"), n), { size = "small", color = "muted" }),
+	return kit.panel({ w = w + 24, gap = "item", minh = 0 }, {
+		kit.section(t("core:colonists.title_short", "Colonists"), label(tostring(n), { size = "caption", color = "faint" })),
 		{
 			kind = "list",
 			id = "core:colonists.list",
@@ -146,7 +151,7 @@ ui.define("core:colonists", function(view)
 			row = function(i)
 				local e = entries[i]
 				if e.heading then
-					return row({ padx = "xs", align = "end" }, { label(e.heading, { size = "small", color = "faint" }) })
+					return row({ padx = "hair", align = "end" }, { kit.caption(e.heading) })
 				end
 				return person(e, compact, w)
 			end,

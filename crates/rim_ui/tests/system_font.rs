@@ -21,8 +21,8 @@ fn the_system_ui_font_is_found_and_shapes_text() {
         assert!(s.ends_with("segoeui.ttf") || s.ends_with("arial.ttf"), "Segoe UI or Arial, got {}", info.source);
     }
 
-    let one = text.shape("Colony", 14.0, 400, None).width;
-    let two = text.shape("Colony Colony", 14.0, 400, None).width;
+    let one = text.shape("Colony", 14.0, 400, 0.0, None).width;
+    let two = text.shape("Colony Colony", 14.0, 400, 0.0, None).width;
     assert!(one > 20.0, "real glyph advances, not zero-width boxes ({one})");
     assert!(two > one * 1.8, "longer text is wider ({one} vs {two})");
     let _ = std::fs::remove_dir_all(&dir);

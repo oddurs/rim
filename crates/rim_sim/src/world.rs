@@ -576,6 +576,11 @@ impl MsgKind {
     }
 }
 
+/// The hour of day at `tick`, 0..24. Tick 0 is 06:00.
+pub fn hour_at(tick: u64) -> f64 {
+    ((tick + TICKS_PER_DAY / 4) % TICKS_PER_DAY) as f64 / TICKS_PER_DAY as f64 * 24.0
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Message {
     pub tick: u64,
@@ -776,7 +781,7 @@ impl World {
     }
     /// Hour of day, 0..24. Tick 0 is 06:00.
     pub fn hour(&self) -> f64 {
-        ((self.tick + TICKS_PER_DAY / 4) % TICKS_PER_DAY) as f64 / TICKS_PER_DAY as f64 * 24.0
+        hour_at(self.tick)
     }
     /// Ticks since the start of the year the game began in.
     fn year_ticks(&self) -> u64 {

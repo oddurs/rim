@@ -61,19 +61,31 @@ ui.define("core:hover", function(view)
 	if not h then
 		return nil
 	end
-	local lines = {
-		label(string.format(t("core:hover.cell", "%s (%d, %d)  %s"), h.terrain, h.x, h.y, h.shelter), { size = "small", color = "muted" }),
-	}
-	if #h.readings > 0 then
-		table.insert(lines, label(table.concat(h.readings, "   "), { size = "small" }))
+	-- The cell: what it is, where, and whether it's under a roof.
+	local head = row({ gap = "item", align = "center" }, {
+		label(string.upper(string.sub(h.terrain, 1, 1)) .. string.sub(h.terrain, 2), { weight = "strong" }),
+		label(string.format(t("core:hover.coords", "%d, %d"), h.x, h.y), { size = "small", color = "faint" }),
+		{ kind = "spacer" },
+		h.shelter ~= "" and row({ padx = "s", border = "line", radius = "radius" }, {
+			label(h.shelter, { size = "caption", color = "muted" }),
+		}),
+	})
+	local parts = { head }
+	-- Each field that varies over the map: its name over its value.
+	if #h.values > 0 then
+		local readings = {}
+		for _, r in h.values do
+			table.insert(readings, kit.reading(r.label, r.value))
+		end
+		table.insert(parts, row({ gap = "inset" }, readings))
 	end
-	for _, t in h.things do
-		table.insert(lines, label(t))
+	for _, th in h.things do
+		table.insert(parts, label(th))
 	end
 	if h.takes then
-		table.insert(lines, label(h.takes, { id = "core:hover.takes", size = "small", color = "accent" }))
+		table.insert(parts, label(h.takes, { id = "core:hover.takes", size = "small", color = "accent" }))
 	end
-	return kit.panel({ gap = "xxs", maxw = 460 }, lines)
+	return kit.panel({ gap = "item", maxw = 460 }, parts)
 end)
 ui.mount("right", "core:hover", { align = "end" })
 

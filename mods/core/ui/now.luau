@@ -5,7 +5,7 @@
 
 local kit = require("@core/ui/kit")
 local alerts = require("@core/ui/alerts")
-local row, label = kit.row, kit.label
+local row, col, label = kit.row, kit.col, kit.label
 local t = ui.t
 
 local WIDTH = 300
@@ -117,10 +117,9 @@ ui.define("core:alerts", function(view)
 			items,
 			row({
 				id = "core:alerts." .. a.id,
-				padx = "s",
-				pady = "xs",
-				gap = "s",
+				gap = "item",
 				align = "center",
+				radius = "radius",
 				hover = if click then { bg = "surface_hover" } else nil,
 				on_click = click,
 			}, {
@@ -129,41 +128,57 @@ ui.define("core:alerts", function(view)
 			})
 		)
 	end
-	return kit.panel({ w = if view.compact() then COMPACT_WIDTH else WIDTH, pad = "s", gap = "xxs" }, items)
+	return kit.panel({ w = if view.compact() then COMPACT_WIDTH else WIDTH, gap = "item" }, items)
 end)
 ui.mount("right", "core:alerts", { align = "start", order = 0 })
 
 local KIND_COLOR = { good = "good", threat = "threat", bad = "bad" }
 
+-- A message: a stripe in its kind's colour, the text, and when it happened
+-- under it. Older than half a day, the text steps back to muted.
 local function news_line(m)
 	local old = m.age > 0.5
-	return label(m.text, { color = if old then "muted" else KIND_COLOR[m.kind], wrap = true })
+	return row({ gap = "item", align = "stretch" }, {
+		{ kind = "row", w = 3, bg = KIND_COLOR[m.kind] or "faint", radius = 1 },
+		-- minw = 0: a flex item keeps its content's width by default, and
+		-- the text would never be offered a width to wrap at.
+		col({ gap = "hair", grow = 1, minw = 0 }, {
+			label(m.text, { color = if old then "muted" else KIND_COLOR[m.kind], wrap = true }),
+			label(string.format(t("core:news.when", "Day %d · %s"), m.day, m.clock), { size = "caption", color = "faint" }),
+		}),
+	})
 end
 
 ui.define("core:messages", function(view)
-	local items = {}
+	local lines = {}
 	for _, m in view.messages(if view.compact() then COMPACT_NEWS else NEWS) do
 		if m.age > 1 then
 			break
 		end
-		table.insert(items, news_line(m))
+		table.insert(lines, news_line(m))
 	end
-	if #items == 0 then
+	if #lines == 0 then
 		return nil
 	end
-	local total = view.message_count()
-	table.insert(
-		items,
-		kit.button({
-			id = "core:news.open",
-			label = string.format(t("core:news.all", "All news · %d"), total),
-			hint = "N",
-			on_click = function()
-				ui.toggle("core:news")
-			end,
-		})
-	)
-	return kit.panel({ w = if view.compact() then COMPACT_WIDTH else WIDTH, pad = "s", gap = "xs" }, items)
+	-- The whole log is the section's link, not a button of its own.
+	local all = row({
+		id = "core:news.open",
+		gap = "s",
+		align = "center",
+		radius = "radius",
+		padx = "xs",
+		hover = { bg = "surface_hover" },
+		on_click = function()
+			ui.toggle("core:news")
+		end,
+	}, {
+		label(string.format(t("core:news.all", "All %d"), view.message_count()), { size = "small", color = "muted" }),
+		label(t("core:news.key", "N"), { size = "caption", color = "faint" }),
+	})
+	return kit.panel({ w = if view.compact() then COMPACT_WIDTH else WIDTH, gap = "item" }, {
+		kit.section(t("core:news.title_short", "News"), all),
+		col({ gap = "item" }, lines),
+	})
 end)
 ui.mount("right", "core:messages", { align = "start", order = 1 })
 

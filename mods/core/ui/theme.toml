@@ -16,12 +16,28 @@ m = 8
 l = 12
 xl = 16
 xxl = 24
+# The same grid by role, so a gap says what it separates.
+hair = 2    # a label and its sub-line: name over job, message over time
+tight = 4   # rows in a list; a reading's name over its value
+item = 8    # separate things: messages, alerts, a label and its content;
+            # a panel's top and bottom inset
+inset = 12  # a panel's side inset; between readings in a row
+panel = 8   # between panels stacked in a region
+group = 16  # between groups inside a sheet
 
 [text]
+caption = 11   # section labels and reading names, uppercase and tracked
 small = 12
 body = 13
 heading = 15
 title = 18
+
+[leading]      # line height over text size
+line = 1.3     # a single line
+wrap = 1.4     # text that wraps
+
+[tracking]     # letter spacing, in em
+caption = 0.06
 
 [weight]
 regular = 400

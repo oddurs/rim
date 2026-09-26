@@ -104,6 +104,7 @@ struct ShapeKey {
     size_q: u32,
     weight: u16,
     width_q: Option<u32>,
+    tracking_q: i32,
 }
 
 pub struct Atlas {
@@ -215,6 +216,9 @@ pub struct Text {
     /// Snap glyph advances to whole pixels. Crisper small text on 1x
     /// displays; at 2x and above, subpixel positions read smoother.
     hinting: bool,
+    /// Line height over size, for a single line and for wrapped text (the
+    /// theme's `[leading]`).
+    leading: (f32, f32),
 }
 
 impl Text {
@@ -295,6 +299,7 @@ impl Text {
             atlas: Atlas::new(1024),
             shapes: 0,
             hinting: false,
+            leading: (1.3, 1.3),
         })
     }
 
@@ -308,6 +313,15 @@ impl Text {
         if self.frame.is_multiple_of(600) {
             let now = self.frame;
             self.shaped.retain(|_, (_, used)| now - *used < 600);
+        }
+    }
+
+    /// Line heights from the theme: `line` for a single line, `wrap` for
+    /// wrapped text. Changing them drops shaped text.
+    pub fn set_leading(&mut self, line: f32, wrap: f32) {
+        if (line, wrap) != self.leading {
+            self.leading = (line, wrap);
+            self.shaped.clear();
         }
     }
 
@@ -325,24 +339,30 @@ impl Text {
     }
 
     /// Shape `text` at `size` pixels and `weight` (400 regular, 600 semibold),
-    /// wrapping at `width` if given. Cached.
-    pub fn shape(&mut self, text: &str, size: f32, weight: u16, width: Option<f32>) -> &Shaped {
+    /// spaced by `tracking` em, wrapping at `width` if given. Cached.
+    pub fn shape(&mut self, text: &str, size: f32, weight: u16, tracking: f32, width: Option<f32>) -> &Shaped {
         let key = ShapeKey {
             text: text.to_string(),
             size_q: (size * 4.0).round() as u32,
             weight,
             width_q: width.map(|w| (w * 4.0).round() as u32),
+            tracking_q: (tracking * 1000.0).round() as i32,
         };
         let frame = self.frame;
         if let Some(entry) = self.shaped.get_mut(&key) {
             entry.1 = frame;
         } else {
             self.shapes += 1;
-            let line_height = (size * 1.3).ceil();
+            // Only wrapped text is shaped with a width.
+            let leading = if width.is_some() { self.leading.1 } else { self.leading.0 };
+            let line_height = (size * leading).ceil();
             let mut buf = Buffer::new(&mut self.fonts, Metrics::new(size, line_height));
             buf.set_size(width, None);
             buf.set_hinting(if self.hinting { Hinting::Enabled } else { Hinting::Disabled });
-            let attrs = Attrs::new().family(Family::Name(&self.family)).weight(Weight(weight));
+            let mut attrs = Attrs::new().family(Family::Name(&self.family)).weight(Weight(weight));
+            if tracking != 0.0 {
+                attrs = attrs.letter_spacing(tracking);
+            }
             buf.set_text(text, &attrs, Shaping::Advanced, None);
             buf.shape_until_scroll(&mut self.fonts, false);
             let mut out = Shaped::default();
@@ -364,8 +384,18 @@ impl Text {
     }
 
     /// Glyph quads for text shaped earlier, with its top-left at (x, y).
-    pub fn quads(&mut self, text: &str, size: f32, weight: u16, width: Option<f32>, x: f32, y: f32) -> Vec<GlyphQuad> {
-        let glyphs = self.shape(text, size, weight, width).glyphs.clone();
+    #[allow(clippy::too_many_arguments)]
+    pub fn quads(
+        &mut self,
+        text: &str,
+        size: f32,
+        weight: u16,
+        tracking: f32,
+        width: Option<f32>,
+        x: f32,
+        y: f32,
+    ) -> Vec<GlyphQuad> {
+        let glyphs = self.shape(text, size, weight, tracking, width).glyphs.clone();
         let mut out = Vec::with_capacity(glyphs.len());
         for (key, gx, gy) in glyphs {
             let Some(slot) = self.slot(key) else { continue };
@@ -390,7 +420,7 @@ impl Text {
     pub fn rasterize(&mut self, ch: &str, px: f32) -> Option<Raster> {
         // One glyph, and a real one: glyph 0 is the font's missing-glyph
         // box, which is what shaping keeps when no font has the character.
-        let (key, _, baseline) = match self.shape(ch, px, 400, None).glyphs.as_slice() {
+        let (key, _, baseline) = match self.shape(ch, px, 400, 0.0, None).glyphs.as_slice() {
             [one] if one.0.glyph_id != 0 => *one,
             _ => return None,
         };

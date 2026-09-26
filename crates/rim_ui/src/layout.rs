@@ -49,6 +49,7 @@ struct Measure {
     size: f32,
     weight: u16,
     wrap: bool,
+    tracking: f32,
 }
 
 fn build(taffy: &mut TaffyTree<Option<Measure>>, n: &Node) -> NodeId {
@@ -79,7 +80,7 @@ fn build(taffy: &mut TaffyTree<Option<Measure>>, n: &Node) -> NodeId {
         ..Default::default()
     };
     if let Some(t) = &n.text {
-        let m = Measure { text: t.text.clone(), size: t.size, weight: t.weight, wrap: t.wrap };
+        let m = Measure { text: t.text.clone(), size: t.size, weight: t.weight, wrap: t.wrap, tracking: t.tracking };
         return taffy.new_leaf_with_context(style, Some(m)).unwrap();
     }
     let kids: Vec<NodeId> = n.children.iter().map(|c| build(taffy, c)).collect();
@@ -138,7 +139,7 @@ fn measure(
         _ if m.wrap => wrap_at.map(|w| w - px),
         _ => None,
     };
-    let s = text.shape(&m.text, m.size, m.weight, if m.wrap { width } else { None });
+    let s = text.shape(&m.text, m.size, m.weight, m.tracking, if m.wrap { width } else { None });
     let w = if m.wrap && fit { width.unwrap_or(s.width).min(s.width.max(1.0)) } else { s.width };
     taffy::LayoutOutput::from_outer_size(Size {
         width: known.width.unwrap_or(w + px),

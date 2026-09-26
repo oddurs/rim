@@ -88,7 +88,7 @@ First playable vertical slice. One warrior, harvest, build, eat, sleep, animals,
 
 ## interface — Interface
 
-`##########` 96% · 25 of 26 done · due 2026-10-09
+`##########` 96% · 26 of 27 done · due 2026-10-09
 
 A two-week sprint. The whole HUD moves out of Rust into `mods/core/ui/`, written in Luau on a small UI engine, so any mod can extend, replace, wrap or remove any part of the interface. Design: DESIGN.md §11.
 
@@ -102,6 +102,7 @@ A two-week sprint. The whole HUD moves out of Rust into `mods/core/ui/`, written
 - [x] `580f2fbf` Screens as sheets: Work, Storage and mods' screens share one place <sup>feature · p1 · m · engine</sup>
 - [x] `65588ce1` Names and speech bubbles lag a frame behind their pawn <sup>bug · p1 · s · client</sup>
 - [x] `668c7762` Context: an action row and an inspector tab registry <sup>feature · p2 · m · core</sup>
+- [x] `67f5cfe1` HUD rhythm: a type scale with leading and named spacing roles <sup>feature · p1 · m · core</sup>
 - [x] `6d04638b` System UI font: discovery, shaping and a glyph atlas <sup>feature · p0 · m · client</sup>
 - [x] `7497597f` UI layers and input routing <sup>feature · p0 · m · client</sup>
 - [x] `86dcd0ca` Several selected: box and shift selection with shared actions <sup>feature · p2 · m · client</sup>

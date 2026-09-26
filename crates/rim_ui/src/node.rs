@@ -177,6 +177,8 @@ pub struct TextStyle {
     pub weight: u16,
     pub color: Rgba,
     pub wrap: bool,
+    /// Letter spacing in em.
+    pub tracking: f32,
 }
 
 #[derive(Clone)]
@@ -261,7 +263,7 @@ impl Node {
         s.align.hash(h);
         s.justify.hash(h);
         if let Some(t) = &self.text {
-            (t.size.to_bits(), t.weight, t.wrap).hash(h);
+            (t.size.to_bits(), t.weight, t.wrap, t.tracking.to_bits()).hash(h);
             let fixed_w = matches!(s.w, Len::Px(_));
             let fixed_h = matches!(s.h, Len::Px(_));
             if t.wrap {
@@ -269,7 +271,7 @@ impl Node {
                 // is the only safe key.
                 t.text.hash(h);
             } else if !(fixed_w && fixed_h) {
-                let m = text.shape(&t.text, t.size, t.weight, None);
+                let m = text.shape(&t.text, t.size, t.weight, t.tracking, None);
                 if !fixed_w {
                     m.width.to_bits().hash(h);
                 }
@@ -492,6 +494,7 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
     let mut text_weight = None;
     let mut text_color = None;
     let mut wrap = false;
+    let mut tracking = 0.0f32;
     let mut has_radius = false;
     let mut entity: Option<u64> = None;
     let mut cell: Option<(i32, i32)> = None;
@@ -594,6 +597,14 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
             "weight" => text_weight = Some(weight(theme, &v)?),
             "color" => text_color = Some(color(theme, "color", &v)?),
             "wrap" => wrap = matches!(v, Value::Boolean(true)),
+            "tracking" => {
+                tracking = match &v {
+                    Value::Integer(i) => *i as f32,
+                    Value::Number(n) => *n as f32,
+                    Value::String(s) => theme.tracking_named(&s.to_str().map_err(|e| e.to_string())?)?,
+                    _ => return Err("'tracking' must be a token name or a number (em)".into()),
+                }
+            }
             // Entity ids are 64-bit: never round-trip them through f32.
             "entity" => {
                 entity = Some(match v {
@@ -686,6 +697,7 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
                 (false, None) => theme.color("text")?,
             },
             wrap: false,
+            tracking,
         });
         n.input = Some(InputData { value, placeholder: empty, on_change, on_submit, on_key });
         n.focusable = true;
@@ -706,6 +718,7 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
                 None => theme.color("text")?,
             },
             wrap,
+            tracking,
         });
     }
     if kind == Kind::Grid {
@@ -851,6 +864,7 @@ pub fn error_node(theme: &Theme, owner: Rc<str>, key: u64, what: &str, err: &str
             weight: 400,
             color: [1.0, 1.0, 1.0, 1.0],
             wrap: true,
+            tracking: 0.0,
         }),
         hover: None,
         press: None,

@@ -89,6 +89,15 @@ ui.window("core:gallery", { title = t("core:gallery.title", "Kit gallery"), w = 
 		kit.tabs({ id = "core:gallery.tabs", selected = tab, tabs = { { key = "a", label = t("core:gallery.first", "First") }, { key = "b", label = t("core:gallery.second", "Second") } }, on_select = function(k)
 			ui.set_state("core:gallery.tab", k)
 		end }),
+		-- A section header over readings: the tile readout's parts.
+		col({ gap = "item" }, {
+			kit.section(t("core:gallery.section", "Section"), label(t("core:gallery.count", "3"), { size = "small", color = "muted" })),
+			row({ gap = "inset" }, {
+				kit.reading(t("core:gallery.temp", "Temp"), t("core:gallery.temp_v", "6°C")),
+				kit.reading(t("core:gallery.light", "Light"), t("core:gallery.light_v", "0%")),
+				kit.reading(t("core:gallery.wind", "Wind"), t("core:gallery.wind_v", "100%")),
+			}),
+		}),
 		col({ gap = "xs" }, {
 			kit.bar({ label = t("core:gallery.full", "full"), value = 1, color = "good" }),
 			kit.bar({ label = t("core:gallery.half", "half"), value = 0.5 }),

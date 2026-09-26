@@ -2034,12 +2034,13 @@ fn forty_colonists_fit_the_left_edge_at_1280_by_720() {
     let inspector = ui.find("core:inspector").expect("and the inspector");
     let top = ui.find("core:topbar").unwrap();
     println!("list {list:?} inspector {inspector:?}");
-    assert!(list[0] < 12.0, "people dock left: {list:?}");
+    let panel = ui.find("core:colonists").unwrap();
+    assert!(panel[0] <= 12.0, "people dock left: {panel:?}");
     assert!(list[1] >= top[1] + top[3], "under the top bar: {list:?}");
     assert!(list[1] + list[3] <= inspector[1], "above the inspector: {list:?} vs {inspector:?}");
     assert!(top[2] <= 1280.0 + 0.5, "the top bar no longer grows with the colony: {top:?}");
     let snap = ui.snapshot();
-    assert!(snap.contains("Idle ·") || snap.contains("Working ·"), "forty are grouped:\n{snap}");
+    assert!(snap.contains("IDLE ·") || snap.contains("WORKING ·"), "forty are grouped:\n{snap}");
     let rows = snap.matches("#core:colonists.").count();
     assert!(rows < n, "only the lines in view are built ({rows} of {n})");
     // Wheeled far past the end, the list clamps to it: the last lines are

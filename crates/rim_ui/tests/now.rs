@@ -92,7 +92,7 @@ fn nothing_is_lost_when_many_messages_arrive() {
     frame(&mut ui, &sim, &cv, Default::default());
     let snap = ui.snapshot();
     assert!(snap.contains("event 499") && !snap.contains("event 400"), "the newest few in the column:\n{snap}");
-    assert!(snap.contains(&format!("All news · {}", before + 500)), "and a count of them all:\n{snap}");
+    assert!(snap.contains(&format!("All {}", before + 500)), "and a count of them all:\n{snap}");
     ui.open_window("core:news");
     for i in 1..3 {
         frame(&mut ui, &sim, &cv, Input { time: i as f64, ..Default::default() });
@@ -101,4 +101,35 @@ fn nothing_is_lost_when_many_messages_arrive() {
     assert!(snap.contains("event 499"), "the window starts at the newest:\n{snap}");
     let lines = snap.matches("event ").count();
     assert!(lines < 100, "the window builds only the lines in view ({lines})");
+}
+
+/// A long message wraps inside the news panel rather than running past it.
+#[test]
+fn a_long_message_wraps_inside_the_news() {
+    let sim = {
+        let mut s = sim_at(&mods());
+        s.world.message(
+            "Nyx, a wanderer, has heard of your colony and joined it, bringing a story about the coast.".to_string(),
+            MsgKind::Good,
+        );
+        s
+    };
+    let mut ui = ui_for(&sim);
+    let cv = client(&sim);
+    frame(&mut ui, &sim, &cv, Default::default());
+    let out = frame(&mut ui, &sim, &cv, Input { time: 1.0, ..Default::default() });
+    let panel = ui.find("core:messages").expect("the news");
+    let screen_right = cv.screen.0;
+    assert!(panel[0] + panel[2] <= screen_right + 0.5, "the panel stays on screen: {panel:?}");
+    // Every line the panel drew is inside it.
+    let snap = ui.snapshot();
+    assert!(snap.contains("bringing a story"), "{snap}");
+    let inside = out.draw.iter().all(|d| match d {
+        rim_ui::paint::Draw::Glyphs { quads, .. } => quads
+            .iter()
+            .filter(|q| q.dst[1] >= panel[1] && q.dst[1] <= panel[1] + panel[3] && q.dst[0] >= panel[0])
+            .all(|q| q.dst[0] + q.dst[2] <= panel[0] + panel[2] + 0.5),
+        _ => true,
+    });
+    assert!(inside, "a glyph in the news runs past its right edge: {panel:?}");
 }

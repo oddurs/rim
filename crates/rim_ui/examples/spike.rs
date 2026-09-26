@@ -23,28 +23,28 @@ fn main() {
     let labels: Vec<String> = (0..300).map(|i| format!("Colonist {i} · hauling · 72%")).collect();
     let t = Instant::now();
     for l in &labels {
-        text.shape(l, 13.0, 400, None);
+        text.shape(l, 13.0, 400, 0.0, None);
     }
     println!("shape 300 labels, cold: {:.3} ms", ms(t));
     let t = Instant::now();
     for l in &labels {
-        text.shape(l, 13.0, 400, None);
+        text.shape(l, 13.0, 400, 0.0, None);
     }
     println!("shape 300 labels, cached: {:.3} ms", ms(t));
     let t = Instant::now();
     let mut quads = 0;
     for (i, l) in labels.iter().enumerate() {
-        quads += text.quads(l, 13.0, 400, None, 10.0, i as f32 * 18.0).len();
+        quads += text.quads(l, 13.0, 400, 0.0, None, 10.0, i as f32 * 18.0).len();
     }
     println!("glyph quads, cold (rasterise {} glyph quads): {:.3} ms", quads, ms(t));
     let t = Instant::now();
     for (i, l) in labels.iter().enumerate() {
-        text.quads(l, 13.0, 400, None, 10.0, i as f32 * 18.0);
+        text.quads(l, 13.0, 400, 0.0, None, 10.0, i as f32 * 18.0);
     }
     println!("glyph quads, cached: {:.3} ms", ms(t));
     for s in ["Café déjà vu — naïve", "Ελληνικά", "日本語のテキスト", "العربية", "🔥🏠"]
     {
-        let n = text.quads(s, 13.0, 400, None, 0.0, 0.0).len();
+        let n = text.quads(s, 13.0, 400, 0.0, None, 0.0, 0.0).len();
         println!("  fallback '{s}': {n} glyphs");
     }
 
@@ -88,7 +88,7 @@ fn main() {
         let mut taffy: TaffyTree<Option<(f32, f32)>> = TaffyTree::new();
         fn add(taffy: &mut TaffyTree<Option<(f32, f32)>>, n: &N, text: &mut Text) -> NodeId {
             if let Some(s) = &n.text {
-                let sh = text.shape(s, 13.0, 400, None);
+                let sh = text.shape(s, 13.0, 400, 0.0, None);
                 return taffy.new_leaf_with_context(Style::default(), Some((sh.width, sh.height))).unwrap();
             }
             let kids: Vec<NodeId> = n.children.iter().map(|c| add(taffy, c, text)).collect();
