@@ -386,13 +386,25 @@ fn flee(w: &mut World, p: &mut Pawn, from: IVec) -> Option<Job> {
 /// Reachability reads the regions as of the last tick: a wall finished
 /// this tick counts from the next.
 pub fn work_blocked(w: &World, e: Entity) -> Option<String> {
-    let d = w.ecs.get::<&Designated>(e).ok()?.0;
     let t = w.thing(e)?;
-    if w.defs.designations[d as usize].targets == Targets::Thing {
+    // A plan waits only on a tool here; its materials say for themselves.
+    let d = match w.ecs.get::<&Designated>(e).ok().map(|d| d.0) {
+        Some(d) => Some(d),
+        None if w.ecs.get::<&Blueprint>(e).is_ok() => None,
+        None => return None,
+    };
+    if let Some(d) = d.filter(|&d| w.defs.designations[d as usize].targets == Targets::Thing) {
         let h = w.defs.thing(t.def).harvest_for(d)?;
         if !w.harvest_ready(e, h.key()) {
             return Some("Growing back.".into());
         }
+    }
+    let need = match d {
+        Some(d) => w.defs.thing(t.def).harvest_for(d).map_or(0, |h| h.requires_r),
+        None => w.defs.thing(t.def).build.as_ref().map_or(0, |b| b.requires_r),
+    };
+    if d.is_none() && need == 0 {
+        return None;
     }
     // Drafted colonists take no work.
     let free: Vec<Entity> =
@@ -404,7 +416,6 @@ pub fn work_blocked(w: &World, e: Entity) -> Option<String> {
     if !reachable {
         return Some("No colonist can reach it.".into());
     }
-    let need = w.defs.thing(t.def).harvest_for(d).map_or(0, |h| h.requires_r);
     if need == 0 {
         return None;
     }
@@ -790,8 +801,20 @@ fn choose_work(w: &World, e: Entity, p: &Pawn, mut why: Option<&mut Refusals>) -
             }
             match missing {
                 None => {
-                    best[bw as usize] = Some((k, Job::Construct { bp: be }, be));
-                    break;
+                    // A build that needs a tool fetches it first; the walk
+                    // there counts, as a material's does.
+                    let need = w.thing(be).and_then(|t| defs.thing(t.def).build.as_ref().map(|b| b.requires_r));
+                    match tool_for(w, e, p, need.unwrap_or(0), w.colony_tools()) {
+                        Some((extra, tool)) => {
+                            best[bw as usize] = Some((k + extra, Job::Construct { bp: be, tool }, be));
+                            break;
+                        }
+                        None => {
+                            if let Some(r) = why.as_deref_mut() {
+                                r.note(bw, d, Why::NeedsTool(need.unwrap_or(0)));
+                            }
+                        }
+                    }
                 }
                 Some((mdef, want)) => {
                     if !none_of.contains(&mdef) {
@@ -1160,7 +1183,7 @@ fn run_job(w: &mut World, e: Entity, p: &mut Pawn) {
         Job::Haul { src, to, stage } => (run_haul(w, p, src, to, stage), 0),
         Job::Supply { site, src, need, want, stage } => (run_supply(w, p, site, src, need, want, stage), 0),
         Job::Craft { site, tool } => (run_craft(w, e, p, site, tool), 0),
-        Job::Construct { bp } => (run_construct(w, p, bp), 0),
+        Job::Construct { bp, tool } => (run_construct(w, e, p, bp, tool), 0),
         Job::Deconstruct { target } => (run_deconstruct(w, p, target), 0),
         Job::Eat { src, t, seat, stage } => (run_eat(w, p, src, t, seat, stage), 0),
         Job::Sleep { bed, spot, stage } => (run_sleep(w, e, p, bed, spot, stage), 0),
@@ -1473,7 +1496,7 @@ fn run_deconstruct(w: &mut World, p: &mut Pawn, target: Entity) -> Option<Job> {
     }
 }
 
-fn run_construct(w: &mut World, p: &mut Pawn, bp: Entity) -> Option<Job> {
+fn run_construct(w: &mut World, e: Entity, p: &mut Pawn, bp: Entity, tool: Option<Entity>) -> Option<Job> {
     let b = w.thing(bp)?;
     {
         let bpc = w.ecs.get::<&Blueprint>(bp).ok()?;
@@ -1481,10 +1504,19 @@ fn run_construct(w: &mut World, p: &mut Pawn, bp: Entity) -> Option<Job> {
             return None;
         }
     }
+    // First the tool, if the build needs one this pawn doesn't hold.
+    if let Some(tl) = tool {
+        let taken = fetch(w, e, p, tl)?;
+        return Some(Job::Construct { bp, tool: tool.filter(|_| !taken) });
+    }
+    let need = w.defs.thing(b.def).build.as_ref().map_or(0, |bd| bd.requires_r);
+    if !w.hand_covers(p, need) {
+        return None;
+    }
     let goal = w.reach_goal(&b);
     match go_to(w, p, goal) {
         Go::Failed => None,
-        Go::Moving => Some(Job::Construct { bp }),
+        Go::Moving => Some(Job::Construct { bp, tool }),
         Go::Arrived => {
             let skill = w.defs.build_work.and_then(|t| w.defs.work_types[t as usize].skill_r);
             let amount = p.work_amount(skill);
@@ -1495,12 +1527,15 @@ fn run_construct(w: &mut World, p: &mut Pawn, bp: Entity) -> Option<Job> {
                 let td = w.defs.thing(b.def);
                 let inside = [Some(p.pos), p.next].into_iter().flatten().find(|&c| td.footprint(b.pos).any(|f| f == c));
                 if let Some(cell) = inside.filter(|_| td.blocks) {
-                    return step_off(w, p, cell).then_some(Job::Construct { bp });
+                    return step_off(w, p, cell).then_some(Job::Construct { bp, tool });
                 }
                 complete_building(w, bp);
+                if need != 0 {
+                    w.wear_tool(p);
+                }
                 None
             } else {
-                Some(Job::Construct { bp })
+                Some(Job::Construct { bp, tool })
             }
         }
     }

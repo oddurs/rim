@@ -99,7 +99,7 @@ pub fn options(w: &World, pawn: Entity, cell: IVec, on: Option<Entity>) -> Vec<C
 pub fn target_of(job: &Job) -> Option<Entity> {
     match *job {
         Job::Harvest { target, .. } | Job::Deconstruct { target, .. } | Job::Attack { target, .. } => Some(target),
-        Job::Construct { bp } | Job::Deliver { bp, .. } => Some(bp),
+        Job::Construct { bp, .. } | Job::Deliver { bp, .. } => Some(bp),
         Job::Eat { src, .. } => Some(src),
         _ => None,
     }
@@ -146,13 +146,31 @@ fn fixture(w: &World, pawn: Entity, from: IVec, f: Entity, out: &mut Vec<Choice>
     if let Ok(bp) = w.ecs.get::<&Blueprint>(f) {
         let missing = bp.cost.iter().zip(&bp.delivered).find(|(c, d)| **d < c.1).map(|(c, d)| (c.0, c.1 - d));
         drop(bp);
-        match missing {
-            None => out.push(Choice::ready(
+        let need = td.build.as_ref().map_or(0, |b| b.requires_r);
+        let tool = w.ecs.get::<&Pawn>(pawn).ok().map(|p| ai::tool_for(w, pawn, &p, need, w.colony_tools()));
+        match (missing, tool) {
+            (None, Some(Some((_, tool)))) => out.push(Choice::ready(
                 format!("build:{id}"),
                 false,
-                Order { label: format!("Build {}", td.label), job: Job::Construct { bp: f }, reserve: vec![f] },
+                Order {
+                    label: format!("Build {}", td.label),
+                    job: Job::Construct { bp: f, tool },
+                    reserve: std::iter::once(f).chain(tool).collect(),
+                },
             )),
-            Some((def, want)) => {
+            (None, _) => {
+                let tags = w.defs.tool_tag_names(need).join(" and ");
+                let reason = if tags.is_empty() { "needs a tool".to_string() } else { format!("no {tags}") };
+                let label = format!("Build {}", td.label);
+                out.push(Choice {
+                    key: format!("build:{id}"),
+                    label,
+                    damaging: false,
+                    order: None,
+                    reason: Some(reason),
+                });
+            }
+            (Some((def, want)), _) => {
                 if let Some((_, src)) = ai::nearest_item(w, pawn, from, def) {
                     out.push(Choice::ready(
                         format!("haul:{id}"),
@@ -269,7 +287,7 @@ pub fn describe(w: &World, job: &Job) -> String {
             let hd = td.harvest_by_key(*harvest)?;
             Some(format!("{} {}", w.defs.designations[hd.desig_r as usize].label, td.label))
         }),
-        Job::Construct { bp } => thing_label(*bp).map(|l| format!("Build {l}")),
+        Job::Construct { bp, .. } => thing_label(*bp).map(|l| format!("Build {l}")),
         Job::Deconstruct { target, .. } => {
             let verb = w.defs.designations.iter().find(|d| d.targets == Targets::Built).map(|d| d.label.as_str());
             thing_label(*target).map(|l| format!("{} {l}", verb.unwrap_or("Take down")))

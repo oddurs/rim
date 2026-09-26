@@ -289,11 +289,13 @@ pub struct ToolDef {
 
 #[derive(Deserialize, Clone, Debug)]
 pub struct BuildDef {
-    /// A fixed recipe. Empty when the thing is built out of `stuff`.
+    /// A fixed recipe: the parts. With `stuff`, what goes in besides the
+    /// material: a plank wall is planks and nails (DESIGN.md §4f).
     #[serde(default)]
     pub cost: Vec<ItemCount>,
     /// Built out of whatever matches: the def says how much, the player
     /// says of what. A wall is 25 of something structural, not 25 wood.
+    /// The material sets the factors; `cost` adds the parts.
     #[serde(default)]
     pub stuff: Option<StuffCost>,
     pub work: u32,
@@ -307,8 +309,13 @@ pub struct BuildDef {
     /// so a forgotten `cost` isn't a free building.
     #[serde(default)]
     pub free: bool,
+    /// Tool tags the builder holds a tool with, as a harvest's `requires`.
+    #[serde(default)]
+    pub requires: Vec<String>,
     #[serde(skip)]
     pub cost_r: Vec<(DefId, u32)>,
+    #[serde(skip)]
+    pub requires_r: ToolMask,
 }
 
 /// How much material a buildable takes, and what kind will do.
@@ -1563,7 +1570,10 @@ impl DefDb {
         let tags: std::collections::BTreeSet<String> = self
             .things
             .iter()
-            .flat_map(|d| d.tool.iter().flat_map(|t| &t.tags).chain(d.harvest.iter().flat_map(|h| &h.requires)))
+            .flat_map(|d| {
+                let builds = d.build.iter().flat_map(|b| &b.requires);
+                d.tool.iter().flat_map(|t| &t.tags).chain(d.harvest.iter().flat_map(|h| &h.requires)).chain(builds)
+            })
             .cloned()
             .collect();
         if tags.len() > ToolMask::BITS as usize {
@@ -1581,6 +1591,9 @@ impl DefDb {
             }
             for h in &mut d.harvest {
                 h.requires_r = mask(&h.requires);
+            }
+            if let Some(b) = &mut d.build {
+                b.requires_r = mask(&b.requires);
             }
         }
         // Fields a need is satisfied by, and those they're worked out from.
@@ -1635,7 +1648,6 @@ impl DefDb {
                     (false, _) | (_, true) if b.free => {
                         return Err(format!("{ctx}: build is `free` and has a cost; pick one"))
                     }
-                    (false, true) => return Err(format!("{ctx}: build has both `cost` and `stuff`; pick one")),
                     _ => {}
                 }
             }

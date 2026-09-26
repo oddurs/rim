@@ -57,7 +57,7 @@ fn open_at(s: &Sim, at: IVec, r: i32) -> IVec {
 fn builds(s: &Sim, job: &Job, def: &str) -> bool {
     let d = s.world.defs.thing_id(def).unwrap();
     let bp = match job {
-        Job::Construct { bp } | Job::Deliver { bp, .. } => *bp,
+        Job::Construct { bp, .. } | Job::Deliver { bp, .. } => *bp,
         _ => return false,
     };
     s.world.ecs.get::<&Blueprint>(bp).is_ok() && s.world.thing(bp).is_some_and(|t| t.def == d)
@@ -101,7 +101,7 @@ fn between_urgent_plans_the_nearest_wins() {
     s.push(Command::Build { thing: wall, stuff: wood, a: near, b: near });
     let job = first_job(&mut s, pawn, 600).expect("some work");
     let bp = match job {
-        Job::Construct { bp } | Job::Deliver { bp, .. } => bp,
+        Job::Construct { bp, .. } | Job::Deliver { bp, .. } => bp,
         other => panic!("{other:?}"),
     };
     assert_eq!(s.world.thing(bp).unwrap().pos, near, "the near wall, not the far one");

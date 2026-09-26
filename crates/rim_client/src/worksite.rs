@@ -496,7 +496,7 @@ impl Worksites {
     pub fn lunge(&self, w: &World, p: &Pawn) -> (f32, f32) {
         let target = match p.job {
             Job::Harvest { target, .. } | Job::Deconstruct { target } | Job::Breach { target } => target,
-            Job::Construct { bp } => bp,
+            Job::Construct { bp, .. } => bp,
             _ => return (0.0, 0.0),
         };
         let Some(site) = self.sites.get(&target) else { return (0.0, 0.0) };
