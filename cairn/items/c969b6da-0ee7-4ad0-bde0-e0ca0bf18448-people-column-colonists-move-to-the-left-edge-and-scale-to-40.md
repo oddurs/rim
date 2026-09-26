@@ -2,12 +2,12 @@
 id: c969b6da-0ee7-4ad0-bde0-e0ca0bf18448
 title: 'People column: colonists move to the left edge and scale to 40'
 type: feature
-status: review
+status: done
 milestone: interface
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 created: 2026-09-26
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p1
 api: additive
 effort: m

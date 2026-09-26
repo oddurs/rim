@@ -88,7 +88,7 @@ First playable vertical slice. One warrior, harvest, build, eat, sleep, animals,
 
 ## interface — Interface
 
-`########··` 76% · 19 of 25 done · due 2026-10-09
+`########··` 80% · 20 of 25 done · due 2026-10-09
 
 A two-week sprint. The whole HUD moves out of Rust into `mods/core/ui/`, written in Luau on a small UI engine, so any mod can extend, replace, wrap or remove any part of the interface. Design: DESIGN.md §11.
 
@@ -96,7 +96,6 @@ A two-week sprint. The whole HUD moves out of Rust into `mods/core/ui/`, written
 - [ ] `668c7762` Context: an action row and an inspector tab registry <sup>feature · p2 · m · core</sup>
 - [ ] `86dcd0ca` Several selected: box and shift selection with shared actions <sup>feature · p2 · m · client</sup>
 - [ ] `93071dfd` Compact mode and UI scale <sup>feature · p2 · s · client</sup>
-- [ ] `c969b6da` People column: colonists move to the left edge and scale to 40 <sup>feature · p1 · m · core</sup>
 - [ ] `dd73a536` Now: an alert registry and a news feed <sup>feature · p1 · m · core</sup>
 - [x] `16eecb22` Anchored layer: world-attached labels, bars and bubbles without overlap <sup>feature · p1 · m · client</sup>
 - [x] `17505800` Theme tokens: ui/theme.toml, mod patches and UI scale <sup>feature · p0 · s · client</sup>
@@ -114,6 +113,7 @@ A two-week sprint. The whole HUD moves out of Rust into `mods/core/ui/`, written
 - [x] `ac5a569b` UI modding guide <sup>docs · p2 · s · tooling</sup>
 - [x] `ad0ab61f` UI engine: node tree, flexbox layout and batched drawing <sup>feature · p0 · l · client</sup>
 - [x] `b144ca3c` Component kit v1: buttons, bars, tabs, lists, tooltips, menus, toasts, bubbles <sup>feature · p0 · l · core</sup>
+- [x] `c969b6da` People column: colonists move to the left edge and scale to 40 <sup>feature · p1 · m · core</sup>
 - [x] `c96a6a8f` Hot reload of UI scripts and theme <sup>feature · p1 · s · tooling</sup>
 - [x] `c9b1406d` UI mod operations: extend, replace, wrap and remove by id <sup>feature · p0 · m · client</sup>
 - [x] `cc7114a3` Typography and spacing pass: minimal, not ugly <sup>chore · p2</sup>
