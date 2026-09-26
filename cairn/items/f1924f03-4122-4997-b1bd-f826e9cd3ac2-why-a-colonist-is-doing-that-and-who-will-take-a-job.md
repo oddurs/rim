@@ -38,3 +38,7 @@ area: ui
 ## 2026-09-25
 
 Tools (7016d86b) give a refusal reason the why panel should show: rim_sim::ai::work_blocked says 'Needs a chopping tool.' when no tool in the colony has the tag, and 'Needs a free chopping tool.' when the colony's are held, claimed or out of reach. The thing inspector already shows it.
+
+## 2026-09-25
+
+Work pools (0e73145a) were dropped by the owner on 2026-09-25: the candidates and the reason each work type was passed over come from find_work itself, recorded only for a pawn someone is inspecting. The body's 'the data already exists in the pools' now means find_work's sources, which work_waiting (from the Work Board) also counts.

@@ -3,7 +3,7 @@ id: 9bd9e8ab-6eef-44dc-b814-0b376ceec1e5
 title: 'Fire: burning, spread by wind, put out by rain'
 type: feature
 status: blocked
-milestone: colony
+milestone: crafting
 depends_on:
 - 7c50b502-5e27-4807-a36c-0654fe9aec97
 - d77d9e1f-f0ae-4e30-ae9c-95cd35c1346b
@@ -43,3 +43,7 @@ Blocked outside Colony: it depends on stock fields (d77d9e1f), which are in Craf
 ## Proposed milestone: colony -> crafting (Oddur Sigurdsson, 2026-09-25)
 
 It can't land before stock fields (d77d9e1f), which are in Crafting; keeping it in Colony means Colony can't close. DESIGN.md §5 also puts fire spread in a plugin.
+
+## Accepted milestone: crafting (Oddur Sigurdsson, 2026-09-25)
+
+Proposed by Oddur Sigurdsson on 2026-09-25.
