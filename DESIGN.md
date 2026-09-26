@@ -613,7 +613,10 @@ not from a research screen.
   branches. The second is tools: a hammerstone, a flint flake and hand
   axe, cordage, and the hafted axe, maul and digging stick, all made at a
   crafting spot. It gates the oak's chop behind `chopping` and granite
-  behind `pounding`. Clay and bone come next.
+  behind `pounding`. The third is clay: banks on the marsh, dug with a
+  digging stick and dug out for a few days at a time, build cob walls
+  that hold heat better than branches and don't burn, and fire into pots
+  at the campfire, which is a crafting station too. Bone comes next.
 
 ### The first days
 

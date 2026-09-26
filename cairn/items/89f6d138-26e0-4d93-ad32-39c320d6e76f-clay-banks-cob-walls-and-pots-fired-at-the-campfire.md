@@ -2,8 +2,10 @@
 id: 89f6d138-26e0-4d93-ad32-39c320d6e76f
 title: 'Clay: banks, cob walls, and pots fired at the campfire'
 type: content
-status: backlog
+status: doing
 milestone: stone-age
+assignee: Oddur Sigurdsson
+claimed: 2026-09-25
 depends_on:
 - 4675019b-c017-47e7-b148-b12e4be58bda
 created: 2026-09-25
@@ -28,6 +30,14 @@ Split from e3846c47. After night one, clay is the upgrade. Cob is warmer than br
 
 ## Acceptance criteria
 
-- [ ] Clay is dug with a digging stick, and not with bare hands
-- [ ] Cob walls build from clay and hold heat better than branch walls
-- [ ] A pot is fired at a campfire from a bill
+- [x] Clay is dug with a digging stick, and not with bare hands
+- [x] Cob walls build from clay and hold heat better than branch walls
+- [x] A pot is fired at a campfire from a bill
+
+## 2026-09-25
+
+Clay banks use core's gather designation with requires = ["digging"], so a bank says 'Needs a digging tool.' and the toolbar needs no new mark. The pot takes its material from the clay: a clay pot, at clay's hp. Cob is a wall made of clay (structural stuff), so there's no separate cob def. The warmth test checks the insulation stat the boundary divides by, not a room's temperature.
+
+## 2026-09-25
+
+With af17cc1d (#116), a building planned over a clay bank clears it at once: the bank's only harvest leaves it standing, and it doesn't block. Banks never come back. I accepted that on purpose: there are 72 to 335 reachable banks per map (19 on seed 8), and a wall over one is a player's choice. The crosscheck also moved to seed 9, since clay banks reshuffle every map and seed 1's founder died to wolves on day 3.

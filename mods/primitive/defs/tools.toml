@@ -176,3 +176,28 @@ work = 150
 requires = ["cutting"]
 # A stick, not a "branches digging stick", and its own hp.
 stuff = false
+
+# ─── Fired in the campfire ──────────────────────────────────────────────────
+
+# The vessel cooking will ask for. Until then it's wealth, and a start.
+[[thing]]
+id = "pot"
+label = "pot"
+color = "#b0704a"
+category = "item"
+look.layers = [
+    { draw = "disc", x = 0.5, y = 0.6, r = 0.24 },
+    { draw = "fill", x = 0.36, y = 0.3, w = 0.28, h = 0.1, shade = 0.8 },
+]
+hp = 40
+market_value = 4
+stack_limit = 10
+tags = ["vessel"]
+
+[[crafting.recipe]]
+id = "pot"
+label = "pot"
+station = "crafting:fire"
+inputs = [{ tag = "clay", count = 3 }]
+outputs = [{ thing = "pot" }]
+work = 300

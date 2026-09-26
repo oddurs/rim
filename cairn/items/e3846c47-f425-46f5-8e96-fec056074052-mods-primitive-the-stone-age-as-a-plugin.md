@@ -86,7 +86,7 @@ Hunting stays barehanded (a spear waits for equipment, d5d0ea1f).
 - [x] Chopping and mining are gated behind the tools, and say why when blocked
 - [x] Tool quality comes from material, not duplicate defs
 - [x] A branch shelter and campfire are buildable with no tools
-- [ ] Clay is dug with a digging stick, builds cob walls, and fires into a pot at a campfire
+- [x] Clay is dug with a digging stick, builds cob walls, and fires into a pot at a campfire
 - [x] A `rim test` scene goes from bare hands to a felled tree
 - [ ] Core alone still plays with the plugin removed (§5 CI smoke test)
 
@@ -97,3 +97,7 @@ First tier landed as mods/primitive (gather by hand): branches, fibre, loose sto
 ## 2026-09-25
 
 Split into three: stone tools and the gates (4675019b), clay (89f6d138) and bone (61c93a4e). Each is a PR of its own. This item stays as the umbrella: its criteria are ticked as the parts land, and 'core alone still plays' is checked once at the end.
+
+## 2026-09-25
+
+The materials table above lists the clay pot's stuff as none. As built (89f6d138), the pot is made of its clay: a clay pot, at clay's hp. The hammerstone is its own item, shaped from a stone (4675019b).
