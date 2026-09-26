@@ -95,6 +95,8 @@ declare rim: {
     random_int: (lo: number, hi: number) -> number,
     -- The room at a cell, or nil on a wall or door.
     room_at: (x: number, y: number) -> Room?,
+    -- A pawn says something: a speech bubble over it for `ticks` ticks (600 unless given). Higher `priority` wins when it has several lines or the screen is crowded; needs speak at 1, and 2 is the default. Only presentation: nothing in the sim reads it back.
+    say: (id: number, text: string, ticks: number?, priority: number?) -> (),
     -- The current season's name.
     season: () -> string,
     -- The calendar's season names, in order.

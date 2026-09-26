@@ -2,12 +2,12 @@
 id: 65588ce1-0625-4cd2-bb31-e2425f781cb2
 title: Names and speech bubbles lag a frame behind their pawn
 type: bug
-status: doing
+status: done
 milestone: interface
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 created: 2026-09-26
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p1
 api: none
 effort: s

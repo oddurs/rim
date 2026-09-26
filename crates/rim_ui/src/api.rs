@@ -68,6 +68,7 @@ type VisiblePawn = {
     id: number, name: string, faction: string, intelligent: boolean, asleep: boolean,
     selected: boolean, hovered: boolean, radius: number,
 }
+type Speech = { id: number, text: string, age: number, priority: number }
 type Message = { text: string, kind: string, age: number }
 type WorldEvent = { tick: number, kind: string, id: number, name: string }
 type FieldInfo = {
@@ -240,6 +241,11 @@ pub const UI_API: &[UiDoc] = &[
     d!("view.selected", "() -> number?", "The selected pawn or thing's id: view.pawn or view.thing says which."),
     d!("view.show_devtools", "() -> boolean", "Whether devtools are open."),
     d!("view.show_profiler", "() -> boolean", "Whether the profiler is open."),
+    d!(
+        "view.speech",
+        "() -> { Speech }",
+        "What pawns are saying now, oldest first: a need's line or a script's rim.say. `age` runs 0 to 1 over the line's life."
+    ),
     d!("view.speed", "() -> number", "The game speed."),
     d!("view.stances", "() -> { Stance }", "The colony's stances, in bar order; `active` is the one it's in."),
     d!("view.stats", "() -> { string }", "Client statistics lines."),

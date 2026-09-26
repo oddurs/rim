@@ -372,6 +372,32 @@ above it. When labels collide, the higher `priority` keeps its place and
 the others step away. If there's no room at all, the lowest-priority label
 is dropped: labels never draw on top of each other.
 
+An anchored label follows its pawn every frame, however the camera moves,
+without your component rebuilding: the engine moves what it drew.
+
+### Speech
+
+Pawns talk in speech bubbles. A line comes from one of three places:
+
+- **A need running low.** Give a need def a `say` table and a pawn who
+  can talk says one of its lines as the need drops below `below`, once per
+  crossing:
+
+  <!-- not a sample -->
+  ```toml
+  say = { below = 0.2, lines = ["I'm starving.", "So hungry…"], ticks = 600 }
+  ```
+
+- **A sim script**, on any event: `rim.say(pawn_id, text, ticks?, priority?)`.
+  Core's raids have their leader call out as they arrive.
+- **The UI itself**: core greets a colonist who joins.
+
+`view.speech()` lists the lines up now (`id`, `text`, `age` from 0 to 1,
+`priority`). Core's `core:labels` shows each pawn's most important line,
+and at most six bubbles at a time, most important first. Speech is only
+presentation: the sim never reads it back, it isn't saved, and a line
+is cut at 120 characters.
+
 ## Themes
 
 Every colour and size comes from a token. Override any of them in your mod's

@@ -1186,6 +1186,22 @@ impl ScriptHost {
                 Ok(())
             }
         );
+        api!(
+            "say",
+            "(id: number, text: string, ticks: number?, priority: number?) -> ()",
+            "A pawn says something: a speech bubble over it for `ticks` ticks (600 unless given). Higher `priority` \
+             wins when it has several lines or the screen is crowded; needs speak at 1, and 2 is the default. \
+             Only presentation: nothing in the sim reads it back.",
+            (u64, String, Option<u32>, Option<i32>),
+            |w, (id, text, ticks, priority)| {
+                let e = rim_sim_entity(id)?;
+                if w.ecs.get::<&Pawn>(e).is_err() {
+                    return Err(mlua::Error::runtime(format!("say: no pawn {id}")));
+                }
+                w.say(e, &text, ticks.unwrap_or(600), priority.unwrap_or(2));
+                Ok(())
+            }
+        );
         // Make a pawn give up and walk off the map after `ticks`.
         api!(
             "leave_after",

@@ -46,6 +46,7 @@ are in [Scripting rules](scripting.md).
 | `rim.random` | `() -> number` | A number in [0, 1) from the world's random numbers: the same on every machine. |
 | `rim.random_int` | `(lo: number, hi: number) -> number` | A whole number from lo to hi inclusive, from the world's random numbers. |
 | `rim.room_at` | `(x: number, y: number) -> Room?` | The room at a cell, or nil on a wall or door. |
+| `rim.say` | `(id: number, text: string, ticks: number?, priority: number?) -> ()` | A pawn says something: a speech bubble over it for `ticks` ticks (600 unless given). Higher `priority` wins when it has several lines or the screen is crowded; needs speak at 1, and 2 is the default. Only presentation: nothing in the sim reads it back. |
 | `rim.season` | `() -> string` | The current season's name. |
 | `rim.seasons` | `{string}` | The calendar's season names, in order. |
 | `rim.set_ambient` | `(id: string, value: number?) -> ()` | Pin a field's outdoor value, overriding its terms and pushes; nil unpins. For tests and tools: mods push instead. |

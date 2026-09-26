@@ -3,6 +3,7 @@
 use crate::defs::*;
 use crate::world::*;
 use crate::{IVec, TICKS_PER_DAY};
+use hecs::Entity;
 
 /// Every `NEEDS_INTERVAL` ticks: decay needs, apply sleep, starvation, healing.
 pub const NEEDS_INTERVAL: u64 = 60;
@@ -10,6 +11,8 @@ pub const NEEDS_INTERVAL: u64 = 60;
 pub fn needs(w: &mut World) {
     let defs = w.defs.clone();
     let frac = NEEDS_INTERVAL as f64 / TICKS_PER_DAY as f64;
+    // Lines needs speak as they cross their level, said after the pass.
+    let mut said: Vec<(Entity, usize)> = Vec::new();
     for i in 0..w.pawns.len() {
         let e = w.pawns[i];
         let Ok(mut p) = w.ecs.get::<&mut Pawn>(e) else { continue };
@@ -20,9 +23,11 @@ pub fn needs(w: &mut World) {
         let asleep = p.asleep;
         let sleep_rate = p.sleep_rate.max(1) as f64 / 100.0;
         let pos = p.pos;
+        let talks = defs.creature(p.def).intelligent;
         let mut dmg = 0.0;
-        for n in &mut p.needs {
+        for (k, n) in p.needs.iter_mut().enumerate() {
             let nd = defs.need(n.0);
+            let was = n.1;
             let delta = match nd.satisfier {
                 // A full night's sleep on the ground restores ~1/3 day of rest.
                 Satisfier::Rest if asleep => NEED_MAX as f64 * frac / 0.3 * sleep_rate,
@@ -41,6 +46,12 @@ pub fn needs(w: &mut World) {
                 _ => -(NEED_MAX as f64) * frac / nd.days_to_empty,
             };
             n.1 = (n.1 + w.rng.round(delta)).clamp(0, NEED_MAX);
+            if let Some(say) = nd.say.as_ref().filter(|_| talks) {
+                let level = (say.below * NEED_MAX as f64) as i32;
+                if was >= level && n.1 < level {
+                    said.push((e, k));
+                }
+            }
             if n.1 == 0 && nd.empty_damage_per_day > 0.0 {
                 starving = true;
                 dmg += nd.empty_damage_per_day * frac;
@@ -57,6 +68,15 @@ pub fn needs(w: &mut World) {
             let rate = max as f64 * 0.25 * frac * if asleep { 2.0 } else { 1.0 };
             p.hp = (p.hp + w.rng.round(rate)).min(max);
         }
+    }
+    for (e, k) in said {
+        let Some(need) = w.ecs.get::<&Pawn>(e).ok().map(|p| p.needs[k].0) else { continue };
+        let Some(say) = defs.need(need).say.as_ref() else { continue };
+        // Which line: the pawn and the moment, not the world's RNG, so a
+        // word said changes nothing that follows.
+        let pick = (e.id() as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15) ^ w.tick;
+        let line = &say.lines[(pick % say.lines.len() as u64) as usize];
+        w.say(e, line, say.ticks, 1);
     }
 }
 
