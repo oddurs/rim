@@ -7,7 +7,7 @@ use crate::map::{Map, NEIGHBORS8};
 use crate::world::Faction;
 use crate::IVec;
 use std::cmp::Reverse;
-use std::collections::BinaryHeap;
+use std::collections::{BinaryHeap, VecDeque};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, serde::Serialize, serde::Deserialize)]
 pub enum Goal {
@@ -54,15 +54,32 @@ pub struct Pathfinder {
     open_gen: Vec<u32>,
     closed_gen: Vec<u32>,
     gen: u32,
+    /// Open nodes by (f, h, cell): of two nodes as promising, the one
+    /// nearer the goal first, so a search on open ground runs straight at
+    /// it instead of widening a front of ties.
     heap: BinaryHeap<Reverse<(u32, u32, u32)>>,
+    queue: VecDeque<u32>,
     pub searches: u64,
     pub expanded: u64,
+    /// Searches that found no path.
+    pub failed: u64,
+    /// Wall-clock time spent searching, for benchmarks; never feeds the sim.
+    pub micros: f64,
 }
 
 impl Pathfinder {
     /// Returns the path as a stack: `last()` is the next step. Excludes
     /// `start`. Doors `who` does not own are walls to this search.
     pub fn find(&mut self, map: &Map, start: IVec, goal: Goal, max_nodes: u32, who: Faction) -> Option<Vec<IVec>> {
+        let t = std::time::Instant::now();
+        let path = self.search(map, start, goal, max_nodes, who);
+        self.micros += t.elapsed().as_secs_f64() * 1e6;
+        self.failed += path.is_none() as u64;
+        path
+    }
+
+    /// A fresh generation: every cell unvisited, without clearing a thing.
+    fn next_gen(&mut self, map: &Map) -> u32 {
         let n = (map.w * map.h) as usize;
         if self.g.len() != n {
             self.g = vec![0; n];
@@ -76,16 +93,20 @@ impl Pathfinder {
             self.closed_gen.iter_mut().for_each(|x| *x = 0);
             self.gen = 1;
         }
+        self.gen
+    }
+
+    fn search(&mut self, map: &Map, start: IVec, goal: Goal, max_nodes: u32, who: Faction) -> Option<Vec<IVec>> {
+        let gen = self.next_gen(map);
         self.searches += 1;
-        let gen = self.gen;
         self.heap.clear();
 
         let si = map.idx(start);
         self.g[si] = 0;
         self.parent[si] = si as u32;
         self.open_gen[si] = gen;
-        let mut seq = 0u32;
-        self.heap.push(Reverse((start.octile(goal.nearest(start)), seq, si as u32)));
+        let h = start.octile(goal.nearest(start));
+        self.heap.push(Reverse((h, h, si as u32)));
         let mut expanded = 0;
 
         while let Some(Reverse((_, _, ci))) = self.heap.pop() {
@@ -110,17 +131,18 @@ impl Pathfinder {
                 break;
             }
             let cg = self.g[ci];
-            let open = |q: IVec| map.passable_for(q, who);
-            for (k, (dx, dy)) in NEIGHBORS8.iter().enumerate() {
-                let q = cp.offset(*dx, *dy);
-                if !open(q) {
+            let open = NEIGHBORS8.map(|(dx, dy)| map.passable_for(cp.offset(dx, dy), who));
+            for (k, &(dx, dy)) in NEIGHBORS8.iter().enumerate() {
+                if !open[k] {
                     continue;
                 }
                 let diag = k >= 4;
-                // No corner cutting.
-                if diag && (!open(cp.offset(*dx, 0)) || !open(cp.offset(0, *dy))) {
+                // No corner cutting: both cells beside a diagonal are open
+                // (NEIGHBORS8 lists +x, -x, +y, -y first).
+                if diag && !(open[(dx < 0) as usize] && open[2 + (dy < 0) as usize]) {
                     continue;
                 }
+                let q = cp.offset(dx, dy);
                 let qi = map.idx(q);
                 if self.closed_gen[qi] == gen {
                     continue;
@@ -131,12 +153,57 @@ impl Pathfinder {
                     self.open_gen[qi] = gen;
                     self.g[qi] = ng;
                     self.parent[qi] = ci as u32;
-                    seq += 1;
-                    self.heap.push(Reverse((ng + q.octile(goal.nearest(q)), seq, qi as u32)));
+                    let h = q.octile(goal.nearest(q));
+                    self.heap.push(Reverse((ng + h, h, qi as u32)));
                 }
             }
         }
         self.expanded += expanded as u64;
         None
+    }
+
+    /// Breadth-first over the cells a walker reaches from `start`, nearest
+    /// (in steps) first, doors open whoever owns them. `visit` sees each
+    /// cell in turn and ends the fill by returning `Some`; the fill also
+    /// ends once more than `limit` cells have been reached.
+    pub fn flood<T>(
+        &mut self,
+        map: &Map,
+        start: IVec,
+        limit: usize,
+        mut visit: impl FnMut(IVec) -> Option<T>,
+    ) -> Option<T> {
+        let gen = self.next_gen(map);
+        let mut queue = std::mem::take(&mut self.queue);
+        queue.clear();
+        let si = map.idx(start);
+        self.closed_gen[si] = gen;
+        queue.push_back(si as u32);
+        let mut reached = 1;
+        let mut found = None;
+        while let Some(ci) = queue.pop_front() {
+            let c = map.pos(ci as usize);
+            found = visit(c);
+            if found.is_some() || reached > limit {
+                break;
+            }
+            let open = NEIGHBORS8.map(|(dx, dy)| map.passable(c.offset(dx, dy)));
+            for (k, &(dx, dy)) in NEIGHBORS8.iter().enumerate() {
+                // A diagonal past a corner is no way in: a door is only ever
+                // reached straight on, so marking it from a rejected diagonal
+                // would hide every room behind a door.
+                if !open[k] || k >= 4 && !(open[(dx < 0) as usize] && open[2 + (dy < 0) as usize]) {
+                    continue;
+                }
+                let qi = map.idx(c.offset(dx, dy));
+                if self.closed_gen[qi] != gen {
+                    self.closed_gen[qi] = gen;
+                    reached += 1;
+                    queue.push_back(qi as u32);
+                }
+            }
+        }
+        self.queue = queue;
+        found
     }
 }
