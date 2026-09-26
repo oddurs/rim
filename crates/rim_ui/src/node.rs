@@ -203,6 +203,16 @@ pub struct Node {
     pub on_right_click: Option<Function>,
     /// Called once when the pointer comes onto this node.
     pub on_hover: Option<Function>,
+    /// A context menu subject, (kind, id): a right-click here asks for its
+    /// menu (see `ui.on_context`).
+    pub menu: Option<(Rc<str>, Rc<str>)>,
+    /// Popup roots: where to open, in logical pixels; the engine flips it
+    /// to stay on screen.
+    pub at: Option<(f32, f32)>,
+    /// Popup roots: every named key while it's open, in place of bindings.
+    pub on_key: Option<Function>,
+    /// Popup roots: a press anywhere else.
+    pub on_outside: Option<Function>,
     pub tooltip: Option<String>,
     pub focusable: bool,
     pub anchor: Option<Anchor>,
@@ -229,6 +239,7 @@ impl Node {
         self.on_click.is_some()
             || self.on_right_click.is_some()
             || self.on_hover.is_some()
+            || self.menu.is_some()
             || self.tooltip.is_some()
             || self.focusable
             || self.grid.as_ref().is_some_and(|g| {
@@ -361,6 +372,10 @@ pub fn blank(key: u64, owner: Rc<str>) -> Node {
         on_click: None,
         on_right_click: None,
         on_hover: None,
+        menu: None,
+        at: None,
+        on_key: None,
+        on_outside: None,
         tooltip: None,
         focusable: false,
         anchor: None,
@@ -526,6 +541,10 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
         on_click: None,
         on_right_click: None,
         on_hover: None,
+        menu: None,
+        at: None,
+        on_key: None,
+        on_outside: None,
         tooltip: None,
         focusable: false,
         anchor: None,
@@ -633,6 +652,9 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
             "on_click" => n.on_click = Some(function("on_click", v)?),
             "on_right_click" => n.on_right_click = Some(function("on_right_click", v)?),
             "on_hover" => n.on_hover = Some(function("on_hover", v)?),
+            "on_outside" => n.on_outside = Some(function("on_outside", v)?),
+            "menu" => n.menu = Some(subject(&v)?),
+            "at" => n.at = Some(point("at", &v)?),
             "tooltip" => n.tooltip = Some(string("tooltip", &v)?),
             "focusable" => n.focusable = matches!(v, Value::Boolean(true)),
             "priority" => n.priority = num("priority", &v)? as i32,
@@ -707,6 +729,9 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
         });
         n.input = Some(InputData { value, placeholder: empty, on_change, on_submit, on_key });
         n.focusable = true;
+    } else {
+        // Not an input: a popup's keys (see `Node::on_key`).
+        n.on_key = on_key;
     }
     if kind == Kind::Text {
         n.text = Some(TextStyle {
@@ -846,6 +871,29 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
     Ok(n)
 }
 
+/// A context menu subject: `{ kind = "zone", id = 3 }`. The id may be a
+/// string or an integer (entity ids are integers; never round-trip them
+/// through a float).
+fn subject(v: &Value) -> Result<(Rc<str>, Rc<str>), String> {
+    let Value::Table(t) = v else { return Err("'menu' must be { kind = ..., id = ... }".into()) };
+    let kind: String = t.get("kind").map_err(|_| "'menu' needs a kind".to_string())?;
+    let id = match t.get::<Value>("id").map_err(|e| e.to_string())? {
+        Value::Integer(i) => i.to_string(),
+        Value::Number(n) if n.fract() == 0.0 => (n as i64).to_string(),
+        Value::String(s) => s.to_str().map_err(|e| e.to_string())?.to_string(),
+        _ => return Err("'menu' needs an id: a string or an integer".into()),
+    };
+    Ok((kind.into(), id.into()))
+}
+
+/// A point `{ x = ..., y = ... }` in logical pixels.
+fn point(k: &str, v: &Value) -> Result<(f32, f32), String> {
+    let Value::Table(t) = v else { return Err(format!("'{k}' must be {{ x = ..., y = ... }}")) };
+    let x: f32 = t.get("x").map_err(|_| format!("'{k}' needs an x"))?;
+    let y: f32 = t.get("y").map_err(|_| format!("'{k}' needs a y"))?;
+    Ok((x, y))
+}
+
 fn function(k: &str, v: Value) -> Result<Function, String> {
     match v {
         Value::Function(f) => Ok(f),
@@ -879,6 +927,10 @@ pub fn error_node(theme: &Theme, owner: Rc<str>, key: u64, what: &str, err: &str
         on_click: None,
         on_right_click: None,
         on_hover: None,
+        menu: None,
+        at: None,
+        on_key: None,
+        on_outside: None,
         tooltip: None,
         focusable: false,
         anchor: None,
@@ -912,6 +964,10 @@ pub fn error_node(theme: &Theme, owner: Rc<str>, key: u64, what: &str, err: &str
         on_click: None,
         on_right_click: None,
         on_hover: None,
+        menu: None,
+        at: None,
+        on_key: None,
+        on_outside: None,
         tooltip: None,
         focusable: false,
         anchor: None,

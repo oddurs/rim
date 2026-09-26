@@ -400,23 +400,77 @@ function kit.slider(props)
 	})
 end
 
--- A context menu. props: items = { {label, on_click, disabled} }, id.
+-- A context menu: a caption (what it's about, and who acts), then rows in
+-- groups with a hairline between groups. props: id, subject, actor,
+-- groups = { { row, ... }, ... } (empty groups leave no divider), hi (the
+-- highlighted row's number, counting every row), and for a popup root:
+-- at, on_key, on_outside. A row: label, tone ("primary" or "damaging"),
+-- trailing (a key or a short note), disabled (the reason it can't run),
+-- on_click, on_hover.
 function kit.menu(props)
-	local rows = {}
-	for _, item in props.items do
+	local children = {}
+	if props.subject or props.actor then
 		table.insert(
-			rows,
-			node("row", {
-				padx = "m",
-				pady = "s",
-				hover = { bg = "surface_hover" },
-				press = { bg = "surface_press" },
-				on_click = item.on_click,
-				disabled = item.disabled,
-			}, { kit.label(item.label) })
+			children,
+			node("row", { padx = "item", pady = "tight", gap = "item", align = "center" }, {
+				props.subject and kit.caption(props.subject),
+				{ kind = "spacer" },
+				props.actor and kit.label(props.actor, { size = "small", color = "faint" }),
+			})
 		)
 	end
-	return kit.panel({ id = props.id, pad = "xs", gap = "xxs", bg = "surface_raised" }, rows)
+	local n = 0
+	for _, group in props.groups do
+		if #group > 0 then
+			if n > 0 then
+				table.insert(children, node("row", { h = 1, bg = "line" }))
+			end
+			for _, r in group do
+				n += 1
+				local primary, damaging = r.tone == "primary", r.tone == "damaging"
+				local off = r.disabled ~= nil and r.disabled ~= false
+				table.insert(
+					children,
+					node("row", {
+						id = props.id and (props.id .. ".row." .. n),
+						h = 28,
+						padx = "item",
+						gap = "item",
+						align = "center",
+						radius = "radius",
+						bg = if n == props.hi then "surface_hover" else nil,
+						hover = if off then nil else { bg = "surface_hover" },
+						press = if off then nil else { bg = "surface_press" },
+						on_click = if off then nil else r.on_click,
+						on_hover = r.on_hover,
+					}, {
+						node("row", { w = 10, justify = "center", align = "center" }, {
+							primary and node("row", { w = 5, h = 5, radius = 3, bg = "accent" }),
+						}),
+						kit.label(r.label, {
+							weight = if primary then "strong" else nil,
+							color = if off then "faint" elseif damaging then "threat" else nil,
+						}),
+						{ kind = "spacer" },
+						kit.label(if off and type(r.disabled) == "string" then r.disabled else (r.trailing or ""), { size = "small", color = "faint" }),
+					})
+				)
+			end
+		end
+	end
+	return node("col", {
+		id = props.id,
+		at = props.at,
+		on_key = props.on_key,
+		on_outside = props.on_outside,
+		minw = 184,
+		maxw = 264,
+		pad = "tight",
+		gap = 0,
+		bg = "surface_raised",
+		border = "line_strong",
+		radius = "radius",
+	}, children)
 end
 
 local TOAST_COLOR = { info = "text", good = "good", threat = "threat", bad = "bad" }

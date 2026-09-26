@@ -743,6 +743,7 @@ pub struct RawInput {
     pub left_pressed: bool,
     pub left_released: bool,
     pub right_pressed: bool,
+    pub right_released: bool,
     /// Wheel movement in notches (fractional on a trackpad).
     pub wheel: f32,
     pub keys: Vec<KeyCode>,
@@ -844,6 +845,7 @@ impl RawInput {
             left_pressed: is_mouse_button_pressed(MouseButton::Left),
             left_released: is_mouse_button_released(MouseButton::Left),
             right_pressed: is_mouse_button_pressed(MouseButton::Right),
+            right_released: is_mouse_button_released(MouseButton::Right),
             wheel,
             keys,
             chars,
@@ -947,6 +949,7 @@ fn ui_input(raw: &RawInput, dpi: f32) -> rim_ui::Input {
         left_pressed: raw.left_pressed,
         left_released: raw.left_released,
         right_pressed: raw.right_pressed,
+        right_released: raw.right_released,
         wheel: raw.wheel,
         tab: has(KeyCode::Tab),
         shift: raw.shift,

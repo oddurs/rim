@@ -44,6 +44,9 @@ pub struct Input {
     pub left_pressed: bool,
     pub left_released: bool,
     pub right_pressed: bool,
+    /// The right button came up this frame: over a popup's row, it picks it
+    /// (press on a subject, drag to a row, release).
+    pub right_released: bool,
     /// Wheel steps this frame (positive is up).
     pub wheel: f32,
     pub tab: bool,
@@ -161,6 +164,13 @@ enum Call {
         steps: f32,
         shift: bool,
     },
+    /// A right-click on a menu subject: ask for its menu, at a point in
+    /// logical pixels.
+    Context {
+        kind: Rc<str>,
+        id: Rc<str>,
+        at: (f32, f32),
+    },
     /// A press on a grid cell: ask the mod what to paint, then paint it.
     Press {
         grid: Rc<node::Grid>,
@@ -218,7 +228,7 @@ const WIN_KEEP: f32 = 80.0;
 type CachedLayout = (u64, (f32, f32), Vec<Rect>);
 
 /// Layers bottom to top.
-const LAYERS: &[&str] = &["anchored", "docked", "title", "windows", "cursor", "modal", "tooltip"];
+const LAYERS: &[&str] = &["anchored", "docked", "title", "windows", "cursor", "popup", "modal", "tooltip"];
 const TOOLTIP_DELAY: f64 = 0.45;
 /// A sheet's share of the screen at most: wide enough for a board, narrow
 /// enough to leave both side columns clear at 1280 wide and up.
@@ -741,6 +751,40 @@ impl Ui {
         self.layers.iter().find_map(|l| l.hits.iter().find(|h| h.key == key).map(|h| (l.name, h.clone())))
     }
 
+    /// The popup layer's roots, as laid out last frame.
+    fn popup_roots(&self) -> impl Iterator<Item = &Node> {
+        self.layers.iter().filter(|l| l.name == "popup").flat_map(|l| l.roots.iter())
+    }
+
+    /// The nearest menu subject on the path to a hit: the node itself, or
+    /// the closest ancestor that declares one.
+    fn subject_at(&self, layer: &str, path: &[usize]) -> Option<(Rc<str>, Rc<str>)> {
+        (1..=path.len()).rev().find_map(|n| self.node_at(layer, path[0], &path[1..n])?.menu.clone())
+    }
+
+    /// Open the context menu for a subject from outside the interface (the
+    /// map): `at` in physical pixels, like the mouse.
+    pub fn context(
+        &mut self,
+        world: &rim_sim::world::World,
+        client: &ClientView,
+        kind: &str,
+        id: &str,
+        at: (f32, f32),
+    ) -> bool {
+        let s = self.theme.scale;
+        self.vm.context(kind, id, (at.0 / s, at.1 / s), world, client, &self.shown)
+    }
+
+    /// Tell every open popup the player moved on (the camera moved, the
+    /// game changed underneath): each one's `on_outside` runs.
+    pub fn dismiss_popups(&mut self, world: &rim_sim::world::World, client: &ClientView) {
+        let calls: Vec<mlua::Function> = self.popup_roots().filter_map(|n| n.on_outside.clone()).collect();
+        for f in calls {
+            self.vm.call_handler(&f, world, client, &self.shown);
+        }
+    }
+
     fn node_at<'a>(&'a self, layer: &str, root: usize, path: &[usize]) -> Option<&'a Node> {
         let l = self.layers.iter().find(|l| l.name == layer)?;
         let mut n = l.roots.get(root)?;
@@ -948,11 +992,32 @@ impl Ui {
             self.pressed = None;
             self.painting = None;
         }
+        // A press anywhere but an open popup tells the popup, first, so a
+        // right-click elsewhere closes one menu before it opens the next.
+        if input.left_pressed || input.right_pressed {
+            let in_popup = top.as_ref().is_some_and(|(l, _)| *l == "popup");
+            if !in_popup {
+                handlers.extend(self.popup_roots().filter_map(|n| n.on_outside.clone()).map(Call::Click));
+            }
+        }
         if input.right_pressed && out.mouse_over_ui {
             out.captured_right = true;
             if let Some((layer, h)) = &top {
-                if let Some(f) = self.node_at(layer, h.path[0], &h.path[1..]).and_then(|n| n.on_right_click.clone()) {
+                let node = self.node_at(layer, h.path[0], &h.path[1..]);
+                if let Some(f) = node.and_then(|n| n.on_right_click.clone()) {
                     handlers.push(Call::Click(f));
+                } else if let Some((kind, id)) = self.subject_at(layer, &h.path) {
+                    let s = self.theme.scale;
+                    handlers.push(Call::Context { kind, id, at: (mx / s, my / s) });
+                }
+            }
+        }
+        // Press on a subject, drag onto a row, let go: that picks the row.
+        if input.right_released {
+            if let Some((layer, h)) = top.as_ref().filter(|(l, _)| *l == "popup") {
+                if let Some(f) = self.node_at(layer, h.path[0], &h.path[1..]).and_then(|n| n.on_click.clone()) {
+                    handlers.push(Call::Click(f));
+                    out.captured_right = true;
                 }
             }
         }
@@ -1000,8 +1065,19 @@ impl Ui {
                 enter = false;
             }
         }
+        // An open popup takes the keyboard: every named key goes to it, and
+        // no binding fires while it's up.
+        let popup_keys = self.popup_roots().find_map(|n| n.on_key.clone());
+        if let (Some(f), false) = (&popup_keys, input.pressed.is_empty()) {
+            if self.focused_input().is_none() {
+                for key in &input.pressed {
+                    handlers.push(Call::Text { f: f.clone(), text: key.clone() });
+                }
+                out.captured_keys = true;
+            }
+        }
         // Bound actions fire from their keys, unless a text input is typing.
-        if !input.pressed.is_empty() && self.focused_input().is_none() {
+        if !input.pressed.is_empty() && self.focused_input().is_none() && popup_keys.is_none() {
             for key in &input.pressed {
                 if let Some(f) = self.vm.bind_for_key(key) {
                     handlers.push(Call::Click(f));
@@ -1087,6 +1163,9 @@ impl Ui {
                         self.vm.call_with(f, (r, c, value.clone()), world, client, &self.shown);
                     }
                     self.painting = Some(Painting { key, value, done: HashSet::from([cell]) });
+                }
+                Call::Context { kind, id, at } => {
+                    self.vm.context(&kind, &id, at, world, client, &self.shown);
                 }
                 Call::Wheel { f, cell, steps, shift } => {
                     let (r, c) = (cell.0 as i64 + 1, cell.1 as i64 + 1);
@@ -1285,6 +1364,21 @@ impl Ui {
                         placed.push((tree.clone(), rects));
                     }
                 }
+                "popup" => {
+                    // At the point it asks for, 4 px off, flipped left or up
+                    // where it would run off the screen.
+                    let s = self.theme.scale;
+                    let gap = 4.0 * s;
+                    for (_, tree) in built.iter().filter(|(m, _)| m.layer == "popup") {
+                        let (ax, ay) = tree.at.map_or((sw / 2.0, sh / 2.0), |(x, y)| (x * s, y * s));
+                        let rects = self.place_small(tree, (sw * 0.5, sh * 0.8), |(w, h)| {
+                            let x = if ax + gap + w <= sw - gap { ax + gap } else { (ax - gap - w).max(gap) };
+                            let y = if ay + gap + h <= sh - gap { ay + gap } else { (ay - gap - h).max(gap) };
+                            (x, y)
+                        });
+                        placed.push((tree.clone(), rects));
+                    }
+                }
                 "windows" => {
                     let mut y = 60.0 * self.theme.scale;
                     let gap = 12.0 * self.theme.scale;
@@ -1385,7 +1479,7 @@ impl Ui {
                     h.path.insert(0, ri);
                     lo.hits.push(h);
                 }
-                let solid_layer = matches!(layer, "docked" | "title" | "windows" | "modal");
+                let solid_layer = matches!(layer, "docked" | "title" | "windows" | "popup" | "modal");
                 let mut i = 0;
                 let mut path = vec![ri];
                 collect_nodes(&root, &rects, &mut i, &mut path, &mut |n, r, p| {
@@ -1756,6 +1850,10 @@ fn plain(key: u64, style: Style, children: Vec<Node>) -> Node {
         on_click: None,
         on_right_click: None,
         on_hover: None,
+        menu: None,
+        at: None,
+        on_key: None,
+        on_outside: None,
         tooltip: None,
         focusable: false,
         anchor: None,

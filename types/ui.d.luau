@@ -35,7 +35,7 @@ type ListProps = {
 type WindowOpts = { title: string?, w: number?, h: number?, resizable: boolean?, sheet: boolean?, open: boolean? }
 type WindowInfo = { id: string, title: string, w: number, h: number, resizable: boolean, sheet: boolean, comp: string }
 type Bind = { id: string, label: string, key: string, owner: string }
-type Layer = "top" | "bottom" | "left" | "right" | "anchored" | "cursor" | "modal" | "windows" | "title"
+type Layer = "top" | "bottom" | "left" | "right" | "anchored" | "cursor" | "popup" | "modal" | "windows" | "title"
 type Need = { id: string, label: string, value: number, color: string, low: boolean }
 type Pawn = {
     id: number, name: string, label: string, faction: string, player: boolean, founder: boolean,
@@ -115,6 +115,8 @@ declare ui: {
     list: (props: ListProps) -> Node,
     -- Show a component on a screen layer. refresh says how often it is rebuilt when nothing forces it: every frame, twenty times a second (the default) or four.
     mount: (layer: Layer, id: string, opts: { order: number?, align: string?, refresh: ("frame" | "fast" | "slow")? }?) -> (),
+    -- What a right-click on a node with a menu subject (menu = { kind, id }) calls, with the point in logical pixels. Core's menus module sets it; the last one set wins.
+    on_context: (handler: (subject: { kind: string, id: any }, x: number, y: number) -> ()) -> (),
     -- Open a window (and bring it to the front).
     open: (id: string) -> (),
     -- Hide a node by id.
