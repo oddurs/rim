@@ -22,7 +22,8 @@ id = "warmth"
 label = "warmth"
 color = "#e07a3a"
 satisfier = "field"
-field = "temperature"
+# How cold it feels, wind and rain included, not the thermometer.
+field = "feels_like"
 comfort = [10.0, 32.0]
 days_to_empty = 0.2
 recover_days = 0.1

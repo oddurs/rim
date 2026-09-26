@@ -14,8 +14,9 @@
 //! programs and evaluate in integer fixed point: no floats and no
 //! transcendental maths, so lockstep holds on every platform.
 //!
-//! v1 inputs are global (time of day and year, other fields' outdoor values,
-//! noise, constants). Per-cell inputs arrive with stock fields.
+//! Inputs are global (time of day and year, other fields' outdoor values,
+//! noise, constants), plus `field`: another field's value at the cell a
+//! derived field is read at, or its outdoor value where there is no cell.
 
 use crate::rng::mix;
 use serde::Deserialize;
@@ -66,6 +67,9 @@ pub struct SourceDef {
     pub input: Option<String>,
     /// Another field's outdoor value.
     pub ambient: Option<String>,
+    /// Another field's value at the cell being read, for a derived field;
+    /// where there is no cell (an outdoor value), its outdoor value.
+    pub field: Option<String>,
     /// Smooth noise in -1..1, keyed so different uses don't move together.
     pub noise: Option<String>,
     /// Noise period in game hours.
@@ -85,6 +89,7 @@ enum Src {
     Year,
     Hour,
     Ambient(usize),
+    Field(usize),
     Noise { key: u64, period: u64 },
     Const(i64),
 }
@@ -154,6 +159,10 @@ pub trait Env {
     /// Hour of the day, 0..24·Q.
     fn hour(&self) -> i64;
     fn ambient(&self, field: usize) -> i64;
+    /// A field's value where the terms are read; outdoors by default.
+    fn field(&self, field: usize) -> i64 {
+        self.ambient(field)
+    }
     fn tick(&self) -> u64;
     fn seed(&self) -> u64;
 }
@@ -186,7 +195,10 @@ impl Terms {
             .terms
             .iter()
             .flat_map(|t| t.inputs.iter())
-            .filter_map(|i| if let Src::Ambient(f) = i.src { Some(f) } else { None })
+            .filter_map(|i| match i.src {
+                Src::Ambient(f) | Src::Field(f) => Some(f),
+                _ => None,
+            })
             .collect();
         v.sort_unstable();
         v.dedup();
@@ -200,6 +212,7 @@ impl Terms {
                 Src::Year => env.year(),
                 Src::Hour => env.hour(),
                 Src::Ambient(f) => env.ambient(f),
+                Src::Field(f) => env.field(f),
                 Src::Noise { key, period } => noise(env.seed() ^ key, env.tick(), period),
                 Src::Const(c) => c,
             };
@@ -222,9 +235,10 @@ impl Terms {
 }
 
 fn compile_source(s: &SourceDef, ctx: &str, resolve: &dyn Fn(&str) -> Option<usize>) -> Result<Input, String> {
-    let named = [s.input.is_some(), s.ambient.is_some(), s.noise.is_some()].iter().filter(|b| **b).count();
+    let named =
+        [s.input.is_some(), s.ambient.is_some(), s.field.is_some(), s.noise.is_some()].iter().filter(|b| **b).count();
     if named != 1 {
-        return Err(format!("{ctx}: an input needs exactly one of `input`, `ambient` or `noise`"));
+        return Err(format!("{ctx}: an input needs exactly one of `input`, `ambient`, `field` or `noise`"));
     }
     let src = if let Some(i) = &s.input {
         match i.as_str() {
@@ -234,6 +248,8 @@ fn compile_source(s: &SourceDef, ctx: &str, resolve: &dyn Fn(&str) -> Option<usi
         }
     } else if let Some(a) = &s.ambient {
         Src::Ambient(resolve(a).ok_or_else(|| format!("{ctx}: unknown field '{a}'"))?)
+    } else if let Some(f) = &s.field {
+        Src::Field(resolve(f).ok_or_else(|| format!("{ctx}: unknown field '{f}'"))?)
     } else {
         let key = s.noise.as_deref().unwrap_or_default();
         if s.hours <= 0.0 {
@@ -279,7 +295,7 @@ pub fn order(reads: &[Vec<usize>], names: &[&str]) -> Result<Vec<usize>, String>
             1 => {
                 let start = path.iter().position(|&p| p == i).unwrap_or(0);
                 let cycle: Vec<&str> = path[start..].iter().chain([&i]).map(|&p| names[p]).collect();
-                return Err(format!("field ambient terms form a cycle: {}", cycle.join(" -> ")));
+                return Err(format!("field terms form a cycle: {}", cycle.join(" -> ")));
             }
             _ => {}
         }

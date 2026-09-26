@@ -467,6 +467,10 @@ pub enum FieldKind {
     /// in the lee of what blocks the wind, 0 in an enclosed room. The
     /// direction comes from the field named in `from`.
     Shelter,
+    /// Worked out on read from other fields, by its `value` terms: nothing
+    /// is stored. A `field` input reads the other field at the same cell,
+    /// so it's the room's value indoors and the lee's in the lee.
+    Derived,
 }
 
 fn d6() -> u32 {
@@ -510,6 +514,10 @@ pub struct FieldDef {
     /// Plugins add named contributions on top (`rim.push_ambient`).
     #[serde(default)]
     pub ambient: AmbientDef,
+    /// A derived field's value, as terms; read at a cell, `field` inputs
+    /// read that cell. Outdoors it's also the field's outdoor value.
+    #[serde(default)]
+    pub value: Option<TermsDef>,
     #[serde(default)]
     pub indoor: IndoorMode,
     #[serde(default)]
@@ -1176,6 +1184,21 @@ impl DefDb {
                 AmbientDef::Const(v) => d.base = *v,
                 AmbientDef::Terms(t) => d.terms = Terms::compile(t, &format!("field/{}", d.id), &field_index)?,
             }
+            // A derived field's value is its outdoor value's terms too, so
+            // the outdoor reading, pushes and ordering all come for free.
+            match (&d.value, d.kind == FieldKind::Derived) {
+                (Some(v), true) if d.terms.is_empty() && d.base == 0.0 && d.indoor == IndoorMode::Outdoor => {
+                    d.terms = Terms::compile(v, &format!("field/{}, value", d.id), &field_index)?;
+                }
+                (None, false) => {}
+                (Some(_), false) => return Err(format!("field/{}: `value` is for kind = \"derived\"", d.id)),
+                _ => {
+                    return Err(format!(
+                        "field/{}: a derived field gives `value` terms, and no `ambient` or `indoor`",
+                        d.id
+                    ))
+                }
+            }
             if d.kind == FieldKind::Shelter {
                 d.from_r = field_index(&d.from)
                     .ok_or_else(|| format!("field/{}: a shelter field needs `from`, the wind direction field", d.id))?;
@@ -1354,6 +1377,10 @@ impl DefDb {
                 h.requires_r = mask(&h.requires);
             }
         }
+        // Shelter and derived fields are worked out, not stamped or kept
+        // per room: an emitter or a boundary piece on one would do nothing.
+        let computed: Vec<Option<&str>> =
+            self.fields.iter().map(|f| (f.kind != FieldKind::Ambient).then_some(f.id.as_str())).collect();
         for d in &mut self.things {
             let ctx = format!("thing/{}", d.id);
             d.rgb = parse_color(&d.color).map_err(|e| format!("{ctx}: {e}"))?;
@@ -1397,6 +1424,12 @@ impl DefDb {
             }
             for em in &mut d.emit {
                 em.field_r = get("field", &em.field, &ctx)?;
+            }
+            let fed = d.boundary.iter().map(|b| b.field_r).chain(d.emit.iter().map(|e| e.field_r));
+            if let Some(f) = fed.filter_map(|f| computed[f as usize]).next() {
+                return Err(format!(
+                    "{ctx}: field {f} is worked out from others, so nothing can emit into it or bound it"
+                ));
             }
             d.stack_limit = d.stack_limit.max(1);
             if let Some(t) = &d.tool {

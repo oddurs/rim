@@ -45,9 +45,13 @@ That reads: 10°C, plus 9° times a curve over the hour of the day.
 | `{ input = "hour" }` | Hour of the day, 0 to 24 |
 | `{ input = "year" }` | Fraction of the year, 0 to 1 |
 | `{ ambient = "cloud" }` | Another field's outdoor value |
+| `{ field = "temperature" }` | Another field's value at the cell being read (a derived field's terms); elsewhere its outdoor value |
 | `{ noise = "gusts", hours = 2 }` | Smooth noise from -1 to 1, changing over about `hours` game hours |
 | `4.5` | A constant |
 
+- A field with `kind = "derived"` has `value` terms instead of `ambient`,
+  worked out wherever it's read and never stored. Core's `feels_like` is
+  `temperature` less wind chill and cold rain, and the warmth need reads it.
 - A **curve** is up to 16 `[x, y]` points with increasing `x`. Between points
   it's a straight line; beyond the ends it holds the end value.
 - Fields are evaluated in dependency order: `temperature` can read `cloud`.

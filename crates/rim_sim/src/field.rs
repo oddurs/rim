@@ -97,6 +97,37 @@ impl Env for AmbEnv<'_> {
     }
 }
 
+/// What a derived field's terms see at one cell: `field` inputs read the
+/// other fields there, everything else reads as outdoors does.
+struct CellEnv<'a> {
+    fields: &'a Fields,
+    defs: &'a DefDb,
+    map: &'a Map,
+    p: IVec,
+    clock: Clock,
+}
+
+impl Env for CellEnv<'_> {
+    fn year(&self) -> i64 {
+        self.clock.year
+    }
+    fn hour(&self) -> i64 {
+        self.clock.hour
+    }
+    fn ambient(&self, f: usize) -> i64 {
+        self.fields.atmos[f].value
+    }
+    fn field(&self, f: usize) -> i64 {
+        self.fields.value_fixed(self.defs, self.map, f, self.p) as i64 * (Q / FIXED as i64)
+    }
+    fn tick(&self) -> u64 {
+        self.clock.tick
+    }
+    fn seed(&self) -> u64 {
+        self.clock.seed
+    }
+}
+
 /// The clock, as terms see it.
 #[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Clock {
@@ -547,6 +578,9 @@ impl Fields {
             return 0;
         }
         let layer = &self.layers[field];
+        if defs.fields[field].kind == FieldKind::Derived {
+            return self.derived_at(defs, map, field, p);
+        }
         let indoors = map.room_at(p).filter(|r| r.enclosed());
         if defs.fields[field].kind == FieldKind::Shelter {
             let open = layer.exposure.get(map.idx(p)).copied().unwrap_or(100) as i32;
@@ -564,6 +598,21 @@ impl Fields {
             // adding their local stamp too would count the same fire twice.
             (IndoorMode::Room, Some(r)) => layer.rooms.get(r.id as usize - 1).copied().unwrap_or(layer.ambient),
         }
+    }
+
+    /// A derived field at a cell: its terms read there, plus whatever is
+    /// pushed onto its outdoor value. A pin holds everywhere.
+    fn derived_at(&self, defs: &DefDb, map: &Map, field: usize, p: IVec) -> i32 {
+        let a = &self.atmos[field];
+        let q = match a.pin {
+            Some(v) => v,
+            None => {
+                let clock = self.last_clock.unwrap_or(Clock { tick: 0, year: 0, hour: 0, seed: 0 });
+                let env = CellEnv { fields: self, defs, map, p, clock };
+                defs.fields[field].terms.eval(&env) + a.pushes.iter().map(|p| p.value(clock.tick)).sum::<i64>()
+            }
+        };
+        (q / (Q / FIXED as i64)) as i32
     }
 
     /// Value at a cell, in the field's own units.
