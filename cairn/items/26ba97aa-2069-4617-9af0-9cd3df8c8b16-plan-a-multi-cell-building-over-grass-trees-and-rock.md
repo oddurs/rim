@@ -3,7 +3,7 @@ id: 26ba97aa-2069-4617-9af0-9cd3df8c8b16
 title: Plan a multi-cell building over grass, trees and rock
 type: feature
 status: backlog
-milestone: crafting
+milestone: houses
 depends_on:
 - 8cf4db07-217d-42f9-aed0-8c119d5acf0c
 created: 2026-09-25
@@ -33,3 +33,7 @@ Planning a building over a natural thing (#116) marks it to be cleared and puts 
 ## 2026-09-26
 
 Moved from building, which had already shipped when this was filed: multi-cell workbenches arrive with crafting.
+
+## 2026-09-26
+
+Moved to houses: facing (ba18a8e4) makes 1x2 beds and 2x1 benches the norm, and they must be plannable over grass.

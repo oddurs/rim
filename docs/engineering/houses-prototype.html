@@ -1,0 +1,1542 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- The building concept of DESIGN.md §6c, running on real data. No build step: open it in a browser. -->
+<title>Rim House Plans</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=JetBrains+Mono:wght@400&display=swap">
+<style>
+:root {
+  color-scheme: dark;
+  --ground: #0d0f11;
+  --surface: #121417;
+  --raised: #1c1f24;
+  --hover: #272b31;
+  --line: #ffffff1f;
+  --line-strong: #ffffff40;
+  --text: #e7e7e4;
+  --muted: #a3a8ae;
+  --faint: #7b8188;
+  --accent: #5ab4ff;
+  --accent-soft: #5ab4ff2e;
+  --good: #72d282;
+  --threat: #ff6b5a;
+  --bad: #ffb35a;
+  --sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html, body { background: var(--ground); color: var(--text); }
+body { margin: 0; font: 14px/1.5 var(--sans); padding-inline: 16px; padding-block: 28px 64px; }
+.wrap { max-width: 1320px; margin: 0 auto; display: grid; gap: 28px; }
+header { display: grid; gap: 10px; max-width: 760px; }
+.eyebrow { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+h1 { font-size: 30px; line-height: 1.15; font-weight: 600; margin: 0; letter-spacing: -.01em; text-wrap: balance; }
+header p { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.55; max-width: 68ch; }
+h2 { font-size: 18px; font-weight: 600; margin: 0; text-wrap: balance; }
+h3 { font-size: 15px; font-weight: 600; margin: 0; }
+code, .mono { font-family: var(--mono); font-size: 12.5px; }
+
+/* The workbench: tools, the plan, the inspector */
+.bench { display: grid; grid-template-columns: 196px minmax(0, 1fr) 300px; gap: 12px; align-items: start; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
+.tools { padding: 12px; display: grid; gap: 14px; }
+.group { display: grid; gap: 6px; }
+.cap { font-size: 11px; letter-spacing: .07em; text-transform: uppercase; color: var(--faint); }
+.grid-tools { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
+.tool { appearance: none; border: 1px solid transparent; background: var(--raised); border-radius: 4px; padding: 0; aspect-ratio: 1; display: grid; place-items: center; cursor: pointer; position: relative; }
+.tool canvas { width: 100%; height: 100%; border-radius: 3px; display: block; }
+.tool:hover { border-color: var(--line-strong); }
+.tool[aria-pressed="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.tool:focus-visible, .seg button:focus-visible, .mat:focus-visible, .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tool .k { position: absolute; right: 2px; bottom: 1px; font: 9px/1 var(--mono); color: #fff; text-shadow: 0 0 3px #000, 0 0 2px #000; }
+.toolname { font-size: 12px; color: var(--muted); min-height: 18px; }
+.mats { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.mat { appearance: none; border: 1px solid transparent; background: var(--raised); border-radius: 4px; padding: 4px; display: grid; gap: 3px; cursor: pointer; color: var(--muted); font: 11px/1.2 var(--sans); text-align: left; }
+.mat canvas { width: 100%; height: auto; aspect-ratio: 2 / 1; display: block; border-radius: 2px; }
+.mat:hover { border-color: var(--line-strong); }
+.mat[aria-pressed="true"] { border-color: var(--accent); color: var(--text); }
+.seg { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--raised); border-radius: 4px; padding: 2px; gap: 2px; }
+.seg button { appearance: none; border: 0; background: transparent; color: var(--muted); font: 12px/1 var(--sans); padding: 7px 0; border-radius: 3px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--hover); color: var(--text); }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+.row2 { display: flex; gap: 6px; flex-wrap: wrap; }
+.btn { appearance: none; border: 1px solid var(--line); background: var(--raised); color: var(--text); font: 12px/1 var(--sans); padding: 7px 10px; border-radius: 4px; cursor: pointer; }
+.btn:hover { background: var(--hover); }
+
+.stage { position: relative; overflow: hidden; }
+#plan { display: block; width: 100%; touch-action: none; cursor: crosshair; border-radius: 6px; }
+#plan.panning { cursor: grab; }
+.hint { display: flex; gap: 14px; flex-wrap: wrap; padding: 8px 2px 0; color: var(--faint); font-size: 12px; }
+.hint b { color: var(--muted); font-weight: 600; }
+
+.inspect { padding: 14px; display: grid; gap: 12px; min-height: 300px; }
+.ins-head { display: grid; gap: 4px; }
+.kicker { font: 11px/1.2 var(--mono); color: var(--faint); }
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 999px; width: fit-content; }
+.pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.pill.good { color: var(--good); background: #72d2821f; }
+.pill.threat { color: var(--threat); background: #ff6b5a1f; }
+.pill.muted { color: var(--muted); background: #ffffff10; }
+dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; font-size: 13px; }
+dt { color: var(--faint); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; padding-top: 2px; }
+dd { margin: 0; font-variant-numeric: tabular-nums; }
+.explain { font: 11.5px/1.5 var(--mono); color: var(--muted); border-top: 1px solid var(--line); padding-top: 10px; overflow-wrap: anywhere; }
+.explain .t { color: var(--text); }
+.mask { display: inline-grid; grid-template-columns: repeat(3, 10px); gap: 2px; vertical-align: middle; }
+.mask i { width: 10px; height: 10px; border-radius: 2px; background: #ffffff14; }
+.mask i.on { background: var(--muted); }
+.mask i.me { background: var(--accent); }
+.roomlist { display: grid; gap: 2px; font-size: 13px; }
+.roomlist div { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.roomlist span:last-child { color: var(--faint); font-size: 12px; text-align: right; }
+.roomlist .bad { color: var(--threat); }
+
+/* The argument, below the plan */
+.notes { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 28px 32px; border-top: 1px solid var(--line); padding-top: 28px; }
+.note { display: grid; gap: 10px; align-content: start; }
+.note p, .note li { color: var(--muted); line-height: 1.6; margin: 0; }
+.note ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+.note strong { color: var(--text); font-weight: 600; }
+.span4 { grid-column: span 4; } .span6 { grid-column: span 6; } .span8 { grid-column: span 8; } .span12 { grid-column: span 12; }
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 12px; }
+.gallery figure { margin: 0; display: grid; gap: 6px; }
+.gallery canvas { width: 100%; aspect-ratio: 1; border-radius: 4px; display: block; }
+.gallery figcaption { font-size: 12px; color: var(--muted); }
+.gallery.wide canvas { aspect-ratio: 4 / 3; }
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 7px 10px 7px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { color: var(--faint); font-weight: 400; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
+td.sw { width: 34px; } td.sw i { display: block; width: 22px; height: 14px; border-radius: 2px; }
+pre { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; overflow-x: auto; font: 12px/1.55 var(--mono); color: var(--muted); }
+pre .c { color: var(--faint); }
+.api { font: 11px/1 var(--mono); padding: 2px 6px; border-radius: 3px; background: #ffffff10; color: var(--muted); margin-left: 6px; }
+.api.add { color: var(--good); background: #72d2821a; }
+.api.brk { color: var(--bad); background: #ffb35a1a; }
+
+@media (max-width: 1100px) {
+  .bench { grid-template-columns: 180px minmax(0, 1fr); }
+  .inspect { grid-column: 1 / -1; }
+  .span4 { grid-column: span 6; } .span8 { grid-column: span 12; }
+}
+@media (max-width: 720px) {
+  h1 { font-size: 24px; }
+  .bench { grid-template-columns: minmax(0, 1fr); }
+  .tools { grid-template-columns: 1fr 1fr; }
+  .grid-tools { grid-template-columns: repeat(6, 1fr); }
+  .notes { grid-template-columns: minmax(0, 1fr); }
+  .span4, .span6, .span8, .span12 { grid-column: auto; }
+}
+@media (max-width: 480px) { .tools { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">rim · building concept</div>
+    <h1>A house is drawn as its plan</h1>
+    <p>Every wall, door and window here is drawn from a few primitives and the cell's neighbours. There are no sprites. Each mark shows something the sim works out: whether the room is enclosed, whether the roof holds, what the room is for and how fast it loses heat. Paint walls, knock a hole in one, and watch the room's state change.</p>
+  </header>
+
+  <section class="bench" aria-label="House plan prototype">
+    <aside class="panel tools">
+      <div class="group">
+        <div class="cap">Build</div>
+        <div class="grid-tools" id="tools-build"></div>
+      </div>
+      <div class="group">
+        <div class="cap">Furnish</div>
+        <div class="grid-tools" id="tools-furnish"></div>
+        <div class="toolname" id="toolname" aria-live="polite"></div>
+      </div>
+      <div class="group">
+        <div class="cap">Made of</div>
+        <div class="mats" id="mats"></div>
+      </div>
+      <div class="group">
+        <div class="cap">Roofs</div>
+        <div class="seg" id="roofs">
+          <button type="button" id="roof-auto" data-v="auto" aria-pressed="true">Auto</button>
+          <button type="button" id="roof-on" data-v="on" aria-pressed="false">On</button>
+          <button type="button" id="roof-off" data-v="off" aria-pressed="false">Off</button>
+        </div>
+        <label class="cap" for="zoom">Zoom</label>
+        <input type="range" id="zoom" min="8" max="46" step="0.5" value="18">
+        <div class="row2">
+          <button type="button" class="btn" id="reset">Reset sample</button>
+          <button type="button" class="btn" id="clear">Clear</button>
+        </div>
+      </div>
+    </aside>
+
+    <div class="stage">
+      <canvas id="plan" aria-label="Colony plan. Paint to build."></canvas>
+      <div class="hint">
+        <span><b>Drag</b> to build</span>
+        <span><b>Right-drag</b> to erase</span>
+        <span><b>Scroll</b> to zoom · zoom out for roofs</span>
+        <span><b>Space-drag</b> to pan</span>
+        <span><b>R</b> rotates</span>
+      </div>
+    </div>
+
+    <aside class="panel inspect" id="inspect" aria-live="polite"></aside>
+  </section>
+
+  <section class="notes">
+    <div class="note span12">
+      <h2>One rule for every junction</h2>
+      <p>A wall piece looks at its eight neighbours. Each quarter of the cell reads its two sides and the corner between them, and that picks one of five shapes: outer corner, edge, edge, inner corner or solid. A run then reads as one mass, rounded where it ends and square where it meets. Doors and windows take their direction from the run they sit in. Material changes along a run with only a hairline seam, never an outline.</p>
+      <div class="gallery" id="joins"></div>
+    </div>
+
+    <div class="note span6">
+      <h2>Four weights, one light</h2>
+      <ul>
+        <li><strong>Walls</strong> carry the heaviest line and cast the only real shadow: short, down and to the right, from one sun.</li>
+        <li><strong>Openings</strong> are drawn in a medium line: a door leaf and the arc it swings through, a pane across a window.</li>
+        <li><strong>Furniture</strong> is a thin outlined plan symbol. A chair turns to face its table, and a bed's head is where it was placed.</li>
+        <li><strong>Material</strong> is a hairline pattern in the material's own colour. It fades out when zoomed out and becomes a roof further out.</li>
+      </ul>
+    </div>
+
+    <div class="note span6">
+      <h2>What each mark tells you</h2>
+      <ul>
+        <li><strong>A light fan</strong> behind a window means daylight is getting into an enclosed room.</li>
+        <li><strong>A warm wash</strong> fills a room that has a fire. It stops at the walls, because heat does.</li>
+        <li><strong>A red dash</strong> marks the one gap that stops a ring of walls from being a room.</li>
+        <li><strong>Blue hatching</strong> marks floor that is too far from any wall or pillar to be roofed. The room counts as outdoors until you add a pillar.</li>
+        <li><strong>The room's name</strong> comes from what is inside it, checked against rules written as data.</li>
+      </ul>
+    </div>
+
+    <div class="note span12">
+      <h2>Materials, from hands to kiln</h2>
+      <p>One wall def, many materials, as today. The material sets the pattern, the stats and the roof. It can also require a tool to build with, the way it requires one to gather. Building and crafting share one order, so a stone wall waits on a maul the way a bill does.</p>
+      <div class="tablewrap"><table id="mattable"></table></div>
+    </div>
+
+    <div class="note span6">
+      <h2>Rooms know what they are for</h2>
+      <p>Roles are data. The first rule a room meets names it. The engine only counts tags inside a room when rooms rebuild. Mood, eras and the storyteller read the result.</p>
+      <pre id="rolesrc"></pre>
+    </div>
+
+    <div class="note span6">
+      <h2>The roof follows from the walls</h2>
+      <p>Today a room is indoors if it is enclosed and at most 400 cells. The proposal replaces the cap with a roof span. Every wall, door, window and pillar holds the roof up for a few cells, set by its material. A 3×3 hut is unaffected. A great hall needs pillars, and a valley ringed by cliffs still isn't a house. The same distance field draws the roof: its slope is the distance to the eaves, which gives hipped roofs on any room shape.</p>
+    </div>
+
+    <div class="note span8">
+      <h2>What changes in the engine</h2>
+      <ul>
+        <li><strong>Joins as a topology.</strong> <code>look.join</code> gains a style (<code>mass</code> for walls and rock, <code>pipe</code> for fences) and a list of groups it connects to.<span class="api add">additive</span></li>
+        <li><strong>Four primitives</strong>: <code>mass</code>, <code>pipe</code>, <code>pattern</code> and <code>arc</code>. Layers can be written along the run (<code>orient = "run"</code>) and mirrored to face the room (<code>into = "room"</code>).<span class="api add">additive</span></li>
+        <li><strong>A look for materials.</strong> <code>stuff.look = { pattern, roof }</code> from a fixed vocabulary, and <code>stuff.requires</code> for tools.<span class="api add">additive</span></li>
+        <li><strong>Facing.</strong> Things turn in four directions. The footprint, spots and look turn with them.<span class="api add">additive</span></li>
+        <li><strong>Room roles and a roof span</strong>, both as data. The span replaces <code>MAX_ROOM_CELLS</code>.<span class="api brk">breaking</span></li>
+        <li><strong>Builds become orders</strong>, and a planned material swap leaves the old wall standing until the new material arrives.<span class="api">none</span></li>
+        <li><strong>Plans as data</strong>: an ASCII grid and a legend, placed as blueprints with one command.<span class="api add">additive</span></li>
+      </ul>
+    </div>
+
+    <div class="note span4">
+      <h2>Borrowed from</h2>
+      <ul>
+        <li><strong>RimWorld</strong>: things made of stuff, rooms found from walls, roof support.</li>
+        <li><strong>Minecraft</strong>: a block is its shape and its material. Working a material changes its look, fences connect on their own, and structures are data.</li>
+        <li><strong>Prison Architect</strong>: a readable top-down plan, and rooms defined by what is in them.</li>
+        <li><strong>Terraria</strong>: a house is a checklist the game can explain.</li>
+        <li><strong>Townscaper</strong>: joins are decided at corners, not cells.</li>
+        <li><strong>Architects' drawings</strong>: poché walls, line weights, hatches for materials and door swings.</li>
+      </ul>
+    </div>
+  </section>
+</div>
+
+<script>
+'use strict';
+
+// ---------------------------------------------------------------- data
+// Everything below mirrors what the defs would say. The renderer reads
+// only these tables and the neighbours, never an id.
+
+const MATS = {
+  branches: { label: 'Wattle', item: 'branches', from: 'gathered by hand', color: '#7a5a36', pattern: 'weave', ins: 0.6, hp: 0.4, span: 2, beauty: 0.8, roof: 'thatch', floor: 'rushes', needs: '' },
+  clay:     { label: 'Cob', item: 'clay', from: 'dug with a digging stick', color: '#a86f4c', pattern: 'stipple', ins: 1.6, hp: 0.8, span: 3, beauty: 0.9, roof: 'thatch', floor: 'earth', needs: '' },
+  wood:     { label: 'Log', item: 'wood', from: 'felled with an axe', color: '#9c6b3c', pattern: 'logs', ins: 1.0, hp: 0.7, span: 4, beauty: 1.0, roof: 'shingle', floor: 'planks', needs: 'chopping' },
+  stones:   { label: 'Dry stone', item: 'stones', from: 'gathered by hand', color: '#8f8a82', pattern: 'rubble', ins: 1.2, hp: 1.2, span: 3, beauty: 0.9, roof: 'turf', floor: 'cobbles', needs: '' },
+  stone:    { label: 'Ashlar', item: 'stone blocks', from: 'quarried with a maul', color: '#a9a39a', pattern: 'courses', ins: 1.5, hp: 1.6, span: 5, beauty: 1.1, roof: 'slate', floor: 'flags', needs: 'pounding' },
+  brick:    { label: 'Brick', item: 'bricks', from: 'clay fired in a kiln', color: '#a4533a', pattern: 'bond', ins: 1.8, hp: 1.4, span: 4, beauty: 1.2, roof: 'tile', floor: 'bond', needs: '' },
+};
+const ROOFS = {
+  thatch:  { label: 'thatch', color: '#b39a5b', lines: 'slope' },
+  shingle: { label: 'shingle', color: '#7d5d3d', lines: 'eave' },
+  turf:    { label: 'turf', color: '#667a41', lines: 'dots' },
+  slate:   { label: 'slate', color: '#5b6571', lines: 'eave' },
+  tile:    { label: 'clay tile', color: '#b0583f', lines: 'eave' },
+};
+const KINDS = {
+  wall:     { label: 'wall', join: 'wall', mass: true, leak: 1.0, hp: 200, support: true },
+  door:     { label: 'door', join: 'wall', opening: 'door', leak: 1.5, hp: 150, support: true },
+  window:   { label: 'window', join: 'wall', mass: true, opening: 'window', leak: 4.0, pass: 0.35, hp: 60, support: true },
+  pillar:   { label: 'pillar', support: true, hp: 180 },
+  fence:    { label: 'fence', pipe: true, connects: ['fence', 'wall'], hp: 60 },
+  bed:      { label: 'bed', size: [1, 2], tag: 'bed', furn: true },
+  table:    { label: 'table', size: [2, 1], tag: 'table', furn: true },
+  chair:    { label: 'chair', tag: 'seat', furn: true },
+  hearth:   { label: 'hearth', tag: 'fire', furn: true, fixed: '#6a625b' },
+  bench:    { label: 'workbench', size: [2, 1], tag: 'station', furn: true },
+  campfire: { label: 'campfire', tag: 'fire', furn: true, fixed: '#8f8a82' },
+  tree:     { label: 'oak tree', natural: true },
+  rock:     { label: 'granite', join: 'rock', mass: true, support: true, natural: true, leak: 0.5 },
+};
+const ROCK = { color: '#7d776f', pattern: 'crag', ins: 2, span: 5, label: 'Granite' };
+// Rules in order: the first a room meets names it.
+const ROLES = [
+  { id: 'dormitory', label: 'Dormitory', needs: { bed: 2 } },
+  { id: 'home', label: 'Home', needs: { bed: 1, fire: 1 } },
+  { id: 'bedroom', label: 'Bedroom', needs: { bed: 1 } },
+  { id: 'workshop', label: 'Workshop', needs: { station: 1 } },
+  { id: 'hall', label: 'Hall', needs: { table: 1, seat: 1 } },
+];
+const TERR = ['#5d8a3c', '#8a7355', '#4d6645', '#3d7ab8', '#5e5a55']; // grass dirt marsh water rock floor
+const WATER = 3;
+
+// ---------------------------------------------------------------- helpers
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+function hash(x, y, k) {
+  let h = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263) ^ Math.imul(k | 0, 1274126177);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+const RGB = {};
+function rgb(h) { return RGB[h] || (RGB[h] = [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16))); }
+function shade(h, f, a = 1) { const c = rgb(h); return `rgba(${Math.min(255, c[0] * f) | 0},${Math.min(255, c[1] * f) | 0},${Math.min(255, c[2] * f) | 0},${a})`; }
+function mix(h1, h2, t, a = 1) { const p = rgb(h1), q = rgb(h2); return `rgba(${(p[0] + (q[0] - p[0]) * t) | 0},${(p[1] + (q[1] - p[1]) * t) | 0},${(p[2] + (q[2] - p[2]) * t) | 0},${a})`; }
+const INK = 'rgba(22,17,12,0.82)';
+const DIRS4 = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+const matOf = o => o.kind === 'rock' ? ROCK : MATS[o.mat];
+const colorOf = o => KINDS[o.kind].fixed || matOf(o).color;
+
+// ---------------------------------------------------------------- world
+function makeWorld(W, H) { return { W, H, t: new Uint8Array(W * H), f: new Array(W * H).fill(null), fl: new Array(W * H).fill(null) }; }
+const inb = (w, x, y) => x >= 0 && y >= 0 && x < w.W && y < w.H;
+const at = (w, x, y) => inb(w, x, y) ? w.f[y * w.W + x] : null;
+function size(kind, rot) { const s = KINDS[kind].size || [1, 1]; return rot & 1 ? [s[1], s[0]] : s; }
+function J(w, x, y, g) { const o = at(w, x, y); return !!o && KINDS[o.kind].join === g; }
+function joinsPipe(w, x, y) { const o = at(w, x, y); return !!o && (o.kind === 'fence' || KINDS[o.kind].join === 'wall'); }
+
+function canPlace(w, kind, x, y, rot) {
+  const [fw, fh] = size(kind, rot), one = fw === 1 && fh === 1, k = KINDS[kind];
+  for (let j = 0; j < fh; j++) for (let i = 0; i < fw; i++) {
+    const cx = x + i, cy = y + j;
+    if (!inb(w, cx, cy) || w.t[cy * w.W + cx] === WATER) return false;
+    const o = at(w, cx, cy);
+    if (!o || o.kind === 'tree') continue;
+    // Replacing in place: a wall becomes a door, or cob becomes stone.
+    if (one && k.join === 'wall' && KINDS[o.kind].join === 'wall') continue;
+    if (one && o.kind === kind) continue;
+    return false;
+  }
+  return true;
+}
+function removeObj(w, o) {
+  const [fw, fh] = size(o.kind, o.rot);
+  for (let j = 0; j < fh; j++) for (let i = 0; i < fw; i++) w.f[(o.y + j) * w.W + o.x + i] = null;
+}
+function place(w, kind, mat, x, y, rot = 0) {
+  if (!canPlace(w, kind, x, y, rot)) return false;
+  const [fw, fh] = size(kind, rot);
+  const cur = at(w, x, y);
+  if (cur && cur.kind === kind && cur.mat === mat && fw * fh === 1) return false;
+  for (let j = 0; j < fh; j++) for (let i = 0; i < fw; i++) { const o = at(w, x + i, y + j); if (o) removeObj(w, o); }
+  const o = { kind, mat, rot, x, y };
+  for (let j = 0; j < fh; j++) for (let i = 0; i < fw; i++) w.f[(y + j) * w.W + x + i] = o;
+  return true;
+}
+function erase(w, x, y) {
+  const o = at(w, x, y);
+  if (o) { removeObj(w, o); return true; }
+  if (inb(w, x, y) && w.fl[y * w.W + x]) { w.fl[y * w.W + x] = null; return true; }
+  return false;
+}
+function floorAt(w, x, y, mat) {
+  if (!inb(w, x, y) || w.t[y * w.W + x] === WATER) return false;
+  const o = at(w, x, y);
+  if (o && (o.kind === 'rock' || KINDS[o.kind].join === 'wall')) return false;
+  if (w.fl[y * w.W + x] === mat) return false;
+  w.fl[y * w.W + x] = mat; return true;
+}
+
+// ---------------------------------------------------------------- the sim's view
+// What the engine would derive when walls change: rooms, the roof span,
+// each room's boundary and role, gaps, and houses for the roof.
+function barrier(w, x, y) {
+  const o = at(w, x, y);
+  if (o && (o.kind === 'rock' || KINDS[o.kind].join === 'wall')) return true;
+  return w.t[y * w.W + x] === WATER;
+}
+function flood(w, sx, sy, blocked, limit) {
+  const seen = new Set([sy * w.W + sx]), stack = [[sx, sy]], cells = [];
+  let edge = false;
+  while (stack.length) {
+    const [x, y] = stack.pop();
+    cells.push([x, y]);
+    if (x === 0 || y === 0 || x === w.W - 1 || y === w.H - 1) edge = true;
+    if (limit && cells.length > limit) return { cells, edge: true };
+    for (const [dx, dy] of DIRS4) {
+      const nx = x + dx, ny = y + dy, i = ny * w.W + nx;
+      if (!inb(w, nx, ny) || seen.has(i) || barrier(w, nx, ny) || i === blocked) continue;
+      seen.add(i); stack.push([nx, ny]);
+    }
+  }
+  return { cells, edge };
+}
+function spanOf(o) { return o.kind === 'rock' ? ROCK.span : MATS[o.mat].span; }
+
+function analyze(w) {
+  const N = w.W * w.H, region = new Int32Array(N).fill(-1), rooms = [];
+  // Roof span: every support holds the roof over a square around it.
+  const cov = new Uint8Array(N);
+  for (let y = 0; y < w.H; y++) for (let x = 0; x < w.W; x++) {
+    const o = at(w, x, y);
+    if (!o || !KINDS[o.kind].support || o.x !== x || o.y !== y) continue;
+    const s = spanOf(o);
+    for (let j = Math.max(0, y - s); j <= Math.min(w.H - 1, y + s); j++)
+      for (let i = Math.max(0, x - s); i <= Math.min(w.W - 1, x + s); i++) cov[j * w.W + i] = 1;
+  }
+  for (let y = 0; y < w.H; y++) for (let x = 0; x < w.W; x++) {
+    const i = y * w.W + x;
+    if (region[i] !== -1 || barrier(w, x, y)) continue;
+    const { cells, edge } = flood(w, x, y, -1, 0);
+    const id = rooms.length;
+    let x0 = 1e9, y0 = 1e9, x1 = -1, y1 = -1, uncovered = 0;
+    for (const [cx, cy] of cells) {
+      region[cy * w.W + cx] = id;
+      x0 = Math.min(x0, cx); y0 = Math.min(y0, cy); x1 = Math.max(x1, cx); y1 = Math.max(y1, cy);
+      if (!cov[cy * w.W + cx]) uncovered++;
+    }
+    rooms.push({ id, cells, edge, bbox: [x0, y0, x1, y1], uncovered });
+  }
+  for (const r of rooms) {
+    r.enclosed = !r.edge;
+    r.indoor = r.enclosed && r.uncovered === 0;
+    if (!r.enclosed) continue;
+    // Boundary pieces and what is inside.
+    const pieces = new Map(), tags = {}, things = new Set();
+    for (const [x, y] of r.cells) {
+      for (const [dx, dy] of DIRS4) {
+        const nx = x + dx, ny = y + dy;
+        if (inb(w, nx, ny) && barrier(w, nx, ny)) pieces.set(ny * w.W + nx, [nx, ny]);
+      }
+      const o = at(w, x, y);
+      if (o && KINDS[o.kind].tag && !things.has(o)) { things.add(o); tags[KINDS[o.kind].tag] = (tags[KINDS[o.kind].tag] || 0) + 1; }
+    }
+    let leak = 0, n = 0, pass = 0, beauty = 0, nb = 0;
+    const groups = new Map(), roofVotes = {}, windows = [];
+    for (const [x, y] of pieces.values()) {
+      const o = at(w, x, y);
+      let lk, label;
+      if (!o) { lk = 1; label = 'water'; }
+      else if (o.kind === 'rock') { lk = KINDS.rock.leak; label = 'granite'; }
+      else {
+        const m = MATS[o.mat], k = KINDS[o.kind];
+        lk = k.leak / m.ins; label = `${m.label.toLowerCase()} ${k.label}`;
+        if (k.pass) { pass += k.pass; windows.push(o); }
+        beauty += m.beauty; nb++;
+        if (o.kind === 'wall') roofVotes[m.roof] = (roofVotes[m.roof] || 0) + 1;
+      }
+      leak += lk; n++;
+      const g = groups.get(label) || { n: 0, lk }; g.n++; groups.set(label, g);
+    }
+    r.leak = n ? leak / n : 0;
+    r.pieces = n; r.groups = groups; r.pass = pass; r.windows = windows;
+    r.beauty = nb ? beauty / nb : 0;
+    r.roof = Object.entries(roofVotes).sort((a, b) => b[1] - a[1])[0]?.[0] || 'thatch';
+    r.tags = tags; r.things = things;
+    r.role = ROLES.find(ro => Object.entries(ro.needs).every(([t, c]) => (tags[t] || 0) >= c)) || null;
+    r.fire = (tags.fire || 0) > 0;
+    const [x0, y0, x1, y1] = r.bbox;
+    r.dims = [x1 - x0 + 1, y1 - y0 + 1];
+    // The label goes on the free cell nearest the middle.
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+    let best = null, bd = 1e9;
+    for (const [x, y] of r.cells) {
+      const d = (x - cx) ** 2 + (y - cy) ** 2 + (at(w, x, y) ? 3 : 0);
+      if (d < bd) { bd = d; best = [x, y]; }
+    }
+    r.labelAt = best;
+  }
+  // Gaps: a missing piece in a wall run that, filled, would make a room.
+  const gaps = [], pseudo = [], pseudoAt = new Int32Array(N).fill(-1);
+  for (let y = 1; y < w.H - 1; y++) for (let x = 1; x < w.W - 1; x++) {
+    if (barrier(w, x, y)) continue;
+    const r = rooms[region[y * w.W + x]];
+    if (!r || !r.edge) continue;
+    const h = J(w, x - 1, y, 'wall') && J(w, x + 1, y, 'wall');
+    const v = J(w, x, y - 1, 'wall') && J(w, x, y + 1, 'wall');
+    if (!h && !v) continue;
+    const sides = h ? [[x, y - 1], [x, y + 1]] : [[x - 1, y], [x + 1, y]];
+    for (const [sx, sy] of sides) {
+      if (barrier(w, sx, sy) || pseudoAt[sy * w.W + sx] !== -1) continue;
+      const f = flood(w, sx, sy, y * w.W + x, 900);
+      if (f.edge) continue;
+      const pid = pseudo.length;
+      for (const [cx, cy] of f.cells) pseudoAt[cy * w.W + cx] = pid;
+      let x0 = 1e9, y0 = 1e9, x1 = -1, y1 = -1;
+      for (const [cx, cy] of f.cells) { x0 = Math.min(x0, cx); y0 = Math.min(y0, cy); x1 = Math.max(x1, cx); y1 = Math.max(y1, cy); }
+      const mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
+      let best = f.cells[0], bd = 1e9;
+      for (const [cx, cy] of f.cells) { const d = (cx - mx) ** 2 + (cy - my) ** 2 + (at(w, cx, cy) ? 3 : 0); if (d < bd) { bd = d; best = [cx, cy]; } }
+      pseudo.push({ cells: f.cells, gap: [x, y], labelAt: best, dims: [x1 - x0 + 1, y1 - y0 + 1] });
+      gaps.push({ x, y, axis: h ? 'h' : 'v' });
+    }
+  }
+  // Houses: indoor rooms that share walls get one roof. Its height is the
+  // distance to the eaves, which makes a hipped roof on any shape.
+  const coverOf = new Int32Array(N).fill(-1), houses = [];
+  const roofRooms = rooms.filter(r => r.indoor);
+  const tmp = new Int32Array(N).fill(-1);
+  roofRooms.forEach((r, k) => {
+    const mark = (x, y) => { if (inb(w, x, y)) tmp[y * w.W + x] = k; };
+    for (const [x, y] of r.cells) {
+      mark(x, y);
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const nx = x + dx, ny = y + dy;
+        if (inb(w, nx, ny) && J(w, nx, ny, 'wall')) mark(nx, ny);
+      }
+    }
+    for (let i = 0; i < N; i++) if (tmp[i] === k) coverOf[i] = coverOf[i] === -1 ? k : coverOf[i];
+  });
+  // Union rooms whose covers touch into houses.
+  const parent = roofRooms.map((_, k) => k);
+  const find = k => parent[k] === k ? k : (parent[k] = find(parent[k]));
+  roofRooms.forEach((r, k) => {
+    for (const [x, y] of r.cells) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const nx = x + dx, ny = y + dy;
+      if (!inb(w, nx, ny) || !J(w, nx, ny, 'wall')) continue;
+      // A wall touching another indoor room joins the two.
+      for (let ey = -1; ey <= 1; ey++) for (let ex = -1; ex <= 1; ex++) {
+        const mx = nx + ex, my = ny + ey;
+        if (!inb(w, mx, my)) continue;
+        const rr = rooms[region[my * w.W + mx]];
+        if (rr && rr.indoor) { const kk = roofRooms.indexOf(rr); if (kk >= 0) parent[find(kk)] = find(k); }
+      }
+    }
+  });
+  const houseOf = new Int32Array(N).fill(-1), hid = new Map();
+  roofRooms.forEach((r, k) => { const root = find(k); if (!hid.has(root)) { hid.set(root, houses.length); houses.push({ rooms: [], cells: 0, votes: {} }); } houses[hid.get(root)].rooms.push(r); r.house = hid.get(root); });
+  for (let i = 0; i < N; i++) if (coverOf[i] !== -1) {
+    const h = hid.get(find(coverOf[i]));
+    houseOf[i] = h; houses[h].cells++;
+    const o = w.f[i];
+    if (o && o.kind === 'wall') { const rf = MATS[o.mat].roof; houses[h].votes[rf] = (houses[h].votes[rf] || 0) + 1; }
+  }
+  houses.forEach(h => { h.roof = Object.entries(h.votes).sort((a, b) => b[1] - a[1])[0]?.[0] || 'thatch'; });
+  // Chebyshev distance to the eaves, by breadth-first search.
+  const hgt = new Int16Array(N);
+  let q = [];
+  for (let y = 0; y < w.H; y++) for (let x = 0; x < w.W; x++) {
+    const i = y * w.W + x;
+    if (houseOf[i] === -1) continue;
+    let eave = x === 0 || y === 0 || x === w.W - 1 || y === w.H - 1;
+    for (let dy = -1; dy <= 1 && !eave; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const nx = x + dx, ny = y + dy;
+      if (inb(w, nx, ny) && houseOf[ny * w.W + nx] !== houseOf[i]) { eave = true; break; }
+    }
+    if (eave) { hgt[i] = 1; q.push(i); }
+  }
+  while (q.length) {
+    const nq = [];
+    for (const i of q) {
+      const x = i % w.W, y = (i / w.W) | 0;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const nx = x + dx, ny = y + dy;
+        if (!inb(w, nx, ny)) continue;
+        const j = ny * w.W + nx;
+        if (houseOf[j] === houseOf[i] && hgt[j] === 0) { hgt[j] = hgt[i] + 1; nq.push(j); }
+      }
+    }
+    q = nq;
+  }
+  return { region, rooms, cov, gaps, pseudo, pseudoAt, houses, houseOf, hgt };
+}
+
+// ---------------------------------------------------------------- drawing
+function roomSide(w, A, x, y, axis) {
+  // Which side of an opening is the room: +1 is south (or east).
+  const [a, b] = axis === 'h' ? [[x, y - 1], [x, y + 1]] : [[x - 1, y], [x + 1, y]];
+  const ra = inb(w, a[0], a[1]) ? A.rooms[A.region[a[1] * w.W + a[0]]] : null;
+  const rb = inb(w, b[0], b[1]) ? A.rooms[A.region[b[1] * w.W + b[0]]] : null;
+  const ia = !!ra && ra.enclosed, ib = !!rb && rb.enclosed;
+  if (ia && ib) return ra.cells.length < rb.cells.length ? -1 : 1;
+  if (ia) return -1;
+  return 1;
+}
+function runAxis(w, x, y, g) {
+  const hj = J(w, x - 1, y, g) || J(w, x + 1, y, g), vj = J(w, x, y - 1, g) || J(w, x, y + 1, g);
+  return vj && !hj ? 'v' : 'h';
+}
+
+function massPath(p, w, x, y, g, X0, Y0, z, r) {
+  const e = 0.6;
+  const n = J(w, x, y - 1, g), s = J(w, x, y + 1, g), wv = J(w, x - 1, y, g), ev = J(w, x + 1, y, g);
+  const L = X0 - (wv ? e : 0), R = X0 + z + (ev ? e : 0), T = Y0 - (n ? e : 0), B = Y0 + z + (s ? e : 0);
+  const a = !n && !wv ? r : 0, b = !n && !ev ? r : 0, c = !s && !ev ? r : 0, d = !s && !wv ? r : 0;
+  p.moveTo(L + a, T); p.lineTo(R - b, T); if (b) p.arcTo(R, T, R, T + b, b);
+  p.lineTo(R, B - c); if (c) p.arcTo(R, B, R - c, B, c);
+  p.lineTo(L + d, B); if (d) p.arcTo(L, B, L, B - d, d);
+  p.lineTo(L, T + a); if (a) p.arcTo(L, T, L + a, T, a);
+  p.closePath();
+}
+function massContour(p, lit, w, x, y, g, X0, Y0, z, r, inset) {
+  const n = J(w, x, y - 1, g), s = J(w, x, y + 1, g), wv = J(w, x - 1, y, g), ev = J(w, x + 1, y, g);
+  const a = !n && !wv ? r : 0, b = !n && !ev ? r : 0, c = !s && !ev ? r : 0, d = !s && !wv ? r : 0;
+  const R = X0 + z, B = Y0 + z;
+  if (!n) { p.moveTo(X0 + a, Y0); p.lineTo(R - b, Y0); lit.moveTo(X0 + a, Y0 + inset); lit.lineTo(R - b, Y0 + inset); }
+  if (!ev) { p.moveTo(R, Y0 + b); p.lineTo(R, B - c); }
+  if (!s) { p.moveTo(R - c, B); p.lineTo(X0 + d, B); }
+  if (!wv) { p.moveTo(X0, B - d); p.lineTo(X0, Y0 + a); lit.moveTo(X0 + inset, B - d); lit.lineTo(X0 + inset, Y0 + a); }
+  if (a) { p.moveTo(X0, Y0 + a); p.arcTo(X0, Y0, X0 + a, Y0, a); }
+  if (b) { p.moveTo(R - b, Y0); p.arcTo(R, Y0, R, Y0 + b, b); }
+  if (c) { p.moveTo(R, B - c); p.arcTo(R, B, R - c, B, c); }
+  if (d) { p.moveTo(X0 + d, B); p.arcTo(X0, B, X0, B - d, d); }
+}
+
+// A material's pattern, in world space and along the run, so it flows
+// from cell to cell.
+function pattern(ctx, pat, x, y, axis, X0, Y0, z, base, pa, ends) {
+  const hv = axis === 'h', u0 = hv ? x : y, v0 = hv ? y : x;
+  const P = (u, v) => hv ? [X0 + (u - u0) * z, Y0 + (v - v0) * z] : [X0 + (v - v0) * z, Y0 + (u - u0) * z];
+  const seg = (u1, v1, u2, v2) => { const a = P(u1, v1), b = P(u2, v2); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); };
+  const lw = Math.max(0.6, z * 0.03);
+  const dark = shade(base, 0.6, 0.85 * pa), light = shade(base, 1.3, 0.6 * pa);
+  ctx.lineWidth = lw;
+  const courses = (rows, len, off, jointColor) => {
+    ctx.beginPath();
+    for (let k = 1; k < rows; k++) seg(u0, v0 + k / rows, u0 + 1, v0 + k / rows);
+    for (let c = 0; c < rows; c++) {
+      const o = ((v0 * rows + c) & 1) * off;
+      for (let n = Math.floor((u0 - o) / len) - 1; n * len + o < u0 + 1; n++) {
+        const u = n * len + o;
+        if (u > u0 + 0.01 && u < u0 + 0.99) seg(u, v0 + c / rows, u, v0 + (c + 1) / rows);
+      }
+    }
+    ctx.strokeStyle = jointColor; ctx.stroke();
+  };
+  switch (pat) {
+    case 'courses': courses(3, 0.72, 0.36, dark); break;
+    case 'bond': courses(5, 0.44, 0.22, shade(base, 1.55, 0.75 * pa)); break;
+    case 'logs': {
+      ctx.beginPath(); for (let k = 1; k < 3; k++) seg(u0, v0 + k / 3, u0 + 1, v0 + k / 3); ctx.strokeStyle = dark; ctx.stroke();
+      ctx.beginPath(); for (let k = 0; k < 3; k++) seg(u0, v0 + k / 3 + 0.08, u0 + 1, v0 + k / 3 + 0.08); ctx.strokeStyle = light; ctx.stroke();
+      // Log ends where the run stops.
+      for (const [on, u] of [[ends[0], u0 + 0.12], [ends[1], u0 + 0.88]]) {
+        if (!on) continue;
+        for (let k = 0; k < 3; k++) {
+          const [sx, sy] = P(u, v0 + (k + 0.5) / 3);
+          ctx.beginPath(); ctx.arc(sx, sy, z * 0.12, 0, Math.PI * 2);
+          ctx.fillStyle = shade(base, 1.2, pa); ctx.fill(); ctx.strokeStyle = dark; ctx.stroke();
+          ctx.beginPath(); ctx.arc(sx, sy, z * 0.05, 0, Math.PI * 2); ctx.stroke();
+        }
+      }
+      if (hash(x, y, 5) < 0.45) { const [sx, sy] = P(u0 + 0.25 + hash(x, y, 6) * 0.5, v0 + (Math.floor(hash(x, y, 7) * 3) + 0.5) / 3); ctx.beginPath(); ctx.ellipse(sx, sy, z * 0.05, z * 0.03, 0, 0, Math.PI * 2); ctx.strokeStyle = dark; ctx.stroke(); }
+      break;
+    }
+    case 'stipple': {
+      for (let i = 0; i < 18; i++) {
+        const [sx, sy] = P(u0 + hash(x, y, 10 + i), v0 + hash(x, y, 40 + i));
+        ctx.beginPath(); ctx.arc(sx, sy, Math.max(0.6, z * (0.012 + 0.014 * hash(x, y, 70 + i))), 0, Math.PI * 2);
+        ctx.fillStyle = i & 1 ? dark : light; ctx.fill();
+      }
+      ctx.beginPath();
+      const a = P(u0, v0 + 0.5), m = P(u0 + 0.5, v0 + 0.5 + (hash(x, y, 3) - 0.5) * 0.08), b = P(u0 + 1, v0 + 0.5);
+      ctx.moveTo(a[0], a[1]); ctx.quadraticCurveTo(m[0], m[1], b[0], b[1]);
+      ctx.strokeStyle = shade(base, 0.7, 0.45 * pa); ctx.stroke();
+      break;
+    }
+    case 'rubble': {
+      for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) {
+        const gu = u0 * 3 + i, gv = v0 * 3 + j;
+        const cu = (gu + 0.5) / 3 + (hash(gu, gv, 1) - 0.5) * 0.06, cv = (gv + 0.5) / 3 + (hash(gu, gv, 2) - 0.5) * 0.06;
+        const su = 0.22 + hash(gu, gv, 3) * 0.08, sv = 0.2 + hash(gu, gv, 4) * 0.08;
+        const p = P(cu - su / 2, cv - sv / 2), q = P(cu + su / 2, cv + sv / 2);
+        ctx.beginPath(); ctx.roundRect(Math.min(p[0], q[0]), Math.min(p[1], q[1]), Math.abs(q[0] - p[0]), Math.abs(q[1] - p[1]), z * 0.05);
+        ctx.fillStyle = shade(base, 0.9 + hash(gu, gv, 5) * 0.25, pa); ctx.fill(); ctx.strokeStyle = dark; ctx.stroke();
+      }
+      break;
+    }
+    case 'weave': {
+      const vc = v0 + 0.5, amp = 0.17;
+      ctx.beginPath(); seg(u0, v0 + 0.17, u0 + 1, v0 + 0.17); seg(u0, v0 + 0.83, u0 + 1, v0 + 0.83); ctx.strokeStyle = dark; ctx.stroke();
+      for (const s of [1, -1]) {
+        ctx.beginPath();
+        for (let k = 0; k < 2; k++) {
+          const ua = u0 + k * 0.5, sg = ((Math.round(ua * 2) & 1) ? 1 : -1) * s;
+          const p0 = P(ua, vc), pc = P(ua + 0.25, vc + sg * amp * 2), p1 = P(ua + 0.5, vc);
+          ctx.moveTo(p0[0], p0[1]); ctx.quadraticCurveTo(pc[0], pc[1], p1[0], p1[1]);
+        }
+        ctx.lineWidth = lw * 1.7; ctx.strokeStyle = s > 0 ? shade(base, 1.25, 0.8 * pa) : shade(base, 0.72, 0.9 * pa); ctx.stroke();
+      }
+      ctx.fillStyle = shade(base, 0.45, pa);
+      for (let k = 0; k < 2; k++) { const [sx, sy] = P(u0 + k * 0.5, vc); ctx.beginPath(); ctx.arc(sx, sy, Math.max(1, z * 0.05), 0, Math.PI * 2); ctx.fill(); }
+      break;
+    }
+    case 'crag': {
+      ctx.fillStyle = `rgba(0,0,0,${hash(x, y, 9) * 0.14 * pa})`; ctx.fillRect(X0, Y0, z, z);
+      ctx.beginPath();
+      for (let i = 0; i < 2; i++) {
+        let u = u0 + 0.15 + hash(x, y, 20 + i) * 0.7, v = v0 + 0.15 + hash(x, y, 30 + i) * 0.7;
+        let [sx, sy] = P(u, v); ctx.moveTo(sx, sy);
+        for (let k = 0; k < 3; k++) { const ang = hash(x, y, 50 + i * 3 + k) * Math.PI * 2; u += Math.cos(ang) * 0.16; v += Math.sin(ang) * 0.16; [sx, sy] = P(u, v); ctx.lineTo(sx, sy); }
+      }
+      ctx.strokeStyle = shade(base, 0.55, 0.7 * pa); ctx.stroke();
+      break;
+    }
+  }
+}
+function floorPattern(ctx, pat, x, y, X0, Y0, z, base, pa) {
+  const lw = Math.max(0.5, z * 0.022), dark = shade(base, 0.7, 0.55 * pa);
+  ctx.lineWidth = lw; ctx.strokeStyle = dark; ctx.beginPath();
+  const rows = (n, len, stag) => {
+    for (let k = 0; k < n; k++) {
+      const yA = Y0 + k / n * z, yB = Y0 + (k + 1) / n * z;
+      ctx.moveTo(X0, yA); ctx.lineTo(X0 + z, yA);
+      const off = ((y * n + k) % 3) * stag;
+      for (let m = Math.floor((x - off) / len) - 1; m * len + off < x + 1; m++) {
+        const xv = m * len + off - x;
+        if (xv > 0.02 && xv < 0.98) { ctx.moveTo(X0 + xv * z, yA); ctx.lineTo(X0 + xv * z, yB); }
+      }
+    }
+  };
+  switch (pat) {
+    case 'planks': rows(4, 1.6, 0.53); break;
+    case 'flags': rows(2, 0.8, 0.4); break;
+    case 'bond': rows(4, 0.5, 0.25); break;
+    case 'cobbles': ctx.stroke(); ctx.beginPath(); for (let i = 0; i < 4; i++) { const cx = X0 + (0.25 + (i & 1) * 0.5) * z, cy = Y0 + (0.25 + (i >> 1) * 0.5) * z; ctx.moveTo(cx + z * 0.19, cy); ctx.arc(cx, cy, z * 0.19, 0, Math.PI * 2); } break;
+    case 'rushes': for (let k = 0; k < 5; k++) { const o = hash(x, y, k) * 0.2; ctx.moveTo(X0 + (k * 0.2 + o) * z, Y0 + 0.08 * z); ctx.lineTo(X0 + (k * 0.2 + o + 0.1) * z, Y0 + 0.92 * z); } break;
+    case 'earth': ctx.stroke(); ctx.fillStyle = dark; for (let i = 0; i < 7; i++) { ctx.beginPath(); ctx.arc(X0 + hash(x, y, i) * z, Y0 + hash(x, y, i + 9) * z, Math.max(0.5, z * 0.014), 0, Math.PI * 2); ctx.fill(); } ctx.beginPath(); break;
+  }
+  ctx.stroke();
+}
+
+// Local frames: a layer written along the run, or for a thing's facing.
+function frame(ctx, s, a, b, c, d, e, f) { ctx.setTransform(s * a, s * b, s * c, s * d, s * e, s * f); }
+function runFrame(ctx, s, axis, X0, Y0) { axis === 'h' ? frame(ctx, s, 1, 0, 0, 1, X0, Y0) : frame(ctx, s, 0, 1, 1, 0, X0, Y0); }
+function rotFrame(ctx, s, rot, X0, Y0, w0, h0) {
+  if (rot === 0) frame(ctx, s, 1, 0, 0, 1, X0, Y0);
+  else if (rot === 1) frame(ctx, s, 0, 1, -1, 0, X0 + h0, Y0);
+  else if (rot === 2) frame(ctx, s, -1, 0, 0, -1, X0 + w0, Y0 + h0);
+  else frame(ctx, s, 0, -1, 1, 0, X0, Y0 + w0);
+}
+
+function chairRot(w, o) {
+  // A chair turns its back on its table.
+  const faces = [[0, 1, 0], [-1, 0, 1], [0, -1, 2], [1, 0, 3]];
+  for (const [dx, dy, r] of faces) { const n = at(w, o.x + dx, o.y + dy); if (n && n.kind === 'table') return r; }
+  return o.rot;
+}
+
+function drawFurniture(ctx, s, w, o, X0, Y0, z, lw3) {
+  const k = KINDS[o.kind], [w0, h0] = k.size || [1, 1];
+  const rot = o.kind === 'chair' ? chairRot(w, o) : o.rot;
+  rotFrame(ctx, s, rot, X0, Y0, w0 * z, h0 * z);
+  const c = colorOf(o);
+  ctx.lineWidth = lw3; ctx.strokeStyle = INK;
+  const box = (x, y, bw, bh, r, fill) => { ctx.beginPath(); ctx.roundRect(x * z, y * z, bw * z, bh * z, r * z); ctx.fillStyle = fill; ctx.fill(); ctx.stroke(); };
+  switch (o.kind) {
+    case 'bed':
+      box(0.08, 0.06, 0.84, 1.88, 0.07, shade(c, 1.05));
+      box(0.14, 0.52, 0.72, 1.34, 0.04, '#b9ae95');
+      ctx.beginPath(); ctx.moveTo(0.14 * z, 0.84 * z); ctx.lineTo(0.14 * z, 0.52 * z); ctx.lineTo(0.5 * z, 0.52 * z); ctx.closePath(); ctx.fillStyle = '#ddd4bf'; ctx.fill(); ctx.stroke();
+      box(0.2, 0.14, 0.6, 0.3, 0.1, '#ece6d6');
+      break;
+    case 'table':
+      box(0.1, 0.14, 1.8, 0.72, 0.06, shade(c, 1.08));
+      ctx.beginPath(); ctx.moveTo(0.2 * z, 0.38 * z); ctx.lineTo(1.8 * z, 0.38 * z); ctx.moveTo(0.2 * z, 0.62 * z); ctx.lineTo(1.8 * z, 0.62 * z); ctx.strokeStyle = shade(c, 0.7, 0.5); ctx.stroke();
+      break;
+    case 'chair':
+      box(0.26, 0.34, 0.48, 0.44, 0.07, shade(c, 1.1));
+      box(0.2, 0.16, 0.6, 0.14, 0.04, shade(c, 0.8));
+      break;
+    case 'hearth':
+      box(0.1, 0.1, 0.8, 0.8, 0.08, shade(c, 1.0));
+      box(0.26, 0.26, 0.48, 0.48, 0.1, '#2a211c');
+      ctx.beginPath(); ctx.arc(0.5 * z, 0.5 * z, 0.15 * z, 0, Math.PI * 2); ctx.fillStyle = '#ff8c3a'; ctx.fill();
+      ctx.beginPath(); ctx.arc(0.5 * z, 0.52 * z, 0.07 * z, 0, Math.PI * 2); ctx.fillStyle = '#ffd27a'; ctx.fill();
+      break;
+    case 'bench':
+      box(0.06, 0.1, 1.88, 0.66, 0.05, shade(c, 1.08));
+      box(0.14, 0.2, 0.26, 0.22, 0.03, shade(c, 0.62));
+      ctx.beginPath(); ctx.moveTo(0.7 * z, 0.3 * z); ctx.lineTo(1.1 * z, 0.3 * z); ctx.moveTo(1.3 * z, 0.24 * z); ctx.lineTo(1.3 * z, 0.56 * z); ctx.moveTo(1.5 * z, 0.3 * z); ctx.lineTo(1.75 * z, 0.5 * z); ctx.stroke();
+      ctx.setLineDash([Math.max(2, z * 0.08), Math.max(2, z * 0.07)]);
+      ctx.beginPath(); ctx.arc(0.5 * z, 1.45 * z, 0.22 * z, 0, Math.PI * 2); ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.stroke();
+      ctx.setLineDash([]);
+      break;
+    case 'campfire':
+      for (let i = 0; i < 7; i++) { const a = i / 7 * Math.PI * 2; ctx.beginPath(); ctx.arc((0.5 + Math.cos(a) * 0.3) * z, (0.5 + Math.sin(a) * 0.3) * z, 0.09 * z, 0, Math.PI * 2); ctx.fillStyle = shade(c, 0.9 + hash(o.x, i, 2) * 0.3); ctx.fill(); ctx.stroke(); }
+      ctx.beginPath(); ctx.arc(0.5 * z, 0.5 * z, 0.17 * z, 0, Math.PI * 2); ctx.fillStyle = '#e07b2a'; ctx.fill();
+      ctx.beginPath(); ctx.arc(0.5 * z, 0.52 * z, 0.08 * z, 0, Math.PI * 2); ctx.fillStyle = '#ffdc78'; ctx.fill();
+      break;
+  }
+  frame(ctx, s, 1, 0, 0, 1, 0, 0);
+}
+
+function render(ctx, s, w, A, v, o) {
+  const z = v.z, X = x => x * z - v.ox, Y = y => y * z - v.oy;
+  const cx0 = Math.max(0, Math.floor(v.ox / z) - 1), cx1 = Math.min(w.W - 1, Math.ceil((v.ox + v.cw) / z) + 1);
+  const cy0 = Math.max(0, Math.floor(v.oy / z) - 1), cy1 = Math.min(w.H - 1, Math.ceil((v.oy + v.ch) / z) + 1);
+  const each = fn => { for (let y = cy0; y <= cy1; y++) for (let x = cx0; x <= cx1; x++) fn(x, y); };
+  const anchored = (x, y) => { const q = at(w, x, y); return q && q.x === x && q.y === y ? q : null; };
+  const lw1 = Math.max(1.2, z * 0.06), lw2 = Math.max(1, z * 0.04), lw3 = Math.max(0.8, z * 0.028);
+  const pa = o.full ? 1 : clamp((z - 10) / 8, 0, 1);
+  const roofA = o.roof === 'on' ? 1 : o.roof === 'off' ? 0 : clamp((15 - z) / 4, 0, 1);
+  const labelA = o.labels ? clamp((z - 13) / 4, 0, 1) * (1 - roofA) : 0;
+  frame(ctx, s, 1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = o.bg || '#0d0f11'; ctx.fillRect(0, 0, v.cw, v.ch);
+
+  // Ground, then built floors.
+  each((x, y) => {
+    const t = w.t[y * w.W + x];
+    ctx.fillStyle = shade(TERR[t], 0.975 + hash(x, y, 1) * 0.045);
+    ctx.fillRect(X(x), Y(y), z + 0.6, z + 0.6);
+    if (t === 0 && pa > 0.3) {
+      ctx.strokeStyle = shade(TERR[0], 0.8, 0.5 * pa); ctx.lineWidth = Math.max(0.5, z * 0.02); ctx.beginPath();
+      for (let i = 0; i < 2; i++) { const gx = X(x) + hash(x, y, 60 + i) * z, gy = Y(y) + hash(x, y, 62 + i) * z; ctx.moveTo(gx, gy); ctx.lineTo(gx - z * 0.04, gy - z * 0.1); ctx.moveTo(gx, gy); ctx.lineTo(gx + z * 0.05, gy - z * 0.08); }
+      ctx.stroke();
+    }
+    if (t === WATER && pa > 0.3) { ctx.strokeStyle = `rgba(255,255,255,${0.12 * pa})`; ctx.lineWidth = Math.max(0.6, z * 0.025); ctx.beginPath(); const yy = Y(y) + (0.3 + hash(x, y, 4) * 0.4) * z; ctx.moveTo(X(x) + 0.2 * z, yy); ctx.lineTo(X(x) + 0.6 * z, yy); ctx.stroke(); }
+    const fm = w.fl[y * w.W + x];
+    if (fm) {
+      const m = MATS[fm], base = m.color;
+      ctx.fillStyle = mix(base, '#dccfb2', 0.3); ctx.fillRect(X(x), Y(y), z + 0.6, z + 0.6);
+      if (pa > 0.05) floorPattern(ctx, m.floor, x, y, X(x), Y(y), z, base, pa);
+    }
+  });
+
+  // Floor too far from a support to be roofed: open to the sky.
+  each((x, y) => {
+    const r = A.rooms[A.region[y * w.W + x]];
+    if (!r || !r.enclosed || A.cov[y * w.W + x]) return;
+    ctx.fillStyle = 'rgba(120,190,255,0.14)'; ctx.fillRect(X(x), Y(y), z, z);
+    ctx.save(); ctx.beginPath(); ctx.rect(X(x), Y(y), z, z); ctx.clip();
+    ctx.strokeStyle = 'rgba(150,205,255,0.55)'; ctx.lineWidth = Math.max(0.6, z * 0.025); ctx.beginPath();
+    for (let k = -1; k < 4; k++) { const off = ((k / 3) + ((x + y) % 3) / 9) * z; ctx.moveTo(X(x) + off, Y(y) + z); ctx.lineTo(X(x) + off + z, Y(y)); }
+    ctx.stroke(); ctx.restore();
+  });
+
+  // Light: daylight fans behind windows, firelight filling a room.
+  const roomPath = r => { const p = new Path2D(); for (const [x, y] of r.cells) p.rect(X(x) - 0.3, Y(y) - 0.3, z + 0.6, z + 0.6); return p; };
+  for (const r of A.rooms) {
+    if (!r.enclosed) continue;
+    const [bx0, by0, bx1, by1] = r.bbox;
+    if (bx1 < cx0 - 4 || bx0 > cx1 + 4 || by1 < cy0 - 4 || by0 > cy1 + 4) continue;
+    ctx.save(); ctx.clip(roomPath(r));
+    ctx.fillStyle = 'rgba(255,238,205,0.06)'; ctx.fillRect(X(bx0), Y(by0), (bx1 - bx0 + 1) * z, (by1 - by0 + 1) * z);
+    for (const win of r.windows) {
+      const axis = runAxis(w, win.x, win.y, 'wall');
+      const [ax, ay] = axis === 'h' ? [0, 1] : [1, 0];
+      const into = A.region[(win.y + ay) * w.W + win.x + ax] === r.id ? 1 : -1;
+      runFrame(ctx, s, axis, X(win.x), Y(win.y));
+      const v0 = into > 0 ? z : 0, v1 = into > 0 ? z * 3.2 : -z * 2.2;
+      const g = ctx.createLinearGradient(0, v0, 0, v1);
+      g.addColorStop(0, 'rgba(255,240,196,0.30)'); g.addColorStop(1, 'rgba(255,240,196,0)');
+      ctx.fillStyle = g; ctx.beginPath();
+      ctx.moveTo(0.1 * z, v0); ctx.lineTo(0.9 * z, v0); ctx.lineTo(1.5 * z, v1); ctx.lineTo(-0.5 * z, v1); ctx.closePath(); ctx.fill();
+      frame(ctx, s, 1, 0, 0, 1, 0, 0);
+    }
+    for (const t of r.things) {
+      if (KINDS[t.kind].tag !== 'fire') continue;
+      const fx = X(t.x) + z / 2, fy = Y(t.y) + z / 2, g = ctx.createRadialGradient(fx, fy, 0, fx, fy, z * 4.5);
+      g.addColorStop(0, 'rgba(255,150,70,0.30)'); g.addColorStop(1, 'rgba(255,150,70,0)');
+      ctx.fillStyle = g; ctx.fillRect(fx - z * 5, fy - z * 5, z * 10, z * 10);
+    }
+    ctx.restore();
+  }
+  each((x, y) => {
+    const q = anchored(x, y);
+    if (!q || q.kind !== 'campfire') return;
+    const r = A.rooms[A.region[y * w.W + x]];
+    if (r && r.enclosed) return;
+    const fx = X(x) + z / 2, fy = Y(y) + z / 2, g = ctx.createRadialGradient(fx, fy, 0, fx, fy, z * 4);
+    g.addColorStop(0, 'rgba(255,150,70,0.28)'); g.addColorStop(1, 'rgba(255,150,70,0)');
+    ctx.fillStyle = g; ctx.fillRect(fx - z * 4, fy - z * 4, z * 8, z * 8);
+  });
+
+  // One sun: every mass casts the same short shadow.
+  const sdx = z * 0.12, sdy = z * 0.18, rr = z * 0.22;
+  const shadow = new Path2D(), byMat = new Map();
+  each((x, y) => {
+    const q = at(w, x, y);
+    if (!q) return;
+    const k = KINDS[q.kind];
+    if (k.mass) {
+      massPath(shadow, w, x, y, k.join, X(x) + sdx, Y(y) + sdy, z, rr);
+      const key = q.kind === 'rock' ? 'rock' : q.mat;
+      if (!byMat.has(key)) byMat.set(key, []);
+      byMat.get(key).push([x, y, q]);
+    } else if (q.kind === 'pillar') shadow.roundRect(X(x) + 0.22 * z + sdx, Y(y) + 0.22 * z + sdy, 0.56 * z, 0.56 * z, 0.1 * z);
+    else if (q.kind === 'tree') { shadow.moveTo(X(x) + z * 0.58 + z * 0.44, Y(y) + z * 0.62); shadow.arc(X(x) + z * 0.58, Y(y) + z * 0.62, z * 0.44, 0, Math.PI * 2); }
+    else if (q.kind === 'door') {
+      const axis = runAxis(w, x, y, 'wall');
+      for (const [dx, dy, lo] of axis === 'h' ? [[-1, 0, true], [1, 0, false]] : [[0, -1, true], [0, 1, false]]) {
+        if (!J(w, x + dx, y + dy, 'wall')) continue;
+        if (axis === 'h') shadow.rect(X(x) + (lo ? 0 : 0.88 * z) + sdx, Y(y) + sdy, 0.12 * z, z);
+        else shadow.rect(X(x) + sdx, Y(y) + (lo ? 0 : 0.88 * z) + sdy, z, 0.12 * z);
+      }
+    }
+  });
+  ctx.fillStyle = 'rgba(8,10,6,0.30)'; ctx.fill(shadow);
+
+  // Masses: one fill per material so joined cells never show a seam,
+  // then the pattern, then one contour around the whole group.
+  const contour = new Path2D(), lit = new Path2D();
+  for (const [key, cells] of byMat) {
+    const m = key === 'rock' ? ROCK : MATS[key], p = new Path2D();
+    for (const [x, y, q] of cells) massPath(p, w, x, y, KINDS[q.kind].join, X(x), Y(y), z, rr);
+    ctx.fillStyle = shade(m.color, 1); ctx.fill(p);
+    if (pa > 0.05) {
+      ctx.save(); ctx.clip(p);
+      for (const [x, y, q] of cells) {
+        const g = KINDS[q.kind].join, axis = runAxis(w, x, y, g);
+        const ends = axis === 'h' ? [!J(w, x - 1, y, g), !J(w, x + 1, y, g)] : [!J(w, x, y - 1, g), !J(w, x, y + 1, g)];
+        pattern(ctx, m.pattern, x, y, axis, X(x), Y(y), z, m.color, pa, ends);
+      }
+      ctx.restore();
+    }
+    for (const [x, y, q] of cells) massContour(contour, lit, w, x, y, KINDS[q.kind].join, X(x), Y(y), z, rr, lw1);
+  }
+  // A seam where the material changes along a run.
+  const seam = new Path2D();
+  each((x, y) => {
+    const q = at(w, x, y);
+    if (!q || KINDS[q.kind].join !== 'wall') return;
+    const e = at(w, x + 1, y), sN = at(w, x, y + 1);
+    if (KINDS[q.kind].opening) return;
+    if (e && KINDS[e.kind].join === 'wall' && !KINDS[e.kind].opening && e.mat !== q.mat) { seam.moveTo(X(x + 1), Y(y)); seam.lineTo(X(x + 1), Y(y) + z); }
+    if (sN && KINDS[sN.kind].join === 'wall' && !KINDS[sN.kind].opening && sN.mat !== q.mat) { seam.moveTo(X(x), Y(y + 1)); seam.lineTo(X(x) + z, Y(y + 1)); }
+  });
+  ctx.lineWidth = lw3; ctx.strokeStyle = 'rgba(22,17,12,0.5)'; ctx.stroke(seam);
+
+  // Openings, written along the run and turned to face the room.
+  each((x, y) => {
+    const q = at(w, x, y);
+    if (!q || !KINDS[q.kind].opening) return;
+    const axis = runAxis(w, x, y, 'wall'), m = MATS[q.mat];
+    const lo = axis === 'h' ? J(w, x - 1, y, 'wall') : J(w, x, y - 1, 'wall');
+    const hi = axis === 'h' ? J(w, x + 1, y, 'wall') : J(w, x, y + 1, 'wall');
+    runFrame(ctx, s, axis, X(x), Y(y));
+    if (q.kind === 'window') {
+      ctx.fillStyle = 'rgba(196,228,255,0.9)'; ctx.fillRect(0, 0.36 * z, z, 0.28 * z);
+      ctx.beginPath(); ctx.moveTo(0, 0.36 * z); ctx.lineTo(z, 0.36 * z); ctx.moveTo(0, 0.64 * z); ctx.lineTo(z, 0.64 * z);
+      ctx.lineWidth = lw2; ctx.strokeStyle = INK; ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, 0.5 * z); ctx.lineTo(z, 0.5 * z); ctx.lineWidth = lw3; ctx.strokeStyle = 'rgba(80,140,200,0.8)'; ctx.stroke();
+    } else {
+      const jw = 0.12 * z, side = roomSide(w, A, x, y, axis), L = z - 2 * jw, t = Math.max(1.5, 0.07 * z);
+      ctx.lineWidth = lw1; ctx.strokeStyle = INK;
+      const nb = axis === 'h' ? [at(w, x - 1, y), at(w, x + 1, y)] : [at(w, x, y - 1), at(w, x, y + 1)];
+      for (const [on, x0, n] of [[lo, 0, nb[0]], [hi, z - jw, nb[1]]]) {
+        if (!on) continue;
+        ctx.fillStyle = MATS[n.mat].color;
+        ctx.fillRect(x0, 0, jw, z);
+        ctx.beginPath(); ctx.moveTo(x0, 0); ctx.lineTo(x0 + jw, 0); ctx.moveTo(x0, z); ctx.lineTo(x0 + jw, z);
+        const inner = x0 === 0 ? jw : x0; ctx.moveTo(inner, 0); ctx.lineTo(inner, z); ctx.stroke();
+      }
+      const hx = jw, hy = z / 2;
+      ctx.beginPath(); ctx.arc(hx, hy, L, side > 0 ? 0 : -Math.PI / 2, side > 0 ? Math.PI / 2 : 0);
+      ctx.lineWidth = lw3; ctx.strokeStyle = 'rgba(22,17,12,0.55)'; ctx.stroke();
+      ctx.beginPath(); ctx.rect(hx, side > 0 ? hy : hy - L, t, L);
+      ctx.fillStyle = shade(m.color, 1.15); ctx.fill(); ctx.lineWidth = lw2; ctx.strokeStyle = INK; ctx.stroke();
+    }
+    frame(ctx, s, 1, 0, 0, 1, 0, 0);
+  });
+  ctx.lineCap = 'round';
+  ctx.lineWidth = lw1; ctx.strokeStyle = INK; ctx.stroke(contour);
+  ctx.lineWidth = Math.max(0.8, z * 0.03); ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.stroke(lit);
+  ctx.lineCap = 'butt';
+
+  // Pillars and fences.
+  each((x, y) => {
+    const q = at(w, x, y);
+    if (!q) return;
+    if (q.kind === 'pillar') {
+      const c = MATS[q.mat].color;
+      ctx.beginPath(); ctx.roundRect(X(x) + 0.22 * z, Y(y) + 0.22 * z, 0.56 * z, 0.56 * z, 0.1 * z);
+      ctx.fillStyle = c; ctx.fill(); ctx.lineWidth = lw1; ctx.strokeStyle = INK; ctx.stroke();
+      ctx.beginPath(); ctx.roundRect(X(x) + 0.34 * z, Y(y) + 0.34 * z, 0.32 * z, 0.32 * z, 0.05 * z);
+      ctx.lineWidth = lw3; ctx.strokeStyle = shade(c, 0.6, 0.8); ctx.stroke();
+    } else if (q.kind === 'fence') {
+      const c = MATS[q.mat].color, mx = X(x) + z / 2, my = Y(y) + z / 2, off = 0.09 * z;
+      for (const pass of [0, 1]) {
+        const d = pass === 0 ? [z * 0.06, z * 0.09] : [0, 0];
+        ctx.beginPath();
+        for (const [dx, dy] of DIRS4) {
+          if (!joinsPipe(w, x + dx, y + dy)) continue;
+          for (const sgn of [-1, 1]) {
+            const ox = dy !== 0 ? sgn * off : 0, oy = dx !== 0 ? sgn * off : 0;
+            ctx.moveTo(mx + ox + d[0], my + oy + d[1]); ctx.lineTo(mx + dx * z / 2 + ox + d[0], my + dy * z / 2 + oy + d[1]);
+          }
+        }
+        ctx.lineWidth = lw2 * 1.3; ctx.strokeStyle = pass === 0 ? 'rgba(8,10,6,0.3)' : shade(c, 0.85); ctx.stroke();
+      }
+      ctx.beginPath(); ctx.roundRect(mx - 0.13 * z, my - 0.13 * z, 0.26 * z, 0.26 * z, 0.05 * z);
+      ctx.fillStyle = shade(c, 1.1); ctx.fill(); ctx.lineWidth = lw3; ctx.strokeStyle = INK; ctx.stroke();
+    }
+  });
+
+  // Furniture, then trees.
+  each((x, y) => { const q = anchored(x, y); if (q && KINDS[q.kind].furn) drawFurniture(ctx, s, w, q, X(x), Y(y), z, lw3); });
+  each((x, y) => {
+    const q = anchored(x, y);
+    if (!q || q.kind !== 'tree') return;
+    const cx = X(x) + z / 2, cy = Y(y) + z / 2;
+    ctx.beginPath(); ctx.arc(cx, cy, z * 0.43, 0, Math.PI * 2); ctx.fillStyle = shade('#2c5a26', 0.95 + hash(x, y, 8) * 0.1); ctx.fill();
+    ctx.lineWidth = lw3; ctx.strokeStyle = 'rgba(10,20,8,0.45)'; ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx - z * 0.09, cy - z * 0.09, z * 0.22, 0, Math.PI * 2); ctx.fillStyle = '#3d7534'; ctx.fill();
+  });
+
+  // Gaps: the one missing piece that keeps a ring from being a room.
+  for (const g of A.gaps) {
+    const cx = X(g.x) + z / 2, cy = Y(g.y) + z / 2;
+    ctx.setLineDash([Math.max(2, z * 0.14), Math.max(2, z * 0.1)]);
+    ctx.beginPath();
+    if (g.axis === 'h') { ctx.moveTo(X(g.x), cy); ctx.lineTo(X(g.x) + z, cy); } else { ctx.moveTo(cx, Y(g.y)); ctx.lineTo(cx, Y(g.y) + z); }
+    ctx.lineWidth = Math.max(1.5, z * 0.08); ctx.strokeStyle = '#ff6b5a'; ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // The hovered room, outlined.
+  if (o.hover) {
+    const [hx, hy] = o.hover, i = hy * w.W + hx;
+    let cells = null;
+    const r = A.rooms[A.region[i]];
+    if (r && r.enclosed) cells = r.cells;
+    else if (A.pseudoAt[i] !== -1) cells = A.pseudo[A.pseudoAt[i]].cells;
+    if (cells) {
+      const set = new Set(cells.map(([x, y]) => y * w.W + x)), p = new Path2D();
+      ctx.fillStyle = r && r.enclosed ? 'rgba(90,180,255,0.1)' : 'rgba(255,107,90,0.1)';
+      for (const [x, y] of cells) {
+        ctx.fillRect(X(x), Y(y), z, z);
+        if (!set.has((y - 1) * w.W + x)) { p.moveTo(X(x), Y(y)); p.lineTo(X(x) + z, Y(y)); }
+        if (!set.has((y + 1) * w.W + x)) { p.moveTo(X(x), Y(y) + z); p.lineTo(X(x) + z, Y(y) + z); }
+        if (!set.has(y * w.W + x - 1)) { p.moveTo(X(x), Y(y)); p.lineTo(X(x), Y(y) + z); }
+        if (!set.has(y * w.W + x + 1)) { p.moveTo(X(x) + z, Y(y)); p.lineTo(X(x) + z, Y(y) + z); }
+      }
+      ctx.lineWidth = 1.5; ctx.strokeStyle = r && r.enclosed ? '#5ab4ff' : '#ff6b5a'; ctx.stroke(p);
+    }
+  }
+
+  // Room names, the way a plan labels them.
+  if (labelA > 0.02) {
+    const fs = clamp(z * 0.36, 9, 13);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const label = (x, y, l1, l2, bad) => {
+      const cx = X(x) + z / 2, cy = Y(y) + z / 2;
+      ctx.globalAlpha = labelA;
+      ctx.shadowColor = 'rgba(0,0,0,0.75)'; ctx.shadowBlur = 4;
+      ctx.font = `600 ${fs}px Inter, system-ui, sans-serif`;
+      if ('letterSpacing' in ctx) ctx.letterSpacing = '0.08em';
+      ctx.fillStyle = bad ? '#ff8a7d' : '#f4efe4'; ctx.fillText(l1, cx, cy - fs * 0.55);
+      ctx.font = `400 ${fs * 0.88}px Inter, system-ui, sans-serif`;
+      if ('letterSpacing' in ctx) ctx.letterSpacing = '0.02em';
+      ctx.fillStyle = bad ? '#ffb0a6' : 'rgba(244,239,228,0.8)'; ctx.fillText(l2, cx, cy + fs * 0.6);
+      ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+    };
+    for (const r of A.rooms) {
+      if (!r.enclosed || r.cells.length < 4) continue;
+      const name = (r.role ? r.role.label : 'Room').toUpperCase();
+      const l2 = !r.indoor ? 'open to the sky' : `${r.dims[0]} × ${r.dims[1]}${r.fire ? ' · heated' : ''}`;
+      label(r.labelAt[0], r.labelAt[1], name, l2, !r.indoor);
+    }
+    for (const p of A.pseudo) if (p.cells.length >= 4) label(p.labelAt[0], p.labelAt[1], 'NOT A ROOM', 'gap in the wall', true);
+    ctx.textAlign = 'start'; ctx.textBaseline = 'alphabetic';
+  }
+
+  // Roofs, from far away: height is the distance to the eaves.
+  if (roofA > 0.01 && A.houses.length) {
+    const rc = o.roofCanvas;
+    rc.width = ctx.canvas.width; rc.height = ctx.canvas.height;
+    const r2 = rc.getContext('2d');
+    frame(r2, s, 1, 0, 0, 1, 0, 0);
+    const lifted = o.hover ? A.houseOf[o.hover[1] * w.W + o.hover[0]] : -1;
+    const liftedRoom = o.hover ? A.rooms[A.region[o.hover[1] * w.W + o.hover[0]]] : null;
+    const liftHouse = liftedRoom && liftedRoom.indoor ? liftedRoom.house : lifted;
+    const H = (x, y) => inb(w, x, y) ? A.hgt[y * w.W + x] : 0;
+    const same = (i, x, y) => inb(w, x, y) && A.houseOf[y * w.W + x] === A.houseOf[i];
+    const shadowR = new Path2D(), eaves = new Path2D();
+    each((x, y) => {
+      const i = y * w.W + x, h = A.houseOf[i];
+      if (h === -1 || h === liftHouse) return;
+      shadowR.rect(X(x) + z * 0.3, Y(y) + z * 0.42, z + 0.5, z + 0.5);
+    });
+    r2.fillStyle = 'rgba(8,10,6,0.34)'; r2.fill(shadowR);
+    const BRIGHT = { N: 1.14, W: 1.02, E: 0.86, S: 0.74, F: 1.0 };
+    each((x, y) => {
+      const i = y * w.W + x, h = A.houseOf[i];
+      if (h === -1 || h === liftHouse) return;
+      const roof = ROOFS[A.houses[h].roof], hc = H(x, y);
+      const gx = (same(i, x + 1, y) ? H(x + 1, y) : 0) - (same(i, x - 1, y) ? H(x - 1, y) : 0);
+      const gy = (same(i, x, y + 1) ? H(x, y + 1) : 0) - (same(i, x, y - 1) ? H(x, y - 1) : 0);
+      const F = gx === 0 && gy === 0 ? 'F' : Math.abs(gy) >= Math.abs(gx) ? (gy > 0 ? 'N' : 'S') : (gx > 0 ? 'W' : 'E');
+      const x0 = X(x), y0 = Y(y), mx = x0 + z / 2, my = y0 + z / 2;
+      const tris = [['N', 0, -1, [x0, y0], [x0 + z, y0]], ['E', 1, 0, [x0 + z, y0], [x0 + z, y0 + z]], ['S', 0, 1, [x0 + z, y0 + z], [x0, y0 + z]], ['W', -1, 0, [x0, y0 + z], [x0, y0]]];
+      const opp = { N: 'S', S: 'N', E: 'W', W: 'E' };
+      for (const [d, dx, dy, a, b] of tris) {
+        const hn = same(i, x + dx, y + dy) ? H(x + dx, y + dy) : 0;
+        const face = hn < hc ? d : hn > hc ? opp[d] : F;
+        r2.beginPath(); r2.moveTo(mx, my); r2.lineTo(a[0] + (a[0] < mx ? -0.4 : 0.4), a[1] + (a[1] < my ? -0.4 : 0.4)); r2.lineTo(b[0] + (b[0] < mx ? -0.4 : 0.4), b[1] + (b[1] < my ? -0.4 : 0.4)); r2.closePath();
+        r2.fillStyle = shade(roof.color, BRIGHT[face] * (0.97 + hash(x, y, 11) * 0.05)); r2.fill();
+      }
+      // Courses of the covering, along the eave or down the slope.
+      r2.lineWidth = Math.max(0.5, z * 0.03); r2.strokeStyle = shade(roof.color, 0.65, 0.45); r2.beginPath();
+      const alongX = F === 'N' || F === 'S';
+      if (roof.lines === 'dots') { for (let k = 0; k < 3; k++) { r2.moveTo(x0 + hash(x, y, k) * z + 1, y0 + hash(x, y, k + 5) * z); r2.arc(x0 + hash(x, y, k) * z, y0 + hash(x, y, k + 5) * z, Math.max(0.6, z * 0.04), 0, Math.PI * 2); } }
+      else if ((roof.lines === 'eave') === alongX) { for (let k = 1; k < 3; k++) { r2.moveTo(x0, y0 + k * z / 3); r2.lineTo(x0 + z, y0 + k * z / 3); } }
+      else { for (let k = 1; k < 4; k++) { r2.moveTo(x0 + k * z / 4, y0); r2.lineTo(x0 + k * z / 4, y0 + z); } }
+      r2.stroke();
+      if (!same(i, x, y - 1)) { eaves.moveTo(x0, y0); eaves.lineTo(x0 + z, y0); }
+      if (!same(i, x, y + 1)) { eaves.moveTo(x0, y0 + z); eaves.lineTo(x0 + z, y0 + z); }
+      if (!same(i, x - 1, y)) { eaves.moveTo(x0, y0); eaves.lineTo(x0, y0 + z); }
+      if (!same(i, x + 1, y)) { eaves.moveTo(x0 + z, y0); eaves.lineTo(x0 + z, y0 + z); }
+    });
+    r2.lineWidth = lw1; r2.strokeStyle = INK; r2.stroke(eaves);
+    // A chimney over every hearth, and a little smoke.
+    for (const r of A.rooms) {
+      if (!r.indoor || r.house === liftHouse) continue;
+      for (const t of r.things) {
+        if (t.kind !== 'hearth') continue;
+        const cx = X(t.x) + z / 2, cy = Y(t.y) + z / 2;
+        r2.fillStyle = 'rgba(8,10,6,0.35)'; r2.fillRect(cx - z * 0.2 + z * 0.2, cy - z * 0.2 + z * 0.3, z * 0.4, z * 0.4);
+        r2.fillStyle = '#4a4440'; r2.fillRect(cx - z * 0.2, cy - z * 0.2, z * 0.4, z * 0.4);
+        r2.lineWidth = lw3; r2.strokeStyle = INK; r2.strokeRect(cx - z * 0.2, cy - z * 0.2, z * 0.4, z * 0.4);
+        r2.fillStyle = '#1e1a18'; r2.fillRect(cx - z * 0.1, cy - z * 0.1, z * 0.2, z * 0.2);
+        for (let k = 0; k < 3; k++) { r2.beginPath(); r2.arc(cx + z * (0.3 + k * 0.35), cy - z * (0.35 + k * 0.3), z * (0.16 + k * 0.08), 0, Math.PI * 2); r2.fillStyle = `rgba(230,230,225,${0.3 - k * 0.08})`; r2.fill(); }
+      }
+    }
+    frame(ctx, 1, 1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = roofA; ctx.drawImage(rc, 0, 0); ctx.globalAlpha = 1;
+    frame(ctx, s, 1, 0, 0, 1, 0, 0);
+  }
+
+  // What the cursor would build.
+  if (o.preview) {
+    for (const [x, y, ok] of o.preview) {
+      ctx.fillStyle = ok ? 'rgba(90,180,255,0.28)' : 'rgba(255,107,90,0.3)';
+      ctx.fillRect(X(x), Y(y), z, z);
+      ctx.strokeStyle = ok ? 'rgba(90,180,255,0.9)' : 'rgba(255,107,90,0.9)'; ctx.lineWidth = 1; ctx.strokeRect(X(x) + 0.5, Y(y) + 0.5, z - 1, z - 1);
+    }
+  }
+}
+
+// ---------------------------------------------------------------- the sample colony
+function ring(w, x0, y0, x1, y1, mat) {
+  for (let x = x0; x <= x1; x++) { place(w, 'wall', mat, x, y0); place(w, 'wall', mat, x, y1); }
+  for (let y = y0; y <= y1; y++) { place(w, 'wall', mat, x0, y); place(w, 'wall', mat, x1, y); }
+}
+function floorRect(w, x0, y0, x1, y1, mat) { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) floorAt(w, x, y, mat); }
+function sample() {
+  const w = makeWorld(46, 30);
+  // Marsh and a pond in the south, a granite outcrop in the north-east.
+  for (let y = 0; y < w.H; y++) for (let x = 0; x < w.W; x++) {
+    const i = y * w.W + x;
+    const dm = Math.hypot((x - 24) / 7, (y - 28) / 3.4) + hash(x, y, 3) * 0.35;
+    if (dm < 1) w.t[i] = 2;
+    if (Math.hypot((x - 23) / 3.2, (y - 28.5) / 1.6) + hash(x, y, 4) * 0.3 < 1) w.t[i] = WATER;
+    if (Math.hypot((x - 22) / 5, (y - 12) / 2.5) + hash(x, y, 6) * 0.5 < 1) w.t[i] = 1;
+    const dr = Math.hypot((x - 46) / 7.5, (y + 1) / 8) + hash(x, y, 5) * 0.25;
+    if (dr < 1.12) w.t[i] = 4;
+    if (dr < 0.95) place(w, 'rock', null, x, y);
+  }
+  // A cob house: bedroom and hall.
+  ring(w, 3, 3, 12, 9, 'clay');
+  for (let y = 4; y <= 8; y++) place(w, 'wall', 'clay', 7, y);
+  place(w, 'door', 'wood', 7, 6); place(w, 'door', 'wood', 10, 9);
+  place(w, 'window', 'clay', 3, 6); place(w, 'window', 'clay', 5, 3); place(w, 'window', 'clay', 9, 3);
+  floorRect(w, 8, 4, 11, 8, 'wood'); floorRect(w, 4, 4, 6, 8, 'branches');
+  place(w, 'bed', 'wood', 4, 4, 0); place(w, 'hearth', 'stone', 11, 4);
+  place(w, 'table', 'wood', 9, 6, 0); place(w, 'chair', 'wood', 9, 5); place(w, 'chair', 'wood', 10, 7);
+  // A wattle hut: the first night.
+  ring(w, 15, 4, 19, 8, 'branches');
+  place(w, 'door', 'branches', 17, 8);
+  place(w, 'bed', 'branches', 16, 5, 0); place(w, 'campfire', null, 18, 6);
+  // An ashlar workshop.
+  ring(w, 23, 3, 32, 10, 'stone');
+  place(w, 'door', 'wood', 27, 10);
+  place(w, 'window', 'stone', 25, 3); place(w, 'window', 'stone', 30, 3); place(w, 'window', 'stone', 23, 7);
+  floorRect(w, 24, 4, 31, 9, 'stone');
+  place(w, 'bench', 'wood', 25, 5, 0); place(w, 'bench', 'wood', 29, 5, 0);
+  // A dry-stone pen against the rock, one stone short of a room.
+  ring(w, 34, 8, 38, 14, 'stones');
+  erase(w, 36, 14);
+  // A log hall too wide for its span: it needs a pillar.
+  ring(w, 3, 13, 16, 24, 'wood');
+  place(w, 'door', 'wood', 9, 24); place(w, 'door', 'wood', 16, 18);
+  place(w, 'window', 'wood', 6, 13); place(w, 'window', 'wood', 12, 13); place(w, 'window', 'wood', 3, 18);
+  floorRect(w, 4, 14, 15, 23, 'wood');
+  place(w, 'table', 'wood', 5, 16, 0); place(w, 'chair', 'wood', 5, 15); place(w, 'chair', 'wood', 6, 17);
+  place(w, 'table', 'wood', 12, 20, 0); place(w, 'chair', 'wood', 12, 19); place(w, 'chair', 'wood', 13, 21);
+  place(w, 'hearth', 'stone', 4, 22);
+  // A brick dormitory.
+  ring(w, 36, 17, 43, 22, 'brick');
+  place(w, 'door', 'wood', 39, 22); place(w, 'window', 'brick', 43, 19); place(w, 'window', 'brick', 41, 17);
+  floorRect(w, 37, 18, 42, 21, 'brick');
+  place(w, 'bed', 'wood', 37, 18, 0); place(w, 'bed', 'wood', 39, 18, 0); place(w, 'hearth', 'stone', 42, 21);
+  // A log fence round a paddock, with a gate left open.
+  for (let x = 21; x <= 31; x++) { place(w, 'fence', 'wood', x, 14); if (x !== 26) place(w, 'fence', 'wood', x, 21); }
+  for (let y = 14; y <= 21; y++) { place(w, 'fence', 'wood', 21, y); place(w, 'fence', 'wood', 31, y); }
+  place(w, 'campfire', null, 21, 11);
+  // Oaks where nothing stands.
+  for (let y = 0; y < w.H; y++) for (let x = 0; x < w.W; x++) {
+    if (w.t[y * w.W + x] !== 0 || hash(x, y, 77) > 0.09) continue;
+    let free = true;
+    for (let dy = -1; dy <= 1 && free; dy++) for (let dx = -1; dx <= 1; dx++) if (at(w, x + dx, y + dy)) { free = false; break; }
+    if (free) place(w, 'tree', null, x, y);
+  }
+  // Nothing grows inside a building or a paddock.
+  const A0 = analyze(w);
+  for (let i = 0; i < w.W * w.H; i++) { const o = w.f[i]; if (o && o.kind === 'tree') { const r = A0.rooms[A0.region[i]]; if ((r && r.enclosed) || A0.pseudoAt[i] !== -1 || (o.x > 20 && o.x < 32 && o.y > 13 && o.y < 22)) removeObj(w, o); } }
+  return w;
+}
+
+// ---------------------------------------------------------------- app
+const TOOLS = [
+  { id: 'wall', label: 'Wall', key: 'W', group: 'build', line: true },
+  { id: 'room', label: 'Room: drag a rectangle', key: 'M', group: 'build' },
+  { id: 'door', label: 'Door: set into a wall', key: 'D', group: 'build' },
+  { id: 'window', label: 'Window: set into a wall', key: 'N', group: 'build' },
+  { id: 'pillar', label: 'Pillar: holds the roof', key: 'P', group: 'build' },
+  { id: 'fence', label: 'Fence', key: 'F', group: 'build', line: true },
+  { id: 'floor', label: 'Floor', key: 'O', group: 'build', line: true },
+  { id: 'erase', label: 'Take down', key: 'E', group: 'build', line: true },
+  { id: 'bed', label: 'Bed (R turns it)', key: 'B', group: 'furnish' },
+  { id: 'table', label: 'Table (R turns it)', key: 'T', group: 'furnish' },
+  { id: 'chair', label: 'Chair: faces a table', key: 'C', group: 'furnish' },
+  { id: 'hearth', label: 'Hearth', key: 'H', group: 'furnish' },
+  { id: 'bench', label: 'Workbench (R turns it)', key: 'K', group: 'furnish' },
+  { id: 'campfire', label: 'Campfire', key: 'G', group: 'furnish' },
+  { id: 'pan', label: 'Pan the view', key: 'V', group: 'furnish' },
+];
+const S = { tool: 'wall', mat: 'clay', rot: 0, roof: 'auto', hover: null, drag: null, space: false };
+let world = sample(), A = analyze(world);
+const canvas = document.getElementById('plan'), ctx = canvas.getContext('2d'), roofCanvas = document.createElement('canvas');
+const view = { z: 18, ox: 0, oy: 0, cw: 800, ch: 520 };
+let dpr = 1, dirty = true;
+
+function fit() {
+  const cw = canvas.clientWidth, ch = Math.round(cw * world.H / world.W);
+  dpr = Math.min(2, window.devicePixelRatio || 1);
+  canvas.style.height = ch + 'px';
+  canvas.width = Math.round(cw * dpr); canvas.height = Math.round(ch * dpr);
+  const first = view.cw === 800;
+  view.cw = cw; view.ch = ch;
+  if (first) { view.z = cw / world.W; view.ox = 0; view.oy = 0; syncZoom(); }
+  clampView(); dirty = true;
+}
+function clampView() {
+  const ww = world.W * view.z, wh = world.H * view.z;
+  view.ox = ww <= view.cw ? (ww - view.cw) / 2 : clamp(view.ox, -view.z * 2, ww - view.cw + view.z * 2);
+  view.oy = wh <= view.ch ? (wh - view.ch) / 2 : clamp(view.oy, -view.z * 2, wh - view.ch + view.z * 2);
+}
+function syncZoom() { document.getElementById('zoom').value = view.z.toFixed(1); }
+function zoomAt(nz, sx, sy) {
+  nz = clamp(nz, 8, 46);
+  const wx = (sx + view.ox) / view.z, wy = (sy + view.oy) / view.z;
+  view.z = nz; view.ox = wx * nz - sx; view.oy = wy * nz - sy;
+  clampView(); syncZoom(); dirty = true;
+}
+function cellAt(e) {
+  const r = canvas.getBoundingClientRect();
+  const sx = e.clientX - r.left, sy = e.clientY - r.top;
+  return [Math.floor((sx + view.ox) / view.z), Math.floor((sy + view.oy) / view.z), sx, sy];
+}
+function changed() { A = analyze(world); dirty = true; inspect(); }
+
+function apply(tool, x, y, erasing) {
+  if (!inb(world, x, y)) return false;
+  if (erasing || tool === 'erase') return erase(world, x, y);
+  if (tool === 'wall' || tool === 'pillar' || tool === 'fence') return place(world, tool, S.mat, x, y);
+  if (tool === 'door' || tool === 'window') { const o = at(world, x, y); if (!o || KINDS[o.kind].join !== 'wall') return false; return place(world, tool, tool === 'door' ? (S.mat === 'stone' || S.mat === 'stones' || S.mat === 'brick' ? 'wood' : S.mat) : S.mat, x, y); }
+  if (tool === 'floor') return floorAt(world, x, y, S.mat);
+  if (KINDS[tool] && KINDS[tool].furn) return place(world, tool, tool === 'hearth' ? 'stone' : S.mat, x, y, KINDS[tool].size ? S.rot : 0);
+  return false;
+}
+function ringCells(a, b) {
+  const x0 = Math.min(a[0], b[0]), x1 = Math.max(a[0], b[0]), y0 = Math.min(a[1], b[1]), y1 = Math.max(a[1], b[1]), out = [];
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (x === x0 || x === x1 || y === y0 || y === y1) out.push([x, y]);
+  return out;
+}
+function previewCells() {
+  if (!S.hover || S.tool === 'pan' || S.space) return null;
+  if (S.drag && S.drag.tool === 'room') return ringCells(S.drag.start, S.hover).map(([x, y]) => [x, y, inb(world, x, y) && canPlace(world, 'wall', x, y, 0)]);
+  if (S.drag) return null;
+  const [x, y] = S.hover;
+  if (!inb(world, x, y)) return null;
+  const t = S.tool;
+  if (t === 'erase' || t === 'floor' || t === 'room') return [[x, y, true]];
+  if (t === 'door' || t === 'window') { const o = at(world, x, y); return [[x, y, !!o && KINDS[o.kind].join === 'wall']]; }
+  const kind = t, rot = KINDS[kind].size ? S.rot : 0, [fw, fh] = size(kind, rot), ok = canPlace(world, kind, x, y, rot), out = [];
+  for (let j = 0; j < fh; j++) for (let i = 0; i < fw; i++) out.push([x + i, y + j, ok]);
+  return out;
+}
+
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+canvas.addEventListener('pointerdown', e => {
+  canvas.setPointerCapture(e.pointerId);
+  const [x, y, sx, sy] = cellAt(e);
+  if (e.button === 1 || S.space || S.tool === 'pan') { S.drag = { pan: true, sx, sy, ox: view.ox, oy: view.oy }; canvas.classList.add('panning'); return; }
+  const erasing = e.button === 2;
+  if (!erasing && S.tool === 'room') { S.drag = { tool: 'room', start: [x, y] }; dirty = true; return; }
+  S.drag = { tool: S.tool, erasing, last: [x, y] };
+  if (apply(S.tool, x, y, erasing)) changed();
+  if (!erasing && !TOOLS.find(t => t.id === S.tool).line) S.drag = null;
+});
+canvas.addEventListener('pointermove', e => {
+  const [x, y, sx, sy] = cellAt(e);
+  if (S.drag && S.drag.pan) { view.ox = S.drag.ox - (sx - S.drag.sx); view.oy = S.drag.oy - (sy - S.drag.sy); clampView(); dirty = true; return; }
+  const moved = !S.hover || S.hover[0] !== x || S.hover[1] !== y;
+  S.hover = [x, y];
+  if (S.drag && S.drag.last) {
+    let [lx, ly] = S.drag.last, any = false;
+    // Walk the cells between the last and this one, so a fast drag leaves no holes.
+    const dx = Math.abs(x - lx), dy = Math.abs(y - ly), sgx = lx < x ? 1 : -1, sgy = ly < y ? 1 : -1;
+    let err = dx - dy;
+    for (let k = 0; k < 200 && (lx !== x || ly !== y); k++) {
+      const e2 = 2 * err;
+      if (e2 > -dy) { err -= dy; lx += sgx; } else { err += dx; ly += sgy; }
+      if (apply(S.drag.tool, lx, ly, S.drag.erasing)) any = true;
+    }
+    S.drag.last = [x, y];
+    if (any) { changed(); return; }
+  }
+  if (moved) { dirty = true; inspect(); }
+});
+function endDrag() {
+  if (S.drag && S.drag.tool === 'room' && S.hover) {
+    let any = false;
+    for (const [x, y] of ringCells(S.drag.start, S.hover)) {
+      const o = at(world, x, y);
+      if (o && KINDS[o.kind].opening) continue;
+      if (inb(world, x, y) && place(world, 'wall', S.mat, x, y)) any = true;
+    }
+    if (any) changed();
+  }
+  S.drag = null; canvas.classList.remove('panning'); dirty = true;
+}
+canvas.addEventListener('pointerup', endDrag);
+canvas.addEventListener('pointercancel', endDrag);
+canvas.addEventListener('pointerleave', () => { if (!S.drag) { S.hover = null; dirty = true; inspect(); } });
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const r = canvas.getBoundingClientRect();
+  zoomAt(view.z * Math.pow(1.0018, -e.deltaY), e.clientX - r.left, e.clientY - r.top);
+}, { passive: false });
+document.getElementById('zoom').addEventListener('input', e => zoomAt(+e.target.value, view.cw / 2, view.ch / 2));
+
+window.addEventListener('keydown', e => {
+  if (e.target.closest && e.target.closest('input, textarea')) return;
+  if (e.code === 'Space') { S.space = true; canvas.classList.add('panning'); e.preventDefault(); return; }
+  const k = e.key.toUpperCase();
+  if (k === 'R') { S.rot = (S.rot + 1) & 3; dirty = true; return; }
+  const t = TOOLS.find(t => t.key === k);
+  if (t && !e.metaKey && !e.ctrlKey) setTool(t.id);
+});
+window.addEventListener('keyup', e => { if (e.code === 'Space') { S.space = false; canvas.classList.remove('panning'); } });
+
+// ---------------------------------------------------------------- toolbar, drawn with the same looks
+function miniWorld(W, H, build) { const w = makeWorld(W, H); build(w); return w; }
+function drawMini(cv, w, opts = {}) {
+  const r = cv.getBoundingClientRect(), d = Math.min(2, window.devicePixelRatio || 1);
+  const cw = Math.max(20, r.width || +cv.dataset.w || 40), ch = Math.max(20, r.height || +cv.dataset.h || 40);
+  cv.width = Math.round(cw * d); cv.height = Math.round(ch * d);
+  const z = opts.z || Math.min(cw / w.W, ch / w.H);
+  const v = { z, ox: (w.W * z - cw) / 2, oy: (w.H * z - ch) / 2, cw, ch };
+  render(cv.getContext('2d'), d, w, analyze(w), v, { full: true, labels: false, roof: 'off', bg: '#1c1f24', roofCanvas });
+}
+function toolWorld(id, mat) {
+  const doorMat = mat === 'stone' || mat === 'stones' || mat === 'brick' ? 'wood' : mat;
+  switch (id) {
+    case 'wall': return miniWorld(3, 3, w => { place(w, 'wall', mat, 0, 1); place(w, 'wall', mat, 1, 1); place(w, 'wall', mat, 1, 2); });
+    case 'room': return miniWorld(4, 4, w => ring(w, 0, 0, 3, 3, mat));
+    case 'door': return miniWorld(3, 3, w => { place(w, 'wall', mat, 0, 1); place(w, 'door', doorMat, 1, 1); place(w, 'wall', mat, 2, 1); });
+    case 'window': return miniWorld(3, 3, w => { place(w, 'wall', mat, 0, 1); place(w, 'window', mat, 1, 1); place(w, 'wall', mat, 2, 1); });
+    case 'pillar': return miniWorld(1, 1, w => place(w, 'pillar', mat, 0, 0));
+    case 'fence': return miniWorld(3, 3, w => { place(w, 'fence', mat, 0, 1); place(w, 'fence', mat, 1, 1); place(w, 'fence', mat, 1, 2); place(w, 'fence', mat, 2, 1); });
+    case 'floor': return miniWorld(2, 2, w => floorRect(w, 0, 0, 1, 1, mat));
+    case 'erase': return miniWorld(2, 2, w => { place(w, 'tree', null, 0, 0); });
+    case 'bed': return miniWorld(2, 2, w => place(w, 'bed', mat, 0, 0, 0));
+    case 'table': return miniWorld(2, 2, w => { place(w, 'table', mat, 0, 0, 0); place(w, 'chair', mat, 0, 1); });
+    case 'chair': return miniWorld(1, 1, w => place(w, 'chair', mat, 0, 0));
+    case 'hearth': return miniWorld(1, 1, w => place(w, 'hearth', 'stone', 0, 0));
+    case 'bench': return miniWorld(2, 2, w => place(w, 'bench', mat, 0, 0, 0));
+    case 'campfire': return miniWorld(1, 1, w => place(w, 'campfire', null, 0, 0));
+    default: return null;
+  }
+}
+function buildToolbar() {
+  for (const t of TOOLS) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'tool'; b.id = 'tool-' + t.id; b.dataset.tool = t.id;
+    b.setAttribute('aria-label', `${t.label} (${t.key})`); b.title = `${t.label} · ${t.key}`;
+    b.setAttribute('aria-pressed', String(t.id === S.tool));
+    if (t.id === 'pan') { b.innerHTML = `<svg viewBox="0 0 24 24" width="55%" height="55%" fill="none" stroke="#a3a8ae" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/></svg>`; }
+    else b.innerHTML = '<canvas></canvas>';
+    b.insertAdjacentHTML('beforeend', `<span class="k">${t.key}</span>`);
+    b.addEventListener('click', () => setTool(t.id));
+    document.getElementById(t.group === 'build' ? 'tools-build' : 'tools-furnish').appendChild(b);
+  }
+  for (const [id, m] of Object.entries(MATS)) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'mat'; b.id = 'mat-' + id; b.setAttribute('aria-pressed', String(id === S.mat));
+    b.innerHTML = `<canvas></canvas><span>${m.label}</span>`;
+    b.addEventListener('click', () => { S.mat = id; document.querySelectorAll('.mat').forEach(x => x.setAttribute('aria-pressed', String(x.id === 'mat-' + id))); drawIcons(); inspect(); });
+    document.getElementById('mats').appendChild(b);
+  }
+  document.querySelectorAll('#roofs button').forEach(b => b.addEventListener('click', () => {
+    S.roof = b.dataset.v; document.querySelectorAll('#roofs button').forEach(x => x.setAttribute('aria-pressed', String(x === b))); dirty = true;
+  }));
+  document.getElementById('reset').addEventListener('click', () => { world = sample(); changed(); });
+  document.getElementById('clear').addEventListener('click', () => { world = makeWorld(46, 30); changed(); });
+  setTool(S.tool);
+}
+function setTool(id) {
+  S.tool = id;
+  document.querySelectorAll('.tool').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.tool === id)));
+  const t = TOOLS.find(t => t.id === id);
+  document.getElementById('toolname').textContent = t ? t.label : '';
+  canvas.classList.toggle('panning', id === 'pan');
+  dirty = true;
+}
+function drawIcons() {
+  for (const t of TOOLS) { const w = toolWorld(t.id, S.mat); if (w) drawMini(document.querySelector(`#tool-${t.id} canvas`), w); }
+  for (const id of Object.keys(MATS)) {
+    drawMini(document.querySelector(`#mat-${id} canvas`), miniWorld(4, 2, w => { place(w, 'wall', id, 0, 0); place(w, 'wall', id, 1, 0); place(w, 'wall', id, 2, 0); place(w, 'wall', id, 2, 1); place(w, 'wall', id, 3, 0); }));
+  }
+}
+
+// ---------------------------------------------------------------- the inspector
+const esc = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+const fmt = (n, d = 2) => n.toFixed(d);
+function holds(leak) { return leak < 0.8 ? 'well' : leak < 1.3 ? 'fairly' : 'poorly'; }
+function maskHtml(x, y, g) {
+  let s = '<span class="mask" aria-hidden="true">';
+  for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) s += `<i class="${dx === 0 && dy === 0 ? 'me' : J(world, x + dx, y + dy, g) ? 'on' : ''}"></i>`;
+  return s + '</span>';
+}
+function roomRows(r) {
+  const groups = [...r.groups.entries()].sort((a, b) => b[1].n - a[1].n).map(([l, g]) => `${g.n} ${l} ${fmt(g.lk)}`).join(' · ');
+  const role = r.role ? `${r.role.label}: ${Object.entries(r.role.needs).map(([t, c]) => `${t} ${r.tags[t]}/${c}`).join(', ')}` : 'no rule matches';
+  const roof = ROOFS[r.roof];
+  return `<dl>
+    <dt>Size</dt><dd>${r.dims[0]} × ${r.dims[1]} · ${r.cells.length} cells</dd>
+    <dt>Heat</dt><dd>holds it ${holds(r.leak)}${r.fire ? ', heated' : ', no fire'}</dd>
+    <dt>Daylight</dt><dd>${Math.round(Math.min(1, r.pass) * 100)}% through ${r.windows.length} window${r.windows.length === 1 ? '' : 's'}</dd>
+    <dt>Roof</dt><dd>${r.uncovered ? `<span style="color:var(--threat)">${r.uncovered} cells out of reach</span>` : `${roof.label}, all held`}</dd>
+    <dt>Beauty</dt><dd>${fmt(r.beauty)}</dd>
+  </dl>
+  <div class="explain"><span class="t">leak ${fmt(r.leak)}</span> = mean of ${r.pieces} pieces, each its leak ÷ insulation: ${esc(groups)}<br><span class="t">role</span> = ${esc(role)}</div>`;
+}
+function inspect() {
+  const el = document.getElementById('inspect');
+  const h = S.hover;
+  if (!h || !inb(world, h[0], h[1])) {
+    const rooms = A.rooms.filter(r => r.enclosed);
+    const list = rooms.map(r => `<div><span>${r.role ? r.role.label : 'Room'}</span><span class="${r.indoor ? '' : 'bad'}">${r.indoor ? `${r.dims[0]} × ${r.dims[1]} · ${MATS_ROOF(r)}` : 'open to the sky'}</span></div>`).join('')
+      + A.pseudo.map(p => `<div><span>Not a room</span><span class="bad">gap at ${p.gap[0]}, ${p.gap[1]}</span></div>`).join('');
+    el.innerHTML = `<div class="ins-head"><div class="kicker">colony</div><h3>${A.houses.length} house${A.houses.length === 1 ? '' : 's'}, ${rooms.filter(r => r.indoor).length} rooms indoors</h3></div>
+      <div class="roomlist">${list || '<div><span>No rooms yet</span><span>close a ring of walls</span></div>'}</div>
+      <div class="explain">Hover a room or a wall to see what the sim knows about it.</div>`;
+    return;
+  }
+  const [x, y] = h, o = at(world, x, y), i = y * world.W + x;
+  const r = A.rooms[A.region[i]];
+  let html = `<div class="ins-head"><div class="kicker">cell ${x}, ${y}</div>`;
+  if (o && (KINDS[o.kind].join === 'wall' || o.kind === 'pillar' || o.kind === 'fence')) {
+    const m = MATS[o.mat], k = KINDS[o.kind];
+    const bounds = [...new Set(DIRS4.map(([dx, dy]) => A.rooms[A.region[(y + dy) * world.W + x + dx]]).filter(rr => rr && rr.enclosed).map(rr => rr.role ? rr.role.label : 'Room'))];
+    html += `<h3>${m.label} ${k.label}</h3></div><dl>
+      <dt>Made of</dt><dd>${m.item}, ${m.from}</dd>
+      <dt>Hit points</dt><dd>${Math.round((k.hp || 100) * m.hp)} = ${k.hp || 100} × ${m.hp}</dd>
+      <dt>Insulation</dt><dd>× ${m.ins}${k.leak ? `, leak ${fmt(k.leak / m.ins)}` : ''}</dd>
+      ${k.support ? `<dt>Roof span</dt><dd>${m.span} cells</dd>` : ''}
+      <dt>Build with</dt><dd>${m.needs ? `a ${m.needs} tool in hand` : 'bare hands'}</dd>
+      <dt>Pattern</dt><dd>${m.pattern}</dd>
+      ${k.join ? `<dt>Joins</dt><dd>${maskHtml(x, y, 'wall')} &nbsp;${runAxis(world, x, y, 'wall') === 'h' ? 'east–west run' : 'north–south run'}</dd>` : ''}
+      ${bounds.length ? `<dt>Bounds</dt><dd>${bounds.join(', ')}</dd>` : ''}
+    </dl>`;
+    if (k.opening === 'door') html += `<div class="explain">The leaf swings into ${bounds.length ? 'the smaller room it bounds' : 'the south or east side'}: the look reads the room, not a rotation.</div>`;
+    else if (k.opening === 'window') html += `<div class="explain">Lets ${k.pass * 100}% of daylight into each enclosed room it faces, and leaks ${k.leak}× a wall's heat before insulation.</div>`;
+  } else if (o && o.kind === 'rock') {
+    html += `<h3>Granite</h3></div><dl><dt>Joins</dt><dd>${maskHtml(x, y, 'rock')} as rock</dd><dt>Roof span</dt><dd>${ROCK.span} cells: overhead rock holds a cave</dd></dl>`;
+  } else if (r && r.enclosed) {
+    const name = r.role ? r.role.label : 'Room';
+    html += `<h3>${name}</h3>${r.indoor ? '<span class="pill good">Indoors</span>' : `<span class="pill threat">Outdoors: ${r.uncovered} cells beyond the roof span</span>`}</div>${roomRows(r)}`;
+    if (!r.indoor) html += `<div class="explain">A pillar holds the roof for its material's span in every direction. Place one in the blue hatching.</div>`;
+  } else if (A.pseudoAt[i] !== -1) {
+    const p = A.pseudo[A.pseudoAt[i]];
+    html += `<h3>Not a room</h3><span class="pill threat">Outdoors: gap at ${p.gap[0]}, ${p.gap[1]}</span></div>
+      <dl><dt>Would be</dt><dd>${p.dims[0]} × ${p.dims[1]} · ${p.cells.length} cells</dd></dl>
+      <div class="explain">One missing piece joins this ring to the outdoors. A wall, a door or a window in the red dash closes it.</div>`;
+  } else {
+    const t = ['Grass', 'Dirt', 'Marsh', 'Water', 'Rock floor'][world.t[i]];
+    html += `<h3>${o ? KINDS[o.kind].label[0].toUpperCase() + KINDS[o.kind].label.slice(1) : t}</h3><span class="pill muted">Outdoors</span></div>
+      <div class="explain">Close a ring of walls, doors and windows for a room. Anything within span of a wall is roofed.</div>`;
+  }
+  el.innerHTML = html;
+}
+function MATS_ROOF(r) { return ROOFS[r.roof].label; }
+
+// ---------------------------------------------------------------- the notes, drawn by the same renderer
+function buildNotes() {
+  const J_ = [
+    ['post', 1, 1, w => place(w, 'wall', 'clay', 1, 1)],
+    ['end', 1, 1, w => { place(w, 'wall', 'clay', 1, 1); place(w, 'wall', 'clay', 2, 1); }],
+    ['run', 1, 1, w => { for (let x = 0; x < 3; x++) place(w, 'wall', 'clay', x, 1); }],
+    ['corner', 1, 1, w => { place(w, 'wall', 'clay', 1, 1); place(w, 'wall', 'clay', 2, 1); place(w, 'wall', 'clay', 1, 2); }],
+    ['tee', 1, 1, w => { for (let x = 0; x < 3; x++) place(w, 'wall', 'clay', x, 1); place(w, 'wall', 'clay', 1, 2); }],
+    ['cross', 1, 1, w => { for (let x = 0; x < 3; x++) place(w, 'wall', 'clay', x, 1); place(w, 'wall', 'clay', 1, 0); place(w, 'wall', 'clay', 1, 2); }],
+    ['block', 1, 1, w => { for (let y = 1; y < 3; y++) for (let x = 1; x < 3; x++) place(w, 'wall', 'clay', x, y); place(w, 'wall', 'clay', 0, 1); }],
+    ['material seam', 1, 1, w => { place(w, 'wall', 'clay', 0, 1); place(w, 'wall', 'clay', 1, 1); place(w, 'wall', 'stone', 2, 1); place(w, 'wall', 'stone', 2, 2); }],
+    ['door', 1, 1, w => { place(w, 'wall', 'clay', 0, 1); place(w, 'door', 'wood', 1, 1); place(w, 'wall', 'clay', 2, 1); }],
+    ['window', 1, 1, w => { place(w, 'wall', 'clay', 1, 0); place(w, 'window', 'clay', 1, 1); place(w, 'wall', 'clay', 1, 2); }],
+    ['fence', 1, 1, w => { place(w, 'fence', 'wood', 0, 1); place(w, 'fence', 'wood', 1, 1); place(w, 'fence', 'wood', 2, 1); place(w, 'fence', 'wood', 1, 2); }],
+    ['rock', 1, 1, w => { for (let y = 0; y < 3; y++) for (let x = 0; x < 3; x++) if (hash(x, y, 2) < 0.7 || (x === 1 && y === 1)) place(w, 'rock', null, x, y); }],
+  ];
+  const g = document.getElementById('joins');
+  const jobs = [];
+  for (const [name, , , build] of J_) {
+    const f = document.createElement('figure'); f.innerHTML = `<canvas></canvas><figcaption>${name}</figcaption>`; g.appendChild(f);
+    jobs.push([f.querySelector('canvas'), miniWorld(3, 3, build)]);
+  }
+  const t = document.getElementById('mattable');
+  t.innerHTML = `<thead><tr><th></th><th>Material</th><th>From</th><th>Pattern</th><th>Insulation</th><th>Hit points</th><th>Roof span</th><th>Build with</th><th>Roof</th></tr></thead><tbody>${Object.entries(MATS).map(([id, m]) => `<tr><td class="sw"><canvas data-mat="${id}" style="width:44px;height:22px;display:block;border-radius:2px"></canvas></td><td>${m.label}</td><td>${m.item}, ${m.from}</td><td>${m.pattern}</td><td>× ${m.ins}</td><td>× ${m.hp}</td><td>${m.span}</td><td>${m.needs ? m.needs + ' tool' : 'hands'}</td><td>${ROOFS[m.roof].label}</td></tr>`).join('')}</tbody>`;
+  t.querySelectorAll('canvas').forEach(cv => jobs.push([cv, miniWorld(4, 2, w => { const id = cv.dataset.mat; for (let x = 0; x < 4; x++) place(w, 'wall', id, x, 0); place(w, 'wall', id, 3, 1); })]));
+  document.getElementById('rolesrc').innerHTML = `<span class="c"># mods/core/defs/rooms.toml: the first rule a room meets names it</span>\n` + ROLES.map(r => `[[room_role]]\nid = "${r.id}"\nneeds = { ${Object.entries(r.needs).map(([t, c]) => `${t} = ${c}`).join(', ')} }`).join('\n\n') + `\n\n<span class="c"># tags come from things: bed, fire, station, table, seat</span>`;
+  return jobs;
+}
+
+// ---------------------------------------------------------------- run
+function frameLoop() {
+  if (dirty) {
+    dirty = false;
+    render(ctx, dpr, world, A, view, { roof: S.roof, hover: S.hover, labels: true, preview: previewCells(), roofCanvas });
+  }
+  requestAnimationFrame(frameLoop);
+}
+buildToolbar();
+let noteJobs = buildNotes();
+function redrawStatic() { drawIcons(); for (const [cv, w] of noteJobs) drawMini(cv, w); }
+fit(); inspect();
+requestAnimationFrame(() => { redrawStatic(); frameLoop(); });
+window.addEventListener('resize', () => { fit(); redrawStatic(); });
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { dirty = true; });
+</script>
+</body>
+</html>
