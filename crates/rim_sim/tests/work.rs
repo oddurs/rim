@@ -109,7 +109,12 @@ fn an_interrupted_chop_resumes_where_it_stopped() {
 
     s.push(Command::Draft { pawn: founder, on: false });
     assert!(step_until(&mut s, 4000, |s| s.world.is_worksite(tree)), "back at it");
-    assert!(work(&s, tree).unwrap().done > done, "carrying on from where it stopped, not from zero");
+    // A slow worker can go a tick without a whole unit (skills), so wait
+    // for the next one rather than expecting it on this very tick.
+    assert!(
+        step_until(&mut s, 10, |s| work(s, tree).is_some_and(|w| w.done > done)),
+        "carrying on from where it stopped, not from zero"
+    );
 }
 
 #[test]

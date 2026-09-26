@@ -254,6 +254,7 @@ pub fn load_only(mods_dir: &Path, enabled: &dyn Fn(&str) -> bool) -> Result<Load
             "designation" => defs.designations.push(de!(v)?),
             "work_type" => defs.work_types.push(de!(v)?),
             "work_style" => defs.work_styles.push(de!(v)?),
+            "skill" => defs.skills.push(de!(v)?),
             "priority_scale" => {
                 if scales > 0 {
                     return Err(format!(

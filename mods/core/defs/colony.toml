@@ -34,6 +34,25 @@ empty_damage_per_day = 40
 # 1 is first, 0 never. `order` breaks ties; `jobs = ["build"]` is the work
 # type that raises blueprints and brings them materials; `jobs = ["haul"]`
 # the one that carries loose items to stockpiles.
+# Skills: what colonists get better at by doing it. A work type names the
+# skill it trains; the one with `melee = true` is what fighting trains.
+[[skill]]
+id = "construction"
+label = "Construction"
+
+[[skill]]
+id = "mining"
+label = "Mining"
+
+[[skill]]
+id = "plants"
+label = "Plants"
+
+[[skill]]
+id = "melee"
+label = "Melee"
+melee = true
+
 [[priority_scale]]
 id = "core"
 levels = 4
@@ -75,7 +94,7 @@ order = 40
 id = "hunt"
 label = "Hunt"
 icon = "U"
-skill = "shooting"
+skill = "melee"
 priority = 3
 order = 50
 
