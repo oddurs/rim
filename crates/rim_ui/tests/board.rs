@@ -311,7 +311,9 @@ fn a_mods_work_type_is_a_column() {
         "boardcol",
         &[("tailor", "", &[("defs/work.toml", "[[work_type]]\nid = \"tailor\"\nlabel = \"Tailor\"\norder = 70\n")])],
     );
-    let sim = sim_at(&dir);
+    let mut sim = sim_at(&dir);
+    // Hand, so the board shows (one colonist on Auto gets a plan).
+    hands(&mut sim);
     let mut ui = ui_for(&sim);
     let cv = client(&sim);
     ui.open_window("core:work");

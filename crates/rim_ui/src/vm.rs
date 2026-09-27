@@ -1467,6 +1467,10 @@ impl UiVm {
                     // A ring on the board: a planner chose it and may change it.
                     cell.set("planned", p.own_priority(wt).is_none() && w.is_planned(&p) && p.planned(wt).is_some())?;
                     cell.set("why", why_text(defs, &d.label, value, &parts))?;
+                    // Auto's reason on its own, for the plan view.
+                    let reason =
+                        parts.iter().find(|p| p.kind == rim_sim::rules::PartKind::Plan).map(|p| p.label.as_str());
+                    cell.set("reason", reason)?;
                     if let Some(s) = skill {
                         cell.set("skill", s)?;
                         cell.set("skill_frac", s as f64 / rim_sim::world::SKILL_MAX as f64)?;

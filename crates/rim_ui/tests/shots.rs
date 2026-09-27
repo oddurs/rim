@@ -157,3 +157,22 @@ fn work_board_at_4_and_9_levels() {
     }
     let _ = std::fs::remove_dir_all(nine);
 }
+
+/// One castaway on Auto, an hour in: the Work screen is their plan.
+#[test]
+#[ignore]
+fn work_plan_shot() {
+    let mut sim = sim_at(&mods());
+    for _ in 0..rim_sim::TICKS_PER_DAY / 24 + 1 {
+        sim.step();
+    }
+    let mut ui = ui_for(&sim);
+    let cv = client(&sim);
+    frame(&mut ui, &sim, &cv, Input { time: 0.5, ..Default::default() });
+    ui.open_window("core:work");
+    frame(&mut ui, &sim, &cv, Input { time: 1.0, ..Default::default() });
+    let out = frame(&mut ui, &sim, &cv, Input { time: 2.0, ..Default::default() });
+    let mut canvas = Canvas::new(cv.screen.0 as usize, cv.screen.1 as usize, GROUND);
+    canvas.draw(&out.draw, &ui.text.atlas);
+    canvas.write_png(&out_dir().join("work_plan.png"));
+}

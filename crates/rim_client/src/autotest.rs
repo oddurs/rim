@@ -272,6 +272,13 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.shot("start").await;
 
     // ---------------------------------------------------------- 0171 the HUD is core's UI mod
+    // A castaway on Auto gets a first-day hint over the map; a player would
+    // read it and wave it away, and it would sit under clicks meant for the map.
+    println!("\n# the first-day hint (5dc8f858)");
+    t.check(t.app.ui.find("core:auto_hint").is_some(), "a castaway on Auto gets the first-day hint");
+    t.click_ui("core:auto_hint.ok").await;
+    t.check(t.app.ui.find("core:auto_hint").is_none(), "Got it waves it away");
+
     println!("\n# the HUD is a mod (0171)");
     for id in [
         "core:topbar",
@@ -1262,6 +1269,10 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     println!("\n# stances (0cb48faf)");
     t.key(KeyCode::P).await;
     t.check(t.app.ui.find("core:work.stance.core:siege").is_some(), "P opens the Work Board with a stance bar");
+    // One colonist on Auto opens to their plan; the stance step reads the board.
+    t.check(t.app.ui.find("core:work.show_board").is_some(), "one colonist on Auto opens to their plan");
+    t.shot("work_plan").await;
+    t.click_ui("core:work.show_board").await;
     t.click_ui("core:work.stance.core:siege").await;
     t.ticks(1);
     t.check(t.w().stance == defs.lookup("stance", "core:siege"), "a stance button puts the colony in it");

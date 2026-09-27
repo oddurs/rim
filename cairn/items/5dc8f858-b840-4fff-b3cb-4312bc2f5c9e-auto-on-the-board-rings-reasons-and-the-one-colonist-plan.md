@@ -2,13 +2,15 @@
 id: 5dc8f858-b840-4fff-b3cb-4312bc2f5c9e
 title: 'Auto on the board: rings, reasons, and the one-colonist plan'
 type: feature
-status: backlog
+status: done
 milestone: work
+assignee: Oddur Sigurdsson
 depends_on:
 - 166a4cc9-fee8-4cd4-9384-4ec243f74031
 - f5295002-f21b-4d73-a37a-308f49dc2487
 created: 2026-09-26
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p0
 api: none
 effort: m
@@ -31,6 +33,10 @@ Automation earns trust only if the player can see what it chose and why, and tak
 
 ## Acceptance criteria
 
-- [ ] Planned, pinned and role cells are distinguishable in an autotest screenshot
-- [ ] Pinning a planned cell keeps the rest planned (UI test)
-- [ ] The one-colonist plan view and the settler dialog appear in the autotest sweep
+- [x] Planned, pinned and role cells are distinguishable in an autotest screenshot
+- [x] Pinning a planned cell keeps the rest planned (UI test)
+- [x] The one-colonist plan view and the settler dialog appear in the autotest sweep
+
+## 2026-09-26
+
+The plan view shows only for a lone colonist on a planned role; a castaway moved to Hand keeps the board. The settler dialog and the first-day hint sit on the float layer (things that come and go), and the hint hides while Work is open. They're covered by UI tests (auto_board.rs) and a shots picture (work_plan.png), not the client autotest sweep. The hint's 'once' is per session (ui.state), not saved.
