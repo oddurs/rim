@@ -627,6 +627,14 @@ pub struct Held {
     pub by: Entity,
 }
 
+/// A spoiling stack's condition below one hit point, in 1/10000ths: the
+/// part of a point it has lost since its hp last dropped. Its hp is the
+/// rest (DESIGN.md §4f).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Spoiling {
+    pub lost: u16,
+}
+
 /// Harvests growing back, each named by its key:
 /// `harvest` is ready again at `ready_at`, and any others are in `also`.
 /// Nearly every regrowing thing has one, its first harvest, which saves
@@ -2477,6 +2485,27 @@ impl World {
         }
     }
 
+    /// A stack's condition changed, as when it spoils. A store may keep it
+    /// at one hp and not another, so it leaves the ledger and the store
+    /// index at the old hp and comes back at the new. At 0 it is gone.
+    pub fn set_stack_hp(&mut self, e: Entity, hp: i32) {
+        let Some(t) = self.thing(e) else { return };
+        if hp <= 0 {
+            self.take_from_stack(e, t.count);
+            return;
+        }
+        let stacked = self.is_stack(e, &t);
+        if stacked {
+            self.stock_change(e, -(t.count as i64), -1);
+        }
+        if let Ok(mut t) = self.ecs.get::<&mut Thing>(e) {
+            t.hp = hp;
+        }
+        if stacked {
+            self.stock_change(e, t.count as i64, 1);
+        }
+    }
+
     /// Take up to `n` from a stack, despawning it when empty.
     pub fn take_from_stack(&mut self, e: Entity, n: u32) -> u32 {
         let held_in = self.ecs.get::<&Contained>(e).ok().map(|c| c.store);
@@ -2730,6 +2759,13 @@ impl World {
             // Order-independent combine for things.
             h = h.wrapping_add(crate::rng::mix(
                 (t.def as u64) << 40 ^ (t.pos.x as u64) << 20 ^ t.pos.y as u64 ^ (t.count as u64) << 56,
+            ));
+        }
+        // Condition isn't in the things' combine above; what spoils changes
+        // it every pass.
+        for (t, s) in self.ecs.query::<(&Thing, &Spoiling)>().iter() {
+            h = h.wrapping_add(crate::rng::mix(
+                (t.hp as u64) << 32 ^ (s.lost as u64) << 16 ^ (t.pos.x as u64) << 8 ^ t.pos.y as u64 ^ 0x5b0,
             ));
         }
         for a in &self.fields.atmos {

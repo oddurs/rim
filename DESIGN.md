@@ -1002,6 +1002,24 @@ derived and rebuilt on load (§7a). Before this, the haul search cost
 0.33 ms a step on 250 × 250 with 30 colonists and 300 loose stacks, over
 the 0.2 ms work-choice budget (§4d).
 
+### Spoiling and keeping
+
+- An item with `spoil = { days, rate }` loses condition as it lies: hp,
+  so the filters, the token's condition bar and saves need nothing new.
+  The rate is terms read at the stack's cell (warmth, rain). A store's
+  `keeps` terms divide it (a sealed pot 2.5, a granary 3; cold storage is
+  a curve over temperature), and a `shelter` store reads `sky` as 0, so
+  rain terms written against `sky` stop at its lid. At no condition left
+  a stack rots away through `take_from_stack`, so the ledger and the
+  colony's food count follow.
+- A condition change goes through `set_stack_hp`: out of the ledger and
+  the store index at the old hp, back in at the new, since a store may
+  keep a stack at one condition and not another. The part of a point
+  lost below one hp rides in a `Spoiling` component, saved.
+- The spoil pass runs every 250 ticks and works out a quarter of the
+  stacks, by entity id. 4,000 stacks cost 1.4 ms a pass (0.006 ms a
+  tick) on a loaded machine.
+
 ### Showing contents
 
 One **item token** draws every item everywhere: the def's own look, the

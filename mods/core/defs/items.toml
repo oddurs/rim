@@ -40,6 +40,21 @@ market_value = 1.5
 stack_limit = 50
 food = { nutrition = 0.12 }
 
+# Berries keep about six days where they lie: slower in the cold, faster in heat
+# and in the rain (DESIGN.md §4f). Rain reads `sky`, so under a roof or
+# in a sheltering store it stays dry.
+[thing.spoil]
+days = 6.0
+
+[thing.spoil.rate.base]
+of = [1.0]
+
+[thing.spoil.rate.warmth]
+of = [{ field = "temperature", curve = [[0, -0.8], [10, 0.0], [25, 1.0], [35, 1.5]] }]
+
+[thing.spoil.rate.rain]
+of = [{ field = "precipitation", curve = [[0, 0.0], [1, 1.0], [5, 2.0]] }, { input = "sky" }]
+
 [[thing]]
 id = "raw_meat"
 label = "raw meat"
@@ -52,3 +67,18 @@ look.layers = [
 market_value = 2.0
 stack_limit = 75
 food = { nutrition = 0.08 }
+
+# Raw meat keeps two or three days: slower in the cold, faster in heat
+# and in the rain (DESIGN.md §4f). Rain reads `sky`, so under a roof or
+# in a sheltering store it stays dry.
+[thing.spoil]
+days = 2.5
+
+[thing.spoil.rate.base]
+of = [1.0]
+
+[thing.spoil.rate.warmth]
+of = [{ field = "temperature", curve = [[0, -0.8], [10, 0.0], [25, 1.0], [35, 1.5]] }]
+
+[thing.spoil.rate.rain]
+of = [{ field = "precipitation", curve = [[0, 0.0], [1, 1.0], [5, 2.0]] }, { input = "sky" }]

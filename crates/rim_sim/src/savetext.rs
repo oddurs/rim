@@ -21,7 +21,7 @@ use crate::field::SavedFields;
 use crate::savefile::{self, Epoch, EpochRead, Log, Root};
 use crate::snapshot::{DefsSection, Header, ScriptsSection, Snapshot, WorldSection};
 use crate::world::{
-    Blueprint, Contained, Designated, Held, MadeOf, Order, Owner, Pawn, Planned, Regrow, Store, Thing, Work,
+    Blueprint, Contained, Designated, Held, MadeOf, Order, Owner, Pawn, Planned, Regrow, Spoiling, Store, Thing, Work,
 };
 use hecs::Entity;
 use serde::de::DeserializeOwned;
@@ -120,6 +120,7 @@ fn codec_of(section: &str) -> Result<Codec, String> {
         "engine:urgent" => codec::<Vec<(Entity, crate::world::Urgent)>>(),
         "engine:planned" => codec::<Vec<(Entity, Planned)>>(),
         "engine:regrow" => codec::<Vec<(Entity, Regrow)>>(),
+        "engine:spoiling" => codec::<Vec<(Entity, Spoiling)>>(),
         "engine:held" => codec::<Vec<(Entity, Held)>>(),
         "engine:store" => codec::<Vec<(Entity, Store)>>(),
         "engine:contained" => codec::<Vec<(Entity, Contained)>>(),

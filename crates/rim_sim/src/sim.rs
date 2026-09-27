@@ -199,6 +199,9 @@ impl Sim {
         if w.tick.is_multiple_of(systems::NEEDS_INTERVAL) {
             prof.time("needs", || systems::needs(w));
         }
+        if w.tick.is_multiple_of(systems::SPOIL_PASS) {
+            prof.time("spoil", || systems::spoil(w));
+        }
         if w.tick.is_multiple_of(250) {
             prof.time("regrow", || systems::regrow(w));
             prof.time("wealth", || systems::wealth(w));
