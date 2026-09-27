@@ -398,5 +398,10 @@ fn a_slow_mod_is_named_in_the_warnings() {
         "the profiler names the slow mod: {:?}",
         s.warnings
     );
-    assert!(!s.warnings.iter().any(|w| w.contains("mod 'core' is slow")), "{:?}", s.warnings);
+    // Not "core isn't named": the budget is wall-clock, and on a loaded
+    // machine core's own calls can cross it too. Load slows both mods
+    // alike, so compare them: the slow one costs many times core.
+    let per_call = |m: &str| s.profile.entries.iter().find(|e| e.0 == format!("mod:{m}")).map_or(0.0, |e| e.1);
+    let (probe, core) = (per_call("probe"), per_call("core"));
+    assert!(probe > 5.0 * core, "the slow mod stands out from core: {probe:.0} us against {core:.0} us");
 }
