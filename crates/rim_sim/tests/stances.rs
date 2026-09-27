@@ -32,6 +32,7 @@ fn stance(s: &Sim, id: &str) -> DefId {
 #[test]
 fn effective_priorities_explain_themselves() {
     let mut s = Sim::new(&common::mods(), 1).unwrap();
+    common::hands(&mut s);
     assert_eq!(s.world.stance, Some(stance(&s, "core:normal")), "a colony starts in the first stance");
     assert_eq!(explained(&s, "core:build"), (3, vec![part("default", 3)]));
 
@@ -102,6 +103,7 @@ shift = { "core:chop" = 1 }
 fn a_mod_adds_a_stance_and_rules_with_data_alone() {
     let dir = modded("stances-data");
     let mut s = Sim::new(&dir, 1).unwrap();
+    common::hands(&mut s);
     let drill = stance(&s, "drills:drill");
     s.push(Command::SetStance { stance: drill });
     s.step();
@@ -283,6 +285,7 @@ fn first_work(stance_id: Option<&str>) -> &'static str {
     use rim_sim::world::Job;
     // Core alone: with the stone age on, the oaks would wait for an axe.
     let mut s = Sim::with_mods(&common::mods(), 2, &|m| m == "core").unwrap();
+    common::hands(&mut s);
     let defs = s.world.defs.clone();
     let pawn = s.world.colonists().next().unwrap();
     let c = s.world.pawn_pos(pawn).unwrap();

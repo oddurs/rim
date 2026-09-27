@@ -16,6 +16,8 @@ fn board(n: usize) -> (Sim, Ui, ClientView) {
     for i in 1..n {
         sim.world.spawn_pawn(human, rim_sim::world::Faction::Player, c.offset(i as i32 % 5, i as i32 / 5), None);
     }
+    // Hand sets nothing, so cells read as the work types' defaults.
+    hands(&mut sim);
     let mut ui = ui_for(&sim);
     let cv = client(&sim);
     // A frame first, so the window opens on a screen of known size.

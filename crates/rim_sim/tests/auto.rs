@@ -21,7 +21,7 @@ fn planned(name: &str) -> PathBuf {
 [[work_role]]
 id = "auto"
 label = "Auto"
-order = -10
+order = -20
 planner = "planning:test"
 "#;
     let script = r#"

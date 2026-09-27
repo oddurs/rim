@@ -137,3 +137,16 @@ pub fn loose_cells(sim: &Sim, from: IVec, n: usize) -> Vec<IVec> {
         .take(n)
         .collect()
 }
+
+/// Put every colonist in core's Hand role, which sets nothing: for tests of
+/// stances, rules and work choice that shouldn't depend on Auto's plan.
+pub fn hands(s: &mut Sim) {
+    let hand =
+        s.world.work_roles.iter().position(|r| r.def.as_deref() == Some("core:hand")).expect("core's Hand") as u16;
+    for e in s.world.colonists().collect::<Vec<_>>() {
+        let mut p = s.world.ecs.get::<&mut rim_sim::world::Pawn>(e).unwrap();
+        p.work_role = Some(hand);
+        p.plan.clear();
+        p.proposal.clear();
+    }
+}

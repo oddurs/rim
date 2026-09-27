@@ -72,6 +72,7 @@ skill = "construction"
 priority = 3
 order = 10
 jobs = ["build"]
+auto = { per_person = 4, weight = 4 }
 
 [[work_type]]
 id = "mine"
@@ -80,6 +81,7 @@ icon = "M"
 skill = "mining"
 priority = 3
 order = 20
+auto = { per_person = 6, weight = 1 }
 
 [[work_type]]
 id = "chop"
@@ -88,6 +90,7 @@ icon = "C"
 skill = "plants"
 priority = 3
 order = 30
+auto = { per_person = 4, weight = 2 }
 
 [[work_type]]
 id = "harvest"
@@ -96,6 +99,7 @@ icon = "H"
 skill = "plants"
 priority = 3
 order = 40
+auto = { per_person = 5, weight = 3 }
 
 [[work_type]]
 id = "hunt"
@@ -104,6 +108,7 @@ icon = "U"
 skill = "melee"
 priority = 3
 order = 50
+auto = { per_person = 1, weight = 2 }
 
 # Carrying loose items to the stockpiles that take them.
 [[work_type]]
@@ -113,12 +118,23 @@ icon = "L"
 priority = 3
 order = 60
 jobs = ["haul"]
+auto = { per_person = 8, weight = 1 }
 
 # Work roles (DESIGN.md §4d): a partial set of levels colonists belong to,
 # one role each; what a role leaves out is the work type's default, and a
 # colonist's own setting (a pin) beats it. The first by `order` is where
 # colonists start. The colony keeps its own copy of each, which the player
 # edits; mods add roles or patch these (`work_role/core:builder`).
+# Auto: where colonists start. Its levels are planned hourly by
+# scripts/auto.luau from skill and what's waiting, around the colonists
+# in other roles and every pin. A mod replaces the policy by patching
+# `planner`.
+[[work_role]]
+id = "auto"
+label = "Auto"
+order = -10
+planner = "core:auto"
+
 [[work_role]]
 id = "hand"
 label = "Hand"

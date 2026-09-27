@@ -31,6 +31,7 @@ fn pair() -> (Sim, rim_sim::hecs::Entity, rim_sim::hecs::Entity) {
     let human = s.world.defs.creature_id("human").unwrap();
     let at = s.world.pawn_pos(a).unwrap().offset(1, 0);
     let b = s.world.spawn_pawn(human, Faction::Player, at, None);
+    common::hands(&mut s);
     (s, a, b)
 }
 
@@ -38,9 +39,9 @@ fn pair() -> (Sim, rim_sim::hecs::Entity, rim_sim::hecs::Entity) {
 fn core_seeds_its_roles_and_colonists_start_in_the_first() {
     let s = Sim::new(&common::mods(), 1).unwrap();
     let labels: Vec<&str> = s.world.work_roles.iter().map(|r| r.label.as_str()).collect();
-    assert_eq!(labels, ["Hand", "Builder", "Forager", "Crafter"], "core's, then the crafting mod's");
+    assert_eq!(labels, ["Auto", "Hand", "Builder", "Forager", "Crafter"], "core's, then the crafting mod's");
     let pawn = s.world.colonists().next().unwrap();
-    assert_eq!(s.world.ecs.get::<&Pawn>(pawn).unwrap().work_role, Some(role(&s, "Hand")));
+    assert_eq!(s.world.ecs.get::<&Pawn>(pawn).unwrap().work_role, Some(role(&s, "Auto")), "Auto comes first by order");
     let builder = &s.world.work_roles[role(&s, "Builder") as usize];
     assert_eq!(builder.level(work(&s, "crafting:craft")), Some(4), "the crafting mod patched core's builder");
     assert!(!builder.edited && builder.def.as_deref() == Some("core:builder"));
@@ -136,7 +137,7 @@ fn a_role_follows_its_mod_on_load_until_the_player_edits_it() {
     let mut s = Sim::new(&before, 1).unwrap();
     let pawn = s.world.colonists().next().unwrap();
     let porter = role(&s, "Porter");
-    assert_eq!(porter, 3, "after core's three");
+    assert_eq!(porter, 4, "after core's four");
     s.push(Command::AssignWorkRole { pawn, role: porter });
     s.step();
     assert_eq!(level(&s, pawn, "core:haul"), 2);
@@ -168,9 +169,9 @@ fn a_save_from_before_roles_loads_everyone_into_the_first() {
         s.world.ecs.get::<&mut Pawn>(e).unwrap().work_role = None;
     }
     let back = Snapshot::capture(&s).restore(&common::mods(), &|m| m == "core").unwrap();
-    assert_eq!(back.world.work_roles.len(), 3, "core's roles are seeded");
-    assert_eq!(back.world.work_role_of(&back.world.ecs.get::<&Pawn>(a).unwrap()), Some(0), "the first, Hand");
-    assert_eq!((levels(&back, a), levels(&back, b)), (la, lb), "nobody's work changes");
+    assert_eq!(back.world.work_roles.len(), 4, "core's roles are seeded");
+    assert_eq!(back.world.work_role_of(&back.world.ecs.get::<&Pawn>(a).unwrap()), Some(0), "the first, Auto");
+    assert_eq!((levels(&back, a), levels(&back, b)), (la, lb), "nobody's work changes until Auto's first plan");
 }
 
 #[test]
