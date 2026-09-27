@@ -1196,10 +1196,11 @@ impl UiVm {
         view!("message_count", (), |_lua, l, _a| Ok(l.world.messages.len()));
         // The last order and its age in seconds, or nil.
         view!("last_order", (), |lua, l, _a| {
-            let Some((label, age)) = &l.client.last_order else { return Ok(None) };
+            let Some((label, age, undoable)) = &l.client.last_order else { return Ok(None) };
             let t = lua.create_table()?;
             t.set("label", label.as_str())?;
             t.set("age", *age)?;
+            t.set("undoable", *undoable)?;
             Ok(Some(t))
         });
         // Every order the selected colonists could be given at a spot, for

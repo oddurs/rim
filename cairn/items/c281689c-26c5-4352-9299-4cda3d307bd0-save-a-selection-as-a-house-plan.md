@@ -2,12 +2,14 @@
 id: c281689c-26c5-4352-9299-4cda3d307bd0
 title: Save a selection as a house plan
 type: feature
-status: backlog
+status: done
 milestone: houses
+assignee: Oddur Sigurdsson
 depends_on:
 - 827b2421-129a-4995-b475-1398dc91d2cb
 created: 2026-09-27
 updated: 2026-09-27
+closed_at: 2026-09-27
 priority: p2
 api: none
 effort: m
@@ -26,4 +28,8 @@ Minecraft structures and Factorio blueprints make a good house something you pla
 
 ## Acceptance criteria
 
-- [ ] A saved selection loads back and places the same pieces (test)
+- [x] A saved selection loads back and places the same pieces (test)
+
+## 2026-09-27
+
+rim_sim::plan::plan_text writes the fixtures in a rectangle as a [[plan]] (legend characters per thing, material and facing, the first letter of the name where free; multi-cell pieces over their whole footprint). The test round-trips the shed through text and a new mod. The client's Save as plan tool writes plans/plan_N.toml in the player's data folder and says where; it deliberately doesn't write into the mods folder, which tests load. Loading the player's own files as defs is the mod manager's job (7f26e2e3). The order toast gained 'undoable' so a save shows no Undo button.

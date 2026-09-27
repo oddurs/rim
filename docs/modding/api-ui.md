@@ -100,7 +100,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `view.inspect` | `() -> Inspect?` | The node under the cursor (devtools). |
 | `view.item_categories` | `() -> ItemCategories` | The item category tree stores filter by: the top level in order, and each category by id with its children, the items directly in it, and every item under it. |
 | `view.items` | `() -> { Item }` | Every item def, which a stockpile can take or refuse. |
-| `view.last_order` | `() -> { label: string, age: number }?` | The last order given ("Gunnar will deconstruct wall") and how many seconds ago, or nil once it's been undone. |
+| `view.last_order` | `() -> { label: string, age: number, undoable: boolean }?` | The last order given ("Gunnar will deconstruct wall"), how many seconds ago, and whether an undo takes it back; nil once it's been undone. |
 | `view.level` | `() -> number` | The level on screen: 0 is the surface, below it is negative. |
 | `view.level_of` | `(id: number) -> number?` | The level a pawn or thing is on. |
 | `view.levels` | `() -> { { z: number, colonists: number, others: number, reached: boolean } }` | Every level, the highest first: the colonists and other creatures on it, and whether it is reached (the surface and above, or a level a portal goes down to or a pit looks into). |

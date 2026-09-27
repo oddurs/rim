@@ -80,7 +80,7 @@ fn nothing_docked_moves_while_you_play() {
         still(&run, &format!("the {tab} tab"));
     }
 
-    run.cv.last_order = Some(("Arn will chop oak".into(), 0.5));
+    run.cv.last_order = Some(("Arn will chop oak".into(), 0.5, true));
     run.frame(&sim, Input::default());
     assert!(inside(run.find("core:undo"), dock), "the undo chip sits in the dock bar");
     still(&run, "an order's undo chip");

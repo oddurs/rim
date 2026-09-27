@@ -44,6 +44,8 @@ pub enum Tool {
     /// Place a house plan whole (DESIGN.md §6c), its corner under the
     /// pointer, turned with T as a build is.
     Plan(DefId),
+    /// Save what stands in a rectangle as a house plan (DESIGN.md §6c).
+    SavePlan,
     /// Paint a stockpile: extends the one zone a drag touches, else a new one.
     Stockpile,
     /// Take cells out of their zone.
@@ -819,6 +821,8 @@ fn toolbar(sim: &Sim) -> Vec<ToolDef> {
         let first = p.pieces.first().map_or([128; 3], |pc| defs.thing(pc.stuff.unwrap_or(pc.thing)).rgb);
         items.push(tool(format!("plan:{}", p.id), &p.label, Tool::Plan(i as DefId), rgb(first), "build", "plans"));
     }
+    let plan = Color::from_rgba(160, 200, 240, 255);
+    items.push(tool("plan:save".into(), "Save as plan", Tool::SavePlan, plan, "build", "plans"));
     items.push(tool("stockpile".into(), "Stockpile", Tool::Stockpile, ZONE, "zones", ""));
     let clear = Color::from_rgba(150, 150, 170, 255);
     items.push(tool("clear_zone".into(), "Clear zone", Tool::ClearZone, clear, "zones", ""));
@@ -1165,7 +1169,7 @@ pub fn client_view(app: &mut App, mouse: (f32, f32), time: f64) -> ClientView {
             .collect(),
         stuff: stuff_view(app),
         hint: drag.or_else(|| app.hint.clone()),
-        last_order: app.last_order.as_ref().map(|o| (o.label.clone(), get_time() - o.at)),
+        last_order: app.last_order.as_ref().map(|o| (o.label.clone(), get_time() - o.at, !o.undo.is_empty())),
         hover_cell,
         hover_pawn,
         time,
@@ -1917,6 +1921,25 @@ fn open_orders(app: &mut App, cv: &rim_ui::view::ClientView, at: (f32, f32)) {
 
 /// The last order given, for a few seconds: what to say, and the commands
 /// that take it back.
+/// Write what stands in `a`..`b` as a plan in the player's `plans/`
+/// folder, as a mod's defs would hold it, and say where. Loading the
+/// player's own files as defs waits on the mod manager (7f26e2e3).
+fn save_plan(app: &mut App, a: IVec, b: IVec) {
+    let label = match app.settings_file.as_ref().map(|p| p.with_file_name("plans")) {
+        None => "No folder to save plans in".to_string(),
+        Some(dir) => {
+            let n = (1..).find(|n| !dir.join(format!("plan_{n}.toml")).exists()).unwrap_or(1);
+            let (id, path) = (format!("plan_{n}"), dir.join(format!("plan_{n}.toml")));
+            let text = rim_sim::plan::plan_text(&app.sim.world, a, b, &id, &format!("saved plan {n}"));
+            match std::fs::create_dir_all(&dir).and_then(|_| std::fs::write(&path, text)) {
+                Ok(()) => format!("Saved as a plan: {}", path.display()),
+                Err(e) => format!("Couldn't save the plan: {e}"),
+            }
+        }
+    };
+    app.last_order = Some(LastOrder { label, at: get_time(), undo: Vec::new() });
+}
+
 pub struct LastOrder {
     pub label: String,
     pub at: f64,
@@ -2121,6 +2144,7 @@ pub fn apply(app: &mut App, action: Action) {
                 Tool::Plan(plan) => {
                     app.sim.push(Command::PlacePlan { plan, at: b, facing: app.build_facing, stuff: None })
                 }
+                Tool::SavePlan => save_plan(app, a, b),
                 Tool::Stockpile => {
                     let zone = app.sim.world.zones.touched(&app.sim.world.map, a, b);
                     app.sim.push(Command::Stockpile { a, b, zone });

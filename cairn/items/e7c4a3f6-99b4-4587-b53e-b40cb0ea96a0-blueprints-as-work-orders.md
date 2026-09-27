@@ -2,10 +2,10 @@
 id: e7c4a3f6-99b4-4587-b53e-b40cb0ea96a0
 title: Blueprints as work orders
 type: feature
-status: backlog
+status: dropped
 milestone: houses
 created: 2026-09-25
-updated: 2026-09-26
+updated: 2026-09-27
 priority: p1
 api: none
 effort: m
@@ -36,3 +36,11 @@ Moved to houses and raised to p1: material tool gates (fff4fb42) and replace-in-
 ## Proposed status: backlog -> dropped (Oddur Sigurdsson, 2026-09-26)
 
 Its purpose was giving building what orders have (inputs by tag, a tool requirement). #165 (dce75339) since gave blueprints build.requires with tool fetching and 'Needs a ... tool' reasons, and the material tool gate (fff4fb42) builds on that by reading the blueprint's MadeOf. What's left is an internal refactor of Deliver/Construct into Supply/Craft that no Houses item needs and that touches ai.rs, which three agents are editing. Suggest dropping it, or parking it in the backlog without a milestone, until a mod needs a build input by tag.
+
+## Accepted status: dropped (Oddur Sigurdsson, 2026-09-27)
+
+Proposed by Oddur Sigurdsson on 2026-09-26.
+
+## 2026-09-27
+
+Dropped on the owner's delegation (2026-09-27, 'you make the decisions'), for the reason in the proposal. If a mod later needs a build input by tag, reopen it then.

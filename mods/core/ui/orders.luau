@@ -124,8 +124,12 @@ ui.extend("core:dock.status", function(view)
 	if not o or o.age > UNDO_SECS then
 		return nil
 	end
+	local label = kit.label(o.label, { size = "small" })
+	if not o.undoable then
+		return kit.row({ id = "core:undo", gap = "m", align = "center", padx = "m", border = "line_strong", radius = "radius" }, { label })
+	end
 	return kit.row({ id = "core:undo", gap = "m", align = "center", padx = "m", border = "line_strong", radius = "radius" }, {
-		kit.label(o.label, { size = "small" }),
+		label,
 		kit.button({
 			id = "core:undo.button",
 			label = t("core:undo.label", "Undo"),

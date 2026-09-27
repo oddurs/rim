@@ -88,9 +88,9 @@ pub struct ClientView {
     pub stuff: Vec<StuffView>,
     /// What a right-click would do here, if anything.
     pub hint: Option<String>,
-    /// The last order given and how long ago, in seconds: what an undo
-    /// would take back.
-    pub last_order: Option<(String, f64)>,
+    /// The last order given, how long ago in seconds, and whether an undo
+    /// would take it back (saving a plan is news, not an order).
+    pub last_order: Option<(String, f64, bool)>,
     /// The world cell under the mouse, when it isn't over the UI.
     pub hover_cell: Option<IVec>,
     pub hover_pawn: Option<Entity>,

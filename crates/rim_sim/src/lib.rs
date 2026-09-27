@@ -17,6 +17,7 @@ pub mod modtest;
 pub mod near;
 pub mod order;
 pub mod path;
+pub mod plan;
 pub mod profile;
 pub mod rng;
 pub mod rules;
