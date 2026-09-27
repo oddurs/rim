@@ -651,6 +651,7 @@ pub fn world_ui(app: &App) {
     let z = cam.zoom;
 
     zones(app);
+    app.marks.draw(cam, visible(app));
     // The selected thing: pawns draw their own ring.
     if let Some(t) = app.selected.and_then(|e| w.thing(e)) {
         let (sx, sy) = cam.to_screen(t.pos.x as f32, t.pos.y as f32);
