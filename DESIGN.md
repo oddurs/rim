@@ -14,8 +14,8 @@ ruling turns out wrong, change the ruling and keep the argument.
 
 > **Everything you build makes you visible, and visibility brings the world to you: settlers, traders, beasts and raiders.**
 
-There is no difficulty slider and no scenario picker, so the game needs one
-rule that produces its own difficulty curve. That rule is **Wealth is gravity.**
+There is no difficulty slider, and a premise (§4g) sets only how a run
+opens, so the game needs one rule that produces its own difficulty curve. That rule is **Wealth is gravity.**
 Every event in the game is something being pulled toward your colony.
 
 ### Tension: wealth-scaled threats punish building
@@ -36,7 +36,8 @@ Every event in the game is something being pulled toward your colony.
 
 ## 2. The arc: eras instead of scenarios
 
-There are no scenarios, so the shape of a run has to come from inside the game.
+A premise (§4g) can choose how a run opens, but never its arc or its
+difficulty, so the shape of a run has to come from inside the game.
 
 | Era      | Reached by                          | What the world sends                         |
 |----------|-------------------------------------|----------------------------------------------|
@@ -56,7 +57,8 @@ There are no scenarios, so the shape of a run has to come from inside the game.
 ### Tension: endless sandbox vs. a goal
 
 - **For a goal:** runs without a goal fizzle out, and a goal gives decisions weight.
-- **Against:** a fixed goal is a scenario in disguise, and you said no scenarios.
+- **Against:** a fixed goal is a scenario in disguise. Premises (§4g) may set
+  the opening, and nothing else.
 - **Ruling:** eras give the run direction without a finish line. A plugin can
   add a win condition (build a ship, found a kingdom) as its own event chain.
 
@@ -904,6 +906,207 @@ so a mod's order can never desync a game.
 
 ---
 
+## 4g. Story: facts, feelings, telling
+
+Every run should leave a story worth retelling, and the story is something
+to take apart. Every feeling names its reason, every line of text comes
+from a pack anyone can edit, and a story package can be run headless across
+a hundred seeds to see what it does.
+
+A story has three layers, and the line between them decides the rest:
+
+| Layer    | Example                                        | Lives in           |
+|----------|------------------------------------------------|--------------------|
+| Facts    | Arn died on day 14 holding the door            | the sim            |
+| Feelings | Sefa grieves; Ode is ashamed, because Ode ran  | the sim, plugins   |
+| Telling  | *"Someone should fix his door."*               | the client         |
+
+**Feelings change behaviour; words never do.** A grieving medic works
+slower, so grief is simulated. A line of dialogue changes nothing, so text
+is presentation: it never enters the sim, costs nothing when nobody looks,
+and can come from a template, an author or a model without touching
+determinism. A *speech act* (comfort, insult, confess) is a sim event with
+effects on opinion; only its wording is telling.
+
+### Tension: scenarios after all?
+
+- **For:** a seed gives a run a reason to exist. "A survey crew whose lander
+  came down in the wrong valley, and one of them sabotaged it" is a story
+  before day one, and players remember openings.
+- **Against:** §1 and §2 ruled scenarios out. They usually bring difficulty
+  and goals with them, which wealth-as-gravity and eras replaced.
+- **Ruling:** a **premise** sets the opening and never the difficulty.
+  `[[start]]` becomes a choice of premises: map constraints, the cast (names,
+  traits, skills, who is founder), what they carry, their history with each
+  other, and an opening. The schema has no field for the raid budget, the
+  wealth scorer or era thresholds. Core's castaway is the default premise,
+  so a game with no story mod plays as it does today. There is still no
+  difficulty picker.
+
+### Tension: can you load more than one?
+
+- **For stacking:** players will want a premise from one author and a feud
+  from another, and mods that can't combine split the community.
+- **Against:** two openings can't both happen, and two story mods that each
+  pace raids would double them.
+- **Ruling:** one premise, any number of **threads**, one **writer**. A
+  thread is a chain of beats gated by conditions (an era, a day, an event, a
+  bond), optionally bound to one premise; with another premise it is skipped
+  with a reason. A thread never fires anything itself: a beat is an *offer* to
+  core's storyteller, which spends one tension budget on offers and its own
+  incidents alike. Five threads make a run more varied, not harder.
+- A def may **claim** a tag (`claims = ["early_raids"]`). Two enabled defs
+  claiming one tag are a conflict the loader reports like a patch conflict,
+  and the player picks one. The pick is kept in the save until the modlist
+  lockfile lands, then in the lockfile. Claims are generic: any kind can use
+  them.
+
+### Who owns what
+
+The engine gets mechanisms that three or more of these plugins share:
+
+- **Perception.** An event def may ask for witnesses: pawns within its
+  radius, on its level, in its room or with a clear line to it. Candidates
+  come from a **pawn index by chunk**, kept by movement, so nothing scans
+  every pawn. Witnesses are computed once, in id order, into the payload.
+- **Memories.** The chronicle's store (§2) is the one memory mechanism: a log
+  of compact records (kind, tick, place, actors, witnesses, a small data
+  table), each with a notability from its event def, indexed by entity. "What
+  happened to Arn", "what does this knife remember" and "what happened in
+  this room" are lookups. Routine events live in a short ring; notable ones
+  are kept, and retention is bounded by size.
+- **Relations.** Sparse values between two entities, per kind a mod
+  declares (opinion first), each the sum of remembered reasons that decay.
+  A pair exists only while it has a reason. Decay runs in one daily batch.
+- **Interactions.** Each awake, unbusy pawn considers one on a staggered
+  cadence, about once an in-game hour. The partner comes from the pawn
+  index, the act is a weighted pick over `[[interaction]]` defs whose weights
+  are data (opinion, emotion, bond, traits) evaluated in Rust, and the
+  effects are data: a relation reason, a thought. Scripts listen to the
+  event, and one budgeted hook may veto.
+- **Gatherings.** People at a place for a time, facing a focus: funerals
+  first, shared meals and parties later.
+- **Bodies.** A death leaves a corpse that remembers who it was, and
+  `pawn_died` names the killer.
+- **Traits.** A pawn carries trait ids. Core declares the kind and the
+  founder; plugins add traits, and traits modify stats through the pipeline.
+- **Premises**, and a script hook at game start.
+
+Core owns the shared names: the premise and trait kinds, the castaway, the
+corpse, the storyteller's offer queue, notability for its own events, and
+English text for them. Four first-party plugins do the rest, each reading
+the others as `optional`:
+
+| Plugin     | Owns                                                              |
+|------------|-------------------------------------------------------------------|
+| `mood`     | thoughts (the mood milestone), emotions, appraisal, contrast, contagion |
+| `social`   | opinion, bonds, speech acts, shared experience, secrets           |
+| `mourning` | grief, graves, burial, funerals, reminders, grief styles, epitaphs |
+| `story`    | threads, beats, procedural premises                               |
+
+### Feelings
+
+- **Emotions are kinds.** A thought carries an emotion (joy, grief, fear,
+  anger, disgust, pride, shame, relief) declared as data. Mood is still the
+  sum, but a person at −20 from grief acts differently from one at −20 from
+  disgust, and speaks differently.
+- **Appraisal.** A thought's strength is its base times factors from the
+  person's traits: raw meat is nothing to a hunter and an insult to a cook.
+- **Contrast.** A thought family can measure against the person's recent
+  average, so the first hot meal after a hungry week matters and the
+  thirtieth doesn't.
+- **Contagion.** Strong emotions spread a little between people in a room,
+  per room per in-game hour.
+- **Mixed feelings and delayed reactions** need no mechanism: one event can
+  raise two thoughts, and a thought can start late.
+
+### Mourning
+
+Grief is a thought with phases (shock, acute, a long tail), scaled by the
+bond, not by the death. Rites (burial, a marker, a funeral) shorten the
+tail. An unburied body blocks them and gives dread and disgust to whoever
+sees it; a body never recovered keeps grief open. **Reminders**: a grieving
+person near something the log links to the dead (their bed, their knife,
+the grave) gets the grief back, checked on the grief's own cadence and only
+for grieving pawns. **Grief styles** (withdraw, keep vigil, overwork, take
+over their job, keep a memento, blame someone) are data choosing jobs and
+modifiers; blame is a relation reason. Shared rites raise opinion among
+those present. The chronicle writes an epitaph from facts.
+
+### Tension: rich simulation or legible simulation?
+
+- **For rich:** more interaction kinds, hidden values, gossip. The surprises
+  are the point.
+- **Against:** if the player can't see why Hild hates Ode, it reads as
+  random, and random isn't a story.
+- **Ruling:** legible. Every thought, opinion and memory names its reason and
+  the event it came from, and the inspector shows them. Few interaction
+  kinds, each with a clear effect.
+
+### Telling
+
+- **Intent in, line out.** The sim records intents: act, speaker, listener,
+  topic, facts, feelings. A writer turns an intent into words. Writers live in
+  the client, and `rim_text` is shared with the CLI.
+- **Templates are the default writer,** and must be good on their own.
+  Packs are data per locale (`text/en/*.toml`), keyed by act, emotion and
+  bond, with nested grammars and slots filled from the intent's facts, most
+  specific first. Voices are data: register, words, and what a voice never
+  says, by trait and background. Hand-written lines override templates for
+  an exact moment.
+- **Same words, nothing saved.** A line's template is picked with a seed from
+  the world seed and the event's sequence number, avoiding what the speaker
+  said recently. Picks are made as events arrive, which is cheap; text is
+  expanded only when a line is seen. A replay shows the same words.
+- **A connected writer** is an external process the player points the game
+  at, speaking JSON lines over stdio: intent in, line out; prompt in, premise
+  package out. It never runs in the sim, the sim never waits, and a slow
+  answer falls back to templates. Its lines go in the save's presentation
+  sidecar. No model ships with the game.
+- **Craft rules**, linted by `rim check` where a linter can: every template
+  uses a fact slot; lines have a length cap; slots only offer facts the
+  speaker witnessed or was told; a deny-list catches therapy phrasing. The
+  rest is for authors: subtext, talking past the event, a voice per person,
+  callbacks, silence as a line, rarity.
+- Each client renders its own words. In co-op the facts are shared and the
+  words may differ.
+
+### Hack it
+
+- `rim story <premise> --seeds 100 --days 120` runs a story headless and
+  prints a chronicle and beat statistics: how often each beat fired, and when.
+- Text packs reload instantly. Words are presentation, so no replay.
+- The inspector shows why a person feels, likes and remembers, and what a
+  thing remembers.
+- A dev console fires a beat, adds a memory or sets a relation, as commands,
+  so replays hold.
+- Players act in the story: name people, things and places, hold a funeral,
+  pin a moment, rewrite an entry's words.
+
+### Cost
+
+All story systems together stay under **0.15 ms a tick** on the §8 target
+map, measured by the bench with the story plugins on. Nothing runs per pawn
+per tick.
+
+| System | Cadence | Bounded by |
+|---|---|---|
+| Perception | per event that asks | pawns in nearby chunks |
+| Memories | per event | fixed-size records, bounded retention |
+| Interactions | each pawn about hourly, staggered | defs × one partner |
+| Relations | a daily decay batch | pairs with a reason |
+| Contagion | per room, hourly | occupied rooms |
+| Reminders | grieving pawns, hourly | remembered things in their room |
+| Threads | daily, and on the events they name | enabled threads |
+| Text | client, lines on screen only | lines seen |
+
+Event dispatch gets cheaper first. Today every event builds a Luau table
+even with no listener, handlers are found by a linear scan, and each call
+allocates its profiler label. Handlers are indexed by name, unheard events
+are skipped, and labels are interned.
+
+---
+
 ## 5. What's in `core` and what isn't
 
 `core` is the smallest complete game. Everything else is a plugin, including
@@ -912,13 +1115,14 @@ things we build ourselves.
 | In `core`                                     | Out (plugins, first-party or community) |
 |-----------------------------------------------|-----------------------------------------|
 | Terrain, strata, plants, map generation       | Seasons and weather (`mods/weather`)    |
-| Needs: food, rest, warmth                     | Mood, mental breaks, relationships      |
+| Needs: food, rest, warmth                     | Mood, mental breaks, relationships, mourning |
 | Calendar, day and night, the atmosphere names | Other biomes, rain runoff, fire spread  |
 | Harvest, mine, dig, build, haul (delivery)    | The stone age (`mods/primitive`)        |
 |                                               | Bills (`mods/crafting`), research       |
 | Melee combat, health, death                   | Ranged weapons, armour, medicine        |
 | Wild animals, predators, hunting              | Taming, farming animals                 |
 | Storyteller, wealth, eras                     | Trade, factions, diplomacy              |
+| The castaway premise, traits, bodies          | Other premises, story threads (§4g)     |
 | Incidents: raid, wanderer, herd, predators    | Everything else                         |
 
 `core` is itself a plugin: it loads from `mods/core` like any other mod, and
@@ -1909,6 +2113,8 @@ dense colony, per pass, with draw calls; CI fails over budget.
 3. **Save/load:** the log is the save and snapshots are a cache (§7a);
    unknown mod data is preserved.
 4. **`rim.mood`:** the first first-party plugin, and the test of the API.
+   **Story** follows it (§4g): perception, memories, relations, mourning,
+   and text written from intents.
 5. **Stockpiles and hauling, work priorities (§4d), skills.**
 6. **WASM tier, mod browser, co-op lockstep.**
 
