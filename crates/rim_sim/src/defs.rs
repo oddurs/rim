@@ -476,6 +476,12 @@ pub struct StuffDef {
     /// How things built of it look on the plan (DESIGN.md §6c).
     #[serde(default)]
     pub look: StuffLookDef,
+    /// Tool tags the builder holds a tool with when building of it, on top
+    /// of the building's own `build.requires`: ashlar wants a maul.
+    #[serde(default)]
+    pub requires: Vec<String>,
+    #[serde(skip)]
+    pub requires_r: ToolMask,
 }
 
 /// A material's look: the patterns its walls and floors are drawn in, and
@@ -2011,7 +2017,7 @@ impl DefDb {
             .things
             .iter()
             .flat_map(|d| {
-                let builds = d.build.iter().flat_map(|b| &b.requires);
+                let builds = d.build.iter().flat_map(|b| &b.requires).chain(d.stuff.iter().flat_map(|s| &s.requires));
                 d.tool.iter().flat_map(|t| &t.tags).chain(d.harvest.iter().flat_map(|h| &h.requires)).chain(builds)
             })
             .cloned()
@@ -2034,6 +2040,9 @@ impl DefDb {
             }
             if let Some(b) = &mut d.build {
                 b.requires_r = mask(&b.requires);
+            }
+            if let Some(st) = &mut d.stuff {
+                st.requires_r = mask(&st.requires);
             }
         }
         // Fields a need is satisfied by, and those they're worked out from.

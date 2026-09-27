@@ -154,7 +154,7 @@ fn fixture(w: &World, pawn: Entity, from: IVec, f: Entity, out: &mut Vec<Choice>
     if let Ok(bp) = w.ecs.get::<&Blueprint>(f) {
         let missing = bp.cost.iter().zip(&bp.delivered).find(|(c, d)| **d < c.1).map(|(c, d)| (c.0, c.1 - d));
         drop(bp);
-        let need = td.build.as_ref().map_or(0, |b| b.requires_r);
+        let need = w.build_requires(f);
         let tool = w.ecs.get::<&Pawn>(pawn).ok().map(|p| ai::tool_for(w, pawn, &p, need, w.colony_tools()));
         match (missing, tool) {
             (None, Some(Some((_, tool)))) => out.push(Choice::ready(

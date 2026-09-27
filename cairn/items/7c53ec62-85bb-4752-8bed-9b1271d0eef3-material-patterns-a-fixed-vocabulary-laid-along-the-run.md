@@ -2,14 +2,14 @@
 id: 7c53ec62-85bb-4752-8bed-9b1271d0eef3
 title: 'Material patterns: a fixed vocabulary, laid along the run'
 type: feature
-status: doing
+status: done
 milestone: houses
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 depends_on:
 - 3fe8c3cb-dcba-4882-b623-0468ea9fe697
 created: 2026-09-26
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p1
 api: additive
 effort: m

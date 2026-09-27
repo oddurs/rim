@@ -78,3 +78,10 @@ market_value = 0.5
 stack_limit = 75
 tags = ["clay"]
 stuff = { categories = ["structural"], factors = { hp = 0.8, work = 1.2, insulation = 1.6, flammability = 0.0, beauty = 0.9, span = 0.75 }, look = { pattern = "stipple", floor = "earth", roof = "thatch" } }
+
+# Walls climb the tool ladder the gathering does (DESIGN.md §6c): stone is
+# dressed with a maul. Wattle and cob go up by hand, so the first hut needs
+# nothing. Logs need no rule of their own: felling already takes an axe.
+[[patch]]
+target = "thing/core:stone"
+set = { stuff = { requires = ["pounding"] } }
