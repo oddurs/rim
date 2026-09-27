@@ -2,10 +2,12 @@
 id: 454f4bde-ee82-44e8-8875-b5fc66739591
 title: 'Draw a room: drag a rectangle into a ring of walls'
 type: feature
-status: backlog
+status: done
 milestone: houses
+assignee: Oddur Sigurdsson
 created: 2026-09-26
-updated: 2026-09-26
+updated: 2026-09-27
+closed_at: 2026-09-26
 priority: p2
 api: none
 effort: s
@@ -24,5 +26,13 @@ Most walls are built as rings. Prison Architect draws a room with one drag, and 
 
 ## Acceptance criteria
 
-- [ ] One drag places a closed ring (autotest)
-- [ ] Dragging over an existing door keeps the door
+- [x] One drag places a closed ring (autotest)
+- [x] Dragging over an existing door keeps the door
+
+## 2026-09-26
+
+The tool already existed: a drag with a blocking build has placed a ring since Castaway (71b3bd4, build_rects), with the cells shown as it follows the cursor, and the autotest already checks the 20-cell outline. Existing fixtures are skipped because spawn_fixture_of refuses an occupied cell. What was missing was a check that a door survives a ring drawn over it; added to the autotest.
+
+## 2026-09-27
+
+The new check failed at first and found an older fault: the autotest clicked build:door and build:bed, which aren't tool keys (they're build:core:door and build:core:bed), so both clicks did nothing and walls went where the door and bed were meant to. The plan count still came to 21, so nobody noticed. Fixed the keys, and each click now checks its tool was selected.
