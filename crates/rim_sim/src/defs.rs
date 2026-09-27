@@ -197,6 +197,12 @@ pub struct ThingDef {
     /// trees some. What's behind it downwind is sheltered.
     #[serde(default)]
     pub blocks_wind: f64,
+    /// How tall it stands, in cells, for the shadows the renderer casts
+    /// from it (DESIGN.md §6e). Blocking things and plants read it: unset, a
+    /// blocking thing stands one cell tall, and a plant casts no shadow.
+    /// Anything else casts none either way.
+    #[serde(default)]
+    pub height: Option<f64>,
     /// Extra movement cost in percent (doors, trees).
     #[serde(default)]
     pub path_cost: u32,

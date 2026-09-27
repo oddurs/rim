@@ -3,9 +3,9 @@
 //! The renderer reads the sim's fields and never names a weather type:
 //!
 //! - **Light** multiplies the world by the `light` field: a lightmap texture
-//!   holds firelight (emitter stamps) and which cells are indoors, and the
-//!   sky's colour and brightness arrive as shader uniforms. The texture is
-//!   rebuilt only when emitters or rooms change; a changing sky costs nothing.
+//!   holds firelight (emitter stamps), rebuilt only when emitters change; the
+//!   occluders (`occluders.rs`) say which cells are indoors; the sky's colour
+//!   and brightness arrive as shader uniforms, so a changing sky costs nothing.
 //! - **Precipitation** from the `precipitation`, `temperature` and `wind`
 //!   channels: rain, sleet or snow, slanted by the wind, never indoors.
 //! - **Fog** from `fog`, and **lightning** in heavy precipitation with a
@@ -37,18 +37,21 @@ void main() {
 
 // Multiplied over the world: the sky (dimmed indoors) or firelight,
 // whichever is brighter, and never darker than night. A fire shows at night
-// and hardly at noon.
+// and hardly at noon. Indoors is the occluders' roof bit (G), which the
+// linear filter blends into a soft edge where a floor meets its wall.
 const FRAGMENT: &str = "#version 100
 precision mediump float;
 varying vec2 uv;
 uniform sampler2D Texture;
+uniform sampler2D occluders;
 uniform vec3 sky;
 uniform vec3 night;
 uniform vec3 fire;
 uniform float indoor_share;
 void main() {
     vec4 t = texture2D(Texture, uv);
-    vec3 amb = sky * mix(1.0, indoor_share, t.g);
+    float indoors = texture2D(occluders, uv).g;
+    vec3 amb = sky * mix(1.0, indoor_share, indoors);
     vec3 c = max(max(night, amb), fire * t.r);
     gl_FragColor = vec4(min(c, vec3(1.0)), 1.0);
 }";
@@ -67,8 +70,10 @@ struct Particle {
 pub struct Sky {
     material: Option<Material>,
     lightmap: Option<Texture2D>,
-    /// (field stamp revision, room rebuilds): the lightmap is current for these.
-    key: (u64, u64),
+    /// The field stamp revision the lightmap is current for.
+    key: u64,
+    /// What stops light, per cell.
+    pub occluders: crate::occluders::Occluders,
     parts: Vec<Particle>,
     rng: u64,
     last: f64,
@@ -199,7 +204,8 @@ impl Default for Sky {
         Sky {
             material: None,
             lightmap: None,
-            key: (u64::MAX, u64::MAX),
+            key: u64::MAX,
+            occluders: Default::default(),
             parts: Vec::new(),
             rng: 0x5EED,
             last: 0.0,
@@ -266,6 +272,7 @@ impl Sky {
                         UniformDesc::new("fire", UniformType::Float3),
                         UniformDesc::new("indoor_share", UniformType::Float1),
                     ],
+                    textures: vec!["occluders".to_string()],
                     pipeline_params: PipelineParams {
                         // Multiply: result = source × destination.
                         color_blend: Some(BlendState::new(
@@ -275,7 +282,6 @@ impl Sky {
                         )),
                         ..Default::default()
                     },
-                    ..Default::default()
                 },
             );
             match m {
@@ -289,10 +295,10 @@ impl Sky {
         self.material.as_ref()
     }
 
-    /// Rebuild the lightmap if emitters or rooms changed: R = firelight,
-    /// G = indoors. Whether it rebuilt.
+    /// Rebuild the lightmap if emitters changed: R = firelight. Whether it
+    /// rebuilt.
     fn update_lightmap(&mut self, w: &World) -> bool {
-        let key = (w.fields.revision, w.map.room_rebuilds);
+        let key = w.fields.revision;
         if self.lightmap.is_some() && key == self.key {
             return false;
         }
@@ -303,9 +309,7 @@ impl Sky {
         let mut bytes = vec![0u8; mw * mh * 4];
         for i in 0..mw * mh {
             let fire = (stamped[i] as f32 / rim_sim::field::FIXED as f32 / 100.0).clamp(0.0, 1.0);
-            let indoors = w.map.indoors(w.map.pos(i));
             bytes[i * 4] = (fire * 255.0) as u8;
-            bytes[i * 4 + 1] = if indoors { 255 } else { 0 };
             bytes[i * 4 + 3] = 255;
         }
         let img = Image { bytes, width: mw as u16, height: mh as u16 };
@@ -350,12 +354,17 @@ impl Sky {
     /// Forget every cached lighting result, so the next frame rebuilds them
     /// all: what the render bench times as the cost of a change.
     pub fn invalidate(&mut self) {
-        self.key = (u64::MAX, u64::MAX);
+        self.key = u64::MAX;
+        self.occluders.invalidate();
     }
 
     /// Multiply the world by the light. Call after everything lit is drawn.
     pub fn light(&mut self, w: &World, cam: &Cam, air: &Air) {
         self.passes.clear();
+        let t = self.pass_begin();
+        let changed = self.occluders.update(w);
+        // Uploads, not draws.
+        self.pass_end("occluders", t, changed, 0);
         let t = self.pass_begin();
         let rebuilt = self.update_lightmap(w);
         // An upload, not a draw.
@@ -409,8 +418,10 @@ impl Sky {
         let def = &w.defs.sky;
         let (night, fire, share) = (rgb3(def.rgb_night), rgb3(def.rgb_fire) * 1.2, def.indoor_share as f32);
         let Some(tex) = self.lightmap.clone() else { return false };
+        let Some(occ) = self.occluders.texture.clone() else { return false };
         let (mw, mh) = (w.map.w as f32, w.map.h as f32);
         let Some(m) = self.material() else { return false };
+        m.set_texture("occluders", occ);
         m.set_uniform("sky", sky);
         m.set_uniform("night", night);
         m.set_uniform("fire", fire);

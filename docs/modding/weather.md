@@ -257,6 +257,27 @@ color = "#7dffa0"
 of = [{ input = "hour", curve = [[21.0, 0.0], [23.0, 0.35], [24.0, 0.35]] }]
 ```
 
+## What stops light
+
+The renderer works out what stops light from what things are, so a mod's
+walls, windows and trees need nothing extra (DESIGN.md §6e). A blocking
+thing stands a storey tall; a door is a door; a blocking thing whose
+`boundary` lets some of `light` through is a window. The one thing it can't
+guess is how tall something stands, which sets how long its shadow is:
+
+```toml
+# Taller oaks, and longer shadows at dusk.
+[[patch]]
+target = "thing/core:tree_oak"
+
+[patch.set]
+height = 2.6   # cells; a blocking thing defaults to 1
+```
+
+A plant with a `height` is a canopy: it shades the ground, and some sky
+gets through its leaves. Only blocking things and plants cast shadows; a
+`height` on anything else does nothing yet.
+
 ## What the renderer draws
 
 The renderer reads channels, never weather names, so any mod that sets the

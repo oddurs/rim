@@ -86,6 +86,10 @@ pub struct Map {
     /// since joined walls look at their neighbours. Not a plan's progress:
     /// that moves every tick of work, so renderers draw plans each frame.
     things_rev: Vec<u64>,
+    /// Per chunk: bumped when a fixture is placed or removed. Not items,
+    /// designations or looks, so what cares only about what stands in a
+    /// cell (the renderer's shadows) isn't woken by hauling.
+    fixture_rev: Vec<u64>,
 }
 
 /// Side of a chunk, in cells: the one unit caches and incremental updates
@@ -167,6 +171,7 @@ impl Map {
             chunks_w: (w + CHUNK - 1) / CHUNK,
             terrain_rev: vec![0; chunks],
             things_rev: vec![0; chunks],
+            fixture_rev: vec![0; chunks],
         }
     }
 
@@ -237,6 +242,10 @@ impl Map {
 
     pub fn terrain_rev(&self, chunk: usize) -> u64 {
         self.terrain_rev[chunk]
+    }
+
+    pub fn fixture_rev(&self, chunk: usize) -> u64 {
+        self.fixture_rev[chunk]
     }
 
     pub fn things_rev(&self, chunk: usize) -> u64 {
@@ -340,6 +349,8 @@ impl Map {
         }
         self.fix_cost[i] = cost.min(u16::MAX as u32) as u16;
         self.revision += 1;
+        let c = self.chunk_of(p);
+        self.fixture_rev[c] += 1;
         self.touch(p);
     }
 
