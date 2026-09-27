@@ -98,8 +98,12 @@ fn an_order_switches_off() {
     let rule = s.world.defs.lookup("priority_rule", "core:food_low").unwrap();
     s.push(Command::SetRuleEnabled { rule, on: false });
     s.step();
+    // Where harvesting sits for this colonist before food runs low: their
+    // own level, whatever the seed's founder started with.
+    let before = level(&s, "core:harvest");
     s.world.set_reading("core:food_days", 1.0);
-    assert_eq!(level(&s, "core:harvest"), 3);
+    s.world.update_rules();
+    assert_eq!(level(&s, "core:harvest"), before, "the order is off, so nothing moves");
 }
 
 /// Starting and stopping make the news.

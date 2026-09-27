@@ -235,8 +235,15 @@ end)
         s.step();
     }
     assert_eq!(s.world.stance, Some(stance(&s, "core:siege")));
+    // The script reads the level the engine works to, and parts that add
+    // up to it: whatever level this seed's founder started building at.
+    let build = s.world.defs.lookup("work_type", "core:build").unwrap();
+    let p = s.world.ecs.get::<&rim_sim::world::Pawn>(pawn).unwrap();
+    let want = rim_sim::rules::effective(&s.world, &p, build) as i64;
+    drop(p);
     let check = format!("{:?}", s.world.data.get("alarm:check"));
-    assert!(check.contains("\"build\"") && check.matches("Int(1)").count() == 2, "{check}");
+    let int = format!("Int({want})");
+    assert!(check.contains("\"build\"") && check.matches(int.as_str()).count() == 2, "want {want}: {check}");
     let _ = std::fs::remove_dir_all(dir);
 }
 
