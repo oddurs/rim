@@ -237,8 +237,9 @@ build = { menu = "structure", work = 100, stuff = { category = "structural", cou
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-/// Criterion 3: the boundary recompute rides the room rebuild. Measured,
-/// and bounded generously so a pathological regression is caught in CI.
+/// Criterion 3: the boundary recompute rides the room rebuild, and looks each
+/// boundary piece up once per room whatever the number of fields. Counted, not
+/// timed, so a busy machine can't fail it (DESIGN.md §8a).
 #[test]
 fn boundary_refresh_is_cheap() {
     let mut s = sim();
@@ -249,15 +250,16 @@ fn boundary_refresh_is_cheap() {
         hut(&mut s, o, wood, None, None);
         taken.push(o);
     }
-    // Force a rebuild and time only the refresh.
+    // Force a rebuild, then count what the refresh does.
     let probe = site(&s, &taken);
     s.world.spawn_fixture_of(thing(&s, "wall"), probe, false, Some(wood)).expect("a wall");
     s.world.map.ensure_rooms();
-    let t0 = std::time::Instant::now();
-    s.world.refresh_boundaries();
-    let ms = t0.elapsed().as_secs_f64() * 1e3;
-    println!("boundary refresh over {} rooms: {ms:.3} ms", s.world.map.room_count());
-    assert!(ms < 5.0, "boundary refresh took {ms} ms");
+    let rooms = s.world.map.room_count();
+    let pieces: usize = (1..=rooms as u32).map(|r| s.world.map.room_boundary(r).len()).sum();
+    assert!(s.world.defs.fields.len() > 1, "more than one field, so a lookup per field would show");
+    assert!(pieces > 12 * 8, "twelve huts' worth of boundary: {pieces}");
+    assert_eq!(s.world.refresh_boundaries(), pieces, "each piece looked up once, over {rooms} rooms");
+    assert_eq!(s.world.refresh_boundaries(), 0, "and nothing to do without a room rebuild");
     let _ = ROOM_INTERVAL;
 }
 
