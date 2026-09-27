@@ -1,0 +1,43 @@
+# Cooking (DESIGN.md §4e): recipes like any other, made at a fire. The
+# campfire is the first station that cooks; a mod's hearth, oven or stove
+# cooks too once it carries `crafting:fire`.
+
+[[patch]]
+target = "thing/core:campfire"
+append = { tags = ["crafting:fire"] }
+
+# Food work: it weighs like harvesting when Auto shares the colony out,
+# and a cook keeps up with a couple of waiting meals (docs/modding/work.md).
+[[work_type]]
+id = "cook"
+label = "Cook"
+icon = "K"
+skill = "crafting"
+priority = 3
+order = 44
+auto = { per_person = 2, weight = 3 }
+
+# Two raw cuts over the fire make one that feeds nearly twice as well:
+# cooking is worth a colonist's time.
+[[thing]]
+id = "roast_meat"
+label = "roast meat"
+color = "#8a4a2c"
+category = "item"
+look.layers = [
+    { draw = "disc", x = 0.5, y = 0.52, r = 0.3 },
+    { draw = "disc", x = 0.42, y = 0.44, r = 0.12, shade = 1.25 },
+]
+market_value = 5.0
+stack_limit = 40
+food = { nutrition = 0.3 }
+
+[[recipe]]
+id = "roast_meat"
+label = "roast meat"
+station = "crafting:fire"
+inputs = [{ thing = "core:raw_meat", count = 2 }]
+outputs = [{ thing = "roast_meat" }]
+work = 180
+work_type = "cook"
+stuff = false

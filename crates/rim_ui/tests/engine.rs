@@ -23,9 +23,9 @@ fn shell_docks_regions_to_the_edges() {
     let near = |a: f32, b: f32| (a - b).abs() <= 12.0;
     let inspector = ui.find("core:inspector").unwrap();
     assert!(inspector[0] < 12.0, "inspector docks left: {inspector:?}");
-    // Its slot (280) sits on the toolbar, and the panel hangs from the slot's top.
+    // Its slot (300) sits on the toolbar, and the panel hangs from the slot's top.
     assert!(
-        near(inspector[1] + inspector[3].max(280.0), bottom[1]),
+        near(inspector[1] + inspector[3].max(300.0), bottom[1]),
         "inspector's slot sits on the toolbar: {inspector:?} vs {bottom:?}"
     );
     let people = ui.find("core:colonists").unwrap();

@@ -502,7 +502,7 @@ fn guide_samples_load() {
     let guide =
         std::fs::read_to_string(common::mods().join("../docs/modding/crafting.md")).unwrap().replace("\r\n", "\n");
     let samples: Vec<&str> = guide.split("```toml\n").skip(1).map(|b| b.split("```").next().unwrap()).collect();
-    assert_eq!(samples.len(), 5);
+    assert_eq!(samples.len(), 6);
     let dir = common::test_mods(
         "craft-guide",
         &["core", "crafting"],

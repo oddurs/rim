@@ -1,0 +1,28 @@
+# Stone-age cooking, at the campfire. Crafting roasts meat over any fire;
+# a pot lets the fire boil, so meat and berries go further as a stew.
+
+[[thing]]
+id = "stew"
+label = "stew"
+color = "#7a5a3a"
+category = "item"
+look.layers = [
+    { draw = "disc", x = 0.5, y = 0.55, r = 0.3, color = "#b0704a" },
+    { draw = "disc", x = 0.5, y = 0.5, r = 0.2 },
+]
+market_value = 6.0
+stack_limit = 30
+food = { nutrition = 0.3 }
+
+# A cut of meat and a handful of berries: two bowls, feeding nearly twice
+# what they would raw. The pot isn't used up; the cook holds it.
+[[crafting.recipe]]
+id = "stew"
+label = "stew"
+station = "crafting:fire"
+inputs = [{ thing = "core:raw_meat", count = 1 }, { thing = "core:berries", count = 2 }]
+outputs = [{ thing = "stew", count = 2 }]
+requires = ["boiling"]
+work = 300
+work_type = "crafting:cook"
+stuff = false

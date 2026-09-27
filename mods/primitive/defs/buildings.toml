@@ -3,10 +3,8 @@
 target = "thing/core:campfire"
 set = { build = { cost = [{ thing = "primitive:branches", count = 10 }] } }
 
-# The fire is a station too: a clay pot is fired in it (tools.toml).
-[[patch]]
-target = "thing/core:campfire"
-append = { tags = ["crafting:fire"] }
+# The fire is a station too (crafting tags it): a clay pot is fired in it
+# (tools.toml), and a stew is boiled in one (kitchen.toml).
 
 # A bed of grass for the first nights: a timber frame is 25 branches that
 # a hand-gathered day can't spare. It rests less well than a real bed.
