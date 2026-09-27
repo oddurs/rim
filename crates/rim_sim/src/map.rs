@@ -732,7 +732,7 @@ impl Map {
     }
 
     /// Open floor that belongs to a room: passable and not a doorway.
-    fn room_cell(&self, i: usize) -> bool {
+    pub fn room_cell(&self, i: usize) -> bool {
         self.passable_i(i) && !self.fix_door[i]
     }
 

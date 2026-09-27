@@ -354,7 +354,6 @@ A house is drawn as its plan and built as an order (DESIGN.md §6c). Walls join 
 - [ ] `26a69a8e` Pipe joins: fences and palisades connect like Minecraft's <sup>feature · p2 · s · client</sup>
 - [ ] `26ba97aa` Plan a multi-cell building over grass, trees and rock <sup>feature · p2 · m · engine</sup>
 - [ ] `454f4bde` Draw a room: drag a rectangle into a ring of walls <sup>feature · p2 · s · client</sup>
-- [ ] `4791e24b` Room state on the plan: daylight, firelight, gaps and open sky <sup>feature · p2 · m · client</sup>
 - [ ] `827b2421` House plans as data: an ASCII grid placed with one command <sup>feature · p2 · m · engine</sup>
 - [ ] `b3ffbae1` Replace in place: upgrade a wall without opening the room <sup>feature · p1 · m · engine</sup>
 - [ ] `e7c4a3f6` Blueprints as work orders <sup>feature · p1 · m · engine</sup>
@@ -362,6 +361,7 @@ A house is drawn as its plan and built as an order (DESIGN.md §6c). Walls join 
 - [ ] `ff479390` The building ladder: dry stone, logs, bricks and a kiln <sup>content · p1 · m · plugin</sup>
 - [ ] `fff4fb42` A material names the tool it is built with <sup>feature · p1 · s · engine</sup>
 - [ ] `24100bb9` A roof span replaces the room size cap, and pillars hold it <sup>feature · p0 · m · engine</sup>
+- [ ] `4791e24b` Room state on the plan: daylight, firelight, gaps and open sky <sup>feature · p2 · m · client</sup>
 - [ ] `5643976c` Room labels on the plan <sup>feature · p2 · s · client</sup>
 - [ ] `7c53ec62` Material patterns: a fixed vocabulary, laid along the run <sup>feature · p1 · m · client</sup>
 - [ ] `ae5c3807` Lit edges: a mass catches the light on its top and left <sup>feature · p2 · s · client</sup>

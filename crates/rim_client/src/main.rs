@@ -15,6 +15,7 @@ mod pattern;
 mod pinch;
 mod quiet;
 mod roof;
+mod roomstate;
 mod save;
 mod sky;
 mod title;
@@ -149,6 +150,8 @@ pub struct App {
     pub sky: sky::Sky,
     /// Roofs from far away, rebuilt when rooms are.
     pub roofs: roof::Roofs,
+    /// Gaps and open sky, rebuilt when rooms are.
+    pub marks: roomstate::RoomMarks,
     /// The terrain, baked into a texture.
     pub ground: draw::Ground,
     /// What each render pass cost last frame.
@@ -641,6 +644,7 @@ async fn game() {
         last_order: None,
         sky: sky::Sky::default(),
         roofs: roof::Roofs::default(),
+        marks: roomstate::RoomMarks::default(),
         ground: draw::Ground::default(),
         render_us: RenderTimes::default(),
         meshes: mesh::Meshes::default(),
@@ -1411,6 +1415,7 @@ pub fn render(app: &mut App) {
         // like the meshes'.
         t.gl += lap();
     }
+    app.marks.update(&app.sim.world);
     draw::world_ui(app);
     let readouts = draw::readouts(app);
     // Stack counts, in the UI's text: shaped into the same atlas, drawn in

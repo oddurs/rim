@@ -830,6 +830,25 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.check(dist(lifted, roofed) > 0.1, format!("pointing at the hut lifts its roof ({lifted:?} was {roofed:?})"));
     t.mouse = (4.0, 200.0);
     t.app.cam.zoom = 40.0;
+    // ---------------------------------------------------------- room state
+    println!("\n# a gap in a ring of walls is marked (DESIGN.md §6c)");
+    // Knock out the hut's east wall, opposite its door.
+    let gap = hut.offset(4, 2);
+    if let Some(e) = t.w().map.fixture_at(gap) {
+        t.app.sim.world.despawn_thing(e);
+    }
+    t.app.sim.world.map.ensure_rooms();
+    t.focus(gap);
+    t.grab().await;
+    t.check(
+        t.app.marks.gaps.iter().any(|&(p, _)| p == gap),
+        format!("the gap is marked at {gap:?} ({:?})", t.app.marks.gaps),
+    );
+    t.shot("gap").await;
+    t.app.sim.world.spawn_fixture_of(wall, gap, false, Some(wood)).expect("the wall back");
+    t.app.sim.world.map.ensure_rooms();
+    t.grab().await;
+    t.check(!t.app.marks.gaps.iter().any(|&(p, _)| p == gap), "walled up again, no mark");
 
     // ---------------------------------------------------------- material patterns
     println!("\n# a material shows as a pattern, running on along the wall (DESIGN.md §6c)");
