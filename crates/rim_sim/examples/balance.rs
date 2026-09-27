@@ -58,6 +58,20 @@ struct Report {
     samples: u64,
     /// Planned levels that changed, over the run.
     plan_changes: u64,
+    /// Each death: (cause, the job they were on, cells from the colony's
+    /// centre), from what the colonist looked like the sample before.
+    causes: Vec<(String, String, i32)>,
+}
+
+/// What a colonist looked like at the last sample: what would explain a
+/// death before the next one.
+#[derive(Clone, Default)]
+struct Last {
+    job: String,
+    dist: i32,
+    attacker: Option<String>,
+    starving: bool,
+    freezing: bool,
 }
 
 /// How the run sets priorities: `auto` leaves colonists on Auto (the
@@ -136,6 +150,7 @@ fn play(mods: &Path, seed: u64, days: u64) -> Report {
     }
     set_priorities(&mut s);
     let mut plans: std::collections::BTreeMap<u64, Vec<(u16, u8)>> = std::collections::BTreeMap::new();
+    let mut last: std::collections::BTreeMap<String, Last> = std::collections::BTreeMap::new();
     let des = |id: &str| defs.lookup("designation", id).unwrap();
     let thing = |id: &str| defs.thing_id(id).unwrap();
     let food = defs.lookup("need", "food").unwrap();
@@ -207,6 +222,20 @@ fn play(mods: &Path, seed: u64, days: u64) -> Report {
                 let p = w.ecs.get::<&Pawn>(e).unwrap();
                 r.samples += 1;
                 r.idle_samples += matches!(p.job, rim_sim::world::Job::Idle) as u64;
+                let job = format!("{:?}", p.job).split([' ', '{', '(']).next().unwrap_or("").to_string();
+                let attacker =
+                    p.last_attacker.and_then(|a| w.ecs.get::<&Pawn>(a).ok().map(|ap| defs.creature(ap.def).id.clone()));
+                let home = w.colony_center().unwrap_or(p.pos);
+                last.insert(
+                    p.name.clone(),
+                    Last {
+                        job,
+                        dist: p.pos.octile(home) as i32 / 10,
+                        attacker,
+                        starving: p.need(food) == Some(0),
+                        freezing: warmth.and_then(|n| p.need(n)) == Some(0),
+                    },
+                );
                 let now: Vec<(u16, u8)> = p.plan.iter().map(|x| (x.work, x.level)).collect();
                 let before = plans.insert(e.to_bits().get(), now.clone()).unwrap_or_default();
                 r.plan_changes += now.iter().filter(|x| before.iter().any(|b| b.0 == x.0 && b.1 != x.1)).count() as u64;
@@ -247,6 +276,15 @@ fn play(mods: &Path, seed: u64, days: u64) -> Report {
                 MsgKind::Threat => r.threats.push((day, m.text.clone())),
                 MsgKind::Bad if m.text.ends_with("has died.") => {
                     r.deaths.push((day, m.text.clone()));
+                    let name = m.text.trim_end_matches(" has died.");
+                    let l = last.get(name).cloned().unwrap_or_default();
+                    let cause = match (&l.attacker, l.starving, l.freezing) {
+                        (Some(a), _, _) => format!("attacked by {a}"),
+                        (None, true, _) => "starved".to_string(),
+                        (None, false, true) => "froze".to_string(),
+                        _ => "other".to_string(),
+                    };
+                    r.causes.push((cause, l.job.clone(), l.dist));
                     r.deaths_by_season[w.season_index() as usize] += 1;
                 }
                 MsgKind::Good => r.goods += 1,
@@ -360,6 +398,20 @@ fn main() {
     let churn = reports.iter().map(|r| r.plan_changes).sum::<u64>() as f64 / (samples / per_day);
     println!("idle, hours a colonist-day: {idle:.1}");
     println!("planned changes a colonist-day: {churn:.2}");
+    // Deaths by cause, and the jobs and distances they happened at.
+    let mut by_cause: std::collections::BTreeMap<&str, (u32, i64)> = std::collections::BTreeMap::new();
+    let mut by_job: std::collections::BTreeMap<&str, u32> = std::collections::BTreeMap::new();
+    for (cause, job, dist) in reports.iter().flat_map(|r| r.causes.iter()) {
+        let e = by_cause.entry(cause.as_str()).or_default();
+        e.0 += 1;
+        e.1 += *dist as i64;
+        *by_job.entry(job.as_str()).or_default() += 1;
+    }
+    let causes: Vec<String> =
+        by_cause.iter().map(|(c, (n, d))| format!("{c} {n} (mean {} cells out)", d / (*n).max(1) as i64)).collect();
+    println!("deaths by cause:          {}", causes.join(", "));
+    let jobs: Vec<String> = by_job.iter().map(|(j, n)| format!("{j} {n}")).collect();
+    println!("deaths by job:            {}", jobs.join(", "));
     println!("near-misses (hp < 35%):   {near_miss}/{n}");
     println!("food ever below 10%:      {hungry}/{n}");
     let cold = reports.iter().filter(|r| r.min_warmth < 0.1).count();

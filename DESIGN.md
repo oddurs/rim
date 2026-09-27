@@ -695,10 +695,13 @@ keeps it against someone a level and a half better.
 
 - **Ruling:** Auto ships as the default. It loses no more colonies than
   flat defaults or a tuned grid, and changes a level less than once a day.
-- **Open:** with six colonists Auto has more runs with a death (29 against
-  24 and 23), about one standard deviation at 80 seeds. It may be noise or
-  may be Auto spreading colonists over more ground when a threat arrives.
-  Measured further in its own item before it's ruled either way.
+- **Deaths, measured again:** with six colonists at 200 seeds, runs with
+  a death were Auto 63, flat 57, tuned 60: under one standard deviation
+  (about 6.5 runs). The causes match mode for mode (wolves 51, 46 and 47;
+  cold 26, 24 and 36; raiders and boars the rest), and colonists died the
+  same distance from home (22 to 23 cells) on the same jobs, mostly idle
+  or harvesting. Auto doesn't spread colonists into danger; the 80-seed gap
+  was noise, and the planner stays as it is.
 
 ### Disclosure
 
