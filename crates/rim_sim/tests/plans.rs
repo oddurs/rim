@@ -217,3 +217,73 @@ fn a_floor_over_grass_leaves_the_grass() {
     assert!(s.world.map.floor_at(at).is_some(), "the floor is planned");
     assert!(s.world.ecs.get::<&Planned>(grass).is_err() && s.world.thing(grass).is_some());
 }
+
+/// A trough two cells wide, planned over tall grass and an oak.
+fn trough_over_grass_and_an_oak(s: &mut Sim) -> (Entity, Entity, IVec) {
+    let (oak, at) = in_a_row(s, "core:tree_oak").expect("an oak with room beside it");
+    let grass = s.world.defs.thing_id("primitive:tall_grass").unwrap();
+    let tuft = s.world.spawn_fixture_of(grass, at.offset(-1, 0), false, None).expect("grass");
+    let (trough, wood) =
+        (s.world.defs.thing_id("wildlife_plus:feeding_trough").unwrap(), s.world.defs.thing_id("core:wood").unwrap());
+    let anchor = at.offset(-1, 0);
+    s.push(Command::Build { thing: trough, stuff: Some(wood), a: anchor, b: anchor, facing: 0 });
+    s.step();
+    (tuft, oak, anchor)
+}
+
+/// Every thing in a bigger building's footprint is marked, and the
+/// blueprint goes up when the last of them is gone.
+#[test]
+fn a_trough_over_grass_and_an_oak_goes_up_once_both_are_cleared() {
+    let mut s = Sim::new(&common::mods(), 3).unwrap();
+    let founder = alone(&mut s);
+    let home = s.world.pawn_pos(founder).unwrap();
+    s.world.place_item(s.world.defs.thing_id("primitive:hand_axe").unwrap(), home, 1);
+    s.world.place_item(s.world.defs.thing_id("core:wood").unwrap(), home, 20);
+    let (tuft, oak, anchor) = trough_over_grass_and_an_oak(&mut s);
+    for e in [tuft, oak] {
+        assert!(s.world.ecs.get::<&Planned>(e).is_ok() && s.world.ecs.get::<&Designated>(e).is_ok(), "both marked");
+    }
+    let trough = s.world.defs.thing_id("wildlife_plus:feeding_trough").unwrap();
+    let standing = |s: &Sim| {
+        s.world.map.fixture_at(anchor).is_some_and(|f| {
+            s.world.thing(f).is_some_and(|t| t.def == trough) && s.world.ecs.get::<&Blueprint>(f).is_err()
+        })
+    };
+    let trough_at =
+        |s: &Sim| s.world.map.fixture_at(anchor).and_then(|f| s.world.thing(f)).is_some_and(|t| t.def == trough);
+    for _ in 0..30_000 {
+        s.step();
+        if s.world.thing(tuft).is_some() || s.world.thing(oak).is_some() {
+            assert!(!trough_at(&s), "no blueprint before the whole footprint is clear");
+        }
+        if standing(&s) {
+            break;
+        }
+    }
+    assert!(s.world.thing(tuft).is_none() && s.world.thing(oak).is_none(), "both cleared");
+    assert!(standing(&s), "and the trough stands");
+}
+
+/// Cancelling any cell of it takes back every mark; a footprint with a
+/// cell that can't be cleared plans nothing at all.
+#[test]
+fn cancelling_a_trough_unmarks_its_whole_footprint() {
+    let mut s = Sim::new(&common::mods(), 3).unwrap();
+    alone(&mut s);
+    let (tuft, oak, anchor) = trough_over_grass_and_an_oak(&mut s);
+    s.push(Command::Cancel { a: anchor, b: anchor });
+    s.step();
+    for e in [tuft, oak] {
+        assert!(s.world.ecs.get::<&Planned>(e).is_err() && s.world.ecs.get::<&Designated>(e).is_err(), "unmarked");
+    }
+
+    // A wall planned where the trough's second cell would be.
+    let at = s.world.thing(oak).unwrap().pos;
+    build_wall(&mut s, at.offset(1, 0), at.offset(1, 0));
+    let (trough, wood) =
+        (s.world.defs.thing_id("wildlife_plus:feeding_trough").unwrap(), s.world.defs.thing_id("core:wood").unwrap());
+    s.push(Command::Build { thing: trough, stuff: Some(wood), a: at, b: at, facing: 0 });
+    s.step();
+    assert!(s.world.ecs.get::<&Planned>(oak).is_err(), "the oak isn't marked for a trough that can't go there");
+}

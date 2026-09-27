@@ -669,7 +669,7 @@ impl Snapshot {
                     None => None,
                 };
                 add(e, &|b| {
-                    b.add(Planned { thing, stuff, facing: p.facing });
+                    b.add(Planned { thing, stuff, ..p });
                 });
             }
         }
