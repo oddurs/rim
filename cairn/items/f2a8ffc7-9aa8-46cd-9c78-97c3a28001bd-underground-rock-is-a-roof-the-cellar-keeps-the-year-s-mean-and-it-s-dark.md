@@ -32,3 +32,7 @@ A reason to dig in the first week that isn't ore: the cellar is the warmest plac
 - [ ] A cellar at −1 sits within 3°C of the year's mean through a simulated year (weather plugin on)
 - [ ] A large dug hall at −2 counts as sheltered
 - [ ] Balance: founder's hours at zero warmth in the first winter with a cellar, recorded here
+
+## 2026-09-26
+
+Houses' roof span (map.rs spread_cover / cover_window) walks the surface plane only (IVec::new). Below the surface cover stays 0, so an underground room counts every cell as uncovered until this item spreads cover per level. Solid rock's span comes from its thing's support block (granite).

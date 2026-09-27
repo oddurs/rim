@@ -578,7 +578,9 @@ impl Map {
             }
             _ => {
                 let (w, h) = (self.w, self.h);
-                self.cover_window(IVec::new(w / 2, h / 2), w.max(h));
+                for z in self.levels() {
+                    self.cover_window(IVec::at(w / 2, h / 2, z), w.max(h));
+                }
             }
         }
         self.support_changed = Some(Vec::new());
@@ -588,7 +590,8 @@ impl Map {
     /// best of each neighbour's less one, so the ring just outside the
     /// window, whose values nothing inside can have changed, is all the
     /// window needs from beyond it: those cells seed the fill with what
-    /// they hold, beside the supports inside.
+    /// they hold, beside the supports inside. The window is on `p`'s level:
+    /// a roof holds up the level it stands on.
     fn cover_window(&mut self, p: IVec, r: i32) {
         let (x0, y0) = ((p.x - r).max(0), (p.y - r).max(0));
         let (x1, y1) = ((p.x + r).min(self.w - 1), (p.y + r).min(self.h - 1));
@@ -596,7 +599,7 @@ impl Map {
         let mut buckets: Vec<Vec<u32>> = vec![Vec::new(); crate::defs::MAX_SPAN as usize + 1];
         for y in y0..=y1 {
             for x in x0..=x1 {
-                let i = self.idx(IVec::new(x, y));
+                let i = self.idx(IVec::at(x, y, p.z));
                 let s = self.span_at(i);
                 self.cover[i] = if s > 0 { s + 1 } else { 0 };
                 if s > 0 {
@@ -606,7 +609,7 @@ impl Map {
         }
         for y in y0 - 1..=y1 + 1 {
             for x in x0 - 1..=x1 + 1 {
-                let q = IVec::new(x, y);
+                let q = IVec::at(x, y, p.z);
                 if inside(q) || !self.inb(q) {
                     continue;
                 }

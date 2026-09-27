@@ -110,3 +110,31 @@ fn a_world_with_levels_round_trips() {
     assert_eq!(loaded.world.map.fixture_at(down), Some(e));
     assert!(Snapshot::capture(&loaded) == first, "save, load, save gives the same snapshot");
 }
+
+/// A room dug into rock below the surface is roofed by the rock around it,
+/// as one on the surface is by its walls: cover spreads on every level.
+#[test]
+fn a_room_dug_below_is_roofed_by_its_rock() {
+    let mods = common::mods();
+    let mut sim = Sim::build_with(&mods, 3, &|m| m == "core", 64, 1, 0).unwrap();
+    let (rock, floor) = {
+        let d = &sim.world.defs;
+        (d.lookup("terrain", "core:granite").unwrap(), d.lookup("terrain", "core:rock_floor").unwrap())
+    };
+    let m = &mut sim.world.map;
+    for y in 0..64 {
+        for x in 0..64 {
+            m.set_terrain(IVec::at(x, y, -1), rock, 0);
+        }
+    }
+    for y in 20..24 {
+        for x in 20..24 {
+            m.set_terrain(IVec::at(x, y, -1), floor, 100);
+        }
+    }
+    m.ensure_rooms();
+    let room = m.room_at(IVec::at(21, 21, -1)).expect("a room");
+    assert_eq!(room.cells, 16);
+    assert_eq!(room.uncovered, 0, "the rock around it holds the roof");
+    assert!(m.covered(m.idx(IVec::at(22, 22, -1))));
+}
