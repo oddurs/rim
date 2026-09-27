@@ -2075,13 +2075,40 @@ fn forty_colonists_fit_the_left_edge_at_1280_by_720() {
     frame(&mut ui, &sim, &cv, Input { mouse: at, time: t, ..Default::default() });
     let rows_up = ui.snapshot().matches("#core:colonists.").count();
     assert!(rows_up > 5, "one notch up from a clamped end still shows lines ({rows_up})");
-    // A colonist in view still selects by its id.
-    let first = sim.world.colonists().next().unwrap();
-    let name = sim.world.ecs.get::<&rim_sim::world::Pawn>(first).unwrap().name.clone();
-    if let Some(r) = ui.find(&format!("core:colonists.{name}")) {
-        let actions = click(&mut ui, &sim, &mut cv, centre(r));
-        assert!(actions.iter().any(|a| matches!(a, UiAction::Select(Some(e)) if *e == first)), "{actions:?}");
+    // A colonist in view still selects by its id. `find` gives a row's
+    // place before the list's scroll, so wheel back to the top, where the two
+    // agree, and click a row whose centre is in the list; which colonist that
+    // is depends on the names the seed drew.
+    for _ in 0..60 {
+        t += 0.1;
+        frame(&mut ui, &sim, &cv, Input { mouse: at, wheel: 1.0, time: t, ..Default::default() });
     }
+    for _ in 0..2 {
+        t += 0.1;
+        frame(&mut ui, &sim, &cv, Input { mouse: at, time: t, ..Default::default() });
+    }
+    let list = ui.find("core:colonists.list").unwrap();
+    let in_view = |r: &[f32; 4]| {
+        let (_, y) = centre(*r);
+        y > list[1] && y < list[1] + list[3]
+    };
+    let shown: Vec<_> = sim.world.colonists().collect();
+    let (pick, r) = shown
+        .iter()
+        .find_map(|&e| {
+            let name = sim.world.ecs.get::<&rim_sim::world::Pawn>(e).unwrap().name.clone();
+            ui.find(&format!("core:colonists.{name}")).filter(in_view).map(|r| (e, r))
+        })
+        .expect("some colonist's row is in view at the top");
+    let actions = click(&mut ui, &sim, &mut cv, centre(r));
+    // Names repeat among forty colonists, so the row may be another with the
+    // same name: what matters is that a click on a row selects a colonist.
+    let picked = sim.world.ecs.get::<&rim_sim::world::Pawn>(pick).unwrap().name.clone();
+    assert!(
+        actions.iter().any(|a| matches!(a, UiAction::Select(Some(e))
+            if sim.world.ecs.get::<&rim_sim::world::Pawn>(*e).is_ok_and(|p| p.name == picked))),
+        "{actions:?}"
+    );
 }
 
 /// A mod badges every colonist's row through core's people module, without

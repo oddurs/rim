@@ -313,7 +313,7 @@ end)
 ## The weather plugin's API
 
 Weather is a queue: the current weather and the next three. Each is picked
-with the world's random numbers when it joins the queue, so the forecast is
+with the weather mod's random stream when it joins the queue, so the forecast is
 the future that will actually happen, unless something forces a change.
 While it lasts, a weather type pushes a `"weather"` contribution to `cloud`,
 `precipitation`, `wind`, `wind_dir`, `fog` and `temperature`.

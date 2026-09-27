@@ -2,7 +2,7 @@
 //!
 //! Scripts run once at load to register hooks (`rim.every`) and event
 //! handlers (`rim.on`). The world-facing API (`rim.spawn_pawn`, `rim.wealth`,
-//! ...) only works inside those callbacks. It draws from the world's RNG, and
+//! ...) only works inside those callbacks. It draws from its mod's own random stream, and
 //! `math.random`/`os` are removed, so scripts stay deterministic.
 //!
 //! Each script gets its own global environment (reads fall through to the
@@ -334,7 +334,7 @@ fn sim_libs() -> StdLib {
 /// Globals removed from the sim VM. `collectgarbage` and `gcinfo` report
 /// memory, which differs between machines; `loadstring` compiles code at run
 /// time; `getfenv`/`setfenv` reach other mods' environments and turn off
-/// Luau's fast paths; `math.random` is replaced by `rim.random` (the world RNG).
+/// Luau's fast paths; `math.random` is replaced by `rim.random` (the mod's own random stream).
 const REMOVED: &[&str] = &["collectgarbage", "gcinfo", "loadstring", "getfenv", "setfenv", "newproxy", "os"];
 
 /// `math` functions whose C library versions differ between platforms in the
@@ -1048,16 +1048,16 @@ impl ScriptHost {
         api!(
             "random",
             "() -> number",
-            "A number in [0, 1) from the world's random numbers: the same on every machine.",
+            "A number in [0, 1) from your mod's own random stream: the same on every machine, and untouched by other mods' draws.",
             (),
-            |w, _a| Ok(w.rng.float())
+            |w, from, _a| Ok(w.streams.stream(&crate::rng::mod_stream(&from)).float())
         );
         api!(
             "random_int",
             "(lo: number, hi: number) -> number",
-            "A whole number from lo to hi inclusive, from the world's random numbers.",
+            "A whole number from lo to hi inclusive, from your mod's own random stream.",
             (i32, i32),
-            |w, (a, b)| Ok(w.rng.range(a, b))
+            |w, from, (a, b)| Ok(w.streams.stream(&crate::rng::mod_stream(&from)).range(a, b))
         );
         api!("colonists", "() -> number", "How many colonists are alive.", (), |w, _a| Ok(w.colonists().count()));
         api!(
@@ -1111,15 +1111,16 @@ impl ScriptHost {
         api!(
             "edge_cell",
             "() -> (number?, number?)",
-            "A random open cell on the map edge that can reach the colony.",
+            "A random open cell on the map edge that can reach the colony, from your mod's stream.",
             (),
-            |w, _a| {
+            |w, from, _a| {
+                let stream = crate::rng::mod_stream(&from);
                 w.map.ensure_regions();
                 let center = w.colony_center();
                 let (mw, mh) = (w.map.w, w.map.h);
                 for _ in 0..400 {
-                    let t = w.rng.below(mw.max(mh) as u32) as i32;
-                    let p = match w.rng.below(4) {
+                    let t = w.streams.stream(&stream).below(mw.max(mh) as u32) as i32;
+                    let p = match w.streams.stream(&stream).below(4) {
                         0 => IVec::new(t.min(mw - 1), 0),
                         1 => IVec::new(t.min(mw - 1), mh - 1),
                         2 => IVec::new(0, t.min(mh - 1)),
@@ -1136,12 +1137,13 @@ impl ScriptHost {
         api!(
             "near_cell",
             "(x: number, y: number, r: number, z: number?) -> (number?, number?)",
-            "A random open cell within r of (x, y), on level z (the surface if nil).",
+            "A random open cell within r of (x, y), on level z (the surface if nil), from your mod's stream.",
             (i32, i32, i32, Option<i32>),
-            |w, (x, y, r, z)| {
+            |w, from, (x, y, r, z)| {
                 let at = cell(w, x, y, z)?;
+                let stream = crate::rng::mod_stream(&from);
                 for _ in 0..100 {
-                    let p = at.offset(w.rng.range(-r, r), w.rng.range(-r, r));
+                    let p = at.offset(w.streams.stream(&stream).range(-r, r), w.streams.stream(&stream).range(-r, r));
                     if w.map.passable(p) {
                         return Ok((Some(p.x), Some(p.y)));
                     }

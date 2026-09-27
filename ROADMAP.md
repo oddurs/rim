@@ -30,7 +30,7 @@ The headless engine: defs, mod loading and patching, map, pathing, AI skeleton, 
 
 ## proving-ground — Proving ground
 
-`###·······` 27% · 6 of 22 done
+`###·······` 25% · 6 of 24 done
 
 Seeds, tests, CI and the merge queue, so that every change is checked the same way on a laptop and in CI, every failure can be brought back with one line, and a PR lands without anyone rebasing it by hand. Design: DESIGN.md §7b, §8a. Plan: https://claude.ai/artifact/KUQcdtWkNG4u63T4S8uPpt
 
@@ -45,10 +45,12 @@ Seeds, tests, CI and the merge queue, so that every change is checked the same w
 - [ ] `7fb64c0e` ROADMAP.md stops conflicting: render it on main, not in every PR <sup>chore · p0 · s · tooling</sup>
 - [ ] `845db9fb` rim replay --bisect and a hash per tick when platforms disagree <sup>feature · p1 · s · tooling</sup>
 - [ ] `932f2bfd` Bench baselines: store main's numbers and judge a PR against them <sup>feature · p1 · m · tooling</sup>
-- [ ] `c2579dbc` Random streams per purpose: a new draw in one system stops reshuffling the rest <sup>feature · p0 · m · engine</sup>
+- [ ] `9a743404` Migrate rim to cairn format 5, bumping CI's pin in the same commit <sup>chore · p1 · s · tooling</sup>
+- [ ] `aa9610a0` scripts/task runs cairn at the pinned rev, installed into the project <sup>chore · p1 · s · tooling</sup>
 - [ ] `dabb52d6` Fuzz the save reader, the def loader and patches, and the Luau boundary <sup>feature · p2 · m · tooling</sup>
 - [ ] `dd48e551` scripts/agent: start, sync, pr and queue for the worktree workflow <sup>chore · p1 · s · tooling</sup>
 - [ ] `f32fa785` A set with no core loads, ticks a day and round-trips a save, in CI <sup>feature · p3 · s · engine</sup>
+- [ ] `c2579dbc` Random streams per purpose: a new draw in one system stops reshuffling the rest <sup>feature · p0 · m · engine</sup>
 - [ ] `e2c56c9a` UI frame-budget test asserts wall-clock time on shared CI runners <sup>bug · p0 · s · tooling</sup>
 - [x] `3163979c` No wall-clock assertions in the suite: count work, and a guard <sup>chore · p0 · m · tooling</sup>
 - [x] `6b605f27` boundary_refresh_is_cheap asserts wall-clock time and fails under load <sup>bug · p0 · s · engine</sup>

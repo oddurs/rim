@@ -1,7 +1,7 @@
 -- The weather machine: a registry of weather types and a forecast queue.
 --
 -- The queue holds the current weather and the next three. Each entry is
--- picked with the world RNG when it joins the queue, so the forecast is the
+-- picked with this mod's random stream when it joins the queue, so the forecast is the
 -- future that will actually happen, unless something forces a change. The
 -- queue lives in script data (`weather:forecast`), so it's part of the saved,
 -- hashed world, and the UI reads it with view.data.
@@ -250,7 +250,7 @@ function weather.forecast()
 	return out
 end
 
--- For tools and tests: the weights and a pick (drawing from the world RNG)
+-- For tools and tests: the weights and a pick (drawing from this mod's random stream)
 -- for what would follow `previous` at tick `start`.
 function weather.weights(previous: string?, start: number)
 	local out = {}

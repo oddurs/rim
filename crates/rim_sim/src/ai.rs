@@ -7,6 +7,7 @@
 use crate::defs::*;
 use crate::map::CHUNK;
 use crate::path::Goal;
+use crate::rng::{Rng, AI};
 use crate::store::StoreKey;
 use crate::world::*;
 use crate::IVec;
@@ -176,7 +177,7 @@ fn think_colonist(w: &mut World, e: Entity, p: &mut Pawn) -> Option<Job> {
         let attacker = p.last_attacker.take().and_then(|a| w.pawn_pos(a));
         let threat = attacker.or_else(|| nearest_pawn(w, e, p.pos, 10, |o| o.faction == Faction::Hostile).map(|t| t.1));
         if let Some(tp) = threat {
-            return flee(w, p, tp);
+            return flee(w, e, p, tp);
         }
     } else {
         if let Some(a) = p.last_attacker.take() {
@@ -228,7 +229,7 @@ fn think_colonist(w: &mut World, e: Entity, p: &mut Pawn) -> Option<Job> {
             return Some(Job::Comfort { to, need, until: w.tick + 1200 });
         }
     }
-    wander(w, p, 4)
+    wander(w, e, p, 4)
 }
 
 fn think_hostile(w: &mut World, e: Entity, p: &mut Pawn) -> Option<Job> {
@@ -251,7 +252,7 @@ fn think_hostile(w: &mut World, e: Entity, p: &mut Pawn) -> Option<Job> {
             return Some(Job::Bridge { at, left });
         }
     }
-    wander(w, p, 8)
+    wander(w, e, p, 8)
 }
 
 /// The weakest owned piece standing between `from`'s side and `to`'s side,
@@ -290,7 +291,7 @@ fn think_animal(w: &mut World, e: Entity, p: &mut Pawn) -> Option<Job> {
     if let Some(a) = p.last_attacker.take() {
         if let Some(ap) = w.pawn_pos(a) {
             if cd.flees || wounded(&defs, p) {
-                return flee(w, p, ap);
+                return flee(w, e, p, ap);
             }
             return Some(Job::Attack { target: a, until: w.tick + 900 });
         }
@@ -304,7 +305,7 @@ fn think_animal(w: &mut World, e: Entity, p: &mut Pawn) -> Option<Job> {
             }
         }
     }
-    wander(w, p, 6)
+    wander(w, e, p, 6)
 }
 
 /// Running from a fight. Nobody picks a retreating creature as a target or
@@ -375,9 +376,16 @@ fn nearest_pawn(
     best.map(|b| (b.1, b.2))
 }
 
-fn wander(w: &mut World, p: &mut Pawn, r: i32) -> Option<Job> {
-    for _ in 0..8 {
-        let to = p.pos.offset(w.rng.range(-r, r), w.rng.range(-r, r));
+/// A pawn's roll: by who, when and which draw, not by the order pawns think
+/// in, so one more animal on the map doesn't change a colonist's choices
+/// (DESIGN.md §7b).
+fn roll(w: &World, e: Entity, k: u64) -> Rng {
+    w.streams.draw(AI, e.to_bits().get(), w.tick, k)
+}
+
+fn wander(w: &mut World, e: Entity, p: &mut Pawn, r: i32) -> Option<Job> {
+    for i in 0..8 {
+        let to = p.pos.offset(roll(w, e, 2 * i).range(-r, r), roll(w, e, 2 * i + 1).range(-r, r));
         if w.map.passable(to) && reachable(w, p.pos, Goal::Cell(to)) {
             return Some(Job::Wander { to, until: w.tick + 600 });
         }
@@ -385,16 +393,18 @@ fn wander(w: &mut World, p: &mut Pawn, r: i32) -> Option<Job> {
     None
 }
 
-fn flee(w: &mut World, p: &mut Pawn, from: IVec) -> Option<Job> {
+fn flee(w: &mut World, e: Entity, p: &mut Pawn, from: IVec) -> Option<Job> {
     let dx = (p.pos.x - from.x).signum();
     let dy = (p.pos.y - from.y).signum();
-    for _ in 0..10 {
-        let to = p.pos.offset(dx * 10 + w.rng.range(-4, 4), dy * 10 + w.rng.range(-4, 4));
+    for i in 0..10 {
+        let to = p
+            .pos
+            .offset(dx * 10 + roll(w, e, 100 + 2 * i).range(-4, 4), dy * 10 + roll(w, e, 101 + 2 * i).range(-4, 4));
         if w.map.passable(to) && reachable(w, p.pos, Goal::Cell(to)) {
             return Some(Job::Flee { to, until: w.tick + 400 });
         }
     }
-    wander(w, p, 8)
+    wander(w, e, p, 8)
 }
 
 // ================================================================ finding work
@@ -1427,7 +1437,7 @@ fn run_job(w: &mut World, e: Entity, p: &mut Pawn) {
         Job::Idle => return,
         j @ Job::Wander { to, until } => match go_to(w, p, Goal::Cell(to)) {
             Go::Moving if w.tick < until => (Some(j), 0),
-            _ => (None, 60 + w.rng.below(120) as u64),
+            _ => (None, 60 + roll(w, e, 200).below(120) as u64),
         },
         j @ Job::MoveTo { to } => match go_to(w, p, Goal::Cell(to)) {
             Go::Moving => (Some(j), 0),
@@ -1457,7 +1467,7 @@ fn run_job(w: &mut World, e: Entity, p: &mut Pawn) {
         Job::Comfort { to, need, until } => (run_comfort(w, p, to, need, until), 0),
         Job::Dress { item } => (run_dress(w, e, p, item), 0),
         Job::Attack { target, until } => (run_attack(w, e, p, target, until), 0),
-        Job::Breach { target } => (run_breach(w, p, target), 0),
+        Job::Breach { target } => (run_breach(w, e, p, target), 0),
         Job::Bridge { at, left } => (run_bridge(w, p, at, left), 0),
     };
     match next {
@@ -2243,7 +2253,7 @@ fn run_bridge(w: &mut World, p: &mut Pawn, at: IVec, left: u32) -> Option<Job> {
 
 /// Hack at a piece of the wall until it gives. The job ends when it is
 /// gone, and the next think finds the way in now open.
-fn run_breach(w: &mut World, p: &mut Pawn, target: Entity) -> Option<Job> {
+fn run_breach(w: &mut World, e: Entity, p: &mut Pawn, target: Entity) -> Option<Job> {
     let t = w.thing(target)?;
     let goal = w.reach_goal(&t);
     match go_to(w, p, goal) {
@@ -2251,7 +2261,7 @@ fn run_breach(w: &mut World, p: &mut Pawn, target: Entity) -> Option<Job> {
         Go::Moving => Some(Job::Breach { target }),
         Go::Arrived => {
             if p.cooldown == 0 {
-                hit_thing(w, p, target, t.pos);
+                hit_thing(w, e, p, target, t.pos);
             }
             Some(Job::Breach { target })
         }
@@ -2287,10 +2297,10 @@ const SWING_XP: u32 = 20;
 
 /// One melee swing, before it is applied to anything. It trains a person's
 /// melee skill.
-fn swing(w: &mut World, p: &mut Pawn) -> i32 {
+fn swing(w: &mut World, e: Entity, p: &mut Pawn) -> i32 {
     let defs = w.defs.clone();
     p.cooldown = defs.creature(p.def).melee_cooldown;
-    let dmg = (melee_base(&defs, p) * (70 + w.rng.below(61) as i32) / 100).max(1);
+    let dmg = (melee_base(&defs, p) * (70 + roll(w, e, 300).below(61) as i32) / 100).max(1);
     if let Some(s) = defs.melee_skill.filter(|_| defs.creature(p.def).intelligent) {
         p.learn(s, SWING_XP);
     }
@@ -2304,8 +2314,8 @@ fn mark_hit(w: &mut World, tpos: IVec) {
     }
 }
 
-fn hit_thing(w: &mut World, p: &mut Pawn, target: Entity, tpos: IVec) {
-    let dmg = swing(w, p);
+fn hit_thing(w: &mut World, e: Entity, p: &mut Pawn, target: Entity, tpos: IVec) {
+    let dmg = swing(w, e, p);
     let broken = match w.ecs.get::<&mut Thing>(target) {
         Ok(mut t) => {
             t.hp -= dmg;
@@ -2325,7 +2335,7 @@ fn hit_thing(w: &mut World, p: &mut Pawn, target: Entity, tpos: IVec) {
 }
 
 fn hit(w: &mut World, e: Entity, p: &mut Pawn, target: Entity, tpos: IVec) {
-    let dmg = swing(w, p);
+    let dmg = swing(w, e, p);
     if let Ok(mut t) = w.ecs.get::<&mut Pawn>(target) {
         t.hp -= dmg;
         t.last_attacker = Some(e);

@@ -3,7 +3,7 @@
 //! wildlife from `[creature.spawn]`.
 
 use crate::defs::{DefDb, DefId};
-use crate::rng::{hash2_f, hash_str, mix};
+use crate::rng::{hash2_f, hash_str, mix, SPAWNS};
 use crate::world::{Faction, World};
 use crate::IVec;
 
@@ -56,14 +56,17 @@ pub fn generate(w: &mut World) -> IVec {
         let Some(s) = &cd.spawn else { continue };
         for _ in 0..s.groups {
             for _ in 0..200 {
-                let p = IVec::new(w.rng.below(mw as u32) as i32, w.rng.below(mh as u32) as i32);
+                let p = IVec::new(
+                    w.streams.stream(SPAWNS).below(mw as u32) as i32,
+                    w.streams.stream(SPAWNS).below(mh as u32) as i32,
+                );
                 let i = w.map.idx(p);
                 if !w.map.passable(p) || !s.terrain_r.contains(&w.map.terrain[i]) || p.chebyshev(start) < 30 {
                     continue;
                 }
-                let n = w.rng.range(s.group[0] as i32, s.group[1] as i32);
+                let n = w.streams.stream(SPAWNS).range(s.group[0] as i32, s.group[1] as i32);
                 for _ in 0..n {
-                    let q = p.offset(w.rng.range(-2, 2), w.rng.range(-2, 2));
+                    let q = p.offset(w.streams.stream(SPAWNS).range(-2, 2), w.streams.stream(SPAWNS).range(-2, 2));
                     if w.map.passable(q) {
                         w.spawn_pawn(ci as DefId, Faction::Wild, q, None);
                     }

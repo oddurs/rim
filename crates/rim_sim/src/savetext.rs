@@ -469,11 +469,8 @@ pub fn pack(dir: &Path, save: &Path) -> Result<Option<u64>, String> {
         [(e, s)] => {
             let snap = epochs[*e].snapshots.remove(*s);
             let tick = snap.header.tick;
-            let epoch = Epoch {
-                mods: snap.header.mods.clone(),
-                engine: env!("CARGO_PKG_VERSION").into(),
-                root: Root::Snapshot,
-            };
+            let epoch =
+                Epoch { mods: snap.header.mods.clone(), engine: crate::savefile::engine_id(), root: Root::Snapshot };
             epochs.push(EpochRead { epoch, snapshots: vec![snap], logs: Vec::new() });
             Some(tick)
         }

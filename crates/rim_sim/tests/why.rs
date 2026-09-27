@@ -151,6 +151,15 @@ fn the_first_in_line_takes_it() {
     for i in 0..3 {
         s.world.spawn_pawn(human, rim_sim::world::Faction::Player, c.offset(2 * i + 1, 1), None);
     }
+    // A pawn's first think is a random tick in its first 30. Nobody may
+    // think during `designate`'s step, or the line is taken before it's read:
+    // hold everyone a few ticks, whatever the seed drew (DESIGN.md §7b).
+    let tick = s.world.tick;
+    for &e in &s.world.pawns.clone() {
+        if let Ok(mut p) = s.world.ecs.get::<&mut Pawn>(e) {
+            p.next_think = p.next_think.max(tick + 5);
+        }
+    }
     let (tree, at) = oak_near(&s, c.offset(4, 0));
     designate(&mut s, "chop", at);
     let line = who_takes(&s.world, tree);

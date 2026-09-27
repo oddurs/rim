@@ -18,7 +18,8 @@ How it's configured, and why: [docs/engineering/dependencies.md](../engineering/
   - `collectgarbage` and `gcinfo`, which report memory that differs between machines;
   - `loadstring`, `getfenv`/`setfenv` and `newproxy`;
   - `math.random`: use `rim.random()` and `rim.random_int(a, b)`, which draw
-    from the world's random numbers and replay identically.
+    from your mod's own random stream and replay identically. Other mods'
+    draws never move yours (DESIGN.md §7b).
 - **The game's API** is the `rim` table (`rim.every`, `rim.on`, `rim.spawn_pawn`,
   `rim.push_ambient`, ...), plus whatever other plugins add to it.
   Every engine function is listed in the [script API reference](api-scripts.md).

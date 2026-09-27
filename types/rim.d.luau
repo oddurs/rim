@@ -61,7 +61,7 @@ declare rim: {
     defs: (kind: string) -> { {[string]: any} },
     -- Mark a thing for work with a designation, as the player's drag would, or clear its mark with nil.
     designate: (id: number, designation: string?) -> (),
-    -- A random open cell on the map edge that can reach the colony.
+    -- A random open cell on the map edge that can reach the colony, from your mod's stream.
     edge_cell: () -> (number?, number?),
     -- Send an event to rim.on handlers in any mod. Only under your own name: "your_mod:event".
     emit: (name: string, data: {[string]: any}?) -> (),
@@ -103,7 +103,7 @@ declare rim: {
     message: (text: string, kind: MessageKind?) -> (),
     -- Every modifier def on a loaded thing (the stat pipeline): what it adds to which stat of which thing, whether it's on from the start, and its group. rim.set_modifiers switches a group.
     modifier_defs: {ModifierInfo},
-    -- A random open cell within r of (x, y), on level z (the surface if nil).
+    -- A random open cell within r of (x, y), on level z (the surface if nil), from your mod's stream.
     near_cell: (x: number, y: number, r: number, z: number?) -> (number?, number?),
     -- Every need def: what satisfies it ("food", "rest", "field") and how many days a full one lasts.
     need_defs: {NeedInfo},
@@ -129,9 +129,9 @@ declare rim: {
     priority_parts: (id: number, work: string) -> { PriorityPart }?,
     -- Add a named contribution to a field's outdoor value, easing in over ease_hours and expiring after hours (nil: until cleared).
     push_ambient: (field: string, key: string, value: number, hours: number?, ease_hours: number?) -> (),
-    -- A number in [0, 1) from the world's random numbers: the same on every machine.
+    -- A number in [0, 1) from your mod's own random stream: the same on every machine, and untouched by other mods' draws.
     random: () -> number,
-    -- A whole number from lo to hi inclusive, from the world's random numbers.
+    -- A whole number from lo to hi inclusive, from your mod's own random stream.
     random_int: (lo: number, hi: number) -> number,
     -- A colony reading, by qualified id ("core:food_days"); a bare name is your own mod's. Nil until published.
     reading: (id: string) -> number?,

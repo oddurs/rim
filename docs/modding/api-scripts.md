@@ -23,7 +23,7 @@ are in [Scripting rules](scripting.md).
 | `rim.day` | `() -> number` | Days since the game began, from 0. |
 | `rim.defs` | `(kind: string) -> { {[string]: any} }` | Entries of a def kind a mod declared with [[kind]], in load order: "type" for your own kind, "weather:type" for another mod's. |
 | `rim.designate` | `(id: number, designation: string?) -> ()` | Mark a thing for work with a designation, as the player's drag would, or clear its mark with nil. |
-| `rim.edge_cell` | `() -> (number?, number?)` | A random open cell on the map edge that can reach the colony. |
+| `rim.edge_cell` | `() -> (number?, number?)` | A random open cell on the map edge that can reach the colony, from your mod's stream. |
 | `rim.emit` | `(name: string, data: {[string]: any}?) -> ()` | Send an event to rim.on handlers in any mod. Only under your own name: "your_mod:event". |
 | `rim.every` | `(interval: number, fn: () -> ()) -> ()` | Run fn every `interval` ticks (hooks are staggered). Register at load time. |
 | `rim.explain` | `(field: string) -> {Part}` | Each part of a field's outdoor value: its terms, then pushes. |
@@ -44,7 +44,7 @@ are in [Scripting rules](scripting.md).
 | `rim.map_size` | `() -> (number, number)` | Map width and height in cells. |
 | `rim.message` | `(text: string, kind: MessageKind?) -> ()` | Post a message to the feed (default kind "info"). |
 | `rim.modifier_defs` | `{ModifierInfo}` | Every modifier def on a loaded thing (the stat pipeline): what it adds to which stat of which thing, whether it's on from the start, and its group. rim.set_modifiers switches a group. |
-| `rim.near_cell` | `(x: number, y: number, r: number, z: number?) -> (number?, number?)` | A random open cell within r of (x, y), on level z (the surface if nil). |
+| `rim.near_cell` | `(x: number, y: number, r: number, z: number?) -> (number?, number?)` | A random open cell within r of (x, y), on level z (the surface if nil), from your mod's stream. |
 | `rim.need_defs` | `{NeedInfo}` | Every need def: what satisfies it ("food", "rest", "field") and how many days a full one lasts. |
 | `rim.noise` | `(x: number, y: number, scale: number, salt: number?) -> number` | Smooth noise in [0, 1] from the world's seed: patches about `scale` cells across. The same on every machine, so a generated level is too. `salt` gives another pattern. |
 | `rim.on` | `(event: string, fn: (event: {[string]: any}) -> ()) -> ()` | Handle an engine event (`pawn_died`, `season_changed`, ...) or a mod event (`weather:changed`). |
@@ -57,8 +57,8 @@ are in [Scripting rules](scripting.md).
 | `rim.priority` | `(id: number, work: string) -> number?` | A colonist's priority for a work type, rules and stance included: 1 first, 0 never. Nil if it isn't a pawn. |
 | `rim.priority_parts` | `(id: number, work: string) -> { PriorityPart }?` | How a colonist's priority came about: the work type's default, their work role if it sets one, their pin if they have one, then each rule that moved it. The deltas sum to rim.priority. |
 | `rim.push_ambient` | `(field: string, key: string, value: number, hours: number?, ease_hours: number?) -> ()` | Add a named contribution to a field's outdoor value, easing in over ease_hours and expiring after hours (nil: until cleared). |
-| `rim.random` | `() -> number` | A number in [0, 1) from the world's random numbers: the same on every machine. |
-| `rim.random_int` | `(lo: number, hi: number) -> number` | A whole number from lo to hi inclusive, from the world's random numbers. |
+| `rim.random` | `() -> number` | A number in [0, 1) from your mod's own random stream: the same on every machine, and untouched by other mods' draws. |
+| `rim.random_int` | `(lo: number, hi: number) -> number` | A whole number from lo to hi inclusive, from your mod's own random stream. |
 | `rim.reading` | `(id: string) -> number?` | A colony reading, by qualified id ("core:food_days"); a bare name is your own mod's. Nil until published. |
 | `rim.remove` | `(id: number) -> boolean` | Take a thing off the map for good, as if it were never there: false if it's already gone. |
 | `rim.room_at` | `(x: number, y: number, z: number?) -> Room?` | The room at a cell on level z (the surface if nil), or nil on a wall or door. `uncovered` counts cells beyond every roof support's span; `role` is the first [[room_role]] it meets, if any. |

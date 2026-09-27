@@ -476,7 +476,7 @@ namespace (`weather:changed`).
   type) and channel settings. Precipitation below freezing falls as snow, so
   there's no separate snow type: winter rain *is* snow.
 - **Forecast:** the current type and the next three. Each is picked with the
-  world RNG when it joins the queue, so the forecast is the future that will
+  mod's random stream when it joins the queue, so the forecast is the future that will
   happen unless an incident forces a change. Changes push the channels with
   easing, so rain starts as a drizzle.
 - **Incidents:** cold snap, heat wave and storm, through core's storyteller.
@@ -510,7 +510,7 @@ namespace (`weather:changed`).
 - On screen: 50 µs of CPU for 1,500 raindrops, 3 µs for the lighting pass
   (the firelight texture only rebuilds when emitters change, and the
   occluders only when fixtures, terrain or roofs do).
-- Fixed-point terms, the world RNG only for picking weather, and pushes and
+- Fixed-point terms, the mod's random stream only for picking weather, and pushes and
   script data in the state hash: a year of weather hashes the same on every run.
 
 ### Tuning seasons (balance harness)
@@ -2687,7 +2687,7 @@ to answer on macOS's GL before the body is built.
   everywhere, checked by test vectors in CI), and Rust sim code avoids the
   platform's.
 - **Scripts are sandboxed for it:** only deterministic libraries, no memory
-  or clock queries, the world RNG instead of `math.random`, and a runaway
+  or clock queries, the mod's own random stream instead of `math.random`, and a runaway
   script is stopped after a *counted* number of steps, never a timeout, so
   every peer stops it at the same point. Rules for modders:
   [docs/modding/scripting.md](docs/modding/scripting.md); configuration:
@@ -2865,12 +2865,12 @@ doesn't round-trip is a desync that hasn't happened yet.
 
 ## 7b. Seeds: every run is named, every failure comes back
 
-The world owns one RNG, and 29 draw sites in seven files share it: terms,
+The world owned one RNG, and 29 draw sites in seven files shared it: terms,
 systems, scripts, AI, world, mapgen and the map. A new draw anywhere
-reshuffles every roll after it, so an unrelated change moves where wolves
-spawn, which colonist a raid picks, and what `rim.random()` returns to every
-mod. Tests written against what seed 1 does break for no reason (#207, #211),
-and a balance number measured on one seed means little. The plan, with the
+reshuffled every roll after it, so an unrelated change moved where wolves
+spawned, which colonist a raid picked, and what `rim.random()` returned to
+every mod. Tests written against what seed 1 did broke for no reason (#207,
+#211), and a balance number measured on one seed meant little. The plan, with the
 testing and CI around it, is at
 <https://claude.ai/artifact/KUQcdtWkNG4u63T4S8uPpt>.
 

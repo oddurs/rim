@@ -264,6 +264,14 @@ pub fn summary(path: &Path) -> Result<Summary, String> {
     Ok(Summary { tick, colonists: snap.colonists()? })
 }
 
+/// The code an epoch ran under: the package version and the snapshot format,
+/// which changes whenever the sim's rules for a saved game do (a new random
+/// stream layout, format 6). A save from other code starts a new epoch on
+/// load, and its logs replay only under the code that wrote them.
+pub fn engine_id() -> String {
+    format!("{}+s{}", env!("CARGO_PKG_VERSION"), crate::snapshot::FORMAT)
+}
+
 fn lock_of(sim: &Sim) -> Vec<(String, String)> {
     sim.mods.iter().map(|m| (m.id.clone(), m.version.clone())).collect()
 }
@@ -315,7 +323,7 @@ impl SaveFile {
     fn epoch(&mut self, sim: &mut Sim, root: Root) -> std::io::Result<()> {
         sim.record();
         sim.clear_applied();
-        let e = Epoch { mods: lock_of(sim), engine: env!("CARGO_PKG_VERSION").to_string(), root };
+        let e = Epoch { mods: lock_of(sim), engine: engine_id(), root };
         self.put(EPOCH, &msgpack(&e))?;
         self.write_snapshot(&Snapshot::capture(sim))
     }
@@ -381,7 +389,7 @@ impl SaveFile {
         let (mut sim, dropped) = snap.restore_noting(mods_dir, enabled)?;
         report.dropped = dropped;
         let start = sim.world.tick;
-        let same_code = lock_of(&sim) == last.epoch.mods && last.epoch.engine == env!("CARGO_PKG_VERSION");
+        let same_code = lock_of(&sim) == last.epoch.mods && last.epoch.engine == engine_id();
         if !same_code {
             report.lost = last.logs.iter().map(|l| l.tick).max().unwrap_or(start).saturating_sub(start);
         } else if let Err((at, _)) = replay_logs(&mut sim, &last.logs, None, &mut |_| {}) {
@@ -460,11 +468,11 @@ pub fn replay(path: &Path, mods_dir: &Path, epoch: Option<usize>) -> Result<Repl
     let (epochs, _) = read(path)?;
     let n = epoch.unwrap_or(epochs.len().saturating_sub(1));
     let e = epochs.get(n).ok_or_else(|| format!("the save has {} epochs; there's no epoch {n}", epochs.len()))?;
-    if e.epoch.engine != env!("CARGO_PKG_VERSION") {
+    if e.epoch.engine != engine_id() {
         return Err(format!(
             "epoch {n} ran under engine {}; this is {}, and a log only replays under the code that wrote it",
             e.epoch.engine,
-            env!("CARGO_PKG_VERSION")
+            engine_id()
         ));
     }
     let ids: Vec<&str> = e.epoch.mods.iter().map(|m| m.0.as_str()).collect();
@@ -639,5 +647,38 @@ impl Drop for Writer {
         if let Err(e) = self.stop() {
             eprintln!("rim: {e}");
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A save written before random streams (engine "0.1.0", format 5) is
+    /// another engine: loading it opens a new epoch for the change, and its
+    /// old epoch refuses to replay rather than reporting a divergence.
+    #[test]
+    fn a_save_from_before_streams_is_another_engine() {
+        let mods = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mods");
+        let path = std::env::temp_dir().join(format!("rim-save-old-engine-{}.rim", std::process::id()));
+        let mut sim = Sim::new(&mods, 3).expect("mods load");
+        let mut save = SaveFile::blank(&path).unwrap();
+        let old =
+            Epoch { mods: lock_of(&sim), engine: "0.1.0".into(), root: Root::Seed { seed: 3, size: sim.world.map.w } };
+        save.put(EPOCH, &msgpack(&old)).unwrap();
+        save.write_snapshot(&Snapshot::capture(&sim)).unwrap();
+        sim.record();
+        for _ in 0..600 {
+            sim.step();
+        }
+        save.log(&mut sim).unwrap();
+        drop(save);
+
+        let (_, _, report) = SaveFile::load(&path, &mods, &|_| true).unwrap();
+        assert_eq!(report.diverged_at, None, "not a divergence: {report:?}");
+        assert_eq!(report.new_epoch.as_deref(), Some("the mods or the engine changed"));
+        let err = replay(&path, &mods, Some(0)).unwrap_err();
+        assert!(err.contains("ran under engine 0.1.0"), "{err}");
+        let _ = std::fs::remove_file(path);
     }
 }
