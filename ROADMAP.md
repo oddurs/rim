@@ -455,10 +455,10 @@ Hit the performance budget: benchmark harness, hierarchical pathing, flow fields
 - [ ] `91de1172` Parallel systems where read and write sets allow <sup>spike · p2 · m · engine</sup>
 - [ ] `a353667b` Flow fields for raid groups <sup>perf · p2 · m · engine</sup>
 - [ ] `c1089360` Pathfinding on a map full of work: long A* searches in forest and rock <sup>perf · p1 · m · engine</sup>
-- [ ] `c3d18fe7` Map generation hashes spawns by def index, so a new def reshapes every map <sup>bug · p2 · s · engine</sup>
 - [ ] `da558444` Ground renderer: terrain, wetness and snow in one shader pass <sup>perf · p2 · m · client</sup>
 - [ ] `dab55ea2` Meet the budget: 6x speed at 60 fps <sup>perf · p0 · l · engine</sup>
 - [ ] `e8673d3f` scripting test a_slow_mod_is_named_in_the_warnings flakes under load <sup>bug · p2 · s · engine</sup>
+- [ ] `c3d18fe7` Map generation hashes spawns by def index, so a new def reshapes every map <sup>bug · p2 · s · engine</sup>
 - [x] `4819db9c` Pathfinding and movement: measure the spikes, then cut them <sup>perf · p1 · m · engine</sup>
 - [x] `8baaf318` Pawns jitter as they walk: draw them at the fraction of a tick <sup>bug · p0 · s · client</sup>
 - [x] `8ee7a610` Anchored labels capped by priority inside the viewport <sup>perf · p2 · s · engine</sup>
@@ -562,7 +562,7 @@ Lockstep co-op on top of determinism: command broadcast, desync detection, mod-l
 
 ## depth — Depth
 
-`###·······` 25% · 2 of 8 done
+`####······` 38% · 3 of 8 done
 
 Dig down. The map becomes a stack of 2D levels joined only at stairs, ladders and holes, rock becomes terrain, and water fills what you dig into. Design: DESIGN.md §6d.
 
@@ -571,7 +571,7 @@ Dig down. The map becomes a stack of 2D levels joined only at stairs, ladders an
 - [ ] `acd85584` Portals: stairs, ladders, digging down, and paths across levels <sup>feature · p0 · l · engine</sup>
 - [ ] `ba8253df` Pits and bridges: trenches that raiders have to bridge <sup>feature · p1 · m · engine</sup>
 - [ ] `f2a8ffc7` Underground: rock is a roof, the cellar keeps the year's mean, and it's dark <sup>content · p2 · s · core</sup>
-- [ ] `3f90e043` Strata: the levels below are made from \[\[stratum\]\] defs <sup>feature · p0 · m · engine</sup>
+- [x] `3f90e043` Strata: the levels below are made from \[\[stratum\]\] defs <sup>feature · p0 · m · engine</sup>
 - [x] `8cc6252d` Rock is terrain: solid cells, mining them, and worksites <sup>feature · p0 · l · engine</sup>
 - [x] `e311c029` Positions gain z: the map becomes a stack of levels <sup>feature · p0 · l · engine</sup>
 
