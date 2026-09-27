@@ -65,6 +65,8 @@ pub struct ClientView {
     /// What the inspector shows: the one selected thing, or the first of
     /// several selected colonists.
     pub selected: Option<Entity>,
+    /// A stockpile the inspector shows, when no thing or pawn is selected.
+    pub selected_zone: Option<u32>,
     /// Every selected colonist when more than one is; empty otherwise.
     pub group: Vec<Entity>,
     /// Shift is held, so a click adds to the selection.
@@ -115,6 +117,16 @@ pub struct SaveView {
     pub error: Option<String>,
 }
 
+/// One change to a store's filter, by qualified ids (DESIGN.md §4f).
+#[derive(Clone, Debug, PartialEq)]
+pub enum UiFilterEdit {
+    Thing(String, bool),
+    Category(String, bool),
+    Material(String, bool),
+    Condition(u8, u8),
+    All(bool),
+}
+
 /// Everything a UI script can ask the client to do.
 #[derive(Clone, Debug, PartialEq)]
 pub enum UiAction {
@@ -158,8 +170,14 @@ pub enum UiAction {
     SetRuleEnabled(String, bool),
     /// Let a stockpile take an item (by qualified id), or stop it.
     ZoneAllow(u32, String, bool),
-    /// Put a stockpile at a level of the store priority scale.
-    StoreLevel(u32, u8),
+    /// Put a store (a stockpile or a container) at a level of the store
+    /// priority scale.
+    StoreLevel(rim_sim::zone::StoreRef, u8),
+    /// Change what a store takes; ids are qualified and resolved by the
+    /// client, as `ZoneAllow`'s are.
+    StoreFilter(rim_sim::zone::StoreRef, UiFilterEdit),
+    /// Show a stockpile in the inspector, or none.
+    SelectZone(Option<u32>),
     CycleOverlay,
     SetOverlay(Option<usize>),
     ToggleProfiler,

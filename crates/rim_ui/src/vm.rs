@@ -790,7 +790,12 @@ impl UiVm {
         act!("set_rule_enabled", (String, bool), |(id, on)| UiAction::SetRuleEnabled(id, on));
         act!("set_stance", String, |id| UiAction::SetStance(id));
         act!("zone_allow", (u32, String, bool), |(zone, item, on)| UiAction::ZoneAllow(zone, item, on));
-        act!("store_level", (u32, u8), |(zone, level)| UiAction::StoreLevel(zone, level));
+        act!("store_level", (Value, u8), |(store, level)| UiAction::StoreLevel(store_ref(&store)?, level));
+        act!("store_filter", (Value, Table), |(store, edit)| UiAction::StoreFilter(
+            store_ref(&store)?,
+            filter_edit(&edit)?
+        ));
+        act!("select_zone", Option<u32>, |zone| UiAction::SelectZone(zone));
         act!("cycle_overlay", (), |_a| UiAction::CycleOverlay);
         act!("set_overlay", Option<usize>, |i| UiAction::SetOverlay(i.map(|i| i.saturating_sub(1))));
         act!("toggle_profiler", (), |_a| UiAction::ToggleProfiler);
@@ -892,6 +897,9 @@ impl UiVm {
         view!("time", (), |_lua, l, _a| Ok(l.client.time));
         view!("colony_lost", (), |_lua, l, _a| Ok(l.world.colony_lost));
         view!("selected", (), |_lua, l, _a| Ok(l.client.selected.map(|e| e.to_bits().get())));
+        view!("selected_zone", (), |_lua, l, _a| Ok(l.client.selected_zone));
+        view!("store", Value, |lua, l, store| store_table(lua, l.world, store_ref(&store)?));
+        view!("item_categories", (), |lua, l, _a| categories_table(lua, l.world));
         // Every selected id: the group when several are, else the one.
         view!("selection", (), |lua, l, _a| {
             let t = lua.create_table()?;
@@ -2451,7 +2459,221 @@ fn thing_table(lua: &Lua, w: &World, e: Entity) -> mlua::Result<Option<Table>> {
     let designated = w.ecs.get::<&rim_sim::world::Designated>(e).ok().map(|d| d.0);
     t.set("designated", designated.map(|d| w.defs.designations[d as usize].label.clone()))?;
     t.set("why", rim_sim::ai::work_blocked(w, e))?;
+    t.set("store", w.ecs.get::<&rim_sim::world::Store>(e).is_ok())?;
     Ok(Some(t))
+}
+
+/// A store a script names: a stockpile's id, or `{ zone = id }` or
+/// `{ thing = id }` (a container).
+fn store_ref(v: &Value) -> mlua::Result<rim_sim::zone::StoreRef> {
+    use rim_sim::zone::StoreRef;
+    let bad = || rt("a store is a stockpile's id, { zone = id } or { thing = id }");
+    match v {
+        Value::Integer(n) => Ok(StoreRef::Zone(*n as u32)),
+        Value::Number(n) => Ok(StoreRef::Zone(*n as u32)),
+        Value::Table(t) => {
+            if let Some(z) = t.get::<Option<u32>>("zone")? {
+                return Ok(StoreRef::Zone(z));
+            }
+            match t.get::<Option<u64>>("thing")?.and_then(Entity::from_bits) {
+                Some(e) => Ok(StoreRef::Thing(e)),
+                None => Err(bad()),
+            }
+        }
+        _ => Err(bad()),
+    }
+}
+
+/// A filter edit a script sends: `{ thing | category | material = id, on
+/// = bool }`, `{ min = n, max = n }` (condition, percent) or `{ all =
+/// bool }`.
+fn filter_edit(t: &Table) -> mlua::Result<crate::view::UiFilterEdit> {
+    use crate::view::UiFilterEdit as E;
+    let on = t.get::<Option<bool>>("on")?.unwrap_or(true);
+    if let Some(x) = t.get::<Option<String>>("thing")? {
+        return Ok(E::Thing(x, on));
+    }
+    if let Some(x) = t.get::<Option<String>>("category")? {
+        return Ok(E::Category(x, on));
+    }
+    if let Some(x) = t.get::<Option<String>>("material")? {
+        return Ok(E::Material(x, on));
+    }
+    if let Some(all) = t.get::<Option<bool>>("all")? {
+        return Ok(E::All(all));
+    }
+    let (min, max) = (t.get::<Option<u8>>("min")?, t.get::<Option<u8>>("max")?);
+    if min.is_some() || max.is_some() {
+        return Ok(E::Condition(min.unwrap_or(0), max.unwrap_or(100)));
+    }
+    Err(rt("a filter edit is { thing | category | material = id, on = bool }, { min, max } or { all = bool }"))
+}
+
+/// Everything the store inspector paints, in one read: what a store is,
+/// how full, what it holds (a container's slots in order; a stockpile's
+/// totals by thing and material) and what it takes.
+fn store_table(lua: &Lua, w: &World, store: rim_sim::zone::StoreRef) -> mlua::Result<Option<Table>> {
+    use rim_sim::world::{Job, Pawn, Store};
+    use rim_sim::zone::StoreRef;
+    let defs = &w.defs;
+    let t = lua.create_table()?;
+    let first_category = |d: rim_sim::defs::DefId| {
+        defs.item_categories.iter().position(|c| c.items.contains(&d)).map(|i| &defs.item_categories[i])
+    };
+    let row = |d: rim_sim::defs::DefId, made_of: Option<rim_sim::defs::DefId>, count: u32, hp: i32, limit: u32| {
+        let td = defs.thing(d);
+        let r = lua.create_table()?;
+        r.set("thing", td.id.as_str())?;
+        r.set("label", td.label.as_str())?;
+        r.set("made_of", made_of.map(|m| defs.thing(m).id.clone()))?;
+        r.set("made_of_label", made_of.map(|m| defs.thing(m).label.clone()))?;
+        r.set("count", count)?;
+        r.set("limit", limit)?;
+        r.set("hp", (hp.max(0) as f64 / defs.full_hp(d, made_of) as f64).clamp(0.0, 1.0))?;
+        r.set("value", td.market_value * count as f64)?;
+        let cat = first_category(d);
+        r.set("category", cat.map(|c| c.id.clone()))?;
+        r.set("category_label", cat.map(|c| c.label.clone()))?;
+        r.set("category_order", cat.map_or(i32::MAX, |c| c.order))?;
+        Ok::<_, mlua::Error>(r)
+    };
+    let (filter, level, can): (rim_sim::filter::Filter, u8, Vec<rim_sim::defs::DefId>) = match store {
+        StoreRef::Zone(z) => {
+            let Some(zone) = w.zones.get(z) else { return Ok(None) };
+            t.set("kind", "zone")?;
+            t.set("id", z)?;
+            t.set("name", zone.name.as_str())?;
+            // Totals by thing and material, over its cells.
+            let mut totals: std::collections::BTreeMap<
+                (rim_sim::defs::DefId, Option<rim_sim::defs::DefId>),
+                (u32, u32, i32),
+            > = std::collections::BTreeMap::new();
+            let (mut cells, mut used) = (0u32, 0u32);
+            for (_, c) in w.zones.members().filter(|(zn, _)| zn.id == z) {
+                cells += 1;
+                let Some(e) = w.map.item_at(w.map.pos(c as usize)) else { continue };
+                let Some(x) = w.thing(e) else { continue };
+                used += 1;
+                let e = totals.entry((x.def, w.made_of(e))).or_insert((0, 0, i32::MAX));
+                e.0 += x.count;
+                e.1 += 1;
+                e.2 = e.2.min(x.hp);
+            }
+            let contents = lua.create_table()?;
+            for ((d, m), (count, stacks, hp)) in totals {
+                let r = row(d, m, count, hp, defs.thing(d).stack_limit * stacks)?;
+                r.set("stacks", stacks)?;
+                contents.push(r)?;
+            }
+            t.set("contents", contents)?;
+            t.set("capacity", cells)?;
+            t.set("used", used)?;
+            let can = (0..defs.things.len() as rim_sim::defs::DefId)
+                .filter(|&d| defs.thing(d).category == rim_sim::defs::Category::Item)
+                .collect();
+            (zone.filter.clone(), zone.level, can)
+        }
+        StoreRef::Thing(e) => {
+            let (Some(th), Ok(st)) = (w.thing(e), w.ecs.get::<&Store>(e).map(|s| (*s).clone())) else {
+                return Ok(None);
+            };
+            let td = defs.thing(th.def);
+            let Some(sd) = td.store.as_ref() else { return Ok(None) };
+            t.set("kind", "thing")?;
+            t.set("id", e.to_bits().get())?;
+            t.set("name", td.label.as_str())?;
+            let contents = lua.create_table()?;
+            let mut used = 0u32;
+            for slot in &st.slots {
+                match slot.and_then(|x| w.thing(x).map(|t| (x, t))) {
+                    Some((x, xt)) => {
+                        used += 1;
+                        let limit = defs.thing(xt.def).stack_limit.saturating_mul(sd.stack_scale);
+                        contents.push(row(xt.def, w.made_of(x), xt.count, xt.hp, limit)?)?;
+                    }
+                    None => {
+                        let r = lua.create_table()?;
+                        r.set("empty", true)?;
+                        contents.push(r)?;
+                    }
+                }
+            }
+            t.set("contents", contents)?;
+            t.set("capacity", st.slots.len())?;
+            t.set("used", used)?;
+            (st.filter.clone(), st.level, sd.accepts_r.clone())
+        }
+    };
+    let labels = &defs.store_priority.labels;
+    t.set("level", level)?;
+    t.set("level_label", labels.get(level as usize).map_or("", String::as_str))?;
+    t.set("levels", lua.create_sequence_from(labels.iter().map(String::as_str))?)?;
+    // Haulers bound for it: stacks on their way in.
+    let incoming = w
+        .pawns
+        .iter()
+        .filter_map(|&p| w.ecs.get::<&Pawn>(p).ok().map(|p| p.job.clone()))
+        .filter(|job| match (job, store) {
+            (Job::Haul { into: Some(c), .. }, StoreRef::Thing(e)) => *c == e,
+            (Job::Haul { to, into: None, .. }, StoreRef::Zone(z)) => {
+                w.zones.at(&w.map, *to).is_some_and(|zn| zn.id == z)
+            }
+            _ => false,
+        })
+        .count();
+    t.set("incoming", incoming)?;
+    let set = |ids: &mut dyn Iterator<Item = rim_sim::defs::DefId>| -> mlua::Result<Table> {
+        let s = lua.create_table()?;
+        for d in ids {
+            s.set(defs.thing(d).id.as_str(), true)?;
+        }
+        Ok(s)
+    };
+    let f = lua.create_table()?;
+    f.set("allows", set(&mut filter.allows.iter().copied())?)?;
+    f.set("refuses", set(&mut filter.refuses.iter().copied())?)?;
+    f.set("can", set(&mut can.into_iter())?)?;
+    f.set("min", filter.hp[0])?;
+    f.set("max", filter.hp[1])?;
+    t.set("filter", f)?;
+    // Materials a thing can be made of, for the filter's chips.
+    let mats = lua.create_table()?;
+    for (i, td) in defs.things.iter().enumerate() {
+        if td.category == rim_sim::defs::Category::Item && td.stuff.is_some() {
+            let m = lua.create_table()?;
+            m.set("id", td.id.as_str())?;
+            m.set("label", td.label.as_str())?;
+            m.set("refused", filter.refuses.binary_search(&(i as rim_sim::defs::DefId)).is_ok())?;
+            mats.push(m)?;
+        }
+    }
+    t.set("materials", mats)?;
+    Ok(Some(t))
+}
+
+/// The item category tree: `roots` in order, and each category by id with
+/// its label, children (in order), the items directly in it, and every
+/// item under it.
+fn categories_table(lua: &Lua, w: &World) -> mlua::Result<Table> {
+    let defs = &w.defs;
+    let cats = &defs.item_categories;
+    let ids = |v: &[rim_sim::defs::DefId], f: &dyn Fn(rim_sim::defs::DefId) -> String| {
+        lua.create_sequence_from(v.iter().map(|&d| f(d)))
+    };
+    let t = lua.create_table()?;
+    t.set("roots", ids(&defs.category_roots, &|c| cats[c as usize].id.clone())?)?;
+    let by = lua.create_table()?;
+    for (i, c) in cats.iter().enumerate() {
+        let r = lua.create_table()?;
+        r.set("id", c.id.as_str())?;
+        r.set("label", c.label.as_str())?;
+        r.set("children", ids(&c.children, &|k| cats[k as usize].id.clone())?)?;
+        r.set("items", ids(&c.items, &|d| defs.thing(d).id.clone())?)?;
+        r.set("under", ids(&defs.category_items(i as rim_sim::defs::DefId), &|d| defs.thing(d).id.clone())?)?;
+        by.set(c.id.as_str(), r)?;
+    }
+    t.set("by_id", by)?;
+    Ok(t)
 }
 
 /// UI script directories for the loaded mods, in load order.

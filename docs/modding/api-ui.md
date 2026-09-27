@@ -22,6 +22,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `act.role_from_role` | `(label: string, role: number) -> ()` | Make a work role of the player's, copying another. It joins the end of view.board().roles. |
 | `act.scroll_mode` | `(mode: string) -> ()` | What a scroll does on the map: 'auto' (a trackpad pans, a wheel zooms), 'zoom' or 'pan'. Saved with the player's settings. |
 | `act.select` | `(id: number?, add: boolean?) -> ()` | Select a pawn or thing, or nothing. With add, put a colonist into the selection or take them out of it (a shift-click). |
+| `act.select_zone` | `(zone: number?) -> ()` | Show a stockpile in the inspector, or none. |
 | `act.send` | `(name: string, data: {[string]: any}?) -> ()` | Send an event to your mod's own sim scripts ("your_mod:event"), as a player command. |
 | `act.set_overlay` | `(index: number?) -> ()` | Show a field overlay by its index in view.fields(), or none. |
 | `act.set_priority` | `(id: number, work: string, level: number) -> ()` | Set a colonist's priority for a work type: 1 first, 0 never. |
@@ -29,7 +30,8 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `act.set_rule_enabled` | `(id: string, on: boolean) -> ()` | Switch a priority rule (a standing order) off for this colony, or back on. |
 | `act.set_stance` | `(id: string) -> ()` | Put the colony in a stance: its priority rules hold until another. |
 | `act.speed` | `(speed: number) -> ()` | Set the game speed. |
-| `act.store_level` | `(zone: number, level: number) -> ()` | Put a stockpile at a level of the store priority scale (0 is lowest). Stacks only move to a higher one. |
+| `act.store_filter` | `(store: number \| StoreRef, edit: FilterEdit) -> ()` | Change what a store takes: a thing, a category of them, a material (on = false refuses it), the condition range in percent (min, max), or everything (all). A stockpile by id, or { zone = id } or { thing = id } for a container. |
+| `act.store_level` | `(store: number \| StoreRef, level: number) -> ()` | Put a store at a level of the store priority scale (0 is lowest): a stockpile by id, or { zone = id } or { thing = id }. Stacks only move to a higher one. |
 | `act.stuff` | `(id: string) -> ()` | Choose the material for the active build tool. |
 | `act.toggle_devtools` | `() -> ()` | Show or hide devtools. |
 | `act.toggle_outlines` | `() -> ()` | Show or hide layout outlines (devtools). |
@@ -92,6 +94,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `view.hour` | `() -> number` | Hour of the day, 0 to 24. |
 | `view.hover` | `() -> Hover?` | What's under the cursor. |
 | `view.inspect` | `() -> Inspect?` | The node under the cursor (devtools). |
+| `view.item_categories` | `() -> ItemCategories` | The item category tree stores filter by: the top level in order, and each category by id with its children, the items directly in it, and every item under it. |
 | `view.items` | `() -> { Item }` | Every item def, which a stockpile can take or refuse. |
 | `view.last_order` | `() -> { label: string, age: number }?` | The last order given ("Gunnar will deconstruct wall") and how many seconds ago, or nil once it's been undone. |
 | `view.look` | `(thing: string, made_of: string?) -> number` | A thing's world look, tinted by what it's made of, as an index a token node's `look` takes (kind = "token"; `kit.item` builds one). Made once per thing and material. |
@@ -111,6 +114,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `view.saves` | `() -> { Save }` | The player's saves, newest first, on the title screen; empty in a game. |
 | `view.screen` | `() -> (number, number)` | Screen width and height in logical pixels. |
 | `view.selected` | `() -> number?` | The selected pawn or thing's id: view.pawn or view.thing says which. With several colonists selected, the first of them. |
+| `view.selected_zone` | `() -> number?` | The stockpile the inspector shows, when no pawn or thing is selected. |
 | `view.selection` | `() -> { number }` | Every selected id: several colonists, or the one pawn or thing, or none. |
 | `view.shift` | `() -> boolean` | Whether Shift is held: a click on a colonist then adds them to the selection. |
 | `view.show_devtools` | `() -> boolean` | Whether devtools are open. |
@@ -120,6 +124,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `view.stances` | `() -> { Stance }` | The colony's stances, in bar order; `active` is the one it's in. |
 | `view.standing` | `() -> { StandingOrder }` | The standing orders: rules on colony readings, with the reading now, their marks (`band`), what they do (`effect`), a season they wait for, whether the reading has crossed the mark, whether the colony has them on, and whether they're moving priorities now (`acting`). |
 | `view.stats` | `() -> { string }` | Client statistics lines. |
+| `view.store` | `(store: number \| StoreRef) -> StoreView?` | Everything the store inspector paints, in one read: a stockpile by id (or { zone = id }) or a container ({ thing = id }). Contents are a container's slots in order (an empty one is { empty = true }) or a stockpile's totals by thing and material. |
 | `view.store_levels` | `() -> { string }` | The store priority scale's level names, lowest first. |
 | `view.stuff` | `() -> { Stuff }` | Materials for the active build tool: what you have, what you'd get. |
 | `view.thing` | `(id: number) -> ThingInfo?` | A thing on the map: a building, plant, rock or item stack, or nil. why says what stops its designated work. |

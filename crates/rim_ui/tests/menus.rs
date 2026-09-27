@@ -313,6 +313,6 @@ mod surfaces {
         // Raise priority: Normal (1) to Preferred (2).
         s.right_click(&format!("core:dock.zone.{z}"));
         let actions = s.key("4");
-        assert_eq!(actions, vec![UiAction::StoreLevel(z, 2)]);
+        assert_eq!(actions, vec![UiAction::StoreLevel(rim_sim::zone::StoreRef::Zone(z), 2)]);
     }
 }

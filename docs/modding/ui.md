@@ -386,6 +386,41 @@ whole list as a second argument, and `run` is called once per member, so
 core's Draft drafts the lot unless every one already is. A right-click
 orders every selected colonist it means something to.
 
+### Stores
+
+A stockpile or a container, selected, shows two tabs (DESIGN.md §4f), in
+[`storage.luau`](../../mods/core/ui/storage.luau): **Contents**, what it
+holds as item tokens (a container's slots, empty ones dashed; a
+stockpile's totals by thing and material), and **Accepts**, what it takes
+(the category tree, materials and condition, with a line saying it all).
+A stockpile is selected by clicking one of its empty cells or its row in
+the Zones tray; `view.selected_zone()` says which, and the inspector's
+`sel` is then `{ kind = "zone", id, name, cells, level }`. A container is a
+thing whose `sel.store` is true.
+
+`view.store(ref)` is everything the tabs paint in one read, and
+`act.store_filter(ref, edit)` and `act.store_level(ref, level)` change it.
+`ref` is a stockpile's id, `{ zone = id }` or `{ thing = id }`; `edit` is
+`{ thing | category | material = id, on = bool }`, `{ min, max }` (percent
+of condition) or `{ all = bool }`. Every change is a command, so it
+replays. Copy and paste (Ctrl+C, Ctrl+V) carry a filter between stores;
+comma and full stop lower and raise a store's level.
+
+The Contents tab sorts by an order a mod can add to:
+
+```lua
+local storage = require("@core/ui/storage")
+storage.sorter({
+	id = "my_mod:weight",
+	label = "Weight",
+	order = 50,          -- core's run 10 to 40: Category, Count, Value, Name
+	key = function(row, view) return -row.count end,
+})
+```
+
+A key is a number or a string; rows sort by it, then by label. Orders run
+in the UI's VM, so none can change the game.
+
 ### People
 
 The colonists run down the left edge (`core:colonists`, in

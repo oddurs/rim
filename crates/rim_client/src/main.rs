@@ -96,6 +96,8 @@ pub struct App {
     /// What the inspector shows: the one selected thing, or the first of
     /// `group`.
     pub selected: Option<Entity>,
+    /// A stockpile the inspector shows, when nothing else is selected.
+    pub selected_zone: Option<u32>,
     /// Every selected colonist when more than one is; empty otherwise.
     pub group: Vec<Entity>,
     /// Shift is held this frame: a click adds to the selection.
@@ -594,6 +596,7 @@ async fn game() {
         cam: Cam { x: center.x as f32 + 0.5, y: center.y as f32 + 0.5, zoom: 28.0 },
         tool: Tool::Select,
         selected: None,
+        selected_zone: None,
         group: Vec::new(),
         shift: false,
         drag_start: None,
@@ -1052,6 +1055,7 @@ pub fn client_view(app: &mut App, mouse: (f32, f32), time: f64) -> ClientView {
         mouse: (mouse.0 * dpi, mouse.1 * dpi),
         frac: app.tick_frac(),
         selected: app.selected,
+        selected_zone: app.selected_zone,
         group: app.group.clone(),
         shift: app.shift,
         paused: app.paused,
@@ -1463,8 +1467,26 @@ fn apply_ui(app: &mut App, a: UiAction) {
                 }
             }
         }
-        UiAction::StoreLevel(zone, level) => {
-            app.sim.push(Command::StoreLevel { store: rim_sim::zone::StoreRef::Zone(zone), level });
+        UiAction::StoreLevel(store, level) => app.sim.push(Command::StoreLevel { store, level }),
+        UiAction::StoreFilter(store, edit) => {
+            use rim_sim::filter::FilterEdit as F;
+            use rim_ui::view::UiFilterEdit as U;
+            let defs = &app.sim.world.defs;
+            let thing = |id: &str| defs.thing_id(id);
+            let edit = match edit {
+                U::Thing(id, on) => thing(&id).map(|thing| F::Thing { thing, on }),
+                U::Material(id, on) => thing(&id).map(|material| F::Material { material, on }),
+                U::Category(id, on) => defs.lookup("item_category", &id).map(|category| F::Category { category, on }),
+                U::Condition(min, max) => Some(F::Condition { min, max }),
+                U::All(on) => Some(F::All { on }),
+            };
+            if let Some(edit) = edit {
+                app.sim.push(Command::StoreFilter { store, edit });
+            }
+        }
+        UiAction::SelectZone(zone) => {
+            select(app, Vec::new());
+            app.selected_zone = zone;
         }
         UiAction::ZoneAllow(zone, item, on) => {
             if let Some(thing) = app.sim.world.defs.thing_id(&item) {
@@ -1585,6 +1607,9 @@ fn step(app: &mut App) {
         let keep: Vec<Entity> = selection(app).into_iter().filter(|&e| !gone(e)).collect();
         select(app, keep);
     }
+    if app.selected_zone.is_some_and(|z| app.sim.world.zones.get(z).is_none()) {
+        app.selected_zone = None;
+    }
 }
 
 impl App {
@@ -1608,6 +1633,7 @@ pub fn selection(app: &App) -> Vec<Entity> {
 /// Select these: nothing, one pawn or thing, or several colonists (the
 /// first is the one the inspector shows).
 pub fn select(app: &mut App, v: Vec<Entity>) {
+    app.selected_zone = None;
     app.selected = v.first().copied();
     app.group = if v.len() > 1 { v } else { Vec::new() };
 }
@@ -1957,7 +1983,14 @@ pub fn apply(app: &mut App, action: Action) {
                     if (x - fx).abs().max((y - fy).abs()) < 6.0 {
                         match pawn_under(app, fx, fy).or_else(|| thing_under(app, fx, fy)) {
                             Some(e) if app.shift => toggle_selected(app, e),
-                            under => select(app, under.into_iter().collect()),
+                            under => {
+                                select(app, under.into_iter().collect());
+                                // Nothing there but a stockpile's cell: the stockpile.
+                                if under.is_none() {
+                                    let w = &app.sim.world;
+                                    app.selected_zone = w.zones.at(&w.map, app.cam.tile_at(fx, fy)).map(|z| z.id);
+                                }
+                            }
                         }
                     } else {
                         let (lo, hi) = (IVec::new(a.x.min(b.x), a.y.min(b.y)), IVec::new(a.x.max(b.x), a.y.max(b.y)));

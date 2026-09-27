@@ -86,6 +86,22 @@ type Tool = {
     key: string, label: string, color: string, active: boolean, category: string, group: string,
     cost: string, work: number, hp: number,
 }
+type StoreRef = { zone: number?, thing: number? }
+type FilterEdit = { thing: string?, category: string?, material: string?, on: boolean?, min: number?, max: number?, all: boolean? }
+type StoreRow = {
+    thing: string?, label: string?, made_of: string?, made_of_label: string?, count: number?, limit: number?,
+    hp: number?, value: number?, stacks: number?, category: string?, category_label: string?, category_order: number?,
+    empty: boolean?,
+}
+type StoreFilterView = { allows: { [string]: boolean }, refuses: { [string]: boolean }, can: { [string]: boolean }, min: number, max: number }
+type StoreMaterial = { id: string, label: string, refused: boolean }
+type StoreView = {
+    kind: string, id: number, name: string, level: number, level_label: string, levels: { string },
+    capacity: number, used: number, incoming: number, contents: { StoreRow }, filter: StoreFilterView,
+    materials: { StoreMaterial },
+}
+type ItemCategory = { id: string, label: string, children: { string }, items: { string }, under: { string } }
+type ItemCategories = { roots: { string }, by_id: { [string]: ItemCategory } }
 type Zone = { id: number, name: string, cells: number, allows: { [string]: boolean }, level: number, level_label: string }
 type Item = { id: string, label: string, color: string }
 type WorkType = { id: string, label: string, icon: string, order: number, default: number }
@@ -105,7 +121,7 @@ type ProfileRow = { name: string, us: number, mod: boolean }
 type ModInfo = { id: string, version: string, name: string }
 type ThingInfo = {
     id: number, def: string, label: string, count: number, hp: number, max_hp: number,
-    made_of: string?, blueprint: boolean, designated: string?, why: string?,
+    made_of: string?, blueprint: boolean, designated: string?, why: string?, store: boolean,
 }
 type Save = { path: string, file: string, day: number, colonists: { string }, age: number, error: string? }
 type UiStats = { font: string, build_us: number, layout_us: number, paint_us: number, nodes: number, layouts: number }
@@ -139,6 +155,7 @@ pub const UI_API: &[UiDoc] = &[
     d!("act.role_from_role", "(label: string, role: number) -> ()", "Make a work role of the player's, copying another. It joins the end of view.board().roles."),
     d!("act.scroll_mode", "(mode: string) -> ()", "What a scroll does on the map: 'auto' (a trackpad pans, a wheel zooms), 'zoom' or 'pan'. Saved with the player's settings."),
     d!("act.select", "(id: number?, add: boolean?) -> ()", "Select a pawn or thing, or nothing. With add, put a colonist into the selection or take them out of it (a shift-click)."),
+    d!("act.select_zone", "(zone: number?) -> ()", "Show a stockpile in the inspector, or none."),
     d!(
         "act.send",
         "(name: string, data: {[string]: any}?) -> ()",
@@ -150,7 +167,8 @@ pub const UI_API: &[UiDoc] = &[
     d!("act.set_rule_enabled", "(id: string, on: boolean) -> ()", "Switch a priority rule (a standing order) off for this colony, or back on."),
     d!("act.set_stance", "(id: string) -> ()", "Put the colony in a stance: its priority rules hold until another."),
     d!("act.speed", "(speed: number) -> ()", "Set the game speed."),
-    d!("act.store_level", "(zone: number, level: number) -> ()", "Put a stockpile at a level of the store priority scale (0 is lowest). Stacks only move to a higher one."),
+    d!("act.store_filter", "(store: number | StoreRef, edit: FilterEdit) -> ()", "Change what a store takes: a thing, a category of them, a material (on = false refuses it), the condition range in percent (min, max), or everything (all). A stockpile by id, or { zone = id } or { thing = id } for a container."),
+    d!("act.store_level", "(store: number | StoreRef, level: number) -> ()", "Put a store at a level of the store priority scale (0 is lowest): a stockpile by id, or { zone = id } or { thing = id }. Stacks only move to a higher one."),
     d!("act.stuff", "(id: string) -> ()", "Choose the material for the active build tool."),
     d!("act.toggle_devtools", "() -> ()", "Show or hide devtools."),
     d!("act.toggle_outlines", "() -> ()", "Show or hide layout outlines (devtools)."),
@@ -253,6 +271,7 @@ pub const UI_API: &[UiDoc] = &[
     d!("view.hour", "() -> number", "Hour of the day, 0 to 24."),
     d!("view.hover", "() -> Hover?", "What's under the cursor."),
     d!("view.inspect", "() -> Inspect?", "The node under the cursor (devtools)."),
+    d!("view.item_categories", "() -> ItemCategories", "The item category tree stores filter by: the top level in order, and each category by id with its children, the items directly in it, and every item under it."),
     d!("view.items", "() -> { Item }", "Every item def, which a stockpile can take or refuse."),
     d!("view.last_order", "() -> { label: string, age: number }?", "The last order given (\"Gunnar will deconstruct wall\") and how many seconds ago, or nil once it's been undone."),
     d!("view.look", "(thing: string, made_of: string?) -> number", "A thing's world look, tinted by what it's made of, as an index a token node's `look` takes (kind = \"token\"; `kit.item` builds one). Made once per thing and material."),
@@ -272,6 +291,7 @@ pub const UI_API: &[UiDoc] = &[
     d!("view.saves", "() -> { Save }", "The player's saves, newest first, on the title screen; empty in a game."),
     d!("view.screen", "() -> (number, number)", "Screen width and height in logical pixels."),
     d!("view.selected", "() -> number?", "The selected pawn or thing's id: view.pawn or view.thing says which. With several colonists selected, the first of them."),
+    d!("view.selected_zone", "() -> number?", "The stockpile the inspector shows, when no pawn or thing is selected."),
     d!("view.selection", "() -> { number }", "Every selected id: several colonists, or the one pawn or thing, or none."),
     d!("view.shift", "() -> boolean", "Whether Shift is held: a click on a colonist then adds them to the selection."),
     d!("view.show_devtools", "() -> boolean", "Whether devtools are open."),
@@ -285,6 +305,7 @@ pub const UI_API: &[UiDoc] = &[
     d!("view.stances", "() -> { Stance }", "The colony's stances, in bar order; `active` is the one it's in."),
     d!("view.standing", "() -> { StandingOrder }", "The standing orders: rules on colony readings, with the reading now, their marks (`band`), what they do (`effect`), a season they wait for, whether the reading has crossed the mark, whether the colony has them on, and whether they're moving priorities now (`acting`)."),
     d!("view.stats", "() -> { string }", "Client statistics lines."),
+    d!("view.store", "(store: number | StoreRef) -> StoreView?", "Everything the store inspector paints, in one read: a stockpile by id (or { zone = id }) or a container ({ thing = id }). Contents are a container's slots in order (an empty one is { empty = true }) or a stockpile's totals by thing and material."),
     d!("view.store_levels", "() -> { string }", "The store priority scale's level names, lowest first."),
     d!("view.stuff", "() -> { Stuff }", "Materials for the active build tool: what you have, what you'd get."),
     d!(

@@ -65,6 +65,22 @@ type Tool = {
     key: string, label: string, color: string, active: boolean, category: string, group: string,
     cost: string, work: number, hp: number,
 }
+type StoreRef = { zone: number?, thing: number? }
+type FilterEdit = { thing: string?, category: string?, material: string?, on: boolean?, min: number?, max: number?, all: boolean? }
+type StoreRow = {
+    thing: string?, label: string?, made_of: string?, made_of_label: string?, count: number?, limit: number?,
+    hp: number?, value: number?, stacks: number?, category: string?, category_label: string?, category_order: number?,
+    empty: boolean?,
+}
+type StoreFilterView = { allows: { [string]: boolean }, refuses: { [string]: boolean }, can: { [string]: boolean }, min: number, max: number }
+type StoreMaterial = { id: string, label: string, refused: boolean }
+type StoreView = {
+    kind: string, id: number, name: string, level: number, level_label: string, levels: { string },
+    capacity: number, used: number, incoming: number, contents: { StoreRow }, filter: StoreFilterView,
+    materials: { StoreMaterial },
+}
+type ItemCategory = { id: string, label: string, children: { string }, items: { string }, under: { string } }
+type ItemCategories = { roots: { string }, by_id: { [string]: ItemCategory } }
 type Zone = { id: number, name: string, cells: number, allows: { [string]: boolean }, level: number, level_label: string }
 type Item = { id: string, label: string, color: string }
 type WorkType = { id: string, label: string, icon: string, order: number, default: number }
@@ -84,7 +100,7 @@ type ProfileRow = { name: string, us: number, mod: boolean }
 type ModInfo = { id: string, version: string, name: string }
 type ThingInfo = {
     id: number, def: string, label: string, count: number, hp: number, max_hp: number,
-    made_of: string?, blueprint: boolean, designated: string?, why: string?,
+    made_of: string?, blueprint: boolean, designated: string?, why: string?, store: boolean,
 }
 type Save = { path: string, file: string, day: number, colonists: { string }, age: number, error: string? }
 type UiStats = { font: string, build_us: number, layout_us: number, paint_us: number, nodes: number, layouts: number }
@@ -189,6 +205,8 @@ declare act: {
     scroll_mode: (mode: string) -> (),
     -- Select a pawn or thing, or nothing. With add, put a colonist into the selection or take them out of it (a shift-click).
     select: (id: number?, add: boolean?) -> (),
+    -- Show a stockpile in the inspector, or none.
+    select_zone: (zone: number?) -> (),
     -- Send an event to your mod's own sim scripts ("your_mod:event"), as a player command.
     send: (name: string, data: {[string]: any}?) -> (),
     -- Show a field overlay by its index in view.fields(), or none.
@@ -203,8 +221,10 @@ declare act: {
     set_stance: (id: string) -> (),
     -- Set the game speed.
     speed: (speed: number) -> (),
-    -- Put a stockpile at a level of the store priority scale (0 is lowest). Stacks only move to a higher one.
-    store_level: (zone: number, level: number) -> (),
+    -- Change what a store takes: a thing, a category of them, a material (on = false refuses it), the condition range in percent (min, max), or everything (all). A stockpile by id, or { zone = id } or { thing = id } for a container.
+    store_filter: (store: number | StoreRef, edit: FilterEdit) -> (),
+    -- Put a store at a level of the store priority scale (0 is lowest): a stockpile by id, or { zone = id } or { thing = id }. Stacks only move to a higher one.
+    store_level: (store: number | StoreRef, level: number) -> (),
     -- Choose the material for the active build tool.
     stuff: (id: string) -> (),
     -- Show or hide devtools.
@@ -268,6 +288,8 @@ declare view: {
     hover: () -> Hover?,
     -- The node under the cursor (devtools).
     inspect: () -> Inspect?,
+    -- The item category tree stores filter by: the top level in order, and each category by id with its children, the items directly in it, and every item under it.
+    item_categories: () -> ItemCategories,
     -- Every item def, which a stockpile can take or refuse.
     items: () -> { Item },
     -- The last order given ("Gunnar will deconstruct wall") and how many seconds ago, or nil once it's been undone.
@@ -306,6 +328,8 @@ declare view: {
     screen: () -> (number, number),
     -- The selected pawn or thing's id: view.pawn or view.thing says which. With several colonists selected, the first of them.
     selected: () -> number?,
+    -- The stockpile the inspector shows, when no pawn or thing is selected.
+    selected_zone: () -> number?,
     -- Every selected id: several colonists, or the one pawn or thing, or none.
     selection: () -> { number },
     -- Whether Shift is held: a click on a colonist then adds them to the selection.
@@ -324,6 +348,8 @@ declare view: {
     standing: () -> { StandingOrder },
     -- Client statistics lines.
     stats: () -> { string },
+    -- Everything the store inspector paints, in one read: a stockpile by id (or { zone = id }) or a container ({ thing = id }). Contents are a container's slots in order (an empty one is { empty = true }) or a stockpile's totals by thing and material.
+    store: (store: number | StoreRef) -> StoreView?,
     -- The store priority scale's level names, lowest first.
     store_levels: () -> { string },
     -- Materials for the active build tool: what you have, what you'd get.
