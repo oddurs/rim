@@ -5,9 +5,10 @@ type: feature
 status: backlog
 milestone: mood
 depends_on:
+- d83192ed-0a3e-4a6f-a39a-04ce94a68935
 - f1924f03-4122-4997-b1bd-f826e9cd3ac2
 created: 2026-09-25
-updated: 2026-09-26
+updated: 2026-09-27
 priority: p3
 api: additive
 effort: s
@@ -32,3 +33,7 @@ DESIGN.md §4d: hovering a Work Board column lights its waiting jobs on the map,
 ## 2026-09-26
 
 Moved from building, which had already shipped when this was filed: with the other Work Board follow-ups.
+
+## 2026-09-27
+
+Draw the spotlight with Chalkline (DESIGN.md §6f): a veil (theme color.veil) over the map, with a hole for each waiting job, and a 1.5 px edge in the work type's hue on a keyline. It depends on the overlay palette item for the tokens and primitives.

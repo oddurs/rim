@@ -2006,6 +2006,107 @@ than 4 screen pixels: at the minimum zoom (4 px a cell) the buffer drops to
 
 ---
 
+## 6f. Overlays: the grid, selection and highlights
+
+Everything the client draws over the world answers three questions: what
+is under the pointer, what have I picked, and what will this order do.
+Today each answer has its own look. Selection is a yellow box. A drag fills
+its whole rectangle in the tool's colour. A tool's cursor is a 2-point
+square. Stockpiles and blueprints are both sky blue. And there is no grid,
+although every order is a promise about cells. The concept, with a live map
+and every state drawn, is at
+<https://claude.ai/artifact/N2buE4YpoduQdxpE1zZTHv>. Its working name is
+Chalkline.
+
+### Tension: always show the grid, or never?
+
+- **For always:** every order is a promise about cells (§6a). A wall run of
+  eighteen cells is easier to lay when you can count them.
+- **Against:** a lattice laid over the whole map turns a village into graph
+  paper and fights the plan's own line weights and patterns (§6c). A player
+  watching the colony has no use for it.
+- **Ruling:** **the grid shows while a tool is in hand.** It has four
+  levels:
+  - **Rest:** no grid, with the select tool and nothing held.
+  - **Lens:** a tool is armed. Corner ticks appear around the pointer and
+    fade out over 5.5 cells.
+  - **Plan:** during a drag, lines run across the view, strongest near the
+    pointer.
+  - **Measure:** held with G. Every fifth line is heavier, counted from
+    the map's origin. Rulers count cells, and the pointer's row and column
+    are lit.
+
+  A grid line is a groove in the ground, not a line over it. It is a dark
+  seam, with a faint lit edge on its lower-right side from the same
+  top-left light as the walls (§6c). It is drawn after the terrain and
+  before the things, so a tree or a wall hides it. Below 10 points a cell
+  there are no lines, and below 20 they are at 70%. Measure's heavier lines
+  stay at every zoom.
+
+### One colour, one job
+
+- **Chalk** (a warm off-white) means attention. It marks hover, selection,
+  the drag box, the grid's lit edge and the ring an order leaves. It never
+  changes colour, whether the thing selected is a raider or a tree.
+- **Hue** means kind. Designation colours stay in the defs. The theme's
+  `accent` blue marks the player's plans and people. Zones move to violet,
+  so that a stockpile never reads as a plan. `bad` (amber) means allowed but
+  costly, and `threat` (red) means it can't be done, or it's hostile.
+- **Form** carries state. An edge is hover, brackets are selection, a
+  wash is extent, a cross is blocked, a triangle is caution. A player who
+  can't tell red from green reads every state from its shape.
+- **Every overlay stroke has a keyline**, a dark line 2 points wider drawn
+  under it. This is what keeps chalk readable on sand and blue readable on
+  water. The black disc under a designation dot is the same idea.
+
+The colours and sizes are theme tokens in core's `ui/theme.toml`, and the
+world renderer reads them from the theme. A mod restyles the overlays the
+same way it restyles a panel. Durations and zoom bands are client
+constants, since they are measured in cells and time.
+
+### Out, edge, in
+
+When states stack on one thing, each sits at its own distance from the
+footprint. Selection is 3 points outside it: brackets on a thing, a ring on
+a pawn. Hover is on the footprint's edge. Marks are inside it, each at a
+fixed corner: a designation top-right, urgent top-left, unreachable
+bottom-left. Nothing covers the thing itself, and no state hides another.
+
+### Tension: who decides what a preview shows?
+
+- **The client:** it already knows the tool, the drag and the map.
+- **Against:** `command::apply` decides which trees a chop drag marks and
+  which cells get a wall. A second copy of those rules in the client will
+  drift from them. A preview that doesn't match its order is worse than
+  having no preview.
+- **Ruling:** **the sim answers, read-only, and `apply` uses the same
+  answer.** A designate preview names the targets an order would mark. A
+  build preview gives each cell an outcome: open, clears a natural thing
+  first, or blocked by something named. Both are mechanisms and name no
+  content. The client draws only what would change. New targets get a ring
+  in the designation's hue, and marks already there stay as they are. A
+  cell that has to be cleared first gets an amber triangle, and a blocked
+  cell gets a red cross and a reason.
+
+### Motion reports a change
+
+Hover fades in over 60 ms and out over 140 ms. Brackets close in from 7
+points to 3 over 120 ms. The grid fades in over 160 ms. It fades out over
+280 ms, but only after a 400 ms hold, so swapping tools doesn't make it
+blink. An order leaves one chalk ring for 240 ms. A refused placement
+shakes twice. Urgent is the only mark that keeps moving: a ring breathes
+out every 1.8 s. The reduce-motion setting makes all of this instant and
+stills the urgent ring.
+
+### Cost
+
+The grid costs one quad per line in view and nothing below 10 points a
+cell, so the whole-map views in `rim --bench-render` pay nothing. The lens
+and previews touch only the cells near the pointer or inside the drag.
+Everything else is a handful of strokes per selected or hovered thing.
+
+---
+
 ## 7. Determinism is non-negotiable
 
 - All player input becomes a `Command` that is applied at a tick boundary.
