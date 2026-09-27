@@ -140,11 +140,14 @@ pub enum Job {
     Leave {
         to: IVec,
     },
-    /// Carry a stack to a stockpile cell: 0 to fetch it, 1 to bring it.
+    /// Carry a stack to a stockpile cell, or into a container (`into`,
+    /// standing at `to`): 0 to fetch it, 1 to bring it.
     Haul {
         src: Entity,
         to: IVec,
         stage: u8,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        into: Option<Entity>,
     },
 }
 
@@ -533,6 +536,23 @@ impl Order {
     pub fn missing(&self) -> Option<(usize, u32)> {
         self.needs.iter().enumerate().find_map(|(i, n)| (n.missing() > 0).then(|| (i, n.missing())))
     }
+}
+
+/// On a stack held in a container's slot: off the item layer, at the
+/// container's `pos` (DESIGN.md §4f).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Contained {
+    pub store: Entity,
+    pub slot: u8,
+}
+
+/// A container's own state: its level, what the player lets it take (within
+/// what its def can ever take), and the stack in each slot.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Store {
+    pub level: u8,
+    pub filter: crate::filter::Filter,
+    pub slots: Vec<Option<Entity>>,
 }
 
 /// On a tool a pawn holds: it is off the map until put down.
@@ -1186,6 +1206,7 @@ impl World {
             if span > 0 {
                 self.set_support(e, span);
             }
+            self.open_store(e);
         }
         Some(e)
     }
@@ -1405,6 +1426,21 @@ impl World {
     fn remove_thing(&mut self, e: Entity, dug: bool) {
         let rock = dug && self.is_rock(e);
         let Ok(t) = self.ecs.get::<&Thing>(e).map(|t| (*t).clone()) else { return };
+        // A container empties onto the ground first; nothing inside is lost.
+        let was_store = self.ecs.get::<&Store>(e).is_ok();
+        if was_store {
+            self.spill_store(e, t.pos);
+        }
+        // A stack in a container leaves its slot.
+        if let Ok(c) = self.ecs.get::<&Contained>(e).map(|c| *c) {
+            self.stock_change(e, -(t.count as i64), -1);
+            if let Ok(mut st) = self.ecs.get::<&mut Store>(c.store) {
+                if st.slots.get(c.slot as usize) == Some(&Some(e)) {
+                    st.slots[c.slot as usize] = None;
+                }
+            }
+            self.map.touch(t.pos);
+        }
         let planned = self.ecs.get::<&Planned>(e).ok().map(|p| *p);
         // A site taken down mid-order: what was brought stays, and the mod
         // that posted it hears.
@@ -1448,6 +1484,9 @@ impl World {
                 self.map.set_terrain(t.pos, leaves, self.defs.terrain[leaves as usize].path_cost);
             }
         }
+        if was_store {
+            self.stores_changed();
+        }
         // Cleared for a building: it goes up in its place.
         if let Some(p) = planned {
             self.spawn_fixture_of(p.thing, t.pos, true, p.stuff);
@@ -1489,7 +1528,9 @@ impl World {
             }
             let Ok(pos) = self.ecs.get::<&Thing>(t).map(|t| t.pos) else { continue };
             let d = pos.octile(from);
-            if best.is_some_and(|b| (b.0, b.1.id()) <= (d, t.id())) || !self.map.can_reach(from, Goal::Cell(pos)) {
+            if best.is_some_and(|b| (b.0, b.1.id()) <= (d, t.id()))
+                || !self.map.can_reach(from, self.stack_goal(t, pos))
+            {
                 continue;
             }
             best = Some((d, t));
@@ -1504,6 +1545,15 @@ impl World {
         if self.map.item_at(at) == Some(tool) {
             self.stock_change(tool, -(t.count as i64), -1);
             self.map.set_item(at, None);
+        }
+        // Off a rack: out of its slot.
+        if let Ok(c) = self.ecs.get::<&Contained>(tool).map(|c| *c) {
+            self.stock_change(tool, -(t.count as i64), -1);
+            let _ = self.ecs.remove_one::<Contained>(tool);
+            if let Ok(mut st) = self.ecs.get::<&mut Store>(c.store) {
+                st.slots[c.slot as usize] = None;
+            }
+            self.map.touch(at);
         }
         // Held is its claim now; nobody else can take it. What it emits
         // (a torch's light) goes with the pawn, not the cell it lay in.
@@ -1671,12 +1721,232 @@ impl World {
         worked.max(hurt)
     }
 
+    /// Where a pawn stands to take from a stack: on its cell, or beside the
+    /// container holding it.
+    pub fn stack_goal(&self, e: Entity, pos: IVec) -> crate::path::Goal {
+        match self.ecs.get::<&Contained>(e).ok().and_then(|c| self.thing(c.store)) {
+            Some(store) => self.reach_goal(&store),
+            None => crate::path::Goal::Cell(pos),
+        }
+    }
+
+    /// A thing whose def has a store block and is built, not planned, gets
+    /// its slots: when it's spawned whole and when a building completes.
+    pub fn open_store(&mut self, e: Entity) {
+        let Some(t) = self.thing(e) else { return };
+        let Some(st) = self.defs.thing(t.def).store.clone() else { return };
+        if self.ecs.get::<&Blueprint>(e).is_ok() || self.ecs.get::<&Store>(e).is_ok() {
+            return;
+        }
+        let filter = crate::filter::Filter { allows: st.accepts_r.clone(), refuses: Vec::new(), hp: [0, 100] };
+        let store = Store { level: self.defs.store_priority.default, filter, slots: vec![None; st.slots as usize] };
+        let _ = self.ecs.insert_one(e, store);
+        self.stores_changed();
+    }
+
+    /// How many of a stack's kind a slot holds when full.
+    fn slot_limit(&self, store_def: DefId, def: DefId) -> u32 {
+        let scale = self.defs.thing(store_def).store.as_ref().map_or(1, |s| s.stack_scale);
+        self.defs.thing(def).stack_limit.saturating_mul(scale)
+    }
+
+    /// Room a container has for `def` made of `made_of`: the rest of each
+    /// slot holding that kind, and every empty slot. Not whether its filter
+    /// takes it: ask `store_keeps`.
+    pub fn store_room(&self, store: Entity, def: DefId, made_of: Option<DefId>) -> u32 {
+        let (Some(t), Ok(st)) = (self.thing(store), self.ecs.get::<&Store>(store)) else { return 0 };
+        let limit = self.slot_limit(t.def, def);
+        st.slots
+            .iter()
+            .map(|s| match s {
+                None => limit,
+                Some(e) => self
+                    .thing(*e)
+                    .filter(|x| x.def == def && self.made_of(*e) == made_of)
+                    .map_or(0, |x| limit.saturating_sub(x.count)),
+            })
+            .fold(0u32, u32::saturating_add)
+    }
+
+    /// Whether a container's filter takes a stack of `def` made of `made_of`
+    /// at `hp`.
+    pub fn store_keeps(&self, store: Entity, def: DefId, made_of: Option<DefId>, hp: Option<i32>) -> bool {
+        self.ecs.get::<&Store>(store).is_ok_and(|st| st.filter.takes(&self.defs, def, made_of, hp))
+    }
+
+    /// Put as much of a lot as fits into a container: onto the stacks of its
+    /// kind first, then into empty slots. Returns how many didn't fit.
+    pub fn put_in_store(&mut self, store: Entity, lot: Lot) -> u32 {
+        let Some(st_thing) = self.thing(store) else { return lot.count };
+        let Ok(slots) = self.ecs.get::<&Store>(store).map(|s| s.slots.clone()) else { return lot.count };
+        let stage = self.fill_stage(store);
+        let limit = self.slot_limit(st_thing.def, lot.def);
+        let mut left = lot.count;
+        for pass in 0..2 {
+            for (i, slot) in slots.iter().enumerate() {
+                if left == 0 {
+                    break;
+                }
+                match (pass, slot) {
+                    (0, Some(e)) => {
+                        let Some(t) = self.thing(*e) else { continue };
+                        if t.def != lot.def || self.made_of(*e) != lot.made_of || t.count >= limit {
+                            continue;
+                        }
+                        let n = left.min(limit - t.count);
+                        if let Ok(mut x) = self.ecs.get::<&mut Thing>(*e) {
+                            x.count += n;
+                        }
+                        self.stock_change(*e, n as i64, 0);
+                        left -= n;
+                    }
+                    (1, None) => {
+                        let n = left.min(limit);
+                        let td = self.defs.thing(lot.def);
+                        let hp = lot.hp.unwrap_or_else(|| self.defs.full_hp(lot.def, lot.made_of));
+                        let tool = td.tool.is_some();
+                        let e = self.spawn((
+                            Thing { def: lot.def, pos: st_thing.pos, count: n, hp },
+                            Contained { store, slot: i as u8 },
+                        ));
+                        if let Some(m) = lot.made_of {
+                            let _ = self.ecs.insert_one(e, MadeOf(m));
+                        }
+                        if tool {
+                            self.tools.insert(e);
+                        }
+                        if let Ok(mut s) = self.ecs.get::<&mut Store>(store) {
+                            s.slots[i] = Some(e);
+                        }
+                        self.stock_change(e, n as i64, 1);
+                        left -= n;
+                    }
+                    _ => {}
+                }
+            }
+        }
+        if self.fill_stage(store) != stage
+            || slots != self.ecs.get::<&Store>(store).map_or(slots.clone(), |s| s.slots.clone())
+        {
+            self.map.touch(st_thing.pos);
+        }
+        left
+    }
+
+    /// How full a container looks, from 0 (empty) to its def's
+    /// `look_stages`: each slot counts by how full its stack is, and any
+    /// contents at all show at least the first stage. The map redraws a
+    /// container only when this changes (DESIGN.md §6b: idle costs nothing).
+    pub fn fill_stage(&self, store: Entity) -> u8 {
+        let (Some(t), Ok(st)) = (self.thing(store), self.ecs.get::<&Store>(store)) else { return 0 };
+        let Some(sd) = self.defs.thing(t.def).store.as_ref() else { return 0 };
+        let per_mille: u64 = st
+            .slots
+            .iter()
+            .flatten()
+            .filter_map(|e| self.thing(*e))
+            .map(|x| x.count as u64 * 1000 / self.slot_limit(t.def, x.def).max(1) as u64)
+            .sum::<u64>()
+            / st.slots.len().max(1) as u64;
+        let stages = sd.look_stages as u64;
+        (per_mille * stages).div_ceil(1000).min(stages) as u8
+    }
+
+    /// A container's contents, as lots, emptied onto the ground near it:
+    /// when it is torn down or destroyed, nothing inside is lost.
+    fn spill_store(&mut self, store: Entity, at: IVec) {
+        let Ok(slots) = self.ecs.get::<&Store>(store).map(|s| s.slots.clone()) else { return };
+        for e in slots.into_iter().flatten() {
+            let Some(t) = self.thing(e) else { continue };
+            if let Some(lot) = self.pick_up(e, t.count) {
+                self.place_lot(lot, at);
+            }
+        }
+    }
+
+    /// Containers made whole after a load under different mods: a filter
+    /// never takes more than the def can ever take, slots match the def, and
+    /// a stack whose container is gone (or whose slot says otherwise) is set
+    /// down on the ground rather than lost.
+    pub fn fit_stores(&mut self) {
+        let mut boxes: Vec<Entity> = self.ecs.query::<(Entity, &Store)>().iter().map(|(e, _)| e).collect();
+        boxes.sort_by_key(|e| e.id());
+        for e in boxes {
+            let def = self.thing(e).map(|t| self.defs.thing(t.def).store.clone());
+            match def.flatten() {
+                Some(sd) => {
+                    if let Ok(mut st) = self.ecs.get::<&mut Store>(e) {
+                        st.filter.allows.retain(|d| sd.accepts_r.binary_search(d).is_ok());
+                        st.slots.resize(sd.slots as usize, None);
+                    }
+                }
+                None => {
+                    let _ = self.ecs.remove_one::<Store>(e);
+                }
+            }
+        }
+        let mut held: Vec<(Entity, Contained)> =
+            self.ecs.query::<(Entity, &Contained)>().iter().map(|(e, c)| (e, *c)).collect();
+        held.sort_by_key(|(e, _)| e.id());
+        for (e, c) in held {
+            let home = self.ecs.get::<&Store>(c.store).is_ok_and(|st| st.slots.get(c.slot as usize) == Some(&Some(e)));
+            if home {
+                continue;
+            }
+            let _ = self.ecs.remove_one::<Contained>(e);
+            let Some(t) = self.thing(e) else { continue };
+            let lot = Lot { def: t.def, count: t.count, made_of: self.made_of(e), hp: Some(t.hp) };
+            let _ = self.ecs.despawn(e);
+            self.tools.remove(&e);
+            self.place_lot(lot, t.pos);
+        }
+    }
+
+    /// Containers changed (one built or gone, a filter or level changed):
+    /// what's stored and the store index are worked out again.
+    pub fn stores_changed(&mut self) {
+        self.zones_changed();
+    }
+
+    /// Change what a store takes. A container never takes more than its def
+    /// can ever take.
+    pub fn edit_store(&mut self, store: crate::zone::StoreRef, edit: crate::filter::FilterEdit) {
+        let defs = self.defs.clone();
+        match store {
+            crate::zone::StoreRef::Zone(z) => self.zones.edit(&defs, z, edit),
+            crate::zone::StoreRef::Thing(e) => {
+                let Some(t) = self.thing(e) else { return };
+                let Some(can) = defs.thing(t.def).store.as_ref().map(|s| s.accepts_r.clone()) else { return };
+                if let Ok(mut st) = self.ecs.get::<&mut Store>(e) {
+                    st.filter.edit(&defs, edit);
+                    st.filter.allows.retain(|d| can.binary_search(d).is_ok());
+                }
+            }
+        }
+        self.stores_changed();
+    }
+
+    /// Put a store at a level of the store priority scale.
+    pub fn set_store_level(&mut self, store: crate::zone::StoreRef, level: u8) {
+        let defs = self.defs.clone();
+        let top = defs.store_priority.labels.len().saturating_sub(1) as u8;
+        match store {
+            crate::zone::StoreRef::Zone(z) => self.zones.set_level(&defs, z, level),
+            crate::zone::StoreRef::Thing(e) => {
+                if let Ok(mut st) = self.ecs.get::<&mut Store>(e) {
+                    st.level = level.min(top);
+                }
+            }
+        }
+        self.stores_changed();
+    }
+
     /// A stack on the item layer gained or lost `units`, and appeared
     /// (`stacks` 1) or went (-1): the one way the stock ledger changes.
     fn stock_change(&mut self, e: Entity, units: i64, stacks: i64) {
         let Some(t) = self.thing(e) else { return };
         let made_of = self.made_of(e);
-        let kept = self.zones.at(&self.map, t.pos).is_some_and(|z| z.keeps(&self.defs, t.def, made_of, Some(t.hp)));
+        let kept = self.kept_level(e, &t, made_of).is_some();
         let chunk = self.map.chunk_of(t.pos) as u32;
         self.stock.change(crate::stock::Change { def: t.def, made_of, chunk, kept, units, stacks });
         if let Some(s) = self.stack_at(e) {
@@ -1687,21 +1957,44 @@ impl World {
         }
     }
 
-    /// How the store index sees a stack on the item layer.
+    /// The level of the store a stack lies in, if that store keeps it: a
+    /// zone its cell is in, or the container holding it.
+    pub fn kept_level(&self, e: Entity, t: &Thing, made_of: Option<DefId>) -> Option<u8> {
+        match self.ecs.get::<&Contained>(e) {
+            Ok(c) => {
+                let st = self.ecs.get::<&Store>(c.store).ok()?;
+                st.filter.takes(&self.defs, t.def, made_of, Some(t.hp)).then_some(st.level)
+            }
+            Err(_) => self
+                .zones
+                .at(&self.map, t.pos)
+                .filter(|z| z.keeps(&self.defs, t.def, made_of, Some(t.hp)))
+                .map(|z| z.level),
+        }
+    }
+
+    /// Whether a stack is one the colony has: on the item layer or in a
+    /// container, rather than held, delivered or planned.
+    pub fn is_stack(&self, e: Entity, t: &Thing) -> bool {
+        self.map.item_at(t.pos) == Some(e) || self.ecs.get::<&Contained>(e).is_ok()
+    }
+
+    /// How the store index sees a stack on the item layer or in a container.
     pub fn stack_at(&self, e: Entity) -> Option<crate::store::StackAt> {
         let t = self.thing(e)?;
-        if self.map.item_at(t.pos) != Some(e) {
+        if !self.is_stack(e, &t) {
             return None;
         }
         let made_of = self.made_of(e);
-        let zone = self.zones.at(&self.map, t.pos);
+        let contained = self.ecs.get::<&Contained>(e).is_ok();
+        let zone = if contained { None } else { self.zones.at(&self.map, t.pos) };
         Some(crate::store::StackAt {
             entity: e.to_bits().get(),
             kind: (t.def, made_of),
             cell: self.map.idx(t.pos) as u32,
             chunk: self.map.chunk_of(t.pos) as u32,
             zone: zone.map(|z| z.id),
-            level: zone.filter(|z| z.keeps(&self.defs, t.def, made_of, Some(t.hp))).map(|z| z.level),
+            level: self.kept_level(e, &t, made_of),
             below_limit: t.count < self.defs.thing(t.def).stack_limit,
         })
     }
@@ -1716,16 +2009,23 @@ impl World {
     /// The store index from scratch: on load, and when zones change.
     pub fn rebuild_stores(&mut self) {
         let things = self.defs.things.len();
-        self.stores.rebuild_accepts(&self.zones, things);
+        let mut boxes: Vec<(Entity, Store, IVec)> =
+            self.ecs.query::<(Entity, &Thing, &Store)>().iter().map(|(e, t, st)| (e, st.clone(), t.pos)).collect();
+        boxes.sort_by_key(|(e, _, _)| e.id());
+        let containers: Vec<crate::store::ContainerAt> = boxes
+            .iter()
+            .map(|(e, st, pos)| crate::store::ContainerAt {
+                entity: e.to_bits().get(),
+                level: st.level,
+                allows: &st.filter.allows,
+                chunk: self.map.chunk_of(*pos) as u32,
+            })
+            .collect();
+        self.stores.rebuild_accepts(&self.zones, &containers, things);
         self.stores.rebuild_open(&self.zones, &self.map);
         self.stores.clear_stacks();
-        let mut stacks: Vec<Entity> = self
-            .ecs
-            .query::<(Entity, &Thing)>()
-            .iter()
-            .filter(|(e, t)| self.map.item_at(t.pos) == Some(*e))
-            .map(|(e, _)| e)
-            .collect();
+        let mut stacks: Vec<Entity> =
+            self.ecs.query::<(Entity, &Thing)>().iter().filter(|(e, t)| self.is_stack(*e, t)).map(|(e, _)| e).collect();
         stacks.sort_by_key(|e| e.id());
         for e in stacks {
             if let Some(s) = self.stack_at(e) {
@@ -1749,13 +2049,13 @@ impl World {
             .ecs
             .query::<(Entity, &Thing)>()
             .iter()
-            .filter(|(e, t)| self.map.item_at(t.pos) == Some(*e))
+            .filter(|(e, t)| self.is_stack(*e, t))
             .map(|(e, t)| (e, t.clone()))
             .collect();
         on_map.sort_by_key(|(e, _)| e.id());
         for (e, t) in on_map {
             let made_of = self.made_of(e);
-            let kept = self.zones.at(&self.map, t.pos).is_some_and(|z| z.keeps(&self.defs, t.def, made_of, Some(t.hp)));
+            let kept = self.kept_level(e, &t, made_of).is_some();
             let chunk = self.map.chunk_of(t.pos) as u32;
             s.change(crate::stock::Change { def: t.def, made_of, chunk, kept, units: t.count as i64, stacks: 1 });
         }
@@ -1782,6 +2082,14 @@ impl World {
                 kept.push((t.def, t.count));
             }
         }
+        let mut held: Vec<(Entity, Thing)> =
+            self.ecs.query::<(Entity, &Thing, &Contained)>().iter().map(|(e, t, _)| (e, t.clone())).collect();
+        held.sort_by_key(|(e, _)| e.id());
+        for (e, t) in held {
+            if self.kept_level(e, &t, self.made_of(e)).is_some() {
+                kept.push((t.def, t.count));
+            }
+        }
         for (def, n) in kept {
             self.stock.add_stored(def, n);
         }
@@ -1789,6 +2097,8 @@ impl World {
 
     /// Take up to `n` from a stack, despawning it when empty.
     pub fn take_from_stack(&mut self, e: Entity, n: u32) -> u32 {
+        let held_in = self.ecs.get::<&Contained>(e).ok().map(|c| c.store);
+        let stage = held_in.map(|store| self.fill_stage(store));
         let (taken, empty, pos) = match self.ecs.get::<&mut Thing>(e) {
             Ok(mut t) => {
                 let k = n.min(t.count);
@@ -1797,10 +2107,15 @@ impl World {
             }
             Err(_) => return 0,
         };
-        if self.map.item_at(pos) == Some(e) {
+        if self.map.item_at(pos) == Some(e) || held_in.is_some() {
             self.stock_change(e, -(taken as i64), 0);
         }
-        self.map.touch(pos);
+        // A container redraws only when it looks different (its stage), or
+        // when the stack goes (despawning touches).
+        match (held_in, stage) {
+            (Some(store), Some(stage)) if !empty && self.fill_stage(store) == stage => {}
+            _ => self.map.touch(pos),
+        }
         if empty {
             self.despawn_thing(e);
         }

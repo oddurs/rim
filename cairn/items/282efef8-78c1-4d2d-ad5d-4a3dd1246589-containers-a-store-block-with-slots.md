@@ -2,8 +2,10 @@
 id: 282efef8-78c1-4d2d-ad5d-4a3dd1246589
 title: 'Containers: a store block with slots'
 type: feature
-status: backlog
+status: review
 milestone: crafting
+assignee: Oddur Sigurdsson
+claimed: 2026-09-26
 depends_on:
 - e953d711-8d06-43a5-b096-4ff7cce491f7
 created: 2026-09-26
@@ -32,12 +34,16 @@ A cell holds one stack and `room_for` is zero on any fixture, so nothing can hol
 
 ## Acceptance criteria
 
-- [ ] A test mod's crate takes four stacks in one cell, and refuses a bulky one (test)
-- [ ] Bills and building deliveries take from containers (test)
-- [ ] Tearing down a full crate loses nothing (test)
-- [ ] Save, load and save again gives the same bytes with containers
-- [ ] Determinism test passes
+- [x] A test mod's crate takes four stacks in one cell, and refuses a bulky one (test)
+- [x] Bills and building deliveries take from containers (test)
+- [x] Tearing down a full crate loses nothing (test)
+- [x] Save, load and save again gives the same bytes with containers
+- [x] Determinism test passes
 
 ## 2026-09-26
 
 Decisions taken on 2026-09-26 when the owner said to build it: core ships zones only, and every container is plugin content. Store levels are five, with their own pips. timber and iron are two plugins. core:wood is relabelled 'logs' by a timber patch; the id stays.
+
+## 2026-09-26
+
+Built with stored stacks as entities (Contained { store, slot } at the container's cell, off the item layer), not Lots in slots as first ruled: the ledger and index had already removed the scan cost that argued for values, and as values every job that takes a thing would need a second kind of source. DESIGN.md §4f keeps both arguments. stack_goal() is the one helper jobs gained. Containers join the store index as StoreKey::Thing; haul reservations for a container are units bound for it. Fill stages (fill_stage) redraw the map only on a stage change; display = items draws up to three slot colours. Loading under different mods fits containers to their defs and sets down contents whose container is gone. item_stored event deferred: nothing listens yet.

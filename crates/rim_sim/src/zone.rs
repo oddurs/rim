@@ -8,11 +8,12 @@ use crate::map::Map;
 use crate::IVec;
 use serde::{Deserialize, Serialize};
 
-/// A store a command names. Zones today; containers join with the store
-/// block (DESIGN.md §4f).
+/// A store a command names: a stockpile zone, or a container (DESIGN.md
+/// §4f).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum StoreRef {
     Zone(u32),
+    Thing(hecs::Entity),
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

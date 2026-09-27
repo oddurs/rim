@@ -1,12 +1,12 @@
 //! Where things go (DESIGN.md §4f, Sorting only climbs). Stores are
-//! stockpile zones today; each has a level, and a stack moves only to a
+//! stockpile zones and containers; each has a level, and a stack moves only to a
 //! store at a strictly higher level that takes it, nearest within that
 //! level. So two stores at one level never trade, and nothing thrashes.
 //!
 //! The index here answers the haul search's questions without walking the
 //! map or every zone cell:
 //!
-//! - **accepts**, by item def: the zones that take it, highest level first;
+//! - **accepts**, by item def: the stores that take it, highest level first;
 //! - **open**, by zone: its cells with nothing on them;
 //! - **partial**, by zone and stack kind: its cells with a stack below its
 //!   limit, so hauls merge before they spread;
@@ -26,9 +26,28 @@ use std::collections::{BTreeMap, BTreeSet};
 /// What kind of stack: thing and material. Stacks of one kind merge.
 pub type Kind = (DefId, Option<DefId>);
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+/// A store: a stockpile zone by id, or a container by entity bits. Zones
+/// sort before containers at one level, then by id.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum StoreKey {
+    Zone(u32),
+    Thing(u64),
+}
+
+/// A container as the index sees it.
+#[derive(Clone, Copy, Debug)]
+pub struct ContainerAt<'a> {
+    pub entity: u64,
+    pub level: u8,
+    pub allows: &'a [DefId],
+    pub chunk: u32,
+}
+
+#[derive(Clone, Debug, Default)]
 pub struct StoreIndex {
-    accepts: Vec<Vec<(u8, u32)>>,
+    accepts: Vec<Vec<(u8, StoreKey)>>,
+    /// Containers by chunk, so a search for the nearest stack looks in them.
+    containers: BTreeMap<u32, BTreeSet<u64>>,
     open: BTreeMap<u32, BTreeSet<u32>>,
     partial: BTreeMap<(u32, Kind), BTreeSet<u32>>,
     unsorted: BTreeMap<u32, BTreeSet<u64>>,
@@ -36,10 +55,19 @@ pub struct StoreIndex {
     pub seen_revision: u64,
 }
 
+/// Two indexes are equal when they say the same things; the map revision
+/// they were last checked against is bookkeeping.
+impl PartialEq for StoreIndex {
+    fn eq(&self, o: &Self) -> bool {
+        (&self.accepts, &self.containers, &self.open, &self.partial, &self.unsorted)
+            == (&o.accepts, &o.containers, &o.open, &o.partial, &o.unsorted)
+    }
+}
+
 impl StoreIndex {
-    /// The zones taking `def`, as (level, zone id), highest level first,
-    /// then oldest zone first.
-    pub fn accepts(&self, def: DefId) -> &[(u8, u32)] {
+    /// The stores taking `def`, highest level first, then zones oldest
+    /// first, then containers by id.
+    pub fn accepts(&self, def: DefId) -> &[(u8, StoreKey)] {
         self.accepts.get(def as usize).map_or(&[], Vec::as_slice)
     }
 
@@ -66,18 +94,33 @@ impl StoreIndex {
         self.unsorted.values().map(BTreeSet::len).sum()
     }
 
-    /// Everything that depends on the zones' filters and levels.
-    pub fn rebuild_accepts(&mut self, zones: &Zones, things: usize) {
-        let mut accepts: Vec<Vec<(u8, u32)>> = vec![Vec::new(); things];
+    /// Containers in a chunk, as entity bits.
+    pub fn containers_in(&self, chunk: u32) -> impl Iterator<Item = u64> + '_ {
+        self.containers.get(&chunk).into_iter().flatten().copied()
+    }
+
+    /// Everything that depends on the stores' filters and levels.
+    pub fn rebuild_accepts(&mut self, zones: &Zones, containers: &[ContainerAt], things: usize) {
+        let mut accepts: Vec<Vec<(u8, StoreKey)>> = vec![Vec::new(); things];
+        let mut add = |d: DefId, entry| {
+            if let Some(v) = accepts.get_mut(d as usize) {
+                v.push(entry);
+            }
+        };
         for z in &zones.list {
             for &d in &z.filter.allows {
-                if let Some(v) = accepts.get_mut(d as usize) {
-                    v.push((z.level, z.id));
-                }
+                add(d, (z.level, StoreKey::Zone(z.id)));
             }
         }
+        self.containers.clear();
+        for c in containers {
+            for &d in c.allows {
+                add(d, (c.level, StoreKey::Thing(c.entity)));
+            }
+            self.containers.entry(c.chunk).or_default().insert(c.entity);
+        }
         for v in &mut accepts {
-            v.sort_by_key(|&(l, id)| (std::cmp::Reverse(l), id));
+            v.sort_by_key(|&(l, k)| (std::cmp::Reverse(l), k));
         }
         self.accepts = accepts;
     }

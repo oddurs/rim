@@ -2,16 +2,16 @@
 id: e953d711-8d06-43a5-b096-4ff7cce491f7
 title: 'Store levels: sorting that only climbs, and room reserved by count'
 type: feature
-status: review
+status: done
 milestone: crafting
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 depends_on:
 - 01691032-1f99-475a-b964-6e3f4149fe22
 - 629e1fa7-7e3c-4c42-96dd-98ea8a3b762f
 - ac643c1f-3f5b-4908-884f-da4e87bfcf01
 created: 2026-09-26
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p1
 api: additive
 effort: l

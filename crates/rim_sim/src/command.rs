@@ -303,14 +303,8 @@ pub fn apply(w: &mut World, c: Command) {
             w.zones.edit(&defs, zone, FilterEdit::Thing { thing, on });
             w.zones_changed();
         }
-        Command::StoreFilter { store: StoreRef::Zone(zone), edit } => {
-            w.zones.edit(&defs, zone, edit);
-            w.zones_changed();
-        }
-        Command::StoreLevel { store: StoreRef::Zone(zone), level } => {
-            w.zones.set_level(&defs, zone, level);
-            w.zones_changed();
-        }
+        Command::StoreFilter { store, edit } => w.edit_store(store, edit),
+        Command::StoreLevel { store, level } => w.set_store_level(store, level),
         Command::SetPriority { pawn, work, level } => {
             if !is_colonist(w, pawn) || work as usize >= defs.work_types.len() {
                 return;

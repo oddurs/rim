@@ -24,7 +24,8 @@ use std::path::Path;
 /// 3: `engine:held`, the tools in pawns' hands.
 /// 4: what a pawn carries, an order's deliveries and `OrderDone` inputs are
 /// lots, keeping material and hp. Older `(def, count)` pairs still read.
-pub const FORMAT: u32 = 4;
+/// 5: `engine:store` and `engine:contained`, containers and what's in them.
+pub const FORMAT: u32 = 5;
 
 /// Where a format-1 plan kept its progress.
 #[derive(Deserialize)]
@@ -275,6 +276,8 @@ impl Snapshot {
             ("engine:work".to_string(), component::<Work>(w)),
             ("engine:held".to_string(), component::<Held>(w)),
             ("engine:order".to_string(), component::<Order>(w)),
+            ("engine:store".to_string(), component::<Store>(w)),
+            ("engine:contained".to_string(), component::<Contained>(w)),
         ]);
         // Script data, one section per mod: every key is "mod:key" (0062).
         let mut by_mod: BTreeMap<&str, BTreeMap<&str, &Data>> = BTreeMap::new();
@@ -614,6 +617,23 @@ impl Snapshot {
                 });
             }
         }
+        // Containers (format 5): filters mapped by id; fitted to their defs
+        // once the entities exist, below.
+        if self.sections.contains_key("engine:store") {
+            for (e, mut st) in dec::<Vec<(Entity, Store)>>(self, "engine:store")? {
+                st.filter.allows = st.filter.allows.iter().filter_map(|&d| remap.get("thing", d)).collect();
+                st.filter.refuses = st.filter.refuses.iter().filter_map(|&d| remap.get("thing", d)).collect();
+                st.filter.tidy();
+                add(e, &|b| {
+                    b.add(st.clone());
+                });
+            }
+            for (e, c) in dec::<Vec<(Entity, Contained)>>(self, "engine:contained")? {
+                add(e, &|b| {
+                    b.add(c);
+                });
+            }
+        }
         // Optional: saves from before plans over natural things lack it. A
         // plan whose building or material is gone is forgotten, like a
         // blueprint would be: the thing keeps its mark, and stays.
@@ -722,6 +742,7 @@ impl Snapshot {
             .ecs
             .query::<(Entity, &Thing, Option<&Blueprint>, Option<&Owner>)>()
             .without::<&Held>()
+            .without::<&Contained>()
             .iter()
             .map(|(e, t, bp, o)| (e, t.clone(), bp.is_some(), o.map(|o| o.0)))
             .collect();
@@ -834,6 +855,7 @@ impl Snapshot {
             w.zones = zones;
         }
         // Derived from the stacks and the zones, both now in place.
+        w.fit_stores();
         w.recount_stock();
         // A stance a removed mod added falls back to the first there is.
         w.stance = match ws.stance {
