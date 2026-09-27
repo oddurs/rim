@@ -2163,8 +2163,8 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         // fill as it was: nothing is baked. Opening the lit hut empties its
         // fill, and it is.
         let lamps: Vec<IVec> = t.w().fields.emitters_of(light).map(|(_, p, _, _)| p).collect();
-        // Far means from the wall's whole chunk: the occluders say which
-        // chunks changed, not which cells.
+        // Far from the wall's whole chunk, so this holds however finely the
+        // occluders say what changed.
         let clear = |p: IVec| {
             let c = rim_sim::map::CHUNK;
             let (x0, y0) = (p.x.div_euclid(c) * c, p.y.div_euclid(c) * c);
@@ -2194,6 +2194,40 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
             );
         } else {
             t.check(false, "free ground far from every light");
+        }
+        // Just past a light's reach, in a chunk that reaches it: only the
+        // cells that changed count, so the light isn't redone (4b6c3a9c).
+        let lights: Vec<(IVec, i32)> =
+            t.w().fields.emitters_of(light).filter(|e| e.2 > 0.0).map(|(_, p, _, r)| (p, r as i32)).collect();
+        // Past its reach and the cell a change is padded by for the filter.
+        let past = |p: IVec| lights.iter().all(|&(l, r)| (l.x - p.x).abs().max((l.y - p.y).abs()) > r.max(1) + 2);
+        let c = rim_sim::map::CHUNK;
+        let shares_chunk = |p: IVec| {
+            let (x0, y0) = (p.x.div_euclid(c) * c, p.y.div_euclid(c) * c);
+            lights.iter().any(|&(l, r)| (x0 - l.x).max(l.x - (x0 + c - 1)).max((y0 - l.y).max(l.y - (y0 + c - 1))) <= r)
+        };
+        let stove_at = dark.offset(2, 2);
+        let near = (0..24i32)
+            .flat_map(|r| (-r..=r).flat_map(move |dy| (-r..=r).map(move |dx| stove_at.offset(dx, dy))))
+            .find(|&p| {
+                let w = t.w();
+                w.map.inb(p) && w.map.passable(p) && w.map.fixture_at(p).is_none() && past(p) && shares_chunk(p)
+            });
+        if let Some(near) = near {
+            t.frame().await;
+            let bakes = t.app.light.bakes;
+            placed.extend(t.app.sim.world.spawn_fixture(wall, near, false));
+            t.app.sim.world.map.ensure_rooms();
+            t.frame().await;
+            t.check(
+                t.app.light.bakes == bakes,
+                format!(
+                    "a wall just past a light's reach, in its chunk, redoes no firelight ({} bakes)",
+                    t.app.light.bakes - bakes
+                ),
+            );
+        } else {
+            t.check(false, "free ground just past a light's reach");
         }
         let before = glow(&t, dark.offset(1, 1));
         let door = t.w().map.fixture_at(dark.offset(0, 2));

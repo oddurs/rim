@@ -2,7 +2,7 @@
 id: 3124bd7b-9f9a-4d92-84e6-2df736b6e2fe
 title: 'Light on every level: buffers keyed by z, sky only down open shafts'
 type: feature
-status: backlog
+status: blocked
 milestone: lighting
 depends_on:
 - 5689930d-2bd1-4838-b403-a72bc61c31e9
@@ -12,7 +12,7 @@ depends_on:
 - e311c029-499c-4764-a4d6-6d1f933f00f9
 - f2a8ffc7-9aa8-46cd-9c78-97c3a28001bd
 created: 2026-09-26
-updated: 2026-09-26
+updated: 2026-09-27
 priority: p1
 api: none
 effort: m
@@ -45,3 +45,7 @@ Light has to be continuous across levels: no edge where one level's light stops,
 ## 2026-09-26
 
 Agreed with the Depth session. e311c029 keeps every level in one Map's flat arrays (surface is slice 0, then −1…−3, then the levels above; idx(p) includes z). Openings arrive with the portals item acd85584, now a dependency: Map::portals() -> &[Portal { top, bottom }], sorted by top index and bumped in Map::revision; World::air_at(p), where air always opens to (x, y, z−1); and Map::air_cells(z) -> &[u32], kept per level, so compose never scans a level for openings. 5689930d keeps caches for the viewed level ±1.
+
+## 2026-09-27
+
+Portals (acd85584) merged in #225. Still waits on the view (5689930d) and on f2a8ffc7, underground: that item decides what light below ground is, so this starts once it's in review.
