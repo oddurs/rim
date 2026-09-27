@@ -41,6 +41,7 @@ local MENUS = {
 	structure = t("core:dock.menu.structure", "Structure"),
 	furniture = t("core:dock.menu.furniture", "Furniture"),
 	production = t("core:dock.menu.production", "Production"),
+	dig = t("core:dock.menu.dig", "Dig"),
 }
 
 -- Tiles per row in the Build tray, and how many take a number key.

@@ -157,6 +157,21 @@ impl Pathfinder {
                     self.heap.push(Reverse((ng + h, h, qi as u32)));
                 }
             }
+            // Up or down the stairs (DESIGN.md §6d): one more edge, where
+            // there is a portal this faction may use.
+            if let Some((qi, cost)) = map.through(ci, who) {
+                let q = map.pos(qi);
+                if self.closed_gen[qi] != gen && map.passable_for(q, who) {
+                    let ng = cg + (10 * cost as u32 / 100).max(1);
+                    if self.open_gen[qi] != gen || ng < self.g[qi] {
+                        self.open_gen[qi] = gen;
+                        self.g[qi] = ng;
+                        self.parent[qi] = ci as u32;
+                        let h = q.octile(goal.nearest(q));
+                        self.heap.push(Reverse((ng + h, h, qi as u32)));
+                    }
+                }
+            }
         }
         self.expanded += expanded as u64;
         None

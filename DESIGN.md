@@ -1869,8 +1869,19 @@ becomes its explicit roof. A floor that loses its span falls.
   none until a cell is worked.
 - Basins simplify: no currents, no pressure, and water never climbs stairs.
 - One cell of height per level: no ramps or slopes, and hilltops are flat.
-- Cross-level pathing, drawing the level below and generating a level are
-  not yet measured. Each ticket that adds one records its number here.
+- Drawing the level below is not yet measured; the view records it here.
+  Generating a level is about 3 ms at 192 × 192 (the strata above).
+  Crossing levels, measured with portals (acd85584): joining reach over 61
+  portals on four levels costs 0.0017 ms. With every colonist mining two
+  dug levels below the colony (`bench --levels`, 250 × 250), a tick is
+  0.41–0.52 ms on average and p99 5.6–11 ms, with searches still about 12
+  nodes. The largest part is rooms, about 0.2 ms, since every dug cell
+  rebuilds rooms over all four levels until rooms update incrementally.
+- Digging down is a build: stairs, ladders and pits are things whose
+  `build.dig` takes out the cell below first, with the work and the tool
+  its rock asks. The stairs stay as the portal; a pit's cell becomes `air`
+  terrain. Wind is the surface's alone, and cover is never worked out below
+  it: rock is the roof there.
 
 ---
 

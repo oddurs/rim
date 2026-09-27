@@ -75,8 +75,25 @@ pub struct Map {
     /// One bit per level whose regions need rebuilding (by plane, in the
     /// order the arrays hold them).
     regions_dirty: u64,
+    /// The ways between levels (DESIGN.md §6d): stairs, ladders. Sorted by
+    /// the top cell's index.
+    portals: Vec<Portal>,
+    /// Per cell: the index of the other end of a portal standing here, plus
+    /// one; 0 is none. What A* steps through.
+    link: Vec<u32>,
+    /// Per terrain: is it air, a cell with no floor (a pit, a shaft).
+    terrain_air: Vec<bool>,
+    /// Air cells per level, by plane, sorted: what light and water cross.
+    air: Vec<Vec<u32>>,
+    /// Region ids joined at portals, one table per faction: a region
+    /// that no portal touches is its own.
+    reach: [std::collections::BTreeMap<u32, u32>; Faction::ALL.len()],
+    reach_dirty: bool,
     /// Bumped whenever passability changes; renderers can use it to cache.
     pub revision: u64,
+    /// The same, per level, by plane: what changed where, so work that only
+    /// reads the surface (wind) isn't redone for a dig underground.
+    level_rev: Vec<u64>,
     /// Chunks across (see `CHUNK`).
     chunks_w: i32,
     /// Per chunk: bumped when a cell's terrain changes.
@@ -98,6 +115,24 @@ pub struct Map {
 /// key on (DESIGN.md §6a). Consumers remember the revision they last saw;
 /// the sim never reads them, so they are not world state.
 pub const CHUNK: i32 = 32;
+
+/// A way between two levels: the top cell and the one below it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Portal {
+    pub top: IVec,
+    pub bottom: IVec,
+    /// Move cost in percent, as a terrain's: 250 is stairs.
+    pub cost: u16,
+    /// Who may use it, as `faction as u8 + 1`; 0 is anyone. An owned
+    /// portal is a wall to everyone else, as an owned door is.
+    pub owner: u8,
+}
+
+impl Portal {
+    pub fn open_to(&self, who: Faction) -> bool {
+        self.owner == 0 || self.owner == who as u8 + 1
+    }
+}
 
 /// A connected area bounded by walls, doors, rock, water or the map edge.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -169,6 +204,13 @@ impl Map {
             region_rebuilds: 0,
             regions: std::array::from_fn(|_| vec![0; n]),
             regions_dirty: (1u64 << (below + above + 1)) - 1,
+            portals: Vec::new(),
+            link: vec![0; n],
+            terrain_air: Vec::new(),
+            air: vec![Vec::new(); (below + above + 1) as usize],
+            reach: std::array::from_fn(|_| std::collections::BTreeMap::new()),
+            reach_dirty: true,
+            level_rev: vec![0; (below + above + 1) as usize],
             revision: 0,
             chunks_w: (w + CHUNK - 1) / CHUNK,
             terrain_rev: vec![0; chunks],
@@ -321,8 +363,19 @@ impl Map {
         let i = self.idx(p);
         let was = self.span_at(i);
         self.near.changed(i, self.terrain[i], def);
+        let was_air = self.is_air(i);
         self.terrain[i] = def;
-        if self.span_at(i) != was {
+        if self.is_air(i) != was_air {
+            let list = &mut self.air[i / self.plane];
+            match list.binary_search(&(i as u32)) {
+                Ok(_) if !was_air => {}
+                Ok(k) => {
+                    list.remove(k);
+                }
+                Err(k) => list.insert(k, i as u32),
+            }
+        }
+        if self.span_at(i) != was && !self.under_rock(i) {
             if let Some(c) = &mut self.support_changed {
                 c.push(i as u32);
             }
@@ -331,7 +384,7 @@ impl Map {
         self.dirty_regions(i);
         self.rooms_dirty = true;
         self.changed.push(i as u32);
-        self.revision += 1;
+        self.bump(i);
         let c = self.chunk_of(p);
         self.terrain_rev[c] += 1;
     }
@@ -352,7 +405,7 @@ impl Map {
             self.changed.push(i as u32);
         }
         self.fix_cost[i] = cost.min(u16::MAX as u32) as u16;
-        self.revision += 1;
+        self.bump(i);
         let c = self.chunk_of(p);
         self.fixture_rev[c] += 1;
         self.touch(p);
@@ -386,7 +439,7 @@ impl Map {
         let i = self.idx(p);
         self.floor[i] = e;
         self.floor_cost[i] = if e.is_some() { cost.min(u16::MAX as u32) as u16 } else { 0 };
-        self.revision += 1;
+        self.bump(i);
         self.touch(p);
     }
 
@@ -400,8 +453,12 @@ impl Map {
     /// at its plane's number times `1 << 20`, so they never collide.
     pub fn ensure_regions(&mut self) {
         if self.regions_dirty == 0 {
+            if self.reach_dirty {
+                self.join_reach();
+            }
             return;
         }
+        self.reach_dirty = true;
         let dirty = std::mem::take(&mut self.regions_dirty);
         let plane = self.plane();
         let mut stack = Vec::new();
@@ -416,6 +473,50 @@ impl Map {
             }
             self.regions[who as usize] = region;
         }
+        self.join_reach();
+    }
+
+    /// Join regions at the portals that link them, per faction: one pass
+    /// over the portals, in order, so the result is the same every time.
+    fn join_reach(&mut self) {
+        self.reach_dirty = false;
+        for who in Faction::ALL {
+            let mut roots: std::collections::BTreeMap<u32, u32> = std::collections::BTreeMap::new();
+            fn find(roots: &mut std::collections::BTreeMap<u32, u32>, r: u32) -> u32 {
+                let mut x = r;
+                while let Some(&up) = roots.get(&x).filter(|&&up| up != x) {
+                    x = up;
+                }
+                roots.insert(r, x);
+                x
+            }
+            for p in &self.portals {
+                if !p.open_to(who) {
+                    continue;
+                }
+                let layer = &self.regions[who as usize];
+                let (a, b) = (layer[self.idx(p.top)], layer[self.idx(p.bottom)]);
+                if a == 0 || b == 0 {
+                    continue;
+                }
+                let (ra, rb) = (find(&mut roots, a), find(&mut roots, b));
+                // The smaller id is the root, so the order joins came in
+                // doesn't matter.
+                let (lo, hi) = (ra.min(rb), ra.max(rb));
+                roots.insert(hi, lo);
+                roots.insert(lo, lo);
+            }
+            let keys: Vec<u32> = roots.keys().copied().collect();
+            for k in keys {
+                find(&mut roots, k);
+            }
+            self.reach[who as usize] = roots;
+        }
+    }
+
+    /// Which joined area region `r` belongs to, for `who`.
+    fn reach_of(&self, r: u32, who: Faction) -> u32 {
+        self.reach[who as usize].get(&r).copied().unwrap_or(r)
     }
 
     /// Number the connected areas among `cells` (one level), from `base + 1`.
@@ -475,7 +576,7 @@ impl Map {
         }
         self.fix_owner[i] = v;
         self.dirty_regions(i);
-        self.revision += 1;
+        self.bump(i);
     }
 
     pub fn owner_at(&self, p: IVec) -> Option<Faction> {
@@ -505,7 +606,11 @@ impl Map {
 
     /// Cheap reachability test, from `who`'s side of the doors.
     pub fn can_reach_for(&self, from: IVec, goal: Goal, who: Faction) -> bool {
-        let region_at = |p: IVec| self.region_at_for(p, who);
+        // Regions joined at the portals: a cell below is reached by stairs.
+        let region_at = |p: IVec| match self.region_at_for(p, who) {
+            0 => 0,
+            r => self.reach_of(r, who),
+        };
         let rf = region_at(from);
         if rf == 0 {
             return true; // standing somewhere odd (fresh wall): let A* decide
@@ -571,7 +676,7 @@ impl Map {
         }
         self.spread_cover();
         for (i, &id) in self.room.iter().enumerate() {
-            if id > 0 && self.cover[i] == 0 {
+            if id > 0 && !self.covered(i) {
                 self.rooms[id as usize - 1].uncovered += 1;
             }
         }
@@ -585,7 +690,7 @@ impl Map {
     fn spread_cover(&mut self) {
         match self.support_changed.take() {
             Some(changed) if changed.len() <= 32 => {
-                let top = (0..self.support.len()).map(|i| self.span_at(i)).max().unwrap_or(0).max(1) as i32;
+                let top = self.roofed_cells().map(|i| self.span_at(i)).max().unwrap_or(0).max(1) as i32;
                 for i in changed {
                     // Every cell a support here could have reached, or can.
                     self.cover_window(self.pos(i as usize), top);
@@ -593,7 +698,7 @@ impl Map {
             }
             _ => {
                 let (w, h) = (self.w, self.h);
-                for z in self.levels() {
+                for z in 0..=self.above {
                     self.cover_window(IVec::at(w / 2, h / 2, z), w.max(h));
                 }
             }
@@ -659,6 +764,98 @@ impl Map {
 
     /// How far each terrain holds a roof up, by terrain id. Set once, from
     /// the defs, when the world is made.
+    /// Which terrains are air, by terrain id. Set once, from the defs, when
+    /// the world is made.
+    pub fn set_terrain_air(&mut self, air: Vec<bool>) {
+        self.terrain_air = air;
+        for list in &mut self.air {
+            list.clear();
+        }
+        for i in 0..self.terrain.len() {
+            if self.is_air(i) {
+                self.air[i / self.plane].push(i as u32);
+            }
+        }
+    }
+
+    /// A cell with no floor: nothing walks it, and things fall through.
+    #[inline]
+    pub fn is_air(&self, i: usize) -> bool {
+        self.terrain_air.get(self.terrain[i] as usize).copied().unwrap_or(false)
+    }
+
+    /// The air cells of level `z`, by index: what light and water cross.
+    pub fn air_cells(&self, z: i32) -> &[u32] {
+        if !self.levels().contains(&z) {
+            return &[];
+        }
+        &self.air[self.slot(z)]
+    }
+
+    /// Something at cell `i` changed what it blocks or costs.
+    fn bump(&mut self, i: usize) {
+        self.revision += 1;
+        self.level_rev[i / self.plane] += 1;
+    }
+
+    /// `revision`, for level `z` only.
+    pub fn level_revision(&self, z: i32) -> u64 {
+        if !self.levels().contains(&z) {
+            return 0;
+        }
+        self.level_rev[self.slot(z)]
+    }
+
+    /// Every way between levels, by top cell.
+    pub fn portals(&self) -> &[Portal] {
+        &self.portals
+    }
+
+    /// The portal whose top or bottom is cell `i`.
+    pub fn portal_at(&self, i: usize) -> Option<&Portal> {
+        let other = self.link[i].checked_sub(1)? as usize;
+        let top = if self.pos(i).z > self.pos(other).z { i } else { other };
+        let k = self.portals.binary_search_by_key(&top, |p| self.idx(p.top)).ok()?;
+        Some(&self.portals[k])
+    }
+
+    /// The other end of a portal at cell `i`, if `who` may use it.
+    #[inline]
+    pub fn through(&self, i: usize, who: Faction) -> Option<(usize, u16)> {
+        let other = self.link[i].checked_sub(1)? as usize;
+        let p = self.portal_at(i)?;
+        p.open_to(who).then_some((other, p.cost))
+    }
+
+    /// Join `top` to the cell below it. Both must be on the map.
+    pub fn add_portal(&mut self, top: IVec, cost: u16, owner: Option<Faction>) {
+        let bottom = IVec::at(top.x, top.y, top.z - 1);
+        let (t, b) = (self.idx(top), self.idx(bottom));
+        let portal = Portal { top, bottom, cost, owner: owner.map_or(0, |f| f as u8 + 1) };
+        match self.portals.binary_search_by_key(&t, |p| self.idx(p.top)) {
+            Ok(k) => self.portals[k] = portal,
+            Err(k) => self.portals.insert(k, portal),
+        }
+        self.link[t] = b as u32 + 1;
+        self.link[b] = t as u32 + 1;
+        self.reach_dirty = true;
+        self.bump(t);
+        self.bump(b);
+    }
+
+    /// Take away the portal whose top is `top`.
+    pub fn remove_portal(&mut self, top: IVec) {
+        let t = self.idx(top);
+        let Ok(k) = self.portals.binary_search_by_key(&t, |p| self.idx(p.top)) else { return };
+        let b = self.idx(self.portals[k].bottom);
+        self.portals.remove(k);
+        self.link[t] = 0;
+        self.link[b] = 0;
+        self.reach_dirty = true;
+        self.bump(t);
+        self.bump(b);
+    }
+
     pub fn set_terrain_spans(&mut self, spans: Vec<u8>) {
         self.terrain_span = spans;
         self.support_changed = None;
@@ -702,7 +899,8 @@ impl Map {
         if self.support[i] != span {
             self.support[i] = span;
             self.rooms_dirty = true;
-            if let Some(c) = &mut self.support_changed {
+            let rock = self.under_rock(i);
+            if let Some(c) = self.support_changed.as_mut().filter(|_| !rock) {
                 c.push(i as u32);
             }
         }
@@ -710,7 +908,22 @@ impl Map {
 
     /// Within reach of a support on this level. Call `ensure_rooms` first.
     pub fn covered(&self, i: usize) -> bool {
-        self.cover[i] > 0
+        self.under_rock(i) || self.cover[i] > 0
+    }
+
+    /// Below the surface: rock is the roof over everything there, so cover
+    /// is never worked out (DESIGN.md §6d).
+    #[inline]
+    fn under_rock(&self, i: usize) -> bool {
+        let slot = i / self.plane;
+        slot >= 1 && slot <= self.below as usize
+    }
+
+    /// The cells whose cover is worked out: the surface and the levels
+    /// above it.
+    fn roofed_cells(&self) -> impl Iterator<Item = usize> + '_ {
+        let (plane, below) = (self.plane, self.below as usize);
+        (0..plane).chain((below + 1) * plane..self.support.len())
     }
 
     /// Roofed: within reach of a support. With levels (DESIGN.md §6d) a

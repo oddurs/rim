@@ -620,9 +620,9 @@ Dig down. The map becomes a stack of 2D levels joined only at stairs, ladders an
 
 - [ ] `3979868c` Basins: water fills what you dig into <sup>feature · p1 · l · engine</sup>
 - [ ] `5689930d` The view: one level at a time, \[ and \], and the depth ruler <sup>feature · p0 · m · client</sup>
-- [ ] `acd85584` Portals: stairs, ladders, digging down, and paths across levels <sup>feature · p0 · l · engine</sup>
 - [ ] `ba8253df` Pits and bridges: trenches that raiders have to bridge <sup>feature · p1 · m · engine</sup>
 - [ ] `f2a8ffc7` Underground: rock is a roof, the cellar keeps the year's mean, and it's dark <sup>content · p2 · s · core</sup>
+- [ ] `acd85584` Portals: stairs, ladders, digging down, and paths across levels <sup>feature · p0 · l · engine</sup>
 - [x] `3f90e043` Strata: the levels below are made from \[\[stratum\]\] defs <sup>feature · p0 · m · engine</sup>
 - [x] `8cc6252d` Rock is terrain: solid cells, mining them, and worksites <sup>feature · p0 · l · engine</sup>
 - [x] `e311c029` Positions gain z: the map becomes a stack of levels <sup>feature · p0 · l · engine</sup>

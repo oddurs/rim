@@ -150,3 +150,57 @@ natural = true
 blocks = true
 hp = 450
 harvest = { designation = "mine", work = 450, yields = [{ thing = "stone", count = 10 }] }
+
+# ------------------------------------------------------------ digging down
+
+# No floor: a pit, a shaft. Nothing walks it; light and water fall
+# through it to the level below.
+[[terrain]]
+id = "air"
+label = "open pit"
+color = "#1c1b1f"
+air = true
+
+# Dug down a level: the cell below is mined out first, with the work and
+# the tool its rock asks, then the steps go in. Both cells are the stairs.
+[[thing]]
+id = "stairs"
+label = "stairs"
+color = "#8a7d6b"
+category = "building"
+look.layers = [
+    { draw = "fill", x = 0.1, y = 0.08, w = 0.8, h = 0.16 },
+    { draw = "fill", x = 0.1, y = 0.32, w = 0.8, h = 0.16, shade = 0.85 },
+    { draw = "fill", x = 0.1, y = 0.56, w = 0.8, h = 0.16, shade = 0.7 },
+    { draw = "fill", x = 0.1, y = 0.8, w = 0.8, h = 0.14, shade = 0.55 },
+]
+path_cost = 100
+portal = { cost = 250 }
+build = { menu = "dig", work = 120, free = true, dig = {} }
+
+# A ladder down: quicker to put in, slower to climb.
+[[thing]]
+id = "ladder"
+label = "ladder"
+color = "#8c6a45"
+category = "building"
+look.layers = [
+    { draw = "fill", x = 0.2, y = 0.05, w = 0.1, h = 0.9 },
+    { draw = "fill", x = 0.7, y = 0.05, w = 0.1, h = 0.9 },
+    { draw = "fill", x = 0.2, y = 0.25, w = 0.6, h = 0.08 },
+    { draw = "fill", x = 0.2, y = 0.5, w = 0.6, h = 0.08 },
+    { draw = "fill", x = 0.2, y = 0.75, w = 0.6, h = 0.08 },
+]
+path_cost = 100
+portal = { cost = 400 }
+build = { menu = "dig", work = 60, free = true, dig = {} }
+
+# Dig down and leave a hole: a pit, a trench cell, a shaft. Nothing climbs
+# out of one.
+[[thing]]
+id = "pit"
+label = "pit"
+color = "#3a3530"
+category = "building"
+look.layers = [{ draw = "outline", x = 0.1, y = 0.1, w = 0.8, h = 0.8, width = 1.5 }]
+build = { menu = "dig", work = 40, free = true, dig = { hole = "air" } }

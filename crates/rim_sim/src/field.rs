@@ -590,7 +590,11 @@ impl Fields {
         }
         let indoors = map.room_at(p).filter(|r| r.enclosed());
         if defs.fields[field].kind == FieldKind::Shelter {
-            let open = layer.exposure.get(map.idx(p)).copied().unwrap_or(100) as i32;
+            // No wind reaches below the surface (DESIGN.md §6d).
+            let open = match p.z {
+                0 => layer.exposure.get(map.idx(p)).copied().unwrap_or(100) as i32,
+                _ => 0,
+            };
             return if indoors.is_some() { 0 } else { open * FIXED as i32 };
         }
         let stamped = layer.stamped[map.idx(p)];

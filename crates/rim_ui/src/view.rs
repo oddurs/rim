@@ -57,6 +57,8 @@ pub struct ClientView {
     pub scale: f32,
     /// Camera: centre in tiles, and physical pixels per tile.
     pub cam: (f32, f32, f32),
+    /// The level on screen (DESIGN.md §6d): 0 is the surface.
+    pub level: i32,
     /// Mouse in physical pixels.
     pub mouse: (f32, f32),
     /// How far into the next sim tick this frame falls (0 to 1): pawns and

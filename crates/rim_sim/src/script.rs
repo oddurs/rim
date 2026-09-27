@@ -2268,6 +2268,10 @@ impl ScriptHost {
                 t.set("z", pos.z)?;
                 "building_complete"
             }
+            GameEvent::LevelOpened { z } => {
+                t.set("z", *z)?;
+                "level_opened"
+            }
             GameEvent::NewDay { day } => {
                 t.set("day", *day)?;
                 "new_day"
