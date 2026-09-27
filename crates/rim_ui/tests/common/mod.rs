@@ -8,6 +8,14 @@ use rim_ui::view::{ClientView, ToolView};
 use rim_ui::{Input, Output, Ui};
 use std::path::{Path, PathBuf};
 
+/// Whether to assert wall-clock budgets. Off by default: a gating test counts
+/// work, and time is checked where nothing else competes for the cores, by
+/// CI's isolated budget step (`RIM_BUDGETS=1`, one test at a time). DESIGN.md
+/// §8a.
+pub fn timing_budgets() -> bool {
+    std::env::var_os("RIM_BUDGETS").is_some()
+}
+
 pub fn mods() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mods")
 }
