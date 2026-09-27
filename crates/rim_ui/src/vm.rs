@@ -1271,7 +1271,13 @@ impl UiVm {
             }
             Ok(t)
         });
-        view!("overlay", (), |_lua, l, _a| Ok(l.client.overlay.map(|i| l.world.defs.fields[i].label.clone())));
+        view!("overlay", (), |_lua, l, _a| {
+            Ok(match l.client.storage_overlay {
+                true => Some("Storage".to_string()),
+                false => l.client.overlay.map(|i| l.world.defs.fields[i].label.clone()),
+            })
+        });
+        view!("stock", (), |lua, l, _a| stock_table(lua, l.world));
         // The calendar: { year, season, day, day_of_year, year_days }.
         view!("date", (), |lua, l, _a| {
             let w = l.world;
@@ -2549,7 +2555,66 @@ fn hover_table(lua: &Lua, w: &World, client: &ClientView) -> mlua::Result<Value>
         things.push(s)?;
     }
     t.set("things", things)?;
+    // The store under the cursor, as view.store takes it: a container
+    // standing here, else the stockpile the cell is in.
+    let container = w.map.fixture[i].filter(|&e| w.ecs.get::<&rim_sim::world::Store>(e).is_ok());
+    let store = match (container, w.zones.at(&w.map, tp)) {
+        (Some(e), _) => Some(("thing", e.to_bits().get())),
+        (None, Some(z)) => Some(("zone", z.id as u64)),
+        _ => None,
+    };
+    if let Some((k, id)) = store {
+        let s = lua.create_table()?;
+        s.set(k, id)?;
+        t.set("store", s)?;
+    }
     Ok(Value::Table(t))
+}
+
+/// What the colony has, one row per thing it has any of, from the stock
+/// ledger: units stored and loose, how many stores hold it, and its
+/// category for grouping (DESIGN.md §4f). Rows are in def order.
+fn stock_table(lua: &Lua, w: &World) -> mlua::Result<Table> {
+    use rim_sim::defs::DefId;
+    let defs = &w.defs;
+    // How many stores hold each thing: stockpiles by their cells, containers
+    // by their slots, each store counted once.
+    let mut stores: Vec<std::collections::BTreeSet<(u8, u64)>> = vec![Default::default(); defs.things.len()];
+    for (z, c) in w.zones.members() {
+        if let Some(t) = w.map.item_at(w.map.pos(c as usize)).and_then(|e| w.thing(e)) {
+            stores[t.def as usize].insert((0, z.id as u64));
+        }
+    }
+    for (e, st) in w.ecs.query::<(Entity, &rim_sim::world::Store)>().iter() {
+        for x in st.slots.iter().flatten() {
+            if let Ok(t) = w.ecs.get::<&Thing>(*x) {
+                stores[t.def as usize].insert((1, e.to_bits().get()));
+            }
+        }
+    }
+    let out = lua.create_table()?;
+    for d in 0..defs.things.len() as DefId {
+        let total = w.stock.on_map(d);
+        if total == 0 {
+            continue;
+        }
+        let td = defs.thing(d);
+        let stored = w.stock.stored(d);
+        let r = lua.create_table()?;
+        r.set("thing", td.id.as_str())?;
+        r.set("label", td.label.as_str())?;
+        r.set("total", total)?;
+        r.set("stored", stored)?;
+        r.set("loose", total.saturating_sub(stored))?;
+        r.set("stores", stores[d as usize].len())?;
+        r.set("value", td.market_value * total as f64)?;
+        let cat = defs.item_categories.iter().find(|c| c.items.contains(&d));
+        r.set("category", cat.map(|c| c.id.clone()))?;
+        r.set("category_label", cat.map(|c| c.label.clone()))?;
+        r.set("category_order", cat.map_or(i32::MAX, |c| c.order))?;
+        out.push(r)?;
+    }
+    Ok(out)
 }
 
 /// One thing on the map, for the inspector.

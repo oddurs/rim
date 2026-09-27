@@ -74,6 +74,8 @@ pub struct ClientView {
     pub paused: bool,
     pub speed: u32,
     pub overlay: Option<usize>,
+    /// The storage overlay is shown (the last stop of the O cycle).
+    pub storage_overlay: bool,
     pub show_profiler: bool,
     pub show_devtools: bool,
     pub tools: Vec<ToolView>,

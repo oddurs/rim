@@ -430,6 +430,20 @@ storage.sorter({
 A key is a number or a string; rows sort by it, then by label. Orders run
 in the UI's VM, so none can change the game.
 
+The colony's stock across every store is `view.stock()`: one row per thing
+it has any of, read from the sim's stock ledger (never counted), with units
+`stored` and `loose`, how many `stores` hold it, and its category. The
+**Stores** sheet (`core:stores`, key K, in
+[`stores.luau`](../../mods/core/ui/stores.luau)) shows it with a trend of
+the last seven days, which the UI records a day at a time. Resting the
+cursor on a store for 0.3 s shows its card (`core:store.card`, on the
+`cursor` layer): its name, level, how full it is and the first of its
+contents in the Contents tab's order. `view.hover().store` says which store
+the cursor is on, as `view.store` takes it. O cycles the field overlays and
+then the storage overlay, which washes each store by its level and labels
+its fill; with a loose stack selected it draws where the stack will go, or
+says why it stays.
+
 ### People
 
 The colonists run down the left edge (`core:colonists`, in
