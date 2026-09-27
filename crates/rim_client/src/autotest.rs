@@ -579,9 +579,12 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     let img = t.grab().await;
     let dpi = screen_dpi_scale();
     let z = t.app.cam.zoom;
+    // The screen reads back bottom row first (it's GL's framebuffer), so a
+    // row counted from the top is counted from the other end.
     let px = |img: &Image, (x, y): (f32, f32)| {
-        let (xi, yi) = ((x * dpi) as u32, (y * dpi) as u32);
-        let c = img.get_pixel(xi.min(img.width() as u32 - 1), yi.min(img.height() as u32 - 1));
+        let (w, h) = (img.width() as u32, img.height() as u32);
+        let (xi, yi) = (((x * dpi) as u32).min(w - 1), ((y * dpi) as u32).min(h - 1));
+        let c = img.get_pixel(xi, h - 1 - yi);
         [c.r, c.g, c.b]
     };
     let dist = |a: [f32; 3], b: [f32; 3]| a.iter().zip(b).map(|(x, y)| (x - y).abs()).sum::<f32>();
@@ -682,6 +685,11 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     let zoom = t.app.cam.zoom;
     t.app.cam.zoom = 40.0;
     t.focus(slot.offset(sw / 2, 1));
+    // Chunks are drawn scaled from the zoom they were built at until it
+    // settles (mesh.rs): point-sized detail is only right after a rebuild.
+    for _ in 0..20 {
+        t.frame().await;
+    }
     let img = t.grab().await;
     let z = t.app.cam.zoom;
     let at = |t: &T, p: IVec, fx: f32, fy: f32| t.app.cam.to_screen(p.x as f32 + fx, p.y as f32 + fy);
@@ -695,8 +703,28 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.check(dist(inner, fill) < 0.1, format!("an inner corner is square ({inner:?} vs fill {fill:?})"));
     // Where a run meets its neighbour there is no round and no seam.
     let run = slot.offset(4 + 1, 1);
-    let joint = px(&img, at(&t, run, 1.0 - 1.0 / z, 2.0 / z));
+    // Below the lit edge, and well inside where a round would cut.
+    let joint = px(&img, at(&t, run, 1.0 - 1.0 / z, 5.0 / z));
     t.check(dist(joint, fill) < 0.1, format!("a joined corner is square and seamless ({joint:?} vs fill {fill:?})"));
+    // One light, from the north-west: an open top side catches it just
+    // inside the outline; the bottom doesn't.
+    let base: f32 = fill.iter().sum();
+    // The brightest pixel in a band along the run's middle cell.
+    let band = |y0: f32, y1: f32| {
+        let mut best = 0.0f32;
+        for i in 0..12 {
+            for j in 0..8 {
+                let (fx, fy) = (0.2 + 0.6 * i as f32 / 11.0, y0 + (y1 - y0) * j as f32 / 7.0);
+                best = best.max(px(&img, at(&t, run, fx, fy)).iter().sum::<f32>());
+            }
+        }
+        best
+    };
+    let (top, bottom) = (band(1.0 / z, 3.0 / z), band(1.0 - 3.0 / z, 1.0 - 1.0 / z));
+    t.check(
+        top > base + 0.1 && bottom < base + 0.05,
+        format!("the top edge catches the light ({top:.2}) and the bottom doesn't ({bottom:.2}) against {base:.2}"),
+    );
     t.shot("joins").await;
 
     // ---------------------------------------------------------- openings turn to their wall

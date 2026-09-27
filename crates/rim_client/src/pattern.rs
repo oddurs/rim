@@ -183,7 +183,11 @@ pub fn paint(
     let [n, e, so, wv] = [(0, -1), (1, 0), (0, 1), (-1, 0)].map(|(dx, dy)| joins(w, p.offset(dx, dy), join));
     let along_y = (n || so) && !(e || wv);
     let (u0, v0) = if along_y { (p.y as f32, p.x as f32) } else { (p.x as f32, p.y as f32) };
-    let m = |joined: bool| if joined { 0.0 } else { MARGIN };
+    // On a joined side the neighbour's fill reaches half a point over this
+    // cell, and is painted after it: reach back as far, so a course carries
+    // across the joint without a notch.
+    let over = 0.5 / z;
+    let m = |joined: bool| if joined { -over } else { MARGIN };
     let cell = Cell {
         along_y,
         u0,
@@ -192,8 +196,8 @@ pub fn paint(
         z,
         x0: m(wv),
         y0: m(n),
-        x1: 1.0 - m(e),
-        y1: 1.0 - m(so),
+        x1: 1.0 - m(e).max(0.0),
+        y1: 1.0 - m(so).max(0.0),
         outer: [!n && !wv, !n && !e, !so && !e, !so && !wv],
         r: join.map_or(0.0, |(_, r)| r),
     };
