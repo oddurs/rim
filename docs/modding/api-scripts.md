@@ -26,17 +26,17 @@ are in [Scripting rules](scripting.md).
 | `rim.every` | `(interval: number, fn: () -> ()) -> ()` | Run fn every `interval` ticks (hooks are staggered). Register at load time. |
 | `rim.explain` | `(field: string) -> {Part}` | Each part of a field's outdoor value: its terms, then pushes. |
 | `rim.explain_work` | `(id: number) -> { WorkWhy }` | Why a colonist would do what it would, and passes over the rest, work type by work type in tie-break order. Empty if it isn't a pawn. |
-| `rim.field` | `(id: string, x: number, y: number) -> number` | A field's value at a cell (temperature, light, ...). |
+| `rim.field` | `(id: string, x: number, y: number, z: number?) -> number` | A field's value at a cell (temperature, light, ...), on level z (the surface if nil). |
 | `rim.get_data` | `(key: string) -> any` | A copy of stored script data, or nil. A bare key is your mod's; "weather:forecast" reads another's. |
 | `rim.has_tool` | `(tags: { string }) -> boolean` | Whether some tool in the colony, lying about or in a hand, has every one of these tool tags. False for a tag no tool has. |
 | `rim.hour` | `() -> number` | Hour of the day, 0 to 24 (tick 0 is 06:00). |
-| `rim.indoors` | `(x: number, y: number) -> boolean` | Whether a cell is inside an enclosed room. |
+| `rim.indoors` | `(x: number, y: number, z: number?) -> boolean` | Whether a cell is inside an enclosed room, on level z (the surface if nil). |
 | `rim.item_categories` | `{ItemCategoryInfo}` | The item category tree stores and bills filter by, in load order. Each lists its children and the items directly in it, by id. |
 | `rim.leave_after` | `(id: number, ticks: number) -> ()` | Make a pawn give up and walk off the map after `ticks`. |
 | `rim.log` | `(message: string) -> ()` | Print a line to the console, tagged with your mod. |
 | `rim.map_size` | `() -> (number, number)` | Map width and height in cells. |
 | `rim.message` | `(text: string, kind: MessageKind?) -> ()` | Post a message to the feed (default kind "info"). |
-| `rim.near_cell` | `(x: number, y: number, r: number) -> (number?, number?)` | A random open cell within r of (x, y). |
+| `rim.near_cell` | `(x: number, y: number, r: number, z: number?) -> (number?, number?)` | A random open cell within r of (x, y), on level z (the surface if nil). |
 | `rim.need_defs` | `{NeedInfo}` | Every need def: what satisfies it ("food", "rest", "field") and how many days a full one lasts. |
 | `rim.on` | `(event: string, fn: (event: {[string]: any}) -> ()) -> ()` | Handle an engine event (`pawn_died`, `season_changed`, ...) or a mod event (`weather:changed`). |
 | `rim.on_migrate` | `(fn: (from_version: string, data: {[string]: any}) -> {[string]: any}) -> ()` | Upgrade your script data from a save made with a different version of your mod: fn gets that version and your data (bare keys) and returns the data to keep. It sees no world: only your data. Runs on load, before any hook. Register at load time. |
@@ -49,7 +49,7 @@ are in [Scripting rules](scripting.md).
 | `rim.random` | `() -> number` | A number in [0, 1) from the world's random numbers: the same on every machine. |
 | `rim.random_int` | `(lo: number, hi: number) -> number` | A whole number from lo to hi inclusive, from the world's random numbers. |
 | `rim.reading` | `(id: string) -> number?` | A colony reading, by qualified id ("core:food_days"); a bare name is your own mod's. Nil until published. |
-| `rim.room_at` | `(x: number, y: number) -> Room?` | The room at a cell, or nil on a wall or door. `uncovered` counts cells beyond every roof support's span; `role` is the first [[room_role]] it meets, if any. |
+| `rim.room_at` | `(x: number, y: number, z: number?) -> Room?` | The room at a cell on level z (the surface if nil), or nil on a wall or door. `uncovered` counts cells beyond every roof support's span; `role` is the first [[room_role]] it meets, if any. |
 | `rim.say` | `(id: number, text: string, ticks: number?, priority: number?) -> ()` | A pawn says something: a speech bubble over it for `ticks` ticks (600 unless given). Higher `priority` wins when it has several lines or the screen is crowded; needs speak at 1, and 2 is the default. Only presentation: nothing in the sim reads it back. |
 | `rim.season` | `() -> string` | The current season's name. |
 | `rim.seasons` | `{string}` | The calendar's season names, in order. |
@@ -57,8 +57,8 @@ are in [Scripting rules](scripting.md).
 | `rim.set_data` | `(key: string, value: any) -> ()` | Keep plain data in the world (hashed, saved, readable by the UI as view.data). A bare key is your mod's ("state" is "your_mod:state"); you can't write another mod's. |
 | `rim.set_reading` | `(id: string, value: number) -> ()` | Publish a colony reading, like "food_days", under your mod's name (kept to thousandths). Rules with `when = { reading = "mod:id", below = ..., until = ... }` switch on and off as it crosses their marks, firing `rule_started` and `rule_stopped`. Publish on your own cadence: hourly is plenty. |
 | `rim.set_stance` | `(stance: string) -> ()` | Put the colony in a stance: its priority rules hold until another. For incidents; the player's comes as a command. |
-| `rim.spawn_item` | `(thing: string, x: number, y: number, count: number, stuff: string?) -> number` | Drop items near a cell, merging into stacks; returns how many didn't fit. stuff is what they're made of (a flint axe): it sets their hp and quality, and they stack only with the same. |
-| `rim.spawn_pawn` | `(creature: string, faction: Faction, x: number, y: number, name: string?) -> (number?, string?)` | Spawn a creature; returns its id and name, or nil if the cell is blocked. |
+| `rim.spawn_item` | `(thing: string, x: number, y: number, count: number, stuff: string?, z: number?) -> number` | Drop items near a cell, merging into stacks; returns how many didn't fit. stuff is what they're made of (a flint axe): it sets their hp and quality, and they stack only with the same. z is the level (the surface if nil). |
+| `rim.spawn_pawn` | `(creature: string, faction: Faction, x: number, y: number, name: string?, z: number?) -> (number?, string?)` | Spawn a creature on level z (the surface if nil); returns its id and name, or nil if the cell is blocked. |
 | `rim.stance` | `() -> string?` | The colony's stance, or nil if no mod defines any. |
 | `rim.stat` | `(id: number, name: string) -> number?` | A thing's stat by name: its def's base times its material's factor. |
 | `rim.stock` | `(what: string \| StockQuery, place: ("stored" \| "loose")?) -> number` | How many the colony has on the map, read from the stock ledger (never counted): a thing by id, or { thing = }, { tag = } or { category = } (an item category and those under it). `place` narrows it to what lies where a stockpile keeps it, or to what doesn't. |
@@ -104,5 +104,5 @@ type OrderSpec = { label: string, needs: { OrderNeed }, work: number, work_type:
 type OrderInput = { thing: string?, tag: string?, count: number, have: number }
 type OrderInfo = { owner: string, label: string, needs: { OrderInput }, work: number, done: number, total: number, requires: { string } }
 type ItemQuery = { thing: string?, tag: string? }
-type ThingAt = { id: number, thing: string, x: number, y: number, count: number, blueprint: boolean }
+type ThingAt = { id: number, thing: string, x: number, y: number, z: number, count: number, blueprint: boolean }
 ```

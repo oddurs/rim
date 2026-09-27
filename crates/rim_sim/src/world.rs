@@ -844,12 +844,9 @@ impl World {
     /// A world with `below` levels under the surface and `above` over it
     /// (DESIGN.md §6d).
     pub fn with_levels(defs: Arc<DefDb>, w: i32, h: i32, below: i32, above: i32, seed: u64) -> Self {
-        let map = Map::with_levels(w, h, below, above);
-        let fields = Fields::new(&defs, map.cells());
-        let zones = crate::zone::Zones::new(map.cells());
         let stance = defs.default_stance;
         let map = {
-            let mut m = Map::new(w, h);
+            let mut m = Map::with_levels(w, h, below, above);
             // Solid rock holds a roof as the thing it stands up as.
             let span = |t: &crate::defs::TerrainDef| {
                 let sp = t.solid.as_ref().and_then(|s| defs.thing(s.thing_r).support.as_ref());
@@ -858,6 +855,8 @@ impl World {
             m.set_terrain_spans(defs.terrain.iter().map(span).collect());
             m
         };
+        let fields = Fields::new(&defs, map.cells());
+        let zones = crate::zone::Zones::new(map.cells());
         let things = defs.things.len();
         let mut world = World {
             defs,
