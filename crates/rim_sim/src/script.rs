@@ -278,6 +278,7 @@ type MessageKind = "info" | "good" | "threat" | "bad"
 type CreatureInfo = { id: string, label: string, intelligent: boolean, aggressive: boolean, flees: boolean, plural: string, market_value: number, max_hp: number, wild: boolean }
 type ThingInfo = { id: string, label: string, market_value: number, food: boolean, nutrition: number?, item: boolean, tags: { string } }
 type NeedInfo = { id: string, label: string, satisfier: string, days_to_empty: number }
+type ModifierInfo = { id: string, stat: string, thing: string, value: number, reason: string, group: string, on: boolean }
 type StoreSlot = { slot: number, thing: string, count: number, made_of: string?, hp: number }
 type StoreInfo = { level: number, slots: number, contents: { StoreSlot } }
 type StockQuery = { thing: string?, tag: string?, category: string? }
@@ -824,6 +825,25 @@ impl ScriptHost {
             needs.push(t)?;
         }
         rim.set("need_defs", needs)?;
+        let mods = lua.create_table()?;
+        for m in defs.modifiers.iter().filter(|m| m.thing_r.is_some()) {
+            let t = lua.create_table()?;
+            t.set("id", m.id.as_str())?;
+            t.set("stat", m.stat.as_str())?;
+            t.set("thing", m.thing_r.map(|d| defs.thing(d).id.as_str()))?;
+            t.set("value", m.value)?;
+            t.set("reason", m.reason.as_str())?;
+            t.set("group", m.group.as_str())?;
+            t.set("on", m.on)?;
+            mods.push(t)?;
+        }
+        rim.set("modifier_defs", mods)?;
+        self.declare(
+            "modifier_defs",
+            "{ModifierInfo}",
+            "Every modifier def on a loaded thing (the stat pipeline): what it adds to which stat of which thing, \
+             whether it's on from the start, and its group. rim.set_modifiers switches a group.",
+        );
         self.declare(
             "need_defs",
             "{NeedInfo}",
@@ -1824,6 +1844,25 @@ impl ScriptHost {
                     }
                 };
                 items.into_iter().map(count).sum::<mlua::Result<u32>>()
+            }
+        );
+        api!(
+            "set_modifiers",
+            "(group: string, on: boolean) -> number",
+            "Switch every modifier your mod declares in `group` on or off: the stat pipeline. Saved with the world. \
+             Returns how many there are.",
+            (String, bool),
+            |w, from, (group, on)| Ok(w.set_modifiers(&from, &group, on))
+        );
+        api!(
+            "stat_of",
+            "(thing: string, stat: string) -> number?",
+            "A thing def's stat through the pipeline: what the def says plus every modifier on it that is on. \
+             `buildable` is 1 for a buildable, and 0 or less locks it. nil when neither says anything.",
+            (String, String),
+            |w, from, (thing, stat)| {
+                let d = def_id(w, "thing", &thing, &from)?;
+                Ok(w.def_stat(d, &stat))
             }
         );
         api!(

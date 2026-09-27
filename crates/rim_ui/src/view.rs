@@ -24,6 +24,9 @@ pub struct ToolView {
     /// A buildable's work and hit points before its material's factors.
     pub work: u32,
     pub hp: u32,
+    /// Why a buildable can't be placed now (a modifier locks it); empty
+    /// when it can.
+    pub locked: String,
 }
 
 /// One material the active build tool could use.

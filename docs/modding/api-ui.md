@@ -136,7 +136,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `view.tick` | `() -> number` | The current tick. |
 | `view.ticks_per_day` | `() -> number` | Ticks in a game day. |
 | `view.time` | `() -> number` | Wall-clock seconds, for animation. |
-| `view.tools` | `() -> { Tool }` | Every tool, with the dock category and group it is filed under. |
+| `view.tools` | `() -> { Tool }` | Every tool, with the dock category and group it is filed under. A buildable a modifier locks says why in `locked` (empty when it can be placed). |
 | `view.ui_scale` | `() -> number` | The player's UI scale, on top of the display's (1 is normal). |
 | `view.ui_stats` | `() -> UiStats` | The UI's own timings. |
 | `view.ui_tree` | `() -> { TreeRow }` | The node tree (devtools). |

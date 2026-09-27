@@ -861,6 +861,9 @@ pub struct World {
     /// The colony's work roles: copies of the defs' and the player's own.
     /// Colonists name them by index. Saved.
     pub work_roles: Vec<crate::rules::WorkRole>,
+    /// Modifiers a script switched from their def's `on`, by id (the stat
+    /// pipeline, `rim.set_modifiers`). Saved.
+    pub modifiers_switched: BTreeMap<String, bool>,
     /// For each mod whose script data is here but which isn't loaded, the
     /// version it wrote that data with: when it comes back, it migrates
     /// from there (0139).
@@ -934,6 +937,7 @@ impl World {
             rules: crate::rules::Rules::default(),
             standing: crate::rules::Standing::default(),
             work_roles: Vec::new(),
+            modifiers_switched: BTreeMap::new(),
             data_versions: BTreeMap::new(),
         };
         world.seed_work_roles();
@@ -2532,23 +2536,87 @@ impl World {
     /// neither side has anything to say.
     pub fn stat(&self, e: Entity, name: &str) -> Option<f64> {
         let t = self.ecs.get::<&Thing>(e).ok()?;
-        let td = self.defs.thing(t.def);
         let made_of = self.ecs.get::<&MadeOf>(e).ok().map(|m| m.0);
-        let base = match name {
-            "hp" => Some(td.hp as f64),
-            // A dig is the rock below's work, then its own.
-            "work" => td.build.as_ref().map(|b| {
-                let rock = b.dig.as_ref().and_then(|_| self.rock_below(t.pos)).map_or(0, |h| h.work);
-                (b.work + rock) as f64
-            }),
-            "value" => Some(td.market_value),
-            _ => None,
-        };
+        let mut base = self.def_stat(t.def, name);
+        // A dig is the rock below's work, then its own.
+        let digs = self.defs.thing(t.def).build.as_ref().is_some_and(|b| b.dig.is_some());
+        if name == "work" && digs {
+            let rock = self.rock_below(t.pos).map_or(0, |h| h.work);
+            base = base.map(|b| b + rock as f64);
+        }
         let factor = self.defs.factor_declared(made_of, name);
         match (base, factor) {
             (None, None) => None,
             (b, f) => Some(b.unwrap_or(1.0) * f.unwrap_or(1.0)),
         }
+    }
+
+    /// A thing def's stat through the pipeline: what the def says, plus
+    /// every modifier on it that is on. `None` when neither says anything.
+    pub fn def_stat(&self, def: DefId, name: &str) -> Option<f64> {
+        let td = self.defs.thing(def);
+        let base = match name {
+            "hp" => Some(td.hp as f64),
+            "work" => td.build.as_ref().map(|b| b.work as f64),
+            "value" => Some(td.market_value),
+            // Buildable things start at 1; a modifier below that locks one.
+            "buildable" => Some(if td.build.is_some() { 1.0 } else { 0.0 }),
+            _ => None,
+        };
+        let mods = self.defs.thing_modifiers.get(def as usize).map_or(&[][..], |v| v.as_slice());
+        let mut on = mods
+            .iter()
+            .map(|&i| &self.defs.modifiers[i as usize])
+            .filter(|m| m.stat == name && self.modifier_on(m))
+            .peekable();
+        if base.is_none() && on.peek().is_none() {
+            return None;
+        }
+        // Summed in load order, so every machine gets the same float.
+        Some(on.fold(base.unwrap_or(0.0), |acc, m| acc + m.value))
+    }
+
+    /// Whether a modifier counts now: its def's `on`, unless a script
+    /// switched it.
+    pub fn modifier_on(&self, m: &crate::defs::ModifierDef) -> bool {
+        self.modifiers_switched.get(&m.id).copied().unwrap_or(m.on)
+    }
+
+    /// Why a buildable can't be placed now, if it can't: its `buildable`
+    /// stat is 0 or less. The reason is the first modifier holding it back.
+    pub fn build_lock(&self, def: DefId) -> Option<String> {
+        self.defs.thing(def).build.as_ref()?;
+        if self.def_stat(def, "buildable").unwrap_or(0.0) > 0.0 {
+            return None;
+        }
+        let mods = &self.defs.thing_modifiers[def as usize];
+        let why = mods
+            .iter()
+            .map(|&i| &self.defs.modifiers[i as usize])
+            .find(|m| m.stat == "buildable" && m.value < 0.0 && self.modifier_on(m) && !m.reason.is_empty());
+        Some(why.map_or_else(|| "Can't be built yet".to_string(), |m| m.reason.clone()))
+    }
+
+    /// Switch on or off every modifier mod `owner` declares in `group`,
+    /// and every other mod's whose group names it (`research:joinery` from
+    /// `research`): a mod gates its own content behind another's switch.
+    /// Returns how many there are.
+    pub fn set_modifiers(&mut self, owner: &str, group: &str, on: bool) -> usize {
+        let (prefix, named) = (format!("{owner}:"), format!("{owner}:{group}"));
+        let defs = self.defs.clone();
+        let mut n = 0;
+        let switches =
+            |m: &&crate::defs::ModifierDef| (m.group == group && m.id.starts_with(&prefix)) || m.group == named;
+        for m in defs.modifiers.iter().filter(switches) {
+            n += 1;
+            // Back to its def's state is no switch at all: saves stay small.
+            if on == m.on {
+                self.modifiers_switched.remove(&m.id);
+            } else {
+                self.modifiers_switched.insert(m.id.clone(), on);
+            }
+        }
+        n
     }
 
     // ------------------------------------------------------------ reservations
@@ -2622,6 +2690,9 @@ impl World {
             h = crate::rng::mix(h ^ u ^ 0x06e7);
         }
         h = self.standing.hash(h);
+        for (id, on) in &self.modifiers_switched {
+            h = id.bytes().fold(crate::rng::mix(h ^ *on as u64 ^ 0x70d), |h, b| crate::rng::mix(h ^ b as u64));
+        }
         for r in &self.work_roles {
             h = r.label.bytes().fold(crate::rng::mix(h ^ r.edited as u64 ^ (r.order as u64) << 1), |h, b| {
                 crate::rng::mix(h ^ b as u64)

@@ -88,7 +88,7 @@ type UiDate = { year: number, season: string, season_index: number, day: number,
 type Part = { label: string, value: number }
 type Tool = {
     key: string, label: string, color: string, active: boolean, category: string, group: string,
-    cost: string, work: number, hp: number,
+    cost: string, work: number, hp: number, locked: string,
 }
 type StoreRef = { zone: number?, thing: number? }
 type FilterEdit = { thing: string?, category: string?, material: string?, on: boolean?, min: number?, max: number?, all: boolean? }
@@ -327,7 +327,7 @@ pub const UI_API: &[UiDoc] = &[
     d!("view.tick", "() -> number", "The current tick."),
     d!("view.ticks_per_day", "() -> number", "Ticks in a game day."),
     d!("view.time", "() -> number", "Wall-clock seconds, for animation."),
-    d!("view.tools", "() -> { Tool }", "Every tool, with the dock category and group it is filed under."),
+    d!("view.tools", "() -> { Tool }", "Every tool, with the dock category and group it is filed under. A buildable a modifier locks says why in `locked` (empty when it can be placed)."),
     d!("view.ui_scale", "() -> number", "The player's UI scale, on top of the display's (1 is normal)."),
     d!("view.ui_stats", "() -> UiStats", "The UI's own timings."),
     d!("view.ui_tree", "() -> { TreeRow }", "The node tree (devtools)."),

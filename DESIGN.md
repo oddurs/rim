@@ -771,6 +771,15 @@ not from a research screen.
   with no extra UI: "needs a chopping tool".
 - **Ruling:** tools gate the stone age, and research (a plugin) gates later
   tiers. The engine knows neither: it matches tags.
+- **How research gates:** through the stat pipeline (§6). A `[[modifier]]`
+  adds a value to a thing's stat while it is on; a buildable starts with
+  `buildable = 1`, and one at 0 or less can't be placed (the build order
+  is refused, and the dock says the modifier's `reason`). The research
+  plugin declares a modifier group per project that takes its unlocks to
+  0, and `rim.set_modifiers(group, false)` lets them go when the project
+  is studied. The switch is world state, saved by id. The engine knows
+  modifiers and stats; research is data and a script (`mods/research`,
+  docs/modding/research.md).
 
 ### Tension: tools in hand, or tools anywhere in the colony?
 

@@ -234,6 +234,9 @@ pub enum Blocker {
     /// It digs down, and there is nothing here to dig into: the lowest
     /// level, or rock nobody can work below (DESIGN.md §6d).
     NoDig,
+    /// A modifier holds it back (`World::build_lock` says why): research
+    /// not done, say.
+    Locked,
 }
 
 /// Everything `Command::Designate` would newly mark, in the order it would
@@ -318,6 +321,9 @@ pub fn build_preview(
     let td = defs.thing(thing);
     let all = |why: Blocker| cells(w, a, b).map(|p| (p, Place::Blocked(why))).collect();
     let Some(bd) = td.build.as_ref() else { return all(Blocker::NotBuildable) };
+    if w.build_lock(thing).is_some() {
+        return all(Blocker::Locked);
+    }
     // A buildable that takes a material needs one, of the right kind.
     if let Some(sc) = &bd.stuff {
         if !stuff.is_some_and(|m| defs.is_material_for(m, &sc.category)) {

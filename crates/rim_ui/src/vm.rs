@@ -1567,6 +1567,7 @@ impl UiVm {
                 row.set("cost", tool.cost.as_str())?;
                 row.set("work", tool.work)?;
                 row.set("hp", tool.hp)?;
+                row.set("locked", tool.locked.as_str())?;
                 t.push(row)?;
             }
             Ok(t)
