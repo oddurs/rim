@@ -6,6 +6,8 @@ type MessageKind = "info" | "good" | "threat" | "bad"
 type CreatureInfo = { id: string, label: string, intelligent: boolean, aggressive: boolean, flees: boolean, plural: string, market_value: number, max_hp: number, wild: boolean }
 type ThingInfo = { id: string, label: string, market_value: number, food: boolean, nutrition: number?, item: boolean, tags: { string } }
 type NeedInfo = { id: string, label: string, satisfier: string, days_to_empty: number }
+type StoreSlot = { slot: number, thing: string, count: number, made_of: string?, hp: number }
+type StoreInfo = { level: number, slots: number, contents: { StoreSlot } }
 type StockQuery = { thing: string?, tag: string?, category: string? }
 type ItemCategoryInfo = { id: string, label: string, parent: string?, order: number, children: { string }, items: { string } }
 type Date = { year: number, season: string, season_index: number, day: number, day_of_year: number, year_days: number, year_fraction: number }
@@ -135,6 +137,12 @@ declare rim: {
     stat: (id: number, name: string) -> number?,
     -- How many the colony has on the map, read from the stock ledger (never counted): a thing by id, or { thing = }, { tag = } or { category = } (an item category and those under it). `place` narrows it to what lies where a stockpile keeps it, or to what doesn't.
     stock: (what: string | StockQuery, place: ("stored" | "loose")?) -> number,
+    -- A container's level (0 is lowest), how many slots it has, and what is in them (slots from 1). Nil for anything that isn't a built container.
+    store: (id: number) -> StoreInfo?,
+    -- Put things into a container, onto its stacks of the same kind first: a caravan unloading, a chest that fills itself. Only what the container can ever take goes in. Returns how many didn't fit.
+    store_put: (id: number, what: { thing: string, count: number, made_of: string? }) -> number,
+    -- Take up to `count` from a container's slot (from 1); they're gone, for the script to account for. Returns how many were taken.
+    store_take: (id: number, slot: number, count: number) -> number,
     -- A thing by id: what it is and where, or nil if it's gone.
     thing: (id: number) -> ThingAt?,
     -- Every thing def. A food's nutrition is the fraction of a full stomach one unit restores.

@@ -261,6 +261,9 @@ pub fn thing(
         }
         Some(Wear::None) | None => paint(s, w, layers, join_of(look), orient, c, cell, at, z, t, span),
     }
+    if let Some(sd) = td.store.as_ref() {
+        contents(s, w, e, sd, at, z, span);
+    }
     if let Ok(d) = w.ecs.get::<&Designated>(e) {
         let dc = rgb(defs.designations[d.0 as usize].rgb);
         // At the footprint's top-right corner.
@@ -269,6 +272,47 @@ pub fn thing(
         disc(s, dx, sy + z * 0.18, z * 0.13, dc);
     }
     (th.count > 1).then_some(th.count)
+}
+
+/// What a container shows of what it holds (DESIGN.md §4f): for "fill", a
+/// square of its first stack's colour that grows by fill stage; for
+/// "items", up to three of its stacks side by side. Drawn into the chunk
+/// mesh, which the sim touches only when this would change.
+fn contents(
+    s: &mut impl Sink,
+    w: &World,
+    e: Entity,
+    sd: &rim_sim::defs::StoreDef,
+    at: (f32, f32),
+    z: f32,
+    span: [u32; 2],
+) {
+    let Ok(slots) = w.ecs.get::<&rim_sim::world::Store>(e).map(|st| st.slots.clone()) else { return };
+    let colour = |x: Entity| {
+        let t = w.thing(x)?;
+        let own = w.ecs.get::<&MadeOf>(x).map(|m| m.0).unwrap_or(t.def);
+        Some(rgb(w.defs.thing(own).rgb))
+    };
+    let (sx, sy) = at;
+    let (zx, zy) = (z * span[0] as f32, z * span[1] as f32);
+    match sd.display {
+        rim_sim::defs::StoreDisplay::Fill => {
+            let stage = w.fill_stage(e) as f32 / sd.look_stages.max(1) as f32;
+            let Some(c) = slots.iter().flatten().find_map(|&x| colour(x)) else { return };
+            if stage > 0.0 {
+                let side = (0.16 + 0.34 * stage) * zx.min(zy);
+                s.rect(sx + (zx - side) / 2.0, sy + (zy - side) / 2.0, side, side, c);
+            }
+        }
+        rim_sim::defs::StoreDisplay::Items => {
+            let shown: Vec<Color> = slots.iter().flatten().filter_map(|&x| colour(x)).take(3).collect();
+            let side = (zx / 3.6).min(zy * 0.5);
+            for (i, c) in shown.into_iter().enumerate() {
+                s.rect(sx + zx * 0.08 + i as f32 * (zx * 0.84 / 3.0), sy + (zy - side) / 2.0, side, side, c);
+            }
+        }
+        rim_sim::defs::StoreDisplay::None => {}
+    }
 }
 
 /// A plan: what stands of it so far, rising through its layers' `grow`

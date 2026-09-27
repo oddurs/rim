@@ -838,9 +838,17 @@ ground does, **sort** each stack to the best place that takes it, and
 - **Against:** every stored stack would land in every ECS scan, and
   merging two partial stacks despawns one. Slots would fragment the ECS
   for data that never moves by itself.
-- **Ruling:** a slot holds a `Lot`, the value carries and deliveries
-  already use, addressed as `(store, slot)`. Loose and zone stacks stay
-  entities, so nothing that exists today changes shape.
+- **First ruling:** a slot holds a `Lot`, the value carries and
+  deliveries already use, addressed as `(store, slot)`.
+- **Changed, building it:** the argument against entities was ECS scans,
+  and the stock ledger and store index took those away before containers
+  arrived. Measured by the change each asks for, values lose: every job
+  that takes a thing (supply, deliver, eat, haul, fetch a tool) would need
+  a second kind of source, and reservations a second kind of claim. As
+  entities, a stored stack is a stack with a `Contained { store, slot }`
+  component at its container's cell, kept off the item layer, so the grid
+  still holds one stack per cell, and the jobs need only one helper that
+  says where to stand to reach it. Merging still happens in place.
 
 ### Sorting only climbs
 

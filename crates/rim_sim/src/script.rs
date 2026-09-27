@@ -216,6 +216,8 @@ type MessageKind = "info" | "good" | "threat" | "bad"
 type CreatureInfo = { id: string, label: string, intelligent: boolean, aggressive: boolean, flees: boolean, plural: string, market_value: number, max_hp: number, wild: boolean }
 type ThingInfo = { id: string, label: string, market_value: number, food: boolean, nutrition: number?, item: boolean, tags: { string } }
 type NeedInfo = { id: string, label: string, satisfier: string, days_to_empty: number }
+type StoreSlot = { slot: number, thing: string, count: number, made_of: string?, hp: number }
+type StoreInfo = { level: number, slots: number, contents: { StoreSlot } }
 type StockQuery = { thing: string?, tag: string?, category: string? }
 type ItemCategoryInfo = { id: string, label: string, parent: string?, order: number, children: { string }, items: { string } }
 type Date = { year: number, season: string, season_index: number, day: number, day_of_year: number, year_days: number, year_fraction: number }
@@ -1499,6 +1501,82 @@ impl ScriptHost {
                     }
                 };
                 Ok(w.place_item_of(def, IVec::new(x, y), count, stuff))
+            }
+        );
+        // A container's level, slots and contents, or nil.
+        {
+            let ptr = self.world.clone();
+            let f = lua.create_function(move |lua, id: u64| {
+                type Row = (usize, String, u32, Option<String>, i32);
+                let found = with_world(&ptr, |w| {
+                    let e = rim_sim_entity(id)?;
+                    let Ok(st) = w.ecs.get::<&Store>(e).map(|s| (*s).clone()) else { return Ok(None) };
+                    let rows: Vec<Row> = st
+                        .slots
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(i, s)| {
+                            let se = (*s)?;
+                            let x = w.thing(se)?;
+                            let made_of = w.made_of(se).map(|m| w.defs.thing(m).id.clone());
+                            Some((i + 1, w.defs.thing(x.def).id.clone(), x.count, made_of, x.hp))
+                        })
+                        .collect();
+                    Ok(Some((st.level, st.slots.len(), rows)))
+                })?;
+                let Some((level, slots, rows)) = found else { return Ok(Value::Nil) };
+                let t = lua.create_table()?;
+                t.set("level", level)?;
+                t.set("slots", slots)?;
+                let contents = lua.create_table()?;
+                for (slot, thing, count, made_of, hp) in rows {
+                    let row = lua.create_table()?;
+                    row.set("slot", slot)?;
+                    row.set("thing", thing)?;
+                    row.set("count", count)?;
+                    row.set("made_of", made_of)?;
+                    row.set("hp", hp)?;
+                    contents.push(row)?;
+                }
+                t.set("contents", contents)?;
+                Ok(Value::Table(t))
+            })?;
+            rim.set("store", f)?;
+            self.declare(
+                "store",
+                "(id: number) -> StoreInfo?",
+                "A container's level (0 is lowest), how many slots it has, and what is in them (slots from 1). Nil for anything that isn't a built container.",
+            );
+        }
+        api!(
+            "store_put",
+            "(id: number, what: { thing: string, count: number, made_of: string? }) -> number",
+            "Put things into a container, onto its stacks of the same kind first: a caravan unloading, a chest that fills itself. Only what the container can ever take goes in. Returns how many didn't fit.",
+            (u64, Table),
+            |w, from, (id, what)| {
+                let e = rim_sim_entity(id)?;
+                let thing: String = what.get("thing")?;
+                let count: u32 = what.get("count")?;
+                let def = def_id(w, "thing", &thing, &from)?;
+                let made_of = what.get::<Option<String>>("made_of")?.map(|m| def_id(w, "thing", &m, &from)).transpose()?;
+                let can = w
+                    .thing(e)
+                    .and_then(|t| w.defs.thing(t.def).store.as_ref().map(|s| s.accepts_r.binary_search(&def).is_ok()));
+                if can != Some(true) || w.ecs.get::<&Store>(e).is_err() {
+                    return Ok(count);
+                }
+                Ok(w.put_in_store(e, Lot { def, count, made_of, hp: None }))
+            }
+        );
+        api!(
+            "store_take",
+            "(id: number, slot: number, count: number) -> number",
+            "Take up to `count` from a container's slot (from 1); they're gone, for the script to account for. Returns how many were taken.",
+            (u64, usize, u32),
+            |w, (id, slot, count)| {
+                let e = rim_sim_entity(id)?;
+                let stack = w.ecs.get::<&Store>(e).ok().and_then(|st| st.slots.get(slot.wrapping_sub(1)).copied().flatten());
+                Ok(stack.map_or(0, |s| w.take_from_stack(s, count)))
             }
         );
         // Whether a job needing these tool tags could be worked now: some

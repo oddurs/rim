@@ -193,6 +193,9 @@ pub struct ThingDef {
     /// Field sources: a campfire emits heat and light.
     #[serde(default)]
     pub emit: Vec<EmitDef>,
+    /// It holds stacks: a basket, a crate, a shelf (DESIGN.md §4f).
+    #[serde(default)]
+    pub store: Option<StoreDef>,
     /// What this piece does to a room it helps enclose, per field. A wall
     /// leaks a little, a window leaks a lot and lets daylight through.
     #[serde(default)]
@@ -1206,6 +1209,63 @@ pub struct ItemCategoryDef {
     pub items: Vec<DefId>,
 }
 
+/// A container: a thing whose slots hold stacks, so one cell can keep more
+/// than the ground does. Its contents are stacks like any other, kept off
+/// the item layer, so the grid still holds one stack per cell (§6a).
+#[derive(Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct StoreDef {
+    /// How many stacks it holds.
+    pub slots: u32,
+    /// Each slot holds this many times an item's `stack_limit`: a woodpile
+    /// holds wood three stacks deep.
+    #[serde(default = "d1")]
+    pub stack_scale: u32,
+    /// What it can ever take; the player's filter narrows it further.
+    #[serde(default)]
+    pub accepts: StoreAccepts,
+    /// Its contents are out of the weather.
+    #[serde(default)]
+    pub shelter: bool,
+    /// How the map shows what it holds: "fill" (its look by how full it
+    /// is), "items" (the looks of what it holds), or "none".
+    #[serde(default)]
+    pub display: StoreDisplay,
+    /// For "fill": how many steps from empty to full the look has.
+    #[serde(default = "d4")]
+    pub look_stages: u8,
+    /// Items it can ever take, sorted.
+    #[serde(skip)]
+    pub accepts_r: Vec<DefId>,
+}
+
+/// What a container can ever take. Empty means any item.
+#[derive(Deserialize, Clone, Debug, Default)]
+#[serde(deny_unknown_fields)]
+pub struct StoreAccepts {
+    /// Items with any of these tags.
+    #[serde(default)]
+    pub tags: Vec<String>,
+    /// These items, by id.
+    #[serde(default)]
+    pub things: Vec<String>,
+    /// Items in these categories or those under them.
+    #[serde(default)]
+    pub categories: Vec<String>,
+    /// Never items with any of these tags: `not_tags = ["bulky"]`.
+    #[serde(default)]
+    pub not_tags: Vec<String>,
+}
+
+#[derive(Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum StoreDisplay {
+    #[default]
+    Fill,
+    Items,
+    None,
+}
+
 /// The blocks a category's `with` can name.
 const CATEGORY_WITH: &[&str] = &["food", "tool", "stuff"];
 
@@ -2040,6 +2100,43 @@ impl DefDb {
             c.children = kids;
         }
         self.category_roots = roots;
+        // What each container can ever take, now the category tree exists.
+        for i in 0..self.things.len() {
+            let Some(st) = &self.things[i].store else { continue };
+            let ctx = format!("thing/{}", self.things[i].id);
+            if !(1..=64).contains(&st.slots) || st.stack_scale == 0 || st.look_stages == 0 {
+                return Err(format!(
+                    "{ctx}: a store has 1 to 64 slots, a stack_scale of at least 1, and look_stages of at least 1"
+                ));
+            }
+            if self.things[i].category == Category::Item {
+                return Err(format!("{ctx}: an item can't be a store; a basket that stores is a building"));
+            }
+            let a = &st.accepts;
+            let mut named = Vec::new();
+            for t in &a.things {
+                named.push(get("thing", t, &ctx)?);
+            }
+            let mut in_cats = Vec::new();
+            for c in &a.categories {
+                in_cats.extend(self.category_items(get("item_category", c, &ctx)?));
+            }
+            let any = a.tags.is_empty() && a.things.is_empty() && a.categories.is_empty();
+            let accepts: Vec<DefId> = (0..self.things.len() as DefId)
+                .filter(|&d| {
+                    let t = &self.things[d as usize];
+                    t.category == Category::Item
+                        && !t.tags.iter().any(|g| a.not_tags.contains(g))
+                        && (any
+                            || named.contains(&d)
+                            || in_cats.contains(&d)
+                            || t.tags.iter().any(|g| a.tags.contains(g)))
+                })
+                .collect();
+            if let Some(st) = &mut self.things[i].store {
+                st.accepts_r = accepts;
+            }
+        }
         if self.terrain.is_empty() {
             return Err("no terrain defined — is the core mod installed?".into());
         }

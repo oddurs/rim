@@ -125,3 +125,49 @@ A role with no `needs` would fit every room, so it doesn't load. Scripts
 read a room's role with `rim.room_at(x, y).role` (its qualified id) and
 `.role_label`. Roles are worked out again only when rooms rebuild or a
 thing carrying a counted tag is built or taken away.
+
+## Storage
+
+Stores are stockpile zones and containers (DESIGN.md §4f). Core names the
+levels they sort by: a stack only ever moves to a store at a higher one.
+
+```toml
+[[store_priority]]          # core's; patch it to change the scale
+id = "core"
+labels = ["Low", "Normal", "Preferred", "Important", "Critical"]
+default = 1                 # where a new store starts, an index from 0
+```
+
+A container is any building with a `store` block. Its contents are stacks
+held in its slots, off the ground: one cell holds as many stacks as it has
+slots.
+
+```toml
+[[thing]]
+id = "crate"
+label = "crate"
+category = "building"
+blocks = true
+build = { stuff = { category = "structural", count = 6 }, work = 400 }
+
+[thing.store]
+slots = 4                   # stacks it holds
+stack_scale = 1             # each slot holds this many times a stack
+accepts = { not_tags = ["bulky"] }   # what it can ever take (below)
+shelter = false             # contents out of the weather
+display = "fill"            # "fill", "items" or "none"
+look_stages = 4             # for "fill": steps from empty to full
+```
+
+`accepts` takes `tags`, `things` and `categories` (any of them lets an item
+in; none at all means any item) and `not_tags` (never these). The player's
+filter narrows it and can never widen it. Colonists haul into a container,
+take from it for building, crafting and meals, and fetch tools from it,
+standing beside it. Torn down or destroyed, it sets everything it held on
+the ground nearby.
+
+Scripts: `rim.store(id)` reads a container's level, slots and contents;
+`rim.store_put(id, { thing, count, made_of })` puts things in (a caravan
+unloading) and returns what didn't fit; `rim.store_take(id, slot, count)`
+takes from a slot; `rim.stock(...)` counts what the colony has, stored or
+loose.
