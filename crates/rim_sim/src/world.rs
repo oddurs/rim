@@ -431,6 +431,13 @@ pub struct Owner(pub Faction);
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct Designated(pub DefId);
 
+/// The player marked this job urgent (DESIGN.md §4d): a blueprint, a thing
+/// or creature marked for work, or an order's site. Everyone takes it a
+/// level sooner than its work type, and it wins ties inside its level. It
+/// goes when the work does.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Urgent;
+
 /// On a natural thing (grass, a tree, rock) where the player planned a
 /// building: it's marked to be cleared, and when it's gone the blueprint
 /// goes up in its place.
@@ -874,6 +881,40 @@ impl World {
     }
 
     // ------------------------------------------------------------ entities
+
+    /// Whether an entity is a job an urgent mark can go on: a blueprint, a
+    /// thing or creature marked for work, or an order's site.
+    pub fn is_markable(&self, e: Entity) -> bool {
+        self.ecs.get::<&Blueprint>(e).is_ok()
+            || self.ecs.get::<&Designated>(e).is_ok()
+            || self.ecs.get::<&Order>(e).is_ok()
+    }
+
+    /// The job on a cell an urgent mark could go on: its fixture or floor
+    /// (a blueprint, a thing marked for work, a station with an order),
+    /// else a creature there marked for work.
+    pub fn markable_at(&self, cell: IVec) -> Option<Entity> {
+        [self.map.fixture_at(cell), self.map.floor_at(cell)]
+            .into_iter()
+            .flatten()
+            .find(|&e| self.is_markable(e))
+            .or_else(|| self.pawns.iter().copied().find(|&e| self.pawn_pos(e) == Some(cell) && self.is_markable(e)))
+    }
+
+    /// How many jobs are marked urgent now.
+    pub fn urgent_count(&self) -> usize {
+        self.ecs.query::<&Urgent>().iter().count()
+    }
+
+    /// Urgent marks whose work is done or gone go too: a built blueprint,
+    /// a harvested or cancelled designation, a finished order.
+    pub fn sweep_urgent(&mut self) {
+        let stale: Vec<Entity> =
+            self.ecs.query::<(Entity, &Urgent)>().iter().map(|(e, _)| e).filter(|&e| !self.is_markable(e)).collect();
+        for e in stale {
+            let _ = self.ecs.remove_one::<Urgent>(e);
+        }
+    }
 
     /// Spawn with the next world-owned id. Every entity comes through here.
     pub fn spawn(&mut self, components: impl hecs::DynamicBundle) -> Entity {
@@ -2300,6 +2341,12 @@ impl World {
         }
         h = self.zones.hash(h);
         h = crate::rng::mix(h ^ self.stance.map_or(0x57a2, |s| s as u64));
+        let mut urgent: Vec<u64> =
+            self.ecs.query::<(Entity, &Urgent)>().iter().map(|(e, _)| e.to_bits().get()).collect();
+        urgent.sort_unstable();
+        for u in urgent {
+            h = crate::rng::mix(h ^ u ^ 0x06e7);
+        }
         h = self.standing.hash(h);
         for r in &self.work_roles {
             h = r.label.bytes().fold(crate::rng::mix(h ^ r.edited as u64 ^ (r.order as u64) << 1), |h, b| {

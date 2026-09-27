@@ -2,10 +2,12 @@
 id: bc9b9a91-1e87-4676-9e7c-9c44a5fa7680
 title: 'Urgent marks: one job, a level sooner, for everyone'
 type: feature
-status: backlog
+status: done
 milestone: work
+assignee: Oddur Sigurdsson
 created: 2026-09-26
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p1
 api: additive
 effort: m
@@ -27,7 +29,11 @@ area: ai
 
 ## Acceptance criteria
 
-- [ ] A colonist with Build at Later takes an urgent wall before a Soon harvest when nothing is at First (test)
-- [ ] The mark clears when the wall is built (test)
-- [ ] Marked work at 0 for a colonist stays at 0 (test)
-- [ ] Determinism test passes; work choice stays inside the §4d budget on the stress map
+- [x] A colonist with Build at Later takes an urgent wall before a Soon harvest when nothing is at First (test)
+- [x] The mark clears when the wall is built (test)
+- [x] Marked work at 0 for a colonist stays at 0 (test)
+- [x] Determinism test passes; work choice stays inside the §4d budget on the stress map
+
+## 2026-09-26
+
+Creatures marked for hunting can take a mark, and it works in choose_work, but the map draws it only on things, since pawns aren't in the chunk mesh. explain_work and who_takes don't say 'urgent' yet; the effect shows as the job being taken first. A mark is cleared by a per-tick sweep of marked entities that are no longer a job, which costs a query over the marks alone.

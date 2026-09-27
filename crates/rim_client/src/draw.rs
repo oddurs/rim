@@ -15,6 +15,9 @@ use rim_sim::world::*;
 use rim_sim::IVec;
 use rim_ui::paint::Draw;
 
+/// An urgent mark (DESIGN.md §4d): the UI's warning amber.
+const URGENT: Color = Color::new(1.0, 0.70, 0.35, 1.0);
+
 const PLAYER: Color = Color::new(0.35, 0.8, 1.0, 1.0);
 const HOSTILE: Color = Color::new(1.0, 0.3, 0.25, 1.0);
 
@@ -264,6 +267,12 @@ pub fn thing(
         let dx = sx + z * (fw - 0.18);
         disc(s, dx, sy + z * 0.18, z * 0.13 + 1.0, BLACK);
         disc(s, dx, sy + z * 0.18, z * 0.13, dc);
+    }
+    // Marked urgent: a larger amber disc at the top-left corner.
+    if w.ecs.get::<&Urgent>(e).is_ok() {
+        let (ux, uy) = (sx + z * 0.2, sy + z * 0.2);
+        disc(s, ux, uy, z * 0.17 + 1.0, BLACK);
+        disc(s, ux, uy, z * 0.17, URGENT);
     }
     (th.count > 1).then_some(th.count)
 }

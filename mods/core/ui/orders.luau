@@ -67,6 +67,50 @@ menus.add("tile", {
 	end,
 })
 
+-- ─── Urgent ────────────────────────────────────────────────────────────────
+-- One job before the plan (DESIGN.md §4d): everyone takes it a level
+-- sooner than its work type, and the mark goes when the job does.
+local function toggle_urgent(x: number, y: number): boolean
+	local m = view.markable(x, y)
+	if not m then
+		return false
+	end
+	act.mark_urgent(m.id, not m.urgent)
+	return true
+end
+
+menus.add("tile", {
+	id = "core:urgent",
+	group = "work",
+	key = "u",
+	applies = function(ctx)
+		return view.markable(ctx.subject.x, ctx.subject.y) ~= nil
+	end,
+	label = function(ctx)
+		local m = view.markable(ctx.subject.x, ctx.subject.y)
+		return if m and m.urgent then t("core:urgent.clear", "Clear urgent") else t("core:urgent.mark", "Mark urgent")
+	end,
+	run = function(ctx)
+		toggle_urgent(ctx.subject.x, ctx.subject.y)
+	end,
+})
+
+ui.bind("core:urgent", { key = "u", label = t("core:keys.urgent", "Mark the job under the cursor urgent") }, function()
+	local h = view.hover()
+	if h then
+		toggle_urgent(h.x, h.y)
+	end
+end)
+
+-- The HUD counts live marks, so a colony that marked everything sees it.
+ui.extend("core:topbar.right", function(view)
+	local n = view.urgent_count()
+	if n == 0 then
+		return nil
+	end
+	return kit.label(string.format(t("core:urgent.count", "%d urgent"), n), { id = "core:urgent.count", color = "bad" })
+end)
+
 -- ─── Taking an order back ──────────────────────────────────────────────────
 -- For a few seconds after an order, a chip in the dock bar says what it was,
 -- with Undo; Cmd/Ctrl+Z does the same for the newest order. It sits in the

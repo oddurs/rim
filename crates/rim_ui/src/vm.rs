@@ -804,6 +804,10 @@ impl UiVm {
         });
         act!("role_from_role", (String, u16), |(label, r)| UiAction::CreateRoleFromRole(label, role(r)?));
         act!("set_rule_enabled", (String, bool), |(id, on)| UiAction::SetRuleEnabled(id, on));
+        act!("mark_urgent", (u64, bool), |(id, on)| match Entity::from_bits(id) {
+            Some(e) => UiAction::MarkUrgent(e, on),
+            None => return Err(rt("bad entity id")),
+        });
         act!("set_stance", String, |id| UiAction::SetStance(id));
         act!("zone_allow", (u32, String, bool), |(zone, item, on)| UiAction::ZoneAllow(zone, item, on));
         act!("store_level", (Value, u8), |(store, level)| UiAction::StoreLevel(store_ref(&store)?, level));
@@ -1372,6 +1376,22 @@ impl UiVm {
             }
             Ok(t)
         });
+        // Urgent marks (DESIGN.md §4d): the job on a tile a mark could go on.
+        view!("markable", (i32, i32), |lua, l, (x, y)| {
+            let w = l.world;
+            let Some(e) = w.markable_at(rim_sim::IVec::new(x, y)) else { return Ok(None) };
+            let t = lua.create_table()?;
+            t.set("id", e.to_bits().get())?;
+            t.set("urgent", w.ecs.get::<&rim_sim::world::Urgent>(e).is_ok())?;
+            let label = match (w.thing(e), w.ecs.get::<&Pawn>(e)) {
+                (Some(th), _) => w.defs.thing(th.def).label.clone(),
+                (None, Ok(p)) => p.name.clone(),
+                _ => String::new(),
+            };
+            t.set("label", label)?;
+            Ok(Some(t))
+        });
+        view!("urgent_count", (), |_lua, l, _a| Ok(l.world.urgent_count()));
         view!("items", (), |lua, l, _a| {
             let t = lua.create_table()?;
             for d in l.world.defs.things.iter().filter(|d| d.category == rim_sim::defs::Category::Item) {

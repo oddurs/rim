@@ -271,6 +271,7 @@ impl Snapshot {
             ("engine:made_of".to_string(), component::<MadeOf>(w)),
             ("engine:owner".to_string(), component::<Owner>(w)),
             ("engine:designated".to_string(), component::<Designated>(w)),
+            ("engine:urgent".to_string(), component::<crate::world::Urgent>(w)),
             ("engine:planned".to_string(), component::<Planned>(w)),
             ("engine:regrow".to_string(), component::<Regrow>(w)),
             ("engine:work".to_string(), component::<Work>(w)),
@@ -631,6 +632,14 @@ impl Snapshot {
             for (e, c) in dec::<Vec<(Entity, Contained)>>(self, "engine:contained")? {
                 add(e, &|b| {
                     b.add(c);
+                });
+            }
+        }
+        // Optional: saves from before urgent marks lack them.
+        if self.sections.contains_key("engine:urgent") {
+            for (e, u) in dec::<Vec<(Entity, crate::world::Urgent)>>(self, "engine:urgent")? {
+                add(e, &|b| {
+                    b.add(u);
                 });
             }
         }

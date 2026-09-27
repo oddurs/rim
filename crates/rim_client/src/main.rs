@@ -1520,6 +1520,7 @@ fn apply_ui(app: &mut App, a: UiAction) {
                 app.sim.push(Command::SetRuleEnabled { rule, on });
             }
         }
+        UiAction::MarkUrgent(target, on) => app.sim.push(Command::MarkUrgent { target, on }),
         UiAction::SetStance(id) => {
             if let Some(stance) = app.sim.world.defs.lookup("stance", &id) {
                 app.sim.push(Command::SetStance { stance });

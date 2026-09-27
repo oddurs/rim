@@ -14,6 +14,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `act.draft` | `(id: number, on: boolean) -> ()` | Draft or undraft a colonist. |
 | `act.focus` | `(id: number) -> ()` | Move the camera to a pawn or thing. |
 | `act.load` | `(path: string) -> ()` | Play a save from view.saves() (the title screen). |
+| `act.mark_urgent` | `(id: number, on: boolean) -> ()` | Mark a job urgent (a blueprint, a thing or creature marked for work, an order's site), or clear it: everyone takes it a level sooner than its work type. |
 | `act.new_colony` | `() -> ()` | Start a new colony (the title screen). |
 | `act.order` | `(key: string, x: number, y: number, on: number?) -> ()` | Give the selected colonists the order named key at a map spot (a row from view.orders), each one it's on offer to. |
 | `act.preview` | `(key: string?) -> ()` | Point the materials view (view.stuff) at a buildable by its tool key, for a card describing it; nil goes back to the tool in hand. |
@@ -98,6 +99,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `view.items` | `() -> { Item }` | Every item def, which a stockpile can take or refuse. |
 | `view.last_order` | `() -> { label: string, age: number }?` | The last order given ("Gunnar will deconstruct wall") and how many seconds ago, or nil once it's been undone. |
 | `view.look` | `(thing: string, made_of: string?) -> number` | A thing's world look, tinted by what it's made of, as an index a token node's `look` takes (kind = "token"; `kit.item` builds one). Made once per thing and material. |
+| `view.markable` | `(x: number, y: number) -> Markable?` | The job on a tile an urgent mark could go on, with whether it has one. |
 | `view.marked` | `() -> { [string]: number }` | How many things each designation has marked, by designation id; ones with none are left out. |
 | `view.message_count` | `() -> number` | How many messages the log holds. |
 | `view.messages` | `(max: number, skip: number?) -> { Message }` | The newest messages, newest first; skip that many of the newest to page back through the log. |
@@ -135,6 +137,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `view.ui_scale` | `() -> number` | The player's UI scale, on top of the display's (1 is normal). |
 | `view.ui_stats` | `() -> UiStats` | The UI's own timings. |
 | `view.ui_tree` | `() -> { TreeRow }` | The node tree (devtools). |
+| `view.urgent_count` | `() -> number` | How many jobs are marked urgent. |
 | `view.visible_pawns` | `() -> { VisiblePawn }` | Pawns on screen, for anchored labels. |
 | `view.visible_rooms` | `() -> { VisibleRoom }` | Walled rooms on screen, each with the free cell nearest its middle on screen, for their labels. `open` is walled in but not roofed. Empty zoomed out. |
 | `view.warnings` | `() -> { string }` | Load warnings. |

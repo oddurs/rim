@@ -168,6 +168,8 @@ pub enum UiAction {
     SetStance(String),
     /// Switch a priority rule off for the colony, or back on, by its id.
     SetRuleEnabled(String, bool),
+    /// Mark a job urgent, or clear the mark.
+    MarkUrgent(Entity, bool),
     /// Let a stockpile take an item (by qualified id), or stop it.
     ZoneAllow(u32, String, bool),
     /// Put a store (a stockpile or a container) at a level of the store
