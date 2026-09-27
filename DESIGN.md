@@ -2329,9 +2329,11 @@ Chalkline.
     fade out over 5.5 cells.
   - **Plan:** during a drag, lines run across the view, strongest near the
     pointer.
-  - **Measure:** held with G. Every fifth line is heavier, counted from
-    the map's origin. Rulers count cells, and the pointer's row and column
-    are lit.
+  - **Measure:** G turns it on and off, over whatever the tool asks for.
+    Every fifth line is heavier, counted from the map's origin, and each
+    is numbered where it crosses the pointer's row and column, which are
+    lit. The screen's edges are under panels, so there are no edge
+    rulers; the hover readout already names the cell.
 
   A grid line is a groove in the ground, not a line over it. It is a dark
   seam, with a faint lit edge on its lower-right side from the same

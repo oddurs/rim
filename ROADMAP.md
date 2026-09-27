@@ -84,7 +84,7 @@ Shadows from the sun, the moons and every wall; torches that flicker and fill th
 
 ## chalkline — Chalkline
 
-`#######···` 62% · 8 of 13 done
+`#######···` 69% · 9 of 13 done
 
 The grid, hover, selection, drag previews, placement ghosts and marks, drawn in one visual language. Design: DESIGN.md §6f. Concept and live map with every state: https://claude.ai/artifact/N2buE4YpoduQdxpE1zZTHv
 
@@ -92,7 +92,6 @@ The grid, hover, selection, drag previews, placement ghosts and marks, drawn in 
 - [ ] `bb769d00` Designate: targets light in their hue, on hover and across a drag <sup>feature · p0 · m · client</sup>
 - [ ] `bf3079fb` Order ring in chalk, urgent that breathes, and a reduce-motion setting <sup>feature · p3 · s · client</sup>
 - [ ] `e8f313d6` Build ghosts: fits, clears first, or blocked <sup>feature · p0 · m · client</sup>
-- [ ] `f5bc43e3` Measure: G holds a counting grid with rulers <sup>feature · p2 · s · client</sup>
 - [x] `11080b20` Zones in violet; a selected zone turns chalk; paint and erase preview <sup>feature · p1 · s · client</sup>
 - [x] `463983bb` Box select: a snapped box that previews, Shift adds, Alt removes <sup>feature · p1 · s · client</sup>
 - [x] `553bfb19` The grid: Rest, Lens and Plan, drawn as a groove under things <sup>feature · p0 · m · client</sup>
@@ -101,6 +100,7 @@ The grid, hover, selection, drag previews, placement ghosts and marks, drawn in 
 - [x] `bd7a158e` Hover: an edge on the thing under the pointer <sup>feature · p1 · s · client</sup>
 - [x] `cd59b515` Ask the sim what an order would do: designate and build previews <sup>feature · p0 · m · engine</sup>
 - [x] `d83192ed` Overlays read the theme: chalk selection on a keyline, as a testable scene <sup>feature · p0 · m · client</sup>
+- [x] `f5bc43e3` Measure: G holds a counting grid with rulers <sup>feature · p2 · s · client</sup>
 
 ## workbench — Workbench
 

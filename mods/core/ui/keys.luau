@@ -175,6 +175,11 @@ ui.window("core:palette", { title = t("core:palette.title", "Commands"), w = 440
 	})
 end)
 
+-- The measuring grid: every fifth line heavier, for counting cells.
+ui.bind("core:measure", { key = "g", label = t("core:keys.measure", "Measure grid") }, function()
+	act.toggle_measure()
+end)
+
 -- Turn a bed, a bench or anything with a facing before placing it.
 ui.bind("core:turn", { key = "t", label = t("core:keys.turn", "Turn what you're placing") }, function()
 	act.turn()

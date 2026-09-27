@@ -38,6 +38,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `act.store_level` | `(store: number \| StoreRef, level: number) -> ()` | Put a store at a level of the store priority scale (0 is lowest): a stockpile by id, or { zone = id } or { thing = id }. Stacks only move to a higher one. |
 | `act.stuff` | `(id: string) -> ()` | Choose the material for the active build tool. |
 | `act.toggle_devtools` | `() -> ()` | Show or hide devtools. |
+| `act.toggle_measure` | `() -> ()` | Show or hide the measuring grid: every fifth line heavier, labelled along the pointer's row and column. |
 | `act.toggle_outlines` | `() -> ()` | Show or hide layout outlines (devtools). |
 | `act.toggle_pause` | `() -> ()` | Pause or resume. |
 | `act.toggle_profiler` | `() -> ()` | Show or hide the profiler. |

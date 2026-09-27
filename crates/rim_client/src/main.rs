@@ -200,6 +200,8 @@ pub struct App {
     pub grid: grid::Grid,
     /// A drag has left the cell it started in: it's a drag, not a click.
     pub dragged: bool,
+    /// The measuring grid is on (G).
+    pub measure: bool,
     /// What a stockpile or clear-zone drag will change, made once a frame.
     pub zone_preview: Option<draw::ZonePreview>,
     /// The pointer as this frame's input had it, in screen points. Previews
@@ -739,6 +741,7 @@ async fn game() {
         grid: grid::Grid::default(),
         pointer: (0.0, 0.0),
         dragged: false,
+        measure: false,
         zone_preview: None,
     };
     app.selected = app.sim.world.colonists().next();
@@ -1329,7 +1332,7 @@ pub fn frame(app: &mut App, raw: &RawInput) {
     app.pointer = (mx, my);
     app.zone_preview = draw::ZonePreview::of(app);
     let pointer = (!app.mouse_over_ui).then(|| app.cam.to_world(mx, my));
-    app.grid.update(grid::level(app.tool, dragging), pointer, raw.time);
+    app.grid.update(grid::level(app.tool, dragging), app.measure, pointer, raw.time);
     let hovered = if app.tool == Tool::Select && !dragging && pointer.is_some() { hovered(app, mx, my) } else { None };
     app.chalk.update(&picked, hovered, raw.time);
 }
@@ -1585,17 +1588,12 @@ pub fn render(app: &mut App) {
     let dpi = screen_dpi_scale();
     let mut labels = Vec::with_capacity(counts.len() * 2 + readouts.len() * 2);
     for (x, y, text) in readouts {
-        for (dx, color) in [(1.0, [0.0, 0.0, 0.0, 0.7]), (0.0, [0.91, 0.93, 0.9, 1.0])] {
-            let quads = app.ui.text.quads(&text, 12.0 * dpi, 600, 0.0, None, (x + dx) * dpi, (y + dx) * dpi);
-            labels.push(rim_ui::paint::Draw::Glyphs { quads, color });
-        }
+        let look = ([0.0, 0.0, 0.0, 0.7], [0.91, 0.93, 0.9, 1.0]);
+        labels.extend(overlay::shadowed(&mut app.ui.text, &text, 12.0, 600, (x, y), look, dpi));
     }
     for (x, y, n) in counts {
-        let text = n.to_string();
-        for (dx, color) in [(1.0, [0.0, 0.0, 0.0, 0.6]), (0.0, [1.0, 1.0, 1.0, 1.0])] {
-            let quads = app.ui.text.quads(&text, 13.0 * dpi, 600, 0.0, None, (x + dx) * dpi, (y + dx) * dpi);
-            labels.push(rim_ui::paint::Draw::Glyphs { quads, color });
-        }
+        let look = ([0.0, 0.0, 0.0, 0.6], [1.0, 1.0, 1.0, 1.0]);
+        labels.extend(overlay::shadowed(&mut app.ui.text, &n.to_string(), 13.0, 600, (x, y), look, dpi));
     }
     labels.extend(overlay::chips(&scene, &app.palette, &mut app.ui.text, dpi));
     upload_atlas(&mut app.ui, &app.atlas);
@@ -1746,6 +1744,7 @@ fn apply_ui(app: &mut App, a: UiAction) {
         }
         UiAction::ToggleProfiler => apply(app, Action::ToggleProfiler),
         UiAction::ToggleDevtools => apply(app, Action::ToggleDevtools),
+        UiAction::ToggleMeasure => app.measure = !app.measure,
         UiAction::ToggleOutlines => app.ui.toggle_outlines(),
         UiAction::RenderScale(s) => {
             let Some(s) = valid_render_scale(s as f64) else { return };

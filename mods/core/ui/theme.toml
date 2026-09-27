@@ -78,5 +78,6 @@ backdrop = "#00000073"
 chalk = "#f2eee3"        # selection, the grid's lit edge
 keyline = "#080a0c8c"    # under every overlay stroke, so it reads on any ground
 seam = "#0000001f"       # a grid line, darkening the ground it crosses
+seam_major = "#00000052" # every fifth line when measuring (G)
 zone = "#a48fe0"         # stockpiles: violet, so a plan's blue never reads as one
 zone_fill = "#a48fe01f"

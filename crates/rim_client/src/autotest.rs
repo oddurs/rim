@@ -2922,7 +2922,78 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     let d = patch_diff(&rest, &plan, corner, 6.0);
     t.check(d < 0.2, format!("at 8 points a cell there's no grid ({d:.2})"));
     let shown = crate::grid::strength(&t.app);
-    t.check(shown == (0.0, 0.0), format!("putting the tool down fades the grid out ({shown:?})"));
+    t.check(shown.lens == 0.0 && shown.plan == 0.0, format!("putting the tool down fades the grid out ({shown:?})"));
+    // Measure (f5bc43e3): G turns on a counting grid whose fifth lines
+    // show at any zoom, numbered along the pointer's row and column.
+    t.app.cam.zoom = 6.0;
+    t.focus(o.offset(3, 3));
+    t.mouse = t.screen(o.offset(2, 2));
+    for _ in 0..50 {
+        t.frame().await;
+    }
+    let before = t.grab().await;
+    t.key(KeyCode::G).await;
+    t.check(t.app.measure, "G turns the measuring grid on");
+    for _ in 0..30 {
+        t.frame().await;
+    }
+    let measured = t.grab().await;
+    // The fifth line nearest the middle, against a line two cells over,
+    // read only where both run over open ground: rock and trees stand on
+    // the grid and hide it.
+    let (x0, y0, x1, y1) = draw::visible(&t.app);
+    let every = crate::grid::MAJOR_EVERY;
+    let major = ((x0 + x1) / 2).div_euclid(every) * every;
+    let open = |t: &T, x: i32, y: i32| {
+        let w = t.w();
+        [x - 1, x].iter().all(|&cx| {
+            let p = IVec::new(cx, y);
+            w.map.inb(p) && w.map.fixture_at(p).is_none() && w.map.item_at(p).is_none() && w.map.floor_at(p).is_none()
+        })
+    };
+    let along = |x: i32, t: &T| {
+        let (lx, _) = t.app.cam.to_screen(x as f32, 0.0);
+        (y0 + 2..y1 - 2)
+            .filter(|&y| y % every != 0 && open(t, major, y) && open(t, major + 2, y))
+            .map(|y| patch_diff(&before, &measured, (lx, t.app.cam.to_screen(0.0, y as f32 + 0.5).1), 1.5))
+            .fold(0.0f32, f32::max)
+    };
+    let (dm, dn) = (along(major, &t), along(major + 2, &t));
+    t.check(dm > 0.5 && dn < 0.2, format!("at 6 points a cell only the fifth lines show ({dm:.2} against {dn:.2})"));
+    t.app.cam.zoom = 28.0;
+    t.focus(o.offset(3, 3));
+    t.mouse = t.screen(o.offset(2, 2));
+    for _ in 0..10 {
+        t.frame().await;
+    }
+    let cell = t.app.cam.tile_at(t.mouse.0, t.mouse.1);
+    let (_, row_top) = t.app.cam.to_screen(0.0, cell.y as f32);
+    let (col_right, _) = t.app.cam.to_screen(cell.x as f32 + 1.0, 0.0);
+    let caption = t.app.palette.caption;
+    let (mut on_row, mut on_col) = (0, 0);
+    for m in crate::overlay::scene(&t.app).marks {
+        if let Mark::Label { at, .. } = m {
+            on_row += ((at.1 - (row_top - caption - 5.0)).abs() < 0.5) as usize;
+            on_col += ((at.0 - (col_right + 3.0)).abs() < 0.5) as usize;
+        }
+    }
+    t.check(
+        on_row > 0 && on_col > 0,
+        format!("the fifth lines are numbered along the pointer's row ({on_row}) and column ({on_col})"),
+    );
+    t.shot("chalk-measure").await;
+    t.key(KeyCode::G).await;
+    t.check(!t.app.measure, "and G again turns it off");
+    let opening = RawInput { mouse: t.mouse, pressed: vec!["ctrl+k".into()], ..Default::default() };
+    t.input(opening).await;
+    t.input(RawInput { mouse: t.mouse, chars: "measure".chars().collect(), ..Default::default() }).await;
+    t.settle().await;
+    t.check(t.ui_text().contains("Measure grid"), "the command palette finds the measuring grid");
+    // The same keys close it.
+    t.key(KeyCode::Escape).await;
+    t.input(RawInput { mouse: t.mouse, pressed: vec!["ctrl+k".into()], ..Default::default() }).await;
+    t.settle().await;
+    t.check(!t.app.ui.is_open("core:palette"), "Ctrl+K closes the palette");
     t.app.cam.zoom = 28.0;
     t.app.paused = false;
     t.app.sim.world.fields.set_ambient(rain, None);

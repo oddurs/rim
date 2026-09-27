@@ -243,6 +243,8 @@ declare act: {
     stuff: (id: string) -> (),
     -- Show or hide devtools.
     toggle_devtools: () -> (),
+    -- Show or hide the measuring grid: every fifth line heavier, labelled along the pointer's row and column.
+    toggle_measure: () -> (),
     -- Show or hide layout outlines (devtools).
     toggle_outlines: () -> (),
     -- Pause or resume.

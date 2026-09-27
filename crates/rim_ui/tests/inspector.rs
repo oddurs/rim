@@ -237,7 +237,7 @@ inspector.tab({
 inspector.action({
     id = "probe:wave",
     label = "Wave",
-    key = "g",
+    key = "y",
     applies = function(sel) return sel.kind == "pawn" end,
     run = function(sel) act.focus(sel.id) end,
 })
@@ -258,7 +258,7 @@ inspector.action({
 
     // The mod's action sits beside it, and its key runs it on the selection.
     assert!(ui.find("core:inspector.action.probe:wave").is_some(), "the mod's action");
-    let out = frame(&mut ui, &sim, &cv, Input { pressed: vec!["g".into()], time: 5.0, ..Default::default() });
+    let out = frame(&mut ui, &sim, &cv, Input { pressed: vec!["y".into()], time: 5.0, ..Default::default() });
     assert!(out.actions.contains(&rim_ui::view::UiAction::Focus(founder)), "{:?}", out.actions);
 
     // The mod's tab is a tab like core's.

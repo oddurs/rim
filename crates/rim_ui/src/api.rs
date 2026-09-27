@@ -181,6 +181,7 @@ pub const UI_API: &[UiDoc] = &[
     d!("act.store_level", "(store: number | StoreRef, level: number) -> ()", "Put a store at a level of the store priority scale (0 is lowest): a stockpile by id, or { zone = id } or { thing = id }. Stacks only move to a higher one."),
     d!("act.stuff", "(id: string) -> ()", "Choose the material for the active build tool."),
     d!("act.toggle_devtools", "() -> ()", "Show or hide devtools."),
+    d!("act.toggle_measure", "() -> ()", "Show or hide the measuring grid: every fifth line heavier, labelled along the pointer's row and column."),
     d!("act.toggle_outlines", "() -> ()", "Show or hide layout outlines (devtools)."),
     d!("act.toggle_pause", "() -> ()", "Pause or resume."),
     d!("act.toggle_profiler", "() -> ()", "Show or hide the profiler."),

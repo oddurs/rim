@@ -9,7 +9,7 @@
 --         build = function(view, sel) return kit.label("content") end,
 --     })
 --     inspector.action({
---         id = "my_mod:rally", label = "Rally", key = "g",
+--         id = "my_mod:rally", label = "Rally", key = "y",
 --         applies = function(sel) return sel.kind == "pawn" and sel.player end,
 --         run = function(sel) act.send("my_mod:rally", sel.id) end,
 --     })
