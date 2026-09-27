@@ -147,9 +147,8 @@ pub struct App {
     /// Every mod's sprites, packed at load.
     pub world_atlas: atlas::WorldAtlas,
     /// The world's resolution as a fraction of the screen's pixels, if
-    /// the player chose one; unset follows the screen (see
-    /// `default_render_scale`). The UI is always full. Below 1 the world
-    /// draws into `world_target`.
+    /// the player chose one; unset is full. The UI is always full. The
+    /// world draws into `world_target` (see `update_world_target`).
     pub render_scale: Option<f32>,
     pub world_target: Option<RenderTarget>,
     /// Puts `world_target` on the screen without blending: what the world
@@ -314,7 +313,7 @@ mod tests {
         assert_eq!(saved_render_scale(&format!("render_scale = {}\n", 0.75f32)), Ok(Some(0.75)));
         assert_eq!(saved_render_scale("render_scale = 1"), Ok(Some(1.0)));
         assert_eq!(saved_render_scale("render_scale = 0.1"), Ok(Some(0.25)), "clamped to what draws");
-        assert_eq!(saved_render_scale("vsync = true"), Ok(None), "unset follows the screen");
+        assert_eq!(saved_render_scale("vsync = true"), Ok(None), "unset is full");
         assert!(saved_render_scale("render_scale = \"half\"").is_err());
         assert!(saved_render_scale("render_scale = nan").is_err());
         assert!(saved_render_scale("render_scale = ").is_err());
@@ -1275,34 +1274,25 @@ fn save_setting(path: &std::path::Path, key: &str, value: toml::Value) -> Result
         .map_err(|e| format!("{}: {e}", path.display()))
 }
 
-/// A high-DPI screen gets the world at its logical resolution: a quarter
-/// of the pixels at 2x, which is the difference for an integrated GPU.
-fn default_render_scale() -> f32 {
-    let dpi = screen_dpi_scale();
-    if dpi > 1.5 {
-        1.0 / dpi
-    } else {
-        1.0
-    }
-}
-
-/// Make `world_target` match the screen at the render scale, or drop it
-/// at full scale, where the world draws straight to the screen.
+/// Make `world_target` match the screen at the render scale. The world
+/// draws there even at full scale: it takes several passes (the batch, the
+/// chunk meshes' layers), and on macOS's GL each pass on the window's own
+/// framebuffer cost the frame far more than one into a texture. Measured
+/// at 2x: 13-33 ms a frame to submit straight to the screen, 2-8 ms into
+/// a target and one copy out.
 fn update_world_target(app: &mut App) {
     let dpi = screen_dpi_scale();
-    // Unset follows the screen, so a window dragged between a Retina and
-    // an ordinary display gets each one's default.
-    let scale = app.render_scale.unwrap_or_else(default_render_scale);
+    let scale = app.render_scale.unwrap_or(1.0);
     let (w, h) = ((screen_width() * dpi * scale).round(), (screen_height() * dpi * scale).round());
-    let full = (screen_width() * dpi).round();
-    if w >= full || w < 1.0 || h < 1.0 {
+    if w < 1.0 || h < 1.0 {
         app.world_target = None;
         return;
     }
     let fits = app.world_target.as_ref().is_some_and(|t| t.texture.width() == w && t.texture.height() == h);
     if !fits {
         let t = render_target(w as u32, h as u32);
-        t.texture.set_filter(FilterMode::Linear);
+        // Pixel for pixel at full scale; smoothed when stretched.
+        t.texture.set_filter(if scale < 1.0 { FilterMode::Linear } else { FilterMode::Nearest });
         app.world_target = Some(t);
     }
 }
@@ -1349,7 +1339,7 @@ pub fn render(app: &mut App) {
     update_world_target(app);
     let (sw, sh) = (screen_width(), screen_height());
     if let Some(rt) = &app.world_target {
-        // The same screen points, into fewer pixels.
+        // The same screen points, into the target's pixels.
         set_camera(&Camera2D {
             zoom: vec2(2.0 / sw, 2.0 / sh),
             target: vec2(sw / 2.0, sh / 2.0),

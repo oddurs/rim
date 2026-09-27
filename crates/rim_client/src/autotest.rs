@@ -971,7 +971,11 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.shot("render_scale_50").await;
     crate::apply_ui(&mut t.app, rim_ui::view::UiAction::RenderScale(1.0));
     t.frame().await;
-    t.check(t.app.world_target.is_none(), "full render scale draws straight to the screen");
+    let full_w = t.app.world_target.as_ref().map(|rt| rt.texture.width());
+    t.check(
+        full_w.is_some_and(|w| (w - native).abs() <= 1.0),
+        format!("full render scale draws the world at the screen's width ({full_w:?} of {native})"),
+    );
     t.click_tool("cancel").await;
     t.drag(spot, spot).await;
     t.ticks(1);
