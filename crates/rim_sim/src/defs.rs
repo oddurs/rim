@@ -437,6 +437,11 @@ pub struct BuildDef {
     /// that cell's rock asks (DESIGN.md §6d).
     #[serde(default)]
     pub dig: Option<DigDef>,
+    /// It stands over air, and is footing there: a bridge (a floor) or a
+    /// drawbridge (a door). Planned only over air, never on ground
+    /// (DESIGN.md §6d).
+    #[serde(default)]
+    pub spans: bool,
     #[serde(skip)]
     pub cost_r: Vec<(DefId, u32)>,
     #[serde(skip)]
@@ -2482,6 +2487,11 @@ impl DefDb {
                         return Err(format!("{ctx}: build.dig leaves a hole or a portal: one, not both or neither"));
                     }
                     g.hole_r = g.hole.as_deref().map(|h| get("terrain", h, &ctx)).transpose()?;
+                }
+                // Something to stand on over a pit: a floor, or a door that
+                // opens for its owner. A wall over air is no footing.
+                if b.spans && (d.blocks || d.size != [1, 1] || !(d.category == Category::Floor || d.door)) {
+                    return Err(format!("{ctx}: build.spans is for a one-cell floor or door"));
                 }
                 b.cost_r = counts(&b.cost, &ctx)?;
                 match (b.cost.is_empty(), b.stuff.is_some()) {

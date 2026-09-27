@@ -600,13 +600,14 @@ Every run leaves a story you can take apart: perception, memories, relations, mo
 
 ## defense — Defense
 
-`··········` 0% · 0 of 11 done · due 2027-04-10
+`··········` 0% · 0 of 12 done · due 2027-04-10
 
 Combat depth: ranged weapons, apparel and armor, equipment, downed and rescue, raid tactics, turrets.
 
 - [ ] `019148c8` Lone stone-age colonies collapse in autumn (days 30-45) <sup>chore · p1 · l · core</sup>
 - [ ] `3503525f` Raid AI: groups, building targets and retreat <sup>feature · p1 · l · engine</sup>
 - [ ] `41006a46` Apparel and armor <sup>feature · p0 · l · engine</sup>
+- [ ] `5f022ef4` Defences count in the raid budget: walls, doors and trenches <sup>feature · p2 · m · core</sup>
 - [ ] `6499049f` Siege and sapper raids <sup>content · p2 · m · core</sup>
 - [ ] `6d15500e` Turrets and traps <sup>content · p2 · m · plugin</sup>
 - [ ] `713009ac` Fog and darkness limit sight <sup>feature · p3 · m · engine</sup>
@@ -631,17 +632,18 @@ Lockstep co-op on top of determinism: command broadcast, desync detection, mod-l
 
 ## depth — Depth
 
-`####······` 38% · 3 of 8 done
+`#####·····` 44% · 4 of 9 done
 
 Dig down. The map becomes a stack of 2D levels joined only at stairs, ladders and holes, rock becomes terrain, and water fills what you dig into. Design: DESIGN.md §6d.
 
 - [ ] `3979868c` Basins: water fills what you dig into <sup>feature · p1 · l · engine</sup>
+- [ ] `3fea3b3d` Movement classes: a creature that drops a level, with its own region layer <sup>feature · p2 · m · engine</sup>
 - [ ] `5689930d` The view: one level at a time, \[ and \], and the depth ruler <sup>feature · p0 · m · client</sup>
-- [ ] `ba8253df` Pits and bridges: trenches that raiders have to bridge <sup>feature · p1 · m · engine</sup>
 - [ ] `f2a8ffc7` Underground: rock is a roof, the cellar keeps the year's mean, and it's dark <sup>content · p2 · s · core</sup>
 - [ ] `acd85584` Portals: stairs, ladders, digging down, and paths across levels <sup>feature · p0 · l · engine</sup>
 - [x] `3f90e043` Strata: the levels below are made from \[\[stratum\]\] defs <sup>feature · p0 · m · engine</sup>
 - [x] `8cc6252d` Rock is terrain: solid cells, mining them, and worksites <sup>feature · p0 · l · engine</sup>
+- [x] `ba8253df` Pits and bridges: trenches that raiders have to bridge <sup>feature · p1 · m · engine</sup>
 - [x] `e311c029` Positions gain z: the map becomes a stack of levels <sup>feature · p0 · l · engine</sup>
 
 ## crafting — Crafting
@@ -713,9 +715,10 @@ The world beyond the map: factions, traders drawn by wealth, quests, taming.
 
 ## Unscheduled
 
-`########··` 75% · 3 of 4 done
+`######····` 60% · 3 of 5 done
 
 - [ ] `34bc0d93` A Mac mini as a self-hosted runner for the nightly lane <sup>chore · p3 · s · tooling</sup>
+- [ ] `e88e8ce5` One open_cells for the tests: a ring walk that doesn't repeat cells <sup>chore · p3 · s · tooling</sup>
 - [x] `1cfccb62` Storytelling: scenarios, feelings, mourning, relationships and dialogue <sup>spike · p3 · l · plugin</sup>
 - [x] `27307380` A panel that shows nothing while nothing's hovered misses the hover when it comes <sup>bug · p1 · s · client</sup>
 - [x] `cc6ac1c3` Autotest: the wall-seam check picks a row a pawn is standing on <sup>bug · p1 · s · client</sup>

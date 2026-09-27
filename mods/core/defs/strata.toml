@@ -204,3 +204,38 @@ color = "#3a3530"
 category = "building"
 look.layers = [{ draw = "outline", x = 0.1, y = 0.1, w = 0.8, h = 0.8, width = 1.5 }]
 build = { menu = "dig", work = 40, free = true, dig = { hole = "air" } }
+
+# Planks over a pit: ground where there was none. A raider shut out by a
+# trench lays these a cell at a time; anyone can knock one down, and what
+# stands on it goes down with it (DESIGN.md §6d).
+[[thing]]
+id = "bridge"
+label = "bridge"
+color = "#9a7a50"
+category = "floor"
+look.layers = [
+    { draw = "fill", shade = 0.8 },
+    { draw = "pattern", pattern = "floor" },
+    { draw = "edges", line = "light", shade = 0.5 },
+]
+path_cost = 90
+hp = 80
+market_value = 2
+build = { menu = "dig", work = 120, stuff = { category = "structural", count = 3 }, spans = true }
+
+# A bridge that opens for its owner only: to everyone else it is the pit.
+[[thing]]
+id = "drawbridge"
+label = "drawbridge"
+color = "#8a6a40"
+category = "building"
+look.layers = [
+    { draw = "fill", shade = 0.75 },
+    { draw = "pattern", pattern = "floor" },
+    { draw = "edges", line = "heavy", shade = 0.45 },
+]
+door = true
+path_cost = 80
+hp = 150
+market_value = 12
+build = { menu = "dig", work = 300, stuff = { category = "structural", count = 8 }, spans = true }

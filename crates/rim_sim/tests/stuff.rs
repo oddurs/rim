@@ -33,7 +33,11 @@ fn site(s: &Sim) -> IVec {
 fn open_cells(s: &Sim, n: usize) -> Vec<IVec> {
     let c = s.world.colony_center().expect("a colony");
     (1..30)
-        .flat_map(|r| (-r..=r).flat_map(move |dy| (-r..=r).map(move |dx| c.offset(dx, dy))))
+        // Each ring's own cells: a whole square per ring would repeat the
+        // inner ones, and two builds would share a cell.
+        .flat_map(|r| {
+            (-r..=r).flat_map(move |dy| (-r..=r).map(move |dx| c.offset(dx, dy))).filter(move |p| p.chebyshev(c) == r)
+        })
         .filter(|&p| s.world.map.passable(p) && s.world.map.fixture_at(p).is_none() && s.world.map.item_at(p).is_none())
         .take(n)
         .collect()
@@ -198,6 +202,11 @@ stuff = { categories = ["structural"], factors = { hp = 2.0, beauty = 3.0 } }
     assert!(wants.len() >= 3, "wall, door and bed at least: {wants:?}");
     let cells = open_cells(&s, wants.len());
     for ((def, count, id), &cell) in wants.iter().zip(&cells) {
+        // A bridge goes over a pit, and only there.
+        if s.world.defs.thing(*def).build.as_ref().is_some_and(|b| b.spans) {
+            let air = s.world.defs.terrain.iter().position(|t| t.air).expect("air") as DefId;
+            s.world.map.set_terrain(cell, air, 0);
+        }
         build(&mut s, *def, Some(marble_id), cell);
         let (_, bp, made) = blueprint_at(&s, cell).unwrap_or_else(|| panic!("a marble {id}, with no engine change"));
         assert_eq!(bp.cost, vec![(marble_id, *count)], "{id}");

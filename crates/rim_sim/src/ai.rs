@@ -238,6 +238,10 @@ fn think_hostile(w: &mut World, e: Entity, p: &mut Pawn) -> Option<Job> {
         if let Some(target) = nearest_breach(w, p.pos, p.faction, tp) {
             return Some(Job::Breach { target });
         }
+        // Dug out: bridge the trench a cell at a time.
+        if let Some((at, left)) = nearest_gap(w, p.pos, p.faction, tp) {
+            return Some(Job::Bridge { at, left });
+        }
     }
     wander(w, p, 8)
 }
@@ -1440,6 +1444,7 @@ fn run_job(w: &mut World, e: Entity, p: &mut Pawn) {
         Job::Comfort { to, need, until } => (run_comfort(w, p, to, need, until), 0),
         Job::Attack { target, until } => (run_attack(w, e, p, target, until), 0),
         Job::Breach { target } => (run_breach(w, p, target), 0),
+        Job::Bridge { at, left } => (run_bridge(w, p, at, left), 0),
     };
     match next {
         Some(j) => p.job = j,
@@ -1865,6 +1870,9 @@ pub fn complete_building(w: &mut World, bp: Entity) {
         w.map.set_fixture(c, Some(bp), blocks, cost, door);
         w.map.set_owner(c, Some(Faction::Player));
     }
+    if td.build.as_ref().is_some_and(|b| b.spans) {
+        w.map.set_span(t.pos, true);
+    }
     let span = w.support_span(bp);
     if span > 0 {
         w.set_support(bp, span);
@@ -2047,6 +2055,66 @@ fn run_attack(w: &mut World, e: Entity, p: &mut Pawn, target: Entity, until: u64
     match go_to(w, p, Goal::Touch(tpos)) {
         Go::Failed => None,
         _ => Some(Job::Attack { target, until }),
+    }
+}
+
+/// What raiders bridge with: the quickest floor that spans air, of the
+/// first material it takes. None when no mod has one, and then a trench
+/// holds (DESIGN.md §6d).
+fn raid_bridge(defs: &DefDb) -> Option<(DefId, Option<DefId>, u32)> {
+    let (d, b) = (0..defs.things.len())
+        .filter_map(|d| Some((d, defs.things[d].build.as_ref()?)))
+        .filter(|(d, b)| b.spans && defs.things[*d].category == crate::defs::Category::Floor)
+        .min_by_key(|(d, b)| (b.work, *d))?;
+    let stuff = match &b.stuff {
+        Some(sc) => Some(*defs.materials(&sc.category).first()?),
+        None => None,
+    };
+    let work = (b.work as f64 * defs.factor(stuff, "work")).round().max(1.0) as u32;
+    Some((d as DefId, stuff, work))
+}
+
+/// The air cell to bridge next when a trench is all that keeps `who` on
+/// `from`'s side from `to`: of the open air beside that side, the cell
+/// nearest `to`. Each bridged cell joins the side, so the next is one
+/// further across. Only on one level. Call `ensure_regions` first.
+fn nearest_gap(w: &World, from: IVec, who: Faction, to: IVec) -> Option<(IVec, u32)> {
+    let (_, _, work) = raid_bridge(&w.defs)?;
+    if from.z != to.z {
+        return None;
+    }
+    let mine = w.map.region_at_for(from, who);
+    if mine == 0 || mine == w.map.region_at_for(to, who) {
+        return None;
+    }
+    let beside = |p: IVec| {
+        [(1, 0), (-1, 0), (0, 1), (0, -1)].iter().any(|(dx, dy)| w.map.region_at_for(p.offset(*dx, *dy), who) == mine)
+    };
+    w.map
+        .air_cells(from.z)
+        .iter()
+        .map(|&i| w.map.pos(i as usize))
+        .filter(|&p| !w.map.passable(p) && w.map.floor_at(p).is_none() && w.map.fixture_at(p).is_none() && beside(p))
+        .min_by_key(|&p| (p.octile(to), w.map.idx(p)))
+        .map(|p| (p, work))
+}
+
+/// Work on a bridge from beside it; when the work is done it is laid,
+/// and the next think finds the next gap, or the way in open.
+fn run_bridge(w: &mut World, p: &mut Pawn, at: IVec, left: u32) -> Option<Job> {
+    // Someone else bridged it, or it's no longer air.
+    if w.map.passable(at) || w.map.floor_at(at).is_some() {
+        return None;
+    }
+    match go_to(w, p, Goal::Touch(at)) {
+        Go::Failed => None,
+        Go::Moving => Some(Job::Bridge { at, left }),
+        Go::Arrived if left > 1 => Some(Job::Bridge { at, left: left - 1 }),
+        Go::Arrived => {
+            let (def, stuff, _) = raid_bridge(&w.defs)?;
+            w.spawn_fixture_of(def, at, false, stuff);
+            None
+        }
     }
 }
 
