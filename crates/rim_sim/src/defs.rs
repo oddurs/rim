@@ -478,6 +478,17 @@ pub enum Satisfier {
     Field,
 }
 
+impl Satisfier {
+    /// As a def writes it.
+    pub fn name(self) -> &'static str {
+        match self {
+            Satisfier::Food => "food",
+            Satisfier::Rest => "rest",
+            Satisfier::Field => "field",
+        }
+    }
+}
+
 #[derive(Deserialize, Clone, Debug)]
 pub struct NeedDef {
     pub id: String,

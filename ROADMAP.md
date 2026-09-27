@@ -83,14 +83,13 @@ Hands first. The colonist wakes with nothing (pillar 93f291d5), and today nothin
 
 ## work — Work priorities
 
-`####······` 38% · 5 of 13 done
+`#####·····` 46% · 6 of 13 done
 
 Who does what, without a spreadsheet. New colonists start on Auto and the colony plans its own work. The player takes control one rung at a time: Focus for the colony, Urgent for one job, a pin for one cell, work roles for a group. Design: DESIGN.md §4d.
 
 - [ ] `2e145c65` Modding docs: work types, roles, Auto, readings, orders and lenses <sup>docs · p2 · s · core</sup>
 - [ ] `5dc8f858` Auto on the board: rings, reasons, and the one-colonist plan <sup>feature · p0 · m · core</sup>
 - [ ] `98b8ec4a` The orders panel, and Focus on the HUD <sup>feature · p1 · s · core</sup>
-- [ ] `bbc59ec3` Core's default orders: food, loose items, firewood <sup>content · p1 · m · core</sup>
 - [ ] `bc9b9a91` Urgent marks: one job, a level sooner, for everyone <sup>feature · p1 · m · engine</sup>
 - [ ] `c59d67ed` Does Auto play well? Auto against flat defaults and a tuned grid <sup>spike · p1 · m · tooling</sup>
 - [ ] `f5295002` Core's planner: Auto fills the gaps the colony leaves <sup>feature · p0 · m · core</sup>
@@ -99,6 +98,7 @@ Who does what, without a spreadsheet. New colonists start on Auto and the colony
 - [x] `4c9fc19b` Work lenses: the board's views register like screens <sup>feature · p1 · s · core</sup>
 - [x] `97a12814` Colony readings and standing orders: rules that switch themselves <sup>feature · p0 · m · engine</sup>
 - [x] `992ecb92` Work roles: presets a colonist belongs to <sup>feature · p0 · l · engine</sup>
+- [x] `bbc59ec3` Core's default orders: food, loose items, firewood <sup>content · p1 · m · core</sup>
 - [x] `d41e504f` Auto, the mechanism: planned roles and the two-plan rule <sup>feature · p0 · l · engine</sup>
 
 ## pointer — Pointer and Orders

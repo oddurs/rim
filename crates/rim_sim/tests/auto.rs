@@ -52,10 +52,12 @@ fn want(s: &mut Sim, cells: &[(&str, i64)]) {
     s.world.data.insert("planning:want".into(), rim_sim::data::Data::Table(t));
 }
 
+/// A level before the rules: what the plan, a pin or a role set, without
+/// core's standing orders shifting it.
 fn level(s: &Sim, w: &str) -> u8 {
     let pawn = s.world.colonists().next().unwrap();
     let p = s.world.ecs.get::<&Pawn>(pawn).unwrap();
-    rim_sim::rules::effective(&s.world, &p, s.world.defs.lookup("work_type", w).unwrap())
+    s.world.base_priority(&p, s.world.defs.lookup("work_type", w).unwrap())
 }
 
 fn hours(s: &mut Sim, n: u64) {

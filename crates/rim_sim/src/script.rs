@@ -214,7 +214,8 @@ pub struct ApiDoc {
 pub const RIM_TYPES: &str = r#"type Faction = "player" | "hostile" | "wild"
 type MessageKind = "info" | "good" | "threat" | "bad"
 type CreatureInfo = { id: string, label: string, intelligent: boolean, aggressive: boolean, flees: boolean, plural: string, market_value: number, max_hp: number, wild: boolean }
-type ThingInfo = { id: string, label: string, market_value: number, food: boolean, item: boolean, tags: { string } }
+type ThingInfo = { id: string, label: string, market_value: number, food: boolean, nutrition: number?, item: boolean, tags: { string } }
+type NeedInfo = { id: string, label: string, satisfier: string, days_to_empty: number }
 type StockQuery = { thing: string?, tag: string?, category: string? }
 type ItemCategoryInfo = { id: string, label: string, parent: string?, order: number, children: { string }, items: { string } }
 type Date = { year: number, season: string, season_index: number, day: number, day_of_year: number, year_days: number, year_fraction: number }
@@ -737,12 +738,32 @@ impl ScriptHost {
             t.set("label", td.label.as_str())?;
             t.set("market_value", td.market_value)?;
             t.set("food", td.food.is_some())?;
+            t.set("nutrition", td.food.as_ref().map(|f| f.nutrition))?;
             t.set("item", td.category == crate::defs::Category::Item)?;
             t.set("tags", lua.create_sequence_from(td.tags.iter().map(String::as_str))?)?;
             things.push(t)?;
         }
         rim.set("thing_defs", things)?;
-        self.declare("thing_defs", "{ThingInfo}", "Every thing def.");
+        self.declare(
+            "thing_defs",
+            "{ThingInfo}",
+            "Every thing def. A food's nutrition is the fraction of a full stomach one unit restores.",
+        );
+        let needs = lua.create_table()?;
+        for nd in &defs.needs {
+            let t = lua.create_table()?;
+            t.set("id", nd.id.as_str())?;
+            t.set("label", nd.label.as_str())?;
+            t.set("satisfier", nd.satisfier.name())?;
+            t.set("days_to_empty", nd.days_to_empty)?;
+            needs.push(t)?;
+        }
+        rim.set("need_defs", needs)?;
+        self.declare(
+            "need_defs",
+            "{NeedInfo}",
+            "Every need def: what satisfies it (\"food\", \"rest\", \"field\") and how many days a full one lasts.",
+        );
         let cats = lua.create_table()?;
         for c in &defs.item_categories {
             let t = lua.create_table()?;

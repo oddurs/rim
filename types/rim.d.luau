@@ -4,7 +4,8 @@
 type Faction = "player" | "hostile" | "wild"
 type MessageKind = "info" | "good" | "threat" | "bad"
 type CreatureInfo = { id: string, label: string, intelligent: boolean, aggressive: boolean, flees: boolean, plural: string, market_value: number, max_hp: number, wild: boolean }
-type ThingInfo = { id: string, label: string, market_value: number, food: boolean, item: boolean, tags: { string } }
+type ThingInfo = { id: string, label: string, market_value: number, food: boolean, nutrition: number?, item: boolean, tags: { string } }
+type NeedInfo = { id: string, label: string, satisfier: string, days_to_empty: number }
 type StockQuery = { thing: string?, tag: string?, category: string? }
 type ItemCategoryInfo = { id: string, label: string, parent: string?, order: number, children: { string }, items: { string } }
 type Date = { year: number, season: string, season_index: number, day: number, day_of_year: number, year_days: number, year_fraction: number }
@@ -84,6 +85,8 @@ declare rim: {
     message: (text: string, kind: MessageKind?) -> (),
     -- A random open cell within r of (x, y).
     near_cell: (x: number, y: number, r: number) -> (number?, number?),
+    -- Every need def: what satisfies it ("food", "rest", "field") and how many days a full one lasts.
+    need_defs: {NeedInfo},
     -- Handle an engine event (`pawn_died`, `season_changed`, ...) or a mod event (`weather:changed`).
     on: (event: string, fn: (event: {[string]: any}) -> ()) -> (),
     -- Upgrade your script data from a save made with a different version of your mod: fn gets that version and your data (bare keys) and returns the data to keep. It sees no world: only your data. Runs on load, before any hook. Register at load time.
@@ -134,7 +137,7 @@ declare rim: {
     stock: (what: string | StockQuery, place: ("stored" | "loose")?) -> number,
     -- A thing by id: what it is and where, or nil if it's gone.
     thing: (id: number) -> ThingAt?,
-    -- Every thing def.
+    -- Every thing def. A food's nutrition is the fraction of a full stomach one unit restores.
     thing_defs: {ThingInfo},
     -- The current tick. A day is `rim.ticks_per_day` ticks.
     tick: () -> number,

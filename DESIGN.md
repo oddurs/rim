@@ -618,8 +618,23 @@ numbers scripts publish on the sim's clock (`rim.set_reading`), so the
 engine knows no content. A reading re-evaluates the rules only when it
 crosses a band. Starting and stopping emit events for the news, and a
 colony can switch any order off (`SetRuleEnabled`). Core ships three, on by
-default: food is low, loose items piling up, and firewood for winter.
-A standing order only shifts; the stance stays the player's choice.
+default: food is low (under 5 days, until 8), loose items piling up (over
+30, until 10), and wood before winter (autumn, under 60 wood, until 120;
+core's fires burn nothing yet, so wood to build with is winter's want).
+`scripts/readings.luau` publishes the readings hourly from the stock
+ledger, and each order posts to the news when it starts and stops. A
+standing order only shifts; the stance stays the player's choice.
+
+The balance harness (40 seeds, 8 days, the bot's opening) with the orders
+on and switched off:
+
+| | Colonies lost | Runs with a death | Near-misses (hp < 35%) |
+|---|---|---|---|
+| Orders on | 3/40 | 10/40 | 32/40 |
+| Orders off | 3/40 | 10/40 | 34/40 |
+
+They cost nothing in the opening and help at the margin; their real work
+is later, when stores run down and loose items pile up.
 
 ### Urgent marks
 
