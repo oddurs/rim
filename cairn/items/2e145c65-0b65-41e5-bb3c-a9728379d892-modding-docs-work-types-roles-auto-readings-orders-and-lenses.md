@@ -2,8 +2,9 @@
 id: 2e145c65-0b65-41e5-bb3c-a9728379d892
 title: 'Modding docs: work types, roles, Auto, readings, orders and lenses'
 type: docs
-status: backlog
+status: done
 milestone: work
+assignee: Oddur Sigurdsson
 depends_on:
 - 4c9fc19b-3b7b-4bc3-93b4-7b5d600cbc8d
 - 97a12814-63c8-4096-9009-c5c45712cbf7
@@ -11,6 +12,7 @@ depends_on:
 - d41e504f-4e16-493c-bb47-28c5d25a6f05
 created: 2026-09-26
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p2
 api: none
 effort: s
@@ -30,5 +32,5 @@ Every rung of the ladder is a mod surface, and none of it is documented beyond D
 
 ## Acceptance criteria
 
-- [ ] The worked example loads in a fixture test
-- [ ] Every new def field and Luau function in this milestone is documented
+- [x] The worked example loads in a fixture test
+- [x] Every new def field and Luau function in this milestone is documented
