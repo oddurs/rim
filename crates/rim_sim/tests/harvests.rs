@@ -248,7 +248,7 @@ set = { harvest = { regrow_days = 9.0 } }
     let s = Sim::new(&dir, 1).unwrap_or_else(|e| panic!("loads: {e}"));
     let bush = s.world.defs.thing(s.world.defs.thing_id("berry_bush").unwrap());
     assert_eq!(bush.harvest.len(), 2);
-    assert_eq!(bush.harvest[0].regrow_days, 2.0, "unchanged");
+    assert_eq!(bush.harvest[0].regrow_days, 0.0, "unchanged: it regrows with the bush");
     assert!(s.warnings.iter().any(|w| w.contains("can't say which")), "{:?}", s.warnings);
 }
 

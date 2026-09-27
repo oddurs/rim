@@ -338,6 +338,19 @@ of = [{ input = "hour", curve = [[3, -1.0], [9, 0.0], [15, 1.0], [21, 0.0], [27,
   `rim.field_set` change them. `input = "sky"` (0 in an enclosed room, 1
   elsewhere) is for rain and snow: a cell within a wall's or a cliff's
   roof span is still open ground.
+- **Plants grow with the weather.** A plant def's `grow = { days, rate,
+  harm, heal, stages, after_harvest }` gives terms read at its cell: `rate`
+  multiplies its speed (1 is `days` from seedling to grown, 0 or less holds
+  it dormant), `harm` takes health a day and kills it at none. A `Growth`
+  component holds progress and health; the 250-tick plant pass works out a
+  quarter of the plants each time, by entity id, so each once every 1000
+  ticks. A harvest a plant survives regrows with it, cut back to
+  `after_harvest`, so a berry bush bears nothing through a winter; a harvest
+  that gives `regrow_days` keeps to them. A felled plant yields by how grown
+  it is. Wild spread weights each cell by the plant's rate there. The
+  client draws a plant at its stage's size, faded while dormant and browned
+  when hurt. Core's plants read warmth, light and fertility; the weather
+  plugin patches in the ground's wetness.
 - **Tables keyed by label**, not arrays: a patch can change one term
   (`set = { ambient = { day = { scale = 11.0 } } }`) and conflicts are
   reported per term.

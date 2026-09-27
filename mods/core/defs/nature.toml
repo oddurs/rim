@@ -16,6 +16,19 @@ path_cost = 60
 harvest = { designation = "chop", work = 280, yields = [{ thing = "wood", count = 20 }] }
 spawn = { terrain = ["grass", "rich_soil"], density = 0.06, spread = true }
 
+# An oak grows in the warm half of the year, by day, faster on good soil:
+# a seedling is a tree in about a month of summer. Felled young, it yields
+# by how grown it is. The weather plugin adds the ground's wetness.
+[thing.grow]
+days = 16
+
+[thing.grow.rate.growth]
+of = [
+  { field = "temperature", curve = [[2, 0.0], [8, 0.5], [16, 1.0], [28, 1.0], [36, 0.0]] },
+  { field = "light", curve = [[0, 0.0], [30, 1.0]] },
+  { terrain = "fertility", curve = [[0, 0.2], [1, 1.0], [1.4, 1.2]] },
+]
+
 [[thing]]
 id = "berry_bush"
 height = 0.4
@@ -35,8 +48,22 @@ look.layers = [
 ]
 look.regrowing = [{ draw = "disc", r = 0.24, color = "#575b20" }]
 natural = true
-harvest = { designation = "harvest", work = 180, destroy = false, regrow_days = 2.0, yields = [{ thing = "berries", count = 8 }] }
+harvest = { designation = "harvest", work = 180, destroy = false, yields = [{ thing = "berries", count = 8 }] }
 spawn = { terrain = ["grass", "rich_soil"], density = 0.008, spread = true }
+
+# Picked, a bush is cut back to 40% and its berries come with it: two or
+# three spring days (it grows only by day), and none in the cold, so
+# winter has no berries.
+[thing.grow]
+days = 1.5
+after_harvest = 0.4
+
+[thing.grow.rate.growth]
+of = [
+  { field = "temperature", curve = [[3, 0.0], [8, 0.5], [15, 1.0], [28, 1.0], [34, 0.0]] },
+  { field = "light", curve = [[0, 0.0], [30, 1.0]] },
+  { terrain = "fertility", curve = [[0, 0.2], [1, 1.0], [1.4, 1.2]] },
+]
 
 [[thing]]
 id = "granite"

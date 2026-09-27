@@ -256,6 +256,9 @@ pub struct ThingDef {
     #[serde(default)]
     pub stuff: Option<StuffDef>,
     pub spawn: Option<SpawnDef>,
+    /// A plant that grows with the weather (DESIGN.md §4c).
+    #[serde(default)]
+    pub grow: Option<GrowDef>,
     /// Cells a pawn occupies to use this thing. A bed's is the bed; a
     /// chair's is the chair; a workbench's would be in front. A thing with
     /// no spots cannot be used, only had.
@@ -573,6 +576,42 @@ pub struct FoodDef {
 pub struct BedDef {
     /// Rest-recovery multiplier versus sleeping on the ground (1.0).
     pub rest_rate: f64,
+}
+
+fn dhalf() -> f64 {
+    0.5
+}
+
+/// How a plant grows: from a seedling at 0 to grown at 1, at a speed its
+/// `rate` terms give where it stands, losing health by its `harm` terms.
+#[derive(Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct GrowDef {
+    /// Game days from seed to grown at a rate of 1.
+    pub days: f64,
+    /// How fast it grows, as terms read at its cell: 1 is `days`, 0 or less
+    /// holds it still (dormant). No terms is always 1.
+    #[serde(default)]
+    pub rate: TermsDef,
+    /// Health lost a day, as terms read at its cell (1 is all of it). At
+    /// none left it dies. Frost on a tender plant, drought, flooding.
+    #[serde(default)]
+    pub harm: TermsDef,
+    /// Health regained a day while nothing harms it.
+    #[serde(default = "dhalf")]
+    pub heal: f64,
+    /// How many sizes it is drawn at on the way to grown.
+    #[serde(default = "d4u")]
+    pub stages: u32,
+    /// Where a harvest it survives (`destroy = false`) sets it back to: its
+    /// crop grows again with it. A harvest that gives `regrow_days` regrows
+    /// by those days instead, as on a plant that doesn't grow.
+    #[serde(default = "dhalf")]
+    pub after_harvest: f64,
+    #[serde(skip)]
+    pub rate_terms: Terms,
+    #[serde(skip)]
+    pub harm_terms: Terms,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -2458,6 +2497,7 @@ impl DefDb {
         let stock: Vec<bool> = self.fields.iter().map(|f| f.kind == FieldKind::Stock).collect();
         let (terrain_props, terrain_tags) = (&self.terrain_props, &self.terrain_tags);
         let mut spoil_warnings = Vec::new();
+        let mut grow_warnings = Vec::new();
         for d in &mut self.things {
             let ctx = format!("thing/{}", d.id);
             d.rgb = parse_color(&d.color).map_err(|e| format!("{ctx}: {e}"))?;
@@ -2554,6 +2594,18 @@ impl DefDb {
                     return Err(format!("{ctx}: store.keeps reads no `self` or `base`"));
                 }
             }
+            if let Some(g) = &mut d.grow {
+                g.rate_terms = Terms::compile(&g.rate, &format!("{ctx}, grow.rate"), &names, &mut grow_warnings)?;
+                g.harm_terms = Terms::compile(&g.harm, &format!("{ctx}, grow.harm"), &names, &mut grow_warnings)?;
+                if g.rate_terms.reads_own() || g.harm_terms.reads_own() {
+                    return Err(format!("{ctx}: `self`, `base` and `above_base` are for a stock field's rate"));
+                }
+                if !(g.days > 0.0 && g.days.is_finite()) || g.stages == 0 || !(0.0..=1.0).contains(&g.after_harvest) {
+                    return Err(format!(
+                        "{ctx}: grow needs `days` above 0, `stages` of 1 or more, and `after_harvest` from 0 to 1"
+                    ));
+                }
+            }
             for b in &mut d.boundary {
                 b.field_r = get("field", &b.field, &ctx)?;
             }
@@ -2610,7 +2662,11 @@ impl DefDb {
             let spoil = t.spoil.iter().flat_map(|s| s.rate_terms.nears());
             spoil.chain(t.store.iter().flat_map(|s| s.keeps_terms.nears()))
         });
-        let mut near: Vec<usize> = spoil_nears.chain(self.near_tags.iter().copied()).collect();
+        self.warnings.append(&mut grow_warnings);
+        // A plant reading how near water is keeps that tag's grid too.
+        let grown = self.things.iter().filter_map(|t| t.grow.as_ref());
+        let grow_nears = grown.flat_map(|g| g.rate_terms.nears().chain(g.harm_terms.nears()));
+        let mut near: Vec<usize> = spoil_nears.chain(grow_nears).chain(self.near_tags.iter().copied()).collect();
         near.sort_unstable();
         near.dedup();
         self.near_tags = near;

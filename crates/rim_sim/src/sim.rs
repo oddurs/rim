@@ -202,8 +202,9 @@ impl Sim {
         if w.tick.is_multiple_of(systems::SPOIL_PASS) {
             prof.time("spoil", || systems::spoil(w));
         }
-        if w.tick.is_multiple_of(250) {
+        if w.tick.is_multiple_of(systems::PLANT_PASS) {
             prof.time("regrow", || systems::regrow(w));
+            prof.time("grow", || systems::grow(w));
             prof.time("wealth", || systems::wealth(w));
         }
         if w.tick % 500 == 250 {

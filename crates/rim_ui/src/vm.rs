@@ -2616,6 +2616,17 @@ fn hover_table(lua: &Lua, w: &World, client: &ClientView) -> mlua::Result<Value>
                 s.push_str(" (regrowing)");
             }
         }
+        // A growing plant: how far along, and what's holding it back.
+        if let Ok(g) = w.ecs.get::<&rim_sim::world::Growth>(e) {
+            if g.progress < rim_sim::world::GROWN {
+                s = format!("{s} · {:.0}% grown", g.fraction() * 100.0);
+            }
+            if g.health < rim_sim::world::GROWN / 2 {
+                s.push_str(" · withering");
+            } else if g.dormant {
+                s.push_str(" · dormant");
+            }
+        }
         if let Ok(m) = w.ecs.get::<&rim_sim::world::MadeOf>(e) {
             s = format!("{s} · {}", w.defs.thing(m.0).label);
         }

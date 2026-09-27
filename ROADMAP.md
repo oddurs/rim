@@ -667,7 +667,7 @@ Dig down. The map becomes a stack of 2D levels joined only at stairs, ladders an
 
 ## crafting — Crafting
 
-`########··` 77% · 23 of 30 done · due 2027-05-01
+`########··` 80% · 24 of 30 done · due 2027-05-01
 
 Production chains: workbenches and bills, cooking, farming, tailoring, research as a plugin.
 
@@ -676,7 +676,6 @@ Production chains: workbenches and bills, cooking, farming, tailoring, research 
 - [ ] `b1444a26` Farming: growing zones and crops <sup>feature · p0 · l · engine</sup>
 - [ ] `d0362b0c` Apparel: colonists wear what tailors make <sup>feature · p2 · l · engine</sup>
 - [ ] `db7f1e06` Mining that rewards looking: rock kinds, veins and prospecting <sup>content · p1 · m · core</sup>
-- [ ] `e1be8ebd` Plants grow in the weather <sup>feature · p0 · m · engine</sup>
 - [ ] `9bd9e8ab` Fire: burning, spread by wind, put out by rain <sup>feature · p1 · l · engine</sup>
 - [x] `01691032` Item categories and one filter: things, materials and condition <sup>feature · p1 · m · engine</sup>
 - [x] `0927f0af` Tailoring: make apparel <sup>content · p2 · s · core</sup>
@@ -698,6 +697,7 @@ Production chains: workbenches and bills, cooking, farming, tailoring, research 
 - [x] `ca22f222` Bills pick their ingredients: one material per order, and a filter <sup>feature · p2 · m · plugin</sup>
 - [x] `d77d9e1f` Stock fields: per-cell state with staggered updates <sup>feature · p0 · l · engine</sup>
 - [x] `dce75339` A build takes a material and parts, and may require a tool <sup>feature · p1 · m · engine</sup>
+- [x] `e1be8ebd` Plants grow in the weather <sup>feature · p0 · m · engine</sup>
 - [x] `e953d711` Store levels: sorting that only climbs, and room reserved by count <sup>feature · p1 · l · engine</sup>
 - [x] `ede06f37` The storage overlay budget test flakes under load <sup>bug · p2 · s · client</sup>
 - [x] `f22f1a62` Stores sheet, storage overlay and hover card <sup>feature · p2 · m · core</sup>

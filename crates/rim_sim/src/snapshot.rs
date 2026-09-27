@@ -293,6 +293,7 @@ impl Snapshot {
             ("engine:planned".to_string(), component::<Planned>(w)),
             ("engine:regrow".to_string(), component::<Regrow>(w)),
             ("engine:spoiling".to_string(), component::<Spoiling>(w)),
+            ("engine:growth".to_string(), component::<Growth>(w)),
             ("engine:work".to_string(), component::<Work>(w)),
             ("engine:held".to_string(), component::<Held>(w)),
             ("engine:order".to_string(), component::<Order>(w)),
@@ -667,6 +668,15 @@ impl Snapshot {
                 });
             }
         }
+        // Optional: saves from before plants grew lack it, and their plants
+        // are taken as grown (below, once the things exist).
+        if self.sections.contains_key("engine:growth") {
+            for (e, g) in dec::<Vec<(Entity, Growth)>>(self, "engine:growth")? {
+                add(e, &|b| {
+                    b.add(g);
+                });
+            }
+        }
         // Optional: saves from before urgent marks lack them.
         if self.sections.contains_key("engine:urgent") {
             for (e, u) in dec::<Vec<(Entity, crate::world::Urgent)>>(self, "engine:urgent")? {
@@ -812,6 +822,10 @@ impl Snapshot {
                         }
                         // Portals aren't saved: the stairs are, and say where.
                         w.open_portal(*e);
+                    }
+                    // A plant from a save made before plants grew is grown.
+                    if !*blueprint && td.grow.is_some() && w.ecs.get::<&Growth>(*e).is_err() {
+                        let _ = w.ecs.insert_one(*e, Growth::grown());
                     }
                 }
             }
