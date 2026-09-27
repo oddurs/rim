@@ -1940,6 +1940,15 @@ than 4 screen pixels: at the minimum zoom (4 px a cell) the buffer drops to
   where the sky rebuilds. Unmeasured; the first ticket puts every pass in
   `rim --bench-render` with GPU time, and each later ticket records its
   number here.
+- **Baseline** (`rim --bench-render`, 250 × 250, before any of this; Apple
+  silicon under load, so read the CPU numbers as a range): `Sky::light` is
+  two passes. The lightmap rebuild runs only when emitters or rooms change
+  and costs 0.45–1.7 ms of CPU. The multiply is one draw call and 0.005 ms
+  of CPU. The bench's per-pass GPU column comes from timer queries, only
+  where they can time one pass: not on a tile-based GPU (Apple silicon),
+  where a query times the whole tile pass. CI's runner draws with llvmpipe,
+  so its GPU column is the CPU rasterising, useful only relative to itself;
+  GPU budgets are read on a real immediate-mode GPU.
 - **Costs we accept:** height-map shadows are 2.5D (a canopy shades like a
   column); four flicker channels share colours; a static torch's shadow never
   sways; 8-bit buffers need dither in the dark.

@@ -76,6 +76,122 @@ pub struct Sky {
     next_flash: f64,
     /// Particles skipped last frame because they were over an enclosed room.
     pub hidden: usize,
+    /// Each lighting pass last frame, in order.
+    pub passes: Vec<PassTime>,
+    /// Time each pass on the GPU with a timer query (`time_gpu`).
+    gpu_timing: bool,
+    query: Timer,
+}
+
+/// One lighting pass's cost in the last frame.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PassTime {
+    pub name: &'static str,
+    /// Building the pass's draws, µs.
+    pub cpu_us: f64,
+    /// The GPU's time running them, µs; only with `gpu_timing`.
+    pub gpu_us: Option<f64>,
+    /// Whether it did its work this frame, or reused what it had.
+    pub ran: bool,
+    /// Draw calls it made.
+    pub draws: u32,
+}
+
+/// The GPU timer, made the first time the bench asks for one.
+enum Timer {
+    Untried,
+    /// GL has no timer, or none that can time a pass.
+    Unavailable,
+    Ready(GpuTimer),
+}
+
+/// `glGetString(GL_RENDERER)`: miniquad doesn't name the constant.
+const GL_RENDERER: u32 = 0x1F01;
+
+/// A `glGetString`, once a frame has been drawn; empty where GL has none.
+fn gl_string(name: u32) -> String {
+    // SAFETY: on the render thread with the context current; the pointer
+    // is to a static, NUL-terminated string or null.
+    unsafe {
+        let s = miniquad::gl::glGetString(name);
+        if s.is_null() {
+            String::new()
+        } else {
+            std::ffi::CStr::from_ptr(s as _).to_string_lossy().into_owned()
+        }
+    }
+}
+
+/// Which GL draws the frame, for the bench to say where its numbers came from.
+pub fn gl_renderer() -> String {
+    gl_string(GL_RENDERER)
+}
+
+/// A GL timer query (`GL_TIME_ELAPSED`). miniquad's `ElapsedQuery` is a
+/// stub in 0.4, so this calls GL directly.
+struct GpuTimer(u32);
+
+impl GpuTimer {
+    /// One, if the context has a timer that can time one pass.
+    fn new() -> Option<GpuTimer> {
+        if !times_a_pass(&gl_string(miniquad::gl::GL_VERSION), &gl_renderer()) {
+            return None;
+        }
+        let mut id = 0;
+        // SAFETY: desktop GL 3.3 has query objects; on the render thread.
+        unsafe { miniquad::gl::glGenQueries(1, &mut id) };
+        (id != 0).then_some(GpuTimer(id))
+    }
+
+    fn begin(&mut self) {
+        // SAFETY: a query made by `new`, and none other running: passes don't nest.
+        unsafe { miniquad::gl::glBeginQuery(miniquad::gl::GL_TIME_ELAPSED, self.0) }
+    }
+
+    /// End the query and wait for its result, in µs.
+    fn end(&mut self) -> f64 {
+        use miniquad::gl::*;
+        let mut ns: GLuint64 = 0;
+        // SAFETY: ends the query `begin` started; reading GL_QUERY_RESULT
+        // blocks until the GPU has run everything inside it.
+        unsafe {
+            glEndQuery(GL_TIME_ELAPSED);
+            glGetQueryObjectui64v(self.0, GL_QUERY_RESULT, &mut ns);
+        }
+        ns as f64 / 1e3
+    }
+}
+
+impl Drop for GpuTimer {
+    fn drop(&mut self) {
+        // SAFETY: a query `new` made, deleted once.
+        unsafe { miniquad::gl::glDeleteQueries(1, &self.0) };
+    }
+}
+
+/// Whether GL can time one pass: desktop GL 3.3 or later has timer queries
+/// (GL ES and older desktop GL only as extensions), and the GPU draws in
+/// order. A tile-based GPU (Apple's) runs a whole frame's tiles at once, so
+/// a query around part of it times the tile pass, not the part.
+fn times_a_pass(version: &str, renderer: &str) -> bool {
+    if version.starts_with("OpenGL ES") || renderer.contains("Apple") {
+        return false;
+    }
+    let mut it = version.split(|c: char| !c.is_ascii_digit()).filter_map(|n| n.parse::<u32>().ok());
+    matches!((it.next(), it.next()), (Some(major), Some(minor)) if (major, minor) >= (3, 3))
+}
+
+/// Whether the GL draws in software: its "GPU" times are the CPU's.
+pub fn software_gl(renderer: &str) -> bool {
+    ["llvmpipe", "softpipe", "SwiftShader", "Software"].iter().any(|s| renderer.contains(s))
+}
+
+/// Hand macroquad's batched draws to GL, so a timer query brackets only
+/// the draws made between two flushes.
+fn flush_batches() {
+    // SAFETY: called on the render thread between draws, where macroquad
+    // flushes its own batches.
+    unsafe { get_internal_gl() }.flush();
 }
 
 impl Default for Sky {
@@ -90,6 +206,9 @@ impl Default for Sky {
             flash: 0.0,
             next_flash: 0.0,
             hidden: 0,
+            passes: Vec::new(),
+            gpu_timing: false,
+            query: Timer::Untried,
         }
     }
 }
@@ -171,14 +290,14 @@ impl Sky {
     }
 
     /// Rebuild the lightmap if emitters or rooms changed: R = firelight,
-    /// G = indoors.
-    fn update_lightmap(&mut self, w: &World) {
+    /// G = indoors. Whether it rebuilt.
+    fn update_lightmap(&mut self, w: &World) -> bool {
         let key = (w.fields.revision, w.map.room_rebuilds);
         if self.lightmap.is_some() && key == self.key {
-            return;
+            return false;
         }
         self.key = key;
-        let Some(light) = w.defs.lookup("field", "light") else { return };
+        let Some(light) = w.defs.lookup("field", "light") else { return false };
         let stamped = &w.fields.layers[light as usize].stamped;
         let (mw, mh) = (w.map.w as usize, w.map.h as usize);
         let mut bytes = vec![0u8; mw * mh * 4];
@@ -198,6 +317,7 @@ impl Sky {
                 self.lightmap = Some(t);
             }
         }
+        true
     }
 
     /// The sky's colour and brightness now: white, tinted by `[[sky]]`
@@ -227,15 +347,70 @@ impl Sky {
         self.sky_color(w, air).max(rgb3(w.defs.sky.rgb_night))
     }
 
+    /// Forget every cached lighting result, so the next frame rebuilds them
+    /// all: what the render bench times as the cost of a change.
+    pub fn invalidate(&mut self) {
+        self.key = (u64::MAX, u64::MAX);
+    }
+
     /// Multiply the world by the light. Call after everything lit is drawn.
     pub fn light(&mut self, w: &World, cam: &Cam, air: &Air) {
-        self.update_lightmap(w);
+        self.passes.clear();
+        let t = self.pass_begin();
+        let rebuilt = self.update_lightmap(w);
+        // An upload, not a draw.
+        self.pass_end("lightmap", t, rebuilt, 0);
+        let t = self.pass_begin();
+        let drew = self.multiply(w, cam, air);
+        self.pass_end("multiply", t, drew, drew as u32);
+    }
+
+    /// Time each pass on the GPU. Only the render bench does: reading a
+    /// timer back waits for the GPU, which a real frame must never do.
+    pub fn time_gpu(&mut self, on: bool) {
+        self.gpu_timing = on;
+    }
+
+    /// The GPU timer, where GL has one and the bench asked for it.
+    fn timer(&mut self) -> Option<&mut GpuTimer> {
+        if !self.gpu_timing {
+            return None;
+        }
+        if matches!(self.query, Timer::Untried) {
+            self.query = GpuTimer::new().map_or(Timer::Unavailable, Timer::Ready);
+        }
+        match &mut self.query {
+            Timer::Ready(t) => Some(t),
+            _ => None,
+        }
+    }
+
+    fn pass_begin(&mut self) -> std::time::Instant {
+        if let Some(q) = self.timer() {
+            flush_batches();
+            q.begin();
+        }
+        std::time::Instant::now()
+    }
+
+    fn pass_end(&mut self, name: &'static str, start: std::time::Instant, ran: bool, draws: u32) {
+        let cpu_us = start.elapsed().as_secs_f64() * 1e6;
+        let gpu_us = self.timer().map(|q| {
+            flush_batches();
+            q.end()
+        });
+        self.passes.push(PassTime { name, cpu_us, gpu_us, ran, draws });
+    }
+
+    /// Draw the lightmap over the world with multiply blending. Whether it
+    /// drew: without the shader the world stays unlit.
+    fn multiply(&mut self, w: &World, cam: &Cam, air: &Air) -> bool {
         let sky = self.sky_color(w, air);
         let def = &w.defs.sky;
         let (night, fire, share) = (rgb3(def.rgb_night), rgb3(def.rgb_fire) * 1.2, def.indoor_share as f32);
-        let Some(tex) = self.lightmap.clone() else { return };
+        let Some(tex) = self.lightmap.clone() else { return false };
         let (mw, mh) = (w.map.w as f32, w.map.h as f32);
-        let Some(m) = self.material() else { return };
+        let Some(m) = self.material() else { return false };
         m.set_uniform("sky", sky);
         m.set_uniform("night", night);
         m.set_uniform("fire", fire);
@@ -250,6 +425,7 @@ impl Sky {
             DrawTextureParams { dest_size: Some(vec2(mw * cam.zoom, mh * cam.zoom)), ..Default::default() },
         );
         gl_use_default_material();
+        true
     }
 
     /// Precipitation, fog and lightning. Call before `light`, so the weather
@@ -363,5 +539,34 @@ impl Sky {
 
     pub fn particles(&self) -> usize {
         self.parts.len()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_frame_never_waits_for_the_gpu_unless_the_bench_asks() {
+        // Waiting stalls the pipeline; only the render bench may.
+        let mut sky = Sky::default();
+        assert!(!sky.gpu_timing);
+        let t = sky.pass_begin();
+        sky.pass_end("pass", t, true, 1);
+        assert_eq!(sky.passes[0].gpu_us, None);
+        assert!(matches!(sky.query, Timer::Untried), "no timer is even made");
+    }
+
+    #[test]
+    fn passes_are_timed_only_where_gl_can_time_one() {
+        assert!(times_a_pass("3.3 (Core Profile) Mesa 24.0.9", "llvmpipe (LLVM 17.0.6, 256 bits)"));
+        assert!(times_a_pass("4.6.0 NVIDIA 550.54", "NVIDIA GeForce GTX 1650/PCIe/SSE2"));
+        assert!(times_a_pass("4.6 (Core Profile) Mesa 23.2.1", "Mesa Intel(R) UHD Graphics 620 (KBL GT2)"));
+        assert!(!times_a_pass("4.1 Metal - 89.3", "Apple M2"), "tile-based: a query times the tile pass");
+        assert!(!times_a_pass("3.2 Mesa 20.0", "llvmpipe"));
+        assert!(!times_a_pass("OpenGL ES 3.2 Mesa", "Mali-G78"));
+        assert!(!times_a_pass("", ""));
+        assert!(software_gl("llvmpipe (LLVM 17.0.6, 256 bits)"));
+        assert!(!software_gl("Mesa Intel(R) UHD Graphics 620 (KBL GT2)"));
     }
 }

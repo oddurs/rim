@@ -2,8 +2,10 @@
 id: 6a6dfe88-6d54-49a5-b871-f7eb78f69176
 title: 'Lighting in the render bench: every pass, CPU and GPU time'
 type: perf
-status: backlog
+status: doing
 milestone: lighting
+assignee: Oddur Sigurdsson
+claimed: 2026-09-26
 created: 2026-09-26
 updated: 2026-09-26
 priority: p0
@@ -25,6 +27,14 @@ Every later lighting ticket trades quality for GPU time, and §6e's numbers are 
 
 ## Acceptance criteria
 
-- [ ] The bench prints a row per lighting pass with CPU, GPU and draw calls
-- [ ] Baseline for `Sky::light` recorded here and in DESIGN.md §6e
-- [ ] A frame outside bench mode performs no readback (test)
+- [x] The bench prints a row per lighting pass with CPU, GPU and draw calls
+- [x] Baseline for `Sky::light` recorded here and in DESIGN.md §6e
+- [x] A frame outside bench mode performs no readback (test)
+
+## 2026-09-26
+
+Baseline, 250x250 bench map, Apple silicon with other builds running (CPU numbers are a range): lightmap rebuild 0.45-1.23 ms CPU, and only when emitters or rooms change (0% of steady frames). Multiply 0.005-0.03 ms CPU, one draw call. GPU per pass comes from GL timer queries (GL_TIME_ELAPSED, via raw GL: miniquad 0.4's ElapsedQuery is a stub whose is_supported() is unimplemented!()), used only where GL_VERSION is desktop 3.3+. On Apple silicon the query times the tile pass it lands in (0.4-10 ms for one full-screen quad), so GPU numbers are read from CI's Linux runner. A first try with glFinish per pass measured vsync on macOS.
+
+## 2026-09-26
+
+Review fixes: lamps now light the colony only for the dusk view, so every other view and the CI budget gate measure the same scene as before. The GPU frames run after each view's capture, so the zooming view's numbers match its frames. The dusk hour settles for 20 ticks, since outdoor terms are evaluated every 20. Timer queries are refused on tile-based GPUs (Apple) rather than reporting tile-pass times, and the bench prints the GL renderer, flagging software GL: CI's llvmpipe 'GPU' times are CPU rasterisation. The rebuild step times only passes that cache, with GPU time, on the view it actually ran on.
