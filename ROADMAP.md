@@ -145,14 +145,14 @@ Who does what, without a spreadsheet. New colonists start on Auto and the colony
 
 ## pointer — Pointer and Orders
 
-`#######···` 67% · 4 of 6 done
+`#########·` 83% · 5 of 6 done
 
 The map should answer a mouse and a trackpad the way each platform taught its users, and a right-click should never destroy anything. Design: the Pointer and Orders artifact (https://claude.ai/artifact/ShFMN72nbVYERCY4L9nwyN).
 
 - [ ] `2f756dfc` Pinch to zoom on macOS <sup>feature · p2 · s · client</sup>
-- [ ] `7638bdbb` Undo the last order <sup>feature · p2 · m · engine</sup>
 - [x] `3b1726ff` Context menus: one component, subjects and providers <sup>feature · p0 · m · engine</sup>
 - [x] `64a0648e` Context menus across the interface: colonists, zones, tray tiles, news <sup>feature · p1 · m · core</sup>
+- [x] `7638bdbb` Undo the last order <sup>feature · p2 · m · engine</sup>
 - [x] `9aa55d96` Right-click is safe: every order is an option, damage only by choice <sup>bug · p0 · m · engine</sup>
 - [x] `fda56c8e` The camera answers a mouse and a trackpad <sup>feature · p0 · m · client</sup>
 
@@ -182,13 +182,12 @@ First playable vertical slice. One warrior, harvest, build, eat, sleep, animals,
 
 ## interface — Interface
 
-`##########` 91% · 31 of 34 done · due 2026-10-09
+`##########` 94% · 32 of 34 done · due 2026-10-09
 
 A two-week sprint. The whole HUD moves out of Rust into `mods/core/ui/`, written in Luau on a small UI engine, so any mod can extend, replace, wrap or remove any part of the interface. Design: DESIGN.md §11.
 
-- [ ] `90e15c25` The docked shell clones every panel's tree each frame <sup>perf · p3 · m · client</sup>
 - [ ] `06014a48` Lay out incrementally: keep taffy's tree between frames and relayout only what changed <sup>perf · p2 · m · client</sup>
-- [ ] `e530c9c3` Command dock: one job per edge, and trays in decision order <sup>feature · p1 · l · core</sup>
+- [ ] `90e15c25` The docked shell clones every panel's tree each frame <sup>perf · p3 · m · client</sup>
 - [x] `16eecb22` Anchored layer: world-attached labels, bars and bubbles without overlap <sup>feature · p1 · m · client</sup>
 - [x] `17505800` Theme tokens: ui/theme.toml, mod patches and UI scale <sup>feature · p0 · s · client</sup>
 - [x] `1b85ddb0` Build toolbar: group by menu so mods don't push it off screen <sup>bug · p2 · m · core</sup>
@@ -220,6 +219,7 @@ A two-week sprint. The whole HUD moves out of Rust into `mods/core/ui/`, written
 - [x] `cc7114a3` Typography and spacing pass: minimal, not ugly <sup>chore · p2</sup>
 - [x] `ceed6be9` The quiet-launch test compares a function's address, which Rust doesn't keep stable <sup>bug · p2 · s · client</sup>
 - [x] `dd73a536` Now: an alert registry and a news feed <sup>feature · p1 · m · core</sup>
+- [x] `e530c9c3` Command dock: one job per edge, and trays in decision order <sup>feature · p1 · l · core</sup>
 
 ## weather — Weather
 
