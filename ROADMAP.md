@@ -649,8 +649,9 @@ The world beyond the map: factions, traders drawn by wealth, quests, taming.
 
 ## Unscheduled
 
-`##########` 100% · 2 of 2 done
+`##########` 100% · 3 of 3 done
 
 - [x] `1cfccb62` Storytelling: scenarios, feelings, mourning, relationships and dialogue <sup>spike · p3 · l · plugin</sup>
+- [x] `27307380` A panel that shows nothing while nothing's hovered misses the hover when it comes <sup>bug · p1 · s · client</sup>
 - [x] `cc6ac1c3` Autotest: the wall-seam check picks a row a pawn is standing on <sup>bug · p1 · s · client</sup>
 

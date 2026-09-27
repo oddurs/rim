@@ -2019,7 +2019,9 @@ impl UiVm {
         });
         let mut out = Vec::with_capacity(built.len());
         for (m, n, read) in built {
-            self.note_hover(m.key(), if n.is_some() { read } else { 0 });
+            // A mount that shows nothing until something is hovered still
+            // read the hover: it has to rebuild when the hover comes.
+            self.note_hover(m.key(), read);
             out.extend(n.map(|n| (m, n)));
         }
         if !self.unknown_checked {
