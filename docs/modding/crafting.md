@@ -49,7 +49,7 @@ work = 300                        # ticks at bare hands' pace
 |---|---|
 | `label` | What the bill and the work order are called |
 | `station` | A tag. Any thing whose `tags` include it can make this |
-| `inputs` | `{ thing, count }` or `{ tag, count }`, brought in this order |
+| `inputs` | `{ thing, count }` or `{ tag, count }`, brought in this order; `mix = true` lets one input's pieces differ |
 | `outputs` | `{ thing, count }`, dropped at the station when the work is done |
 | `work` | Ticks at bare hands' pace, divided by the station's speed |
 | `requires` | Tool tags (default none): the worker holds a tool with every one |
@@ -173,17 +173,29 @@ how many:
   about. Use one and it makes another.
 - **Forever.**
 
+An input taken by several comes in **one material**: a hand axe knapped
+from two knappable pieces is two flint or two bone, never one of each.
+Once the first piece is in, the rest must be the same thing made of the
+same material, and the first is only fetched from a thing there is enough
+of. An input that may mix says so: `{ tag = "raw_meat", count = 3, mix =
+true }` is a stew of whatever meat there is. Under a bill, each tag input with more than one thing shows a toggle
+per thing: turn bone off and the bill knaps flint only. That's the bill's
+ingredient filter, the same filter a stockpile has (DESIGN.md §4f).
+
 Bills run top first. The station takes the first bill that can run, and
 posts it as a work order; the colonists bring the inputs and work it, and
 the outputs appear at the station. A bill that can't run says why in the
-panel: "no sharp_stone", "1 of 2 wood", "have 5", or "needs a cutting tool"
+panel: "no sharp_stone", "1 of 2 flint" (the one thing with the most,
+since a single flint and a single bone are not two of anything), "have 5",
+or "needs a cutting tool"
 when no tool in the colony has what the recipe `requires`, so a bill for
 the tool itself, lower down, isn't kept waiting behind it. A tool that
 exists but can't be had (held, or out of reach) shows on the station
 itself: "Needs a free pounding tool." A recipe the engine refuses, such as one that
-requires a tool tag no tool has, is paused with the reason. Pausing or
-removing the bill being made takes its order down, and
-what was brought is put back on the ground.
+requires a tool tag no tool has, is paused with the reason. An order up
+that waits for a piece matching the first says so too: "1 of 2 flint".
+Pausing or removing the bill being made, or changing what it may use, takes
+its order down, and what was brought is put back on the ground.
 
 The bills are script data (`crafting:bills`), saved and hashed with the
 world. The panel changes them only through `act.send`, so they're commands
@@ -198,6 +210,7 @@ local bills = require("@crafting/scripts/bills")
 
 local id = bills.add(station, "my_mod:knife")      -- nil if it can't make it there
 bills.set(station, id, { mode = "until", target = 5 })
+bills.set(station, id, { ingredient = { input = 1, thing = "primitive:bone", on = false } })
 bills.move(station, id, -1)                         -- up one
 bills.remove(station, id)
 bills.of(station)                                   -- its bills, top first

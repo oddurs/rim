@@ -141,6 +141,28 @@ fn cell(w: &World, x: i32, y: i32, z: Option<i32>) -> mlua::Result<IVec> {
     Ok(IVec::at(x, y, z))
 }
 
+/// An `ItemFilter` table as the engine's filter: the things it allows (all
+/// of them when left out), the materials it refuses, and the condition
+/// range in percent.
+fn item_filter(w: &World, t: &Table, from: &str) -> mlua::Result<crate::filter::Filter> {
+    let ids = |key: &str| -> mlua::Result<Option<Vec<crate::defs::DefId>>> {
+        t.get::<Option<Vec<String>>>(key)?
+            .map(|v| v.iter().map(|id| def_id(w, "thing", id, from)).collect::<mlua::Result<Vec<_>>>())
+            .transpose()
+    };
+    let mut f = crate::filter::Filter::everything(&w.defs);
+    if let Some(allows) = ids("allows")? {
+        f.allows = allows;
+    }
+    f.refuses = ids("refuses")?.unwrap_or_default();
+    if let Some(hp) = t.get::<Option<Vec<f64>>>("hp")? {
+        let pct = |i: usize| hp.get(i).map_or(if i == 0 { 0 } else { 100 }, |v| v.clamp(0.0, 100.0) as u8);
+        f.hp = [pct(0), pct(1)];
+    }
+    f.tidy();
+    Ok(f)
+}
+
 fn field_id(w: &World, id: &str, from: &str) -> mlua::Result<usize> {
     def_id(w, "field", id, from).map(|f| f as usize)
 }
@@ -244,9 +266,10 @@ type PlanCell = { level: number, reason: string? }
 type WorkWhy = { work: string, level: number, why: string, dist: number?, urgent: boolean }
 type Taker = { id: number, ticks: number, urgent: boolean }
 type Part = { label: string, value: number }
-type OrderNeed = { thing: string?, tag: string?, count: number }
+type ItemFilter = { allows: { string }?, refuses: { string }?, hp: { number }? }
+type OrderNeed = { thing: string?, tag: string?, count: number, filter: ItemFilter?, alike: boolean? }
 type OrderSpec = { label: string, needs: { OrderNeed }, work: number, work_type: string, requires: { string }? }
-type OrderInput = { thing: string?, tag: string?, count: number, have: number }
+type OrderInput = { thing: string?, tag: string?, count: number, have: number, match: string?, coming: boolean }
 type OrderInfo = { owner: string, label: string, needs: { OrderInput }, work: number, done: number, total: number, requires: { string } }
 type ItemQuery = { thing: string?, tag: string? }
 type ThingAt = { id: number, thing: string, x: number, y: number, z: number, count: number, blueprint: boolean }
@@ -1808,7 +1831,9 @@ impl ScriptHost {
                         ));
                     }
                     let thing = thing.map(|t| def_id(w, "thing", &t, &from)).transpose()?;
-                    needs.push(Need { thing, tag, count, delivered: Vec::new() });
+                    let filter = n.get::<Option<Table>>("filter")?.map(|f| item_filter(w, &f, &from)).transpose()?;
+                    let alike = n.get::<Option<bool>>("alike")?.unwrap_or(false);
+                    needs.push(Need { thing, tag, count, filter, alike, delivered: Vec::new() });
                 }
                 if needs.len() > MAX_NEEDS {
                     return Err(mlua::Error::runtime(format!("post_order: at most {MAX_NEEDS} needs")));
@@ -1883,13 +1908,25 @@ impl ScriptHost {
                     t.set("done", o.done)?;
                     t.set("total", if o.total > 0 { o.total } else { o.work })?;
                     t.set("requires", lua.create_sequence_from(o.requires.iter().map(String::as_str))?)?;
+                    // Needs someone is on the way to fill.
+                    let coming: Vec<u8> = w
+                        .pawns
+                        .iter()
+                        .filter_map(|&p| match w.ecs.get::<&Pawn>(p).ok()?.job {
+                            Job::Supply { site: s, need, .. } if s == site => Some(need),
+                            _ => None,
+                        })
+                        .collect();
                     let needs = lua.create_table()?;
-                    for n in &o.needs {
+                    for (i, n) in o.needs.iter().enumerate() {
                         let row = lua.create_table()?;
                         row.set("thing", n.thing.map(|d| w.defs.thing(d).id.clone()))?;
                         row.set("tag", n.tag.as_deref())?;
                         row.set("count", n.count)?;
                         row.set("have", n.have())?;
+                        // Once a piece is in, what the rest must be.
+                        row.set("match", n.matching().map(|d| w.defs.thing(d).id.clone()))?;
+                        row.set("coming", coming.contains(&(i as u8)))?;
                         needs.push(row)?;
                     }
                     t.set("needs", needs)?;

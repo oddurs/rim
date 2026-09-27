@@ -17,6 +17,28 @@ local function small(text: string, id: string, on_click)
 	return kit.button({ id = id, label = text, padx = "s", pady = "xs", on_click = on_click })
 end
 
+-- What may fill each tag input: a toggle per thing. All on is no filter.
+local function ingredients(b, info, set)
+	local rows = {}
+	for _, c in (info and info.choices) or {} do
+		local f = b.filters and b.filters[c.input]
+		local chips = { label(c.tag, { size = "small", color = "muted" }) }
+		for _, t in c.things do
+			local on = f == nil or table.find(f.allows, t.id) ~= nil
+			table.insert(chips, kit.toggle({
+				id = `crafting:bill.{b.id}.use.{c.input}.{t.id}`,
+				label = t.label,
+				on = on,
+				on_click = function()
+					set({ ingredient = { input = c.input, thing = t.id, on = not on } })
+				end,
+			}))
+		end
+		table.insert(rows, row({ gap = "xs", align = "center" }, chips))
+	end
+	return rows
+end
+
 local function bill_row(site: number, b, info, first: boolean, last: boolean, making: boolean)
 	local id = "crafting:bill." .. b.id
 	local function set(changes)
@@ -69,6 +91,7 @@ local function bill_row(site: number, b, info, first: boolean, last: boolean, ma
 				end,
 			}),
 		}),
+		col({ gap = "xxs" }, ingredients(b, info, set)),
 		label(status, {
 			id = id .. ".why",
 			size = "small",

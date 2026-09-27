@@ -915,7 +915,11 @@ fn choose_work(w: &World, e: Entity, p: &Pawn, mut why: Option<&mut Refusals>) -
         let job = match o.missing() {
             Some((i, want)) => {
                 let need = &o.needs[i];
-                nearest_item_where(w, e, p.pos, |def| need.takes(&defs, def))
+                let fits = |te: Entity, t: &Thing| need.fits(&defs, t.def, w.made_of(te), Some(t.hp));
+                // An alike need's first piece sets the material for the rest:
+                // start with a thing there's enough of to finish.
+                let enough = |def| !need.alike || need.have() > 0 || w.stock.on_map(def) >= need.missing();
+                nearest_stack_where(w, e, p.pos, |def| need.takes(&defs, def) && enough(def), fits)
                     .map(|(sd, src)| (sd + d, Job::Supply { site: se, src, need: i as u8, want, stage: 0 }))
             }
             None => defs
@@ -929,7 +933,8 @@ fn choose_work(w: &World, e: Entity, p: &Pawn, mut why: Option<&mut Refusals>) -
             None => {
                 if let Some(r) = why.as_deref_mut() {
                     let refusal = match o.missing() {
-                        Some(_) => Why::NoMaterials(None),
+                        // Waiting for a piece that matches the first: say which.
+                        Some((i, _)) => Why::NoMaterials(o.needs[i].matching()),
                         None => Why::NeedsTool(defs.tool_mask(&o.requires).unwrap_or(0)),
                     };
                     r.note(wt, d, refusal);
@@ -1261,6 +1266,18 @@ pub fn nearest_item(w: &World, e: Entity, from: IVec, def: DefId) -> Option<(u32
 /// anything nearer. The same answer as walking every stack: the nearest,
 /// ties to the lowest id.
 pub fn nearest_item_where(w: &World, e: Entity, from: IVec, takes: impl Fn(DefId) -> bool) -> Option<(u32, Entity)> {
+    nearest_stack_where(w, e, from, takes, |_, _| true)
+}
+
+/// `nearest_item_where`, with each stack of a def it takes asked too: its
+/// material and condition, which a def alone doesn't say.
+pub fn nearest_stack_where(
+    w: &World,
+    e: Entity,
+    from: IVec,
+    takes: impl Fn(DefId) -> bool,
+    fits: impl Fn(Entity, &Thing) -> bool,
+) -> Option<(u32, Entity)> {
     let mut chunks: BTreeSet<u32> = BTreeSet::new();
     for d in 0..w.defs.things.len() as DefId {
         if w.stock.on_map(d) > 0 && takes(d) {
@@ -1291,8 +1308,8 @@ pub fn nearest_item_where(w: &World, e: Entity, from: IVec, takes: impl Fn(DefId
             let Ok(slots) = w.ecs.get::<&Store>(store).map(|s| s.slots.clone()) else { continue };
             let Some(st) = w.thing(store) else { continue };
             for te in slots.into_iter().flatten() {
-                let Ok(def) = w.ecs.get::<&Thing>(te).map(|t| t.def) else { continue };
-                if !takes(def) {
+                let Some(t) = w.thing(te) else { continue };
+                if !takes(t.def) || !fits(te, &t) {
                     continue;
                 }
                 let d = st.pos.octile(from);
@@ -1311,8 +1328,8 @@ pub fn nearest_item_where(w: &World, e: Entity, from: IVec, takes: impl Fn(DefId
                 // On the chunk's own plane: the origin carries its level.
                 let p = lo.offset(x - lo.x, y - lo.y);
                 let Some(te) = w.map.item_at(p) else { continue };
-                let Ok(def) = w.ecs.get::<&Thing>(te).map(|t| t.def) else { continue };
-                if !takes(def) {
+                let Some(t) = w.thing(te) else { continue };
+                if !takes(t.def) || !fits(te, &t) {
                     continue;
                 }
                 let d = p.octile(from);
@@ -1483,7 +1500,8 @@ fn run_supply(w: &mut World, p: &mut Pawn, site: Entity, src: Entity, need: u8, 
             let lot = p.carry?;
             let defs = w.defs.clone();
             if let Ok(mut o) = w.ecs.get::<&mut Order>(site) {
-                if let Some(n) = o.needs.get_mut(need as usize).filter(|n| n.takes(&defs, lot.def)) {
+                if let Some(n) = o.needs.get_mut(need as usize).filter(|n| n.fits(&defs, lot.def, lot.made_of, lot.hp))
+                {
                     let add = lot.count.min(n.missing());
                     if add > 0 {
                         // Lots alike in every way share a row; two axes worn

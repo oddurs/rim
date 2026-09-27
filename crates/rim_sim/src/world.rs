@@ -544,6 +544,13 @@ pub struct Need {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tag: Option<String>,
     pub count: u32,
+    /// Which stacks may fill it (DESIGN.md §4f): a bill's ingredient filter.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub filter: Option<crate::filter::Filter>,
+    /// Every piece alike: after the first, the rest are its thing made of
+    /// its material. A hand axe is two flint or two bone; a stew may mix.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub alike: bool,
     /// What has arrived so far, one lot per def and material.
     #[serde(default)]
     pub delivered: Vec<Lot>,
@@ -556,13 +563,30 @@ impl Need {
     pub fn missing(&self) -> u32 {
         self.count.saturating_sub(self.have())
     }
-    /// Whether a thing of `def` meets this need.
+    /// Whether some stack of `def` could meet this need: the thing or tag,
+    /// the filter's things, and, for an alike need with a piece in, the
+    /// same thing as it.
     pub fn takes(&self, defs: &DefDb, def: DefId) -> bool {
-        match (&self.thing, &self.tag) {
+        let named = match (&self.thing, &self.tag) {
             (Some(t), _) => *t == def,
             (None, Some(tag)) => defs.thing(def).tags.contains(tag),
             (None, None) => false,
-        }
+        };
+        named && self.filter.as_ref().is_none_or(|f| f.takes_thing(def)) && self.matching().is_none_or(|m| m == def)
+    }
+
+    /// Whether a stack of `def` made of `made_of` at `hp` meets it: what
+    /// `takes` asks, the filter's materials and condition, and for an alike
+    /// need, the first piece's material.
+    pub fn fits(&self, defs: &DefDb, def: DefId, made_of: Option<DefId>, hp: Option<i32>) -> bool {
+        self.takes(defs, def)
+            && self.filter.as_ref().is_none_or(|f| f.takes(defs, def, made_of, hp))
+            && (!self.alike || self.delivered.first().is_none_or(|l| l.made_of == made_of))
+    }
+
+    /// The thing every further piece must be: an alike need's first piece.
+    pub fn matching(&self) -> Option<DefId> {
+        self.delivered.first().filter(|_| self.alike).map(|l| l.def)
     }
 }
 

@@ -16,7 +16,8 @@ label = "string"
 station = "string"
 # { thing = "id", count = n } or { tag = "t", count = n }, in the order
 # they're brought. The first that is a material is what the outputs are
-# made of.
+# made of. An input's pieces are alike (two flint or two bone, never one
+# of each) unless it says `mix = true`, as a stew of any meat would.
 inputs = "list"
 # { thing = "id", count = n }
 outputs = "list"
