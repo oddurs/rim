@@ -2,10 +2,12 @@
 id: 8314393f-6a5a-4cde-8c58-fd3d27f0e3a9
 title: 'Auto''s hint and a settler''s role prompt: kept in the save, and seen over the Work sheet'
 type: feature
-status: backlog
+status: done
 milestone: mood
+assignee: Oddur Sigurdsson
 created: 2026-09-27
 updated: 2026-09-27
+closed_at: 2026-09-27
 priority: p3
 api: none
 effort: s
@@ -24,5 +26,9 @@ Two gaps in 5dc8f858. The first-day hint's "once" lives in `ui.state`, so reload
 
 ## Acceptance criteria
 
-- [ ] Dismiss the hint, save and load: it stays dismissed (test)
-- [ ] A settler joining while Work is open is asked once Work closes, with the full time to answer (UI test)
+- [x] Dismiss the hint, save and load: it stays dismissed (test)
+- [x] A settler joining while Work is open is asked once Work closes, with the full time to answer (UI test)
+
+## 2026-09-27
+
+No engine change: the UI already reaches the save through act.send -> a core sim script (scripts/seen.luau) -> rim.set_data, read back as view.data('core:seen'). The settler prompt marks a settler asked in the save when it is first shown, and keeps its own clock in ui.state, so the save's record doesn't hide a prompt still on screen. While a sheet is open it waits and its clock doesn't start. It looks back 20000 ticks for joins, since view.events only keeps the last 32.
