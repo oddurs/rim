@@ -2455,14 +2455,17 @@ impl World {
     /// up what stands in them and what it is made of. Pieces that declare
     /// nothing count as the field's own constant, so a boundary nobody
     /// described behaves exactly as it did before there were boundaries.
-    pub fn refresh_boundaries(&mut self) {
+    /// Returns how many boundary pieces it looked up: each once per room,
+    /// whatever the number of fields, and none without a room rebuild.
+    pub fn refresh_boundaries(&mut self) -> usize {
         if self.map.room_rebuilds == self.seen_room_rebuilds {
-            return;
+            return 0;
         }
         self.seen_room_rebuilds = self.map.room_rebuilds;
         let defs = self.defs.clone();
         let rooms = self.map.room_count();
         self.fields.reset_boundaries(rooms);
+        let mut looked_up = 0;
         for r in 0..rooms {
             let cells = self.map.room_boundary(r as u32 + 1);
             if cells.is_empty() {
@@ -2478,6 +2481,7 @@ impl World {
                     (self.fixture_def_at(self.map.pos(c as usize)), made_of)
                 })
                 .collect();
+            looked_up += pieces.len();
             for (fi, fd) in defs.fields.iter().enumerate() {
                 let (mut leak_sum, mut pass_sum) = (0.0, 0.0);
                 for &(def, made_of) in &pieces {
@@ -2503,6 +2507,7 @@ impl World {
                 self.fields.set_boundary(fi, r as u32 + 1, leak_sum / cells.len() as f64, pass_sum.min(1.0));
             }
         }
+        looked_up
     }
 
     /// What a built thing cost, in what it was made of: the material and

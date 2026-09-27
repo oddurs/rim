@@ -30,7 +30,7 @@ The headless engine: defs, mod loading and patching, map, pathing, AI skeleton, 
 
 ## proving-ground — Proving ground
 
-`#·········` 5% · 1 of 19 done
+`##········` 11% · 2 of 19 done
 
 Seeds, tests, CI and the merge queue, so that every change is checked the same way on a laptop and in CI, every failure can be brought back with one line, and a PR lands without anyone rebasing it by hand. Design: DESIGN.md §7b, §8a. Plan: https://claude.ai/artifact/KUQcdtWkNG4u63T4S8uPpt
 
@@ -42,7 +42,6 @@ Seeds, tests, CI and the merge queue, so that every change is checked the same w
 - [ ] `4afaeedb` The seed corpus, rim seeds find and show, and a nightly 200-seed sweep that files what it finds <sup>feature · p1 · m · tooling</sup>
 - [ ] `5234544e` Visual regression for the autotest: reference shots, a perceptual diff, before and after on the PR <sup>feature · p1 · m · client</sup>
 - [ ] `55952481` Property tests for save round trips, region and room rebuilds, and paths <sup>feature · p1 · m · engine</sup>
-- [ ] `6b605f27` boundary_refresh_is_cheap asserts wall-clock time and fails under load <sup>bug · p0 · s · engine</sup>
 - [ ] `7dcb8a90` A seed per test, the nightly shift, and a one-line repro on every failure <sup>feature · p1 · s · engine</sup>
 - [ ] `7fb64c0e` ROADMAP.md stops conflicting: render it on main, not in every PR <sup>chore · p0 · s · tooling</sup>
 - [ ] `845db9fb` rim replay --bisect and a hash per tick when platforms disagree <sup>feature · p1 · s · tooling</sup>
@@ -52,6 +51,7 @@ Seeds, tests, CI and the merge queue, so that every change is checked the same w
 - [ ] `dd48e551` scripts/agent: start, sync, pr and queue for the worktree workflow <sup>chore · p1 · s · tooling</sup>
 - [ ] `e2c56c9a` UI frame-budget test asserts wall-clock time on shared CI runners <sup>bug · p0 · s · tooling</sup>
 - [ ] `9b435cd8` scripts/task: one gate for the laptop and CI, and a pre-push hook <sup>chore · p0 · s · tooling</sup>
+- [x] `6b605f27` boundary_refresh_is_cheap asserts wall-clock time and fails under load <sup>bug · p0 · s · engine</sup>
 - [x] `e8673d3f` scripting test a_slow_mod_is_named_in_the_warnings flakes under load <sup>bug · p0 · s · engine</sup>
 
 ## lighting — Lighting
