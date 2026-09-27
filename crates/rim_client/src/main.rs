@@ -1493,6 +1493,11 @@ fn apply_ui(app: &mut App, a: UiAction) {
                 app.sim.push(Command::ClearPriority { pawn: e, work: w });
             }
         }
+        UiAction::SetRuleEnabled(id, on) => {
+            if let Some(rule) = app.sim.world.defs.lookup("priority_rule", &id) {
+                app.sim.push(Command::SetRuleEnabled { rule, on });
+            }
+        }
         UiAction::SetStance(id) => {
             if let Some(stance) = app.sim.world.defs.lookup("stance", &id) {
                 app.sim.push(Command::SetStance { stance });

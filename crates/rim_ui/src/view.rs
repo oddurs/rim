@@ -154,6 +154,8 @@ pub enum UiAction {
     CreateRoleFromRole(String, u16),
     /// Put the colony in a stance, by its qualified id.
     SetStance(String),
+    /// Switch a priority rule off for the colony, or back on, by its id.
+    SetRuleEnabled(String, bool),
     /// Let a stockpile take an item (by qualified id), or stop it.
     ZoneAllow(u32, String, bool),
     /// Put a stockpile at a level of the store priority scale.

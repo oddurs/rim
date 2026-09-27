@@ -26,6 +26,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `act.set_overlay` | `(index: number?) -> ()` | Show a field overlay by its index in view.fields(), or none. |
 | `act.set_priority` | `(id: number, work: string, level: number) -> ()` | Set a colonist's priority for a work type: 1 first, 0 never. |
 | `act.set_role_priority` | `(role: number, work: string, level: number?) -> ()` | Set a work role's level for a work type, or nil to leave it to the default. A planned role (Auto) ignores it. |
+| `act.set_rule_enabled` | `(id: string, on: boolean) -> ()` | Switch a priority rule (a standing order) off for this colony, or back on. |
 | `act.set_stance` | `(id: string) -> ()` | Put the colony in a stance: its priority rules hold until another. |
 | `act.speed` | `(speed: number) -> ()` | Set the game speed. |
 | `act.store_level` | `(zone: number, level: number) -> ()` | Put a stockpile at a level of the store priority scale (0 is lowest). Stacks only move to a higher one. |
@@ -117,6 +118,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `view.speech` | `() -> { Speech }` | What pawns are saying now, oldest first: a need's line or a script's rim.say. `age` runs 0 to 1 over the line's life. |
 | `view.speed` | `() -> number` | The game speed. |
 | `view.stances` | `() -> { Stance }` | The colony's stances, in bar order; `active` is the one it's in. |
+| `view.standing` | `() -> { StandingOrder }` | The standing orders: rules on colony readings, with the reading now, their marks (`band`), what they do (`effect`), a season they wait for, whether the reading has crossed the mark, whether the colony has them on, and whether they're moving priorities now (`acting`). |
 | `view.stats` | `() -> { string }` | Client statistics lines. |
 | `view.store_levels` | `() -> { string }` | The store priority scale's level names, lowest first. |
 | `view.stuff` | `() -> { Stuff }` | Materials for the active build tool: what you have, what you'd get. |

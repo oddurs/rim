@@ -2,12 +2,14 @@
 id: 98b8ec4a-eff8-4a52-afbe-d64c61820856
 title: The orders panel, and Focus on the HUD
 type: feature
-status: backlog
+status: done
 milestone: work
+assignee: Oddur Sigurdsson
 depends_on:
 - 97a12814-63c8-4096-9009-c5c45712cbf7
 created: 2026-09-26
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p1
 api: none
 effort: s
@@ -27,5 +29,5 @@ A standing order that acts silently feels like a bug, and a stance left on in sp
 
 ## Acceptance criteria
 
-- [ ] Switching an order off in the panel stops it moving any cell (UI test)
-- [ ] The HUD chip appears for Siege and not for Normal (autotest)
+- [x] Switching an order off in the panel stops it moving any cell (UI test)
+- [x] The HUD chip appears for Siege and not for Normal (autotest)

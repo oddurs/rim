@@ -110,7 +110,96 @@ local function stance_bar(view)
 			})
 		)
 	end
+	-- The standing orders, behind one button that counts those acting.
+	local orders = view.standing()
+	if #orders > 0 then
+		local acting = 0
+		for _, o in orders do
+			if o.acting then
+				acting += 1
+			end
+		end
+		local open = ui.state("core:work.orders", false)
+		table.insert(bar, row({ w = 12 }))
+		table.insert(
+			bar,
+			button({
+				id = "core:work.orders",
+				label = if acting > 0
+					then string.format(t("core:work.orders_on", "Orders · %d on"), acting)
+					else t("core:work.orders_none", "Orders"),
+				active = open,
+				tooltip = t("core:work.orders_tip", "Standing orders: rules that switch on when a colony reading crosses a mark"),
+				on_click = function()
+					ui.set_state("core:work.orders", not open)
+				end,
+			})
+		)
+	end
 	return row({ gap = "xs", align = "center" }, bar)
+end
+
+-- A reading as the panel shows it: whole numbers plain, the rest to one
+-- decimal.
+local function reading_text(v: number?): string
+	if v == nil then
+		return t("core:work.order_unread", "no reading yet")
+	end
+	return if v == math.floor(v) then tostring(v) else string.format("%.1f", v)
+end
+
+-- The standing orders panel: each order, what it does, where its reading
+-- is, and a switch.
+local function orders_panel(view)
+	if not ui.state("core:work.orders", false) then
+		return nil
+	end
+	local lines = {}
+	for _, o in view.standing() do
+		local state = if not o.enabled
+			then t("core:work.order_off", "switched off")
+			elseif o.acting then string.format(t("core:work.order_acting", "on · %s"), reading_text(o.value))
+			elseif o.crossed and o.season then string.format(t("core:work.order_season", "waiting for %s · %s"), o.season, reading_text(o.value))
+			else string.format(t("core:work.order_waiting", "waiting · %s"), reading_text(o.value))
+		table.insert(
+			lines,
+			row({ id = "core:work.order." .. o.id, gap = "s", align = "center" }, {
+				button({
+					id = "core:work.order." .. o.id .. ".switch",
+					label = if o.enabled then t("core:work.order_on_btn", "On") else t("core:work.order_off_btn", "Off"),
+					active = o.enabled,
+					on_click = function()
+						act.set_rule_enabled(o.id, not o.enabled)
+					end,
+				}),
+				col({ gap = "hair" }, {
+					label(o.label, { weight = "strong" }),
+					label(string.format("%s · %s", o.effect, o.band), { size = "small", color = "muted" }),
+				}),
+				{ kind = "spacer" },
+				label(state, { size = "small", color = if o.acting then "accent" else "muted" }),
+			})
+		)
+	end
+	return col({ id = "core:work.orders_panel", gap = "xs", pad = "s", border = "line", radius = "radius" }, lines)
+end
+
+-- What Focus is doing now: the stance if it's not the first, and each
+-- order acting. Nil when nothing is.
+local function focus_now(view)
+	local names = {}
+	local stances = view.stances()
+	for i, st in stances do
+		if st.active and i > 1 then
+			table.insert(names, st.label)
+		end
+	end
+	for _, o in view.standing() do
+		if o.acting then
+			table.insert(names, o.label)
+		end
+	end
+	return if #names > 0 then names else nil
 end
 
 -- The brush: what a press paints. Unset, a press steps the cell.
@@ -401,8 +490,23 @@ local function board_lens(view, b)
 		end,
 	})
 
+	-- What Focus is doing to the board: its rules, and how many cells.
+	local focus = focus_now(view)
+	local moved, total = 0, 0
+	for _, r in rows do
+		for _, x in r.cells do
+			total += 1
+			if x.value ~= x.base then
+				moved += 1
+			end
+		end
+	end
 	return col({ gap = "s" }, {
 		alike_offer(b),
+		focus and label(
+			string.format(t("core:work.focus_line", "Focus: %s · moves %d of %d settings"), table.concat(focus, " + "), moved, total),
+			{ id = "core:work.focus", size = "small", color = "accent" }
+		),
 		brush_bar(levels, labels),
 		row({ gap = "s" }, { row({ w = ROLE_W + NAME_W + 4 }), header }),
 		-- The window scrolls; the wheel over a cell nudges it instead.
@@ -637,6 +741,7 @@ ui.window("core:work", { title = t("core:work.title", "Work"), w = 760, h = 860,
 	end
 	return col({ gap = "s", pad = "m" }, {
 		stance_bar(view),
+		orders_panel(view),
 		row({ id = "core:work.lenses", gap = "xs", align = "center" }, tabs),
 		shown.draw(view, b),
 	})
@@ -690,5 +795,23 @@ menus.add("colonist", {
 		return rows
 	end,
 })
+-- On the HUD: a stance left on in spring is a trap, so a Focus that isn't
+-- Normal, and any standing order acting, stays lit in the top bar. A click
+-- opens the Work screen.
+ui.extend("core:topbar.right", function(view)
+	local names = focus_now(view)
+	if not names then
+		return nil
+	end
+	return button({
+		id = "core:focus.hud",
+		label = table.concat(names, " + "),
+		active = true,
+		tooltip = t("core:focus.hud_tip", "Focus: what's moving priorities now. Open Work (P) to change it."),
+		on_click = function()
+			ui.open("core:work")
+		end,
+	})
+end)
 
 return work
