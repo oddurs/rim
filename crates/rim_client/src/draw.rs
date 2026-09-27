@@ -979,6 +979,29 @@ fn mass(s: &mut impl Sink, w: &World, p: IVec, span: [u32; 2], join: Join, (sx, 
         s.rect(row_x, row_y, qw - r, r, c);
         fan(s, (ox + dx * r, oy + dy * r), r, a0, a1, c);
     }
+    // One light, from the north-west (DESIGN.md §6c): an open top or left
+    // side catches it just inside the outline, and follows a rounded
+    // corner round. Lighting draws the shadow on the far side.
+    let lit = Color::new((c.r * 1.35).min(1.0), (c.g * 1.35).min(1.0), (c.b * 1.35).min(1.0), c.a * 0.55);
+    let (inset, t) = (2.0, (z * 0.03).clamp(0.75, 1.25));
+    let outer = sides.outer();
+    let rr = if r > 0.0 { (r - inset).max(0.0) } else { 0.0 };
+    let (lx, ly) = (sx + inset, sy + inset);
+    if !sides.n {
+        // From over the western neighbour's pad when it's joined.
+        let a = if sides.w { sx - 0.5 } else { lx + if outer[0] { rr } else { 0.0 } };
+        let b = sx + zx - if outer[1] { inset + rr } else { 0.0 };
+        s.line(a, ly, b, ly, t, lit);
+    }
+    if !sides.w {
+        let a = if sides.n { sy - 0.5 } else { ly + if outer[0] { rr } else { 0.0 } };
+        let b = sy + zy - if outer[3] { inset + rr } else { 0.0 };
+        s.line(lx, a, lx, b, t, lit);
+    }
+    if outer[0] && rr > 0.0 {
+        let (a0, a1, dx, dy) = CORNERS[0];
+        arc(s, (lx + dx * rr, ly + dy * rr), rr, a0, a1, t, lit);
+    }
     // A seam where the material changes, on the west and north sides: the
     // neighbours there are painted first, so it isn't covered.
     if span == [1, 1] {

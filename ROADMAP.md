@@ -352,7 +352,6 @@ A house is drawn as its plan and built as an order (DESIGN.md §6c). Walls join 
 - [ ] `454f4bde` Draw a room: drag a rectangle into a ring of walls <sup>feature · p2 · s · client</sup>
 - [ ] `4791e24b` Room state on the plan: daylight, firelight, gaps and open sky <sup>feature · p2 · m · client</sup>
 - [ ] `827b2421` House plans as data: an ASCII grid placed with one command <sup>feature · p2 · m · engine</sup>
-- [ ] `ae5c3807` Lit edges: a mass catches the light on its top and left <sup>feature · p2 · s · client</sup>
 - [ ] `b3ffbae1` Replace in place: upgrade a wall without opening the room <sup>feature · p1 · m · engine</sup>
 - [ ] `ba18a8e4` Facing: things turn in four directions <sup>feature · p1 · m · engine</sup>
 - [ ] `df049dac` Roofs from far away, hipped by the span field <sup>feature · p2 · m · client</sup>
@@ -363,6 +362,7 @@ A house is drawn as its plan and built as an order (DESIGN.md §6c). Walls join 
 - [ ] `24100bb9` A roof span replaces the room size cap, and pillars hold it <sup>feature · p0 · m · engine</sup>
 - [ ] `5643976c` Room labels on the plan <sup>feature · p2 · s · client</sup>
 - [ ] `7c53ec62` Material patterns: a fixed vocabulary, laid along the run <sup>feature · p1 · m · client</sup>
+- [ ] `ae5c3807` Lit edges: a mass catches the light on its top and left <sup>feature · p2 · s · client</sup>
 - [x] `3fe8c3cb` Joins in quarters: a wall run draws as one mass <sup>feature · p0 · m · client</sup>
 - [x] `7129a537` Openings turn to their wall and face the room <sup>feature · p0 · m · client</sup>
 - [x] `eb469f44` Houses concept: drawn as their plan, built as orders <sup>spike · p0 · m · tooling</sup>
