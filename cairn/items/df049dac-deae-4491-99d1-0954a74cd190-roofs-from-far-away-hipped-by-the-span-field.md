@@ -2,8 +2,10 @@
 id: df049dac-deae-4491-99d1-0954a74cd190
 title: Roofs from far away, hipped by the span field
 type: feature
-status: backlog
+status: doing
 milestone: houses
+assignee: Oddur Sigurdsson
+claimed: 2026-09-26
 depends_on:
 - 24100bb9-a9f8-430b-9c0a-4b8b7ed4dfb9
 created: 2026-09-26
@@ -28,10 +30,14 @@ Zoomed out, the colony should read as a village, not a diagram. The roof comes f
 
 ## Acceptance criteria
 
-- [ ] An L-shaped house gets one roof with a valley, not two (screenshot)
-- [ ] The roof mesh rebuilds only when rooms do
-- [ ] Render bench within budget with roofs on
+- [x] An L-shaped house gets one roof with a valley, not two (screenshot)
+- [x] The roof mesh rebuilds only when rooms do
+- [x] Render bench within budget with roofs on
 
 ## 2026-09-26
 
 Lighting's 153dda59 feeds this roof height field into the occluders and shades the facets by the real sun direction instead of a fixed light. Keep the height field available to the client as data (not only baked into the mesh), so both can read it.
+
+## 2026-09-26
+
+Render bench (loaded machine): the roof pass costs 0.33-0.39 ms on the whole map and about 1 ms mid-zoom. Drawing every roof cell as four triangles and courses cost 4-8 ms whole-map, so past 1500 roofed cells on screen a roof is drawn as rows of runs (one rectangle per run of a house sloping one way) with merged eaves; close in, every cell gets its hips and courses. Roofs::height (one byte a cell) and Roofs::house are kept as data for the lighting pass. Roofs draw after the lightmap, tinted by the outdoor sky.

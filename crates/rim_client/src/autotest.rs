@@ -789,6 +789,29 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     );
     t.shot("door").await;
 
+    // ---------------------------------------------------------- roofs from far away
+    println!("\n# zoomed out, a house has its roof, and pointing at it lifts it (DESIGN.md §6c)");
+    let inside = west.offset(2, 0);
+    t.app.cam.zoom = 8.0;
+    t.focus(inside);
+    // The pointer away from the hut, then over it.
+    t.mouse = (4.0, 200.0);
+    let img = t.grab().await;
+    let shingle = [0x7d as f32 / 255.0, 0x5d as f32 / 255.0, 0x3d as f32 / 255.0];
+    let roofed = px(&img, t.screen(inside));
+    let hue = |c: [f32; 3]| (c[0] - c[2]) / (c[0] + c[1] + c[2]).max(0.01);
+    t.check(
+        (hue(roofed) - hue(shingle)).abs() < 0.08,
+        format!("the hut has a shingle roof ({roofed:?} against shingle {shingle:?})"),
+    );
+    t.shot("roofs").await;
+    t.mouse = t.screen(inside);
+    let img = t.grab().await;
+    let lifted = px(&img, t.screen(inside));
+    t.check(dist(lifted, roofed) > 0.1, format!("pointing at the hut lifts its roof ({lifted:?} was {roofed:?})"));
+    t.mouse = (4.0, 200.0);
+    t.app.cam.zoom = 40.0;
+
     // ---------------------------------------------------------- material patterns
     println!("\n# a material shows as a pattern, running on along the wall (DESIGN.md §6c)");
     let run_mid = slot.offset(4 + 1, 1);

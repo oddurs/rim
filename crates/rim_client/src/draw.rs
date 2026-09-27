@@ -153,7 +153,7 @@ fn outline(s: &mut impl Sink, x: f32, y: f32, w: f32, h: f32, t: f32, c: Color) 
 }
 
 /// The part of the viewport that holds map cells, in tiles, inclusive.
-fn visible(app: &App) -> (i32, i32, i32, i32) {
+pub fn visible(app: &App) -> (i32, i32, i32, i32) {
     let (w, cam) = (&app.sim.world, &app.cam);
     let (x0, y0) = cam.to_world(0.0, 0.0);
     let (x1, y1) = cam.to_world(screen_width(), screen_height());
