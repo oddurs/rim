@@ -814,6 +814,24 @@ logical pixels: the engine multiplies them by the display's DPI and the
 player's UI scale (`--ui-scale`). If two mods override the same token, it's
 reported as a conflict and load order decides.
 
+The overlays drawn on the map (DESIGN.md §6f) take their tokens from the
+same file:
+
+| Token | Core | What it styles |
+|---|---|---|
+| `color.chalk` | `#f2eee3` | Selection, and the way a selected stack will be carried |
+| `color.keyline` | `#080a0c8c` | The dark line under every overlay stroke |
+| `shape.firm` | 2 | Selection's line weight |
+| `shape.bracket_gap` | 3 | How far selection sits outside a footprint |
+| `shape.bracket_arm_min`, `shape.bracket_arm_max` | 4, 12 | A bracket's arm, which is 28% of the footprint's short side |
+
+A chip beside a mark ("3 selected") is a small panel: it uses
+`surface_raised`, `line_strong`, `text`, `radius`, `text.caption` and
+`leading.line`.
+
+Overlay sizes are points on the map: the display's DPI applies, the UI
+scale doesn't.
+
 ## The API version
 
 The UI surface is versioned apart from the sim API: `types/ui.d.luau` and

@@ -33,3 +33,7 @@ With the select tool:
 - [ ] Autotest: hovering a tree gives one hover mark on its cell; hovering bare grass gives none; hovering a panel gives none
 - [ ] Autotest: a selected, hovered colonist shows both a hover ring and a selection ring, and their radii differ by at least 2 px
 - [ ] Screenshot `chalk-hover`
+
+## 2026-09-27
+
+This item adds the theme token stroke (and its doc row) to mods/core/ui/theme.toml and docs/modding/ui.md: tokens land with the item that first reads them (d83192ed review).

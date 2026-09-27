@@ -33,3 +33,7 @@ A select drag draws a yellow-ish box in the tool colour with no idea of what it 
 - [ ] Autotest: with three colonists selected, an Alt-drag over one leaves two selected
 - [ ] Autotest: a Shift-drag adds without dropping anyone
 - [ ] Screenshot `chalk-box`
+
+## 2026-09-27
+
+This item adds the theme token hair (and its doc row) to mods/core/ui/theme.toml and docs/modding/ui.md: tokens land with the item that first reads them (d83192ed review).

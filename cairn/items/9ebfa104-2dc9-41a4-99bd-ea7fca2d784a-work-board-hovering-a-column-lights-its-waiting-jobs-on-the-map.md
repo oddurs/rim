@@ -37,3 +37,7 @@ Moved from building, which had already shipped when this was filed: with the oth
 ## 2026-09-27
 
 Draw the spotlight with Chalkline (DESIGN.md §6f): a veil (theme color.veil) over the map, with a hole for each waiting job, and a 1.5 px edge in the work type's hue on a keyline. It depends on the overlay palette item for the tokens and primitives.
+
+## 2026-09-27
+
+This item adds the theme token veil (and its doc row) to mods/core/ui/theme.toml and docs/modding/ui.md: tokens land with the item that first reads them (d83192ed review).
