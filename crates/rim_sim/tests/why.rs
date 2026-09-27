@@ -3,7 +3,7 @@
 
 mod common;
 
-use rim_sim::ai::{explain_work, who_takes, Why, WorkWhy};
+use rim_sim::ai::{explain_work, unreachable_jobs, who_takes, Why, WorkWhy};
 use rim_sim::hecs::Entity;
 use rim_sim::world::{Pawn, Thing};
 use rim_sim::{Command, IVec, Sim};
@@ -225,4 +225,54 @@ fn the_why_panel_names_an_urgent_mark() {
     s.step();
     let text = rim_sim::order::work_why_text(&s.world, &why_of(&s, pawn, "core:build"));
     assert!(text.ends_with("(urgent: ahead of the rest)"), "at First there's no level to lift it: {text}");
+}
+
+/// A tree marked to chop inside a ring of walls is named as nobody can
+/// reach it; a gap in the ring and it isn't. Trees marked in the open
+/// aren't named.
+#[test]
+fn a_walled_in_job_is_named_unreachable() {
+    let mut s = core();
+    let pawn = s.world.colonists().next().unwrap();
+    let c = s.world.pawn_pos(pawn).unwrap();
+    let wall = s.world.defs.thing_id("wall").unwrap();
+    let wood = s.world.defs.thing_id("wood").unwrap();
+    // An oak whose ring of neighbours takes walls, well away from the colonist.
+    let oak = s.world.defs.thing_id("tree_oak").unwrap();
+    let ring =
+        |p: IVec| [(-1, -1), (0, -1), (1, -1), (-1, 0), (1, 0), (-1, 1), (0, 1), (1, 1)].map(|(x, y)| p.offset(x, y));
+    let (tree, at) = s
+        .world
+        .ecs
+        .query::<(Entity, &Thing)>()
+        .iter()
+        .filter(|(_, t)| t.def == oak && t.pos.octile(c) > 80)
+        .map(|(e, t)| (e, t.pos))
+        .filter(|&(_, p)| ring(p).iter().all(|&q| s.world.map.passable(q) && s.world.map.fixture_at(q).is_none()))
+        .min_by_key(|&(e, p)| (p.octile(c), e.id()))
+        .expect("an oak with open ground all round");
+    let (_, open) = oak_near(&s, c);
+    designate(&mut s, "chop", at);
+    designate(&mut s, "chop", open);
+    let whole = (IVec::new(0, 0), IVec::new(s.world.map.w - 1, s.world.map.h - 1));
+    assert!(!unreachable_jobs(&s.world, whole.0, whole.1).contains(&tree), "open ground: reachable");
+
+    for q in ring(at) {
+        s.world.spawn_fixture_of(wall, q, false, Some(wood)).expect("a wall");
+    }
+    s.step();
+    let lost = unreachable_jobs(&s.world, whole.0, whole.1);
+    assert!(lost.contains(&tree), "walled in: nobody can reach it");
+    let (open_tree, _) = oak_near(&s, c);
+    assert!(!lost.contains(&open_tree), "the tree in the open isn't named");
+    assert!(
+        unreachable_jobs(&s.world, c.offset(-3, -3), c.offset(3, 3)).is_empty(),
+        "only jobs in the cells asked about"
+    );
+
+    // Open one side and it can be reached again.
+    let gap = s.world.map.fixture_at(ring(at)[1]).unwrap();
+    s.world.despawn_thing(gap);
+    s.step();
+    assert!(!unreachable_jobs(&s.world, whole.0, whole.1).contains(&tree), "a gap in the ring: reachable");
 }

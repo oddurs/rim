@@ -29,3 +29,7 @@ A marked tree across a river waits forever, and nothing on the map says so. DESI
 
 - [ ] Autotest: a tree marked to chop on an island with no path shows a notch mark within one planner pass; after a path is built, the notch goes away
 - [ ] Screenshot `chalk-unreachable`
+
+## 2026-09-27
+
+From the spike (a207eded): call rim_sim::ai::unreachable_jobs(&world, a, b) with the visible cells. It returns the jobs there that no colonist can reach, from the map's regions, and is read-only: about 21 µs for a 60x36 view. Regions are refreshed every tick, so an island tree gets its notch on the next tick after the last path goes, and loses it on the next tick after one opens.

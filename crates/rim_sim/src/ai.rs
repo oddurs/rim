@@ -763,6 +763,57 @@ pub fn who_takes(w: &World, target: Entity) -> Vec<(Entity, u64)> {
     line.into_iter().map(|x| (x.2, x.3)).collect()
 }
 
+/// The jobs in the cells from `a` to `b` that no colonist can reach: the
+/// map's unreachable mark (DESIGN.md §6f), job by job. A job is a
+/// blueprint, a thing marked for work, an order's site or a creature
+/// marked for work. It asks the map's regions, not the work choice: the
+/// choice stops at the nearest reachable job, so it never looks at most
+/// of the ones nobody can reach. The colonists are sorted into the regions
+/// they stand in, and each job asks one colonist per region, a few cell
+/// lookups each. Read-only and never saved: the regions are the tick's own.
+pub fn unreachable_jobs(w: &World, a: IVec, b: IVec) -> Vec<Entity> {
+    // One colonist per region. A colonist standing where no region is
+    // (a wall just went up round them) might reach anything: ask nobody.
+    let mut from: Vec<(u32, IVec)> = Vec::new();
+    for &c in &w.pawns {
+        let Ok(p) = w.ecs.get::<&Pawn>(c) else { continue };
+        if p.faction != Faction::Player || !p.active || p.dead {
+            continue;
+        }
+        match w.map.region_at(p.pos) {
+            0 => return Vec::new(),
+            r if !from.iter().any(|f| f.0 == r) => from.push((r, p.pos)),
+            _ => {}
+        }
+    }
+    if from.is_empty() {
+        return Vec::new();
+    }
+    let lost = |goal: Goal| !from.iter().any(|&(_, at)| w.map.can_reach(at, goal));
+    let (x0, x1, y0, y1) = (a.x.min(b.x), a.x.max(b.x), a.y.min(b.y), a.y.max(b.y));
+    let inside = |p: IVec| p.z == a.z && (x0..=x1).contains(&p.x) && (y0..=y1).contains(&p.y);
+    let mut out = Vec::new();
+    for y in y0.max(0)..=y1.min(w.map.h - 1) {
+        for x in x0.max(0)..=x1.min(w.map.w - 1) {
+            let cell = IVec::at(x, y, a.z);
+            for e in [w.map.fixture_at(cell), w.map.floor_at(cell)].into_iter().flatten() {
+                let Some(t) = w.thing(e) else { continue };
+                // A thing bigger than a cell is asked once, at its anchor.
+                if t.pos == cell && w.is_markable(e) && lost(w.reach_goal(&t)) {
+                    out.push(e);
+                }
+            }
+        }
+    }
+    for &o in &w.pawns {
+        let Some(at) = w.pawn_pos(o) else { continue };
+        if inside(at) && w.ecs.get::<&Designated>(o).is_ok() && lost(Goal::Touch(at)) {
+            out.push(o);
+        }
+    }
+    out
+}
+
 /// The work pawn `e` would take next, and of which type: the choice,
 /// without reserving anything. With `why`, each refusal is kept.
 fn choose_work(w: &World, e: Entity, p: &Pawn, mut why: Option<&mut Refusals>) -> Option<(DefId, Job, Entity)> {
