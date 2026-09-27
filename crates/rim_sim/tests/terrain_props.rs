@@ -95,7 +95,7 @@ fn a_mod_adds_a_prop_and_reads_it_in_terms() {
         s.warnings
     );
     let d = &s.world.defs;
-    assert_eq!(d.terrain_props, ["drainage", "fertility", "salinity", "water_table"]);
+    assert_eq!(d.terrain_props, ["drainage", "fertility", "mud", "salinity", "water_table"]);
     let at = s.world.colony_center().unwrap().offset(6, 6);
     paint(&mut s, "salt:salt_flat", at);
     assert_eq!(value(&s, "brine", at), 90.0);

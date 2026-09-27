@@ -334,7 +334,15 @@ of = [{ input = "hour", curve = [[3, -1.0], [9, 0.0], [15, 1.0], [21, 0.0], [27,
   see the values from before it. Two stock fields on 250×250 cost 0.003 ms a
   tick on synthetic terms; real ones cost more, about 0.4 µs a cell for a
   dozen inputs, which is why a stock field keeps the surface only unless
-  it says `levels = "all"` (ore does). Values are in the state hash and the save; `rim.field_add` and
+  it says `levels = "all"` (ore does). A stock field's `move_cost` (a
+  curve from its value to extra percent, optionally scaled per cell by a
+  terrain prop in `move_cost_by`) becomes the map's per-cell extra cost in
+  10% steps, written only when a cell's step changes: A* and pawn steps
+  read it through `Map::cost`, and since cost never blocks, snow moves no
+  region. The weather plugin's snow costs +50% at 20 cm and +150% at 50;
+  wetness past 90% on soil (core's `mud` prop) +30%. In 40 cm of snow over
+  the whole bench map, A* expands 39 nodes a search instead of 15 (0.04 ms
+  a tick): the octile heuristic assumes open ground. Values are in the state hash and the save; `rim.field_add` and
   `rim.field_set` change them. `input = "sky"` (0 in an enclosed room, 1
   elsewhere) is for rain and snow: a cell within a wall's or a cliff's
   roof span is still open ground.

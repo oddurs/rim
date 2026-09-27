@@ -39,6 +39,10 @@ pub struct Map {
     /// ground without the hot path asking three arrays.
     footing: Vec<bool>,
     fix_cost: Vec<u16>,
+    /// Extra move cost in percent from what lies on the ground (snow,
+    /// mud), kept by the fields that say so. It never blocks, so it moves
+    /// no region.
+    extra_cost: Vec<u16>,
     fix_door: Vec<bool>,
     /// How far the fixture here holds the roof up, in cells; 0 for none.
     support: Vec<u8>,
@@ -208,6 +212,7 @@ impl Map {
             fix_span: vec![false; n],
             footing: (0..n).map(|i| i < plane).collect(),
             fix_cost: vec![0; n],
+            extra_cost: vec![0; n],
             fix_door: vec![false; n],
             support: vec![0; n],
             terrain_span: Vec::new(),
@@ -428,7 +433,18 @@ impl Map {
             (0, t) => t,
             (f, _) => f,
         };
-        ground as u32 + self.fix_cost[i] as u32
+        ground as u32 + self.fix_cost[i] as u32 + self.extra_cost[i] as u32
+    }
+
+    /// Change the extra move cost at cell `i` by `delta` percent.
+    pub fn add_extra_cost(&mut self, i: usize, delta: i32) {
+        let c = &mut self.extra_cost[i];
+        *c = (*c as i32 + delta).clamp(0, u16::MAX as i32) as u16;
+    }
+
+    /// The extra move cost at cell `i`, in percent.
+    pub fn extra_cost(&self, i: usize) -> u16 {
+        self.extra_cost[i]
     }
 
     pub fn set_terrain(&mut self, p: IVec, def: DefId, cost: u32) {

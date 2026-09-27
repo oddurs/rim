@@ -670,12 +670,11 @@ Dig down. The map becomes a stack of 2D levels joined only at stairs, ladders an
 
 ## crafting — Crafting
 
-`#########·` 87% · 26 of 30 done · due 2027-05-01
+`#########·` 90% · 27 of 30 done · due 2027-05-01
 
 Production chains: workbenches and bills, cooking, farming, tailoring, research as a plugin.
 
 - [ ] `308074c6` Getting wet: pawn wetness and clothing insulation <sup>feature · p2 · m · engine</sup>
-- [ ] `6f1e7410` Snow and mud slow movement <sup>feature · p3 · s · engine</sup>
 - [ ] `b1444a26` Farming: growing zones and crops <sup>feature · p0 · l · engine</sup>
 - [ ] `db7f1e06` Mining that rewards looking: rock kinds, veins and prospecting <sup>content · p1 · m · core</sup>
 - [x] `01691032` Item categories and one filter: things, materials and condition <sup>feature · p1 · m · engine</sup>
@@ -690,6 +689,7 @@ Production chains: workbenches and bills, cooking, farming, tailoring, research 
 - [x] `6ce26632` The UI draws a thing's look: the item token <sup>feature · p1 · m · client</sup>
 - [x] `6dd4891c` Ground wetness and snow in core <sup>content · p0 · m · core</sup>
 - [x] `6ec6da26` primitive: baskets, pots as stores, a woodpile and a stone bin <sup>content · p2 · s · plugin</sup>
+- [x] `6f1e7410` Snow and mud slow movement <sup>feature · p3 · s · engine</sup>
 - [x] `704889c9` Research as a plugin <sup>feature · p1 · l · plugin</sup>
 - [x] `87f54c25` The stock-field cost test times 0.003 ms under load and flakes <sup>bug · p1</sup>
 - [x] `9b569a33` Terrain properties, tags and distance-to inputs <sup>feature · p0 · s · engine</sup>

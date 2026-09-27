@@ -5,7 +5,7 @@
 //! mod's defs with data that only it understands.
 
 use crate::look::{Look, LookDef};
-use crate::terms::{InputDef, TermDef, Terms, TermsDef};
+use crate::terms::{Curve, InputDef, TermDef, Terms, TermsDef};
 use serde::Deserialize;
 use std::collections::{BTreeMap, HashMap};
 
@@ -921,6 +921,18 @@ pub struct FieldDef {
     /// Stock fields: the surface, or every level.
     #[serde(default)]
     pub levels: StockLevels,
+    /// Stock fields: extra move cost in percent by the field's value, as a
+    /// curve (`[[20, 50], [50, 150]]`). Snow and mud slow walking.
+    #[serde(default)]
+    pub move_cost: Vec<[f64; 2]>,
+    /// Stock fields: a terrain prop that scales `move_cost` at each cell,
+    /// so wet soil turns to mud and wet sand doesn't (core's `mud`).
+    #[serde(default)]
+    pub move_cost_by: String,
+    #[serde(skip)]
+    pub move_curve: Option<Curve>,
+    #[serde(skip)]
+    pub move_by_r: Option<usize>,
     #[serde(skip)]
     pub rate_terms: Terms,
     #[serde(skip)]
@@ -1767,6 +1779,8 @@ pub struct DefDb {
     pub near_tags: Vec<usize>,
     /// The fields with `kind = "stock"`, in load order.
     pub stock_fields: Vec<usize>,
+    /// The stock fields that slow walking (`move_cost`), in load order.
+    pub move_fields: Vec<usize>,
     /// What loading noticed but let through, for the mod loader to report.
     pub warnings: Vec<String>,
     pub calendar: CalendarDef,
@@ -2233,14 +2247,32 @@ impl DefDb {
                     ));
                 }
                 d.period = (d.period_minutes * crate::TICKS_PER_DAY as f64 / 1440.0).round().max(1.0) as u64;
-            } else if d.rate.is_some() || d.settle.is_some() || d.init.is_some() {
-                return Err(format!("{ctx}: `rate`, `base` and `init` are for kind = \"stock\""));
+                if !d.move_cost.is_empty() {
+                    d.move_curve = Some(Curve::compile(&d.move_cost).map_err(|e| format!("{ctx}, move_cost: {e}"))?);
+                    if d.move_cost.iter().any(|p| p[1] < 0.0) {
+                        return Err(format!("{ctx}: move_cost adds to a walk, so its percentages are 0 or more"));
+                    }
+                }
+                if !d.move_cost_by.is_empty() {
+                    d.move_by_r = terrain_props.binary_search_by(|p| p.as_str().cmp(&d.move_cost_by)).ok();
+                    if d.move_by_r.is_none() {
+                        warnings.push(format!(
+                            "{ctx}: no terrain has the property '{}', so move_cost scales to nothing",
+                            d.move_cost_by
+                        ));
+                    }
+                }
+            } else if d.rate.is_some() || d.settle.is_some() || d.init.is_some() || !d.move_cost.is_empty() {
+                // Only a stock field knows which cells changed, so only it
+                // can keep a move cost current without a pass over the map.
+                return Err(format!("{ctx}: `rate`, `base`, `init` and `move_cost` are for kind = \"stock\""));
             }
             if d.terms.reads_own() || d.leak_terms.reads_own() {
                 return Err(format!("{ctx}: `self`, `base` and `above_base` are for a stock field's rate"));
             }
         }
         self.stock_fields = (0..self.fields.len()).filter(|&i| self.fields[i].kind == FieldKind::Stock).collect();
+        self.move_fields = (0..self.fields.len()).filter(|&i| self.fields[i].move_curve.is_some()).collect();
         let mut near: Vec<usize> = self
             .fields
             .iter()

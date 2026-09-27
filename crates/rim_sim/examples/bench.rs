@@ -13,7 +13,9 @@
 //!
 //! Flags: --seed N, --size N, --colonists N, --pawns N, --days F,
 //! --designate-all (every cell of the map designated), --haul (a stockpile
-//! and 300 loose stacks instead of other work), --check.
+//! and 300 loose stacks instead of other work), --snow CM (a hard, dry
+//! frost with CM of snow over the whole surface: `--snow 0` is the same
+//! frost with none, to see what snow does to paths), --check.
 
 use rim_sim::world::Faction;
 use rim_sim::{Command, IVec, Sim, TICKS_PER_DAY};
@@ -129,6 +131,22 @@ fn main() {
     }
     if flag("--levels") {
         dig_levels(&mut s, c);
+    }
+
+    // --snow: frozen and dry, so the snow lies as put and nothing else
+    // differs between `--snow 0` and a snowy run.
+    let snow_cm: f64 = arg("--snow", -1.0);
+    if snow_cm >= 0.0 {
+        for (id, v) in [("temperature", -8.0), ("precipitation", 0.0)] {
+            if let Some(f) = defs.lookup("field", id) {
+                s.world.fields.set_ambient(f as usize, Some(v));
+            }
+        }
+        let snow = defs.lookup("field", "weather:snow").expect("--snow needs the weather plugin") as usize;
+        for i in 0..s.world.map.plane() {
+            let p = s.world.map.pos(i);
+            s.world.fields.set_stock(&defs, &s.world.map, snow, p, snow_cm, false);
+        }
     }
 
     // Warm up (paths, rooms, first jobs), then measure.

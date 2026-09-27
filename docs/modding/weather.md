@@ -84,6 +84,8 @@ over time, so the ground can stay wet after the rain stops. Instead of
 | `init` | Terms for each cell's value when the map is made (0 without) |
 | `period_minutes` | How often each cell is worked out, 60 by default |
 | `levels` | `"surface"` (the default) or `"all"`, for what lives underground too, such as ore |
+| `move_cost` | A curve from the value to extra percent move cost: snow `[[0, 0], [20, 50], [50, 150]]` |
+| `move_cost_by` | A terrain prop that scales `move_cost` per cell: the weather plugin's wetness uses core's `mud`, so soaked soil slows a walk and wet sand doesn't |
 | `range` | The value is kept within it |
 
 ```toml
