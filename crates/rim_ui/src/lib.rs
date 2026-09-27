@@ -711,6 +711,16 @@ impl Ui {
         self.ids.get(id).copied()
     }
 
+    /// Does the interface cover this point, in physical pixels: a panel or
+    /// a control in last frame's layout? What the map draws there can't
+    /// be seen or clicked.
+    pub fn covers(&self, x: f32, y: f32) -> bool {
+        self.layers.iter().any(|l| {
+            l.solids.iter().any(|r| contains(*r, x, y))
+                || l.hits.iter().any(|h| h.interactive && contains(h.rect, x, y))
+        })
+    }
+
     /// How far the scroll area with this id is scrolled, in pixels.
     pub fn scroll_offset(&self, id: &str) -> Option<f32> {
         let key = self.id_keys.get(id)?;

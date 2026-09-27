@@ -141,6 +141,13 @@ pub enum Mark {
         points: Vec<(f32, f32)>,
         alpha: f32,
     },
+    /// A selected thing off screen: a chevron at the edge pointing at it,
+    /// `angle` in radians from the screen's centre.
+    Offscreen {
+        at: (f32, f32),
+        angle: f32,
+        of: Entity,
+    },
     /// A measuring line's cell number, where it crosses the pointer's
     /// row or column.
     Label {
@@ -174,9 +181,11 @@ const NOTCH_CELL: f32 = 0.3;
 /// A small label by the pointer or a mark: "3 selected", "Chop · 4 trees".
 #[derive(Clone, Debug, PartialEq)]
 pub struct Chip {
-    /// Its top-left corner; it's kept on screen when drawn.
+    /// Its top-left corner, or its top-right when `right`; it's kept on
+    /// screen when drawn.
     pub at: (f32, f32),
     pub text: String,
+    pub right: bool,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -293,6 +302,120 @@ fn size(a: rim_sim::IVec, b: rim_sim::IVec) -> String {
     format!("{} × {}", (a.x - b.x).abs() + 1, (a.y - b.y).abs() + 1)
 }
 
+/// A selected thing's mark on screen: a pawn's ring's bounds, a thing's
+/// footprint, whether or not it's in view.
+fn bounds(app: &App, e: Entity) -> Option<[f32; 4]> {
+    let gap = app.palette.bracket_gap + app.palette.firm;
+    if let Some(((x, y), r)) = draw::pawn_disc(app, e) {
+        let out = r + gap;
+        return Some([x - out, y - out, out * 2.0, out * 2.0]);
+    }
+    let [x, y, w, h] = footprint(app, &app.sim.world.thing(e)?);
+    Some([x - gap, y - gap, w + 2.0 * gap, h + 2.0 * gap])
+}
+
+/// Chevrons sit at least this far inside the screen's edge, and further
+/// in where a panel is.
+const EDGE_INSET: f32 = 16.0;
+/// Chevrons closer than this are one chevron for all they point at.
+const CHEVRON_MERGE: f32 = 28.0;
+
+/// Where the line from the screen's centre to an off-screen `target`
+/// leaves the screen, `EDGE_INSET` inside it, and the line's angle.
+pub fn edge_point((sw, sh): (f32, f32), target: (f32, f32)) -> ((f32, f32), f32) {
+    let (cx, cy) = (sw / 2.0, sh / 2.0);
+    let (dx, dy) = (target.0 - cx, target.1 - cy);
+    let reach = ((cx - EDGE_INSET) / dx.abs().max(1e-6)).min((cy - EDGE_INSET) / dy.abs().max(1e-6));
+    ((cx + dx * reach, cy + dy * reach), dy.atan2(dx))
+}
+
+/// A chevron for selected things off screen: where it sits, which way it
+/// points, what it points at (the inspector's first), and how many cells
+/// past the view's edge the nearest is.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Offscreen {
+    pub at: (f32, f32),
+    pub angle: f32,
+    pub of: Vec<Entity>,
+    pub cells: i32,
+}
+
+/// The selection's chevrons. Each steps in from the edge until no panel
+/// covers it, and chevrons that land together merge.
+pub fn offscreen(app: &App) -> Vec<Offscreen> {
+    let (sw, sh, dpi) = (screen_width(), screen_height(), screen_dpi_scale());
+    let (v0, v1) = (app.cam.to_world(0.0, 0.0), app.cam.to_world(sw, sh));
+    let mut picked = crate::selection(app);
+    // The inspector's one first, so a merged chevron leads to it.
+    if let Some(i) = picked.iter().position(|&e| Some(e) == app.selected) {
+        picked.swap(0, i);
+    }
+    let mut out: Vec<Offscreen> = Vec::new();
+    for e in picked {
+        let Some(b) = bounds(app, e).filter(|&b| !on_screen(b)) else { continue };
+        let target = (b[0] + b[2] / 2.0, b[1] + b[3] / 2.0);
+        let ((mut x, mut y), angle) = edge_point((sw, sh), target);
+        let (ux, uy) = (-angle.cos(), -angle.sin());
+        for _ in 0..40 {
+            if !app.ui.covers(x * dpi, y * dpi) {
+                break;
+            }
+            (x, y) = (x + ux * 8.0, y + uy * 8.0);
+        }
+        let (wx, wy) = app.cam.to_world(target.0, target.1);
+        let past = |v: f32, lo: f32, hi: f32| (lo - v).max(v - hi).max(0.0);
+        let cells = past(wx, v0.0, v1.0).hypot(past(wy, v0.1, v1.1)).round() as i32;
+        match out.iter_mut().find(|o| (o.at.0 - x).hypot(o.at.1 - y) < CHEVRON_MERGE) {
+            Some(o) => {
+                o.of.push(e);
+                o.cells = o.cells.min(cells);
+            }
+            None => out.push(Offscreen { at: (x, y), angle, of: vec![e], cells }),
+        }
+    }
+    out
+}
+
+/// A chevron's chip: its text, and whether it hangs to the chevron's left
+/// (for a chevron on the right, pointing out).
+fn offscreen_chip(app: &App, o: &Offscreen) -> (String, bool) {
+    let w = &app.sim.world;
+    let name = |e: Entity| {
+        w.ecs
+            .get::<&Pawn>(e)
+            .map(|p| p.name.clone())
+            .ok()
+            .or_else(|| w.thing(e).map(|t| w.defs.thing(t.def).label.clone()))
+    };
+    let who = match o.of.len() {
+        1 => name(o.of[0]).unwrap_or_default(),
+        n => format!("{n} selected"),
+    };
+    let cells = if o.cells == 1 { "1 cell".to_string() } else { format!("{} cells", o.cells) };
+    (format!("{who} · {cells}"), o.angle.cos() > 0.0)
+}
+
+/// Where a chevron's chip goes: on the screen side of it.
+fn chip_anchor(o: &Offscreen) -> (f32, f32) {
+    (o.at.0 - o.angle.cos() * 16.0, o.at.1 - o.angle.sin() * 16.0 - 10.0)
+}
+
+/// The selected thing a click on a chevron, or its chip, would bring back.
+pub fn offscreen_at(app: &mut App, (x, y): (f32, f32)) -> Option<Entity> {
+    const HIT: f32 = 14.0;
+    let dpi = screen_dpi_scale();
+    for o in offscreen(app) {
+        let (text, right) = offscreen_chip(app, &o);
+        let chip = Chip { at: chip_anchor(&o), text, right };
+        let [cx, cy, cw, ch] = chip_box(&app.palette, &mut app.ui.text, &chip, dpi);
+        let on_chip = (cx..=cx + cw).contains(&x) && (cy..=cy + ch).contains(&y);
+        if on_chip || (o.at.0 - x).hypot(o.at.1 - y) <= HIT {
+            return Some(o.of[0]);
+        }
+    }
+    None
+}
+
 /// Does a screen rectangle touch the screen?
 fn on_screen([x, y, w, h]: [f32; 4]) -> bool {
     x + w >= 0.0 && y + h >= 0.0 && x <= screen_width() && y <= screen_height()
@@ -375,10 +498,16 @@ pub fn scene(app: &App) -> Scene {
             marks.push(Mark::Hover { rect: footprint(app, &t), alpha: a });
         }
     }
+    // A selection off screen: a chevron at the edge toward it, and how far.
+    for o in offscreen(app) {
+        let (text, right) = offscreen_chip(app, &o);
+        marks.push(Mark::Offscreen { at: o.at, angle: o.angle, of: o.of[0] });
+        marks.push(Mark::Chip(Chip { at: chip_anchor(&o), text, right }));
+    }
     // Beside the inspector's one: speech sits above a pawn and its name
     // below, so a chip there would be covered.
     if let (true, Some(at)) = (group, primary) {
-        marks.push(Mark::Chip(Chip { at, text: format!("{} selected", picked.len()) }));
+        marks.push(Mark::Chip(Chip { at, text: format!("{} selected", picked.len()), right: false }));
     }
     // A job no one can reach carries a notch at its bottom-left, and says
     // why under the pointer. The map's regions answer: a few lookups a job.
@@ -399,7 +528,7 @@ pub fn scene(app: &App) -> Scene {
             app.hover_cell.is_some_and(|c| (p.x..p.x + fw).contains(&c.x) && (p.y..p.y + fh).contains(&c.y))
         };
         if cells.is_some_and(over) {
-            marks.push(Mark::Chip(Chip { at: (at.0, at.1 + 4.0), text: "No one can reach this".into() }));
+            marks.push(Mark::Chip(Chip { at: (at.0, at.1 + 4.0), text: "No one can reach this".into(), right: false }));
         }
     }
     // Measuring: each heavier line's number where it crosses the
@@ -599,6 +728,18 @@ fn marquee(p: &Palette, [x, y, w, h]: [f32; 4], broken: bool) {
     }
 }
 
+/// A chalk chevron on a keyline at `at`, pointing along `angle`.
+fn chevron(p: &Palette, (x, y): (f32, f32), angle: f32) {
+    let (c, s) = (angle.cos(), angle.sin());
+    let pt = |u: f32, v: f32| vec2(x + u * c - v * s, y + u * s + v * c);
+    let (tip, back, notch, fore) = (pt(7.0, 0.0), pt(-5.0, -7.0), pt(-2.0, 0.0), pt(-5.0, 7.0));
+    for (a, b) in [(tip, back), (back, notch), (notch, fore), (fore, tip)] {
+        draw_line(a.x, a.y, b.x, b.y, 3.0, p.keyline);
+    }
+    draw_triangle(tip, back, notch, p.chalk);
+    draw_triangle(tip, notch, fore, p.chalk);
+}
+
 /// Paint the scene's world marks. Chips are text: `chips` turns them into
 /// the UI's draw list.
 pub fn draw(scene: &Scene, p: &Palette, zoom: f32) {
@@ -624,9 +765,24 @@ pub fn draw(scene: &Scene, p: &Palette, zoom: f32) {
                 ring(p, *center, ring_radius(p, m).unwrap_or(0.0), p.firm, p.chalk, *alpha)
             }
             Mark::Notch { at, size } => notch(p, *at, *size),
+            Mark::Offscreen { at, angle, .. } => chevron(p, *at, *angle),
             Mark::Chip(_) | Mark::Label { .. } => {}
         }
     }
+}
+
+/// A chip's box on screen, in points: its text measured, placed from its
+/// anchor, and kept on screen.
+pub fn chip_box(p: &Palette, text: &mut rim_ui::text::Text, c: &Chip, dpi: f32) -> [f32; 4] {
+    let (pad, size) = (p.caption * 0.64, p.caption);
+    let h = (size * p.leading + pad).round();
+    let quads = text.quads(&c.text, size * dpi, 500, 0.0, None, 0.0, 0.0);
+    let tw = quads.iter().map(|q| (q.dst[0] + q.dst[2]) / dpi).fold(0.0f32, f32::max);
+    let w = (tw + pad * 2.0).ceil();
+    let x0 = if c.right { c.at.0 - w } else { c.at.0 };
+    let x = x0.clamp(4.0, (screen_width() - w - 4.0).max(4.0));
+    let y = c.at.1.clamp(4.0, (screen_height() - h - 4.0).max(4.0));
+    [x, y, w, h]
 }
 
 /// Text on the map with a dark shadow a point down and right, in the
@@ -650,9 +806,7 @@ pub fn shadowed(
 /// here too, as they're text.
 pub fn chips(scene: &Scene, p: &Palette, text: &mut rim_ui::text::Text, dpi: f32) -> Vec<Draw> {
     let rgba = |c: Color| [c.r, c.g, c.b, c.a];
-    let (sw, sh) = (screen_width(), screen_height());
     let (pad, size) = (p.caption * 0.64, p.caption);
-    let h = (size * p.leading + pad).round();
     let mut out = Vec::new();
     for m in &scene.marks {
         if let Mark::Label { at, text: t, alpha } = m {
@@ -661,11 +815,8 @@ pub fn chips(scene: &Scene, p: &Palette, text: &mut rim_ui::text::Text, dpi: f32
             continue;
         }
         let Mark::Chip(c) = m else { continue };
+        let [x, y, w, h] = chip_box(p, text, c, dpi);
         let mut quads = text.quads(&c.text, size * dpi, 500, 0.0, None, 0.0, 0.0);
-        let tw = quads.iter().map(|q| (q.dst[0] + q.dst[2]) / dpi).fold(0.0f32, f32::max);
-        let w = (tw + pad * 2.0).ceil();
-        let x = c.at.0.clamp(4.0, (sw - w - 4.0).max(4.0));
-        let y = c.at.1.clamp(4.0, (sh - h - 4.0).max(4.0));
         let r = [x * dpi, y * dpi, w * dpi, h * dpi];
         out.push(Draw::Rect { rect: r, color: rgba(p.surface), radius: p.radius * dpi });
         out.push(Draw::Outline { rect: r, color: rgba(p.line), width: dpi, radius: p.radius * dpi });
@@ -728,6 +879,17 @@ mod tests {
         let (hover_out, select_in) = (hover + p.stroke / 2.0 + 1.0, select - p.firm / 2.0 - 1.0);
         assert!(select_in - hover_out >= 0.5, "{hover_out} {select_in}");
         assert_eq!(hover + p.stroke / 2.0, r, "hover's outside edge is the body's");
+    }
+
+    #[test]
+    fn a_chevron_sits_inside_the_edge_toward_its_target() {
+        let screen = (800.0, 600.0);
+        let ((x, y), angle) = edge_point(screen, (-500.0, 300.0));
+        assert_eq!((x, y), (EDGE_INSET, 300.0));
+        assert!((angle - std::f32::consts::PI).abs() < 1e-6, "points left: {angle}");
+        let ((x, y), angle) = edge_point(screen, (400.0, 5000.0));
+        assert_eq!((x, y), (400.0, 600.0 - EDGE_INSET));
+        assert!((angle - std::f32::consts::FRAC_PI_2).abs() < 1e-6, "points down: {angle}");
     }
 
     #[test]

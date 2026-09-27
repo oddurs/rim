@@ -2278,6 +2278,14 @@ pub fn apply(app: &mut App, action: Action) {
         // Select acts on release: a click picks what's under it, a drag
         // picks the colonists in the box.
         Action::LeftDown(x, y) => {
+            // With the select tool, a chevron for a selection off screen
+            // brings it back.
+            if app.tool == Tool::Select {
+                if let Some(e) = overlay::offscreen_at(app, (x, y)) {
+                    focus(app, e);
+                    return;
+                }
+            }
             app.drag_start = Some(app.cam.tile_at(x, y));
             app.drag_from = (x, y);
         }
