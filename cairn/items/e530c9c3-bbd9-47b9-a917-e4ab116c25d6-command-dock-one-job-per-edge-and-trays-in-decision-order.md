@@ -2,12 +2,12 @@
 id: e530c9c3-bbd9-47b9-a917-e4ab116c25d6
 title: 'Command dock: one job per edge, and trays in decision order'
 type: feature
-status: review
+status: done
 milestone: interface
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 created: 2026-09-26
-updated: 2026-09-26
+updated: 2026-09-27
+closed_at: 2026-09-27
 priority: p1
 api: additive
 effort: l
@@ -39,3 +39,7 @@ The bottom bar grew one full-width row per decision: materials, then groups, the
 ## 2026-09-26
 
 Built to the approved Command Dock artifact with three changes: find is on / (typing straight into a tray would steal Q/B/Z and Escape from the bindings); the pill keeps the material chips rather than a Tab key, since Tab is next-colonist; the tray has a fixed height, because the card changing under the pointer grew the tray and slid the tiles out from under the click (the autotest caught it).
+
+## 2026-09-27
+
+Merged as #141.

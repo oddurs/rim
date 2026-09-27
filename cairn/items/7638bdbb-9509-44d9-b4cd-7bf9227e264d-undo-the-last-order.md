@@ -2,14 +2,14 @@
 id: 7638bdbb-9509-44d9-b4cd-7bf9227e264d
 title: Undo the last order
 type: feature
-status: review
+status: done
 milestone: pointer
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 depends_on:
 - 9aa55d96-c35e-4378-bfcc-c5882bcbc3b7
 created: 2026-09-26
-updated: 2026-09-26
+updated: 2026-09-27
+closed_at: 2026-09-27
 priority: p2
 api: additive
 effort: m
