@@ -59,7 +59,7 @@ fn main() {
     }
     let o = c.offset(3, 3);
     let at = |dx: i32, dy: i32| -> IVec { o.offset(dx, dy) };
-    s.push(Command::Build { thing: thing("campfire"), stuff: None, a: at(1, 1), b: at(1, 1) });
+    s.push(Command::Build { thing: thing("campfire"), stuff: None, a: at(1, 1), b: at(1, 1), facing: 0 });
     // Outside the door, on the nearest cell with nothing growing on it and
     // clear of the hut to come.
     let hut_cell = |p: IVec| (0..5).contains(&(p.x - o.x)) && (0..5).contains(&(p.y - o.y));
@@ -68,7 +68,7 @@ fn main() {
         .flat_map(|r| (-r..=r).flat_map(move |dy| (-r..=r).map(move |dx| (dx, dy))).map(|(dx, dy)| at(2 + dx, 6 + dy)))
         .find(|&p| open(p))
         .expect("open ground for a crafting spot");
-    s.push(Command::Build { thing: thing("crafting:spot"), stuff: None, a: spot_at, b: spot_at });
+    s.push(Command::Build { thing: thing("crafting:spot"), stuff: None, a: spot_at, b: spot_at, facing: 0 });
     // With an axe: fell the trees, and raise a 5x5 wooden hut around the
     // fire, with a door on the south side and a bed.
     let hut = |g: &mut Sim| {
@@ -78,12 +78,12 @@ fn main() {
                 let p = o.offset(x, y);
                 let edge = x == 0 || y == 0 || x == 4 || y == 4;
                 if edge && p != o.offset(2, 4) {
-                    g.push(Command::Build { thing: thing("wall"), stuff: wood, a: p, b: p });
+                    g.push(Command::Build { thing: thing("wall"), stuff: wood, a: p, b: p, facing: 0 });
                 }
             }
         }
-        g.push(Command::Build { thing: thing("door"), stuff: wood, a: at(2, 4), b: at(2, 4) });
-        g.push(Command::Build { thing: thing("bed"), stuff: wood, a: at(2, 2), b: at(2, 2) });
+        g.push(Command::Build { thing: thing("door"), stuff: wood, a: at(2, 4), b: at(2, 4), facing: 0 });
+        g.push(Command::Build { thing: thing("bed"), stuff: wood, a: at(2, 2), b: at(2, 2), facing: 0 });
     };
 
     // The commands apply on the first tick; the twin splits off after it.

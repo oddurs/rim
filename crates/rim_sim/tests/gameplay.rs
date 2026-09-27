@@ -24,7 +24,7 @@ fn warrior_chops_and_builds() {
         .flat_map(|r| (-r..=r).flat_map(move |dy| (-r..=r).map(move |dx| c.offset(dx, dy))))
         .find(|&p| (0..4).all(|i| free(p.offset(i, 0))))
         .expect("no open ground near start");
-    s.push(Command::Build { stuff: Some(wood), thing: wall, a: row, b: row.offset(3, 0) });
+    s.push(Command::Build { stuff: Some(wood), thing: wall, a: row, b: row.offset(3, 0), facing: 0 });
     let placed = 4;
     for _ in 0..TICKS_PER_DAY * 2 {
         s.step();

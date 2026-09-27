@@ -274,10 +274,35 @@ impl HarvestDef {
 }
 
 impl ThingDef {
-    /// Every cell it covers with its anchor at `at`, row by row.
-    pub fn footprint(&self, at: crate::IVec) -> impl Iterator<Item = crate::IVec> {
+    /// Its size turned `facing` quarter turns clockwise (DESIGN.md §6c): a
+    /// 2×1 bench turned once is 1×2.
+    pub fn size_facing(&self, facing: u8) -> [u32; 2] {
         let [w, h] = self.size;
+        if facing & 1 == 1 {
+            [h, w]
+        } else {
+            [w, h]
+        }
+    }
+
+    /// Every cell it covers facing `facing`, with the footprint's top-left
+    /// at `at`, row by row. Built on `offset`, so a cell keeps its level.
+    pub fn footprint(&self, at: crate::IVec, facing: u8) -> impl Iterator<Item = crate::IVec> {
+        let [w, h] = self.size_facing(facing);
         (0..h as i32).flat_map(move |y| (0..w as i32).map(move |x| at.offset(x, y)))
+    }
+
+    /// A cell written in the def's own frame (from its anchor, facing
+    /// south: a bench's spot below it) turned `facing` quarter turns
+    /// clockwise inside the footprint. Cells outside it turn with it.
+    pub fn turn(&self, (dx, dy): (i32, i32), facing: u8) -> (i32, i32) {
+        let [w, h] = self.size.map(|v| v as i32);
+        match facing & 3 {
+            0 => (dx, dy),
+            1 => (h - 1 - dy, dx),
+            2 => (w - 1 - dx, h - 1 - dy),
+            _ => (dy, w - 1 - dx),
+        }
     }
 
     /// The harvest a designation marks this thing for.

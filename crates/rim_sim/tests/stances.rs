@@ -296,7 +296,7 @@ fn first_work(stance_id: Option<&str>) -> &'static str {
     let chop_d = defs.lookup("designation", "chop").unwrap();
     s.push(Command::Designate { designation: chop_d, a: c.offset(-15, -15), b: c.offset(15, 15) });
     let wall = defs.thing_id("wall").unwrap();
-    s.push(Command::Build { thing: wall, stuff: Some(wood), a: c.offset(-6, 4), b: c.offset(-2, 4) });
+    s.push(Command::Build { thing: wall, stuff: Some(wood), a: c.offset(-6, 4), b: c.offset(-2, 4), facing: 0 });
     if let Some(id) = stance_id {
         s.push(Command::SetStance { stance: stance(&s, id) });
     }

@@ -213,9 +213,9 @@ fn plan_work(s: &mut Sim, defs: &rim_sim::defs::DefDb, c: IVec, size: i32) {
     if let (Some(wall), Some(bed)) = (defs.thing_id("wall"), defs.thing_id("bed")) {
         for k in 0..6 {
             let o = c.offset(8 + k * 7, 8);
-            s.push(Command::Build { thing: wall, stuff: wood, a: o, b: o.offset(5, 0) });
-            s.push(Command::Build { thing: wall, stuff: wood, a: o.offset(0, 4), b: o.offset(5, 4) });
-            s.push(Command::Build { thing: bed, stuff: wood, a: o.offset(2, 2), b: o.offset(2, 2) });
+            s.push(Command::Build { thing: wall, stuff: wood, a: o, b: o.offset(5, 0), facing: 0 });
+            s.push(Command::Build { thing: wall, stuff: wood, a: o.offset(0, 4), b: o.offset(5, 4), facing: 0 });
+            s.push(Command::Build { thing: bed, stuff: wood, a: o.offset(2, 2), b: o.offset(2, 2), facing: 0 });
         }
     }
 }

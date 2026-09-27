@@ -243,7 +243,7 @@ impl UserData for World {
                 let thing = def(&s, "thing", &thing)?;
                 let stuff = stuff.map(|id| def(&s, "thing", &id)).transpose()?;
                 let (a, b) = (IVec::new(x1, y1), IVec::new(x2.unwrap_or(x1), y2.unwrap_or(y1)));
-                s.push(Command::Build { thing, stuff, a, b });
+                s.push(Command::Build { thing, stuff, a, b, facing: 0 });
                 Ok(())
             },
         );

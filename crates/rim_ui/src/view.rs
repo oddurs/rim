@@ -151,6 +151,8 @@ pub enum UiAction {
     },
     /// Take back the last order given.
     Undo,
+    /// Turn what the build tool will place a quarter turn clockwise.
+    Turn,
     /// A colonist's priority for a work type, by its qualified id.
     SetPriority(Entity, String, u8),
     /// Hand a colonist's work type back to what they'd inherit.

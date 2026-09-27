@@ -63,7 +63,7 @@ fn all_three_are_built_of_anything_structural() {
         let def = thing(&s, id);
         let b = s.world.defs.thing(def).build.as_ref().unwrap_or_else(|| panic!("{id} is buildable"));
         assert!(b.stuff.is_some(), "{id} takes a material, so the marble test covers it");
-        s.push(Command::Build { thing: def, stuff: Some(stone), a: *cell, b: *cell });
+        s.push(Command::Build { thing: def, stuff: Some(stone), a: *cell, b: *cell, facing: 0 });
         s.step();
         let e = s.world.map.fixture_at(*cell).unwrap_or_else(|| panic!("a stone {id} blueprint"));
         assert!(s.world.ecs.get::<&Blueprint>(e).is_ok());

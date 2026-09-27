@@ -48,7 +48,7 @@ fn built(s: &Sim, p: IVec) -> bool {
 
 fn build_wall(s: &mut Sim, a: IVec, b: IVec) {
     let (wall, wood) = (s.world.defs.thing_id("core:wall").unwrap(), s.world.defs.thing_id("core:wood").unwrap());
-    s.push(Command::Build { thing: wall, stuff: Some(wood), a, b });
+    s.push(Command::Build { thing: wall, stuff: Some(wood), a, b, facing: 0 });
     s.step();
 }
 
@@ -212,7 +212,7 @@ fn a_floor_over_grass_leaves_the_grass() {
     let (grass, at) = in_a_row(&s, "primitive:tall_grass").expect("tall grass");
     let floor = s.world.defs.thing_id("core:floor").unwrap();
     let wood = s.world.defs.thing_id("core:wood").unwrap();
-    s.push(Command::Build { thing: floor, stuff: Some(wood), a: at, b: at });
+    s.push(Command::Build { thing: floor, stuff: Some(wood), a: at, b: at, facing: 0 });
     s.step();
     assert!(s.world.map.floor_at(at).is_some(), "the floor is planned");
     assert!(s.world.ecs.get::<&Planned>(grass).is_err() && s.world.thing(grass).is_some());

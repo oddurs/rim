@@ -128,7 +128,7 @@ fn building_deliveries_take_from_a_container() {
     }
     assert_eq!(sim.world.put_in_store(bx, Lot::new(wood, 20)), 0);
     let at = site.offset(0, 3);
-    sim.push(Command::Build { thing: wall, stuff: Some(wood), a: at, b: at });
+    sim.push(Command::Build { thing: wall, stuff: Some(wood), a: at, b: at, facing: 0 });
     run(&mut sim, 6_000);
     let built =
         sim.world.map.fixture_at(at).is_some_and(|f| sim.world.ecs.get::<&rim_sim::world::Blueprint>(f).is_err());

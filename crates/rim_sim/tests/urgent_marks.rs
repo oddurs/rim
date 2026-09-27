@@ -21,7 +21,7 @@ fn scene(build: u8) -> (Sim, rim_sim::hecs::Entity, rim_sim::hecs::Entity) {
     let (wall, wood) = (defs.thing_id("wall").unwrap(), defs.thing_id("wood").unwrap());
     s.world.place_item(wood, c.offset(1, 1), 20);
     let spot = common::loose_cells(&s, c.offset(3, 0), 1)[0];
-    s.push(Command::Build { thing: wall, stuff: Some(wood), a: spot, b: spot });
+    s.push(Command::Build { thing: wall, stuff: Some(wood), a: spot, b: spot, facing: 0 });
     let harvest = defs.lookup("designation", "harvest").unwrap();
     s.push(Command::Designate { designation: harvest, a: c.offset(-25, -25), b: c.offset(25, 25) });
     s.step();

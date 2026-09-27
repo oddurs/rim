@@ -470,7 +470,7 @@ fn a_crafting_spot_costs_nothing() {
     let founder = s.world.colonists().next().unwrap();
     let at = free_cell(&s, s.world.pawn_pos(founder).unwrap());
     let spot = s.world.defs.thing_id("crafting:spot").unwrap();
-    s.push(Command::Build { thing: spot, stuff: None, a: at, b: at });
+    s.push(Command::Build { thing: spot, stuff: None, a: at, b: at, facing: 0 });
     let built = |s: &Sim| s.world.map.fixture_at(at).is_some_and(|e| s.world.ecs.get::<&Blueprint>(e).is_err());
     assert!(run_until(&mut s, 4_000, built), "the spot is marked");
 }

@@ -161,3 +161,8 @@ ui.window("core:palette", { title = t("core:palette.title", "Commands"), w = 440
 		kit.col({ gap = 0 }, rows),
 	})
 end)
+
+-- Turn a bed, a bench or anything with a facing before placing it.
+ui.bind("core:turn", { key = "t", label = t("core:keys.turn", "Turn what you're placing") }, function()
+	act.turn()
+end)

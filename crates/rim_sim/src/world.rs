@@ -332,6 +332,14 @@ pub struct Thing {
     pub pos: IVec,
     pub count: u32,
     pub hp: i32,
+    /// Quarter turns clockwise from how its def is drawn (DESIGN.md §6c):
+    /// its footprint, spots and look turn with it. 0 for most things.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub facing: u8,
+}
+
+fn is_zero(v: &u8) -> bool {
+    *v == 0
 }
 
 /// Present on a fixture that is still under construction.
@@ -446,6 +454,8 @@ pub struct Planned {
     pub thing: DefId,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stuff: Option<DefId>,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub facing: u8,
 }
 
 /// Bring these things to a site, then work there (DESIGN.md §4e). A mod
@@ -1122,7 +1132,7 @@ impl World {
     pub(crate) fn set_support(&mut self, e: Entity, span: u8) {
         let Some(t) = self.thing(e) else { return };
         let defs = self.defs.clone();
-        for c in defs.thing(t.def).footprint(t.pos) {
+        for c in defs.thing(t.def).footprint(t.pos, t.facing) {
             if self.map.inb(c) {
                 self.map.set_support(c, span);
             }
@@ -1156,9 +1166,9 @@ impl World {
                 // A thing that blocks (a workbench) stands in no room: it
                 // counts for the first room beside it.
                 let room = td
-                    .footprint(t.pos)
+                    .footprint(t.pos, t.facing)
                     .chain(
-                        td.footprint(t.pos)
+                        td.footprint(t.pos, t.facing)
                             .flat_map(|c| crate::map::NEIGHBORS8[..4].iter().map(move |&(dx, dy)| c.offset(dx, dy))),
                     )
                     .find_map(|c| self.map.room_at(c));
@@ -1199,13 +1209,27 @@ impl World {
 
     /// Where a pawn stands to work on a thing: next to any cell it covers.
     pub fn reach_goal(&self, t: &Thing) -> crate::path::Goal {
-        match self.defs.thing(t.def).size {
+        match self.defs.thing(t.def).size_facing(t.facing) {
             [1, 1] => crate::path::Goal::Touch(t.pos),
             [w, h] => crate::path::Goal::Area { at: t.pos, size: [w as u8, h as u8] },
         }
     }
 
     pub fn spawn_fixture_of(&mut self, def: DefId, pos: IVec, blueprint: bool, stuff: Option<DefId>) -> Option<Entity> {
+        self.spawn_fixture_facing(def, pos, blueprint, stuff, 0)
+    }
+
+    /// `spawn_fixture_of`, turned `facing` quarter turns clockwise: `pos`
+    /// is the turned footprint's top-left.
+    pub fn spawn_fixture_facing(
+        &mut self,
+        def: DefId,
+        pos: IVec,
+        blueprint: bool,
+        stuff: Option<DefId>,
+        facing: u8,
+    ) -> Option<Entity> {
+        let facing = facing & 3;
         if !self.map.inb(pos) {
             return None;
         }
@@ -1219,7 +1243,9 @@ impl World {
         // The rest of a bigger thing's footprint must be open ground too.
         let more = td.size != [1, 1];
         if more
-            && !td.footprint(pos).all(|c| self.map.inb(c) && self.map.passable(c) && self.map.fixture_at(c).is_none())
+            && !td
+                .footprint(pos, facing)
+                .all(|c| self.map.inb(c) && self.map.passable(c) && self.map.fixture_at(c).is_none())
         {
             return None;
         }
@@ -1227,7 +1253,7 @@ impl World {
         // The material scales what the def says. Nothing here knows which
         // names exist; it asks for two and multiplies by whatever comes back.
         let hp = (td.hp as f64 * defs.factor(made_of, "hp")).round().max(1.0) as i32;
-        let t = Thing { def, pos, count: 1, hp };
+        let t = Thing { def, pos, count: 1, hp, facing };
         let e = if blueprint {
             let b = td.build.as_ref()?;
             // The material first, then the parts, delivered in that order.
@@ -1250,7 +1276,7 @@ impl World {
             self.map.set_floor(pos, Some(e), if blueprint { 0 } else { td.path_cost });
         } else {
             let (blocks, cost, door) = if blueprint { (false, 0, false) } else { (td.blocks, td.path_cost, td.door) };
-            for c in td.footprint(pos) {
+            for c in td.footprint(pos, facing) {
                 self.map.set_fixture(c, Some(e), blocks, cost, door);
             }
         }
@@ -1313,7 +1339,7 @@ impl World {
         let td = self.defs.thing(lot.def);
         let hp = lot.hp.unwrap_or_else(|| (td.hp as f64 * self.defs.factor(lot.made_of, "hp")).round().max(1.0) as i32);
         let tool = td.tool.is_some();
-        let e = self.spawn((Thing { def: lot.def, pos: p, count: lot.count, hp },));
+        let e = self.spawn((Thing { def: lot.def, pos: p, count: lot.count, hp, facing: 0 },));
         if let Some(m) = lot.made_of {
             let _ = self.ecs.insert_one(e, MadeOf(m));
         }
@@ -1409,16 +1435,21 @@ impl World {
     /// berry bush, which regrows) is cleared now; something that blocks is
     /// left, as there's no work that would clear it.
     pub fn plan_over(&mut self, e: Entity, thing: DefId, stuff: Option<DefId>) {
+        self.plan_over_facing(e, thing, stuff, 0)
+    }
+
+    /// `plan_over`, for a building that will face `facing`.
+    pub fn plan_over_facing(&mut self, e: Entity, thing: DefId, stuff: Option<DefId>, facing: u8) {
         let Some(t) = self.thing(e) else { return };
         let td = self.defs.thing(t.def);
         match td.harvest.iter().find(|h| h.destroy).map(|h| h.desig_r) {
             Some(d) => {
-                let _ = self.ecs.insert(e, (Designated(d), Planned { thing, stuff }));
+                let _ = self.ecs.insert(e, (Designated(d), Planned { thing, stuff, facing }));
                 self.map.touch(t.pos);
             }
             None if !td.blocks => {
                 self.despawn_thing(e);
-                self.spawn_fixture_of(thing, t.pos, true, stuff);
+                self.spawn_fixture_facing(thing, t.pos, true, stuff, facing);
             }
             None => {}
         }
@@ -1513,7 +1544,7 @@ impl World {
             }
             if self.map.fixture[i] == Some(e) {
                 let defs = self.defs.clone();
-                for c in defs.thing(t.def).footprint(t.pos) {
+                for c in defs.thing(t.def).footprint(t.pos, t.facing) {
                     if self.map.inb(c) && self.map.fixture_at(c) == Some(e) {
                         self.map.set_fixture(c, None, false, 0, false);
                         self.map.set_support(c, 0);
@@ -1544,7 +1575,7 @@ impl World {
         }
         // Cleared for a building: it goes up in its place.
         if let Some(p) = planned {
-            self.spawn_fixture_of(p.thing, t.pos, true, p.stuff);
+            self.spawn_fixture_facing(p.thing, t.pos, true, p.stuff, p.facing);
         }
     }
 
@@ -1861,7 +1892,7 @@ impl World {
                         let hp = lot.hp.unwrap_or_else(|| self.defs.full_hp(lot.def, lot.made_of));
                         let tool = td.tool.is_some();
                         let e = self.spawn((
-                            Thing { def: lot.def, pos: st_thing.pos, count: n, hp },
+                            Thing { def: lot.def, pos: st_thing.pos, count: n, hp, facing: 0 },
                             Contained { store, slot: i as u8 },
                         ));
                         if let Some(m) = lot.made_of {

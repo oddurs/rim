@@ -13,7 +13,7 @@ fn run(seed: u64, ticks: u64) -> u64 {
     let c = sim.world.colony_center().unwrap();
     // Commands must replay identically too.
     sim.push(Command::Designate { designation: chop, a: c.offset(-12, -12), b: c.offset(12, 12) });
-    sim.push(Command::Build { stuff: Some(wood), thing: wall, a: c.offset(2, 2), b: c.offset(6, 2) });
+    sim.push(Command::Build { stuff: Some(wood), thing: wall, a: c.offset(2, 2), b: c.offset(6, 2), facing: 0 });
     let pawn = sim.world.colonists().next().unwrap();
     let chop_first = sim.world.defs.lookup("work_type", "chop").unwrap();
     sim.push(Command::SetPriority { pawn, work: chop_first, level: 1 });
@@ -49,7 +49,7 @@ fn commands_applied_while_paused_are_the_same_game() {
         let wood = sim.world.defs.thing_id("wood").unwrap();
         let c = sim.world.colony_center().unwrap();
         sim.push(Command::Designate { designation: chop, a: c.offset(-12, -12), b: c.offset(12, 12) });
-        sim.push(Command::Build { stuff: Some(wood), thing: wall, a: c.offset(2, 2), b: c.offset(6, 2) });
+        sim.push(Command::Build { stuff: Some(wood), thing: wall, a: c.offset(2, 2), b: c.offset(6, 2), facing: 0 });
     };
     let (mut at_step, mut paused) = (Sim::new(&mods, 9).unwrap(), Sim::new(&mods, 9).unwrap());
     at_step.record();

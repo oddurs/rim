@@ -177,7 +177,10 @@ impl Worksites {
                 };
                 let site = Site {
                     cell,
-                    size: (td.size[0] as f32, td.size[1] as f32),
+                    size: {
+                        let [sw, sh] = td.size_facing(t.facing);
+                        (sw as f32, sh as f32)
+                    },
                     def: t.def,
                     own,
                     chip,

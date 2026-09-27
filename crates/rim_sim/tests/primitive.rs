@@ -110,7 +110,7 @@ fn a_campfire_of_gathered_branches_needs_no_axe() {
         .map(|d| home.offset(d, 0))
         .find(|&p| s.world.map.passable(p) && s.world.map.fixture_at(p).is_none())
         .expect("a free cell");
-    s.push(Command::Build { thing: campfire, stuff: None, a: at, b: at });
+    s.push(Command::Build { thing: campfire, stuff: None, a: at, b: at, facing: 0 });
     assert!(
         run_until(&mut s, 20_000, |s| s.world.map.fixture_at(at).is_some_and(|f| s
             .world
@@ -349,7 +349,7 @@ fn a_grass_pallet_is_a_bed_of_fibre() {
         .find(|&p| s.world.map.passable(p) && s.world.map.fixture_at(p).is_none() && s.world.map.item_at(p).is_none())
         .expect("room for a pallet");
     s.world.place_item(s.world.defs.thing_id("primitive:fibre").unwrap(), home, 6);
-    s.push(Command::Build { thing: pallet, stuff: None, a: at, b: at });
+    s.push(Command::Build { thing: pallet, stuff: None, a: at, b: at, facing: 0 });
     let built = |s: &Sim| s.world.map.fixture_at(at).is_some_and(|f| s.world.ecs.get::<&Blueprint>(f).is_err());
     assert!(run_until(&mut s, 6_000, built), "built from the fibre");
     assert_eq!(count(&s, "primitive:fibre"), 0);

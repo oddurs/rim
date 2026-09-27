@@ -51,6 +51,7 @@ fn a_save(mods: &Path, path: &Path) {
         thing: wall,
         a: c.offset(2, 2),
         b: c.offset(6, 2),
+        facing: 0,
     });
     for _ in 0..3 {
         for _ in 0..600 {

@@ -22,7 +22,7 @@ fn new_game(mods: &Path, path: &Path) -> (Sim, SaveFile) {
     let wood = sim.world.defs.thing_id("wood").unwrap();
     let c = sim.world.colony_center().unwrap();
     sim.push(Command::Designate { designation: chop, a: c.offset(-10, -10), b: c.offset(10, 10) });
-    sim.push(Command::Build { stuff: Some(wood), thing: wall, a: c.offset(2, 2), b: c.offset(6, 2) });
+    sim.push(Command::Build { stuff: Some(wood), thing: wall, a: c.offset(2, 2), b: c.offset(6, 2), facing: 0 });
     (sim, save)
 }
 
@@ -39,6 +39,7 @@ fn play(sim: &mut Sim, save: &mut SaveFile, ticks: u64, hashes: &mut BTreeMap<u6
                 thing: wall,
                 a: c.offset(x, 6),
                 b: c.offset(x, 6),
+                facing: 0,
             });
         }
         sim.step();

@@ -165,17 +165,29 @@ fn run(mods: &Path, seed: u64, days: u64, hut: i32) -> Report {
         for x in 0..hut {
             let edge = x == 0 || y == 0 || x == hut - 1 || y == hut - 1;
             if edge && (x, y) != (2, hut - 1) {
-                s.push(Command::Build { thing: thing("core:wall"), stuff: branches, a: at(x, y), b: at(x, y) });
+                s.push(Command::Build {
+                    thing: thing("core:wall"),
+                    stuff: branches,
+                    a: at(x, y),
+                    b: at(x, y),
+                    facing: 0,
+                });
             }
         }
     }
-    s.push(Command::Build { thing: thing("core:door"), stuff: branches, a: at(2, hut - 1), b: at(2, hut - 1) });
-    s.push(Command::Build { thing: thing("primitive:pallet"), stuff: None, a: at(1, 1), b: at(1, 1) });
+    s.push(Command::Build {
+        thing: thing("core:door"),
+        stuff: branches,
+        a: at(2, hut - 1),
+        b: at(2, hut - 1),
+        facing: 0,
+    });
+    s.push(Command::Build { thing: thing("primitive:pallet"), stuff: None, a: at(1, 1), b: at(1, 1), facing: 0 });
     // The fire inside a hut with room for it, else by the door.
     let fire = if hut >= 5 { at(3, 2) } else { at(2, hut) };
-    s.push(Command::Build { thing: thing("core:campfire"), stuff: None, a: fire, b: fire });
+    s.push(Command::Build { thing: thing("core:campfire"), stuff: None, a: fire, b: fire, facing: 0 });
     let spot_at = at(2, hut + 1);
-    s.push(Command::Build { thing: thing("crafting:spot"), stuff: None, a: spot_at, b: spot_at });
+    s.push(Command::Build { thing: thing("crafting:spot"), stuff: None, a: spot_at, b: spot_at, facing: 0 });
 
     let (campfire, wall) = (thing("core:campfire"), thing("core:wall"));
     let (billed, chopping, digging) = (&mut false, &mut false, &mut false);
@@ -315,7 +327,7 @@ fn run(mods: &Path, seed: u64, days: u64, hut: i32) -> Report {
                     s.push(Command::Designate { designation: des("core:gather"), a: p, b: p });
                 }
                 // A cob windbreak along the hut's east side.
-                s.push(Command::Build { thing: wall, stuff: clay, a: at(hut, 0), b: at(hut, hut - 1) });
+                s.push(Command::Build { thing: wall, stuff: clay, a: at(hut, 0), b: at(hut, hut - 1), facing: 0 });
             }
         }
         s.step();

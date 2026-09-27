@@ -59,7 +59,7 @@ fn a_better_level_beats_it() {
     designate(&mut s, "chop", at);
     let (wall, wood) = (s.world.defs.thing_id("wall").unwrap(), s.world.defs.thing_id("wood").unwrap());
     s.world.place_item(wood, c.offset(1, 1), 20);
-    s.push(Command::Build { thing: wall, stuff: Some(wood), a: c.offset(3, 3), b: c.offset(3, 3) });
+    s.push(Command::Build { thing: wall, stuff: Some(wood), a: c.offset(3, 3), b: c.offset(3, 3), facing: 0 });
     let build = s.world.defs.lookup("work_type", "core:build").unwrap();
     s.push(Command::SetPriority { pawn, work: build, level: 1 });
     s.step();
@@ -123,7 +123,7 @@ fn a_plan_with_nothing_to_build_it_from() {
     for e in loose {
         s.world.despawn_thing(e);
     }
-    s.push(Command::Build { thing: wall, stuff: Some(wood), a: c.offset(3, 3), b: c.offset(3, 3) });
+    s.push(Command::Build { thing: wall, stuff: Some(wood), a: c.offset(3, 3), b: c.offset(3, 3), facing: 0 });
     s.step();
     let why = why_of(&s, pawn, "core:build");
     assert!(matches!(why.why, Why::NoMaterials(Some(d)) if d == wood), "{why:?}");

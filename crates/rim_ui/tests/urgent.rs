@@ -33,7 +33,7 @@ fn the_map_menu_marks_a_job_urgent_and_clears_it() {
         .map(|d| c.offset(d, 0))
         .find(|&p| sim.world.map.passable(p) && sim.world.map.fixture_at(p).is_none())
         .unwrap();
-    sim.push(Command::Build { thing: wall, stuff: Some(wood), a: spot, b: spot });
+    sim.push(Command::Build { thing: wall, stuff: Some(wood), a: spot, b: spot, facing: 0 });
     sim.step();
     let bp = sim.world.markable_at(spot).expect("the blueprint is a job");
     let mut ui = ui_for(&sim);
@@ -71,7 +71,7 @@ fn the_hud_counts_urgent_marks() {
         .map(|d| c.offset(d, 0))
         .find(|&p| sim.world.map.passable(p) && sim.world.map.fixture_at(p).is_none())
         .unwrap();
-    sim.push(Command::Build { thing: wall, stuff: Some(wood), a: spot, b: spot });
+    sim.push(Command::Build { thing: wall, stuff: Some(wood), a: spot, b: spot, facing: 0 });
     sim.step();
     let mut ui = ui_for(&sim);
     let cv = client(&sim);

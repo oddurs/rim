@@ -172,3 +172,66 @@ fn a_wide_thing_is_reached_from_any_side() {
     assert!(path.is_some(), "and a path gets there");
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// A cot two cells long with its place to stand below its foot.
+fn cots(name: &str) -> PathBuf {
+    common::test_mods(
+        name,
+        &["core"],
+        &[(
+            "cot",
+            &[(
+                "defs/cot.toml",
+                "[[thing]]\nid = \"cot\"\nlabel = \"cot\"\ncolor = \"#886644\"\ncategory = \"building\"\nsize = [1, 2]\nspots = [{ dx = 0, dy = 2 }]\nbuild = { menu = \"furniture\", work = 50, free = true }\n",
+            )],
+        )],
+    )
+}
+
+/// Things turn in four directions (DESIGN.md §6c): a cot placed a quarter
+/// turn round lies east to west, and its spot turns with it, off its foot.
+#[test]
+fn a_thing_turned_covers_its_turned_footprint_and_its_spot_turns() {
+    let dir = cots("facing-cot");
+    let mut s = Sim::new(&dir, 2).unwrap();
+    let cot = s.world.defs.thing_id("cot").unwrap();
+    let o = open(&mut s);
+    let e = s.world.spawn_fixture_facing(cot, o, false, None, 1).expect("placed turned");
+    assert_eq!(s.world.map.fixture_at(o), Some(e));
+    assert_eq!(s.world.map.fixture_at(o.offset(1, 0)), Some(e), "east to west");
+    assert_eq!(s.world.map.fixture_at(o.offset(0, 1)), None, "not north to south");
+    // Facing south its spot is below the foot; a quarter turn clockwise
+    // puts it west of the footprint.
+    assert_eq!(rim_sim::ai::spots_of(&s.world, e), vec![o.offset(-1, 0)]);
+}
+
+/// A turned thing keeps its facing through a save, and a thing from a save
+/// that knew no facing faces south.
+#[test]
+fn facing_survives_a_save() {
+    let dir = cots("facing-save");
+    let mut s = Sim::new(&dir, 2).unwrap();
+    let cot = s.world.defs.thing_id("cot").unwrap();
+    let o = open(&mut s);
+    let e = s.world.spawn_fixture_facing(cot, o, false, None, 3).expect("placed");
+    let back = Snapshot::capture(&s).restore(&dir, &|_| true).unwrap();
+    assert_eq!(back.world.thing(e).unwrap().facing, 3);
+    assert_eq!(back.world.map.fixture_at(o.offset(1, 0)), Some(e), "the footprint comes back turned");
+    let _ = std::fs::remove_dir_all(&dir);
+    let old: rim_sim::world::Thing = serde_json::from_str(r#"{"def":0,"pos":{"x":1,"y":2},"count":1,"hp":5}"#).unwrap();
+    assert_eq!(old.facing, 0);
+}
+
+/// Planned through the command, turned, over grass: it goes up turned.
+#[test]
+fn the_build_command_carries_a_facing() {
+    let dir = cots("facing-command");
+    let mut s = Sim::new(&dir, 2).unwrap();
+    let cot = s.world.defs.thing_id("cot").unwrap();
+    let o = open(&mut s);
+    s.push(rim_sim::Command::Build { thing: cot, stuff: None, a: o, b: o, facing: 1 });
+    s.step();
+    let e = s.world.map.fixture_at(o).expect("a plan");
+    assert_eq!(s.world.thing(e).unwrap().facing, 1);
+    assert_eq!(s.world.map.fixture_at(o.offset(1, 0)), Some(e));
+}

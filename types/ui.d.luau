@@ -244,6 +244,8 @@ declare act: {
     toggle_profiler: () -> (),
     -- Pick a toolbar tool ("designate:core:chop", "build:core:wall").
     tool: (key: string) -> (),
+    -- Turn what the build tool will place a quarter turn clockwise (DESIGN.md §6c).
+    turn: () -> (),
     -- Set the player's UI scale, 0.75 to 2 on top of the display's; it is saved with their settings.
     ui_scale: (scale: number) -> (),
     -- Take back the last order given: the colonists stop the job it gave them, and a mark it put on something goes.
