@@ -2,12 +2,12 @@
 id: c3d18fe7-f13e-4b1d-a104-cbd3db4481dd
 title: Map generation hashes spawns by def index, so a new def reshapes every map
 type: bug
-status: doing
+status: review
 milestone: scale
 assignee: Oddur Sigurdsson
 claimed: 2026-09-26
 created: 2026-09-26
-updated: 2026-09-26
+updated: 2026-09-27
 priority: p2
 api: none
 effort: s

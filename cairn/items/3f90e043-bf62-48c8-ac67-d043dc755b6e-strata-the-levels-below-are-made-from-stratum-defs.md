@@ -2,15 +2,15 @@
 id: 3f90e043-bf62-48c8-ac67-d043dc755b6e
 title: 'Strata: the levels below are made from [[stratum]] defs'
 type: feature
-status: review
+status: done
 milestone: depth
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 depends_on:
 - 8cc6252d-67a0-4652-b764-851f3e6bc72a
 - e311c029-499c-4764-a4d6-6d1f933f00f9
 created: 2026-09-26
 updated: 2026-09-27
+closed_at: 2026-09-27
 priority: p0
 api: additive
 effort: m
