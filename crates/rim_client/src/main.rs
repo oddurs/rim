@@ -13,6 +13,7 @@ mod draw;
 mod mesh;
 mod pattern;
 mod pinch;
+mod quiet;
 mod roof;
 mod save;
 mod sky;
@@ -457,6 +458,11 @@ fn main() {
         Some("replay") => std::process::exit(cli::replay(&args[2..])),
         Some("save") => std::process::exit(cli::save(&args[2..])),
         _ => {}
+    }
+    // A test run, or a game started for someone who is doing something
+    // else, opens without taking them to its Space.
+    if args.iter().any(|a| a == "--background" || a == "--autotest" || a == "--bench-render") {
+        quiet::install();
     }
     macroquad::Window::from_config(conf(), game());
 }
