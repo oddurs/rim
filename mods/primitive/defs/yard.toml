@@ -1,0 +1,80 @@
+# ─── Storage: the first rungs of the ladder (DESIGN.md §4f) ─────────────────
+# (This file sorts after wild.toml on purpose: mapgen seeds each spawnable
+# thing by its def index, so a def loaded before wild.toml would reshuffle
+# every map. See the cairn item on spawn seeds.)
+# Each holds more stacks in a cell than the ground, or keeps what the ground
+# can't. Bulky things (wood, stone, branches) don't go in baskets; bulk
+# stores take them deep instead.
+
+# Woven fibre: walkable, cheap, and it burns. Berries and flint off the
+# ground, two stacks to a cell.
+[[thing]]
+id = "basket"
+label = "basket"
+color = "#a8a85a"
+category = "building"
+look.layers = [
+    { draw = "disc", x = 0.5, y = 0.55, r = 0.36, shade = 0.75 },
+    { draw = "disc", x = 0.5, y = 0.5, r = 0.36 },
+    { draw = "disc", x = 0.5, y = 0.5, r = 0.2, shade = 0.8 },
+]
+hp = 30
+market_value = 3
+path_cost = 40
+build = { menu = "storage", work = 150, cost = [{ thing = "fibre", count = 6 }] }
+store = { slots = 2, accepts = { not_tags = ["bulky"] } }
+
+# A fired pot set down to keep food in: one stack, out of the weather. Pots
+# were wealth and nothing more until now.
+[[thing]]
+id = "storage_pot"
+label = "storage pot"
+color = "#b0704a"
+category = "building"
+look.layers = [
+    { draw = "disc", x = 0.5, y = 0.56, r = 0.34, shade = 0.75 },
+    { draw = "disc", x = 0.5, y = 0.52, r = 0.34 },
+    { draw = "disc", x = 0.5, y = 0.46, r = 0.14, shade = 0.4 },
+]
+hp = 40
+market_value = 5
+path_cost = 40
+build = { menu = "storage", work = 60, cost = [{ thing = "pot", count = 1 }] }
+store = { slots = 1, accepts = { categories = ["core:food"] }, shelter = true }
+
+# Wood and branches stacked three deep: the first bulky thing gets its own
+# store, and it's fine outdoors.
+[[thing]]
+id = "woodpile"
+label = "woodpile"
+color = "#7a5a36"
+category = "building"
+size = [2, 1]
+look.layers = [
+    { draw = "fill", x = 0.03, y = 0.18, w = 0.94, h = 0.66, shade = 0.6 },
+    { draw = "fill", x = 0.06, y = 0.24, w = 0.88, h = 0.14 },
+    { draw = "fill", x = 0.06, y = 0.44, w = 0.88, h = 0.14, shade = 1.1 },
+    { draw = "fill", x = 0.06, y = 0.64, w = 0.88, h = 0.14 },
+]
+hp = 60
+market_value = 2
+blocks = true
+build = { menu = "storage", work = 100, cost = [{ thing = "branches", count = 4 }] }
+store = { slots = 2, stack_scale = 3, accepts = { things = ["core:wood"], tags = ["fuel"] } }
+
+# Dry-stone, built where the stone comes out: two slots, each two stacks
+# deep, for mineral things only. The first thing mining asks for.
+[[thing]]
+id = "stone_bin"
+label = "stone bin"
+color = "#8f8a82"
+category = "building"
+look.layers = [
+    { draw = "fill", x = 0.06, y = 0.06, w = 0.88, h = 0.88, shade = 0.7 },
+    { draw = "fill", x = 0.18, y = 0.18, w = 0.64, h = 0.64, shade = 0.45 },
+]
+hp = 200
+market_value = 6
+blocks = true
+build = { menu = "storage", work = 300, cost = [{ thing = "core:stone", count = 12 }] }
+store = { slots = 2, stack_scale = 2, accepts = { tags = ["mineral"] } }

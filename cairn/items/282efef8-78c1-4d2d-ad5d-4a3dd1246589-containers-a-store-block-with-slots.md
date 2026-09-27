@@ -2,14 +2,14 @@
 id: 282efef8-78c1-4d2d-ad5d-4a3dd1246589
 title: 'Containers: a store block with slots'
 type: feature
-status: review
+status: done
 milestone: crafting
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 depends_on:
 - e953d711-8d06-43a5-b096-4ff7cce491f7
 created: 2026-09-26
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p1
 api: additive
 effort: l

@@ -24,7 +24,7 @@ look.layers = [
 ]
 market_value = 1.0
 stack_limit = 75
-tags = ["bulky"]
+tags = ["bulky", "mineral"]
 stuff = { categories = ["structural"], factors = { hp = 1.6, work = 1.8, insulation = 1.5, flammability = 0.0, beauty = 1.1, span = 1.25 }, look = { pattern = "courses", floor = "flags", roof = "slate" } }
 
 [[thing]]
