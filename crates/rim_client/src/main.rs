@@ -119,6 +119,9 @@ pub struct App {
     pub group: Vec<Entity>,
     /// Shift is held this frame: a click adds to the selection.
     pub shift: bool,
+    /// Alt, Ctrl or Cmd is held this frame: a box takes colonists out
+    /// (Ctrl too, since many Linux desktops keep Alt-drag to move windows).
+    pub subtract: bool,
     pub drag_start: Option<IVec>,
     /// Where a drag began on screen, to tell a click from a box.
     pub drag_from: (f32, f32),
@@ -690,6 +693,7 @@ async fn game() {
         selected_zone: None,
         group: Vec::new(),
         shift: false,
+        subtract: false,
         drag_start: None,
         drag_from: (0.0, 0.0),
         paused: false,
@@ -1017,6 +1021,7 @@ pub struct RawInput {
     /// Every key pressed this frame by name, with modifiers ("ctrl+k").
     pub pressed: Vec<String>,
     pub shift: bool,
+    pub alt: bool,
     /// Camera pan this frame, in tiles (WASD, middle-drag).
     pub pan: (f32, f32),
     pub time: f64,
@@ -1120,6 +1125,7 @@ impl RawInput {
             chars,
             pressed,
             shift: is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift),
+            alt,
             pan: (0.0, 0.0),
             time: get_time(),
             advance: true,
@@ -1258,6 +1264,7 @@ fn ui_input(raw: &RawInput, dpi: f32) -> rim_ui::Input {
 pub fn frame(app: &mut App, raw: &RawInput) {
     let dpi = screen_dpi_scale();
     app.shift = raw.shift;
+    app.subtract = raw.alt || raw.zoom_mod;
     app.ui.set_dpi(dpi);
     if app.ui.check_reload(raw.time) {
         app.palette = overlay::Palette::from_theme(&app.ui.theme);
@@ -1854,6 +1861,35 @@ impl App {
     }
 }
 
+/// Is a select press at `(x, y)` a box rather than a click: has the
+/// pointer moved far enough from where it went down? The preview and the
+/// release ask the same question.
+pub fn is_box(app: &App, (x, y): (f32, f32)) -> bool {
+    const BOX_POINTS: f32 = 6.0;
+    let (fx, fy) = app.drag_from;
+    app.tool == Tool::Select && (x - fx).abs().max((y - fy).abs()) >= BOX_POINTS
+}
+
+/// The colonists standing in the box from `a` to `b`: what a select drag
+/// picks, and what its preview shows.
+pub fn boxed_colonists(app: &App, a: IVec, b: IVec) -> Vec<Entity> {
+    let (lo, hi) = (IVec::new(a.x.min(b.x), a.y.min(b.y)), IVec::new(a.x.max(b.x), a.y.max(b.y)));
+    let w = &app.sim.world;
+    w.colonists()
+        .filter(|&e| {
+            w.ecs.get::<&Pawn>(e).is_ok_and(|p| {
+                // Only the level on screen.
+                if p.pos.z != app.cam.z {
+                    return false;
+                }
+                let (px, py) = draw::pawn_pos(&p, app.tick_frac());
+                let c = IVec::new(px.floor() as i32, py.floor() as i32);
+                (lo.x..=hi.x).contains(&c.x) && (lo.y..=hi.y).contains(&c.y)
+            })
+        })
+        .collect()
+}
+
 /// Every selected id: the group, or the one thing.
 pub fn selection(app: &App) -> Vec<Entity> {
     if app.group.is_empty() {
@@ -1871,12 +1907,14 @@ pub fn select(app: &mut App, v: Vec<Entity>) {
     app.group = if v.len() > 1 { v } else { Vec::new() };
 }
 
+/// An active, living colonist of the player's.
+fn colonist(app: &App, e: Entity) -> bool {
+    app.sim.world.ecs.get::<&Pawn>(e).is_ok_and(|p| p.faction == Faction::Player && p.active && !p.dead)
+}
+
 /// A shift-click: put a colonist into the selection or take them out. A
 /// selected thing, or anything that isn't a colonist, starts it afresh.
 pub fn toggle_selected(app: &mut App, e: Entity) {
-    let colonist = |app: &App, e: Entity| {
-        app.sim.world.ecs.get::<&Pawn>(e).is_ok_and(|p| p.faction == Faction::Player && p.active && !p.dead)
-    };
     if !colonist(app, e) {
         return select(app, vec![e]);
     }
@@ -2256,7 +2294,7 @@ pub fn apply(app: &mut App, action: Action) {
                 Tool::Cancel => app.sim.push(Command::Cancel { a, b }),
                 Tool::Select => {
                     let (fx, fy) = app.drag_from;
-                    if (x - fx).abs().max((y - fy).abs()) < 6.0 {
+                    if !is_box(app, (x, y)) {
                         match pawn_under(app, fx, fy).or_else(|| thing_under(app, fx, fy)) {
                             Some(e) if app.shift => toggle_selected(app, e),
                             under => {
@@ -2269,28 +2307,23 @@ pub fn apply(app: &mut App, action: Action) {
                             }
                         }
                     } else {
-                        let (lo, hi) = (IVec::new(a.x.min(b.x), a.y.min(b.y)), IVec::new(a.x.max(b.x), a.y.max(b.y)));
-                        let w = &app.sim.world;
-                        let mut boxed: Vec<Entity> = w
-                            .colonists()
-                            .filter(|&e| {
-                                w.ecs.get::<&Pawn>(e).is_ok_and(|p| {
-                                    if p.pos.z != app.cam.z {
-                                        return false;
-                                    }
-                                    let (px, py) = draw::pawn_pos(&p, app.tick_frac());
-                                    let c = IVec::new(px.floor() as i32, py.floor() as i32);
-                                    (lo.x..=hi.x).contains(&c.x) && (lo.y..=hi.y).contains(&c.y)
-                                })
-                            })
-                            .collect();
-                        if app.shift {
-                            let mut v = selection(app);
-                            boxed.retain(|e| !v.contains(e));
-                            v.extend(boxed);
-                            boxed = v;
+                        let boxed = boxed_colonists(app, a, b);
+                        let picked = selection(app);
+                        if app.subtract {
+                            // Takes the boxed out; a box that takes no one
+                            // changes nothing.
+                            if picked.iter().any(|e| boxed.contains(e)) {
+                                select(app, picked.into_iter().filter(|e| !boxed.contains(e)).collect());
+                            }
+                        } else if app.shift {
+                            // Adds to the colonists already picked; a thing
+                            // picked before doesn't join a group.
+                            let mut v: Vec<Entity> = picked.into_iter().filter(|&e| colonist(app, e)).collect();
+                            v.extend(boxed.into_iter().filter(|e| !v.contains(e)).collect::<Vec<_>>());
+                            select(app, v);
+                        } else {
+                            select(app, boxed);
                         }
-                        select(app, boxed);
                     }
                 }
             }

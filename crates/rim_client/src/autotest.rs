@@ -2875,7 +2875,26 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.ticks(1);
     t.focus(at);
     t.frame().await;
-    t.drag(at.offset(-2, -2), at.offset(2, 2)).await;
+    // The box previews who it will pick before the button comes up (463983bb).
+    let (a, b) = (at.offset(-2, -2), at.offset(2, 2));
+    // Let any hover from before fade out first: it isn't the box's.
+    t.mouse = t.screen(a);
+    for _ in 0..12 {
+        t.frame().await;
+    }
+    t.input(RawInput { mouse: t.screen(a), left_pressed: true, ..Default::default() }).await;
+    t.input(RawInput { mouse: t.screen(b), ..Default::default() }).await;
+    let marks = crate::overlay::scene(&t.app).marks;
+    let rings = marks.iter().filter(|m| matches!(m, Mark::HoverRing { .. })).count();
+    let chip = crate::overlay::drag_hint(&t.app);
+    let boxed_up = marks.iter().any(|m| matches!(m, Mark::Marquee { dashed: false, .. }));
+    let n = squad.len();
+    t.check(
+        boxed_up && rings == n && chip == Some(format!("5 × 5 · {n} colonists")),
+        format!("a select drag's box previews who it picks ({rings} rings, {chip:?})"),
+    );
+    t.shot("chalk-box").await;
+    t.input(RawInput { mouse: t.screen(b), left_released: true, ..Default::default() }).await;
     let boxed = crate::selection(&t.app);
     t.check(
         squad.iter().all(|e| boxed.contains(e)),
@@ -2883,6 +2902,46 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     );
     t.frame().await;
     t.check(t.app.ui.find("core:inspector.group").is_some(), "the inspector sums the group up");
+    // Alt takes the boxed out; Shift puts them back, dropping nobody.
+    let one = squad[2];
+    let p = t.pawn(one).pos;
+    // A cell beside them, so the two-cell box holds them and no one else.
+    let alone = [(1, 0), (-1, 0), (0, 1), (0, -1)]
+        .iter()
+        .map(|&(dx, dy)| p.offset(dx, dy))
+        .find(|&q| crate::boxed_colonists(&t.app, p, q) == [one])
+        .expect("a cell beside one colonist and no other");
+    let (sa, sb) = (t.screen(p), t.screen(alone));
+    for (pressed, released, at) in [(true, false, sa), (false, false, sb), (false, true, sb)] {
+        t.input(RawInput {
+            mouse: at,
+            left_pressed: pressed,
+            left_released: released,
+            alt: true,
+            ..Default::default()
+        })
+        .await;
+    }
+    let after = crate::selection(&t.app);
+    t.check(
+        after.len() + 1 == boxed.len() && !after.contains(&one),
+        format!("an Alt-drag takes the boxed colonist out ({} of {} left)", after.len(), boxed.len()),
+    );
+    for (pressed, released, at) in [(true, false, sa), (false, false, sb), (false, true, sb)] {
+        t.input(RawInput {
+            mouse: at,
+            left_pressed: pressed,
+            left_released: released,
+            shift: true,
+            ..Default::default()
+        })
+        .await;
+    }
+    let again = crate::selection(&t.app);
+    t.check(
+        again.len() == boxed.len() && after.iter().all(|e| again.contains(e)),
+        format!("a Shift-drag adds them back without dropping anyone ({})", again.len()),
+    );
     t.shot("several_selected").await;
     // Each member gets a chalk ring; the inspector's at full strength (d83192ed).
     let marks = crate::overlay::scene(&t.app).marks;

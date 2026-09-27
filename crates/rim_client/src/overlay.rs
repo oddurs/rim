@@ -26,6 +26,12 @@ const HOVER_OUT_SECS: f64 = 0.14;
 const HOVER_ALPHA: f32 = 0.72;
 /// Everything in a group but the one the inspector shows.
 const GROUP_ALPHA: f32 = 0.7;
+/// A colonist an Alt-drag will take out of the selection.
+const LEAVING_ALPHA: f32 = 0.3;
+/// A colonist a select drag will pick, before the button comes up.
+const PICKING_ALPHA: f32 = 0.6;
+/// A select drag's box: its fill, over the chalk's own strength.
+const MARQUEE_FILL: f32 = 0.05;
 /// A path's dots, this many points apart.
 const DOT_STEP: f32 = 5.0;
 
@@ -130,6 +136,12 @@ pub enum Mark {
     Path {
         points: Vec<(f32, f32)>,
         alpha: f32,
+    },
+    /// A select drag's box, snapped to cells: dashed when it takes
+    /// colonists out.
+    Marquee {
+        rect: [f32; 4],
+        dashed: bool,
     },
     /// A selected stack's way to where it will be stored, dashed.
     Haul {
@@ -241,6 +253,19 @@ fn footprint(app: &App, t: &rim_sim::world::Thing) -> [f32; 4] {
 /// counted, else its size. The UI draws it, so there's one chip by the
 /// pointer and a theme styles it.
 pub fn drag_hint(app: &App) -> Option<String> {
+    if let Some(a) = app.drag_start.filter(|_| crate::is_box(app, app.pointer)) {
+        let b = app.cam.tile_at(app.pointer.0, app.pointer.1);
+        let boxed = crate::boxed_colonists(app, a, b);
+        let picked = crate::selection(app);
+        let n = |k: usize| format!("{k} {}", if k == 1 { "colonist" } else { "colonists" });
+        return Some(if app.subtract {
+            format!("−{}", n(boxed.iter().filter(|e| picked.contains(e)).count()))
+        } else if app.shift {
+            format!("+{}", n(boxed.iter().filter(|e| !picked.contains(e)).count()))
+        } else {
+            format!("{} · {}", size(a, b), n(boxed.len()))
+        });
+    }
     if let Some(zp) = &app.zone_preview {
         let n = zp.cells.len();
         return Some(match zp.joins {
@@ -249,8 +274,12 @@ pub fn drag_hint(app: &App) -> Option<String> {
         });
     }
     let a = app.drag_start.filter(|_| app.tool != crate::Tool::Select)?;
-    let b = app.cam.tile_at(app.pointer.0, app.pointer.1);
-    Some(format!("{} × {}", (a.x - b.x).abs() + 1, (a.y - b.y).abs() + 1))
+    Some(size(a, app.cam.tile_at(app.pointer.0, app.pointer.1)))
+}
+
+/// A drag's size in cells: "5 × 4".
+fn size(a: rim_sim::IVec, b: rim_sim::IVec) -> String {
+    format!("{} × {}", (a.x - b.x).abs() + 1, (a.y - b.y).abs() + 1)
 }
 
 /// Does a screen rectangle touch the screen?
@@ -268,10 +297,23 @@ pub fn scene(app: &App) -> Scene {
     let picked = crate::selection(app);
     let group = picked.len() > 1;
     let gap_for = |e: Entity| app.chalk.since(e).map_or(p.bracket_gap, |t0| closing(p.bracket_gap, now - t0));
+    // A select drag: its box, and who it will pick or take out.
+    let boxing = app.drag_start.filter(|_| crate::is_box(app, app.pointer)).map(|a| {
+        let b = cam.tile_at(app.pointer.0, app.pointer.1);
+        (a, b, crate::boxed_colonists(app, a, b))
+    });
+    let leaving = |e: Entity| app.subtract && boxing.as_ref().is_some_and(|(_, _, boxed)| boxed.contains(&e));
     // The inspector's one, when it's on screen: where a group's chip goes.
     let mut primary = None;
     for &e in &picked {
-        let alpha = if !group || app.selected == Some(e) { 1.0 } else { GROUP_ALPHA };
+        let first = !group || app.selected == Some(e);
+        let alpha = if leaving(e) {
+            LEAVING_ALPHA
+        } else if first {
+            1.0
+        } else {
+            GROUP_ALPHA
+        };
         let gap = gap_for(e);
         if let Some((center, r)) = draw::pawn_disc(app, e) {
             if let Ok(pawn) = w.ecs.get::<&Pawn>(e) {
@@ -286,7 +328,7 @@ pub fn scene(app: &App) -> Scene {
             let out = r + gap;
             if on_screen([center.0 - out, center.1 - out, out * 2.0, out * 2.0]) {
                 marks.push(Mark::Ring { center, r, gap, alpha });
-                if alpha == 1.0 {
+                if first {
                     primary = Some((center.0 + out + 6.0, center.1 - 10.0));
                 }
             }
@@ -294,8 +336,22 @@ pub fn scene(app: &App) -> Scene {
             let rect = footprint(app, &t);
             if on_screen([rect[0] - gap, rect[1] - gap, rect[2] + 2.0 * gap, rect[3] + 2.0 * gap]) {
                 marks.push(Mark::Brackets { rect, gap, alpha });
-                if alpha == 1.0 {
+                if first {
                     primary = Some((rect[0] + rect[2] + gap + 6.0, rect[1] - gap));
+                }
+            }
+        }
+    }
+    if let Some((a, b, boxed)) = &boxing {
+        let (lo, hi) = ((a.x.min(b.x), a.y.min(b.y)), (a.x.max(b.x) + 1, a.y.max(b.y) + 1));
+        let (x0, y0) = cam.to_screen(lo.0 as f32, lo.1 as f32);
+        let (x1, y1) = cam.to_screen(hi.0 as f32, hi.1 as f32);
+        marks.push(Mark::Marquee { rect: [x0, y0, x1 - x0, y1 - y0], dashed: app.subtract });
+        // Who the box will pick: with Shift, only the newcomers.
+        if !app.subtract {
+            for &e in boxed.iter().filter(|e| !(app.shift && picked.contains(e))) {
+                if let Some((center, r)) = draw::pawn_disc(app, e) {
+                    marks.push(Mark::HoverRing { center, r, alpha: PICKING_ALPHA });
                 }
             }
         }
@@ -474,6 +530,43 @@ pub fn ring_radius(p: &Palette, m: &Mark) -> Option<f32> {
     }
 }
 
+/// A select drag's box: a faint chalk fill and a hairline on a keyline,
+/// broken into dashes when it takes colonists out.
+fn marquee(p: &Palette, [x, y, w, h]: [f32; 4], broken: bool) {
+    draw_rectangle(x, y, w, h, fade(p.chalk, MARQUEE_FILL));
+    let t = p.hair;
+    // Top and bottom run the full width; the sides fit between them, so
+    // no two pieces share a pixel and the keyline is even at the corners.
+    let sides = [
+        (x, y, w, t, true),
+        (x, y + h - t, w, t, true),
+        (x, y + t, t, h - 2.0 * t, false),
+        (x + w - t, y + t, t, h - 2.0 * t, false),
+    ];
+    for (sx, sy, sw, sh, along) in sides {
+        let len = if along { sw } else { sh };
+        let (dash, gap) = if broken { (4.0, 3.0) } else { (len, 0.0) };
+        let mut d = 0.0;
+        while d < len {
+            let n = dash.min(len - d);
+            let (rx, ry, rw, rh) = if along { (sx + d, sy, n, sh) } else { (sx, sy + d, sw, n) };
+            // Where a side meets the top or the bottom, its keyline stops
+            // at theirs.
+            let (start, end) = (!along && d == 0.0, !along && d + n >= len);
+            let ky0 = if start { ry + 1.0 } else { ry - 1.0 };
+            let ky1 = if end { ry + rh - 1.0 } else { ry + rh + 1.0 };
+            let key = if along {
+                (rx - 1.0, ry - 1.0, rw + 2.0, rh + 2.0)
+            } else {
+                (rx - 1.0, ky0, rw + 2.0, (ky1 - ky0).max(0.0))
+            };
+            draw_rectangle(key.0, key.1, key.2, key.3, p.keyline);
+            draw_rectangle(rx, ry, rw, rh, p.chalk);
+            d += dash + gap;
+        }
+    }
+}
+
 /// Paint the scene's world marks. Chips are text: `chips` turns them into
 /// the UI's draw list.
 pub fn draw(scene: &Scene, p: &Palette, zoom: f32) {
@@ -481,6 +574,7 @@ pub fn draw(scene: &Scene, p: &Palette, zoom: f32) {
         match m {
             Mark::Path { points, alpha } => dotted(p, points, p.chalk, 0.6 * alpha),
             Mark::Haul { from, to } => dashed(p, *from, *to, zoom),
+            Mark::Marquee { rect, dashed: broken } => marquee(p, *rect, *broken),
             Mark::Hover { rect, alpha } => {
                 let a = HOVER_ALPHA * alpha;
                 // On the footprint's edge: the line sits just inside it.
