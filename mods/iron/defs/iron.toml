@@ -1,0 +1,270 @@
+# ─── Iron (DESIGN.md §4f, §6d) ───────────────────────────────────────────────
+# The surface's poor, early iron: bog ore dug out of the marsh like clay.
+# Deep ore at -3 comes with the depth milestone and smelts the same way.
+
+[[thing]]
+id = "bog_iron"
+label = "bog iron"
+color = "#6b5a3a"
+category = "item"
+look.layers = [
+    { draw = "disc", x = 0.38, y = 0.56, r = 0.16 },
+    { draw = "disc", x = 0.6, y = 0.46, r = 0.14, shade = 0.8 },
+    { draw = "disc", x = 0.5, y = 0.7, r = 0.1, shade = 1.1 },
+]
+market_value = 1.5
+stack_limit = 50
+tags = ["mineral", "ore", "bulky"]
+
+[[thing]]
+id = "bog_iron_bed"
+label = "bog iron bed"
+color = "#5a4a30"
+category = "rock"
+look.layers = [
+    { draw = "disc", x = 0.5, y = 0.56, r = 0.34, shade = 0.8 },
+    { draw = "disc", x = 0.46, y = 0.5, r = 0.24, color = "#6b5a3a" },
+    { draw = "disc", x = 0.58, y = 0.42, r = 0.08, color = "#8a5a36" },
+]
+natural = true
+harvest = { designation = "core:gather", work = 160, destroy = false, regrow_days = 8.0, requires = ["digging"],
+            yields = [{ thing = "bog_iron", count = 3 }] }
+spawn = { terrain = ["core:marsh"], density = 0.02 }
+
+# Wood burned slowly under earth: the fuel that gets a bloomery hot enough.
+[[thing]]
+id = "charcoal"
+label = "charcoal"
+color = "#34302d"
+category = "item"
+look.layers = [
+    { draw = "fill", x = 0.22, y = 0.3, w = 0.56, h = 0.4 },
+    { draw = "fill", x = 0.3, y = 0.36, w = 0.18, h = 0.12, shade = 1.5 },
+]
+market_value = 1.2
+stack_limit = 75
+tags = ["fuel"]
+
+[[thing]]
+id = "iron_bar"
+label = "iron bar"
+color = "#6f7c89"
+category = "item"
+look.layers = [
+    { draw = "fill", x = 0.18, y = 0.36, w = 0.64, h = 0.28 },
+    { draw = "fill", x = 0.18, y = 0.36, w = 0.64, h = 0.06, shade = 1.3 },
+]
+market_value = 8
+stack_limit = 50
+tags = ["metal"]
+stuff = { categories = ["metal"], factors = { hp = 2.0, tool_speed = 1.6 } }
+
+[[thing]]
+id = "nails"
+label = "nails"
+color = "#8d98a3"
+category = "item"
+look.layers = [
+    { draw = "fill", x = 0.3, y = 0.2, w = 0.06, h = 0.6 },
+    { draw = "fill", x = 0.47, y = 0.2, w = 0.06, h = 0.6 },
+    { draw = "fill", x = 0.64, y = 0.2, w = 0.06, h = 0.6 },
+]
+market_value = 0.2
+stack_limit = 200
+tags = ["metal", "part"]
+
+[[thing]]
+id = "fittings"
+label = "fittings"
+color = "#5f6b77"
+category = "item"
+look.layers = [
+    { draw = "outline", x = 0.24, y = 0.24, w = 0.52, h = 0.52, width = 2.0 },
+    { draw = "disc", x = 0.5, y = 0.5, r = 0.08 },
+]
+market_value = 2
+stack_limit = 50
+tags = ["metal", "part"]
+
+[[item_category]]
+id = "metal"
+label = "Metal"
+parent = "core:materials"
+order = 50
+tags = ["metal", "ore"]
+
+# ─── Tools ───────────────────────────────────────────────────────────────────
+
+[[thing]]
+id = "saw"
+label = "saw"
+color = "#6f7c89"
+category = "item"
+look.layers = [
+    { draw = "fill", x = 0.14, y = 0.46, w = 0.56, h = 0.14 },
+    { draw = "fill", x = 0.7, y = 0.4, w = 0.16, h = 0.26, color = "#7a5a36" },
+]
+hp = 120
+market_value = 20
+tool = { tags = ["sawing", "cutting"], speed = 1.0, wear = 1 }
+
+# `mining` is the depth milestone's tag for breaking deep rock (§6d); an
+# iron pick carries it now, so deep ore has its tool waiting.
+[[thing]]
+id = "pick"
+label = "iron pick"
+color = "#6f7c89"
+category = "item"
+look.layers = [
+    { draw = "fill", x = 0.46, y = 0.2, w = 0.08, h = 0.64, color = "#7a5a36" },
+    { draw = "fill", x = 0.2, y = 0.2, w = 0.6, h = 0.1 },
+]
+hp = 160
+market_value = 24
+tool = { tags = ["pounding", "digging", "mining"], speed = 1.5, wear = 1 }
+
+# ─── Stations ────────────────────────────────────────────────────────────────
+
+[[thing]]
+id = "charcoal_clamp"
+label = "charcoal clamp"
+color = "#4a3a2c"
+category = "building"
+look.layers = [{ draw = "disc", x = 0.5, y = 0.55, r = 0.42, shade = 0.7 }, { draw = "disc", x = 0.5, y = 0.5, r = 0.3 }]
+market_value = 3
+tags = ["iron:clamp"]
+build = { menu = "production", work = 200, cost = [{ thing = "core:wood", count = 6 }] }
+
+[[thing]]
+id = "bloomery"
+label = "bloomery"
+color = "#8e5d40"
+category = "building"
+blocks = true
+look.layers = [
+    { draw = "fill", x = 0.1, y = 0.1, w = 0.8, h = 0.8, shade = 0.8 },
+    { draw = "disc", x = 0.5, y = 0.5, r = 0.2, color = "#e0782a" },
+]
+market_value = 12
+tags = ["iron:bloomery"]
+build = { menu = "production", work = 600, cost = [{ thing = "primitive:clay", count = 12 }, { thing = "core:stone", count = 6 }] }
+
+[[thing]]
+id = "forge"
+label = "forge"
+color = "#5e5a55"
+category = "building"
+blocks = true
+size = [2, 1]
+look.layers = [
+    { draw = "fill", x = 0.04, y = 0.1, w = 0.92, h = 0.8, shade = 0.7 },
+    { draw = "disc", x = 0.3, y = 0.5, r = 0.14, color = "#e0782a" },
+    { draw = "fill", x = 0.58, y = 0.3, w = 0.3, h = 0.4, color = "#44505e" },
+]
+market_value = 18
+tags = ["iron:forge"]
+build = { menu = "production", work = 800, cost = [{ thing = "core:stone", count = 12 }, { thing = "core:wood", count = 6 }] }
+
+# A trench with a log laid across it: planks twice as quick and twice as
+# many as hewing, with a saw.
+[[thing]]
+id = "saw_pit"
+label = "saw pit"
+color = "#6e5a44"
+category = "building"
+size = [2, 1]
+look.layers = [
+    { draw = "fill", x = 0.04, y = 0.2, w = 0.92, h = 0.6, shade = 0.45 },
+    { draw = "fill", x = 0.0, y = 0.42, w = 1.0, h = 0.16, color = "#9c6b3c" },
+]
+market_value = 4
+tags = ["iron:saw_pit"]
+build = { menu = "production", work = 300, cost = [{ thing = "core:wood", count = 8 }] }
+
+# ─── Recipes ─────────────────────────────────────────────────────────────────
+
+[[crafting.recipe]]
+id = "charcoal"
+label = "burn charcoal"
+station = "iron:clamp"
+inputs = [{ thing = "core:wood", count = 2 }]
+outputs = [{ thing = "charcoal", count = 2 }]
+work = 500
+stuff = false
+
+[[crafting.recipe]]
+id = "smelt"
+label = "smelt bog iron"
+station = "iron:bloomery"
+inputs = [{ thing = "bog_iron", count = 3 }, { thing = "charcoal", count = 2 }]
+outputs = [{ thing = "iron_bar" }]
+work = 800
+stuff = false
+
+[[crafting.recipe]]
+id = "nails"
+label = "forge nails"
+station = "iron:forge"
+inputs = [{ thing = "iron_bar", count = 1 }]
+outputs = [{ thing = "iron:nails", count = 20 }]
+work = 300
+requires = ["pounding"]
+stuff = false
+
+[[crafting.recipe]]
+id = "fittings"
+label = "forge fittings"
+station = "iron:forge"
+inputs = [{ thing = "iron_bar", count = 1 }]
+outputs = [{ thing = "fittings", count = 4 }]
+work = 400
+requires = ["pounding"]
+stuff = false
+
+[[crafting.recipe]]
+id = "saw"
+label = "forge a saw"
+station = "iron:forge"
+inputs = [{ thing = "iron_bar", count = 2 }, { thing = "core:wood", count = 1 }]
+outputs = [{ thing = "saw" }]
+work = 900
+requires = ["pounding"]
+
+[[crafting.recipe]]
+id = "pick"
+label = "forge a pick"
+station = "iron:forge"
+inputs = [{ thing = "iron_bar", count = 2 }, { thing = "core:wood", count = 1 }]
+outputs = [{ thing = "pick" }]
+work = 900
+requires = ["pounding"]
+
+[[crafting.recipe]]
+id = "saw_planks"
+label = "saw planks"
+station = "iron:saw_pit"
+inputs = [{ thing = "core:wood", count = 1 }]
+outputs = [{ thing = "timber:planks", count = 2 }]
+work = 300
+requires = ["sawing"]
+stuff = false
+
+# ─── Nails in timber's builds ────────────────────────────────────────────────
+# With iron, a plank wall is planks and a nail, a crate needs nails and a
+# shelf its fittings (§4f: a build takes a material and parts).
+
+[[patch]]
+target = "thing/timber:plank_wall"
+set = { build = { cost = [{ thing = "iron:nails", count = 1 }] } }
+
+[[patch]]
+target = "thing/timber:crate"
+set = { build = { cost = [{ thing = "iron:nails", count = 4 }] } }
+
+[[patch]]
+target = "thing/timber:shelf"
+set = { build = { cost = [{ thing = "iron:fittings", count = 1 }] } }
+
+[[patch]]
+target = "thing/timber:tool_rack"
+set = { build = { cost = [{ thing = "iron:nails", count = 2 }] } }

@@ -6,7 +6,7 @@ status: done
 milestone: crafting
 assignee: Oddur Sigurdsson
 created: 2026-09-26
-updated: 2026-09-26
+updated: 2026-09-27
 closed_at: 2026-09-26
 priority: p1
 api: additive
@@ -43,3 +43,7 @@ Gate green (503 tests, rim test, rim check --strict, crosscheck) and client auto
 ## 2026-09-26
 
 Closed with its ui_api criterion unticked, deliberately: additive UI API changes haven't bumped ui_api (0.6) so far, and a bump makes every mod and in-flight branch edit its mod.toml. Revisit when a change breaks the UI API.
+
+## 2026-09-27
+
+Checked whether the change breaks the UI API. It adds a node kind (token), a grid cell field (token) and view.look, and removes or renames nothing, so it's additive, and the schema asks for a bump only for breaking changes. types/ui.d.luau and the API docs were regenerated with it. The unticked criterion's 'ui_api bumped' half is the only part that isn't true, and it's left for the owner: tick it or reword it.

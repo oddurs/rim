@@ -926,8 +926,9 @@ condition.
   stone bin), `timber` (planks, plank walls, crates, shelves, racks,
   granary) and `iron` (bog iron, charcoal, the bloomery and forge, nails,
   fittings, the saw and the pick). Timber plays without iron: planks are
-  hewn with an axe, slowly, and nothing needs nails. With iron installed,
-  iron patches timber's builds to add them. Deep ore is §6d's: iron sits
+  hewn with an axe, slowly, and nothing needs nails. Iron depends on
+  timber (its saw pit makes planks) and patches timber's builds to add
+  nails and fittings. Deep ore is §6d's: iron sits
   at −3 behind `mining`, and bog iron is the surface's poor early source.
 - A build may take a material **and** parts (`stuff` and `cost`), and may
   require a tool, so a plank wall is planks and nails.

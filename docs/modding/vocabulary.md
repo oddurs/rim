@@ -43,6 +43,8 @@ requires none, so with no plugins every job is bare-handed.
 | `digging` | Breaks and lifts earth | a digging stick, a spade |
 | `mining` | Cuts hard rock, the deep levels' granite (DESIGN.md §6d) | an iron pick |
 | `piercing` | A point that pierces | a spear, an awl |
+| `sawing` | Cuts timber into planks | iron's saw |
+| `mining` | Breaks deep rock (DESIGN.md §6d) | iron's pick |
 
 A tool is an item with a `tool` block, and a harvest names what it needs:
 

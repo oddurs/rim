@@ -2,15 +2,15 @@
 id: 5e323021-7352-4d48-8453-78e98afb11e9
 title: 'Store inspector: Contents and Accepts tabs'
 type: feature
-status: review
+status: done
 milestone: crafting
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 depends_on:
 - 282efef8-78c1-4d2d-ad5d-4a3dd1246589
 - 6ce26632-93be-424e-935d-9312a4afbdc5
 created: 2026-09-26
-updated: 2026-09-26
+updated: 2026-09-27
+closed_at: 2026-09-27
 priority: p1
 api: none
 effort: m

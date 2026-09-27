@@ -2,10 +2,11 @@
 id: c2b1b623-28e5-4dcd-b72d-c4f5f993f4ed
 title: Map generation seeds spawns by def index, so adding a def reshuffles maps
 type: bug
-status: backlog
+status: done
 milestone: crafting
 created: 2026-09-26
-updated: 2026-09-26
+updated: 2026-09-27
+closed_at: 2026-09-27
 priority: p2
 api: none
 effort: s
@@ -24,6 +25,10 @@ area: map
 
 ## Acceptance criteria
 
-- [ ] Adding a def before a spawnable thing leaves that thing's spawn cells unchanged (test)
-- [ ] The stone-age sweep still meets its targets
-- [ ] Determinism test passes
+- [x] Adding a def before a spawnable thing leaves that thing's spawn cells unchanged (test)
+- [x] The stone-age sweep still meets its targets
+- [x] Determinism test passes
+
+## 2026-09-27
+
+Fixed by #214 (fedc9dc8): each spawning def's pattern is salted by its qualified id, so adding a def no longer reshapes maps. primitive's yard.toml no longer needs to sort after wild.toml; its comment saying so is removed.

@@ -2,16 +2,16 @@
 id: 4f3e5d8d-a566-4520-802f-f03fd6d81ab5
 title: 'mods/timber: planks, plank walls, crates, shelves, racks and a granary'
 type: content
-status: review
+status: done
 milestone: crafting
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 depends_on:
 - 282efef8-78c1-4d2d-ad5d-4a3dd1246589
 - 6ec6da26-9db5-42fb-a9be-80534726606d
 - dce75339-9120-495d-9b3b-b4012251adac
 created: 2026-09-26
-updated: 2026-09-26
+updated: 2026-09-27
+closed_at: 2026-09-27
 priority: p2
 api: none
 effort: m

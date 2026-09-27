@@ -2,14 +2,14 @@
 id: f22f1a62-f8f7-48ef-bfe5-75f986b081c4
 title: Stores sheet, storage overlay and hover card
 type: feature
-status: review
+status: done
 milestone: crafting
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 depends_on:
 - 5e323021-7352-4d48-8453-78e98afb11e9
 created: 2026-09-26
-updated: 2026-09-26
+updated: 2026-09-27
+closed_at: 2026-09-27
 priority: p2
 api: none
 effort: m

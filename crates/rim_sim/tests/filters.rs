@@ -53,7 +53,7 @@ fn every_item_lands_in_the_categories_it_should() {
         .iter()
         .map(|&c| defs.item_categories[c as usize].id.as_str())
         .collect();
-    assert_eq!(kids, ["primitive:knapping", "primitive:stones", "primitive:fibres"]);
+    assert_eq!(kids, ["primitive:knapping", "primitive:stones", "primitive:fibres", "iron:metal"]);
 }
 
 #[test]
