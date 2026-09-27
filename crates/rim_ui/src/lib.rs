@@ -232,9 +232,6 @@ const WIN_MIN: (f32, f32) = (120.0, 80.0);
 /// How much of a window must stay on screen when dragged.
 const WIN_KEEP: f32 = 80.0;
 
-/// A laid-out tree: its layout hash, the space it had, and its rects.
-type CachedLayout = (u64, (f32, f32), Vec<Rect>);
-
 /// Layers bottom to top.
 const LAYERS: &[&str] = &["anchored", "docked", "float", "title", "windows", "cursor", "popup", "modal", "tooltip"];
 
@@ -315,8 +312,7 @@ pub struct Ui {
     painting: Option<Painting>,
     focused: Option<u64>,
     scroll: HashMap<u64, f32>,
-    cache: HashMap<String, CachedLayout>,
-    /// One taffy tree, reused for every layout.
+    /// Layout: named trees kept between frames, and one scratch tree.
     lay: layout::Engine,
     pub info: EngineInfo,
     pub devtools: bool,
@@ -429,7 +425,6 @@ impl Ui {
             painting: None,
             focused: None,
             scroll: HashMap::new(),
-            cache: HashMap::new(),
             lay: layout::Engine::default(),
             info,
             devtools: false,
@@ -690,7 +685,7 @@ impl Ui {
             self.user_scale = s;
             self.vm.ui_scale.set(s);
             self.theme.scale = total_scale(self.dpi, s);
-            self.cache.clear();
+            self.lay.forget();
             self.layout_dirty = true;
         }
     }
@@ -699,7 +694,7 @@ impl Ui {
         if (dpi - self.dpi).abs() > 1e-3 {
             self.dpi = dpi;
             self.theme.scale = total_scale(dpi, self.user_scale);
-            self.cache.clear();
+            self.lay.forget();
             // Whole-pixel glyph advances read crisper at 1x; at 2x subpixel
             // positions are smoother.
             self.text.set_hinting(dpi < 1.5);
@@ -761,7 +756,7 @@ impl Ui {
         self.vm = vm;
         self.images = images;
         self.text.forget_images();
-        self.cache.clear();
+        self.lay.forget();
         self.small.clear();
         self.reload_error = None;
         self.reloads += 1;
@@ -1168,6 +1163,7 @@ impl Ui {
         let mut out = Output::default();
         self.now = input.time;
         self.text.begin_frame();
+        self.lay.begin_frame();
         if input.time - self.shown_at >= 0.25 {
             self.shown_at = input.time;
             self.shown = EngineInfo { tree: Vec::new(), inspect: None, ..self.info.clone() };
@@ -1696,15 +1692,9 @@ impl Ui {
     ) -> Vec<Rect> {
         let mut h = std::collections::hash_map::DefaultHasher::new();
         root.layout_hash(&mut h, &mut self.text);
-        let hash = h.finish();
-        if let Some((ch, ca, rects)) = self.cache.get(name) {
-            if *ch == hash && *ca == avail {
-                return rects.clone();
-            }
-        }
-        *count += 1;
-        let rects = self.lay.layout(root, avail, origin, &mut self.text);
-        self.cache.insert(name.to_string(), (hash, avail, rects.clone()));
+        let before = self.lay.computed;
+        let rects = self.lay.layout_kept(name, h.finish(), root, avail, origin, &mut self.text);
+        *count += self.lay.computed - before;
         rects
     }
 
