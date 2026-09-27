@@ -279,6 +279,7 @@ impl Snapshot {
             ("engine:defs".to_string(), enc(&def_table(&w.defs))),
             ("engine:world".to_string(), enc(&world)),
             ("engine:map".to_string(), enc(&w.map.terrain)),
+            ("engine:seen".to_string(), enc(&w.map.seen_bits())),
             ("engine:zones".to_string(), enc(&w.zones)),
             ("engine:fields".to_string(), enc(&w.fields.saved(&w.map))),
             ("engine:scripts".to_string(), enc(&ScriptsSection { disabled_hooks, disabled_handlers })),
@@ -442,6 +443,10 @@ impl Snapshot {
         }
         for (id, n) in lost_terrain {
             notes.push(format!("{n} cells of {id} became {}", defs.terrain[0].id));
+        }
+        // A save from before levels were seen keeps the map's own start.
+        if self.sections.contains_key("engine:seen") {
+            w.map.set_seen_bits(dec(self, "engine:seen")?);
         }
 
         // Entities, in id order: each gets every component the save has for

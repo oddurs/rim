@@ -351,6 +351,26 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     let now = (t.ui_rect("core:dock"), t.ui_rect("core:inspector"), t.ui_rect("core:colonists"));
     t.check(now == docked, format!("the tray floats: nothing docked moved ({docked:?} → {now:?})"));
     t.shot("build_tray").await;
+    // Tab and Shift+Tab step through the open tray's groups (5689930d):
+    // [ and ] are levels now.
+    let shown = |t: &T| -> Vec<String> {
+        t.app
+            .tools
+            .iter()
+            .map(|b| b.key.clone())
+            .filter(|k| t.ui_rect(&format!("core:toolbar.{k}")).is_some())
+            .collect()
+    };
+    let first = shown(&t);
+    t.key(KeyCode::Tab).await;
+    let second = shown(&t);
+    t.check(!second.is_empty() && second != first, "Tab shows the open tray's next group");
+    t.check(t.app.selected == selected, "and leaves the selection alone");
+    let raw =
+        RawInput { keys: vec![KeyCode::Tab], pressed: vec!["shift+tab".into()], shift: true, ..Default::default() };
+    t.input(RawInput { mouse: t.mouse, ..raw }).await;
+    t.settle().await;
+    t.check(shown(&t) == first, "Shift+Tab goes back");
     t.key(KeyCode::Escape).await;
     t.frame().await;
     t.check(
@@ -1182,6 +1202,67 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         t.check(t.app.meshes.drawn(anchor_chunk), "its anchor's chunk, off screen, is drawn for the half in view");
         t.shot("two_cells").await;
         t.app.cam.zoom = 28.0;
+    }
+
+    // The view (5689930d): one level at a time. A room dug below with pits
+    // over it and a way down; [ and ] change level, the ruler says who is
+    // where and what is wrong there, and a level shown again comes from the
+    // chunk cache.
+    {
+        println!("\n# one level at a time (5689930d)");
+        let paused = t.app.paused;
+        t.app.paused = true;
+        let top = crate::bench::stacked(&mut t.app.sim, home.offset(-24, 6), 16);
+        t.check(top.is_some(), "the stacked scene digs a way down, pits and a room below");
+        if let Some(top) = top {
+            let below: Vec<Entity> = t.w().colonists().filter(|&e| t.pawn(e).pos.z == -1).collect();
+            // One of them badly hurt: core's alert names them, on their level.
+            let hurt = below[0];
+            let max = t.w().defs.creature(t.pawn(hurt).def).max_hp;
+            let hp = t.pawn(hurt).hp;
+            t.app.sim.world.ecs.get::<&mut Pawn>(hurt).unwrap().hp = max / 10;
+            t.focus(top);
+            t.app.cam.zoom = 20.0;
+            // Long enough for the zoom to settle: a chunk drawn scaled from
+            // another zoom is rebuilt once it has, whatever level is shown.
+            for _ in 0..12 {
+                t.frame().await;
+            }
+            t.check(t.ui_rect("core:depth.level.-1").is_some(), "the ruler lists the level dug into");
+            t.check(t.ui_rect("core:depth.count.-1").is_some(), "with the colonists on it");
+            t.check(t.ui_rect("core:depth.alerts.-1").is_some(), "and the alert about one of them");
+            t.check(t.ui_rect("core:depth.level.-2").is_none(), "but not a level nobody has reached");
+            t.shot("level_surface").await;
+            t.key(KeyCode::LeftBracket).await;
+            t.check(t.app.cam.z == -1, format!("[ goes down a level ({})", t.app.cam.z));
+            t.shot("level_below").await;
+            t.key(KeyCode::LeftBracket).await;
+            t.check(t.app.cam.z == -1, "and no further than the levels reached");
+            // Both levels are drawn now: up, down and up again rebuilds nothing.
+            let mut rebuilt = 0;
+            for k in [KeyCode::RightBracket, KeyCode::LeftBracket, KeyCode::RightBracket] {
+                let pressed = crate::key_name(k).map(|n| vec![n.to_string()]).unwrap_or_default();
+                t.input(RawInput { mouse: t.mouse, keys: vec![k], pressed, ..Default::default() }).await;
+                rebuilt += t.app.meshes.rebuilt;
+                for _ in 0..3 {
+                    t.frame().await;
+                    rebuilt += t.app.meshes.rebuilt;
+                }
+            }
+            t.check(t.app.cam.z == 0, "] comes back up");
+            t.check(rebuilt == 0, format!("changing between cached levels rebuilds no chunks ({rebuilt})"));
+            t.click_ui("core:depth.level.-1").await;
+            t.check(t.app.cam.z == -1, "a click on the ruler goes to that level");
+            // Picking a colonist from the bar on another level goes to them.
+            t.key(KeyCode::RightBracket).await;
+            let name = t.pawn(hurt).name.clone();
+            t.click_ui(&format!("core:colonists.{name}")).await;
+            t.check(t.app.cam.z == -1, "selecting a colonist on another level shows their level");
+            t.app.sim.world.ecs.get::<&mut Pawn>(hurt).unwrap().hp = hp;
+            t.key(KeyCode::Escape).await;
+            t.key(KeyCode::RightBracket).await;
+        }
+        t.app.paused = paused;
     }
 
     // Speech (DESIGN.md §11): a bubble sits on its speaker, even on the

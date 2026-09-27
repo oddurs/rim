@@ -121,3 +121,15 @@ fn hunting_needs_a_butcherable_wild_target() {
     s.step();
     assert!(s.world.ecs.get::<&rim_sim::world::Designated>(founder).is_err());
 }
+
+#[test]
+fn a_hunt_drawn_on_one_level_leaves_the_levels_under_it_alone() {
+    let (mut s, founder) = isolated(15, true);
+    let fp = pos(&s, founder);
+    let hare = s.world.defs.creature_id("hare").unwrap();
+    let below = s.world.spawn_pawn(hare, Faction::Wild, IVec::at(fp.x, fp.y, -1), None);
+    let hunt = s.world.defs.lookup("designation", "hunt").unwrap();
+    s.push(Command::Designate { designation: hunt, a: fp.offset(-3, -3), b: fp.offset(3, 3) });
+    s.step();
+    assert!(s.world.ecs.get::<&rim_sim::world::Designated>(below).is_err(), "a hare a level down is marked");
+}

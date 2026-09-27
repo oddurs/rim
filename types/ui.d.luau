@@ -116,8 +116,8 @@ type TreeRow = { depth: number, kind: string, id: string, owner: string }
 declare ui: {
     -- A node attached to a pawn (entity) or cell, on the anchored layer.
     anchored: (node: Node?) -> Node,
-    -- A named action with a default key ("space", "f3", "ctrl+k"): it fires from the key when no text input is typing, and from the command palette. With no key it is in the palette alone. The player's keybinds file overrides the key. Two mods binding one id or one key is reported.
-    bind: (id: string, opts: { key: string?, label: string? }, run: () -> ()) -> (),
+    -- A named action with a default key ("space", "f3", "ctrl+k"): it fires from the key when no text input is typing, and from the command palette. With no key it is in the palette alone. With when, the key is the action's only while when returns true; otherwise the key goes on to the game (Tab to the next colonist). The player's keybinds file overrides the key. Two mods binding one id or one key is reported.
+    bind: (id: string, opts: { key: string?, label: string?, when: (() -> boolean)? }, run: () -> ()) -> (),
     -- Close a window.
     close: (id: string) -> (),
     -- A column: children top to bottom.
@@ -193,8 +193,10 @@ declare act: {
     delete_role: (role: number) -> (),
     -- Draft or undraft a colonist.
     draft: (id: number, on: boolean) -> (),
-    -- Move the camera to a pawn or thing.
+    -- Move the camera to a pawn or thing, and to its level.
     focus: (id: number) -> (),
+    -- Show level z: 0 is the surface, below it is negative. Past the top or bottom level it stays at the last.
+    level: (z: number) -> (),
     -- Play a save from view.saves() (the title screen).
     load: (path: string) -> (),
     -- Mark a job urgent (a blueprint, a thing or creature marked for work, an order's site), or clear it: everyone takes it a level sooner than its work type.
@@ -306,6 +308,12 @@ declare view: {
     items: () -> { Item },
     -- The last order given ("Gunnar will deconstruct wall") and how many seconds ago, or nil once it's been undone.
     last_order: () -> { label: string, age: number }?,
+    -- The level on screen: 0 is the surface, below it is negative.
+    level: () -> number,
+    -- The level a pawn or thing is on.
+    level_of: (id: number) -> number?,
+    -- Every level, the highest first: the colonists and other creatures on it, and whether it is reached (the surface and above, or a level a portal goes down to or a pit looks into).
+    levels: () -> { { z: number, colonists: number, others: number, reached: boolean } },
     -- A thing's world look, tinted by what it's made of, as an index a token node's `look` takes (kind = "token"; `kit.item` builds one). Made once per thing and material.
     look: (thing: string, made_of: string?) -> number,
     -- The job on a tile an urgent mark could go on, with whether it has one.

@@ -1104,6 +1104,7 @@ impl World {
         };
         let e = self.spawn((p,));
         self.pawns.push(e);
+        self.map.see_around(pos);
         if faction == Faction::Player {
             self.note_event("joined", e, &name);
             self.events.push(GameEvent::PawnJoined { id: e, name, def });

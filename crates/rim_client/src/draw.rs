@@ -38,23 +38,30 @@ fn alpha(c: Color, a: f32) -> Color {
 /// baked in, drawn as a single quad. Drawing a rectangle per cell cost ~100
 /// batched draw calls zoomed out; this is one. A chunk is re-uploaded when
 /// its terrain changes, and nothing else: chopping a tree doesn't touch it.
+///
+/// One texture per level, for the viewed level and the ones beside it, as
+/// the chunk meshes keep them. Air is clear, so the level below shows.
 #[derive(Default)]
 pub struct Ground {
-    tex: Option<Texture2D>,
-    /// The terrain revision each chunk was last uploaded at.
-    revs: Vec<u64>,
+    /// Level, texture, and the terrain revision each of its chunks was last
+    /// uploaded at.
+    levels: Vec<(i32, Texture2D, Vec<u64>)>,
 }
 
 impl Ground {
-    /// RGBA for the cells in `[x0, x0 + w) × [y0, y0 + h)`.
-    fn texels(w: &World, x0: i32, y0: i32, cw: i32, ch: i32) -> Image {
+    /// RGBA for the cells in `[x0, x0 + w) × [y0, y0 + h)` on level `z`.
+    fn texels(w: &World, z: i32, x0: i32, y0: i32, cw: i32, ch: i32) -> Image {
         let mut bytes = vec![0u8; (cw * ch * 4) as usize];
         for y in 0..ch {
             for x in 0..cw {
-                let p = IVec::new(x0 + x, y0 + y);
-                let base = w.defs.terrain[w.map.terrain[w.map.idx(p)] as usize].rgb;
-                let v = 0.94 + hash2_f(p.x as i64, p.y as i64, 99) as f32 * 0.1;
+                let p = IVec::at(x0 + x, y0 + y, z);
+                let i = w.map.idx(p);
                 let o = ((y * cw + x) * 4) as usize;
+                if w.map.is_air(i) {
+                    continue;
+                }
+                let base = w.defs.terrain[w.map.terrain[i] as usize].rgb;
+                let v = 0.94 + hash2_f(p.x as i64, p.y as i64, 99) as f32 * 0.1;
                 for (k, c) in base.iter().enumerate() {
                     bytes[o + k] = (*c as f32 * v).min(255.0) as u8;
                 }
@@ -64,31 +71,43 @@ impl Ground {
         Image { bytes, width: cw as u16, height: ch as u16 }
     }
 
-    pub fn update(&mut self, w: &World) {
+    /// Bring `view`'s texture and its neighbours' up to date, and drop the
+    /// rest.
+    pub fn update(&mut self, w: &World, view: i32) {
         let (mw, mh) = (w.map.w, w.map.h);
-        let (cx, cy) = w.map.chunks();
-        let fits = self.tex.as_ref().is_some_and(|t| t.width() as i32 == mw && t.height() as i32 == mh);
-        if !fits {
-            let t = Texture2D::from_image(&Self::texels(w, 0, 0, mw, mh));
-            // Crisp cell edges when zoomed in, like the rectangles were.
-            t.set_filter(FilterMode::Nearest);
-            self.tex = Some(t);
-            self.revs = (0..(cx * cy) as usize).map(|c| w.map.terrain_rev(c)).collect();
-            return;
-        }
-        let Some(tex) = &self.tex else { return };
-        for (c, seen) in self.revs.iter_mut().enumerate() {
-            let now = w.map.terrain_rev(c);
-            if *seen == now {
+        let near = (view - 1..=view + 1).filter(|z| w.map.levels().contains(z));
+        self.levels.retain(|(z, t, _)| {
+            (z - view).abs() <= 1 && w.map.levels().contains(z) && t.width() as i32 == mw && t.height() as i32 == mh
+        });
+        for z in near {
+            let Some((_, tex, revs)) = self.levels.iter_mut().find(|l| l.0 == z) else {
+                let t = Texture2D::from_image(&Self::texels(w, z, 0, 0, mw, mh));
+                // Crisp cell edges when zoomed in, like the rectangles were.
+                t.set_filter(FilterMode::Nearest);
+                self.levels.push((z, t, w.map.level_chunks(z).map(|c| w.map.terrain_rev(c)).collect()));
                 continue;
+            };
+            for (c, seen) in w.map.level_chunks(z).zip(revs.iter_mut()) {
+                let now = w.map.terrain_rev(c);
+                if *seen == now {
+                    continue;
+                }
+                *seen = now;
+                let IVec { x: x0, y: y0, .. } = w.map.chunk_origin(c);
+                let (cw, ch) = (CHUNK.min(mw - x0), CHUNK.min(mh - y0));
+                tex.update_part(&Self::texels(w, z, x0, y0, cw, ch), x0, y0, cw, ch);
             }
-            *seen = now;
-            let IVec { x: x0, y: y0, .. } = w.map.chunk_origin(c);
-            let (cw, ch) = (CHUNK.min(mw - x0), CHUNK.min(mh - y0));
-            tex.update_part(&Self::texels(w, x0, y0, cw, ch), x0, y0, cw, ch);
         }
     }
+
+    /// Level `z`'s texture, if it is kept.
+    fn of(&self, z: i32) -> Option<&Texture2D> {
+        self.levels.iter().find(|l| l.0 == z).map(|l| &l.1)
+    }
 }
+
+/// How much darker the level below is, seen through air.
+const BELOW_DIM: f32 = 0.55;
 
 /// Where painting goes: straight to macroquad's batch each frame, or into
 /// a chunk's cached buffers (mesh.rs). Both draw the same pixels.
@@ -389,22 +408,37 @@ pub fn things(app: &mut App) -> Counts {
     let w = &app.sim.world;
     let cam = &app.cam;
     let z = cam.zoom;
+    let level = app.cam.z;
     clear_background(Color::from_rgba(12, 14, 16, 255));
-
+    let (sx, sy) = cam.to_screen(0.0, 0.0);
+    let (mw, mh) = (w.map.w as f32 * z, w.map.h as f32 * z);
     // Terrain: one quad from the baked ground texture.
-    if let Some(tex) = &app.ground.tex {
-        let (sx, sy) = cam.to_screen(0.0, 0.0);
-        draw_texture_ex(
-            tex,
-            sx,
-            sy,
-            WHITE,
-            DrawTextureParams { dest_size: Some(vec2(w.map.w as f32 * z, w.map.h as f32 * z)), ..Default::default() },
-        );
-    }
+    let ground = |at: i32| {
+        if let Some(tex) = app.ground.of(at) {
+            draw_texture_ex(
+                tex,
+                sx,
+                sy,
+                WHITE,
+                DrawTextureParams { dest_size: Some(vec2(mw, mh)), ..Default::default() },
+            );
+        }
+    };
 
     let t = get_time() as f32;
-    app.meshes.prepare(w, &app.world_atlas, cam, t);
+    let target = app.world_target.as_ref().map(|t| t.render_pass.raw_miniquad_id());
+    app.meshes.prepare(w, &app.world_atlas, cam, level, t);
+    // The level below, where this one is open to it (DESIGN.md §6d): its
+    // ground and what stands still on it, dimmed. The dimming covers the
+    // map, and this level's ground covers all but its air.
+    if !w.map.air_cells(level).is_empty() {
+        ground(level - 1);
+        for layer in 0..3 {
+            app.meshes.draw_layer(w, cam, layer, target, true);
+        }
+        draw_rectangle(sx, sy, mw, mh, Color::new(0.0, 0.0, 0.0, BELOW_DIM));
+    }
+    ground(level);
     let (tx0, ty0, tx1, ty1) = visible(app);
     let on_screen = |c: IVec| (tx0..=tx1).contains(&c.x) && (ty0..=ty1).contains(&c.y);
     let detail = z >= DETAIL_ZOOM;
@@ -417,7 +451,7 @@ pub fn things(app: &mut App) -> Counts {
     };
     // Per layer, cached then live, so a plan never covers what stands on it.
     for layer in 0..3 {
-        app.meshes.draw_layer(w, cam, layer, app.world_target.as_ref().map(|t| t.render_pass.raw_miniquad_id()));
+        app.meshes.draw_layer(w, cam, layer, target, false);
         for cell in app.meshes.live(layer) {
             let Some(e) = w.map.layers_at(w.map.idx(cell))[layer] else { continue };
             let at = cam.to_screen(cell.x as f32, cell.y as f32);
@@ -528,7 +562,7 @@ pub fn readouts(app: &App) -> Vec<(f32, f32, String)> {
         return out;
     }
     if app.storage_overlay {
-        for (at, pct) in storage_view(w, visible(app)).fills {
+        for (at, pct) in storage_view(w, visible(app), app.cam.z).fills {
             let (x, y) = cam.to_screen(at.x as f32, at.y as f32);
             out.push((x + 2.0, y + 2.0, format!("{pct}%")));
         }
@@ -594,7 +628,8 @@ fn drawn_at(app: &App, p: &Pawn) -> (f32, f32) {
 /// drawn.
 pub fn pawn_disc(app: &App, e: Entity) -> Option<((f32, f32), f32)> {
     let w = &app.sim.world;
-    let p = w.ecs.get::<&Pawn>(e).ok().filter(|p| p.active)?;
+    // Only on the level shown (DESIGN.md §6d).
+    let p = w.ecs.get::<&Pawn>(e).ok().filter(|p| p.active && p.pos.z == app.cam.z)?;
     let (px, py) = drawn_at(app, &p);
     Some((app.cam.to_screen(px, py), w.defs.creature(p.def).size * app.cam.zoom))
 }
@@ -618,7 +653,7 @@ pub fn pawns(app: &App) {
     for &e in &w.pawns {
         let Ok(p) = w.ecs.get::<&Pawn>(e) else { continue };
         // Only the level on screen (DESIGN.md §6d).
-        if !p.active || p.pos.z != app.view_z {
+        if !p.active || p.pos.z != app.cam.z {
             continue;
         }
         let cd = defs.creature(p.def);
@@ -680,7 +715,7 @@ pub fn pawns(app: &App) {
         let (lo, hi) = (rgb(fd.rgb_low), rgb(fd.rgb_high));
         for ty in ty0..=ty1 {
             for tx in tx0..=tx1 {
-                let v = w.fields.value(defs, &w.map, fi, IVec::new(tx, ty)) as f32;
+                let v = w.fields.value(defs, &w.map, fi, IVec::at(tx, ty, app.cam.z)) as f32;
                 let f = ((v - fd.range[0] as f32) / (fd.range[1] - fd.range[0]) as f32).clamp(0.0, 1.0);
                 let c = Color::new(lo.r + (hi.r - lo.r) * f, lo.g + (hi.g - lo.g) * f, lo.b + (hi.b - lo.b) * f, 0.55);
                 let (sx, sy) = cam.to_screen(tx as f32, ty as f32);
@@ -702,14 +737,14 @@ pub struct StorageView {
     pub fills: Vec<(IVec, u32)>,
 }
 
-pub fn storage_view(w: &World, (x0, y0, x1, y1): (i32, i32, i32, i32)) -> StorageView {
+pub fn storage_view(w: &World, (x0, y0, x1, y1): (i32, i32, i32, i32), level: i32) -> StorageView {
     let mut v = StorageView::default();
     let top = w.defs.store_priority.labels.len().saturating_sub(1).max(1) as f32;
     // Stockpiles: each visible cell, then each zone seen once for its fill.
     let mut seen: std::collections::BTreeSet<u32> = std::collections::BTreeSet::new();
     for y in y0..=y1 {
         for x in x0..=x1 {
-            let p = IVec::new(x, y);
+            let p = IVec::at(x, y, level);
             let Some(z) = w.zones.at(&w.map, p) else { continue };
             v.washes.push((p, [1, 1], z.level as f32 / top));
             seen.insert(z.id);
@@ -723,14 +758,14 @@ pub fn storage_view(w: &World, (x0, y0, x1, y1): (i32, i32, i32, i32)) -> Storag
             cells += 1;
             used += w.map.item_at(p).is_some() as u32;
         }
-        if let Some(p) = first.filter(|p| (x0..=x1).contains(&p.x) && (y0..=y1).contains(&p.y)) {
+        if let Some(p) = first.filter(|p| p.z == level && (x0..=x1).contains(&p.x) && (y0..=y1).contains(&p.y)) {
             v.fills.push((p, used * 100 / cells.max(1)));
         }
     }
     // Containers: only those in the chunks the rectangle touches.
     for cy in (y0 / CHUNK)..=(y1 / CHUNK) {
         for cx in (x0 / CHUNK)..=(x1 / CHUNK) {
-            let chunk = w.map.chunk_of(IVec::new(cx * CHUNK, cy * CHUNK)) as u32;
+            let chunk = w.map.chunk_of(IVec::at(cx * CHUNK, cy * CHUNK, level)) as u32;
             for bits in w.stores.containers_in(chunk) {
                 let Some(e) = Entity::from_bits(bits) else { continue };
                 let (Some(t), Ok(st)) = (w.thing(e), w.ecs.get::<&rim_sim::world::Store>(e)) else { continue };
@@ -755,7 +790,7 @@ pub fn storage_view(w: &World, (x0, y0, x1, y1): (i32, i32, i32, i32)) -> Storag
 fn storage_overlay(app: &App) {
     let (w, cam) = (&app.sim.world, &app.cam);
     let z = cam.zoom;
-    let v = storage_view(w, visible(app));
+    let v = storage_view(w, visible(app), app.cam.z);
     for (at, [sw, sh], level) in &v.washes {
         let (sx, sy) = cam.to_screen(at.x as f32, at.y as f32);
         let c = alpha(crate::ZONE, 0.12 + 0.5 * level);
@@ -836,8 +871,10 @@ fn zones(app: &App) {
     let (w, cam) = (&app.sim.world, &app.cam);
     let z = cam.zoom;
     let (x0, y0, x1, y1) = visible(app);
-    let zone =
-        |x: i32, y: i32| w.zones.cells.get(w.map.idx(IVec::new(x, y))).copied().filter(|_| w.map.inb(IVec::new(x, y)));
+    let zone = |x: i32, y: i32| {
+        let p = IVec::at(x, y, cam.z);
+        w.zones.cells.get(w.map.idx(p)).copied().filter(|_| w.map.inb(p))
+    };
     let (fill, line) = (alpha(crate::ZONE, 0.13), alpha(crate::ZONE, 0.7));
     for y in y0..=y1 {
         for x in x0..=x1 {
@@ -1795,13 +1832,13 @@ mod tests {
         let e = s.world.spawn_fixture_of(def, crate_at, false, None).unwrap();
         s.world.put_in_store(e, Lot::new(s.world.defs.thing_id("berries").unwrap(), 5));
         let all = (0, 0, s.world.map.w - 1, s.world.map.h - 1);
-        let v = storage_view(&s.world, all);
+        let v = storage_view(&s.world, all, 0);
         assert!(v.washes.contains(&(za, [1, 1], 0.5)), "Preferred is half the scale's top: {v:?}");
         assert!(v.washes.contains(&(crate_at, [1, 1], 0.25)), "Normal a quarter: {v:?}");
         assert!(v.fills.contains(&(za, 100)) && v.fills.contains(&(crate_at, 25)), "{v:?}");
         // Out of view, a store isn't there.
         let away = (crate_at.x + 5, crate_at.y + 5, crate_at.x + 6, crate_at.y + 6);
-        assert!(storage_view(&s.world, away).washes.is_empty());
+        assert!(storage_view(&s.world, away, 0).washes.is_empty());
         let _ = std::fs::remove_dir_all(dir);
     }
 
@@ -1828,7 +1865,7 @@ mod tests {
         let (mut ms, mut washes) = (f64::MAX, 0);
         for _ in 0..20 {
             let t0 = std::time::Instant::now();
-            washes = storage_view(&s.world, all).washes.len();
+            washes = storage_view(&s.world, all, 0).washes.len();
             ms = ms.min(t0.elapsed().as_secs_f64() * 1e3);
         }
         eprintln!(

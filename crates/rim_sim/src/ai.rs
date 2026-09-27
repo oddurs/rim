@@ -132,6 +132,7 @@ fn advance_movement(w: &mut World, p: &mut Pawn) {
         p.pos = n;
         p.next = None;
         p.progress = 0;
+        w.map.see_around(n);
     }
     if let Some(&n) = p.path.last() {
         if !w.map.passable(n) {

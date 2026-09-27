@@ -173,7 +173,9 @@ pub fn scene(app: &App) -> Scene {
         if let Some((center, r)) = draw::pawn_disc(app, e) {
             if let Ok(pawn) = w.ecs.get::<&Pawn>(e) {
                 let mut points = vec![center];
-                points.extend(pawn.path.iter().rev().map(|s| cam.to_screen(s.x as f32 + 0.5, s.y as f32 + 0.5)));
+                // The way on this level: stairs take it out of view.
+                let here = pawn.path.iter().rev().take_while(|s| s.z == cam.z);
+                points.extend(here.map(|s| cam.to_screen(s.x as f32 + 0.5, s.y as f32 + 0.5)));
                 if points.len() > 1 {
                     marks.push(Mark::Path { points, alpha });
                 }
@@ -185,7 +187,7 @@ pub fn scene(app: &App) -> Scene {
                     primary = Some((center.0 + out + 6.0, center.1 - 10.0));
                 }
             }
-        } else if let Some(t) = w.thing(e) {
+        } else if let Some(t) = w.thing(e).filter(|t| t.pos.z == cam.z) {
             let [fw, fh] = w.defs.thing(t.def).size_facing(t.facing);
             let (sx, sy) = cam.to_screen(t.pos.x as f32, t.pos.y as f32);
             let rect = [sx, sy, z * fw as f32, z * fh as f32];
@@ -206,8 +208,8 @@ pub fn scene(app: &App) -> Scene {
     // will be carried.
     if app.storage_overlay {
         if let Some(e) = app.selected {
-            if let (Some(t), Some(rim_sim::ai::HaulPlan::Moves { to, .. })) = (w.thing(e), rim_sim::ai::haul_plan(w, e))
-            {
+            let here = w.thing(e).filter(|t| t.pos.z == cam.z);
+            if let (Some(t), Some(rim_sim::ai::HaulPlan::Moves { to, .. })) = (here, rim_sim::ai::haul_plan(w, e)) {
                 let from = cam.to_screen(t.pos.x as f32 + 0.5, t.pos.y as f32 + 0.5);
                 marks.push(Mark::Haul { from, to: cam.to_screen(to.x as f32 + 0.5, to.y as f32 + 0.5) });
             }

@@ -93,7 +93,7 @@ impl RoomMarks {
     /// Draw the marks on screen, `z` points a cell.
     pub fn draw(&self, cam: &crate::Cam, (x0, y0, x1, y1): (i32, i32, i32, i32)) {
         let z = cam.zoom;
-        let on = |p: IVec| p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1;
+        let on = |p: IVec| p.z == cam.z && p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1;
         // Open sky: a pale wash and hatching, zoomed in far enough to read.
         if z >= 8.0 {
             let step = (z / 4.0).max(4.0);

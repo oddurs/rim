@@ -1935,6 +1935,23 @@ plain, so a vein is found by looking. `[` goes down and `]` goes up. Chunk
 meshes are keyed by `(z, chunk)`. The depth ruler that shows who is on
 which level is a UI mod.
 
+- The level on screen is the camera's (`cam.z`): a cell under the pointer
+  is on it, and so is everything a drag or an order names. The UI reads it
+  as `view.level()` and sets it with `act.level(z)`; `view.levels()` gives
+  each level's colonists and whether it is reached. The ruler
+  (`mods/core/ui/depth.luau`) lists reached levels only, with the alerts
+  whose subject is there, and `[`/`]` step through reached levels.
+- Chunk meshes and ground textures are kept for the viewed level and the
+  ones either side, and freed beyond, so going up or down a level and back
+  rebuilds nothing. The level below is drawn only where this one has air,
+  from the chunks under its air cells: a level with no pits costs nothing.
+- What a pawn has seen is one bit per cell in the map, set for the cell a
+  pawn steps onto and those around it, and saved. The surface and above
+  start seen. A cell seen for the first time touches its chunk.
+- The dock's tray groups moved from `[`/`]` to Tab and Shift+Tab. A binding
+  can take a `when`: while it says no, the key goes on to the game, so Tab
+  still selects the next colonist with no tray open.
+
 ### Underground
 
 Rock is a roof. Solid terrain is a roof support (§6c), and a cell is
@@ -1966,7 +1983,13 @@ becomes its explicit roof. A floor that loses its span falls.
   none until a cell is worked.
 - Basins simplify: no currents, no pressure, and water never climbs stairs.
 - One cell of height per level: no ramps or slopes, and hilltops are flat.
-- Drawing the level below is not yet measured; the view records it here.
+- Drawing by level, measured with the view (5689930d): `rim --bench-render`
+  digs a 40 × 40 room at −1 beside the stamped colony, with three pits over
+  it and stairs down. The whole map from the surface, showing −1 through
+  the pits, is 0.66 ms of world CPU a frame; the whole of −1, nearly every
+  cell rock drawn from the chunk meshes (1.46 M indices in 70 calls), is
+  0.31–0.46 ms. Neither rebuilds a chunk once warm; the budget is 4 ms
+  (Apple M4 Pro, 20 sprite mods).
   Generating a level is about 3 ms at 192 × 192 (the strata above).
   Crossing levels, measured with portals (acd85584): joining reach over 61
   portals on four levels costs 0.0017 ms. With every colonist mining two

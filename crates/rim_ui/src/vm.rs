@@ -158,6 +158,9 @@ pub struct Bind {
     pub key: String,
     pub label: String,
     pub func: Function,
+    /// When the key is the action's: while it says no, the key goes on
+    /// to the game.
+    pub when: Option<Function>,
 }
 
 /// "Ctrl+Shift+P", "shift + ctrl+p" and "ctrl+shift+p" are one key.
@@ -616,9 +619,10 @@ impl UiVm {
             lua.create_function(move |_, (id, opts, func): (String, Table, Function)| {
                 let key: String = opts.get::<Option<String>>("key")?.unwrap_or_default();
                 let label: String = opts.get::<Option<String>>("label")?.unwrap_or_else(|| id.clone());
+                let when: Option<Function> = opts.get("when")?;
                 let mut reg = r.borrow_mut();
                 let owner: Rc<str> = reg.current.as_str().into();
-                reg.binds.push(Bind { id, owner, key: normalise_key(&key), label, func });
+                reg.binds.push(Bind { id, owner, key: normalise_key(&key), label, func, when });
                 Ok(())
             })?,
         )?;
@@ -765,6 +769,7 @@ impl UiVm {
             Some(e) => UiAction::Focus(e),
             None => return Err(rt("bad entity id")),
         });
+        act!("level", i32, |z| UiAction::Level(z));
         act!("tool", String, |key| UiAction::Tool(key));
         act!("stuff", String, |id| UiAction::Stuff(id));
         act!("speed", u32, |s| UiAction::Speed(s));
@@ -994,6 +999,42 @@ impl UiVm {
             }
             Ok(t)
         });
+        view!("level", (), |_lua, l, _a| Ok(l.client.level));
+        view!("levels", (), |lua, l, _a| {
+            let m = &l.world.map;
+            let t = lua.create_table()?;
+            for z in m.levels().rev() {
+                let mut colonists = 0;
+                let mut others = 0;
+                for &e in &l.world.pawns {
+                    let Ok(p) = l.world.ecs.get::<&Pawn>(e) else { continue };
+                    if p.active && !p.dead && p.pos.z == z {
+                        match p.faction == rim_sim::world::Faction::Player && l.world.defs.creature(p.def).intelligent {
+                            true => colonists += 1,
+                            false => others += 1,
+                        }
+                    }
+                }
+                // Reached: the surface and over it, a level a portal goes
+                // down to, and one a pit looks into.
+                let reached = z >= 0
+                    || colonists > 0
+                    || m.portals().iter().any(|p| p.top.z - 1 == z)
+                    || !m.air_cells(z + 1).is_empty();
+                let row = lua.create_table_with_capacity(0, 4)?;
+                row.raw_set("z", z)?;
+                row.raw_set("colonists", colonists)?;
+                row.raw_set("others", others)?;
+                row.raw_set("reached", reached)?;
+                t.raw_push(row)?;
+            }
+            Ok(t)
+        });
+        view!("level_of", u64, |_lua, l, id| {
+            let Some(e) = Entity::from_bits(id) else { return Ok(None) };
+            let w = l.world;
+            Ok(w.ecs.get::<&Pawn>(e).map(|p| p.pos.z).ok().or_else(|| w.thing(e).map(|t| t.pos.z)))
+        });
         // How many living pawns of a faction ("player", "hostile", "wild").
         view!("count_pawns", String, |_lua, l, faction| {
             Ok(l.world
@@ -1061,7 +1102,7 @@ impl UiVm {
             let mut seen: std::collections::BTreeMap<u32, (i64, i64, i64)> = Default::default();
             for y in y0..=y1 {
                 for x in x0..=x1 {
-                    let p = rim_sim::IVec::new(x, y);
+                    let p = rim_sim::IVec::at(x, y, l.client.level);
                     let Some(r) = w.map.room_at(p).filter(|r| !r.touches_edge) else { continue };
                     let e = seen.entry(r.id).or_default();
                     *e = (e.0 + x as i64, e.1 + y as i64, e.2 + 1);
@@ -1070,7 +1111,7 @@ impl UiVm {
             let mut best: std::collections::BTreeMap<u32, (f32, rim_sim::IVec)> = Default::default();
             for y in y0..=y1 {
                 for x in x0..=x1 {
-                    let p = rim_sim::IVec::new(x, y);
+                    let p = rim_sim::IVec::at(x, y, l.client.level);
                     let Some(r) = w.map.room_at(p).filter(|r| !r.touches_edge) else { continue };
                     let (sx, sy, n) = seen[&r.id];
                     let (mx, my) = (sx as f32 / n as f32, sy as f32 / n as f32);
@@ -1167,7 +1208,7 @@ impl UiVm {
         // opening, not per frame.
         view!("orders", (i32, i32, Option<u64>), |lua, l, (x, y, on)| {
             let w = l.world;
-            let cell = rim_sim::IVec::new(x, y);
+            let cell = rim_sim::IVec::at(x, y, l.client.level);
             let on = on.and_then(Entity::from_bits);
             let actors: Vec<Entity> = if l.client.group.is_empty() {
                 l.client.selected.into_iter().collect()
@@ -1387,7 +1428,7 @@ impl UiVm {
         // Urgent marks (DESIGN.md §4d): the job on a tile a mark could go on.
         view!("markable", (i32, i32), |lua, l, (x, y)| {
             let w = l.world;
-            let Some(e) = w.markable_at(rim_sim::IVec::new(x, y)) else { return Ok(None) };
+            let Some(e) = w.markable_at(rim_sim::IVec::at(x, y, l.client.level)) else { return Ok(None) };
             let t = lua.create_table()?;
             t.set("id", e.to_bits().get())?;
             t.set("urgent", w.ecs.get::<&rim_sim::world::Urgent>(e).is_ok())?;
@@ -1795,7 +1836,8 @@ impl UiVm {
     }
 
     /// The action bound to a key, by its current key (overrides applied).
-    pub fn bind_for_key(&self, key: &str) -> Option<Function> {
+    /// The action bound to `key`, and its `when` if it has one.
+    pub fn bind_for_key(&self, key: &str) -> Option<(Function, Option<Function>)> {
         if key.is_empty() {
             return None;
         }
@@ -1807,7 +1849,7 @@ impl UiVm {
             }
             seen.push(&b.id);
             if reg.key_overrides.get(&b.id).map(String::as_str).unwrap_or(&b.key) == key {
-                return Some(b.func.clone());
+                return Some((b.func.clone(), b.when.clone()));
             }
         }
         None
@@ -2085,6 +2127,23 @@ impl UiVm {
             let e = format!("handler: {}", first_line(&e.to_string()));
             if !self.errors.contains(&e) {
                 self.errors.push(e);
+            }
+        }
+    }
+
+    /// Does a binding's `when` hold? One that errors doesn't, and says so.
+    pub fn call_when(&mut self, f: &Function, world: &World, client: &ClientView, engine: &EngineInfo) -> bool {
+        self.deadline.set(Some(Instant::now() + CALL_DEADLINE));
+        let r = self.lend(world, client, engine, || f.call::<bool>(()));
+        self.deadline.set(None);
+        match r {
+            Ok(on) => on,
+            Err(e) => {
+                let e = format!("when: {}", first_line(&e.to_string()));
+                if !self.errors.contains(&e) {
+                    self.errors.push(e);
+                }
+                false
             }
         }
     }

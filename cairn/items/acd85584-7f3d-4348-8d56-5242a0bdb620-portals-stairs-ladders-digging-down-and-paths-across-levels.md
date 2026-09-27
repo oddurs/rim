@@ -2,15 +2,15 @@
 id: acd85584-7f3d-4348-8d56-5242a0bdb620
 title: 'Portals: stairs, ladders, digging down, and paths across levels'
 type: feature
-status: review
+status: done
 milestone: depth
 assignee: Oddur Sigurdsson
-claimed: 2026-09-27
 depends_on:
 - 3f90e043-bf62-48c8-ac67-d043dc755b6e
 - c1089360-a315-4641-9b99-d4d4d33cecda
 created: 2026-09-26
 updated: 2026-09-27
+closed_at: 2026-09-27
 priority: p0
 api: additive
 effort: l

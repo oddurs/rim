@@ -13,7 +13,8 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `act.cycle_overlay` | `() -> ()` | Show the next field overlay. |
 | `act.delete_role` | `(role: number) -> ()` | Delete one of the player's own work roles (a role from a mod can't be deleted), by its index in view.board().roles. Its members go to the default role and keep their pins; the roles after it move down one. |
 | `act.draft` | `(id: number, on: boolean) -> ()` | Draft or undraft a colonist. |
-| `act.focus` | `(id: number) -> ()` | Move the camera to a pawn or thing. |
+| `act.focus` | `(id: number) -> ()` | Move the camera to a pawn or thing, and to its level. |
+| `act.level` | `(z: number) -> ()` | Show level z: 0 is the surface, below it is negative. Past the top or bottom level it stays at the last. |
 | `act.load` | `(path: string) -> ()` | Play a save from view.saves() (the title screen). |
 | `act.mark_urgent` | `(id: number, on: boolean) -> ()` | Mark a job urgent (a blueprint, a thing or creature marked for work, an order's site), or clear it: everyone takes it a level sooner than its work type. |
 | `act.new_colony` | `() -> ()` | Start a new colony (the title screen). |
@@ -46,7 +47,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `act.zone_allow` | `(zone: number, item: string, on: boolean) -> ()` | Let a stockpile take an item, or stop it. |
 | `act.zoom` | `(factor: number) -> ()` | Zoom the map by a factor about the middle of the screen (1.12 is one wheel notch in). |
 | `ui.anchored` | `(node: Node?) -> Node` | A node attached to a pawn (entity) or cell, on the anchored layer. |
-| `ui.bind` | `(id: string, opts: { key: string?, label: string? }, run: () -> ()) -> ()` | A named action with a default key ("space", "f3", "ctrl+k"): it fires from the key when no text input is typing, and from the command palette. With no key it is in the palette alone. The player's keybinds file overrides the key. Two mods binding one id or one key is reported. |
+| `ui.bind` | `(id: string, opts: { key: string?, label: string?, when: (() -> boolean)? }, run: () -> ()) -> ()` | A named action with a default key ("space", "f3", "ctrl+k"): it fires from the key when no text input is typing, and from the command palette. With no key it is in the palette alone. With when, the key is the action's only while when returns true; otherwise the key goes on to the game (Tab to the next colonist). The player's keybinds file overrides the key. Two mods binding one id or one key is reported. |
 | `ui.close` | `(id: string) -> ()` | Close a window. |
 | `ui.col` | `(node: Node?) -> Node` | A column: children top to bottom. |
 | `ui.define` | `(id: string, build: (view: any) -> Node?) -> ()` | Define a component under a namespaced id. |
@@ -100,6 +101,9 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `view.item_categories` | `() -> ItemCategories` | The item category tree stores filter by: the top level in order, and each category by id with its children, the items directly in it, and every item under it. |
 | `view.items` | `() -> { Item }` | Every item def, which a stockpile can take or refuse. |
 | `view.last_order` | `() -> { label: string, age: number }?` | The last order given ("Gunnar will deconstruct wall") and how many seconds ago, or nil once it's been undone. |
+| `view.level` | `() -> number` | The level on screen: 0 is the surface, below it is negative. |
+| `view.level_of` | `(id: number) -> number?` | The level a pawn or thing is on. |
+| `view.levels` | `() -> { { z: number, colonists: number, others: number, reached: boolean } }` | Every level, the highest first: the colonists and other creatures on it, and whether it is reached (the surface and above, or a level a portal goes down to or a pit looks into). |
 | `view.look` | `(thing: string, made_of: string?) -> number` | A thing's world look, tinted by what it's made of, as an index a token node's `look` takes (kind = "token"; `kit.item` builds one). Made once per thing and material. |
 | `view.markable` | `(x: number, y: number) -> Markable?` | The job on a tile an urgent mark could go on, with whether it has one. |
 | `view.marked` | `() -> { [string]: number }` | How many things each designation has marked, by designation id; ones with none are left out. |

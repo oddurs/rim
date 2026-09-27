@@ -188,8 +188,9 @@ fn cells(w: &World, a: IVec, b: IVec) -> impl Iterator<Item = IVec> {
     (y0..=y1).flat_map(move |y| (x0..=x1).map(move |x| IVec::at(x, y, a.z)))
 }
 
+/// Is `p` in the rectangle from `a` to `b`, on `a`'s level?
 fn in_rect(p: IVec, a: IVec, b: IVec) -> bool {
-    (a.x.min(b.x)..=a.x.max(b.x)).contains(&p.x) && (a.y.min(b.y)..=a.y.max(b.y)).contains(&p.y)
+    p.z == a.z && (a.x.min(b.x)..=a.x.max(b.x)).contains(&p.x) && (a.y.min(b.y)..=a.y.max(b.y)).contains(&p.y)
 }
 
 /// Something an order would act on: a thing, rock still asleep in its cell
