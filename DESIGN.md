@@ -394,6 +394,12 @@ of = [{ input = "hour", curve = [[3, -1.0], [9, 0.0], [15, 1.0], [21, 0.0], [27,
   wouldn't, and marks grown crops for harvest. Potatoes are food and
   frost-tender; flax is fibre and hardier. Both read warmth, light,
   fertility and the ground's wetness.
+- **Getting wet.** A field need's `wet = { field, soak, dry_hours, heat,
+  chill }` gives colonists a wetness (0 to 1, on the pawn): the field (core:
+  precipitation) soaks them outside an enclosed room, they dry by the hour
+  out of it, faster the warmer they are above comfort (a fire), and the
+  cold end of the need's comfort rises by `chill` times how wet they are.
+  Feels-like already chills rain while it falls; this is what lasts after.
 - **Tables keyed by label**, not arrays: a patch can change one term
   (`set = { ambient = { day = { scale = 11.0 } } }`) and conflicts are
   reported per term.

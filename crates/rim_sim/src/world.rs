@@ -245,6 +245,10 @@ pub struct Pawn {
     /// What it wears, off the map like a held tool: one garment a layer.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub worn: Vec<Entity>,
+    /// How soaked it is, in 1/10000ths: rain on it outdoors, dried indoors
+    /// and by warmth (a field need's `wet`).
+    #[serde(default, skip_serializing_if = "is_dry")]
+    pub wet: u16,
     /// Experience per skill, by skill def, sorted; a level follows from it.
     #[serde(default)]
     pub skills: Vec<(DefId, u32)>,
@@ -694,6 +698,10 @@ impl Growth {
 /// A harvest waiting on the plant's growth, not on a day: `Regrow`'s
 /// `ready_at` for it. The growth pass clears it once the plant is grown.
 pub const WHEN_GROWN: u64 = u64::MAX;
+
+fn is_dry(w: &u16) -> bool {
+    *w == 0
+}
 
 /// A garment on a pawn (`Pawn::worn`): off the map, out of the stock, and
 /// nobody else's to take.
@@ -3086,6 +3094,7 @@ impl World {
                 for g in &p.worn {
                     h = crate::rng::mix(h ^ g.to_bits().get() ^ 0x3057);
                 }
+                h = crate::rng::mix(h ^ (p.wet as u64) << 24 ^ 0x3e7);
             }
         }
         for t in self.ecs.query::<&Thing>().iter() {
