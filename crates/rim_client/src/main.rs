@@ -16,6 +16,7 @@ mod occluders;
 mod overlay;
 mod pattern;
 mod pinch;
+mod quality;
 mod quiet;
 mod roof;
 mod roomstate;
@@ -511,11 +512,21 @@ async fn game() {
     // The player's UI scale, unless the command line names one; the
     // autotest and the benchmark measure at 1.
     let tests = args.iter().any(|a| a == "--autotest" || a == "--bench-render");
+    let settings_file = if tests { None } else { player_file("settings.toml") };
+    // Read once. No file is the defaults; a file that can't be read is
+    // said, then the defaults.
+    let settings = settings_file.as_ref().and_then(|p| match std::fs::read_to_string(p) {
+        Ok(text) => Some(text),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) => {
+            eprintln!("  warning: settings file {}: {e}", p.display());
+            None
+        }
+    });
     let ui_scale = ui_scale_arg.unwrap_or_else(|| {
-        let saved =
-            (!tests).then(|| player_file("settings.toml")).flatten().and_then(|p| std::fs::read_to_string(p).ok());
-        saved
-            .map_or(Ok(None), |text| saved_ui_scale(&text))
+        settings
+            .as_deref()
+            .map_or(Ok(None), saved_ui_scale)
             .unwrap_or_else(|e| {
                 eprintln!("  warning: settings file: {e}");
                 None
@@ -535,29 +546,39 @@ async fn game() {
         }
     }
     let keys_file = if args.iter().any(|a| a == "--autotest") { None } else { player_file("keybinds.toml") };
-    let settings_file = if args.iter().any(|a| a == "--autotest" || a == "--bench-render") {
-        None
-    } else {
-        player_file("settings.toml")
-    };
     // What a scroll does on the map: the player's setting, else sorted by
     // device. The tests read devices as they come.
-    let scroll_mode = settings_file
-        .as_ref()
-        .and_then(|p| std::fs::read_to_string(p).ok())
+    let scroll_mode = settings
+        .as_deref()
         .and_then(|text| {
-            saved_scroll_mode(&text).unwrap_or_else(|e| {
+            saved_scroll_mode(text).unwrap_or_else(|e| {
                 eprintln!("  warning: settings file: {e}");
                 None
             })
         })
         .unwrap_or_default();
-    let render_scale = if args.iter().any(|a| a == "--autotest" || a == "--bench-render") {
+    // `--lighting <preset>` for the bench and tests; else the settings file.
+    let lighting = match args.windows(2).find(|w| w[0] == "--lighting") {
+        Some(w) => quality::Setting::named(&w[1]).unwrap_or_else(|| {
+            eprintln!("  warning: --lighting wants low, medium, high or ultra, not {}", w[1]);
+            quality::Setting::default()
+        }),
+        None => settings
+            .as_deref()
+            .and_then(|text| {
+                quality::Setting::from_settings(text).unwrap_or_else(|e| {
+                    eprintln!("  warning: settings file: {e}");
+                    None
+                })
+            })
+            .unwrap_or_default(),
+    };
+    let render_scale = if tests {
         // They measure full resolution unless they ask.
         Some(1.0)
     } else {
-        match settings_file.as_ref().and_then(|p| std::fs::read_to_string(p).ok()) {
-            Some(text) => saved_render_scale(&text).unwrap_or_else(|e| {
+        match settings.as_deref() {
+            Some(text) => saved_render_scale(text).unwrap_or_else(|e| {
                 eprintln!("  warning: settings file: {e}");
                 None
             }),
@@ -660,7 +681,7 @@ async fn game() {
         sky: sky::Sky::default(),
         roofs: roof::Roofs::default(),
         marks: roomstate::RoomMarks::default(),
-        light: light::Light::default(),
+        light: light::Light::with(lighting),
         ground: draw::Ground::default(),
         render_us: RenderTimes::default(),
         meshes: mesh::Meshes::default(),
@@ -1402,7 +1423,10 @@ pub fn render(app: &mut App) {
     let mut t = RenderTimes::default();
     // Light's own targets first, while the camera is the screen's.
     let air = sky::Air::read(&app.sim.world);
-    app.light.prepare(&app.sim.world, &air);
+    // The world's pixels a cell: the zoom, at the screen's density and the
+    // render scale it's drawn at.
+    let px_per_cell = app.cam.zoom * screen_dpi_scale() * app.render_scale.unwrap_or(1.0);
+    app.light.prepare(&app.sim.world, &air, px_per_cell);
     t.light = lap();
     update_world_target(app);
     let (sw, sh) = (screen_width(), screen_height());
