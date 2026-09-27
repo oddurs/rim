@@ -11,8 +11,8 @@ color = "#8a7a64"
 category = "building"
 look.layers = [
     { draw = "fill", x = 0.22, y = 0.22, w = 0.56, h = 0.56 },
-    { draw = "outline", x = 0.22, y = 0.22, w = 0.56, h = 0.56, width = 1.5, shade = 0.55 },
-    { draw = "outline", x = 0.34, y = 0.34, w = 0.32, h = 0.32, width = 1.0, shade = 0.7 },
+    { draw = "outline", x = 0.22, y = 0.22, w = 0.56, h = 0.56, line = "medium", shade = 0.55 },
+    { draw = "outline", x = 0.34, y = 0.34, w = 0.32, h = 0.32, line = "light", shade = 0.7 },
 ]
 blocks = true
 hp = 180

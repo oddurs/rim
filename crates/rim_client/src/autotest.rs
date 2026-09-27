@@ -932,6 +932,49 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.app.cam.zoom = 40.0;
     t.app.cam.zoom = zoom;
 
+    // ---------------------------------------------------------- the plan style
+    println!("\n# every core building is drawn in the plan style (DESIGN.md §6c)");
+    let gallery = [
+        [
+            "core:wall",
+            "core:wall",
+            "core:window",
+            "core:door",
+            "core:wall",
+            "",
+            "core:fence",
+            "core:gate",
+            "core:fence",
+        ],
+        ["core:bed", "", "core:table", "core:chair", "", "core:stove", "", "core:campfire", ""],
+        ["core:floor", "core:floor", "", "core:pillar", "", "crafting:spot", "", "crafting:workbench", ""],
+    ];
+    let free = |w: &World, p: IVec| w.map.passable(p) && w.map.fixture_at(p).is_none() && w.map.item_at(p).is_none();
+    t.clear_dock().await;
+    let corner = (2..40i32)
+        .flat_map(|r| (-r..=r).flat_map(move |dy| (-r..=r).map(move |dx| home.offset(dx, dy))))
+        .find(|&o| (-1..7).all(|y| (-1..10).all(|x| free(t.w(), o.offset(x, y)))));
+    let mut placed = 0;
+    if let Some(o) = corner {
+        for (row, ids) in gallery.iter().enumerate() {
+            for (x, id) in ids.iter().enumerate().filter(|(_, id)| !id.is_empty()) {
+                let Some(def) = t.w().defs.thing_id(id) else { continue };
+                let stuff = t.w().defs.thing(def).build.as_ref().and_then(|b| b.stuff.as_ref()).map(|_| wood);
+                let p = o.offset(x as i32, row as i32 * 2);
+                placed += t.app.sim.world.spawn_fixture_of(def, p, false, stuff).is_some() as usize;
+            }
+        }
+        t.app.sim.world.map.ensure_rooms();
+        let zoom = t.app.cam.zoom;
+        t.app.cam.zoom = 56.0;
+        t.focus(o.offset(4, 2));
+        t.grab().await;
+        t.shot("plan_gallery").await;
+        t.app.cam.zoom = zoom;
+    }
+    let want = gallery.iter().flatten().filter(|id| !id.is_empty()).count();
+    t.check(placed == want, format!("the gallery holds every core building ({placed} of {want})"));
+
     // ---------------------------------------------------------- 0215 materials
     println!("\n# pick the material before you place it (0215)");
     t.clear_dock().await;

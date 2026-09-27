@@ -17,7 +17,7 @@ look.join = { group = "wall", round = 0.22 }
 look.layers = [
     { draw = "mass", grow = [0.0, 0.8] },
     { draw = "pattern", grow = [0.8, 0.9] },
-    { draw = "edges", width = 1.5, shade = 0.55, grow = [0.9, 1.0] },
+    { draw = "edges", line = "heavy", shade = 0.55, grow = [0.9, 1.0] },
 ]
 blocks = true
 hp = 200
@@ -42,7 +42,7 @@ look.orient = "run"
 look.layers = [
     { draw = "fill", w = 0.12, shade = 0.75 },
     { draw = "fill", x = 0.88, w = 0.12, shade = 0.75 },
-    { draw = "arc", x = 0.12, r = 0.76, from = 0, to = 90, width = 1.0, shade = 0.45, into = "room" },
+    { draw = "arc", x = 0.12, r = 0.76, from = 0, to = 90, line = "light", shade = 0.45, into = "room" },
     { draw = "fill", x = 0.12, y = 0.5, w = 0.1, h = 0.76, shade = 0.5, into = "room" },
     { draw = "fill", x = 0.14, y = 0.52, w = 0.06, h = 0.72, shade = 1.1, into = "room" },
 ]
@@ -76,7 +76,7 @@ look.layers = [
     { draw = "fill", y = 0.36, h = 0.0, min_px = 1.0, shade = 0.5 },
     { draw = "fill", y = 0.64, h = 0.0, min_px = 1.0, shade = 0.5 },
     { draw = "fill", y = 0.5, h = 0.0, min_px = 1.0, color = "#5a8cc8" },
-    { draw = "edges", width = 1.5, shade = 0.55 },
+    { draw = "edges", line = "heavy", shade = 0.55 },
 ]
 blocks = true
 hp = 60
@@ -91,9 +91,13 @@ id = "bed"
 label = "bed"
 color = "#8c5a3a"
 category = "building"
+# Furniture is a plan symbol (DESIGN.md §6c): outlined in ink at the
+# light weight, in its material's colour. A bed's head is its north end.
 look.layers = [
-    { draw = "fill", x = 0.12, y = 0.05, w = 0.76, h = 0.9 },
-    { draw = "fill", x = 0.18, y = 0.1, w = 0.64, h = 0.22, color = "#e6e1d2" },
+    { draw = "box", x = 0.1, y = 0.04, w = 0.8, h = 0.92, round = 0.07, shade = 1.05 },
+    { draw = "box", x = 0.16, y = 0.4, w = 0.68, h = 0.5, round = 0.04, color = "#b9ae95" },
+    { draw = "line", start = [0.16, 0.56], end = [0.84, 0.56], line = "hair", color = "#8a806a" },
+    { draw = "box", x = 0.22, y = 0.1, w = 0.56, h = 0.22, round = 0.1, color = "#ece6d6" },
 ]
 tags = ["bed"]
 market_value = 40
@@ -125,11 +129,11 @@ id = "table"
 label = "table"
 color = "#8c6a48"
 category = "building"
-# A slab on two legs.
+# Its top, seen from above, with the grain of its boards.
 look.layers = [
-    { draw = "fill", x = 0.14, y = 0.55, w = 0.1, h = 0.35, shade = 0.6 },
-    { draw = "fill", x = 0.76, y = 0.55, w = 0.1, h = 0.35, shade = 0.6 },
-    { draw = "fill", x = 0.06, y = 0.3, w = 0.88, h = 0.28 },
+    { draw = "box", x = 0.06, y = 0.14, w = 0.88, h = 0.72, shade = 1.08 },
+    { draw = "line", start = [0.14, 0.38], end = [0.86, 0.38], line = "hair", shade = 0.7 },
+    { draw = "line", start = [0.14, 0.62], end = [0.86, 0.62], line = "hair", shade = 0.7 },
 ]
 path_cost = 80
 hp = 120
@@ -143,14 +147,12 @@ id = "chair"
 label = "chair"
 color = "#a07a50"
 category = "building"
-# A seat with a back.
+# A seat and its back, seen from above.
 # It turns to face the table beside it, however it was placed.
 look.face = "beside:table"
 look.layers = [
-    { draw = "fill", x = 0.28, y = 0.15, w = 0.44, h = 0.18, shade = 0.7 },
-    { draw = "fill", x = 0.25, y = 0.4, w = 0.5, h = 0.3 },
-    { draw = "fill", x = 0.3, y = 0.7, w = 0.08, h = 0.22, shade = 0.6 },
-    { draw = "fill", x = 0.62, y = 0.7, w = 0.08, h = 0.22, shade = 0.6 },
+    { draw = "box", x = 0.26, y = 0.36, w = 0.48, h = 0.44, round = 0.07, shade = 1.1 },
+    { draw = "box", x = 0.2, y = 0.16, w = 0.6, h = 0.14, round = 0.04, shade = 0.8 },
 ]
 path_cost = 40
 hp = 80
@@ -167,11 +169,12 @@ id = "stove"
 label = "stove"
 color = "#5a534d"
 category = "building"
-# A box with a warm mouth; steady, unlike a fire.
+# Its body, its firebox and the steady glow inside, unlike a fire's.
 look.layers = [
-    { draw = "fill", x = 0.12, y = 0.12, w = 0.76, h = 0.76, shade = 0.85 },
-    { draw = "outline", x = 0.12, y = 0.12, w = 0.76, h = 0.76, width = 1.5, shade = 0.5 },
-    { draw = "fill", x = 0.3, y = 0.45, w = 0.4, h = 0.3, color = "#ff963c" },
+    { draw = "box", x = 0.1, y = 0.1, w = 0.8, h = 0.8, round = 0.08, shade = 0.85 },
+    { draw = "box", x = 0.26, y = 0.26, w = 0.48, h = 0.48, round = 0.1, color = "#2a211c" },
+    { draw = "disc", r = 0.15, color = "#ff8c3a" },
+    { draw = "disc", y = 0.52, r = 0.07, color = "#ffd27a" },
 ]
 path_cost = 90
 hp = 150
@@ -188,10 +191,17 @@ id = "campfire"
 label = "campfire"
 color = "#e07b2a"
 category = "building"
+# A ring of stones round the flame.
 look.layers = [
-    { draw = "disc", r = 0.38, color = "#463c37" },
-    { draw = "disc", r = 0.24, pulse = 0.08 },
-    { draw = "disc", r = 0.12, pulse = 0.08, color = "#ffdc78" },
+    { draw = "disc", x = 0.8, y = 0.5, r = 0.09, color = "#8f8a82", shade = 1.1 },
+    { draw = "disc", x = 0.69, y = 0.73, r = 0.09, color = "#8f8a82", shade = 0.95 },
+    { draw = "disc", x = 0.43, y = 0.79, r = 0.09, color = "#8f8a82", shade = 1.05 },
+    { draw = "disc", x = 0.23, y = 0.63, r = 0.09, color = "#8f8a82", shade = 0.9 },
+    { draw = "disc", x = 0.23, y = 0.37, r = 0.09, color = "#8f8a82", shade = 1.15 },
+    { draw = "disc", x = 0.43, y = 0.21, r = 0.09, color = "#8f8a82", shade = 1.0 },
+    { draw = "disc", x = 0.69, y = 0.27, r = 0.09, color = "#8f8a82", shade = 0.9 },
+    { draw = "disc", r = 0.17, pulse = 0.08 },
+    { draw = "disc", y = 0.52, r = 0.08, pulse = 0.08, color = "#ffdc78" },
 ]
 tags = ["fire"]
 market_value = 20

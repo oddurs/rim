@@ -13,18 +13,22 @@ invisible.
 ## Layers
 
 Positions and sizes are in cells, from the cell's top-left corner: `x = 0.5`
-is the middle. Line widths are in screen points.
+is the middle. A line is either `width`, in screen points, or `line`, one
+of the plan's four weights, which grows with the zoom (see
+[Line weights](#line-weights)).
 
 | `draw` | fields | draws |
 |---|---|---|
 | `fill` | `x`, `y`, `w`, `h` (0, 0, 1, 1), `min_px` | a rectangle |
-| `outline` | `x`, `y`, `w`, `h`, `width` (1) | a rectangle's outline |
+| `outline` | `x`, `y`, `w`, `h`, `width` (1) or `line` | a rectangle's outline |
+| `box` | `x`, `y`, `w`, `h`, `round` (0.06), `line` (`"light"`) | a plan symbol's body: a rounded rectangle, filled and outlined in ink |
+| `line` | `start`, `end` (each `[x, y]`), `width` (1) or `line` | a straight line |
 | `disc` | `x`, `y` (0.5, 0.5), `r` (0.4), `min_px`, `pulse` | a disc |
-| `edges` | `width` (1.5) | the cell's border, left open toward joined neighbours |
+| `edges` | `width` (1.5) or `line` | the cell's border, left open toward joined neighbours |
 | `pipe` | `width` (1.5), `rails` (2), `post` (0.26), `spacing` (3) | a fence: rails toward what it joins, posts where it needs them (see [Fences](#fences)) |
 | `mass` | | the whole cell, rounded at its outer corners (see [Joining](#joining)) |
 | `pattern` | `pattern` (`"material"`) | hairlines in a material's pattern (see [Materials](#materials)) |
-| `arc` | `x`, `y` (0.5, 0.5), `r` (0.4), `from`, `to` (0, 90), `width` (1) | an arc, in degrees clockwise from east |
+| `arc` | `x`, `y` (0.5, 0.5), `r` (0.4), `from`, `to` (0, 90), `width` (1) or `line` | an arc, in degrees clockwise from east |
 | `sprite` | see [Sprites](#sprites) | a mod's picture |
 | `glyph` | see [Glyphs](#glyphs) | one character |
 
@@ -59,6 +63,40 @@ look.layers = [
     { draw = "disc", x = 0.42, y = 0.42, r = 0.14, shade = 1.3, min_px = 1.0 },
 ]
 ```
+
+## Line weights
+
+The plan is drawn in four line weights (DESIGN.md §6c), named so a mod
+draws in the same hand as core. They grow with the zoom and never vanish:
+heavier always stays heavier.
+
+| `line` | For | Core uses it on |
+|---|---|---|
+| `heavy` | a wall's contour | walls, windows |
+| `medium` | an opening, a post, a rock face | pillars, granite |
+| `light` | furniture, a door's swing | every `box`, the door's arc |
+| `hair` | detail inside a symbol | a table's grain, a bed's fold |
+
+Furniture is a plan symbol: the thing seen from above as `box`es in its
+material's colour, each outlined in the same ink, with `hair` lines for
+detail. Core's bed, as a mod would write one:
+
+```toml
+[[thing]]
+id = "cot"
+label = "cot"
+color = "#8c5a3a"
+category = "building"
+look.layers = [
+    { draw = "box", x = 0.1, y = 0.04, w = 0.8, h = 0.92, round = 0.07, shade = 1.05 },
+    { draw = "box", x = 0.16, y = 0.4, w = 0.68, h = 0.5, round = 0.04, color = "#b9ae95" },
+    { draw = "line", start = [0.16, 0.56], end = [0.84, 0.56], line = "hair", color = "#8a806a" },
+    { draw = "box", x = 0.22, y = 0.1, w = 0.56, h = 0.22, round = 0.1, color = "#ece6d6" },
+]
+```
+
+A symbol is written facing south (its head, back or working side to the
+north) and turns with the thing: see [Facing](#facing).
 
 ## Sprites
 
@@ -222,13 +260,13 @@ look.orient = "run"
 look.layers = [
     { draw = "fill", w = 0.12, shade = 0.75 },
     { draw = "fill", x = 0.88, w = 0.12, shade = 0.75 },
-    { draw = "arc", x = 0.12, r = 0.76, from = 0, to = 90, width = 1.0, shade = 0.45, into = "room" },
+    { draw = "arc", x = 0.12, r = 0.76, from = 0, to = 90, line = "light", shade = 0.45, into = "room" },
     { draw = "fill", x = 0.12, y = 0.5, w = 0.1, h = 0.76, shade = 0.5, into = "room" },
 ]
 ```
 
 `orient` needs `join`, since it follows the run. `into` applies to
-`fill`, `outline`, `disc` and `arc`. Edges, masses, sprites and glyphs
+`fill`, `outline`, `box`, `line`, `disc` and `arc`. Edges, masses, sprites and glyphs
 don't turn. A layer may reach past its cell (a leaf swinging into the
 room does). Only one-cell things turn. A gate in a fence:
 

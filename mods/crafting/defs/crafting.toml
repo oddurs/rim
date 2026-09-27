@@ -71,11 +71,18 @@ id = "spot"
 label = "crafting spot"
 color = "#b39b72"
 category = "building"
+# Marked out on the plan as a dashed ring, with the chips of work in it.
 look.layers = [
-    { draw = "disc", r = 0.36, color = "#00000030" },
-    { draw = "disc", x = 0.36, y = 0.44, r = 0.07, shade = 0.8 },
-    { draw = "disc", x = 0.6, y = 0.58, r = 0.09, shade = 0.7 },
-    { draw = "disc", x = 0.52, y = 0.36, r = 0.05 },
+    { draw = "disc", r = 0.36, color = "#00000026" },
+    { draw = "arc", r = 0.36, from = 0, to = 36, line = "light", color = "#ffffff8c" },
+    { draw = "arc", r = 0.36, from = 60, to = 96, line = "light", color = "#ffffff8c" },
+    { draw = "arc", r = 0.36, from = 120, to = 156, line = "light", color = "#ffffff8c" },
+    { draw = "arc", r = 0.36, from = 180, to = 216, line = "light", color = "#ffffff8c" },
+    { draw = "arc", r = 0.36, from = 240, to = 276, line = "light", color = "#ffffff8c" },
+    { draw = "arc", r = 0.36, from = 300, to = 336, line = "light", color = "#ffffff8c" },
+    { draw = "disc", x = 0.4, y = 0.46, r = 0.06, shade = 0.8 },
+    { draw = "disc", x = 0.6, y = 0.56, r = 0.07, shade = 0.7 },
+    { draw = "disc", x = 0.54, y = 0.38, r = 0.045 },
 ]
 hp = 30
 tags = ["crafting:hand"]
@@ -88,11 +95,14 @@ id = "workbench"
 label = "workbench"
 color = "#94704c"
 category = "building"
+# Its top from above: a vice at one end and the marks of the tools laid on
+# it. Whoever works it stands on the south side.
 look.layers = [
-    { draw = "fill", x = 0.1, y = 0.62, w = 0.1, h = 0.3, shade = 0.6 },
-    { draw = "fill", x = 0.8, y = 0.62, w = 0.1, h = 0.3, shade = 0.6 },
-    { draw = "fill", x = 0.04, y = 0.3, w = 0.92, h = 0.34 },
-    { draw = "fill", x = 0.2, y = 0.36, w = 0.24, h = 0.08, shade = 0.75 },
+    { draw = "box", x = 0.06, y = 0.12, w = 0.88, h = 0.7, round = 0.05, shade = 1.08 },
+    { draw = "box", x = 0.14, y = 0.22, w = 0.24, h = 0.22, round = 0.03, shade = 0.62 },
+    { draw = "line", start = [0.5, 0.34], end = [0.68, 0.34], line = "hair", shade = 0.55 },
+    { draw = "line", start = [0.76, 0.26], end = [0.76, 0.6], line = "hair", shade = 0.55 },
+    { draw = "line", start = [0.5, 0.52], end = [0.66, 0.68], line = "hair", shade = 0.55 },
 ]
 blocks = true
 hp = 150

@@ -890,14 +890,24 @@ fn paint(
             }
             Prim::Outline { rect, width } => {
                 let [x, y, rw, rh] = orient.rect(flip, rect);
-                outline(s, sx + x * zx, sy + y * zy, rw * zx, rh * zy, width, c);
+                outline(s, sx + x * zx, sy + y * zy, rw * zx, rh * zy, width.px(z), c);
+            }
+            Prim::Box { rect, round, line } => {
+                let [x, y, rw, rh] = orient.rect(flip, rect);
+                let [r, g, b, a] = rim_sim::look::INK;
+                let ink = Color::new(r, g, b, a * c.a);
+                rbox(s, (sx + x * zx, sy + y * zy, rw * zx, rh * zy), round * zr, c, line.px(z), ink);
+            }
+            Prim::Line { from, to, line } => {
+                let ([x0, y0], [x1, y1]) = (orient.pt(flip, from), orient.pt(flip, to));
+                s.line(sx + x0 * zx, sy + y0 * zy, sx + x1 * zx, sy + y1 * zy, line.px(z), c);
             }
             Prim::Disc { at, r, min_px, pulse } => {
                 let [x, y] = orient.pt(flip, at);
                 let f = if pulse > 0.0 { 1.0 + (t * 9.0 + cell.x as f32).sin() * pulse } else { 1.0 };
                 disc(s, sx + x * zx, sy + y * zy, (r * zr).max(min_px) * f, c);
             }
-            Prim::Edges { width } => edges(s, w, cell, span, join, (sx, sy), z, width, c),
+            Prim::Edges { width } => edges(s, w, cell, span, join, (sx, sy), z, width.px(z), c),
             Prim::Mass => {
                 mass(s, w, cell, span, join, (sx, sy), z, c);
                 massed = Some(c);
@@ -923,7 +933,7 @@ fn paint(
                 };
                 for k in 0..STEPS {
                     let ((x0, y0), (x1, y1)) = (point(k), point(k + 1));
-                    s.line(x0, y0, x1, y1, width, c);
+                    s.line(x0, y0, x1, y1, width.px(z), c);
                 }
             }
             Prim::Sprite { rect, id } => {
@@ -1176,6 +1186,29 @@ fn fan(s: &mut impl Sink, (cx, cy): (f32, f32), r: f32, a0: f32, a1: f32, c: Col
     for k in 0..n {
         s.tri([[cx, cy], at(k), at(k + 1)], c);
     }
+}
+
+/// A plan symbol's body: a rectangle with its corners rounded by `r`
+/// points, filled, and outlined `t` thick in `ink`, inside its bounds.
+fn rbox(s: &mut impl Sink, (x, y, w, h): (f32, f32, f32, f32), r: f32, fill: Color, t: f32, ink: Color) {
+    use std::f32::consts::{FRAC_PI_2, PI};
+    let r = r.min(w / 2.0).min(h / 2.0).max(0.0);
+    s.rect(x + r, y, w - 2.0 * r, h, fill);
+    s.rect(x, y + r, r, h - 2.0 * r, fill);
+    s.rect(x + w - r, y + r, r, h - 2.0 * r, fill);
+    let corners =
+        [(x + r, y + r, PI), (x + w - r, y + r, 1.5 * PI), (x + w - r, y + h - r, 0.0), (x + r, y + h - r, FRAC_PI_2)];
+    for (cx, cy, a0) in corners {
+        if r > 0.0 {
+            fan(s, (cx, cy), r, a0, a0 + FRAC_PI_2, fill);
+            arc(s, (cx, cy), (r - t / 2.0).max(0.0), a0, a0 + FRAC_PI_2, t, ink);
+        }
+    }
+    let (inner_w, inner_h) = ((w - 2.0 * r).max(0.0), (h - 2.0 * r).max(0.0));
+    s.rect(x + r, y, inner_w, t, ink);
+    s.rect(x + r, y + h - t, inner_w, t, ink);
+    s.rect(x, y + r, t, inner_h, ink);
+    s.rect(x + w - t, y + r, t, inner_h, ink);
 }
 
 /// An arc about `(cx, cy)` `t` thick, as short straight lines.
