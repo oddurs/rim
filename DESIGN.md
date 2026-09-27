@@ -2011,6 +2011,10 @@ than 4 screen pixels: at the minimum zoom (4 px a cell) the buffer drops to
   where a query times the whole tile pass. CI's runner draws with llvmpipe,
   so its GPU column is the CPU rasterising, useful only relative to itself;
   GPU budgets are read on a real immediate-mode GPU.
+- **Sun shadows** (8f4f1de8, same machine): the sun pass costs 0.15 ms of
+  CPU when it runs, on a 500 × 500 target, and nothing on the frames it
+  doesn't; with the sun moving 0.25° between runs, that is none of a
+  steady frame. The multiply is one draw call and 0.008 ms.
 - **Costs we accept:** height-map shadows are 2.5D (a canopy shades like a
   column); four flicker channels share colours; a static torch's shadow never
   sways; 8-bit buffers need dither in the dark.

@@ -13,6 +13,10 @@ night = "#4a5478"
 firelight = "#ffb060"
 # Daylight through the windows of an enclosed room.
 indoor_share = 0.45
+# Where the sun is, for shadows: up with the daylight field at 05:00, down at
+# 21:00, 60° at its highest, rising in the east (0°) and setting a little
+# north of west (190°, the map's y grows south).
+sun = { rise = 5.0, set = 21.0, peak = 60.0, arc = [-10.0, 190.0] }
 
 [sky.tint.dawn]
 color = "#ffa066"

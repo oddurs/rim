@@ -844,10 +844,28 @@ pub struct SkyDef {
     /// windows (the `light` field itself is 0 indoors).
     #[serde(default = "dshare")]
     pub indoor_share: f64,
+    /// Where the sun crosses the sky, for the shadows the renderer casts
+    /// (DESIGN.md §6e). How bright it is stays the `daylight` field; this
+    /// is only where it is. Unset: no sun shadows.
+    #[serde(default)]
+    pub sun: Option<SunPath>,
     #[serde(skip)]
     pub rgb_night: [u8; 3],
     #[serde(skip)]
     pub rgb_fire: [u8; 3],
+}
+
+/// A sky body's daily path: up at `rise`, down at `set` (hours), highest at
+/// noon between them, crossing from azimuth `arc[0]` to `arc[1]` (degrees;
+/// 0 is east, 90 south, the way the map's y grows).
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SunPath {
+    pub rise: f64,
+    pub set: f64,
+    /// Elevation at its highest, degrees.
+    pub peak: f64,
+    pub arc: [f64; 2],
 }
 
 impl Default for SkyDef {
@@ -858,6 +876,7 @@ impl Default for SkyDef {
             night: dnight(),
             firelight: dfire(),
             indoor_share: dshare(),
+            sun: None,
             rgb_night: [74, 84, 120],
             rgb_fire: [255, 176, 96],
         }
@@ -1948,6 +1967,17 @@ impl DefDb {
         let field_index = |id: &str| field_in(&sky_home, id);
         sky.rgb_night = parse_color(&sky.night).map_err(|e| format!("sky/{}: {e}", sky.id))?;
         sky.rgb_fire = parse_color(&sky.firelight).map_err(|e| format!("sky/{}: {e}", sky.id))?;
+        if let Some(sun) = &sky.sun {
+            let hours = |h: f64| (0.0..24.0).contains(&h);
+            if !(hours(sun.rise) && hours(sun.set) && sun.rise != sun.set && (0.0..=90.0).contains(&sun.peak))
+                || !sun.arc.iter().all(|a| a.is_finite())
+            {
+                return Err(format!(
+                    "sky/{}: sun needs rise and set hours from 0 to 24, apart, and a peak of 0 to 90°",
+                    sky.id
+                ));
+            }
+        }
         for (label, t) in &mut sky.tint {
             let ctx = format!("sky/{}, tint '{label}'", sky.id);
             t.rgb = parse_color(&t.color).map_err(|e| format!("{ctx}: {e}"))?;

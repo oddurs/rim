@@ -25,7 +25,7 @@
 //! writes the numbers, `--shots DIR` saves a screenshot of each view, and
 //! `--frames N` sets the frames per view.
 
-use crate::{frame, render, sky::PassTime, App, RawInput, RenderTimes, MIN_ZOOM};
+use crate::{frame, light::PassTime, render, App, RawInput, RenderTimes, MIN_ZOOM};
 use macroquad::prelude::*;
 use macroquad::telemetry;
 use rim_sim::defs::Category;
@@ -455,7 +455,7 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
             // Submit: macroquad's end of frame, and the meshes' mid-frame.
             let submit = zone(&zones, "Event::draw end_frame").unwrap_or(0.0) + app.render_us.gl;
             r.frames.push((app.render_us, submit, zone(&zones, "glFinish/glFLush")));
-            passes.push(app.sky.passes.clone());
+            passes.push(app.light.passes.clone());
         }
         // A gesture's numbers are for the zoom it ended on.
         r.zoom = app.cam.zoom;
@@ -473,13 +473,13 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
         r.live = app.meshes.live_count();
         // The lighting passes' GPU time, on frames of their own after
         // everything above, which they would disturb.
-        app.sky.time_gpu(true);
+        app.light.time_gpu(true);
         let mut waited = Vec::with_capacity(GPU_FRAMES);
         for _ in 0..GPU_FRAMES {
             draw_one(&mut app, &mut time, None).await;
-            waited.push(app.sky.passes.clone());
+            waited.push(app.light.passes.clone());
         }
-        app.sky.time_gpu(false);
+        app.light.time_gpu(false);
         r.passes = pass_means(&passes, &waited);
         results.push(r);
     }
@@ -490,16 +490,16 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
     let last = results.last().map_or("", |r: &Run| r.name);
     let cached: Vec<&'static str> =
         results.last().map_or(Vec::new(), |r| r.passes.iter().filter(|p| p.ran < 1.0).map(|p| p.name).collect());
-    app.sky.time_gpu(true);
+    app.light.time_gpu(true);
     let mut rebuilds: Vec<Vec<PassTime>> = Vec::with_capacity(REBUILDS);
     for _ in 0..REBUILDS {
-        app.sky.invalidate();
+        app.light.invalidate();
         draw_one(&mut app, &mut time, None).await;
-        rebuilds.push(app.sky.passes.iter().filter(|p| cached.contains(&p.name)).copied().collect());
+        rebuilds.push(app.light.passes.iter().filter(|p| cached.contains(&p.name)).copied().collect());
     }
-    app.sky.time_gpu(false);
+    app.light.time_gpu(false);
     let rebuilt = pass_means(&rebuilds, &rebuilds);
-    let renderer = crate::sky::gl_renderer();
+    let renderer = crate::light::gl_renderer();
 
     println!(
         "render bench: {SIZE}×{SIZE}, {} colonists, {} pawns, {}×{} points at {dpi}x, {frames} frames per view",
@@ -575,7 +575,7 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
         })
         .collect();
     println!("light rebuild on {last}, ms: {}", costs.join("; "));
-    let soft = if crate::sky::software_gl(&renderer) { " (software: gpu times are the CPU rasterising)" } else { "" };
+    let soft = if crate::light::software_gl(&renderer) { " (software: gpu times are the CPU rasterising)" } else { "" };
     println!("gl: {renderer}{soft}");
 
     if let Some(path) = opt("--json") {

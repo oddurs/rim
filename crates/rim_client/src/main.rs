@@ -10,6 +10,7 @@ mod autotest;
 mod bench;
 mod cli;
 mod draw;
+mod light;
 mod mesh;
 mod occluders;
 mod pattern;
@@ -147,12 +148,14 @@ pub struct App {
     last_precise: f64,
     /// The last order given, so it can be taken back.
     pub last_order: Option<LastOrder>,
-    /// Lighting and weather on screen.
+    /// Weather on screen.
     pub sky: sky::Sky,
     /// Roofs from far away, rebuilt when rooms are.
     pub roofs: roof::Roofs,
     /// Gaps and open sky, rebuilt when rooms are.
     pub marks: roomstate::RoomMarks,
+    /// Light on screen: shadows, firelight, and the multiply over the world.
+    pub light: light::Light,
     /// The terrain, baked into a texture.
     pub ground: draw::Ground,
     /// What each render pass cost last frame.
@@ -646,6 +649,7 @@ async fn game() {
         sky: sky::Sky::default(),
         roofs: roof::Roofs::default(),
         marks: roomstate::RoomMarks::default(),
+        light: light::Light::default(),
         ground: draw::Ground::default(),
         render_us: RenderTimes::default(),
         meshes: mesh::Meshes::default(),
@@ -1368,6 +1372,10 @@ pub fn render(app: &mut App) {
         us
     };
     let mut t = RenderTimes::default();
+    // Light's own targets first, while the camera is the screen's.
+    let air = sky::Air::read(&app.sim.world);
+    app.light.prepare(&app.sim.world, &air);
+    t.light = lap();
     update_world_target(app);
     let (sw, sh) = (screen_width(), screen_height());
     if let Some(rt) = &app.world_target {
@@ -1387,20 +1395,19 @@ pub fn render(app: &mut App) {
     t.things = lap() - t.gl;
     draw::pawns(app);
     t.pawns = lap();
-    let air = sky::Air::read(&app.sim.world);
     app.sky.weather(&app.sim.world, &app.cam, &air);
     t.weather = lap();
-    app.sky.light(&app.sim.world, &app.cam, &air);
-    // Roofs are outdoors whatever is under them: after the lightmap,
-    // lit by the sky. The house under the pointer lifts its roof.
+    app.light.multiply(&app.sim.world, &app.cam, &air, app.sky.flash());
+    // Roofs are outdoors whatever is under them: after the light, lit by
+    // the sky. The house under the pointer lifts its roof.
     app.roofs.update(&app.sim.world);
     let alpha = roof::Roofs::alpha(app.cam.zoom);
     if alpha > 0.0 {
         let lifted = app.hover_cell.map_or(0, |p| app.roofs.house_at(&app.sim.world, p));
-        let tint = app.sky.outdoor(&app.sim.world, &air);
+        let tint = light::Light::outdoor(&app.sim.world, &air, app.sky.flash());
         app.roofs.draw(&app.sim.world, &app.cam, draw::visible(app), alpha, lifted, tint);
     }
-    t.light = lap();
+    t.light += lap();
     if let Some(rt) = &app.world_target {
         set_default_camera();
         if app.blit.is_none() {

@@ -267,6 +267,23 @@ color = "#7dffa0"
 of = [{ input = "hour", curve = [[21.0, 0.0], [23.0, 0.35], [24.0, 0.35]] }]
 ```
 
+The sun's brightness is the `daylight` field; where it is in the sky, for
+the shadows it casts, is `sun` on `[[sky]]`: the hours it rises and sets,
+how high it climbs, and the arc of azimuths it crosses (0° is east, 90°
+south, the way the map's y grows). A sky without `sun` casts no sun shadows.
+
+```toml
+# A slower, lower winter sun.
+[[patch]]
+target = "sky/core:core"
+
+[patch.set.sun]
+rise = 8.0
+set = 17.0
+peak = 25.0
+arc = [20.0, 160.0]
+```
+
 ## What stops light
 
 The renderer works out what stops light from what things are, so a mod's

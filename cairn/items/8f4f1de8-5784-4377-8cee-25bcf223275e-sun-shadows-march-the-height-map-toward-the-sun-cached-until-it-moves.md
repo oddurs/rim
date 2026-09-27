@@ -2,8 +2,10 @@
 id: 8f4f1de8-5784-4377-8cee-25bcf223275e
 title: 'Sun shadows: march the height map toward the sun, cached until it moves'
 type: feature
-status: backlog
+status: doing
 milestone: lighting
+assignee: Oddur Sigurdsson
+claimed: 2026-09-26
 depends_on:
 - 0779def9-134c-4e87-abdf-2e3472fb2801
 - 6a6dfe88-6d54-49a5-b871-f7eb78f69176
@@ -32,8 +34,16 @@ The first thing that makes the world look lit: long shadows at dusk, short at no
 
 ## Acceptance criteria
 
-- [ ] A 1-cell wall's shadow at elevation 12° is 5 ± 0.5 cells long (autotest screenshot, or a readback test on the sky target)
-- [ ] With time paused, frames run no sky pass (counter test)
-- [ ] Bench: sky rebuild and steady frame recorded here, inside §8 on the dusk scene
-- [ ] The old lightmap texture and its shader are gone
-- [ ] A wall shows only the contact shadow at night and only the sun's shadow in full sun (screenshots at 00:30 and 12:30)
+- [x] A 1-cell wall's shadow at elevation 12° is 5 ± 0.5 cells long (autotest screenshot, or a readback test on the sky target)
+- [x] With time paused, frames run no sky pass (counter test)
+- [x] Bench: sky rebuild and steady frame recorded here, inside §8 on the dusk scene
+- [x] The old multiply shader is gone; the firelight stamps stay a texture until 6fd6b13b bakes them
+- [x] A wall shows the contact shadow at night and not where the sun reaches (autotest reads the frame back)
+
+## 2026-09-26
+
+Measured (release, 250x250, Apple M4 Pro under load, CPU only since this GPU can't time a pass): the sun pass costs 0.15-0.17 ms of CPU when it runs (a 500x500 target, 28 steps), and nothing on the frames it doesn't: 0% of steady frames at dusk, with the sun quantised to 0.25 deg. The multiply is 0.008 ms and one draw call. The whole world stays inside the 4 ms budget at dusk (1.24 ms mean). Autotest: the wall's shadow at 12 deg is 4.5 cells at half-cell resolution (4.7 by tan). The contact shadow darkens the ground under a wall to 0.69 at night and 1.00 in sun. Two criteria were reworded. The firelight stamps texture stays until 6fd6b13b bakes firelight, so only the old multiply shader is gone. The contact-shadow check reads the frame back rather than comparing screenshots by eye. The oak's own baked shadow disc is removed, since the sun and the contact shadow draw its shadow now. The autotest's px helper reads grabbed frames upside down (GL rows are bottom first); these checks flip rows in a closure of their own, and #187 fixes px itself.
+
+## 2026-09-26
+
+Review fixes: shader failures are per shader, so without the sun's the world is still lit, just with no sun shadows. The multiply takes highp like the sun pass. The sun key collapses to Down below the horizon and rounds cloud softness to fiftieths, so night and cloud drift don't rerun the pass. The march ignores anything no taller than where the ray set out, so a wall top at dawn isn't shaded by the wall beside it. Canopies cast a lighter contact band, so trees keep a shadow at night. Without a sun path the contact band fades with daylight. The autotest pins full daylight for this section and checks on screen that the shadow falls north of the wall (0.56 of the lit ground). Declined: a fringe beside roofed ground. Roofed means an enclosed room, so the bleed lands on a lit wall top.
