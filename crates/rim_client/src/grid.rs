@@ -61,9 +61,13 @@ struct Fade {
 
 impl Fade {
     /// `hold` keeps it up a moment after it stops being wanted: for the
-    /// grid going away, not for one level handing over to another.
-    fn step(&mut self, wanted: bool, hold: bool, now: f64, dt: f64) {
-        if wanted {
+    /// grid going away, not for one level handing over to another. With
+    /// `instant` (reduce motion) it's simply on or off.
+    fn step(&mut self, wanted: bool, hold: bool, instant: bool, now: f64, dt: f64) {
+        if instant {
+            self.shown = if wanted { 1.0 } else { 0.0 };
+            self.wanted_at = now;
+        } else if wanted {
             self.wanted_at = now;
             self.shown = (self.shown + (dt / UP_SECS) as f32).min(1.0);
         } else if !hold || now - self.wanted_at >= HOLD_SECS {
@@ -89,13 +93,15 @@ impl Grid {
         self.pointer
     }
 
-    pub fn update(&mut self, level: Level, measure: bool, pointer: Option<(f32, f32)>, now: f64) {
+    /// `instant` is the player's reduce-motion setting: no fades.
+    pub fn update(&mut self, level: Level, measure: bool, pointer: Option<(f32, f32)>, now: f64, instant: bool) {
         let dt = (now - self.last).clamp(0.0, 0.1);
         self.last = now;
         let hold = level == Level::Rest;
-        self.lens.step(level == Level::Lens, hold, now, dt);
-        self.plan.step(level == Level::Plan, hold, now, dt);
-        self.measure.step(measure, !measure, now, dt);
+        let i = instant;
+        self.lens.step(level == Level::Lens, hold, i, now, dt);
+        self.plan.step(level == Level::Plan, hold, i, now, dt);
+        self.measure.step(measure, !measure, i, now, dt);
         self.pointer = pointer;
     }
 }
@@ -246,7 +252,7 @@ mod tests {
     fn measuring_keeps_a_tool_s_ticks() {
         let mut g = Grid::default();
         for i in 0..30 {
-            g.update(Level::Lens, true, None, i as f64 / 60.0);
+            g.update(Level::Lens, true, None, i as f64 / 60.0, false);
         }
         assert_eq!((g.lens.shown, g.measure.shown), (1.0, 1.0));
     }
@@ -263,17 +269,17 @@ mod tests {
     fn a_tool_swap_holds_the_grid_up() {
         let mut g = Grid::default();
         for i in 0..30 {
-            g.update(Level::Lens, false, None, i as f64 / 60.0);
+            g.update(Level::Lens, false, None, i as f64 / 60.0, false);
         }
         assert_eq!(g.lens.shown, 1.0);
         // Put down for less than the hold: still up.
-        g.update(Level::Rest, false, None, 0.5 + 0.2);
+        g.update(Level::Rest, false, None, 0.5 + 0.2, false);
         assert_eq!(g.lens.shown, 1.0);
         // Long after: gone.
         let mut t = 0.7;
         while t < 2.0 {
             t += 1.0 / 60.0;
-            g.update(Level::Rest, false, None, t);
+            g.update(Level::Rest, false, None, t, false);
         }
         assert_eq!(g.lens.shown, 0.0);
     }
@@ -282,12 +288,12 @@ mod tests {
     fn starting_a_drag_hands_the_ticks_over_to_the_lines() {
         let mut g = Grid::default();
         for i in 0..30 {
-            g.update(Level::Lens, false, None, i as f64 / 60.0);
+            g.update(Level::Lens, false, None, i as f64 / 60.0, false);
         }
         let mut t = 0.5;
         for _ in 0..20 {
             t += 1.0 / 60.0;
-            g.update(Level::Plan, false, None, t);
+            g.update(Level::Plan, false, None, t, false);
         }
         assert_eq!(g.lens.shown, 0.0);
         assert_eq!(g.plan.shown, 1.0);

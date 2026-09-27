@@ -213,6 +213,8 @@ pub enum UiAction {
     RenderScale(f32),
     /// A lighting preset by name: low, medium, high or ultra.
     Lighting(String),
+    /// Make the map's overlays still: fades instant, rings unmoving.
+    ReduceMotion(bool),
     /// Draw the UI this much bigger (0.75 to 2), on top of the display's
     /// own scale.
     UiScale(f32),

@@ -24,6 +24,10 @@ const HOVER_IN_SECS: f64 = 0.06;
 const HOVER_OUT_SECS: f64 = 0.14;
 /// Hover's edge, over the chalk's own strength.
 const HOVER_ALPHA: f32 = 0.72;
+/// An order's ring: from a third of a cell out to three quarters.
+const ACK_SECS: f64 = 0.24;
+/// An urgent mark's ring breathes out once in this long.
+const BREATHE_SECS: f64 = 1.8;
 /// Everything in a group but the one the inspector shows.
 const GROUP_ALPHA: f32 = 0.7;
 /// A colonist an Alt-drag will take out of the selection.
@@ -43,6 +47,8 @@ const DOT_STEP: f32 = 5.0;
 pub struct Palette {
     pub chalk: Color,
     pub keyline: Color,
+    /// Allowed but costly, and urgent marks: the theme's `bad`.
+    pub caution: Color,
     /// Line weights: hover's, a selected or hovered stockpile's and a
     /// store's outline (`stroke`); a stockpile's edge and a drag box's
     /// (`hair`).
@@ -83,6 +89,7 @@ impl Palette {
         Palette {
             chalk: c("chalk", "#f2eee3"),
             keyline: c("keyline", "#080a0c8c"),
+            caution: c("bad", "#ffb35a"),
             seam: c("seam", "#0000001f"),
             threat: c("threat", "#ff6b5a"),
             seam_major: c("seam_major", "#00000052"),
@@ -139,6 +146,18 @@ pub enum Mark {
     /// What's left of a selected pawn's path, dotted.
     Path {
         points: Vec<(f32, f32)>,
+        alpha: f32,
+    },
+    /// Where an order just landed: one chalk ring, growing and fading.
+    Ack {
+        center: (f32, f32),
+        r: f32,
+        alpha: f32,
+    },
+    /// An urgent mark's ring, breathing out from it.
+    Breathe {
+        center: (f32, f32),
+        r: f32,
         alpha: f32,
     },
     /// A selected thing off screen: a chevron at the edge pointing at it,
@@ -212,18 +231,29 @@ pub struct State {
     /// under the pointer fading in, the rest fading out from wherever
     /// they had got to.
     hovers: Vec<(Hovered, f32)>,
+    /// The player's reduce-motion setting, as of the last update: hover
+    /// and selection are simply there or not.
+    pub instant: bool,
 }
 
 impl State {
     /// Keep `since` in step with the selection, and follow the hover.
-    pub fn update(&mut self, selected: &[Entity], hovered: Option<Hovered>, now: f64) {
+    pub fn update(&mut self, selected: &[Entity], hovered: Option<Hovered>, now: f64, instant: bool) {
+        self.instant = instant;
         let dt = (now - self.now).clamp(0.0, 0.1);
         self.now = now;
         if let Some(h) = hovered.filter(|h| !self.hovers.iter().any(|(s, _)| s == h)) {
             self.hovers.push((h, 0.0));
         }
+        let instant = self.instant;
         for (h, a) in &mut self.hovers {
-            *a = if Some(*h) == hovered {
+            *a = if instant {
+                if Some(*h) == hovered {
+                    1.0
+                } else {
+                    0.0
+                }
+            } else if Some(*h) == hovered {
                 (*a + (dt / HOVER_IN_SECS) as f32).min(1.0)
             } else {
                 (*a - (dt / HOVER_OUT_SECS) as f32).max(0.0)
@@ -236,6 +266,11 @@ impl State {
                 self.since.push((e, now));
             }
         }
+    }
+
+    /// The frame's clock.
+    pub fn now(&self) -> f64 {
+        self.now
     }
 
     fn since(&self, e: Entity) -> Option<f64> {
@@ -430,7 +465,10 @@ pub fn scene(app: &App) -> Scene {
     let mut marks = Vec::new();
     let picked = crate::selection(app);
     let group = picked.len() > 1;
-    let gap_for = |e: Entity| app.chalk.since(e).map_or(p.bracket_gap, |t0| closing(p.bracket_gap, now - t0));
+    let gap_for = |e: Entity| match app.chalk.since(e) {
+        Some(t0) if !app.chalk.instant => closing(p.bracket_gap, now - t0),
+        _ => p.bracket_gap,
+    };
     // A select drag: its box, and who it will pick or take out.
     let boxing = app.drag_start.filter(|_| crate::is_box(app, app.pointer)).map(|a| {
         let b = cam.tile_at(app.pointer.0, app.pointer.1);
@@ -497,6 +535,33 @@ pub fn scene(app: &App) -> Scene {
         } else if let Some(t) = w.thing(e) {
             marks.push(Mark::Hover { rect: footprint(app, &t), alpha: a });
         }
+    }
+    // Where the last order landed: one ring, a quarter of a second.
+    if let Some((cell, at)) = app.order_flash {
+        let k = ((now - at) / ACK_SECS) as f32;
+        if (0.0..1.0).contains(&k) {
+            let center = cam.to_screen(cell.x as f32 + 0.5, cell.y as f32 + 0.5);
+            let (r, alpha) = if app.chalk.instant { (0.5, 1.0) } else { (0.3 + 0.45 * k, 1.0 - k) };
+            marks.push(Mark::Ack { center, r: r * cam.zoom, alpha });
+        }
+    }
+    // Urgent marks breathe: the one mark that keeps moving.
+    let (x0, y0, x1, y1) = draw::visible(app);
+    for (e, _) in w.ecs.query::<(Entity, &rim_sim::world::Urgent)>().iter() {
+        // A creature's ring is around it; a thing's around the amber disc
+        // at its top-left. A blueprint draws no disc, so it gets no ring.
+        let (center, r) = if let Some(disc) = draw::pawn_disc(app, e) {
+            disc
+        } else {
+            let Some(t) = w.thing(e).filter(|_| w.ecs.get::<&rim_sim::world::Blueprint>(e).is_err()) else { continue };
+            if !((x0..=x1).contains(&t.pos.x) && (y0..=y1).contains(&t.pos.y)) {
+                continue;
+            }
+            let (sx, sy) = cam.to_screen(t.pos.x as f32, t.pos.y as f32);
+            ((sx + cam.zoom * 0.2, sy + cam.zoom * 0.2), cam.zoom * 0.17)
+        };
+        let phase = if app.chalk.instant { 0.35 } else { ((now / BREATHE_SECS) % 1.0) as f32 };
+        marks.push(Mark::Breathe { center, r: r + 1.0 + phase * r * 1.4, alpha: 0.35 * (1.0 - phase) });
     }
     // A selection off screen: a chevron at the edge toward it, and how far.
     for o in offscreen(app) {
@@ -766,6 +831,10 @@ pub fn draw(scene: &Scene, p: &Palette, zoom: f32) {
             }
             Mark::Notch { at, size } => notch(p, *at, *size),
             Mark::Offscreen { at, angle, .. } => chevron(p, *at, *angle),
+            Mark::Ack { center, r, alpha } => ring(p, *center, *r, p.stroke, p.chalk, *alpha),
+            Mark::Breathe { center, r, alpha } => {
+                draw_circle_lines(center.0, center.1, *r, p.stroke, fade(p.caution, *alpha))
+            }
             Mark::Chip(_) | Mark::Label { .. } => {}
         }
     }
@@ -851,7 +920,7 @@ mod tests {
         let mut t = 0.0;
         let mut step = |s: &mut State, h: Option<Hovered>, secs: f64| {
             t += secs;
-            s.update(&[], h, t);
+            s.update(&[], h, t, false);
         };
         step(&mut s, Some(a), 0.0);
         step(&mut s, Some(a), HOVER_IN_SECS);

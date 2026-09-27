@@ -851,6 +851,7 @@ impl UiVm {
             true => UiAction::RenderScale(s.clamp(0.25, 1.0)),
             false => return Err(rt("act.render_scale: wants a number from 0.25 to 1")),
         });
+        act!("reduce_motion", bool, |on| UiAction::ReduceMotion(on));
         // Devtools: run the sim forward (hours of game time).
         act!("advance", f64, |h| UiAction::Advance(h.clamp(0.0, 24.0 * 60.0)));
         act!("load", String, |path| UiAction::Load(path));

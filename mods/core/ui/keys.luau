@@ -175,6 +175,15 @@ ui.window("core:palette", { title = t("core:palette.title", "Commands"), w = 440
 	})
 end)
 
+-- Motion on the map: still for players who'd rather. No keys; the
+-- palette finds them.
+ui.bind("core:reduce_motion_on", { label = t("core:keys.reduce_motion_on", "Reduce motion: on") }, function()
+	act.reduce_motion(true)
+end)
+ui.bind("core:reduce_motion_off", { label = t("core:keys.reduce_motion_off", "Reduce motion: off") }, function()
+	act.reduce_motion(false)
+end)
+
 -- The measuring grid: every fifth line heavier, for counting cells.
 ui.bind("core:measure", { key = "g", label = t("core:keys.measure", "Measure grid") }, function()
 	act.toggle_measure()
