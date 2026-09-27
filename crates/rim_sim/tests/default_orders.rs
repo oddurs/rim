@@ -115,3 +115,60 @@ fn an_order_makes_the_news() {
     assert!(said.contains(&"Standing order on: Food is low (3.4)."), "{said:?}");
     assert!(said.contains(&"Standing order off: Food is low (9)."), "{said:?}");
 }
+
+fn announced(s: &Sim) -> Vec<String> {
+    s.world
+        .events
+        .iter()
+        .filter_map(|e| match e {
+            rim_sim::world::GameEvent::RuleStarted { rule } => Some(format!("started {rule}")),
+            rim_sim::world::GameEvent::RuleStopped { rule } => Some(format!("stopped {rule}")),
+            _ => None,
+        })
+        .collect()
+}
+
+/// An order its season holds back is news when it starts to act, not when
+/// its reading crosses.
+#[test]
+fn an_autumn_order_is_news_in_autumn() {
+    let mut s = core();
+    s.step();
+    s.world.events.clear();
+    s.world.set_reading("core:wood", 10.0);
+    assert!(!announced(&s).iter().any(|a| a.contains("wood_for_winter")), "spring: {:?}", announced(&s));
+    let autumn = s.world.defs.calendar.seasons.iter().position(|x| x == "autumn").unwrap() as u32;
+    while s.world.season_index() != autumn {
+        s.world.tick += TICKS_PER_DAY;
+    }
+    s.world.update_rules();
+    assert!(announced(&s).contains(&"started core:wood_for_winter".to_string()), "{:?}", announced(&s));
+}
+
+/// Loading a save with an order acting is no news.
+#[test]
+fn a_load_announces_nothing() {
+    let mut s = core();
+    s.step();
+    s.world.set_reading("core:food_days", 2.0);
+    s.world.events.clear();
+    let back = rim_sim::snapshot::Snapshot::capture(&s).restore(&common::mods(), &|m| m == "core").unwrap();
+    assert!(announced(&back).is_empty(), "{:?}", announced(&back));
+    assert!(holds(&back, "core:food_low"), "and the order still holds");
+}
+
+/// Switching an acting order off is news, and so is switching a crossed
+/// one back on.
+#[test]
+fn switching_an_order_is_news() {
+    let mut s = core();
+    s.step();
+    s.world.set_reading("core:food_days", 2.0);
+    s.world.events.clear();
+    let rule = s.world.defs.lookup("priority_rule", "core:food_low").unwrap();
+    s.world.set_rule_enabled(rule, false);
+    assert_eq!(announced(&s), ["stopped core:food_low"]);
+    s.world.events.clear();
+    s.world.set_rule_enabled(rule, true);
+    assert_eq!(announced(&s), ["started core:food_low"]);
+}
