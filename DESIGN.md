@@ -924,6 +924,15 @@ index lists stores by thing, so no search tests a filter against every
 thing, and a store's filter is only read to check a stack's material and
 condition.
 
+A bill's filter rides on its order's need (`Need::filter`): the engine
+checks it on each stack a fetch looks at, beside the need's thing or tag.
+An `alike` need is filled in one material: after the first piece the
+rest must be its thing made of its material, and the first is only
+fetched from a thing the map has enough of. Crafting asks for alike
+inputs unless a recipe says `mix = true`, so a knapped axe is two flint
+or two bone and the output's material stays one answer, while a stew can
+still take any meat.
+
 ### What goes where
 
 - **Core** owns the mechanism's shared names: the categories, the level

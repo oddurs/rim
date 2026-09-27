@@ -22,6 +22,16 @@ tags = ["shard"]
 stuff = { categories = ["lithic"], factors = { hp = 0.5 } }
 
 [[thing]]
+id = "bit"
+label = "bit"
+color = "#ddddcc"
+category = "item"
+look.layers = [{ draw = "fill" }]
+stack_limit = 20
+tags = ["shard"]
+stuff = { categories = ["lithic"], factors = { hp = 0.8 } }
+
+[[thing]]
 id = "blade"
 label = "blade"
 color = "#aabbcc"
@@ -37,6 +47,15 @@ station = "crafting:hand"
 inputs = [{ tag = "shard", count = 2 }]
 outputs = [{ thing = "blade" }]
 work = 60
+
+[[crafting.recipe]]
+id = "mash"
+label = "mash"
+station = "crafting:hand"
+inputs = [{ tag = "shard", count = 2, mix = true }]
+outputs = [{ thing = "blade" }]
+work = 60
+stuff = false
 
 [[crafting.recipe]]
 id = "slow"
@@ -294,7 +313,8 @@ fn a_stalled_bill_says_why() {
     let home = s.world.pawn_pos(founder).unwrap();
     put(&mut s, "kit:chip", 1, home);
     steps(&mut s, 200);
-    assert_eq!(field(&first_bill(&s, spot), "why"), Some(&Data::Str("1 of 2 shard".into())));
+    // One material for the whole input: the thing short is named.
+    assert_eq!(field(&first_bill(&s, spot), "why"), Some(&Data::Str("1 of 2 chip".into())));
     assert!(s.world.ecs.get::<&Order>(spot).is_err(), "nothing posted that can't be supplied");
 }
 
@@ -540,4 +560,146 @@ work = 10
     let dir = common::test_mods("craft-bad-ref", &["core", "crafting"], &[("bad", &[("defs/bad.toml", defs)])]);
     let err = Sim::new(&dir, 1).err().expect("the mod fails to load");
     assert!(err.contains("recipe 'bad:nope' input 1: no thing 'bad:nope'"), "{err}");
+}
+
+/// Where the stacks of `thing` lie, one entity each.
+fn stacks(s: &Sim, thing: &str) -> Vec<Entity> {
+    let d = s.world.defs.thing_id(thing).unwrap();
+    let mut v: Vec<Entity> =
+        s.world.ecs.query::<(Entity, &Thing)>().iter().filter(|(_, t)| t.def == d).map(|(e, _)| e).collect();
+    v.sort_by_key(|e| e.id());
+    v
+}
+
+fn made_of_blades(s: &Sim) -> Vec<Option<rim_sim::defs::DefId>> {
+    blades(s).into_iter().map(|b| b.2).collect()
+}
+
+/// Two of a tag come in one material. A chip lies nearest, but there's one
+/// of it and three bits: the blade is two bits, and the chip stays.
+#[test]
+fn an_input_by_several_is_one_material() {
+    let (mut s, founder, spot) = world(&kit_mods("craft-one-material"), "crafting:spot");
+    let home = s.world.pawn_pos(founder).unwrap();
+    put(&mut s, "kit:chip", 1, home);
+    let far = free_cell(&s, home.offset(8, 0));
+    put(&mut s, "kit:bit", 3, far);
+    add_bill(&mut s, spot, "kit:blade");
+    assert!(run_until(&mut s, 12_000, |s| count(s, "kit:blade") == 1), "a blade is made");
+    let bit = s.world.defs.thing_id("kit:bit").unwrap();
+    assert_eq!(made_of_blades(&s), vec![Some(bit)]);
+    assert_eq!((count(&s, "kit:chip"), count(&s, "kit:bit")), (1, 1), "two bits went in, and no chip");
+}
+
+#[test]
+fn a_bill_can_be_told_which_thing_to_use() {
+    let (mut s, founder, spot) = world(&kit_mods("craft-filter"), "crafting:spot");
+    let home = s.world.pawn_pos(founder).unwrap();
+    put(&mut s, "kit:chip", 4, home);
+    let at = free_cell(&s, home.offset(8, 0));
+    put(&mut s, "kit:bit", 4, at);
+    add_bill(&mut s, spot, "kit:blade");
+    let off = table(&[("input", Data::Int(1)), ("thing", Data::Str("kit:chip".into())), ("on", Data::Bool(false))]);
+    set_bill(&mut s, spot, &[("ingredient", off.clone()), ("target", Data::Int(2))]);
+    let b = first_bill(&s, spot);
+    let allows = field(&b, "filters").and_then(|f| match f {
+        Data::Table(t) => t.get(&Key::Int(1)),
+        _ => None,
+    });
+    assert_eq!(allows.and_then(|a| field(a, "allows")), Some(&table_list(&["kit:bit"])), "bits only");
+    // Turning the last one off too is refused: a bill that takes nothing
+    // would only wait.
+    let off_bit = table(&[("input", Data::Int(1)), ("thing", Data::Str("kit:bit".into())), ("on", Data::Bool(false))]);
+    set_bill(&mut s, spot, &[("ingredient", off_bit)]);
+    assert!(run_until(&mut s, 20_000, |s| count(s, "kit:blade") == 2), "two blades are made");
+    let bit = s.world.defs.thing_id("kit:bit").unwrap();
+    let of_bits: u32 = blades(&s).iter().filter(|b| b.2 == Some(bit)).map(|b| b.1).sum();
+    assert_eq!(of_bits, 2, "both of bits");
+    assert_eq!(count(&s, "kit:chip"), 4, "the chips nearer to hand were left");
+}
+
+fn table_list(ids: &[&str]) -> Data {
+    Data::Table(ids.iter().enumerate().map(|(i, id)| (Key::Int(i as i64 + 1), Data::Str((*id).into()))).collect())
+}
+
+/// The first chip is in, and the other is gone: the bill waits for a
+/// matching second piece, and says so, though bits lie about.
+#[test]
+fn a_bill_waiting_for_a_matching_piece_says_so() {
+    let (mut s, founder, spot) = world(&kit_mods("craft-match"), "crafting:spot");
+    let home = s.world.pawn_pos(founder).unwrap();
+    put(&mut s, "kit:chip", 1, home);
+    let at = free_cell(&s, home.offset(-6, 0));
+    put(&mut s, "kit:chip", 1, at);
+    add_bill(&mut s, spot, "kit:blade");
+    let one_in = |s: &Sim| s.world.ecs.get::<&Order>(spot).is_ok_and(|o| o.needs[0].have() == 1);
+    assert!(run_until(&mut s, 12_000, one_in), "the first chip is brought");
+    // Take away the other chip, wherever it is, and put bits down.
+    let founder_job = |s: &Sim| s.world.ecs.get::<&rim_sim::world::Pawn>(founder).map(|p| p.job.clone()).ok();
+    for e in stacks(&s, "kit:chip") {
+        if s.world.map.item_at(s.world.thing(e).unwrap().pos) == Some(e) {
+            s.world.take_from_stack(e, 1);
+        }
+    }
+    if let Some(rim_sim::world::Job::Supply { .. }) = founder_job(&s) {
+        s.world.ecs.get::<&mut rim_sim::world::Pawn>(founder).unwrap().carry = None;
+    }
+    let at = free_cell(&s, home.offset(6, 0));
+    put(&mut s, "kit:bit", 3, at);
+    steps(&mut s, 400);
+    assert_eq!(field(&first_bill(&s, spot), "why"), Some(&Data::Str("1 of 2 chip".into())));
+    let o = s.world.ecs.get::<&Order>(spot).expect("the order waits");
+    assert_eq!((o.needs[0].have(), count(&s, "kit:bit")), (1, 3), "no bit went in with the chip");
+}
+
+/// The stone age's hand axe: two knappable pieces, never flint and bone.
+#[test]
+fn a_hand_axe_never_mixes_flint_and_bone() {
+    let dir = common::test_mods("craft-hand-axe", &["core", "crafting", "primitive"], &[]);
+    let (mut s, founder, spot) = world(&dir, "crafting:spot");
+    common::arm(&mut s);
+    let home = s.world.pawn_pos(founder).unwrap();
+    let (flint, bone) =
+        (s.world.defs.thing_id("primitive:flint").unwrap(), s.world.defs.thing_id("primitive:bone").unwrap());
+    let axe = s.world.defs.thing_id("primitive:hand_axe").unwrap();
+    let axes = |s: &Sim| -> Vec<Option<rim_sim::defs::DefId>> {
+        let mut v: Vec<_> = s
+            .world
+            .ecs
+            .query::<(Entity, &Thing)>()
+            .iter()
+            .filter(|(_, t)| t.def == axe)
+            .map(|(e, _)| s.world.made_of(e))
+            .collect();
+        v.sort();
+        v
+    };
+    let before = axes(&s);
+    let lying =
+        |s: &Sim, d| -> u32 { s.world.ecs.query::<&Thing>().iter().filter(|t| t.def == d).map(|t| t.count).sum() };
+    let (flint0, bone0) = (lying(&s, flint), lying(&s, bone));
+    s.world.place_item(flint, home, 1);
+    s.world.place_item(bone, free_cell(&s, home.offset(7, 0)), 3);
+    add_bill(&mut s, spot, "primitive:hand_axe");
+    assert!(run_until(&mut s, 20_000, |s| axes(s).len() > before.len()), "an axe is made");
+    let mut made = axes(&s);
+    for b in &before {
+        let i = made.iter().position(|m| m == b).unwrap();
+        made.remove(i);
+    }
+    assert_eq!(made, vec![Some(bone)], "of bone: there was only one flint");
+    assert_eq!((lying(&s, flint), lying(&s, bone)), (flint0 + 1, bone0 + 1), "two bone went in, and no flint");
+}
+
+/// An input that says `mix = true` takes a chip and a bit together.
+#[test]
+fn a_mixed_input_takes_any_of_its_tag() {
+    let (mut s, founder, spot) = world(&kit_mods("craft-mix"), "crafting:spot");
+    let home = s.world.pawn_pos(founder).unwrap();
+    put(&mut s, "kit:chip", 1, home);
+    let at = free_cell(&s, home.offset(6, 0));
+    put(&mut s, "kit:bit", 1, at);
+    add_bill(&mut s, spot, "kit:mash");
+    assert!(run_until(&mut s, 12_000, |s| count(s, "kit:blade") == 1), "one of each makes it");
+    assert_eq!((count(&s, "kit:chip"), count(&s, "kit:bit")), (0, 0));
 }

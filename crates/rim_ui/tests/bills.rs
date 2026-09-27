@@ -17,6 +17,14 @@ category = "item"
 look.layers = [{ draw = "fill" }]
 tags = ["shard"]
 
+[[thing]]
+id = "bit"
+label = "bit"
+color = "#ddddcc"
+category = "item"
+look.layers = [{ draw = "fill" }]
+tags = ["shard"]
+
 [[crafting.recipe]]
 id = "blade"
 label = "blade"
@@ -104,5 +112,53 @@ fn a_thing_that_makes_nothing_has_no_bills() {
     frame(&mut ui, &sim, &cv, Input::default());
     assert!(ui.find("core:inspector.thing").is_some());
     assert!(ui.find("crafting:bills").is_none());
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// Each tag input shows what may fill it, and a click narrows it: the
+/// bill's filter, sent as a command.
+#[test]
+fn a_bill_shows_its_ingredients_and_narrows_them() {
+    let (mut sim, spot, dir) = world("ingredients");
+    let mut ui = ui_for(&sim);
+    let mut cv = client(&sim);
+    cv.selected = Some(spot);
+    sim.push(Command::ModEvent {
+        name: "crafting:add_bill".into(),
+        data: Some(rim_sim::data::Data::Table(
+            [
+                (rim_sim::data::Key::Str("site".into()), rim_sim::data::Data::Int(spot.to_bits().get() as i64)),
+                (rim_sim::data::Key::Str("recipe".into()), rim_sim::data::Data::Str("kit:blade".into())),
+            ]
+            .into_iter()
+            .collect(),
+        )),
+    });
+    for _ in 0..120 {
+        sim.step();
+    }
+    frame(&mut ui, &sim, &cv, Input::default());
+    assert!(ui.find("crafting:bill.1.use.1.kit:chip").is_some(), "a toggle per thing: {:?}", ui.warnings());
+    let bit = ui.find("crafting:bill.1.use.1.kit:bit").expect("and one for bits");
+    let sent: Vec<_> = click(&mut ui, &sim, &mut cv, centre(bit))
+        .into_iter()
+        .filter_map(|a| match a {
+            UiAction::Send(name, data) => Some((name, data)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(sent.len(), 1, "one command");
+    assert_eq!(sent[0].0, "crafting:set_bill");
+    for (name, data) in sent {
+        sim.push(Command::ModEvent { name, data });
+    }
+    for _ in 0..2 {
+        sim.step();
+    }
+    let data = format!("{:?}", sim.world.data.get("crafting:bills"));
+    assert!(
+        data.contains("allows") && data.contains("kit:chip") && !data.contains("\"kit:bit\""),
+        "chips only: {data}"
+    );
     let _ = std::fs::remove_dir_all(dir);
 }

@@ -628,7 +628,7 @@ Dig down. The map becomes a stack of 2D levels joined only at stairs, ladders an
 
 ## crafting — Crafting
 
-`######····` 54% · 15 of 28 done · due 2027-05-01
+`######····` 57% · 16 of 28 done · due 2027-05-01
 
 Production chains: workbenches and bills, cooking, farming, tailoring, research as a plugin.
 
@@ -640,7 +640,6 @@ Production chains: workbenches and bills, cooking, farming, tailoring, research 
 - [ ] `6f1e7410` Snow and mud slow movement <sup>feature · p3 · s · engine</sup>
 - [ ] `704889c9` Research as a plugin <sup>feature · p1 · l · plugin</sup>
 - [ ] `b1444a26` Farming: growing zones and crops <sup>feature · p0 · l · engine</sup>
-- [ ] `ca22f222` Bills pick their ingredients: one material per order, and a filter <sup>feature · p2 · m · plugin</sup>
 - [ ] `d77d9e1f` Stock fields: per-cell state with staggered updates <sup>feature · p0 · l · engine</sup>
 - [ ] `db7f1e06` Mining that rewards looking: rock kinds, veins and prospecting <sup>content · p1 · m · core</sup>
 - [ ] `e1be8ebd` Plants grow in the weather <sup>feature · p0 · m · engine</sup>
@@ -656,6 +655,7 @@ Production chains: workbenches and bills, cooking, farming, tailoring, research 
 - [x] `9b569a33` Terrain properties, tags and distance-to inputs <sup>feature · p0 · s · engine</sup>
 - [x] `ac643c1f` Stock ledger and holdings: counts by thing, material and chunk <sup>perf · p1 · m · engine</sup>
 - [x] `c2b1b623` Map generation seeds spawns by def index, so adding a def reshuffles maps <sup>bug · p2 · s · engine</sup>
+- [x] `ca22f222` Bills pick their ingredients: one material per order, and a filter <sup>feature · p2 · m · plugin</sup>
 - [x] `dce75339` A build takes a material and parts, and may require a tool <sup>feature · p1 · m · engine</sup>
 - [x] `e953d711` Store levels: sorting that only climbs, and room reserved by count <sup>feature · p1 · l · engine</sup>
 - [x] `ede06f37` The storage overlay budget test flakes under load <sup>bug · p2 · s · client</sup>

@@ -123,6 +123,8 @@ rim.post_order(bench_id, {
     needs = {
         { tag = "knappable", count = 2 },          -- anything with the tag
         { thing = "core:wood", count = 1 },        -- or one thing
+        -- narrowed by a filter: these things, not these materials, this condition
+        -- { tag = "knappable", count = 1, filter = { allows = { "primitive:flint" }, hp = { 50, 100 } } },
     },
 })
 
@@ -138,7 +140,13 @@ count, made_of }` each: a flint axe as an ingredient is `made_of` flint) and
 material (a flint axe rehafted is still flint). If the site is torn down first,
 `order_lost` (`site`, `owner`, `label`) says so, and what was brought is back
 on the ground, still made of what it was. A site is a building or station,
-and takes one order at a time. `rim.order(site)` says how far one has got,
+and takes one order at a time. A need with `alike = true` is filled in one
+material: after the first piece, the rest are the same thing made of the
+same material, and the first comes from a thing there's enough of. A
+need's `filter` (`allows`, `refuses`, `hp`: the stockpile filter's parts)
+narrows what may fill it. `rim.order(site)` says how far one has got, with
+each need's `have`, the thing the rest must `match` once a piece is in, and
+whether a colonist is `coming` with some,
 `rim.cancel_order(site)` puts back down what was brought, and
 `rim.count_items({ tag = "knappable" })` counts what lies about, for "make
 until there are five".

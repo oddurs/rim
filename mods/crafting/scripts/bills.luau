@@ -9,16 +9,25 @@
 --
 -- A station is { site, bills, making }, where `making` is { bill, recipe }
 -- while its order is up. A bill is { id, recipe, mode, target, done,
--- suspended, why }:
+-- suspended, why, filters }:
 --   mode "count"   make `target` more, then the bill is finished
 --   mode "until"   make while there are fewer than `target` of the first output
 --   mode "forever" keep making
 -- `why` says what stops it, for the panel ("no flint").
+-- `filters` narrows a tag input to some of its things, by input index:
+-- { [2] = { allows = { "primitive:flint" } } } is flint only. It is the
+-- engine's item filter (DESIGN.md §4f), passed with the order's need.
+--
+-- An input taken by several comes in one material unless the recipe says
+-- `mix = true`: the engine fills it with pieces matching the first. So a
+-- bill can run only when one allowed thing has enough, not when the tag
+-- has enough in all.
 --
 -- The panel changes bills by sending these, which arrive here as events and
 -- call the functions this module exports (add, set, move, remove):
 --   crafting:add_bill    { site, recipe }
---   crafting:set_bill    { site, bill, mode?, target?, suspended? }
+--   crafting:set_bill    { site, bill, mode?, target?, suspended?,
+--                          ingredient? = { input, thing, on } }
 --   crafting:move_bill   { site, bill, by }      -- -1 up, +1 down
 --   crafting:remove_bill { site, bill }
 
@@ -75,13 +84,14 @@ for _, def in rim.defs("recipe") do
 	local inputs = {}
 	for i, input in def.inputs do
 		local n = count_of(input.count, `{where} input {i}`)
+		local mix = input.mix == true
 		if input.tag then
 			if not tagged[input.tag] then
 				rim.log(`{where}: nothing is tagged '{input.tag}', so it can't be made`)
 			end
-			table.insert(inputs, { tag = input.tag, count = n })
+			table.insert(inputs, { tag = input.tag, count = n, mix = mix })
 		else
-			table.insert(inputs, { thing = thing_ref(input.thing, owner, `{where} input {i}`), count = n })
+			table.insert(inputs, { thing = thing_ref(input.thing, owner, `{where} input {i}`), count = n, mix = mix })
 		end
 	end
 	local outputs = {}
@@ -135,6 +145,48 @@ local function label_of(input): string
 	return input.tag
 end
 
+-- The things that could fill an input, in load order.
+local function candidates(input): { string }
+	if input.thing then
+		return { input.thing }
+	end
+	local out = {}
+	for _, t in rim.thing_defs do
+		if things[t.id].tags[input.tag] then
+			table.insert(out, t.id)
+		end
+	end
+	return out
+end
+
+-- The things a bill lets fill input `i`, and the filter's allow list.
+local function allowed(b, i: number, input): ({ string }, { [string]: boolean }?)
+	local f = b.filters and b.filters[i]
+	if not f then
+		return candidates(input), nil
+	end
+	local set = {}
+	for _, id in f.allows do
+		set[id] = true
+	end
+	local out = {}
+	for _, id in candidates(input) do
+		if set[id] then
+			table.insert(out, id)
+		end
+	end
+	return out, set
+end
+
+-- How an input reads in a reason: its one allowed thing, if it's narrowed
+-- to one, or its tag.
+local function short_label(input, ids: { string }): string
+	if #ids == 1 then
+		return things[ids[1]].label
+	end
+	return label_of(input)
+end
+
 -- ─── State ──────────────────────────────────────────────────────────────────
 
 local function load(): { any }
@@ -171,6 +223,31 @@ local function counter()
 	end
 end
 
+-- Why input `i` can't be filled now, or nil. One material for the whole
+-- input, so it's the allowed thing with the most that counts: one flint
+-- and one bone are not two of anything. A mixed input counts them all.
+local function short(b, i: number, input, count): string?
+	local ids = allowed(b, i, input)
+	local best, most, all = nil, 0, 0
+	for _, id in ids do
+		local have = count({ thing = id })
+		all += have
+		if have > most then
+			best, most = id, have
+		end
+	end
+	if input.mix then
+		if all >= input.count then
+			return nil
+		end
+		return if all == 0 then `no {short_label(input, ids)}` else `{all} of {input.count} {short_label(input, ids)}`
+	end
+	if most >= input.count then
+		return nil
+	end
+	return if most == 0 then `no {short_label(input, ids)}` else `{most} of {input.count} {things[best].label}`
+end
+
 -- What stops a bill now, or nil if it can run.
 local function blocked(b, count): string?
 	local r = recipes[b.recipe]
@@ -188,13 +265,46 @@ local function blocked(b, count): string?
 			return `have {have}`
 		end
 	end
-	for _, input in r.inputs do
-		local have = count(if input.thing then { thing = input.thing } else { tag = input.tag })
-		if have < input.count then
-			return if have == 0 then `no {label_of(input)}` else `{have} of {input.count} {label_of(input)}`
+	for i, input in r.inputs do
+		local why = short(b, i, input, count)
+		if why then
+			return why
 		end
 	end
 	return nil
+end
+
+-- What the order a bill is being made by waits for, or nil: a piece that
+-- matches the first one in, or, before any is in, one thing with enough.
+local function waiting(o, b, count): string?
+	local r = recipes[b.recipe]
+	for i, n in o.needs do
+		-- Short, but someone is bringing it.
+		if n.have >= n.count or n.coming then
+			continue
+		end
+		if n.match then
+			if count({ thing = n.match }) == 0 then
+				return `{n.have} of {n.count} {things[n.match].label}`
+			end
+		elseif r and r.inputs[i] then
+			local why = short(b, i, r.inputs[i], count)
+			if why then
+				return why
+			end
+		end
+	end
+	return nil
+end
+
+-- A recipe's inputs as the order's needs, each with the bill's filter.
+local function needs_of(b, r): { any }
+	local out = {}
+	for i, input in r.inputs do
+		local f = b.filters and b.filters[i]
+		table.insert(out, { thing = input.thing, tag = input.tag, count = input.count, filter = f, alike = not input.mix })
+	end
+	return out
 end
 
 -- The first line of an engine error, without Luau's wrapping.
@@ -206,8 +316,19 @@ end
 -- Give an idle station the first bill that can run, and say what stops
 -- the ones above it. True if anything changed.
 local function run(st, thing: string, count): boolean
-	-- Busy: ours, or another mod's, which we leave alone.
-	if rim.order(st.site) ~= nil then
+	-- Busy: ours, or another mod's, which we leave alone. Ours says what
+	-- it waits for.
+	local o = rim.order(st.site)
+	if o ~= nil then
+		local i = st.making and o.owner == "crafting" and bill_index(st, st.making.bill)
+		local b = i and st.bills[i]
+		if b then
+			local why = waiting(o, b, count)
+			if b.why ~= why then
+				b.why = why
+				return true
+			end
+		end
 		return false
 	end
 	if st.making then
@@ -232,7 +353,7 @@ local function run(st, thing: string, count): boolean
 			local r = recipes[b.recipe]
 			local ok, err = pcall(rim.post_order, st.site, {
 				label = r.label,
-				needs = r.inputs,
+				needs = needs_of(b, r),
 				work = math.max(1, math.floor(r.work / (speeds[thing] or 1) + 0.5)),
 				work_type = r.work_type,
 				requires = r.requires,
@@ -269,11 +390,21 @@ rim.every(60, function()
 		end
 		for _, id in recipe_order do
 			local r = recipes[id]
-			local ins = {}
-			for _, input in r.inputs do
+			local ins, choices = {}, {}
+			for i, input in r.inputs do
 				table.insert(ins, `{input.count} {label_of(input)}`)
+				-- A tag input the player can narrow: its things, for the panel.
+				local ids = candidates(input)
+				if input.tag and #ids > 1 then
+					local list = {}
+					for _, t in ids do
+						table.insert(list, { id = t, label = things[t].label })
+					end
+					table.insert(choices, { input = i, tag = input.tag, things = list })
+				end
 			end
-			labels[id] = { label = r.label, inputs = table.concat(ins, ", "), output = r.outputs[1].thing }
+			labels[id] =
+				{ label = r.label, inputs = table.concat(ins, ", "), output = r.outputs[1].thing, choices = choices }
 		end
 		rim.set_data(CATALOG, { stations = stations, recipes = labels })
 	end
@@ -373,6 +504,36 @@ local function whole(n: any, lo: number, hi: number): number?
 	return math.clamp(math.floor(n), lo, hi)
 end
 
+-- Let a bill's input `i` take `thing`, or stop it. The last thing allowed
+-- stays: a bill that can take nothing would only wait. True if it changed.
+local function narrow(b, i: any, thing: any, on: any): boolean
+	local r = recipes[b.recipe]
+	local input = r and type(i) == "number" and r.inputs[i]
+	if not input or not input.tag or type(thing) ~= "string" or type(on) ~= "boolean" then
+		return false
+	end
+	local all = candidates(input)
+	if not table.find(all, thing) then
+		return false
+	end
+	local ids, set = allowed(b, i, input)
+	local now = set == nil or set[thing] == true
+	if now == on or (not on and #ids <= 1) then
+		return false
+	end
+	local next = {}
+	for _, id in all do
+		if (id == thing and on) or (id ~= thing and table.find(ids, id)) then
+			table.insert(next, id)
+		end
+	end
+	b.filters = b.filters or {}
+	-- Everything allowed is no filter at all, so a thing a mod adds later
+	-- is taken too.
+	b.filters[i] = if #next == #all then nil else { allows = next }
+	return true
+end
+
 local bills = {}
 
 -- Add a bill for `recipe` at the bottom of a station's list: make one.
@@ -410,6 +571,12 @@ function bills.set(site: number, bill: number, changes: { [string]: any })
 		b.mode = changes.mode
 	end
 	b.target = whole(changes.target, 1, MAX_TARGET) or b.target
+	local ing = changes.ingredient
+	if type(ing) == "table" and narrow(b, ing.input, ing.thing, ing.on) then
+		-- The order up was asked for what was allowed before: post it again.
+		b.why = nil
+		stop(st, b.id)
+	end
 	if type(changes.suspended) == "boolean" then
 		b.suspended = changes.suspended
 		b.why = nil
