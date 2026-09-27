@@ -386,12 +386,13 @@ The API grows up: stat pipeline, script components, custom jobs, needs and def k
 
 ## houses — Houses
 
-`########··` 71% · 15 of 21 done
+`#######···` 70% · 16 of 23 done
 
 A house is drawn as its plan and built as an order (DESIGN.md §6c). Walls join from their neighbours in quarters, with rounded ends and square junctions, and no sprites. Materials show as patterns and climb a ladder of tools from wattle to brick. Doors and windows orient themselves in the run and toward the room. Rooms take roles from what is in them, a roof span set by the materials replaces the 400-cell cap, and from far away the colony is a village of hipped roofs. The prototype, docs/engineering/houses-prototype.html, is the reference.
 
-- [ ] `827b2421` House plans as data: an ASCII grid placed with one command <sup>feature · p2 · m · engine</sup>
 - [ ] `b3ffbae1` Replace in place: upgrade a wall without opening the room <sup>feature · p1 · m · engine</sup>
+- [ ] `b6a2d3cf` Place a house plan from the build menu, turned with T <sup>feature · p2 · m · client</sup>
+- [ ] `c281689c` Save a selection as a house plan <sup>feature · p2 · m · client</sup>
 - [ ] `e7c4a3f6` Blueprints as work orders <sup>feature · p1 · m · engine</sup>
 - [ ] `fbab2877` Core's looks in the plan style <sup>content · p1 · m · core</sup>
 - [ ] `ff479390` The building ladder: dry stone, logs, bricks and a kiln <sup>content · p1 · m · plugin</sup>
@@ -404,6 +405,7 @@ A house is drawn as its plan and built as an order (DESIGN.md §6c). Walls join 
 - [x] `5643976c` Room labels on the plan <sup>feature · p2 · s · client</sup>
 - [x] `7129a537` Openings turn to their wall and face the room <sup>feature · p0 · m · client</sup>
 - [x] `7c53ec62` Material patterns: a fixed vocabulary, laid along the run <sup>feature · p1 · m · client</sup>
+- [x] `827b2421` House plans as data: an ASCII grid placed with one command <sup>feature · p2 · m · engine</sup>
 - [x] `ae5c3807` Lit edges: a mass catches the light on its top and left <sup>feature · p2 · s · client</sup>
 - [x] `ba18a8e4` Facing: things turn in four directions <sup>feature · p1 · m · engine</sup>
 - [x] `c2d73146` The seam where a wall's material changes is covered by the pattern <sup>bug · p1 · s · client</sup>

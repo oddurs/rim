@@ -1,0 +1,27 @@
+# Houses as text (DESIGN.md §6c): a grid, and what each character builds.
+# Placed whole, turned with the placement; `.` is floor left open.
+
+# The first night's shelter: seven lengths of wattle, a wattle door and a
+# grass pallet, with room for nothing else.
+[[plan]]
+id = "branch_hut"
+label = "branch hut"
+grid = """
+###
+#b#
+#+#
+"""
+legend = { "#" = { thing = "core:wall", stuff = "branches" }, "+" = { thing = "core:door", stuff = "branches" }, "b" = { thing = "pallet" } }
+
+# Once there's a digging stick: cob walls keep the warmth in, with room
+# for a fire and a second sleeper.
+[[plan]]
+id = "cob_house"
+label = "cob house"
+grid = """
+#####
+#b.b#
+#...#
+##+##
+"""
+legend = { "#" = { thing = "core:wall", stuff = "clay" }, "+" = { thing = "core:door", stuff = "branches" }, "b" = { thing = "pallet" } }

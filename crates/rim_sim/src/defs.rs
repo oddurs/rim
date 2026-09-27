@@ -1143,6 +1143,70 @@ pub struct RoomRoleDef {
     pub needs_r: Vec<(u16, u32)>,
 }
 
+/// A house as text (DESIGN.md §6c): a grid of characters and what each
+/// one builds, placed whole with `Command::PlacePlan` and turned with it.
+#[derive(Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct PlanDef {
+    pub id: String,
+    pub label: String,
+    /// Rows, north first. `.` and space build nothing. A piece bigger than
+    /// a cell is written at its anchor, and may be repeated over the rest
+    /// of its footprint so the grid reads as the house does.
+    pub grid: String,
+    /// What each character builds.
+    pub legend: BTreeMap<String, PieceDef>,
+    /// Width and height of the grid, unturned.
+    #[serde(skip)]
+    pub size: [i32; 2],
+    #[serde(skip)]
+    pub pieces: Vec<Piece>,
+}
+
+/// One character of a plan's legend.
+#[derive(Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct PieceDef {
+    pub thing: String,
+    /// Its material, for a thing built of one.
+    #[serde(default)]
+    pub stuff: Option<String>,
+    /// Quarter turns clockwise, in the plan's own frame.
+    #[serde(default)]
+    pub facing: u8,
+}
+
+/// A piece of a plan: a thing at its anchor, in the plan's frame.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Piece {
+    pub at: (i32, i32),
+    pub thing: DefId,
+    pub stuff: Option<DefId>,
+    pub facing: u8,
+}
+
+impl PlanDef {
+    /// Its pieces with the plan's corner at `at`, turned `facing` quarter
+    /// turns clockwise: each keeps its place in the house, and turns too.
+    pub fn placed(&self, defs: &DefDb, at: crate::IVec, facing: u8) -> Vec<Piece> {
+        let [w, h] = self.size;
+        let turn = |(x, y): (i32, i32)| match facing & 3 {
+            0 => (x, y),
+            1 => (h - 1 - y, x),
+            2 => (w - 1 - x, h - 1 - y),
+            _ => (y, w - 1 - x),
+        };
+        self.pieces
+            .iter()
+            .map(|p| {
+                let [pw, ph] = defs.thing(p.thing).size_facing(p.facing).map(|v| v as i32);
+                let (a, b) = (turn(p.at), turn((p.at.0 + pw - 1, p.at.1 + ph - 1)));
+                Piece { at: (at.x + a.0.min(b.0), at.y + a.1.min(b.1)), facing: (p.facing + facing) & 3, ..*p }
+            })
+            .collect()
+    }
+}
+
 /// When a priority rule holds: every condition it gives.
 #[derive(Deserialize, Clone, Debug, Default)]
 #[serde(deny_unknown_fields)]
@@ -1428,6 +1492,8 @@ pub struct DefDb {
     pub room_roles: Vec<RoomRoleDef>,
     /// Every tag some room role counts, in first-asked order.
     pub room_tags: Vec<String>,
+    /// House plans, in load order.
+    pub plans: Vec<PlanDef>,
     /// The stance a new colony starts in: the first by `order`.
     pub default_stance: Option<DefId>,
     pub priority_rules: Vec<PriorityRuleDef>,
@@ -1572,6 +1638,7 @@ pub const KINDS: &[&str] = &[
     "priority_rule",
     "work_role",
     "room_role",
+    "plan",
     "work_style",
     "skill",
     "field",
@@ -1616,6 +1683,7 @@ impl DefDb {
             "stance" => self.stances[i].id.clone(),
             "work_role" => self.work_roles[i].id.clone(),
             "room_role" => self.room_roles[i].id.clone(),
+            "plan" => self.plans[i].id.clone(),
             "priority_rule" => self.priority_rules[i].id.clone(),
             "work_style" => self.work_styles[i].id.clone(),
             "skill" => self.skills[i].id.clone(),
@@ -1698,6 +1766,9 @@ impl DefDb {
         }
         for (i, d) in self.strata.iter().enumerate() {
             index.insert(("stratum", d.id.clone()), i as DefId);
+        }
+        for (i, d) in self.plans.iter().enumerate() {
+            index.insert(("plan", d.id.clone()), i as DefId);
         }
         for (i, d) in self.priority_rules.iter().enumerate() {
             index.insert(("priority_rule", d.id.clone()), i as DefId);
@@ -2222,6 +2293,75 @@ impl DefDb {
         }
         if let Some(s) = &mut self.start {
             s.creature_r = get("creature", &s.creature, &format!("start/{}", s.id))?;
+        }
+        // House plans: each character resolves to a buildable, and each
+        // piece is found in the grid once.
+        for plan in &mut self.plans {
+            let ctx = format!("plan/{}", plan.id);
+            let mut legend: BTreeMap<char, Piece> = BTreeMap::new();
+            for (key, pd) in &plan.legend {
+                let mut chars = key.chars();
+                let (Some(c), None) = (chars.next(), chars.next()) else {
+                    return Err(format!("{ctx}: legend key '{key}' must be one character"));
+                };
+                if c == '.' || c == ' ' {
+                    return Err(format!("{ctx}: '{c}' builds nothing and can't be in the legend"));
+                }
+                let thing = get("thing", &pd.thing, &ctx)?;
+                let td = &self.things[thing as usize];
+                let Some(bd) = &td.build else {
+                    return Err(format!("{ctx}: '{c}' is {}, which can't be built", pd.thing));
+                };
+                let stuff = pd.stuff.as_deref().map(|m| get("thing", m, &ctx)).transpose()?;
+                match (&bd.stuff, stuff) {
+                    (Some(sc), Some(m)) => {
+                        let fits =
+                            self.things[m as usize].stuff.as_ref().is_some_and(|s| s.categories.contains(&sc.category));
+                        if !fits {
+                            return Err(format!(
+                                "{ctx}: '{c}': {} isn't a {} material",
+                                pd.stuff.as_deref().unwrap_or(""),
+                                sc.category
+                            ));
+                        }
+                    }
+                    (Some(_), None) => {
+                        return Err(format!("{ctx}: '{c}': {} is built of a material; give `stuff`", pd.thing))
+                    }
+                    (None, Some(_)) => return Err(format!("{ctx}: '{c}': {} takes no material", pd.thing)),
+                    (None, None) => {}
+                }
+                legend.insert(c, Piece { at: (0, 0), thing, stuff, facing: pd.facing & 3 });
+            }
+            let rows: Vec<Vec<char>> = plan.grid.lines().map(|l| l.chars().collect()).collect();
+            let (w, h) = (rows.iter().map(Vec::len).max().unwrap_or(0) as i32, rows.len() as i32);
+            if w == 0 {
+                return Err(format!("{ctx}: the grid is empty"));
+            }
+            plan.size = [w, h];
+            let mut covered = vec![false; (w * h) as usize];
+            plan.pieces.clear();
+            for (y, row) in rows.iter().enumerate() {
+                for (x, &c) in row.iter().enumerate() {
+                    let (x, y) = (x as i32, y as i32);
+                    if c == '.' || c == ' ' || covered[(y * w + x) as usize] {
+                        continue;
+                    }
+                    let Some(&piece) = legend.get(&c) else {
+                        return Err(format!("{ctx}: '{c}' at row {}, column {} isn't in the legend", y + 1, x + 1));
+                    };
+                    let [pw, ph] = self.things[piece.thing as usize].size_facing(piece.facing).map(|v| v as i32);
+                    if x + pw > w || y + ph > h {
+                        return Err(format!("{ctx}: '{c}' at row {}, column {} runs off the grid", y + 1, x + 1));
+                    }
+                    for cy in y..y + ph {
+                        for cx in x..x + pw {
+                            covered[(cy * w + cx) as usize] = true;
+                        }
+                    }
+                    plan.pieces.push(Piece { at: (x, y), ..piece });
+                }
+            }
         }
         // A thing that blocks keeps its outline until it is gone (DESIGN.md
         // §6b), so whatever takes it down may crack it but not shrink it.

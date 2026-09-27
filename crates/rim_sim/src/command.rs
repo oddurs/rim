@@ -30,6 +30,16 @@ pub enum Command {
         #[serde(default)]
         facing: u8,
     },
+    /// Place a house plan (DESIGN.md §6c) with its corner at `at`, turned
+    /// `facing` quarter turns clockwise: every piece becomes a blueprint,
+    /// as a Build would, and any that can't go up is left out. `stuff`
+    /// replaces the plan's material wherever it will do.
+    PlacePlan {
+        plan: DefId,
+        at: IVec,
+        facing: u8,
+        stuff: Option<DefId>,
+    },
     /// Remove designations and blueprints in a rectangle.
     Cancel {
         a: IVec,
@@ -231,39 +241,19 @@ pub fn apply(w: &mut World, c: Command) {
             }
         },
         Command::Build { thing, stuff, a, b, facing } => {
-            let Some(bd) = defs.thing(thing).build.as_ref() else { return };
-            // A buildable that takes a material needs one, of the right kind.
-            if let Some(sc) = &bd.stuff {
-                match stuff {
-                    Some(m) if defs.is_material_for(m, &sc.category) => {}
-                    _ => return,
-                }
+            if !stuff_fits(&defs, thing, stuff) {
+                return;
             }
-            let floor = defs.thing(thing).category == crate::defs::Category::Floor;
-            let big = defs.thing(thing).size != [1, 1];
             for p in cells(w, a, b).collect::<Vec<_>>() {
-                if big && !floor {
-                    w.plan_footprint(thing, stuff, p, facing);
-                    continue;
-                }
-                // Grass, a tree or rock in the way is cleared first, not
-                // silently left out: a wall with a gap is no wall.
-                // (On ground that can be built on: nothing is planned over water.)
-                let ground = w.map.inb(p) && w.map.terrain_cost[w.map.idx(p)] > 0;
-                // Rock is cleared by mining it, so it stands up to be marked.
-                let natural = match w.solid_at(p).is_some() && !floor {
-                    true => w.wake_rock(p),
-                    false => {
-                        w.map.fixture_at(p).filter(|&f| ground && w.thing(f).is_some_and(|t| defs.thing(t.def).natural))
-                    }
-                };
-                match natural {
-                    Some(f) if !floor => w.plan_over_facing(f, thing, stuff, facing),
-                    _ if w.map.passable(p) => {
-                        w.spawn_fixture_facing(thing, p, true, stuff, facing);
-                    }
-                    _ => {}
-                }
+                build_at(w, thing, stuff, p, facing);
+            }
+        }
+        Command::PlacePlan { plan, at, facing, stuff } => {
+            let Some(pd) = defs.plans.get(plan as usize) else { return };
+            for piece in pd.placed(&defs, at, facing) {
+                let stuff =
+                    stuff.filter(|_| piece.stuff.is_some()).filter(|&m| stuff_fits(&defs, piece.thing, Some(m)));
+                build_at(w, piece.thing, stuff.or(piece.stuff), IVec::new(piece.at.0, piece.at.1), piece.facing);
             }
         }
         Command::Cancel { a, b } => {
@@ -470,4 +460,41 @@ pub fn apply(w: &mut World, c: Command) {
 
 fn is_colonist(w: &World, e: Entity) -> bool {
     w.ecs.get::<&Pawn>(e).is_ok_and(|p| p.active && !p.dead && p.faction == Faction::Player)
+}
+
+/// Whether `stuff` is what `thing` is built of: a material of the right
+/// kind when it takes one, and none when it doesn't need one.
+fn stuff_fits(defs: &crate::defs::DefDb, thing: DefId, stuff: Option<DefId>) -> bool {
+    let Some(bd) = defs.thing(thing).build.as_ref() else { return false };
+    match (&bd.stuff, stuff) {
+        (Some(sc), Some(m)) => defs.is_material_for(m, &sc.category),
+        (Some(_), None) => false,
+        (None, _) => true,
+    }
+}
+
+/// Plan `thing` at `p`, clearing what's natural in its way.
+fn build_at(w: &mut World, thing: DefId, stuff: Option<DefId>, p: IVec, facing: u8) {
+    let defs = w.defs.clone();
+    let floor = defs.thing(thing).category == crate::defs::Category::Floor;
+    if defs.thing(thing).size != [1, 1] && !floor {
+        w.plan_footprint(thing, stuff, p, facing);
+        return;
+    }
+    // Grass, a tree or rock in the way is cleared first, not silently left
+    // out: a wall with a gap is no wall. (On ground that can be built on:
+    // nothing is planned over water.)
+    let ground = w.map.inb(p) && w.map.terrain_cost[w.map.idx(p)] > 0;
+    // Rock is cleared by mining it, so it stands up to be marked.
+    let natural = match w.solid_at(p).is_some() && !floor {
+        true => w.wake_rock(p),
+        false => w.map.fixture_at(p).filter(|&f| ground && w.thing(f).is_some_and(|t| defs.thing(t.def).natural)),
+    };
+    match natural {
+        Some(f) if !floor => w.plan_over_facing(f, thing, stuff, facing),
+        _ if w.map.passable(p) => {
+            w.spawn_fixture_facing(thing, p, true, stuff, facing);
+        }
+        _ => {}
+    }
 }
