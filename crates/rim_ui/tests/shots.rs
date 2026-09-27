@@ -145,6 +145,15 @@ fn work_board_at_4_and_9_levels() {
         let mut canvas = Canvas::new(cv.screen.0 as usize, cv.screen.1 as usize, GROUND);
         canvas.draw(&out.draw, &ui.text.atlas);
         canvas.write_png(&out_dir().join(format!("{name}.png")));
+        // The same colony in the Roles lens.
+        if let Some(tab) = ui.find("core:work.lens.core:work.roles") {
+            let mut cv = cv.clone();
+            click(&mut ui, &sim, &mut cv, centre(tab));
+            let out = frame(&mut ui, &sim, &cv, Input { time: 5.0, ..Default::default() });
+            let mut canvas = Canvas::new(cv.screen.0 as usize, cv.screen.1 as usize, GROUND);
+            canvas.draw(&out.draw, &ui.text.atlas);
+            canvas.write_png(&out_dir().join(format!("{name}_roles.png")));
+        }
     }
     let _ = std::fs::remove_dir_all(nine);
 }

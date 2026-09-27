@@ -143,6 +143,15 @@ pub enum UiAction {
     SetPriority(Entity, String, u8),
     /// Hand a colonist's work type back to what they'd inherit.
     ClearPriority(Entity, String),
+    /// Put a colonist in a work role, by its index in the colony's roles.
+    AssignWorkRole(Entity, u16),
+    /// A role's level for a work type (qualified id), or `None` to leave it
+    /// to the default.
+    SetRolePriority(u16, String, Option<u8>),
+    /// A new work role named `label`, from a colonist's levels.
+    CreateRoleFromPawn(String, Entity),
+    /// A new work role named `label`, copying another role.
+    CreateRoleFromRole(String, u16),
     /// Put the colony in a stance, by its qualified id.
     SetStance(String),
     /// Let a stockpile take an item (by qualified id), or stop it.
