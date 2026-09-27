@@ -2,14 +2,14 @@
 id: ba18a8e4-6893-4e2e-8e30-9d8040b41109
 title: 'Facing: things turn in four directions'
 type: feature
-status: doing
+status: done
 milestone: houses
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 depends_on:
 - f607a83d-1e4b-487c-ab55-7cd58b821603
 created: 2026-09-26
-updated: 2026-09-26
+updated: 2026-09-27
+closed_at: 2026-09-27
 priority: p1
 api: additive
 effort: m

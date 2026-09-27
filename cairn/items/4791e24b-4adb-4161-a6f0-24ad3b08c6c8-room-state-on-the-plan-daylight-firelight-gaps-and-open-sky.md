@@ -2,15 +2,15 @@
 id: 4791e24b-4adb-4161-a6f0-24ad3b08c6c8
 title: 'Room state on the plan: daylight, firelight, gaps and open sky'
 type: feature
-status: doing
+status: done
 milestone: houses
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 depends_on:
 - 24100bb9-a9f8-430b-9c0a-4b8b7ed4dfb9
 - 7129a537-c108-4a16-8f0f-27a5cd9419d8
 created: 2026-09-26
-updated: 2026-09-26
+updated: 2026-09-27
+closed_at: 2026-09-27
 priority: p2
 api: none
 effort: m
