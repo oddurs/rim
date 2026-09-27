@@ -14,6 +14,7 @@ pub mod map;
 pub mod mapgen;
 pub mod modloader;
 pub mod modtest;
+pub mod near;
 pub mod order;
 pub mod path;
 pub mod profile;

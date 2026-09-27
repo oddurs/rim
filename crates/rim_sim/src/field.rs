@@ -97,8 +97,8 @@ impl Env for AmbEnv<'_> {
     }
 }
 
-/// What a derived field's terms see at one cell: `field` inputs read the
-/// other fields there, everything else reads as outdoors does.
+/// What a derived field's terms see at one cell: `field`, `terrain` and
+/// `near` inputs read there, everything else reads as outdoors does.
 struct CellEnv<'a> {
     fields: &'a Fields,
     defs: &'a DefDb,
@@ -125,6 +125,12 @@ impl Env for CellEnv<'_> {
     }
     fn seed(&self) -> u64 {
         self.clock.seed
+    }
+    fn terrain(&self, prop: usize) -> i64 {
+        self.defs.terrain[self.map.terrain[self.map.idx(self.p)] as usize].props_q[prop]
+    }
+    fn near(&self, tag: usize) -> i64 {
+        self.map.near(tag, self.map.idx(self.p)) as i64 * Q
     }
 }
 
@@ -459,6 +465,7 @@ impl Fields {
         if tick.is_multiple_of(AMBIENT_INTERVAL) {
             self.update_ambient(defs, clock);
         }
+        map.ensure_near();
         let changed = map.take_changed_cells();
         if !changed.is_empty() {
             self.restamp_near(map, &changed);

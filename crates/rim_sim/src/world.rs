@@ -857,6 +857,15 @@ impl World {
                 sp.map_or(0, |sp| sp.span.round().clamp(0.0, crate::defs::MAX_SPAN as f64) as u8)
             };
             m.set_terrain_spans(defs.terrain.iter().map(span).collect());
+            // Only the tags some term measures keep a distance grid.
+            m.set_near_tags(
+                (0..defs.terrain_tags.len())
+                    .map(|k| match defs.near_tags.contains(&k) {
+                        true => defs.terrain.iter().map(|t| t.tags.contains(&defs.terrain_tags[k])).collect(),
+                        false => Vec::new(),
+                    })
+                    .collect(),
+            );
             m
         };
         let fields = Fields::new(&defs, map.cells());

@@ -310,8 +310,15 @@ of = [{ input = "hour", curve = [[3, -1.0], [9, 0.0], [15, 1.0], [21, 0.0], [27,
   outdoor value), `noise = "key"` (smooth deterministic noise with a period
   of `hours`), and plain numbers. A `kind = "derived"` field is only its
   `value` terms, worked out when read: feels-like is the air less wind chill
-  and cold rain, read where the colonist stands. Terrain inputs come with
-  stock fields and farming.
+  and cold rain, read where the colonist stands.
+- **Terrain inputs:** `terrain = "prop"` reads a number the ground gives
+  (`[[terrain]] props`: core's fertility, drainage and water table; any
+  names a mod adds), and `near = "tag"` how many cells it is to the nearest
+  terrain with a tag, up to 16. Only the tags some term reads keep a grid,
+  one byte a cell, worked out by one breadth-first search from every tagged
+  cell at load. A terrain change patches the cells within 16 of it, by a
+  search of the box within 32, so a read is one array lookup and digging a
+  pond costs its neighbourhood. Outdoors (no cell), both read as nowhere.
 - **Tables keyed by label**, not arrays: a patch can change one term
   (`set = { ambient = { day = { scale = 11.0 } } }`) and conflicts are
   reported per term.

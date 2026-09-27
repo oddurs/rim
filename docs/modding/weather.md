@@ -47,11 +47,21 @@ That reads: 10°C, plus 9° times a curve over the hour of the day.
 | `{ ambient = "cloud" }` | Another field's outdoor value |
 | `{ field = "temperature" }` | Another field's value at the cell being read (a derived field's terms); elsewhere its outdoor value |
 | `{ noise = "gusts", hours = 2 }` | Smooth noise from -1 to 1, changing over about `hours` game hours |
+| `{ terrain = "fertility" }` | A property of the terrain at the cell being read (`props` on `[[terrain]]`); 0 where it doesn't give one, or there is no cell |
+| `{ near = "water" }` | Cells to the nearest terrain with that tag (`tags` on `[[terrain]]`), counting diagonal steps, up to 16; 16 where there is no cell |
 | `4.5` | A constant |
 
 - A field with `kind = "derived"` has `value` terms instead of `ambient`,
   worked out wherever it's read and never stored. Core's `feels_like` is
   `temperature` less wind chill and cold rain, and the warmth need reads it.
+- Terrain **props** and **tags** are any names a mod likes. Core gives every
+  terrain `fertility` (1 on grass), `drainage` (0 to 1) and `water_table` (0
+  to 1), and tags water `water`. A mod adds a prop by giving it to its own
+  terrain, or by patching core's (`set = { props = { salinity = 0.4 } }`).
+  Reading a prop or tag no terrain has is a load warning, and it reads 0
+  (or nothing near). `near` is kept as a grid for each tag some term reads,
+  and a terrain change patches it within 32 cells of the change.
+  `rim.terrain_prop(x, y, name)` reads a prop from a script.
 - A **curve** is up to 16 `[x, y]` points with increasing `x`. Between points
   it's a straight line; beyond the ends it holds the end value.
 - Fields are evaluated in dependency order: `temperature` can read `cloud`.

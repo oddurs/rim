@@ -319,6 +319,7 @@ pub fn load_only(mods_dir: &Path, enabled: &dyn Fn(&str) -> bool) -> Result<Load
     defs.finalize()?;
     defs.sprite_files = sprite_files(&order, &defs)?;
     warnings.extend(log.warnings);
+    warnings.append(&mut defs.warnings);
     Ok(LoadedMods { mods: order, defs, scripts, warnings })
 }
 

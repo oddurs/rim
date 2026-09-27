@@ -1106,6 +1106,7 @@ impl ScriptHost {
                 let f = field_id(w, &id, &from)?;
                 let p = cell(w, x, y, z)?;
                 w.map.ensure_rooms();
+                w.map.ensure_near();
                 let defs = w.defs.clone();
                 Ok(w.fields.value(&defs, &w.map, f, p))
             }
@@ -1121,6 +1122,20 @@ impl ScriptHost {
                     return Err(mlua::Error::runtime(format!("terrain_at: ({x}, {y}) is off the map")));
                 }
                 Ok(w.defs.terrain[w.map.terrain[w.map.idx(p)] as usize].id.clone())
+            }
+        );
+        api!(
+            "terrain_prop",
+            "(x: number, y: number, name: string, z: number?) -> number",
+            "A property of the terrain at a cell on level z (the surface if nil), as its [[terrain]] props give it: 0 if they don't.",
+            (i32, i32, String, Option<i32>),
+            |w, (x, y, name, z)| {
+                let p = cell(w, x, y, z)?;
+                if !w.map.inb(p) {
+                    return Err(mlua::Error::runtime(format!("terrain_prop: ({x}, {y}) is off the map")));
+                }
+                let t = &w.defs.terrain[w.map.terrain[w.map.idx(p)] as usize];
+                Ok(t.props.get(&name).copied().unwrap_or(0.0))
             }
         );
         api!(

@@ -81,6 +81,8 @@ pub struct Map {
     chunks_w: i32,
     /// Per chunk: bumped when a cell's terrain changes.
     terrain_rev: Vec<u64>,
+    /// How far each cell is from each terrain tag terms read.
+    near: crate::near::Near,
     /// Per chunk: bumped when anything drawn in a cell changes (what is on
     /// it, or how it looks), and at a chunk's border when a neighbour's does,
     /// since joined walls look at their neighbours. Not a plan's progress:
@@ -172,6 +174,7 @@ impl Map {
             terrain_rev: vec![0; chunks],
             things_rev: vec![0; chunks],
             fixture_rev: vec![0; chunks],
+            near: Default::default(),
         }
     }
 
@@ -317,6 +320,7 @@ impl Map {
     pub fn set_terrain(&mut self, p: IVec, def: DefId, cost: u32) {
         let i = self.idx(p);
         let was = self.span_at(i);
+        self.near.changed(i, self.terrain[i], def);
         self.terrain[i] = def;
         if self.span_at(i) != was {
             if let Some(c) = &mut self.support_changed {
@@ -659,6 +663,30 @@ impl Map {
         self.terrain_span = spans;
         self.support_changed = None;
         self.rooms_dirty = true;
+    }
+
+    /// Which terrains have each tag, by tag then terrain id: an empty list
+    /// for a tag nothing measures the distance to. Set once, from the defs,
+    /// when the world is made.
+    pub fn set_near_tags(&mut self, tagged: Vec<Vec<bool>>) {
+        self.near = crate::near::Near::new(tagged, self.terrain.len());
+    }
+
+    /// Bring the distances to tagged terrain up to date. Cheap when nothing
+    /// changed.
+    pub fn ensure_near(&mut self) {
+        self.near.ensure(self.w, self.h, &self.terrain);
+    }
+
+    /// Cells from `i` to the nearest terrain with tag `tag`, on its level, up
+    /// to `NEAR_CAP`. Call `ensure_near` first.
+    pub fn near(&self, tag: usize, i: usize) -> u8 {
+        self.near.at(tag, i)
+    }
+
+    /// Cells searched patching distances after terrain changes, for tests.
+    pub fn near_patched(&self) -> u64 {
+        self.near.patched
     }
 
     /// The roof a cell holds up: its fixture's or its solid terrain's.
