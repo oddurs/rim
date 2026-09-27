@@ -1156,10 +1156,19 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
 
     let here = t.pawn(founder).pos;
     // Any open cell a few steps off that the founder can reach, ring by
-    // ring: whatever the map put around them.
+    // ring: whatever the map put around them. A scene above may have stood
+    // a wall where they were; they walk out of it, so reach is judged from
+    // the open ground beside them.
+    t.app.sim.world.map.ensure_regions();
+    let region = std::iter::once(here)
+        .chain(rim_sim::map::NEIGHBORS8.iter().map(|&(dx, dy)| here.offset(dx, dy)))
+        .find(|p| t.w().map.passable(*p))
+        .map_or(0, |p| t.w().map.region_at(p));
     let dest = (3..30)
-        .flat_map(|r| (-r..=r).flat_map(move |d| [here.offset(r, d), here.offset(-r, d), here.offset(d, r), here.offset(d, -r)]))
-        .find(|p| t.w().map.passable(*p) && t.w().map.region_at(*p) == t.w().map.region_at(here))
+        .flat_map(|r| {
+            (-r..=r).flat_map(move |d| [here.offset(r, d), here.offset(-r, d), here.offset(d, r), here.offset(d, -r)])
+        })
+        .find(|p| t.w().map.passable(*p) && t.w().map.region_at(*p) == region)
         .expect("somewhere to walk");
     let d = t.screen(dest);
     t.right_click(d).await;
@@ -1314,10 +1323,18 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     println!("\n# stances (0cb48faf)");
     t.key(KeyCode::P).await;
     t.check(t.app.ui.find("core:work.stance.core:siege").is_some(), "P opens the Work Board with a stance bar");
-    // One colonist on Auto opens to their plan; the stance step reads the board.
-    t.check(t.app.ui.find("core:work.show_board").is_some(), "one colonist on Auto opens to their plan");
+    // One colonist on Auto opens to their plan, more to the board; the
+    // stance step reads the board. (Whether a wanderer has joined by now
+    // is the map's doing.)
+    let alone = t.w().colonists().count() == 1;
+    t.check(
+        t.app.ui.find("core:work.show_board").is_some() == alone,
+        format!("one colonist on Auto opens to their plan, more to the board (alone: {alone})"),
+    );
     t.shot("work_plan").await;
-    t.click_ui("core:work.show_board").await;
+    if alone {
+        t.click_ui("core:work.show_board").await;
+    }
     t.click_ui("core:work.stance.core:siege").await;
     t.ticks(1);
     t.check(t.w().stance == defs.lookup("stance", "core:siege"), "a stance button puts the colony in it");
