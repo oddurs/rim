@@ -19,3 +19,34 @@ hp = 180
 market_value = 6
 build = { menu = "structure", work = 200, stuff = { category = "structural", count = 4 } }
 support = { span = 4 }
+
+# A fence: rails between posts, joined to fences and running into walls
+# (DESIGN.md §6c). Posts stand at its ends, corners and junctions, and every
+# third cell along a straight run; where it meets a wall, the wall is its
+# post, and a fence alongside a house doesn't reach into it.
+[[thing]]
+id = "fence"
+label = "fence"
+color = "#8a6a45"
+category = "building"
+look.join = { group = "fence", connects = ["wall"] }
+look.layers = [{ draw = "pipe" }]
+blocks = true
+blocks_wind = 0.2
+hp = 60
+market_value = 3
+build = { menu = "structure", work = 60, stuff = { category = "structural", count = 2 } }
+
+# A gate is a door in a fence: one plank across, a post each side.
+[[thing]]
+id = "gate"
+label = "gate"
+color = "#9a7a52"
+category = "building"
+look.join = { group = "fence", connects = ["wall"] }
+look.layers = [{ draw = "pipe", rails = 1, width = 3.0, post = 0.0 }]
+door = true
+path_cost = 40
+hp = 50
+market_value = 4
+build = { menu = "structure", work = 80, stuff = { category = "structural", count = 3 } }

@@ -63,6 +63,8 @@ pub fn shapes(defs: &DefDb, def: DefId, made_of: Option<DefId>) -> Vec<Shape> {
             Prim::Arc { .. } => continue,
             // Hairlines a token's few pixels can't show.
             Prim::Pattern { .. } => continue,
+            // A fence is its neighbours: nothing to show alone.
+            Prim::Pipe { .. } => continue,
         });
     }
     out

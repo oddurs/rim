@@ -861,6 +861,29 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.app.sim.world.map.ensure_rooms();
     t.grab().await;
     t.check(!t.app.marks.gaps.iter().any(|&(p, _)| p == gap), "walled up again, no mark");
+    // ---------------------------------------------------------- fences
+    println!("\n# a fence runs into a wall with no post, and posts stand where it needs them (DESIGN.md §6c)");
+    let fence = defs.thing_id("fence").unwrap();
+    let mut fences = Vec::new();
+    for k in 1..=8 {
+        fences.push(hut.offset(4 + k, 2));
+    }
+    for x in 3..=12 {
+        fences.push(hut.offset(x, 6));
+    }
+    for y in 3..=5 {
+        fences.push(hut.offset(12, y));
+    }
+    for &p in &fences {
+        if let Some(e) = t.w().map.fixture_at(p) {
+            t.app.sim.world.despawn_thing(e);
+        }
+        t.app.sim.world.spawn_fixture_of(fence, p, false, Some(wood)).expect("a fence");
+    }
+    t.focus(hut.offset(7, 4));
+    t.grab().await;
+    t.check(t.w().map.fixture_at(hut.offset(5, 2)).is_some(), "the fence stands against the hut");
+    t.shot("fences").await;
 
     // ---------------------------------------------------------- material patterns
     println!("\n# a material shows as a pattern, running on along the wall (DESIGN.md §6c)");
@@ -1223,11 +1246,14 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         .map(|(th, _)| th.pos)
         .min_by_key(|p| (p.octile(home), p.x, p.y));
     t.click_tool("designate:core:chop").await;
+    // Centred first, so the cell isn't under a panel whatever the map.
     if let Some(p) = tree {
+        t.focus(p);
         t.drag(p, p).await;
     }
     let spot = open_square(t.w(), home.offset(10, 10), 2).unwrap_or(home.offset(10, 10));
     t.click_tool("build:core:wall").await;
+    t.focus(spot);
     t.drag(spot, spot).await;
     t.frame().await;
     t.check(t.w().tick == tick, "paused: no time passed");
@@ -1826,7 +1852,11 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         left.iter().all(|&e| t.pawn(e).drafted) && !t.pawn(taken).drafted,
         "R drafts every selected colonist, and only them",
     );
-    let to = (3..12).map(|d| at.offset(d, 0)).find(|&p| t.w().map.passable(p)).expect("open ground east");
+    // Open ground a few cells off, whichever way the map leaves some.
+    let to = (3..12)
+        .flat_map(|d| [at.offset(d, 0), at.offset(-d, 0), at.offset(0, d), at.offset(0, -d)])
+        .find(|&p| t.w().map.passable(p))
+        .expect("open ground nearby");
     let dest = t.screen(to);
     t.right_click(dest).await;
     t.ticks(1);

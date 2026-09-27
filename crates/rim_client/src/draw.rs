@@ -897,6 +897,9 @@ fn paint(
             }
             Prim::Edges { width } => edges(s, w, cell, span, join, (sx, sy), z, width, c),
             Prim::Mass => mass(s, w, cell, span, join, (sx, sy), z, c),
+            Prim::Pipe { width, rails, post, spacing } => {
+                pipe(s, w, cell, join, (sx, sy), z, c, (width, rails, post, spacing))
+            }
             Prim::Pattern { src } => {
                 let pat = match (src, cx.made_of.and_then(|m| w.defs.thing(m).stuff.as_ref())) {
                     (PatternSrc::Fixed(p), _) => p,
@@ -1032,6 +1035,101 @@ pub(crate) fn joins(w: &World, p: IVec, join: Join) -> bool {
     }
     // Rock nobody has touched is terrain, and joins as its thing does.
     w.fixture_def_at(p).is_some_and(|d| w.defs.thing(d).look_r.join == Some(g))
+}
+
+/// N E S W.
+const SIDES: [(i32, i32); 4] = [(0, -1), (1, 0), (0, 1), (-1, 0)];
+
+/// The groups a thing's look reaches toward without joining them.
+fn connects_at(w: &World, p: IVec) -> &[u16] {
+    match w.map.fixture_at(p).and_then(|e| w.thing(e)) {
+        Some(t) => &w.defs.thing(t.def).look_r.connects,
+        None => &[],
+    }
+}
+
+/// A fence's arms, N E S W, and which of them are to its own kind: toward
+/// a joined neighbour always; toward a group it connects to (a wall) only
+/// where it runs into it, with a fence behind it or none either side, so a
+/// fence alongside a house doesn't reach into every wall it passes.
+fn pipe_arms(w: &World, p: IVec, join: Join) -> ([bool; 4], [bool; 4]) {
+    let connects = connects_at(w, p);
+    let own = SIDES.map(|(dx, dy)| joins(w, p.offset(dx, dy), join));
+    let other = SIDES.map(|(dx, dy)| connects.iter().any(|&g| joins(w, p.offset(dx, dy), Some((g, 0.0)))));
+    let arms =
+        std::array::from_fn(|k| own[k] || (other[k] && (own[(k + 2) % 4] || !(own[(k + 1) % 4] || own[(k + 3) % 4]))));
+    (arms, own)
+}
+
+/// Along which axis a fence runs straight through, with its own kind on
+/// both sides: Some(true) east–west, Some(false) north–south.
+fn pipe_straight(w: &World, p: IVec, join: Join) -> Option<bool> {
+    let (arms, own) = pipe_arms(w, p, join);
+    match arms {
+        [false, true, false, true] if own[1] && own[3] => Some(true),
+        [true, false, true, false] if own[0] && own[2] => Some(false),
+        _ => None,
+    }
+}
+
+/// Whether a fence has a post: at an end, a corner or a junction, but not
+/// where a straight run meets a wall (the wall is its post); beside a gate
+/// or anything else of its group that isn't itself; and along a straight
+/// run every `spacing` cells, anchored to the world so extending a fence
+/// never moves its posts, and never right beside an end or a corner.
+fn pipe_post(w: &World, p: IVec, join: Join, spacing: u8) -> bool {
+    let def = |q: IVec| w.map.fixture_at(q).and_then(|e| w.thing(e)).map(|t| t.def);
+    let Some(across) = pipe_straight(w, p, join) else {
+        let (arms, own) = pipe_arms(w, p, join);
+        let into_wall = arms.iter().filter(|&&a| a).count() == 2
+            && ((arms[1] && arms[3]) || (arms[0] && arms[2]))
+            && (0..4).any(|k| arms[k] && !own[k]);
+        return !into_wall;
+    };
+    let (dx, dy) = if across { (1, 0) } else { (0, 1) };
+    let (back, ahead) = (p.offset(-dx, -dy), p.offset(dx, dy));
+    if def(back) != def(p) || def(ahead) != def(p) {
+        return true;
+    }
+    let along = if across { p.x } else { p.y };
+    along.rem_euclid(spacing as i32) == 0
+        && pipe_straight(w, back, join).is_some()
+        && pipe_straight(w, ahead, join).is_some()
+}
+
+/// A fence: rails from the middle toward each arm, and a post where it
+/// needs one (DESIGN.md §6c).
+#[allow(clippy::too_many_arguments)]
+fn pipe(
+    s: &mut impl Sink,
+    w: &World,
+    p: IVec,
+    join: Join,
+    (sx, sy): (f32, f32),
+    z: f32,
+    c: Color,
+    (width, rails, post, spacing): (f32, u8, f32, u8),
+) {
+    let (arms, _) = pipe_arms(w, p, join);
+    let (mx, my) = (sx + z / 2.0, sy + z / 2.0);
+    let rail = shade(c, 0.85);
+    let offsets: &[f32] = if rails == 2 { &[-0.09, 0.09] } else { &[0.0] };
+    for (k, &(dx, dy)) in SIDES.iter().enumerate() {
+        if !arms[k] {
+            continue;
+        }
+        for &o in offsets {
+            let (ox, oy) = if dx != 0 { (0.0, o * z) } else { (o * z, 0.0) };
+            let (ex, ey) = (mx + dx as f32 * z / 2.0, my + dy as f32 * z / 2.0);
+            s.line(mx + ox, my + oy, ex + ox, ey + oy, width, rail);
+        }
+    }
+    let lone = !arms.iter().any(|&a| a);
+    if post > 0.0 && (lone || pipe_post(w, p, join, spacing)) {
+        let r = post * z / 2.0;
+        s.rect(mx - r, my - r, 2.0 * r, 2.0 * r, shade(c, 1.1));
+        outline(s, mx - r, my - r, 2.0 * r, 2.0 * r, 1.0, shade(c, 0.5));
+    }
 }
 
 /// Which sides of the footprint face a joined neighbour, and which of its
@@ -1656,5 +1754,57 @@ mod tests {
             s.world.spawn_fixture_of(chair, at, false, Some(wood)).unwrap();
             assert_eq!(orient(&s, at).turn, turn, "a chair at {:?} from its table", (at.x - t.x, at.y - t.y));
         }
+    }
+
+    /// Fences (DESIGN.md §6c): posts where a fence needs one, into a wall
+    /// only where it runs into it, and the wall is its post there.
+    #[test]
+    fn fence_posts_go_where_a_fence_needs_one() {
+        let mut s = Sim::new(std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../mods")), 1).unwrap();
+        let o = s.world.colony_center().unwrap().offset(-20, -20);
+        // A 5×5 hut at o, a fence running into its west wall from 7 cells
+        // out, and a fence along its south side, one cell off.
+        building(&mut s, o, 5, 5, None, &[]);
+        let d = &s.world.defs;
+        let (fence, gate, wood) =
+            (d.thing_id("fence").unwrap(), d.thing_id("gate").unwrap(), d.thing_id("wood").unwrap());
+        let clear = |s: &mut Sim, p: IVec| {
+            if let Some(f) = s.world.map.fixture_at(p) {
+                s.world.despawn_thing(f);
+            }
+        };
+        let run: Vec<IVec> = (1..=7).map(|k| o.offset(-k, 2)).collect();
+        for &p in &run {
+            clear(&mut s, p);
+            s.world.spawn_fixture_of(fence, p, false, Some(wood)).unwrap();
+        }
+        let south: Vec<IVec> = (-1..=5).map(|x| o.offset(x, 5)).collect();
+        for &p in &south {
+            clear(&mut s, p);
+            s.world.spawn_fixture_of(fence, p, false, Some(wood)).unwrap();
+        }
+        let join = |s: &Sim, p: IVec| {
+            join_of(&s.world.defs.thing(s.world.thing(s.world.map.fixture_at(p).unwrap()).unwrap().def).look_r)
+        };
+        let j = join(&s, run[0]);
+        // Into the wall: an arm east, and no post; the wall is its post.
+        let (arms, own) = pipe_arms(&s.world, run[0], j);
+        assert!(arms[1] && !own[1], "the run reaches into the wall");
+        assert!(!pipe_post(&s.world, run[0], j, 3), "no post where it meets the wall");
+        // The far end is an end: a post.
+        assert!(pipe_post(&s.world, run[6], j, 3), "a post at the end");
+        // Along the run, posts only on every third cell, not on every cell.
+        let posts = run[1..6].iter().filter(|&&p| pipe_post(&s.world, p, j, 3)).count();
+        assert!((1..=2).contains(&posts), "a few posts along the run, not five ({posts})");
+        // Alongside the house's south wall: no arm north into it.
+        for &p in &south[1..6] {
+            let (arms, _) = pipe_arms(&s.world, p, j);
+            assert!(!arms[0], "no arm into the wall from {p:?}");
+        }
+        // A gate in the run gets a post each side.
+        let g = run[3];
+        clear(&mut s, g);
+        s.world.spawn_fixture_of(gate, g, false, Some(wood)).unwrap();
+        assert!(pipe_post(&s.world, run[2], j, 3) && pipe_post(&s.world, run[4], j, 3), "a post each side of the gate");
     }
 }

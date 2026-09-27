@@ -109,9 +109,12 @@ pub fn grown(layers: &[Layer], f: f32, own: Color, alpha: f32) -> (Vec<Layer>, f
             }
             Prim::Mass => {}
             // Clipping a picture would squash it: it fades in instead.
-            Prim::Edges { .. } | Prim::Arc { .. } | Prim::Pattern { .. } | Prim::Sprite { .. } | Prim::Glyph { .. } => {
-                fade *= g
-            }
+            Prim::Edges { .. }
+            | Prim::Arc { .. }
+            | Prim::Pattern { .. }
+            | Prim::Pipe { .. }
+            | Prim::Sprite { .. }
+            | Prim::Glyph { .. } => fade *= g,
         }
         let base = l.color.map_or(own, |[r, g, b, a]| Color::from_rgba(r, g, b, a));
         l.color = Some(Color::new(base.r, base.g, base.b, base.a * fade).into());

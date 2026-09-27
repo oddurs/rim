@@ -106,7 +106,7 @@ dd { margin: 0; font-variant-numeric: tabular-nums; }
 .gallery figure { margin: 0; display: grid; gap: 6px; }
 .gallery canvas { width: 100%; aspect-ratio: 1; border-radius: 4px; display: block; }
 .gallery figcaption { font-size: 12px; color: var(--muted); }
-.gallery.wide canvas { aspect-ratio: 4 / 3; }
+.gallery.wide { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
 .tablewrap { overflow-x: auto; }
 table { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums; }
 th, td { text-align: left; padding: 7px 10px 7px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
@@ -193,6 +193,12 @@ pre .c { color: var(--faint); }
       <h2>One rule for every junction</h2>
       <p>A wall piece looks at its eight neighbours. Each quarter of the cell reads its two sides and the corner between them, and that picks one of five shapes: outer corner, edge, edge, inner corner or solid. A run then reads as one mass, rounded where it ends and square where it meets. Doors and windows take their direction from the run they sit in. Material changes along a run with only a hairline seam, never an outline.</p>
       <div class="gallery" id="joins"></div>
+    </div>
+
+    <div class="note span12">
+      <h2>Fences: posts where a fence needs one</h2>
+      <p>A fence post goes at an end, a corner or a junction. Along a straight run, a post stands every third cell, anchored to the world so extending a fence never moves its posts, and never right beside an end or a corner. A long fence reads as rails between posts, not a post on every cell. A fence joins a wall only where it runs into one, and there the wall is its post. A fence that runs alongside a house doesn't reach into every wall it passes.</p>
+      <div class="gallery wide" id="fences"></div>
     </div>
 
     <div class="note span6">
@@ -332,7 +338,43 @@ const inb = (w, x, y) => x >= 0 && y >= 0 && x < w.W && y < w.H;
 const at = (w, x, y) => inb(w, x, y) ? w.f[y * w.W + x] : null;
 function size(kind, rot) { const s = KINDS[kind].size || [1, 1]; return rot & 1 ? [s[1], s[0]] : s; }
 function J(w, x, y, g) { const o = at(w, x, y); return !!o && KINDS[o.kind].join === g; }
-function joinsPipe(w, x, y) { const o = at(w, x, y); return !!o && (o.kind === 'fence' || KINDS[o.kind].join === 'wall'); }
+function isFence(w, x, y) { const o = at(w, x, y); return !!o && o.kind === 'fence'; }
+function isWall(w, x, y) { const o = at(w, x, y); return !!o && KINDS[o.kind].join === 'wall'; }
+// Which of N E S W a fence cell reaches toward. Always a fence; a wall only
+// where the fence runs into it (a fence behind it, or none either side), so
+// a fence alongside a house doesn't sprout an arm into every wall.
+function fenceArms(w, x, y) {
+  const f = DIRS4.map(([dx, dy]) => isFence(w, x + dx, y + dy));
+  return DIRS4.map(([dx, dy], k) => {
+    if (f[k]) return true;
+    if (!isWall(w, x + dx, y + dy)) return false;
+    const back = f[(k + 2) % 4], side = f[(k + 1) % 4] || f[(k + 3) % 4];
+    return back || !side;
+  });
+}
+// A straight stretch: arms exactly on one axis, both ways, fences both sides.
+function straight(w, x, y) {
+  const a = fenceArms(w, x, y), n = a.filter(Boolean).length;
+  if (n !== 2 || !((a[0] && a[2]) || (a[1] && a[3]))) return false;
+  const [dx, dy] = a[1] ? [1, 0] : [0, 1];
+  return isFence(w, x + dx, y + dy) && isFence(w, x - dx, y - dy);
+}
+// Posts at ends, corners and junctions, and along a straight stretch every
+// third cell of the world grid.
+// Where a run meets a wall, the wall is its post.
+function fencePost(w, x, y, arms) {
+  if (!straight(w, x, y)) {
+    const walls = DIRS4.filter(([dx, dy], k) => arms[k] && isWall(w, x + dx, y + dy)).length;
+    const n = arms.filter(Boolean).length;
+    // A straight run's last cell against a wall needs no post of its own.
+    return !(walls === 1 && n === 2 && ((arms[0] && arms[2]) || (arms[1] && arms[3])));
+  }
+  // Every third cell along the run, anchored to the world so extending a
+  // fence never moves its posts, and never right beside an end or corner.
+  const [dx, dy] = arms[1] ? [1, 0] : [0, 1];
+  const along = dx ? x : y;
+  return along % 3 === 0 && straight(w, x - dx, y - dy) && straight(w, x + dx, y + dy);
+}
 
 function canPlace(w, kind, x, y, rot) {
   const [fw, fh] = size(kind, rot), one = fw === 1 && fh === 1, k = KINDS[kind];
@@ -975,20 +1017,25 @@ function render(ctx, s, w, A, v, o) {
       ctx.lineWidth = lw3; ctx.strokeStyle = shade(c, 0.6, 0.8); ctx.stroke();
     } else if (q.kind === 'fence') {
       const c = MATS[q.mat].color, mx = X(x) + z / 2, my = Y(y) + z / 2, off = 0.09 * z;
+      const arms = fenceArms(w, x, y);
       for (const pass of [0, 1]) {
         const d = pass === 0 ? [z * 0.06, z * 0.09] : [0, 0];
         ctx.beginPath();
-        for (const [dx, dy] of DIRS4) {
-          if (!joinsPipe(w, x + dx, y + dy)) continue;
+        DIRS4.forEach(([dx, dy], k) => {
+          if (!arms[k]) return;
           for (const sgn of [-1, 1]) {
             const ox = dy !== 0 ? sgn * off : 0, oy = dx !== 0 ? sgn * off : 0;
+            // Rails run through the middle of the cell: from the far side
+            // of it when the run goes straight on, else from the middle.
             ctx.moveTo(mx + ox + d[0], my + oy + d[1]); ctx.lineTo(mx + dx * z / 2 + ox + d[0], my + dy * z / 2 + oy + d[1]);
           }
-        }
+        });
         ctx.lineWidth = lw2 * 1.3; ctx.strokeStyle = pass === 0 ? 'rgba(8,10,6,0.3)' : shade(c, 0.85); ctx.stroke();
       }
-      ctx.beginPath(); ctx.roundRect(mx - 0.13 * z, my - 0.13 * z, 0.26 * z, 0.26 * z, 0.05 * z);
-      ctx.fillStyle = shade(c, 1.1); ctx.fill(); ctx.lineWidth = lw3; ctx.strokeStyle = INK; ctx.stroke();
+      if (fencePost(w, x, y, arms)) {
+        ctx.beginPath(); ctx.roundRect(mx - 0.13 * z, my - 0.13 * z, 0.26 * z, 0.26 * z, 0.05 * z);
+        ctx.fillStyle = shade(c, 1.1); ctx.fill(); ctx.lineWidth = lw3; ctx.strokeStyle = INK; ctx.stroke();
+      }
     }
   });
 
@@ -1514,6 +1561,16 @@ function buildNotes() {
   for (const [name, , , build] of J_) {
     const f = document.createElement('figure'); f.innerHTML = `<canvas></canvas><figcaption>${name}</figcaption>`; g.appendChild(f);
     jobs.push([f.querySelector('canvas'), miniWorld(3, 3, build)]);
+  }
+  const fg = document.getElementById('fences');
+  const F_ = [
+    ['a long run: a post every third cell', 12, 5, w => { for (let x = 0; x < 12; x++) place(w, 'fence', 'wood', x, 1); for (let y = 2; y < 5; y++) place(w, 'fence', 'wood', 11, y); for (let y = 2; y < 5; y++) place(w, 'fence', 'wood', 4, y); }],
+    ['into a house: the wall is the post', 12, 5, w => { ring(w, 7, 0, 11, 4, 'clay'); for (let x = 0; x < 7; x++) place(w, 'fence', 'wood', x, 2); for (let y = 0; y < 5; y++) place(w, 'fence', 'wood', 0, y); }],
+    ['alongside a house: no arms into its walls', 12, 5, w => { ring(w, 1, 0, 9, 3, 'wood'); for (let x = 0; x < 12; x++) place(w, 'fence', 'wood', x, 4); for (let y = 0; y < 4; y++) { place(w, 'fence', 'wood', 0, y); place(w, 'fence', 'wood', 11, y); } }],
+  ];
+  for (const [name, W, H, build] of F_) {
+    const f = document.createElement('figure'); f.innerHTML = `<canvas style="aspect-ratio:${W}/${H}"></canvas><figcaption>${name}</figcaption>`; fg.appendChild(f);
+    jobs.push([f.querySelector('canvas'), miniWorld(W, H, build)]);
   }
   const t = document.getElementById('mattable');
   t.innerHTML = `<thead><tr><th></th><th>Material</th><th>From</th><th>Pattern</th><th>Insulation</th><th>Hit points</th><th>Roof span</th><th>Build with</th><th>Roof</th></tr></thead><tbody>${Object.entries(MATS).map(([id, m]) => `<tr><td class="sw"><canvas data-mat="${id}" style="width:44px;height:22px;display:block;border-radius:2px"></canvas></td><td>${m.label}</td><td>${m.item}, ${m.from}</td><td>${m.pattern}</td><td>× ${m.ins}</td><td>× ${m.hp}</td><td>${m.span}</td><td>${m.needs ? m.needs + ' tool' : 'hands'}</td><td>${ROOFS[m.roof].label}</td></tr>`).join('')}</tbody>`;
