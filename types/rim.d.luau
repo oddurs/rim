@@ -18,8 +18,8 @@ type BoardWork = { id: string, label: string, skill: string?, waiting: number, p
 type BoardColonist = { id: number, name: string, role: number?, member: boolean, skills: { [string]: number }, pins: { [string]: number }, base: { [string]: number } }
 type WorkBoard = { levels: number, role: number?, work: { BoardWork }, colonists: { BoardColonist } }
 type PlanCell = { level: number, reason: string? }
-type WorkWhy = { work: string, level: number, why: string, dist: number? }
-type Taker = { id: number, ticks: number }
+type WorkWhy = { work: string, level: number, why: string, dist: number?, urgent: boolean }
+type Taker = { id: number, ticks: number, urgent: boolean }
 type Part = { label: string, value: number }
 type OrderNeed = { thing: string?, tag: string?, count: number }
 type OrderSpec = { label: string, needs: { OrderNeed }, work: number, work_type: string, requires: { string }? }
@@ -63,7 +63,7 @@ declare rim: {
     every: (interval: number, fn: () -> ()) -> (),
     -- Each part of a field's outdoor value: its terms, then pushes.
     explain: (field: string) -> {Part},
-    -- Why a colonist would do what it would, and passes over the rest, work type by work type in tie-break order. Empty if it isn't a pawn.
+    -- Why a colonist would do what it would, and passes over the rest, work type by work type in tie-break order. `urgent` if the pick is a job the player marked. Empty if it isn't a pawn.
     explain_work: (id: number) -> { WorkWhy },
     -- A field's value at a cell (temperature, light, ...), on level z (the surface if nil).
     field: (id: string, x: number, y: number, z: number?) -> number,
@@ -163,7 +163,7 @@ declare rim: {
     ticks_per_day: number,
     -- The colony's wealth (recomputed every few hundred ticks).
     wealth: () -> number,
-    -- Who would take the job on a thing next, soonest first, with about how many ticks until they're there: colonists free to choose. Empty if someone already holds it.
+    -- Who would take the job on a thing next, soonest first, with about how many ticks until they're there: colonists free to choose. `urgent` if the player marked the job. Empty if someone already holds it.
     who_takes: (id: number) -> { Taker },
     -- What a planner reads: the scale, each work type (in tie-break order) with what's waiting and its `auto` numbers, and each colonist with their role, skills, pins and level before the rules.
     work_board: () -> WorkBoard,

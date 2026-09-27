@@ -122,7 +122,7 @@ type Stuff = { id: string, label: string, color: string, have: number, active: b
 type Hover = { x: number, y: number, terrain: string, shelter: string, readings: { string }, values: { Reading }, things: { string }, takes: string?, store: StoreRef? }
 type StockRow = { thing: string, label: string, total: number, stored: number, loose: number, stores: number, value: number, category: string?, category_label: string?, category_order: number }
 type Reading = { label: string, value: string }
-type WorkWhy = { work: string, level: number, why: string, picked: boolean, dist: number? }
+type WorkWhy = { work: string, level: number, why: string, picked: boolean, dist: number?, urgent: boolean }
 type ProfileRow = { name: string, us: number, mod: boolean }
 type ModInfo = { id: string, version: string, name: string }
 type ThingInfo = {
@@ -273,7 +273,7 @@ pub const UI_API: &[UiDoc] = &[
     d!("view.effective", "(id: number) -> { [string]: Effective }?", "A colonist's priority per work type once rules and the stance have had their say, with why: \"Build 1 = base 3, Siege -2\". Nil if it isn't a pawn."),
     d!("view.events", "(since_tick: number) -> { WorldEvent }", "Recent joins, deaths and departures, newest last."),
     d!("view.explain", "(field: string) -> { Part }", "Each term and push that makes up a field's outdoor value."),
-    d!("view.explain_work", "(id: number) -> { WorkWhy }?", "The why panel: each work type in tie-break order with why the colonist would take it or passes it over (\"Needs a chopping tool\", \"Build first\"), and which it picks."),
+    d!("view.explain_work", "(id: number) -> { WorkWhy }?", "The why panel: each work type in tie-break order with why the colonist would take it or passes it over (\"Needs a chopping tool\", \"Build first\"), and which it picks; `urgent` if that pick is a job the player marked."),
     d!("view.fields", "() -> { FieldInfo }", "The field layers."),
     d!("view.hint", "() -> string?", "What a right-click would do."),
     d!("view.hour", "() -> number", "Hour of the day, 0 to 24."),

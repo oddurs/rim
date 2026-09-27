@@ -293,6 +293,18 @@ pub fn why_text(w: &World, why: &crate::ai::Why) -> String {
     }
 }
 
+/// A why panel row in words: `why_text`, plus what an urgent mark did to
+/// the pick. Above First it lifted the job a level; at First it could only
+/// put it ahead of the rest there.
+pub fn work_why_text(w: &World, x: &crate::ai::WorkWhy) -> String {
+    let text = why_text(w, &x.why);
+    match (x.urgent, x.level) {
+        (false, _) => text,
+        (true, 1) => format!("{text} (urgent: ahead of the rest)"),
+        (true, _) => format!("{text} (urgent: a level sooner)"),
+    }
+}
+
 fn item(w: &World, from: IVec, i: Entity) -> Option<Order> {
     let t = w.thing(i)?;
     let td = w.defs.thing(t.def);

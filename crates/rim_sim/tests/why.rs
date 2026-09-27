@@ -179,3 +179,50 @@ fn explaining_changes_nothing() {
     assert!(s.world.reservations.get(&tree).is_none_or(|&r| r == pawn));
     let _ = s.world.ecs.get::<&Pawn>(pawn).unwrap();
 }
+
+/// A colonist in Hand with Harvest at Soon and Build at `build`, berries
+/// marked all round, and a wall planned with its wood to hand.
+fn a_wall_and_berries(build: u8) -> (Sim, Entity, Entity) {
+    let mut s = core();
+    common::hands(&mut s);
+    let pawn = s.world.colonists().next().unwrap();
+    let defs = s.world.defs.clone();
+    let work = |id: &str| defs.lookup("work_type", id).unwrap();
+    s.push(Command::SetPriority { pawn, work: work("core:harvest"), level: 2 });
+    s.push(Command::SetPriority { pawn, work: work("core:build"), level: build });
+    let c = s.world.pawn_pos(pawn).unwrap();
+    let (wall, wood) = (defs.thing_id("wall").unwrap(), defs.thing_id("wood").unwrap());
+    s.world.place_item(wood, c.offset(1, 1), 20);
+    let spot = common::loose_cells(&s, c.offset(3, 0), 1)[0];
+    s.push(Command::Build { thing: wall, stuff: Some(wood), a: spot, b: spot, facing: 0 });
+    let harvest = defs.lookup("designation", "harvest").unwrap();
+    s.push(Command::Designate { designation: harvest, a: c.offset(-25, -25), b: c.offset(25, 25) });
+    s.step();
+    let bp = s.world.markable_at(spot).expect("the wall's blueprint is a job");
+    (s, pawn, bp)
+}
+
+/// A Later wall marked urgent is picked, and the why panel says the mark
+/// did it: a level sooner, or at First, ahead of the rest.
+#[test]
+fn the_why_panel_names_an_urgent_mark() {
+    let (s, pawn, _) = a_wall_and_berries(3);
+    let build = why_of(&s, pawn, "core:build");
+    assert!(!build.urgent && matches!(build.why, Why::Beaten(_)), "unmarked, Soon's harvest wins: {build:?}");
+    assert!(!rim_sim::order::work_why_text(&s.world, &build).contains("urgent"));
+
+    let (mut s, pawn, bp) = a_wall_and_berries(3);
+    s.push(Command::MarkUrgent { target: bp, on: true });
+    s.step();
+    let build = why_of(&s, pawn, "core:build");
+    assert!(build.urgent && matches!(build.why, Why::Picked(_)), "marked, the wall wins: {build:?}");
+    assert!(!why_of(&s, pawn, "core:harvest").urgent, "only the pick carries the mark");
+    let text = rim_sim::order::work_why_text(&s.world, &build);
+    assert!(text.ends_with("(urgent: a level sooner)"), "{text}");
+
+    let (mut s, pawn, bp) = a_wall_and_berries(1);
+    s.push(Command::MarkUrgent { target: bp, on: true });
+    s.step();
+    let text = rim_sim::order::work_why_text(&s.world, &why_of(&s, pawn, "core:build"));
+    assert!(text.ends_with("(urgent: ahead of the rest)"), "at First there's no level to lift it: {text}");
+}

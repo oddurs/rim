@@ -101,7 +101,7 @@ type Stuff = { id: string, label: string, color: string, have: number, active: b
 type Hover = { x: number, y: number, terrain: string, shelter: string, readings: { string }, values: { Reading }, things: { string }, takes: string?, store: StoreRef? }
 type StockRow = { thing: string, label: string, total: number, stored: number, loose: number, stores: number, value: number, category: string?, category_label: string?, category_order: number }
 type Reading = { label: string, value: string }
-type WorkWhy = { work: string, level: number, why: string, picked: boolean, dist: number? }
+type WorkWhy = { work: string, level: number, why: string, picked: boolean, dist: number?, urgent: boolean }
 type ProfileRow = { name: string, us: number, mod: boolean }
 type ModInfo = { id: string, version: string, name: string }
 type ThingInfo = {
@@ -286,7 +286,7 @@ declare view: {
     events: (since_tick: number) -> { WorldEvent },
     -- Each term and push that makes up a field's outdoor value.
     explain: (field: string) -> { Part },
-    -- The why panel: each work type in tie-break order with why the colonist would take it or passes it over ("Needs a chopping tool", "Build first"), and which it picks.
+    -- The why panel: each work type in tie-break order with why the colonist would take it or passes it over ("Needs a chopping tool", "Build first"), and which it picks; `urgent` if that pick is a job the player marked.
     explain_work: (id: number) -> { WorkWhy }?,
     -- The field layers.
     fields: () -> { FieldInfo },

@@ -643,6 +643,8 @@ is later, when stores run down and loose items pile up.
 colonist takes it one level sooner than its work type, never from 0, and it
 wins ties inside its level. Pools keep urgent work in its own bucket, so the
 walk stays a walk over levels. The mark clears when the work is done.
+The why panel says when a pick came from a mark ("urgent: a level
+sooner"), and the map's hover forecast leads with "Urgent" on a marked job.
 
 ### The Work Board
 
