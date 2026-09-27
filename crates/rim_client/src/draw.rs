@@ -472,7 +472,11 @@ pub fn things(app: &mut App) -> Counts {
         }
     };
     // Per layer, cached then live, so a plan never covers what stands on it.
+    // The grid lies on the ground and the floors, under items and fixtures.
     for layer in 0..3 {
+        if layer == 1 {
+            crate::grid::draw(app);
+        }
         app.meshes.draw_layer(w, cam, layer, target, false);
         for cell in app.meshes.live(layer) {
             let Some(e) = w.map.layers_at(w.map.idx(cell))[layer] else { continue };
@@ -833,11 +837,10 @@ pub fn world_ui(app: &App) {
     app.marks.draw(cam, visible(app));
     // Selection is the overlay's (overlay::scene).
     // Drag rectangle preview; a select drag shows once it leaves its cell.
-    let (mx, my) = mouse_position();
+    let (mx, my) = app.pointer;
     // A plan is placed with a click, not dragged out.
-    let dragging = app
-        .drag_start
-        .filter(|&a| !matches!(app.tool, Tool::Plan(_)) && (app.tool != Tool::Select || a != cam.tile_at(mx, my)));
+    let dragging =
+        app.drag_start.filter(|_| !matches!(app.tool, Tool::Plan(_)) && (app.tool != Tool::Select || app.dragged));
     if let Some(a) = dragging {
         let b = cam.tile_at(mx, my);
         let (ax, ay) = (a.x.min(b.x) as f32, a.y.min(b.y) as f32);
@@ -874,7 +877,7 @@ pub fn world_ui(app: &App) {
             }
         }
     } else if app.tool != Tool::Select {
-        let (mx, my) = mouse_position();
+        let (mx, my) = app.pointer;
         let tp = cam.tile_at(mx, my);
         let (sx, sy) = cam.to_screen(tp.x as f32, tp.y as f32);
         // A thing bigger than a cell shows its footprint, turned as it will

@@ -10,6 +10,7 @@ mod autotest;
 mod bench;
 mod cli;
 mod draw;
+mod grid;
 mod light;
 mod mesh;
 mod occluders;
@@ -192,6 +193,14 @@ pub struct App {
     /// Overlay colours and sizes, from the theme each frame (DESIGN.md §6f).
     pub palette: overlay::Palette,
     pub chalk: overlay::State,
+    /// The grid's fades and the pointer it follows (DESIGN.md §6f).
+    pub grid: grid::Grid,
+    /// A drag has left the cell it started in: it's a drag, not a click.
+    pub dragged: bool,
+    /// The pointer as this frame's input had it, in screen points. Previews
+    /// follow it rather than the OS cursor, so replayed input (the
+    /// autotest) draws what it did.
+    pub pointer: (f32, f32),
 }
 
 /// Seconds since the last frame, clamped: macroquad's value is raw, so the
@@ -705,6 +714,9 @@ async fn game() {
         saver,
         palette,
         chalk: overlay::State::default(),
+        grid: grid::Grid::default(),
+        pointer: (0.0, 0.0),
+        dragged: false,
     };
     app.selected = app.sim.world.colonists().next();
 
@@ -1283,6 +1295,12 @@ pub fn frame(app: &mut App, raw: &RawInput) {
     hint(app, raw.mouse);
     let picked = selection(app);
     app.chalk.update(&picked, raw.time);
+    // A drag counts once it leaves the cell it started in.
+    app.dragged = app.drag_start.is_some_and(|a| a != app.cam.tile_at(mx, my));
+    let dragging = app.dragged;
+    app.pointer = (mx, my);
+    let pointer = (!app.mouse_over_ui).then(|| app.cam.to_world(mx, my));
+    app.grid.update(grid::level(app.tool, dragging), pointer, raw.time);
 }
 
 /// CPU time of each render pass last frame, in µs. This is building the
