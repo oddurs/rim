@@ -74,7 +74,7 @@ fn with_no_shelter_a_far_wall_beats_a_near_tree() {
     let wood = s.world.defs.thing_id("wood");
     // Far off: every tree near the colony is nearer than this wall.
     let far = open_at(&s, at, 18);
-    s.push(Command::Build { thing: wall, stuff: wood, a: far, b: far });
+    s.push(Command::Build { thing: wall, stuff: wood, a: far, b: far, facing: 0 });
     assert!(!s.world.has_shelter());
     let job = first_job(&mut s, pawn, 600).expect("some work");
     assert!(builds(&s, &job, "wall"), "shelter first: {job:?}");
@@ -88,7 +88,7 @@ fn a_far_table_waits_for_the_near_tree() {
     let table = s.world.defs.thing_id("table").unwrap();
     let wood = s.world.defs.thing_id("wood");
     let far = open_at(&s, at, 18);
-    s.push(Command::Build { thing: table, stuff: wood, a: far, b: far });
+    s.push(Command::Build { thing: table, stuff: wood, a: far, b: far, facing: 0 });
     let job = first_job(&mut s, pawn, 600).expect("some work");
     assert!(matches!(job, Job::Harvest { .. }), "the near tree first: {job:?}");
 }
@@ -100,8 +100,8 @@ fn between_urgent_plans_the_nearest_wins() {
     let wall = s.world.defs.thing_id("wall").unwrap();
     let wood = s.world.defs.thing_id("wood");
     let (far, near) = (open_at(&s, at, 18), open_at(&s, at, 3));
-    s.push(Command::Build { thing: wall, stuff: wood, a: far, b: far });
-    s.push(Command::Build { thing: wall, stuff: wood, a: near, b: near });
+    s.push(Command::Build { thing: wall, stuff: wood, a: far, b: far, facing: 0 });
+    s.push(Command::Build { thing: wall, stuff: wood, a: near, b: near, facing: 0 });
     let job = first_job(&mut s, pawn, 600).expect("some work");
     let bp = match job {
         Job::Construct { bp, .. } | Job::Deliver { bp, .. } => bp,
@@ -117,7 +117,7 @@ fn a_priority_level_still_beats_urgency() {
     let wall = s.world.defs.thing_id("wall").unwrap();
     let wood = s.world.defs.thing_id("wood");
     let far = open_at(&s, at, 18);
-    s.push(Command::Build { thing: wall, stuff: wood, a: far, b: far });
+    s.push(Command::Build { thing: wall, stuff: wood, a: far, b: far, facing: 0 });
     let chop = s.world.defs.lookup("work_type", "core:chop").unwrap();
     s.push(Command::SetPriority { pawn, work: chop, level: 1 });
     let job = first_job(&mut s, pawn, 600).expect("some work");
@@ -134,7 +134,7 @@ fn choosing_work_never_rebuilds_rooms_mid_tick() {
     let wall = s.world.defs.thing_id("wall").unwrap();
     let wood = s.world.defs.thing_id("wood");
     let far = open_at(&s, at, 18);
-    s.push(Command::Build { thing: wall, stuff: wood, a: far, b: far });
+    s.push(Command::Build { thing: wall, stuff: wood, a: far, b: far, facing: 0 });
     s.step();
     // A wall goes up mid-tick; then the colonist thinks.
     let other = open_at(&s, at, 8);

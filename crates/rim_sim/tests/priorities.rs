@@ -51,7 +51,7 @@ fn busy_colony(build: u8, chop: u8) -> (Sim, rim_sim::hecs::Entity) {
     let chop_d = defs.lookup("designation", "chop").unwrap();
     sim.push(Command::Designate { designation: chop_d, a: c.offset(-15, -15), b: c.offset(15, 15) });
     let wall = defs.thing_id("wall").unwrap();
-    sim.push(Command::Build { thing: wall, stuff: Some(wood), a: c.offset(-6, 4), b: c.offset(-2, 4) });
+    sim.push(Command::Build { thing: wall, stuff: Some(wood), a: c.offset(-6, 4), b: c.offset(-2, 4), facing: 0 });
     (sim, pawn)
 }
 
@@ -232,7 +232,7 @@ fn work_waiting_counts_what_there_is_to_do() {
 
     let c = sim.world.colony_center().unwrap();
     let (wall, wood) = (defs.thing_id("wall").unwrap(), defs.thing_id("wood").unwrap());
-    sim.push(Command::Build { thing: wall, stuff: Some(wood), a: c.offset(-6, 6), b: c.offset(-2, 6) });
+    sim.push(Command::Build { thing: wall, stuff: Some(wood), a: c.offset(-6, 6), b: c.offset(-2, 6), facing: 0 });
     let chop = defs.lookup("designation", "chop").unwrap();
     sim.push(Command::Designate { designation: chop, a: c.offset(-20, -20), b: c.offset(20, 20) });
     sim.step();

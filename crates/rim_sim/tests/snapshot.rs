@@ -21,12 +21,12 @@ fn colony(seed: u64) -> Sim {
     let c = sim.world.colony_center().unwrap();
     // A hut, so there are rooms, a door, blueprints and hauling.
     sim.push(Command::Designate { designation: chop, a: c.offset(-12, -12), b: c.offset(12, 12) });
-    sim.push(Command::Build { stuff: Some(wood), thing: wall, a: c.offset(2, 2), b: c.offset(6, 2) });
-    sim.push(Command::Build { stuff: Some(wood), thing: wall, a: c.offset(2, 6), b: c.offset(6, 6) });
-    sim.push(Command::Build { stuff: Some(wood), thing: wall, a: c.offset(2, 3), b: c.offset(2, 5) });
-    sim.push(Command::Build { stuff: Some(wood), thing: wall, a: c.offset(6, 3), b: c.offset(6, 3) });
-    sim.push(Command::Build { stuff: Some(wood), thing: wall, a: c.offset(6, 5), b: c.offset(6, 5) });
-    sim.push(Command::Build { stuff: Some(wood), thing: door, a: c.offset(6, 4), b: c.offset(6, 4) });
+    sim.push(Command::Build { stuff: Some(wood), thing: wall, a: c.offset(2, 2), b: c.offset(6, 2), facing: 0 });
+    sim.push(Command::Build { stuff: Some(wood), thing: wall, a: c.offset(2, 6), b: c.offset(6, 6), facing: 0 });
+    sim.push(Command::Build { stuff: Some(wood), thing: wall, a: c.offset(2, 3), b: c.offset(2, 5), facing: 0 });
+    sim.push(Command::Build { stuff: Some(wood), thing: wall, a: c.offset(6, 3), b: c.offset(6, 3), facing: 0 });
+    sim.push(Command::Build { stuff: Some(wood), thing: wall, a: c.offset(6, 5), b: c.offset(6, 5), facing: 0 });
+    sim.push(Command::Build { stuff: Some(wood), thing: door, a: c.offset(6, 4), b: c.offset(6, 4), facing: 0 });
     sim
 }
 

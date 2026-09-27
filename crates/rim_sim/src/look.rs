@@ -27,6 +27,10 @@ pub struct LookDef {
     /// any wall then needs no facing.
     #[serde(default)]
     pub orient: Option<String>,
+    /// `"beside:<tag>"`: turned to face a neighbour carrying the tag, as a
+    /// chair faces its table, whatever way it was placed.
+    #[serde(default)]
+    pub face: Option<String>,
 }
 
 /// `look.join` as written: `"wall"`, or `{ group = "wall", round = 0.2 }`.
@@ -231,6 +235,8 @@ pub struct Look {
     pub round: f32,
     /// Turned to follow the run it joins (`orient = "run"`).
     pub along_run: bool,
+    /// Turned to face a neighbour with this tag (`face = "beside:<tag>"`).
+    pub face_beside: Option<String>,
 }
 
 impl Look {
@@ -483,12 +489,20 @@ impl LookDef {
             }
             Some(o) => return Err(format!("look.orient = {o:?}: the only one is \"run\"")),
         };
+        let face_beside = match self.face.as_deref() {
+            None => None,
+            Some(f) => match f.strip_prefix("beside:") {
+                Some(tag) if !tag.is_empty() => Some(tag.to_string()),
+                _ => return Err(format!("look.face = {f:?}: want \"beside:<tag>\"")),
+            },
+        };
         let mut look = Look {
             layers: layers(&self.layers, "layers")?,
             regrowing: layers(&self.regrowing, "regrowing")?,
             join,
             round,
             along_run,
+            face_beside,
         };
         if look.layers.is_empty() {
             look.layers = plain();

@@ -657,7 +657,7 @@ impl Snapshot {
                     None => None,
                 };
                 add(e, &|b| {
-                    b.add(Planned { thing, stuff });
+                    b.add(Planned { thing, stuff, facing: p.facing });
                 });
             }
         }
@@ -764,7 +764,7 @@ impl Snapshot {
                 _ => {
                     let (blocks, cost, door) =
                         if *blueprint { (false, 0, false) } else { (td.blocks, td.path_cost, td.door) };
-                    for c in td.footprint(t.pos) {
+                    for c in td.footprint(t.pos, t.facing) {
                         if w.map.inb(c) {
                             w.map.set_fixture(c, Some(*e), blocks, cost, door);
                             w.map.set_owner(c, *owner);

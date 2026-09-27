@@ -48,7 +48,7 @@ fn blueprint_at(s: &Sim, p: IVec) -> Option<(Entity, Blueprint, Option<MadeOf>)>
 }
 
 fn build(s: &mut Sim, thing_id: DefId, stuff: Option<DefId>, at: IVec) {
-    s.push(Command::Build { thing: thing_id, stuff, a: at, b: at });
+    s.push(Command::Build { thing: thing_id, stuff, a: at, b: at, facing: 0 });
     s.step();
 }
 

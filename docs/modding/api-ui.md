@@ -39,6 +39,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `act.toggle_pause` | `() -> ()` | Pause or resume. |
 | `act.toggle_profiler` | `() -> ()` | Show or hide the profiler. |
 | `act.tool` | `(key: string) -> ()` | Pick a toolbar tool ("designate:core:chop", "build:core:wall"). |
+| `act.turn` | `() -> ()` | Turn what the build tool will place a quarter turn clockwise (DESIGN.md §6c). |
 | `act.ui_scale` | `(scale: number) -> ()` | Set the player's UI scale, 0.75 to 2 on top of the display's; it is saved with their settings. |
 | `act.undo` | `() -> ()` | Take back the last order given: the colonists stop the job it gave them, and a mark it put on something goes. |
 | `act.zone_allow` | `(zone: number, item: string, on: boolean) -> ()` | Let a stockpile take an item, or stop it. |

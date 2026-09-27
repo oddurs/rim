@@ -69,7 +69,7 @@ fn a_gap_the_colony_covers_is_left_alone() {
     let (wall, wood) = (defs.thing_id("wall").unwrap(), defs.thing_id("wood").unwrap());
     s.world.place_item(wood, c.offset(1, 1), 40);
     // Four blueprints: one person's worth at core's per_person = 4.
-    s.push(Command::Build { thing: wall, stuff: Some(wood), a: c.offset(-6, 5), b: c.offset(-3, 5) });
+    s.push(Command::Build { thing: wall, stuff: Some(wood), a: c.offset(-6, 5), b: c.offset(-3, 5), facing: 0 });
     hours(&mut s, 1);
     let (level, reason) = planned(&s, auto_c, "core:build").expect("a plan for build");
     assert_ne!(level, 1, "the Builder covers it: {reason}");
@@ -86,7 +86,7 @@ fn a_castaway_on_auto_builds_and_forages() {
     let c = s.world.pawn_pos(pawn).unwrap();
     let (wall, wood) = (defs.thing_id("wall").unwrap(), defs.thing_id("wood").unwrap());
     s.world.place_item(wood, c.offset(1, 1), 40);
-    s.push(Command::Build { thing: wall, stuff: Some(wood), a: c.offset(-4, 3), b: c.offset(-1, 3) });
+    s.push(Command::Build { thing: wall, stuff: Some(wood), a: c.offset(-4, 3), b: c.offset(-1, 3), facing: 0 });
     let harvest = defs.lookup("designation", "harvest").unwrap();
     s.push(Command::Designate { designation: harvest, a: c.offset(-20, -20), b: c.offset(20, 20) });
     let (mut built, mut foraged) = (false, false);

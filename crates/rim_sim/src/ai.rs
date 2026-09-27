@@ -502,12 +502,16 @@ fn find_food(w: &mut World, e: Entity, p: &Pawn) -> Option<Job> {
 
 /// The cells around `thing` that a pawn may use it from, as its def lays
 /// them out, keeping only those whose `beside` requirement is met.
-fn spots_of(w: &World, thing: Entity) -> Vec<IVec> {
+/// The cells a pawn stands in to use `thing`, turned with it.
+pub fn spots_of(w: &World, thing: Entity) -> Vec<IVec> {
     let Some(t) = w.thing(thing) else { return Vec::new() };
     let td = w.defs.thing(t.def);
     td.spots
         .iter()
-        .map(|s| (t.pos.offset(s.dx, s.dy), s))
+        .map(|s| {
+            let (dx, dy) = td.turn((s.dx, s.dy), t.facing);
+            (t.pos.offset(dx, dy), s)
+        })
         .filter(|(cell, s)| s.beside.is_empty() || beside(w, *cell, &s.beside))
         .map(|(cell, _)| cell)
         .collect()
@@ -1713,7 +1717,10 @@ fn run_construct(w: &mut World, e: Entity, p: &mut Pawn, bp: Entity, tool: Optio
                 // A pawn standing on a fresh wall, anywhere in its
                 // footprint, steps out first.
                 let td = w.defs.thing(b.def);
-                let inside = [Some(p.pos), p.next].into_iter().flatten().find(|&c| td.footprint(b.pos).any(|f| f == c));
+                let inside = [Some(p.pos), p.next]
+                    .into_iter()
+                    .flatten()
+                    .find(|&c| td.footprint(b.pos, b.facing).any(|f| f == c));
                 if let Some(cell) = inside.filter(|_| td.blocks) {
                     return step_off(w, p, cell).then_some(Job::Construct { bp, tool });
                 }
@@ -1766,7 +1773,7 @@ pub fn complete_building(w: &mut World, bp: Entity) {
         return;
     }
     let (blocks, cost, door) = (td.blocks, td.path_cost, td.door);
-    for c in td.footprint(t.pos) {
+    for c in td.footprint(t.pos, t.facing) {
         w.map.set_fixture(c, Some(bp), blocks, cost, door);
         w.map.set_owner(c, Some(Faction::Player));
     }
@@ -1781,7 +1788,7 @@ pub fn complete_building(w: &mut World, bp: Entity) {
         for i in 0..w.pawns.len() {
             let e = w.pawns[i];
             let at = w.ecs.get::<&Pawn>(e).ok().filter(|o| o.active).map(|o| o.pos);
-            if let Some(at) = at.filter(|&a| td.footprint(t.pos).any(|c| c == a)) {
+            if let Some(at) = at.filter(|&a| td.footprint(t.pos, t.facing).any(|c| c == a)) {
                 // The nearest open cell, ring by ring: from the middle of
                 // a big thing, its neighbours are the thing.
                 let ring = |r: i32| (-r..=r).flat_map(move |dy| (-r..=r).map(move |dx| (dx, dy)));

@@ -16,7 +16,7 @@ fn sim(seed: u64) -> Sim {
     let wood = sim.world.defs.thing_id("wood").unwrap();
     let c = sim.world.colony_center().unwrap();
     sim.push(Command::Designate { designation: chop, a: c.offset(-12, -12), b: c.offset(12, 12) });
-    sim.push(Command::Build { stuff: Some(wood), thing: wall, a: c.offset(2, 2), b: c.offset(6, 2) });
+    sim.push(Command::Build { stuff: Some(wood), thing: wall, a: c.offset(2, 2), b: c.offset(6, 2), facing: 0 });
     sim
 }
 
@@ -44,9 +44,9 @@ fn ids_are_handed_out_in_order_and_never_reused() {
     let wood = sim.world.defs.thing_id("wood").unwrap();
     let c = sim.world.colony_center().unwrap();
     let before = sim.world.ecs.iter().map(|e| e.entity().id()).max().unwrap();
-    let a = sim.world.spawn((rim_sim::world::Thing { def: wood, pos: c, count: 1, hp: 100 },));
+    let a = sim.world.spawn((rim_sim::world::Thing { def: wood, pos: c, count: 1, hp: 100, facing: 0 },));
     assert_eq!(a.id(), before + 1);
     sim.world.ecs.despawn(a).unwrap();
-    let b = sim.world.spawn((rim_sim::world::Thing { def: wood, pos: c.offset(1, 0), count: 1, hp: 100 },));
+    let b = sim.world.spawn((rim_sim::world::Thing { def: wood, pos: c.offset(1, 0), count: 1, hp: 100, facing: 0 },));
     assert_eq!(b.id(), a.id() + 1);
 }

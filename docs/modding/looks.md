@@ -246,6 +246,15 @@ look.layers = [
 ]
 ```
 
+## Facing
+
+A thing can be placed turned a quarter, a half or three quarters round
+(T turns it while building). Write its look, its `size` and its `spots`
+facing south, and they all turn with it: a `[1, 2]` bed turned once lies
+east to west, and a bench's spot below it moves to its west side. A look
+can work out its own facing instead: `look.face = "beside:table"` turns it
+toward the first neighbour carrying the tag, as core's chair does.
+
 ## States
 
 `look.regrowing` is drawn instead of `layers` while a harvested plant grows

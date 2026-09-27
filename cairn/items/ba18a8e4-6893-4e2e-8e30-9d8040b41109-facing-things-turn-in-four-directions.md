@@ -2,8 +2,10 @@
 id: ba18a8e4-6893-4e2e-8e30-9d8040b41109
 title: 'Facing: things turn in four directions'
 type: feature
-status: backlog
+status: doing
 milestone: houses
+assignee: Oddur Sigurdsson
+claimed: 2026-09-26
 depends_on:
 - f607a83d-1e4b-487c-ab55-7cd58b821603
 created: 2026-09-26
@@ -28,6 +30,10 @@ A 1×2 bed, or a workbench with a place to stand in front, can only face one way
 
 ## Acceptance criteria
 
-- [ ] A bed built facing east covers the two cells east–west, and its spot turns (test)
-- [ ] Saves round-trip facing; an old save loads everything facing south
-- [ ] The determinism test passes
+- [x] A bed built facing east covers the two cells east–west, and its spot turns (test)
+- [x] Saves round-trip facing; an old save loads everything facing south
+- [x] The determinism test passes
+
+## 2026-09-26
+
+Facing is a field on Thing (serde default 0, not written when 0, so old saves and hashes don't move). ThingDef::footprint(at, facing) is the one place a footprint turns, built on offset so it keeps the level for depth; ThingDef::turn turns spot offsets the same way. The client turns a look's layers over the footprint (Orient.turn) and derives a chair's facing from look.face = "beside:table". T turns the build tool (R is draft).

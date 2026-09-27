@@ -94,6 +94,8 @@ pub struct App {
     /// The buildable the build tray is describing, when it isn't the tool
     /// in hand: its materials go to the UI in place of the tool's.
     pub preview: Option<DefId>,
+    /// Quarter turns clockwise for what the build tool places.
+    pub build_facing: u8,
     /// What the inspector shows: the one selected thing, or the first of
     /// `group`.
     pub selected: Option<Entity>,
@@ -614,6 +616,7 @@ async fn game() {
         hint: None,
         stuff_for: Vec::new(),
         preview: None,
+        build_facing: 0,
         hint_key: None,
         order_flash: None,
         mouse_over_ui: false,
@@ -1477,6 +1480,7 @@ fn apply_ui(app: &mut App, a: UiAction) {
         // A pick from the orders menu: every selected colonist it's on
         // offer to gets it, by name.
         UiAction::Order { key, cell, on } => give_orders(app, cell, on, Some(&key)),
+        UiAction::Turn => app.build_facing = (app.build_facing + 1) & 3,
         UiAction::Undo => {
             if let Some(last) = app.last_order.take() {
                 for c in last.undo {
@@ -1987,7 +1991,7 @@ pub fn apply(app: &mut App, action: Action) {
                 Tool::Build(t) => {
                     let stuff = chosen_material(app, t);
                     for (a, b) in build_rects(defs.thing(t).blocks, a, b) {
-                        app.sim.push(Command::Build { stuff, thing: t, a, b });
+                        app.sim.push(Command::Build { stuff, thing: t, a, b, facing: app.build_facing });
                     }
                 }
                 Tool::Stockpile => {

@@ -186,7 +186,7 @@ fn headers_show_demand_and_mark_neglected_work() {
     let (mut sim, mut ui, cv) = board(1);
     let c = sim.world.colony_center().unwrap();
     let (wall, wood) = (sim.world.defs.thing_id("wall").unwrap(), sim.world.defs.thing_id("wood").unwrap());
-    sim.push(Command::Build { thing: wall, stuff: Some(wood), a: c.offset(-6, 6), b: c.offset(-4, 6) });
+    sim.push(Command::Build { thing: wall, stuff: Some(wood), a: c.offset(-6, 6), b: c.offset(-4, 6), facing: 0 });
     sim.step();
     frame(&mut ui, &sim, &cv, Input { time: 10.0, ..Default::default() });
     let col = column(&sim, "core:build");

@@ -105,15 +105,15 @@ fn play(mods: &Path, seed: u64, days: u64) -> Report {
                 let p = o.offset(x, y);
                 let edge = x == 0 || y == 0 || x == 4 || y == 4;
                 if edge && p != door {
-                    s.push(Command::Build { stuff: Some(wood), thing: w, a: p, b: p });
+                    s.push(Command::Build { stuff: Some(wood), thing: w, a: p, b: p, facing: 0 });
                 }
             }
         }
-        s.push(Command::Build { stuff: Some(wood), thing: d, a: door, b: door });
-        s.push(Command::Build { stuff: Some(wood), thing: b, a: o.offset(2, 2), b: o.offset(2, 2) });
+        s.push(Command::Build { stuff: Some(wood), thing: d, a: door, b: door, facing: 0 });
+        s.push(Command::Build { stuff: Some(wood), thing: b, a: o.offset(2, 2), b: o.offset(2, 2), facing: 0 });
         if std::env::args().any(|a| a == "--fire") {
             let f = thing("campfire");
-            s.push(Command::Build { stuff: None, thing: f, a: o.offset(1, 1), b: o.offset(1, 1) });
+            s.push(Command::Build { stuff: None, thing: f, a: o.offset(1, 1), b: o.offset(1, 1), facing: 0 });
         }
     }
 

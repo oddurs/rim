@@ -134,7 +134,13 @@ fn work_board_at_4_and_9_levels() {
             }
         }
         let (wall, wood) = (defs.thing_id("wall").unwrap(), defs.thing_id("wood").unwrap());
-        sim.push(rim_sim::Command::Build { thing: wall, stuff: Some(wood), a: c.offset(-6, 6), b: c.offset(-2, 6) });
+        sim.push(rim_sim::Command::Build {
+            thing: wall,
+            stuff: Some(wood),
+            a: c.offset(-6, 6),
+            b: c.offset(-2, 6),
+            facing: 0,
+        });
         sim.push(rim_sim::Command::SetStance { stance: defs.lookup("stance", "core:siege").unwrap() });
         sim.step();
         let mut ui = ui_for(&sim);

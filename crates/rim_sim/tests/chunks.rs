@@ -68,7 +68,7 @@ fn every_drawn_change_bumps_its_chunk() {
     let wood = defs.thing_id("wood");
     for (id, dx) in [("wall", 3), ("floor", 5), ("bed", 7), ("campfire", 9)] {
         let thing = defs.thing_id(id).unwrap();
-        s.push(Command::Build { thing, stuff: wood, a: c.offset(dx, -4), b: c.offset(dx, 4) });
+        s.push(Command::Build { thing, stuff: wood, a: c.offset(dx, -4), b: c.offset(dx, 4), facing: 0 });
     }
     let (mut fp, mut rv) = (fingerprints(&s.world), revs(&s.world));
     let mut changes = 0;

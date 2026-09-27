@@ -82,7 +82,7 @@ fn a_material_and_parts_build_only_once_both_are_in() {
     let (mut s, dir) = world("parts-both");
     let (wall, wood, nail) = (def(&s, "parts:plank_wall"), def(&s, "wood"), def(&s, "parts:nail"));
     let p = site(&s);
-    s.push(Command::Build { thing: wall, stuff: Some(wood), a: p, b: p });
+    s.push(Command::Build { thing: wall, stuff: Some(wood), a: p, b: p, facing: 0 });
     s.step();
     let bp = s.world.map.fixture_at(p).expect("a plan");
     assert_eq!(
@@ -108,7 +108,7 @@ fn cancelling_a_half_delivered_plan_refunds_the_material_and_the_parts() {
     let (mut s, dir) = world("parts-cancel");
     let (wall, wood, nail) = (def(&s, "parts:plank_wall"), def(&s, "wood"), def(&s, "parts:nail"));
     let p = site(&s);
-    s.push(Command::Build { thing: wall, stuff: Some(wood), a: p, b: p });
+    s.push(Command::Build { thing: wall, stuff: Some(wood), a: p, b: p, facing: 0 });
     s.step();
     let bp = s.world.map.fixture_at(p).expect("a plan");
     s.world.ecs.get::<&mut Blueprint>(bp).unwrap().delivered = vec![1, 1];
@@ -125,7 +125,7 @@ fn a_build_that_needs_a_tool_waits_for_one_and_says_so() {
     let (mut s, dir) = world("parts-tool");
     let (post, wood, saw) = (def(&s, "parts:sawn_post"), def(&s, "wood"), def(&s, "parts:saw"));
     let p = site(&s);
-    s.push(Command::Build { thing: post, stuff: None, a: p, b: p });
+    s.push(Command::Build { thing: post, stuff: None, a: p, b: p, facing: 0 });
     s.step();
     let bp = s.world.map.fixture_at(p).expect("a plan");
     s.world.place_item(wood, p.offset(-2, 0), 5);

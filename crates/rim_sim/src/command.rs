@@ -26,6 +26,9 @@ pub enum Command {
         stuff: Option<DefId>,
         a: IVec,
         b: IVec,
+        /// Quarter turns clockwise (DESIGN.md §6c). Old logs have none.
+        #[serde(default)]
+        facing: u8,
     },
     /// Remove designations and blueprints in a rectangle.
     Cancel {
@@ -222,7 +225,7 @@ pub fn apply(w: &mut World, c: Command) {
                 }
             }
         },
-        Command::Build { thing, stuff, a, b } => {
+        Command::Build { thing, stuff, a, b, facing } => {
             let Some(bd) = defs.thing(thing).build.as_ref() else { return };
             // A buildable that takes a material needs one, of the right kind.
             if let Some(sc) = &bd.stuff {
@@ -245,9 +248,9 @@ pub fn apply(w: &mut World, c: Command) {
                     }
                 };
                 match natural {
-                    Some(f) if !floor => w.plan_over(f, thing, stuff),
+                    Some(f) if !floor => w.plan_over_facing(f, thing, stuff, facing),
                     _ if w.map.passable(p) => {
-                        w.spawn_fixture_of(thing, p, true, stuff);
+                        w.spawn_fixture_facing(thing, p, true, stuff, facing);
                     }
                     _ => {}
                 }

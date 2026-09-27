@@ -770,6 +770,7 @@ impl UiVm {
         act!("speed", u32, |s| UiAction::Speed(s));
         act!("toggle_pause", (), |_a| UiAction::TogglePause);
         act!("undo", (), |_a| UiAction::Undo);
+        act!("turn", (), |_a| UiAction::Turn);
         act!("order", (String, i32, i32, Option<u64>), |(key, x, y, on)| UiAction::Order {
             key,
             cell: rim_sim::IVec::new(x, y),

@@ -74,7 +74,7 @@ fn haul_at_zero_is_never_chosen_and_building_comes_first() {
     sim.push(Command::SetPriority { pawn, work: haul, level: 2 });
     let c = sim.world.pawn_pos(pawn).unwrap();
     let wall = defs.thing_id("wall").unwrap();
-    sim.push(Command::Build { thing: wall, stuff: Some(wood), a: c.offset(1, 3), b: c.offset(1, 3) });
+    sim.push(Command::Build { thing: wall, stuff: Some(wood), a: c.offset(1, 3), b: c.offset(1, 3), facing: 0 });
     for _ in 0..3_000 {
         sim.step();
         let hauling = matches!(sim.world.ecs.get::<&Pawn>(pawn).unwrap().job, Job::Haul { .. });
@@ -93,7 +93,7 @@ fn nothing_is_hauled_onto_a_planned_wall() {
     let build = defs.lookup("work_type", "core:build").unwrap();
     sim.push(Command::SetPriority { pawn, work: build, level: 2 });
     sim.push(Command::Stockpile { a: site, b: site, zone: None });
-    sim.push(Command::Build { thing: wall, stuff: Some(wood), a: site, b: site });
+    sim.push(Command::Build { thing: wall, stuff: Some(wood), a: site, b: site, facing: 0 });
     sim.world.place_item(wood, sim.world.pawn_pos(pawn).unwrap().offset(-2, -2), 10);
     sim.step();
     assert_eq!(sim.world.room_for(wood, None, site), 0);

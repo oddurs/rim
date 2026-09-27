@@ -195,7 +195,7 @@ pub fn thing(
         return None;
     }
     let td = defs.thing(th.def);
-    let span = td.size;
+    let span = td.size_facing(th.facing);
     // A thing built of something is drawn in that something's colour, so
     // marble arrives looking like marble with no change here. Anything
     // else keeps its def's colour.
@@ -212,7 +212,7 @@ pub fn thing(
     let z = zt;
     let (sx, sy) = at;
     let look = &td.look_r;
-    let cx = Ctx { join: join_of(look), orient: orient_of(w, cell, look, span), made_of };
+    let cx = Ctx { join: join_of(look), orient: orient_of(w, cell, look, span, th.facing), made_of };
     if let Ok(bp) = w.ecs.get::<&Blueprint>(e) {
         plan(s, w, e, &bp, &look.layers, c, cell, at, z, t, span, cx);
         return None;
@@ -245,7 +245,7 @@ pub fn thing(
             }
             paint(s, w, layers, cx, shade(c, 1.0 - 0.16 * f), cell, at, z, t, span);
             // Every cell cracks from its own seed, so a boulder isn't copies.
-            for q in td.footprint(cell) {
+            for q in td.footprint(cell, th.facing) {
                 let at = (sx + (q.x - cell.x) as f32 * z, sy + (q.y - cell.y) as f32 * z);
                 wear::draw_cracks(s, q, toward, f, at, z);
             }
@@ -379,7 +379,7 @@ const LABEL_ZOOM: f32 = 22.0;
 #[allow(clippy::too_many_arguments)]
 pub fn rock(s: &mut impl Sink, w: &World, def: rim_sim::defs::DefId, cell: IVec, at: (f32, f32), z: f32, t: f32) {
     let td = w.defs.thing(def);
-    let cx = Ctx { join: join_of(&td.look_r), orient: orient_of(w, cell, &td.look_r, td.size), made_of: None };
+    let cx = Ctx { join: join_of(&td.look_r), orient: orient_of(w, cell, &td.look_r, td.size, 0), made_of: None };
     paint(s, w, &td.look_r.layers, cx, rgb(td.rgb), cell, at, z, t, td.size);
 }
 
@@ -531,7 +531,7 @@ pub fn readouts(app: &App) -> Vec<(f32, f32, String)> {
         let Some((cell, f, hurt)) = ws.readout(w, e) else { continue };
         let Some(th) = w.thing(e) else { continue };
         let (x, y) = cam.to_screen(cell.x as f32, cell.y as f32);
-        let [fw, fh] = w.defs.thing(th.def).size.map(|v| v as f32);
+        let [fw, fh] = w.defs.thing(th.def).size_facing(th.facing).map(|v| v as f32);
         let (bar, y) = (z * (fw - 0.2), y + z * (fh - 1.0));
         draw_rectangle(x + z * 0.1, y + z + 3.0, bar, 3.0, Color::new(0.0, 0.0, 0.0, 0.55));
         draw_rectangle(x + z * 0.1, y + z + 3.0, bar * f, 3.0, site_color(w, e));
@@ -685,7 +685,13 @@ pub fn world_ui(app: &App) {
         let (mx, my) = mouse_position();
         let tp = cam.tile_at(mx, my);
         let (sx, sy) = cam.to_screen(tp.x as f32, tp.y as f32);
-        draw_rectangle_lines(sx, sy, z, z, 2.0, tool_color(app));
+        // A thing bigger than a cell shows its footprint, turned as it will
+        // be placed (T turns it).
+        let [fw, fh] = match app.tool {
+            Tool::Build(t) => w.defs.thing(t).size_facing(app.build_facing),
+            _ => [1, 1],
+        };
+        draw_rectangle_lines(sx, sy, z * fw as f32, z * fh as f32, 2.0, tool_color(app));
     }
     order_flash(app);
 }
@@ -824,33 +830,52 @@ fn paint(
 pub struct Orient {
     pub swap: bool,
     pub flip: bool,
+    /// Quarter turns clockwise, over the whole footprint: a thing's facing.
+    pub turn: u8,
 }
 
 impl Orient {
     fn pt(self, flip: bool, [u, v]: [f32; 2]) -> [f32; 2] {
         let v = if flip { 1.0 - v } else { v };
-        if self.swap {
-            [v, u]
-        } else {
-            [u, v]
+        let [u, v] = if self.swap { [v, u] } else { [u, v] };
+        // Fractions of the footprint, so a 2×1 turned once lays out over
+        // its 1×2 cells.
+        match self.turn & 3 {
+            0 => [u, v],
+            1 => [1.0 - v, u],
+            2 => [1.0 - u, 1.0 - v],
+            _ => [v, 1.0 - u],
         }
     }
     fn rect(self, flip: bool, [x, y, w, h]: [f32; 4]) -> [f32; 4] {
         let y = if flip { 1.0 - y - h } else { y };
-        if self.swap {
-            [y, x, h, w]
-        } else {
-            [x, y, w, h]
+        let [x, y, w, h] = if self.swap { [y, x, h, w] } else { [x, y, w, h] };
+        if self.turn & 3 == 0 {
+            return [x, y, w, h];
         }
+        let turned = Orient { swap: false, flip: false, turn: self.turn };
+        let ([ax, ay], [bx, by]) = (turned.pt(false, [x, y]), turned.pt(false, [x + w, y + h]));
+        [ax.min(bx), ay.min(by), (bx - ax).abs(), (by - ay).abs()]
     }
 }
 
 /// Which way a one-cell look that follows its run faces: along the run its
 /// joined neighbours make, and toward the enclosed side. With a room on
 /// both sides, toward the smaller; with none, south or east.
-fn orient_of(w: &World, cell: IVec, look: &rim_sim::look::Look, span: [u32; 2]) -> Orient {
+fn orient_of(w: &World, cell: IVec, look: &rim_sim::look::Look, span: [u32; 2], facing: u8) -> Orient {
+    if let Some(tag) = &look.face_beside {
+        // Toward the first neighbour with the tag: south, west, north, east
+        // are 0 to 3 quarter turns from how the look is drawn.
+        let turn = [(0, 1), (-1, 0), (0, -1), (1, 0)].iter().position(|&(dx, dy)| {
+            w.map
+                .fixture_at(cell.offset(dx, dy))
+                .and_then(|e| w.thing(e))
+                .is_some_and(|t| w.defs.thing(t.def).tags.contains(tag))
+        });
+        return Orient { turn: turn.map_or(facing, |t| t as u8), ..Orient::default() };
+    }
     if !look.along_run || span != [1, 1] {
-        return Orient::default();
+        return Orient { turn: facing, ..Orient::default() };
     }
     let j = join_of(look);
     let across = joins(w, cell.offset(-1, 0), j) || joins(w, cell.offset(1, 0), j);
@@ -864,7 +889,7 @@ fn orient_of(w: &World, cell: IVec, look: &rim_sim::look::Look, span: [u32; 2]) 
         (Some(_), None) => true,
         _ => false,
     };
-    Orient { swap, flip }
+    Orient { swap, flip, turn: 0 }
 }
 
 /// A look's join group and how round its outer corners are.
@@ -1318,8 +1343,9 @@ mod tests {
 
     fn orient(s: &Sim, p: IVec) -> Orient {
         let e = s.world.map.fixture_at(p).unwrap();
-        let td = s.world.defs.thing(s.world.thing(e).unwrap().def);
-        orient_of(&s.world, p, &td.look_r, td.size)
+        let t = s.world.thing(e).unwrap();
+        let td = s.world.defs.thing(t.def);
+        orient_of(&s.world, p, &td.look_r, td.size_facing(t.facing), t.facing)
     }
 
     #[test]
@@ -1329,13 +1355,31 @@ mod tests {
         // Doors in the south and the west walls of a hut.
         let (south, west) = (o.offset(2, 4), o.offset(0, 2));
         building(&mut s, o, 5, 5, None, &[south, west]);
-        assert_eq!(orient(&s, south), Orient { swap: false, flip: true }, "south door: room to the north");
-        assert_eq!(orient(&s, west), Orient { swap: true, flip: false }, "west door: room to the east");
+        assert_eq!(orient(&s, south), Orient { swap: false, flip: true, turn: 0 }, "south door: room to the north");
+        assert_eq!(orient(&s, west), Orient { swap: true, flip: false, turn: 0 }, "west door: room to the east");
         // A partition door between a closet (1×3, west) and a room (2×3,
         // east) swings into the closet.
         let q = o.offset(10, 0);
         let inner = q.offset(2, 2);
         building(&mut s, q, 6, 5, Some(2), &[inner]);
-        assert_eq!(orient(&s, inner), Orient { swap: true, flip: true }, "into the smaller room");
+        assert_eq!(orient(&s, inner), Orient { swap: true, flip: true, turn: 0 }, "into the smaller room");
+    }
+
+    /// A chair turns to face the table beside it, whichever side that is,
+    /// and a thing placed turned draws turned (DESIGN.md §6c).
+    #[test]
+    fn a_chair_faces_its_table() {
+        let mut s = Sim::new(std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../mods")), 1).unwrap();
+        let o = s.world.colony_center().unwrap().offset(-14, 12);
+        building(&mut s, o, 5, 5, None, &[]);
+        let d = &s.world.defs;
+        let (table, chair, wood) =
+            (d.thing_id("table").unwrap(), d.thing_id("chair").unwrap(), d.thing_id("wood").unwrap());
+        let t = o.offset(2, 2);
+        s.world.spawn_fixture_of(table, t, false, Some(wood)).unwrap();
+        for (at, turn) in [(t.offset(0, -1), 0), (t.offset(1, 0), 1), (t.offset(0, 1), 2), (t.offset(-1, 0), 3)] {
+            s.world.spawn_fixture_of(chair, at, false, Some(wood)).unwrap();
+            assert_eq!(orient(&s, at).turn, turn, "a chair at {:?} from its table", (at.x - t.x, at.y - t.y));
+        }
     }
 }

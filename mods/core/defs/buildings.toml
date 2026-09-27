@@ -144,6 +144,8 @@ label = "chair"
 color = "#a07a50"
 category = "building"
 # A seat with a back.
+# It turns to face the table beside it, however it was placed.
+look.face = "beside:table"
 look.layers = [
     { draw = "fill", x = 0.28, y = 0.15, w = 0.44, h = 0.18, shade = 0.7 },
     { draw = "fill", x = 0.25, y = 0.4, w = 0.5, h = 0.3 },
