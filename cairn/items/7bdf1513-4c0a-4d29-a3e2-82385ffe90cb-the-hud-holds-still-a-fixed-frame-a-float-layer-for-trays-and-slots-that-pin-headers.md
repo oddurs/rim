@@ -2,12 +2,12 @@
 id: 7bdf1513-4c0a-4d29-a3e2-82385ffe90cb
 title: 'The HUD holds still: a fixed frame, a float layer for trays, and slots that pin headers'
 type: bug
-status: review
+status: done
 milestone: interface
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 created: 2026-09-26
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p1
 api: additive
 effort: m
