@@ -84,11 +84,11 @@ Hands first. The colonist wakes with nothing (pillar 93f291d5), and today nothin
 
 ## work — Work priorities
 
-`##########` 93% · 14 of 15 done
+`##########` 94% · 15 of 16 done
 
 Who does what, without a spreadsheet. New colonists start on Auto and the colony plans its own work. The player takes control one rung at a time: Focus for the colony, Urgent for one job, a pin for one cell, work roles for a group. Design: DESIGN.md §4d.
 
-- [ ] `c59d67ed` Does Auto play well? Auto against flat defaults and a tuned grid <sup>spike · p1 · m · tooling</sup>
+- [ ] `1aad094f` Six colonists on Auto have more runs with a death than flat defaults <sup>spike · p2 · m · core</sup>
 - [x] `102b4525` A standing order is announced when its reading crosses, even while its season holds it back <sup>bug · p1 · s · engine</sup>
 - [x] `166a4cc9` Named levels and pins: First, Soon, Later, Spare time <sup>feature · p0 · s · core</sup>
 - [x] `2e145c65` Modding docs: work types, roles, Auto, readings, orders and lenses <sup>docs · p2 · s · core</sup>
@@ -100,6 +100,7 @@ Who does what, without a spreadsheet. New colonists start on Auto and the colony
 - [x] `af2f8428` Core's readings make core look slow: loose items scanned per kind of item <sup>bug · p1 · s · core</sup>
 - [x] `bbc59ec3` Core's default orders: food, loose items, firewood <sup>content · p1 · m · core</sup>
 - [x] `bc9b9a91` Urgent marks: one job, a level sooner, for everyone <sup>feature · p1 · m · engine</sup>
+- [x] `c59d67ed` Does Auto play well? Auto against flat defaults and a tuned grid <sup>spike · p1 · m · tooling</sup>
 - [x] `d41e504f` Auto, the mechanism: planned roles and the two-plan rule <sup>feature · p0 · l · engine</sup>
 - [x] `f5295002` Core's planner: Auto fills the gaps the colony leaves <sup>feature · p0 · m · core</sup>
 - [x] `fc50a63f` Roles on the board: grouped rows, the Roles lens, and making a role from two <sup>feature · p1 · m · core</sup>

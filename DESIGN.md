@@ -671,6 +671,35 @@ A panel in core's UI mod, so a mod can patch or replace it.
 - **One colonist is a plan, not a grid:** their levels as shelves, each with
   Auto's reason, and a way to pin any of them.
 
+### Does Auto play well?
+
+The balance harness (80 seeds, 8 days, the bot's opening) with colonists on
+Auto, in Hand at the defaults ("flat"), and in Hand with a hand-written grid
+("tuned": Build First, Harvest and Chop Soon, Hunt and Haul Later, Mine
+Spare time). Churn is planned levels that changed, per colonist-day.
+
+| Start | Priorities | Colonies lost | Runs with a death | Churn |
+|---|---|---|---|---|
+| Castaway | Auto | 4/80 | 23/80 | 0.91 |
+| Castaway | Flat | 5/80 | 22/80 | 0 |
+| Castaway | Tuned | 4/80 | 21/80 | 0 |
+| Six colonists | Auto | 0/80 | 29/80 | 0.58 |
+| Six colonists | Flat | 0/80 | 24/80 | 0 |
+| Six colonists | Tuned | 0/80 | 23/80 | 0 |
+
+The first run had the castaway's churn at 1.10: a single colonist's rest
+levels flipped between Later and Spare time as one job came and went. Two
+changes brought it under one a day: the rest is set by skill alone, not by
+whether anything waits, and a colonist already at First or Soon for a job
+keeps it against someone a level and a half better.
+
+- **Ruling:** Auto ships as the default. It loses no more colonies than
+  flat defaults or a tuned grid, and changes a level less than once a day.
+- **Open:** with six colonists Auto has more runs with a death (29 against
+  24 and 23), about one standard deviation at 80 seeds. It may be noise or
+  may be Auto spreading colonists over more ground when a threat arrives.
+  Measured further in its own item before it's ruled either way.
+
 ### Disclosure
 
 Controls appear by colony size and by what the player does, never by an era

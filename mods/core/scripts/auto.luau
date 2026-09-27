@@ -12,7 +12,7 @@
 --      penalty for each First already given; at most two First each,
 --      then Soon.
 --   4. Rest: Later if skilled or if the work needs no skill, Spare time if
---      unskilled.
+--      unskilled, whether or not anything is waiting.
 --
 -- It never plans never and never touches a pin; the engine refuses both
 -- anyway. A mod replaces this by patching `work_role/core:auto` with its
@@ -28,6 +28,10 @@ local LOAD = 20
 local SKILLED = 5
 -- What a work type with no skill counts as when choosing who fills it.
 local NO_SKILL = 5
+-- What already being on a job is worth, in tenths of a skill level: a
+-- colonist at First or Soon for it keeps it against someone a level and a
+-- half better, so a swing in what's waiting doesn't move people.
+local STICKY = 15
 
 local function plan(board)
 	local levels = board.levels
@@ -84,7 +88,8 @@ local function plan(board)
 		for _, c in members do
 			if c.pins[w.id] == nil and out[c.id][w.id] == nil then
 				local skill = if w.skill then c.skills[w.id] or 0 else NO_SKILL
-				local fit = skill * 10 - firsts[c.id] * LOAD
+				local on_it = (c.base[w.id] or 0) > 0 and c.base[w.id] <= soon
+				local fit = skill * 10 - firsts[c.id] * LOAD + (if on_it then STICKY else 0)
 				if fit > best_fit then
 					best, best_fit = c, fit
 				end
@@ -107,16 +112,17 @@ local function plan(board)
 	for _, c in members do
 		for _, w in board.work do
 			if c.pins[w.id] == nil and out[c.id][w.id] == nil then
+				-- By skill alone, not by what's waiting: a job appearing and
+				-- going shouldn't move a level the player can see.
 				local skill = c.skills[w.id]
+				local why = if w.waiting == 0 then "nothing waiting" else "covered"
 				local cell
-				if w.waiting == 0 then
-					cell = { level = later, reason = "nothing waiting" }
-				elseif not w.skill then
-					cell = { level = later, reason = "covered; anyone can do it" }
+				if not w.skill then
+					cell = { level = later, reason = why .. "; anyone can do it" }
 				elseif (skill or 0) >= SKILLED then
-					cell = { level = later, reason = string.format("covered; %s %d", w.skill, skill) }
+					cell = { level = later, reason = string.format("%s; %s %d", why, w.skill, skill) }
 				else
-					cell = { level = spare, reason = string.format("covered; low %s (%d)", w.skill, skill or 0) }
+					cell = { level = spare, reason = string.format("%s; low %s (%d)", why, w.skill, skill or 0) }
 				end
 				out[c.id][w.id] = cell
 			end

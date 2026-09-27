@@ -7,6 +7,9 @@
 //! 5x5 wooden hut (walls, a door, a bed inside). Colonists defend themselves.
 //!
 //! Flags: `--nohut`, `--no-orders` (core's standing orders switched off),
+//! `--priorities auto|flat|tuned` (colonists on Auto, the default; all in
+//! Hand at the work types' defaults; or Hand with a hand-written grid),
+//! `--colonists N` (N colonists at the start, not one),
 //! `--fire` (a campfire in the hut), `--cold-snap DAY`, `--core` (core alone,
 //! no weather plugin), `--start-day N` (start on day N of the year, by adding
 //! a patch mod to a copy of the mods folder), `--show SEED` (print that run's
@@ -50,6 +53,46 @@ struct Report {
     /// The founder's hours at zero warmth, per season, and whether they lived.
     founder_frozen_by_season: Vec<f64>,
     founder_alive: bool,
+    /// Colonist-samples idle, and all colonist-samples, every 60 ticks.
+    idle_samples: u64,
+    samples: u64,
+    /// Planned levels that changed, over the run.
+    plan_changes: u64,
+}
+
+/// How the run sets priorities: `auto` leaves colonists on Auto (the
+/// default); `flat` puts them in Hand, every work type at its default;
+/// `tuned` puts them in Hand with a grid a player might set for an opening.
+fn set_priorities(s: &mut Sim) {
+    let mode = std::env::args().skip_while(|a| a != "--priorities").nth(1).unwrap_or_else(|| "auto".into());
+    if mode == "auto" {
+        return;
+    }
+    let Some(hand) = s.world.work_roles.iter().position(|r| r.def.as_deref() == Some("core:hand")) else { return };
+    let defs = s.world.defs.clone();
+    let tuned = [
+        ("core:build", 1),
+        ("core:harvest", 2),
+        ("core:chop", 2),
+        ("core:hunt", 3),
+        ("core:haul", 3),
+        ("core:mine", 4),
+    ];
+    for pawn in s.world.colonists().collect::<Vec<_>>() {
+        let p = s.world.ecs.get::<&Pawn>(pawn).unwrap();
+        let (role, pinned) = (p.work_role, !p.priorities.is_empty());
+        drop(p);
+        if role != Some(hand as u16) {
+            s.push(Command::AssignWorkRole { pawn, role: hand as u16 });
+        }
+        if mode == "tuned" && !pinned {
+            for (id, level) in tuned {
+                if let Some(work) = defs.lookup("work_type", id) {
+                    s.push(Command::SetPriority { pawn, work, level });
+                }
+            }
+        }
+    }
 }
 
 fn open_square(s: &Sim, c: IVec, size: i32) -> Option<IVec> {
@@ -85,6 +128,14 @@ fn play(mods: &Path, seed: u64, days: u64) -> Report {
     let seasons = s.world.defs.calendar.seasons.len();
     let defs = s.world.defs.clone();
     let c = s.world.colony_center().unwrap();
+    // --colonists N: a bigger start, beside the founder.
+    let human = defs.creature_id("human").unwrap();
+    for i in 1..arg("--colonists", 1) as i32 {
+        let at = c.offset(i % 3, i / 3 + 1);
+        s.world.spawn_pawn(human, rim_sim::world::Faction::Player, if s.world.map.passable(at) { at } else { c }, None);
+    }
+    set_priorities(&mut s);
+    let mut plans: std::collections::BTreeMap<u64, Vec<(u16, u8)>> = std::collections::BTreeMap::new();
     let des = |id: &str| defs.lookup("designation", id).unwrap();
     let thing = |id: &str| defs.thing_id(id).unwrap();
     let food = defs.lookup("need", "food").unwrap();
@@ -144,12 +195,21 @@ fn play(mods: &Path, seed: u64, days: u64) -> Report {
             let now = s.world.tick;
             s.world.fields.push_ambient(t, "cold_snap", -(arg("--snap-drop", 8) as f64), now, Some(48.0), 3.0);
         }
+        // Newcomers get the run's priorities too.
+        if s.world.tick.is_multiple_of(TICKS_PER_DAY / 24) {
+            set_priorities(&mut s);
+        }
         s.step();
         let w = &s.world;
         let day = w.tick as f64 / TICKS_PER_DAY as f64;
         if w.tick.is_multiple_of(60) {
             for e in w.colonists() {
                 let p = w.ecs.get::<&Pawn>(e).unwrap();
+                r.samples += 1;
+                r.idle_samples += matches!(p.job, rim_sim::world::Job::Idle) as u64;
+                let now: Vec<(u16, u8)> = p.plan.iter().map(|x| (x.work, x.level)).collect();
+                let before = plans.insert(e.to_bits().get(), now.clone()).unwrap_or_default();
+                r.plan_changes += now.iter().filter(|x| before.iter().any(|b| b.0 == x.0 && b.1 != x.1)).count() as u64;
                 let max = defs.creature(p.def).max_hp as f64;
                 r.min_hp = r.min_hp.min(p.hp as f64 / max);
                 if let Some(v) = warmth.and_then(|n| p.need(n)) {
@@ -293,6 +353,13 @@ fn main() {
     println!();
     println!("colonies lost:            {lost}/{n}");
     println!("runs with a death:        {any_death}/{n}");
+    // Samples are every 60 ticks: a colonist-day is TICKS_PER_DAY / 60 of them.
+    let per_day = TICKS_PER_DAY as f64 / 60.0;
+    let samples = reports.iter().map(|r| r.samples).sum::<u64>().max(1) as f64;
+    let idle = reports.iter().map(|r| r.idle_samples).sum::<u64>() as f64 / samples * 24.0;
+    let churn = reports.iter().map(|r| r.plan_changes).sum::<u64>() as f64 / (samples / per_day);
+    println!("idle, hours a colonist-day: {idle:.1}");
+    println!("planned changes a colonist-day: {churn:.2}");
     println!("near-misses (hp < 35%):   {near_miss}/{n}");
     println!("food ever below 10%:      {hungry}/{n}");
     let cold = reports.iter().filter(|r| r.min_warmth < 0.1).count();
