@@ -104,16 +104,19 @@ fn a_switched_off_order_never_applies_and_stays_off_after_a_load() {
     let rule = s.world.defs.lookup("priority_rule", "stores:food_low").unwrap();
     s.push(Command::SetRuleEnabled { rule, on: false });
     s.step();
+    // The colonist's own level, whatever this seed's founder started at;
+    // the order shifts it down one.
+    let base = harvest(&s);
     s.world.set_reading("stores:food_days", 2.0);
     assert!(holds(&s, "stores:food_low"), "the reading still crossed the mark");
-    assert_eq!(harvest(&s), 3, "but the colony switched the order off");
+    assert_eq!(harvest(&s), base, "but the colony switched the order off");
 
     let mut back = Snapshot::capture(&s).restore(&dir, &|_| true).unwrap();
     assert_eq!(back.world.state_hash(), s.world.state_hash(), "readings, orders and switches are saved");
-    assert_eq!(harvest(&back), 3, "still off");
+    assert_eq!(harvest(&back), base, "still off");
     back.push(Command::SetRuleEnabled { rule, on: true });
     back.step();
-    assert_eq!(harvest(&back), 2, "back on, and the reading is still low");
+    assert_eq!(harvest(&back), base - 1, "back on, and the reading is still low");
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -208,6 +211,7 @@ fn a_switched_off_order_is_quiet_but_keeps_count() {
     let rule = s.world.defs.lookup("priority_rule", "stores:food_low").unwrap();
     s.push(Command::SetRuleEnabled { rule, on: false });
     s.step();
+    let base = harvest(&s);
     s.world.events.clear();
     let before = s.world.rules.evaluations;
     s.world.set_reading("stores:food_days", 2.0);
@@ -215,6 +219,6 @@ fn a_switched_off_order_is_quiet_but_keeps_count() {
     assert_eq!(s.world.rules.evaluations, before, "nothing to work out");
     s.push(Command::SetRuleEnabled { rule, on: true });
     s.step();
-    assert_eq!(harvest(&s), 2, "on again, and the reading was low all along");
+    assert_eq!(harvest(&s), base - 1, "on again, and the reading was low all along");
     let _ = std::fs::remove_dir_all(dir);
 }
