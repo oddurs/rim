@@ -836,8 +836,17 @@ pub struct World {
 }
 
 impl World {
+    /// A world that is only its surface.
     pub fn new(defs: Arc<DefDb>, w: i32, h: i32, seed: u64) -> Self {
-        let fields = Fields::new(&defs, (w * h) as usize);
+        Self::with_levels(defs, w, h, 0, 0, seed)
+    }
+
+    /// A world with `below` levels under the surface and `above` over it
+    /// (DESIGN.md §6d).
+    pub fn with_levels(defs: Arc<DefDb>, w: i32, h: i32, below: i32, above: i32, seed: u64) -> Self {
+        let map = Map::with_levels(w, h, below, above);
+        let fields = Fields::new(&defs, map.cells());
+        let zones = crate::zone::Zones::new(map.cells());
         let stance = defs.default_stance;
         let map = {
             let mut m = Map::new(w, h);
@@ -876,7 +885,7 @@ impl World {
             roles_rev: 0,
             roles_seen: (u64::MAX, u64::MAX),
             data: BTreeMap::new(),
-            zones: crate::zone::Zones::new((w * h) as usize),
+            zones,
             stock: crate::stock::Stock::new(things),
             stores: crate::store::StoreIndex::default(),
             shelter_recomputes: 0,

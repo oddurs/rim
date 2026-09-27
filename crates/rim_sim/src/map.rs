@@ -1,5 +1,11 @@
 //! The tile grid: terrain, one fixture layer (plants, rocks, buildings,
 //! blueprints) and one item layer (stacks). Plus reachability regions.
+//!
+//! The grid has levels (DESIGN.md §6d): every per-cell array holds each
+//! level's plane one after another, the surface first, then the levels
+//! below it, then those above. So a cell's index is its level's offset plus
+//! `y * w + x`, a neighbour is found on the same level by `IVec::offset`,
+//! and code that only knows the surface indexes the first plane.
 
 use crate::defs::DefId;
 use crate::path::Goal;
@@ -10,6 +16,9 @@ use hecs::Entity;
 pub struct Map {
     pub w: i32,
     pub h: i32,
+    /// Levels below the surface and above it.
+    below: i32,
+    above: i32,
     pub terrain: Vec<DefId>,
     pub terrain_cost: Vec<u16>,
     pub fixture: Vec<Option<Entity>>,
@@ -53,12 +62,16 @@ pub struct Map {
     rooms_dirty: bool,
     /// How many times rooms have been rebuilt (they only are when walls change).
     pub room_rebuilds: u64,
+    /// How many level-by-faction region layers have been rebuilt.
+    pub region_rebuilds: u64,
     /// Connected-component id per cell (0 = impassable), one layer per
     /// faction, indexed by `Faction as usize`. They differ only where an
     /// owned door stands: what a raider can walk to is not what the owner
     /// can. Lets us reject unreachable targets in O(1) before running A*.
     regions: [Vec<u32>; Faction::ALL.len()],
-    regions_dirty: bool,
+    /// One bit per level whose regions need rebuilding (by plane, in the
+    /// order the arrays hold them).
+    regions_dirty: u64,
     /// Bumped whenever passability changes; renderers can use it to cache.
     pub revision: u64,
     /// Chunks across (see `CHUNK`).
@@ -99,13 +112,30 @@ impl Room {
 pub const NEIGHBORS8: [(i32, i32); 8] = [(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, 1), (1, -1), (-1, -1)];
 
 impl Map {
+    /// A map that is only its surface.
     pub fn new(w: i32, h: i32) -> Self {
-        let n = (w * h) as usize;
+        Self::with_levels(w, h, 0, 0)
+    }
+
+    /// A map with `below` levels under the surface and `above` over it. The
+    /// levels besides the surface start impassable, for map generation to
+    /// fill in.
+    pub fn with_levels(w: i32, h: i32, below: i32, above: i32) -> Self {
+        assert!(below >= 0 && above >= 0 && below + above < 64, "at most 64 levels");
+        // Each level's region ids fit under its plane's number times 1 << 20.
+        assert!(w * h <= 1 << 20, "a level is at most 1,048,576 cells");
+        let plane = (w * h) as usize;
+        let n = plane * (below + above + 1) as usize;
+        let mut terrain_cost = vec![0; n];
+        terrain_cost[..plane].fill(100);
+        let chunks = Self::chunk_count(w, h) * (below + above + 1) as usize;
         Map {
             w,
             h,
+            below,
+            above,
             terrain: vec![0; n],
-            terrain_cost: vec![100; n],
+            terrain_cost,
             fixture: vec![None; n],
             item: vec![None; n],
             floor: vec![None; n],
@@ -126,12 +156,45 @@ impl Map {
             bound_seen: vec![0; n],
             rooms_dirty: true,
             room_rebuilds: 0,
+            region_rebuilds: 0,
             regions: std::array::from_fn(|_| vec![0; n]),
-            regions_dirty: true,
+            regions_dirty: (1u64 << (below + above + 1)) - 1,
             revision: 0,
             chunks_w: (w + CHUNK - 1) / CHUNK,
-            terrain_rev: vec![0; Self::chunk_count(w, h)],
-            things_rev: vec![0; Self::chunk_count(w, h)],
+            terrain_rev: vec![0; chunks],
+            things_rev: vec![0; chunks],
+        }
+    }
+
+    /// The levels there are, lowest first.
+    pub fn levels(&self) -> std::ops::RangeInclusive<i32> {
+        -self.below..=self.above
+    }
+
+    /// Every cell on every level: the length of each per-cell array.
+    pub fn cells(&self) -> usize {
+        self.fixture.len()
+    }
+
+    /// Cells on one level.
+    pub fn plane(&self) -> usize {
+        (self.w * self.h) as usize
+    }
+
+    /// Where level `z` sits among the planes: the surface first, then down,
+    /// then up.
+    #[inline]
+    fn slot(&self, z: i32) -> usize {
+        (if z <= 0 { -z } else { self.below + z }) as usize
+    }
+
+    #[inline]
+    fn level_of_slot(&self, slot: usize) -> i32 {
+        let s = slot as i32;
+        if s <= self.below {
+            -s
+        } else {
+            s - self.below
         }
     }
 
@@ -139,14 +202,24 @@ impl Map {
         (((w + CHUNK - 1) / CHUNK) * ((h + CHUNK - 1) / CHUNK)) as usize
     }
 
-    /// Chunks across and down.
+    /// Chunks across and down, on one level. The surface's chunks come
+    /// first, so chunk `c` below `chunks().0 * chunks().1` is on the surface.
     pub fn chunks(&self) -> (i32, i32) {
         (self.chunks_w, (self.h + CHUNK - 1) / CHUNK)
     }
 
-    /// The top-left cell of chunk `c`.
+    /// The top-left cell of chunk `c`, on its level.
     pub fn chunk_origin(&self, c: usize) -> IVec {
-        IVec::new((c as i32 % self.chunks_w) * CHUNK, (c as i32 / self.chunks_w) * CHUNK)
+        let per = Self::chunk_count(self.w, self.h);
+        let (slot, c) = ((c / per), (c % per) as i32);
+        IVec::at((c % self.chunks_w) * CHUNK, (c / self.chunks_w) * CHUNK, self.level_of_slot(slot))
+    }
+
+    /// The chunks of level `z`, as indices.
+    pub fn level_chunks(&self, z: i32) -> std::ops::Range<usize> {
+        let per = Self::chunk_count(self.w, self.h);
+        let start = self.slot(z) * per;
+        start..start + per
     }
 
     /// What stands in cell `i`, in the order it is drawn: floor, item, fixture.
@@ -155,7 +228,7 @@ impl Map {
     }
 
     pub fn chunk_of(&self, p: IVec) -> usize {
-        ((p.y / CHUNK) * self.chunks_w + p.x / CHUNK) as usize
+        self.slot(p.z) * Self::chunk_count(self.w, self.h) + ((p.y / CHUNK) * self.chunks_w + p.x / CHUNK) as usize
     }
 
     pub fn terrain_rev(&self, chunk: usize) -> u64 {
@@ -192,15 +265,16 @@ impl Map {
 
     #[inline]
     pub fn inb(&self, p: IVec) -> bool {
-        p.x >= 0 && p.y >= 0 && p.x < self.w && p.y < self.h
+        p.x >= 0 && p.y >= 0 && p.x < self.w && p.y < self.h && p.z >= -self.below && p.z <= self.above
     }
     #[inline]
     pub fn idx(&self, p: IVec) -> usize {
-        (p.y * self.w + p.x) as usize
+        self.slot(p.z) * self.plane() + (p.y * self.w + p.x) as usize
     }
     #[inline]
     pub fn pos(&self, i: usize) -> IVec {
-        IVec::new(i as i32 % self.w, i as i32 / self.w)
+        let (slot, r) = (i / self.plane(), (i % self.plane()) as i32);
+        IVec::at(r % self.w, r / self.w, self.level_of_slot(slot))
     }
     #[inline]
     pub fn passable_i(&self, i: usize) -> bool {
@@ -228,7 +302,7 @@ impl Map {
             }
         }
         self.terrain_cost[i] = cost.min(u16::MAX as u32) as u16;
-        self.regions_dirty = true;
+        self.dirty_regions(i);
         self.rooms_dirty = true;
         self.changed.push(i as u32);
         self.revision += 1;
@@ -247,7 +321,7 @@ impl Map {
         self.fix_block[i] = blocks;
         self.fix_door[i] = door;
         if (self.passable_i(i), self.fix_door[i]) != was {
-            self.regions_dirty = true;
+            self.dirty_regions(i);
             self.rooms_dirty = true;
             self.changed.push(i as u32);
         }
@@ -288,41 +362,66 @@ impl Map {
         self.touch(p);
     }
 
+    /// Cell `i`'s level needs its regions rebuilt.
+    fn dirty_regions(&mut self, i: usize) {
+        self.regions_dirty |= 1 << (i / self.plane());
+    }
+
+    /// Rebuild the regions of the levels whose passability changed, and
+    /// only those: a level nobody touched keeps its ids. A level's ids start
+    /// at its plane's number times `1 << 20`, so they never collide.
     pub fn ensure_regions(&mut self) {
-        if !self.regions_dirty {
+        if self.regions_dirty == 0 {
             return;
         }
-        self.regions_dirty = false;
+        let dirty = std::mem::take(&mut self.regions_dirty);
+        let plane = self.plane();
         let mut stack = Vec::new();
         for who in Faction::ALL {
             let open = |m: &Self, i: usize| m.passable_i(i) && !m.locked_against(i, who);
             let mut region = std::mem::take(&mut self.regions[who as usize]);
-            region.iter_mut().for_each(|r| *r = 0);
-            let mut next = 1;
-            for start in 0..region.len() {
-                if region[start] != 0 || !open(self, start) {
-                    continue;
-                }
-                region[start] = next;
-                stack.push(start);
-                while let Some(i) = stack.pop() {
-                    let p = self.pos(i);
-                    // 4-connected is exact: diagonal moves need both orthogonals open.
-                    for (dx, dy) in &NEIGHBORS8[..4] {
-                        let q = p.offset(*dx, *dy);
-                        if !self.inb(q) {
-                            continue;
-                        }
-                        let j = self.idx(q);
-                        if region[j] == 0 && open(self, j) {
-                            region[j] = next;
-                            stack.push(j);
-                        }
-                    }
-                }
-                next += 1;
+            for slot in (0..64).filter(|s| dirty & (1 << s) != 0) {
+                let cells = slot * plane..(slot + 1) * plane;
+                region[cells.clone()].iter_mut().for_each(|r| *r = 0);
+                self.region_rebuilds += 1;
+                self.flood_regions(&mut region, cells, (slot as u32) << 20, &open, &mut stack);
             }
             self.regions[who as usize] = region;
+        }
+    }
+
+    /// Number the connected areas among `cells` (one level), from `base + 1`.
+    fn flood_regions(
+        &self,
+        region: &mut [u32],
+        cells: std::ops::Range<usize>,
+        base: u32,
+        open: &impl Fn(&Self, usize) -> bool,
+        stack: &mut Vec<usize>,
+    ) {
+        let mut next = base + 1;
+        for start in cells {
+            if region[start] != 0 || !open(self, start) {
+                continue;
+            }
+            region[start] = next;
+            stack.push(start);
+            while let Some(i) = stack.pop() {
+                let p = self.pos(i);
+                // 4-connected is exact: diagonal moves need both orthogonals open.
+                for (dx, dy) in &NEIGHBORS8[..4] {
+                    let q = p.offset(*dx, *dy);
+                    if !self.inb(q) {
+                        continue;
+                    }
+                    let j = self.idx(q);
+                    if region[j] == 0 && open(self, j) {
+                        region[j] = next;
+                        stack.push(j);
+                    }
+                }
+            }
+            next += 1;
         }
     }
 
@@ -347,7 +446,7 @@ impl Map {
             return;
         }
         self.fix_owner[i] = v;
-        self.regions_dirty = true;
+        self.dirty_regions(i);
         self.revision += 1;
     }
 

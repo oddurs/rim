@@ -163,10 +163,13 @@ pub enum RoleSource {
 /// The longest a work role's name may be, in characters.
 pub const ROLE_LABEL_MAX: usize = 40;
 
+/// The cells of the rectangle from `a` to `b`, on `a`'s level; none on a
+/// level the map doesn't have.
 fn cells(w: &World, a: IVec, b: IVec) -> impl Iterator<Item = IVec> {
     let (x0, x1) = (a.x.min(b.x).max(0), a.x.max(b.x).min(w.map.w - 1));
     let (y0, y1) = (a.y.min(b.y).max(0), a.y.max(b.y).min(w.map.h - 1));
-    (y0..=y1).flat_map(move |y| (x0..=x1).map(move |x| IVec::new(x, y)))
+    let y1 = if w.map.levels().contains(&a.z) { y1 } else { y0 - 1 };
+    (y0..=y1).flat_map(move |y| (x0..=x1).map(move |x| IVec::at(x, y, a.z)))
 }
 
 fn in_rect(p: IVec, a: IVec, b: IVec) -> bool {

@@ -131,6 +131,16 @@ fn def_id(w: &World, kind: &'static str, id: &str, from: &str) -> mlua::Result<c
     w.defs.resolve(kind, id, from).map_err(mlua::Error::runtime)
 }
 
+/// A script's cell: level `z`, or the surface when it gave none. A level
+/// the map doesn't have is the script's error.
+fn cell(w: &World, x: i32, y: i32, z: Option<i32>) -> mlua::Result<IVec> {
+    let z = z.unwrap_or(0);
+    if !w.map.levels().contains(&z) {
+        return Err(mlua::Error::runtime(format!("there's no level {z} (the map has {:?})", w.map.levels())));
+    }
+    Ok(IVec::at(x, y, z))
+}
+
 fn field_id(w: &World, id: &str, from: &str) -> mlua::Result<usize> {
     def_id(w, "field", id, from).map(|f| f as usize)
 }
@@ -236,7 +246,7 @@ type OrderSpec = { label: string, needs: { OrderNeed }, work: number, work_type:
 type OrderInput = { thing: string?, tag: string?, count: number, have: number }
 type OrderInfo = { owner: string, label: string, needs: { OrderInput }, work: number, done: number, total: number, requires: { string } }
 type ItemQuery = { thing: string?, tag: string? }
-type ThingAt = { id: number, thing: string, x: number, y: number, count: number, blueprint: boolean }
+type ThingAt = { id: number, thing: string, x: number, y: number, z: number, count: number, blueprint: boolean }
 "#;
 
 /// A work order's needs, at most: a recipe, not a shopping list.
@@ -1015,12 +1025,13 @@ impl ScriptHost {
         // A random open cell within `r` of (x, y).
         api!(
             "near_cell",
-            "(x: number, y: number, r: number) -> (number?, number?)",
-            "A random open cell within r of (x, y).",
-            (i32, i32, i32),
-            |w, (x, y, r)| {
+            "(x: number, y: number, r: number, z: number?) -> (number?, number?)",
+            "A random open cell within r of (x, y), on level z (the surface if nil).",
+            (i32, i32, i32, Option<i32>),
+            |w, (x, y, r, z)| {
+                let at = cell(w, x, y, z)?;
                 for _ in 0..100 {
-                    let p = IVec::new(x + w.rng.range(-r, r), y + w.rng.range(-r, r));
+                    let p = at.offset(w.rng.range(-r, r), w.rng.range(-r, r));
                     if w.map.passable(p) {
                         return Ok((Some(p.x), Some(p.y)));
                     }
@@ -1030,14 +1041,14 @@ impl ScriptHost {
         );
         api!(
             "spawn_pawn",
-            "(creature: string, faction: Faction, x: number, y: number, name: string?) -> (number?, string?)",
-            "Spawn a creature; returns its id and name, or nil if the cell is blocked.",
-            (String, String, i32, i32, Option<String>),
-            |w, from, (creature, faction, x, y, name)| {
+            "(creature: string, faction: Faction, x: number, y: number, name: string?, z: number?) -> (number?, string?)",
+            "Spawn a creature on level z (the surface if nil); returns its id and name, or nil if the cell is blocked.",
+            (String, String, i32, i32, Option<String>, Option<i32>),
+            |w, from, (creature, faction, x, y, name, z)| {
                 let def = def_id(w, "creature", &creature, &from)?;
                 let f = Faction::parse(&faction)
                     .ok_or_else(|| mlua::Error::runtime(format!("unknown faction '{faction}'")))?;
-                let p = IVec::new(x, y);
+                let p = cell(w, x, y, z)?;
                 if !w.map.passable(p) {
                     return Ok((None, None));
                 }
@@ -1049,14 +1060,15 @@ impl ScriptHost {
         // Field layers: temperature, light, whatever mods declare.
         api!(
             "field",
-            "(id: string, x: number, y: number) -> number",
-            "A field's value at a cell (temperature, light, ...).",
-            (String, i32, i32),
-            |w, from, (id, x, y)| {
+            "(id: string, x: number, y: number, z: number?) -> number",
+            "A field's value at a cell (temperature, light, ...), on level z (the surface if nil).",
+            (String, i32, i32, Option<i32>),
+            |w, from, (id, x, y, z)| {
                 let f = field_id(w, &id, &from)?;
+                let p = cell(w, x, y, z)?;
                 w.map.ensure_rooms();
                 let defs = w.defs.clone();
-                Ok(w.fields.value(&defs, &w.map, f, IVec::new(x, y)))
+                Ok(w.fields.value(&defs, &w.map, f, p))
             }
         );
         api!("ambient", "(id: string) -> number", "A field's outdoor value.", String, |w, from, id| {
@@ -1232,22 +1244,23 @@ impl ScriptHost {
         // Sheltered: inside an enclosed room.
         api!(
             "indoors",
-            "(x: number, y: number) -> boolean",
-            "Whether a cell is inside an enclosed room.",
-            (i32, i32),
-            |w, (x, y)| {
+            "(x: number, y: number, z: number?) -> boolean",
+            "Whether a cell is inside an enclosed room, on level z (the surface if nil).",
+            (i32, i32, Option<i32>),
+            |w, (x, y, z)| {
+                let p = cell(w, x, y, z)?;
                 w.map.ensure_rooms();
-                Ok(w.map.indoors(IVec::new(x, y)))
+                Ok(w.map.indoors(p))
             }
         );
         // { id, cells, enclosed } for the room at (x, y), or nil on a wall or door.
         {
             let ptr = self.world.clone();
-            let f = lua.create_function(move |lua, (x, y): (i32, i32)| {
+            let f = lua.create_function(move |lua, (x, y, z): (i32, i32, Option<i32>)| {
                 let room = with_world(&ptr, |w| {
+                    let p = cell(w, x, y, z)?;
                     w.map.ensure_rooms();
                     w.ensure_roles();
-                    let p = IVec::new(x, y);
                     Ok(w.map.room_at(p).map(|r| (r, w.room_role(p).map(|d| w.defs.room_roles[d as usize].clone()))))
                 })?;
                 let Some((r, role)) = room else { return Ok(Value::Nil) };
@@ -1265,8 +1278,9 @@ impl ScriptHost {
             rim.set("room_at", f)?;
             self.declare(
                 "room_at",
-                "(x: number, y: number) -> Room?",
-                "The room at a cell, or nil on a wall or door. `uncovered` counts cells beyond every roof support's span; `role` is the first [[room_role]] it meets, if any.",
+                "(x: number, y: number, z: number?) -> Room?",
+                "The room at a cell on level z (the surface if nil), or nil on a wall or door. `uncovered` counts \
+                 cells beyond every roof support's span; `role` is the first [[room_role]] it meets, if any.",
             );
         }
         // A thing's stat by name: the def's base times its material's factor.
@@ -1484,11 +1498,13 @@ impl ScriptHost {
         );
         api!(
             "spawn_item",
-            "(thing: string, x: number, y: number, count: number, stuff: string?) -> number",
+            "(thing: string, x: number, y: number, count: number, stuff: string?, z: number?) -> number",
             "Drop items near a cell, merging into stacks; returns how many didn't fit. stuff is what they're made \
-             of (a flint axe): it sets their hp and quality, and they stack only with the same.",
-            (String, i32, i32, u32, Option<String>),
-            |w, from, (thing, x, y, count, stuff)| {
+             of (a flint axe): it sets their hp and quality, and they stack only with the same. z is the level \
+             (the surface if nil).",
+            (String, i32, i32, u32, Option<String>, Option<i32>),
+            |w, from, (thing, x, y, count, stuff, z)| {
+                let at = cell(w, x, y, z)?;
                 let def = def_id(w, "thing", &thing, &from)?;
                 let stuff = match stuff {
                     None => None,
@@ -1500,7 +1516,7 @@ impl ScriptHost {
                         Some(m)
                     }
                 };
-                Ok(w.place_item_of(def, IVec::new(x, y), count, stuff))
+                Ok(w.place_item_of(def, at, count, stuff))
             }
         );
         // A container's level, slots and contents, or nil.
@@ -1737,6 +1753,7 @@ impl ScriptHost {
                     r.set("thing", w.defs.thing(t.def).id.as_str())?;
                     r.set("x", t.pos.x)?;
                     r.set("y", t.pos.y)?;
+                    r.set("z", t.pos.z)?;
                     r.set("count", t.count)?;
                     r.set("blueprint", w.ecs.get::<&Blueprint>(e).is_ok())?;
                     Ok(Value::Table(r))
@@ -2071,6 +2088,7 @@ impl ScriptHost {
                 t.set("faction", faction.name())?;
                 t.set("x", pos.x)?;
                 t.set("y", pos.y)?;
+                t.set("z", pos.z)?;
                 t.set("founder", *founder)?;
                 "pawn_died"
             }
@@ -2086,6 +2104,7 @@ impl ScriptHost {
                 t.set("thing", defs.thing(*def).id.as_str())?;
                 t.set("x", pos.x)?;
                 t.set("y", pos.y)?;
+                t.set("z", pos.z)?;
                 "building_complete"
             }
             GameEvent::NewDay { day } => {
@@ -2118,6 +2137,7 @@ impl ScriptHost {
                 if let Some(at) = w.thing(*site).map(|t| t.pos) {
                     t.set("x", at.x)?;
                     t.set("y", at.y)?;
+                    t.set("z", at.z)?;
                 }
                 t.set("owner", owner.as_str())?;
                 t.set("label", label.as_str())?;

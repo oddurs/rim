@@ -83,7 +83,7 @@ impl Ground {
                 continue;
             }
             *seen = now;
-            let IVec { x: x0, y: y0 } = w.map.chunk_origin(c);
+            let IVec { x: x0, y: y0, .. } = w.map.chunk_origin(c);
             let (cw, ch) = (CHUNK.min(mw - x0), CHUNK.min(mh - y0));
             tex.update_part(&Self::texels(w, x0, y0, cw, ch), x0, y0, cw, ch);
         }

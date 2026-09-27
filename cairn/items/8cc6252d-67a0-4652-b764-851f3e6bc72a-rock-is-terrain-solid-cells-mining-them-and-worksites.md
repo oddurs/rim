@@ -2,12 +2,12 @@
 id: 8cc6252d-67a0-4652-b764-851f3e6bc72a
 title: 'Rock is terrain: solid cells, mining them, and worksites'
 type: feature
-status: review
+status: done
 milestone: depth
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 created: 2026-09-26
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p0
 api: additive
 effort: l

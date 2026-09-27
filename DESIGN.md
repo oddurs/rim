@@ -1650,23 +1650,35 @@ nobody has dug.
   neighbours to 6 or 26, and regions and rooms span levels. §6a makes the
   lattice engine because every hot path depends on its shape; 3D changes
   that shape in all of them at once.
-- **Ruling:** stacked planes. A level is a `Map`, unchanged. Levels meet
-  only at **portals** (stairs, ladders, anything whose def says `portal`),
-  which cover two cells one above the other the way a multi-cell thing
-  covers its footprint. There are tens of portals, not thousands, so every
-  3D question becomes a 2D one plus a small graph:
-  - Positions carry `z`; 0 is the surface, and a missing `z` means 0.
-  - Regions, rooms, fields and chunk caches stay per level, with per-level
-    dirty flags. A wall on −2 rebuilds −2 and nothing else.
+- **Ruling:** stacked planes. Levels meet only at **portals** (stairs,
+  ladders, anything whose def says `portal`), which cover two cells one
+  above the other the way a multi-cell thing covers its footprint. There
+  are tens of portals, not thousands, so every 3D question becomes a 2D one
+  plus a small graph:
+  - Positions carry `z`; 0 is the surface. A position without `z` is on the
+    surface, and `z` 0 is never written, so saves, commands and scripts
+    from before levels read the same.
+  - **One map, planes in a row.** Every per-cell array holds each level's
+    plane in turn: the surface first, then down, then up. A cell's index
+    includes its level, `offset` stays on it, and code that only knows the
+    surface indexes the first plane unchanged. One allocation, no lookup of
+    a level on a hot path.
+  - Regions rebuild per level: a wall on −2 renumbers −2 and nothing else,
+    and a level's ids start at its plane's number times `1 << 20`, so they
+    never collide. Rooms are one rebuild over every level, keeping the
+    contiguous ids the fields' room values are indexed by; a level of solid
+    rock is passed over at the cost of a scan. Chunks are per level.
   - Reachability is a union-find over `(z, region)` joined at portals,
     rebuilt in O(portals) when a level's regions or a portal change. Asking
     stays O(1).
   - A path is planned leg by leg: a route over the portal graph, then A* on
     one plane to the next portal with today's scratch buffers. The next leg
     is planned on arrival.
-  - A level nobody has dug into is **untouched**: a function of the seed and
-    `z`, generated from `[[stratum]]` defs the tick something breaks in, and
-    never saved until then.
+  - Every level is generated with the map, from `[[stratum]]` defs. An
+    earlier draft generated a level only when something first dug into
+    it; with the planes in one allocation that saves no memory, and
+    generating everything up front keeps determinism and saves plain. A
+    level of rock is one zstd-compressed array in the save.
 
 ### Tension: how deep?
 

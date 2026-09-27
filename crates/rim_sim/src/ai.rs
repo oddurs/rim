@@ -112,7 +112,7 @@ fn go_to(w: &mut World, p: &mut Pawn, goal: Goal) -> Go {
     // The regions say a path exists, so the search is sure to find one; a
     // cap below the whole map would only give up on a long way round and
     // have the pawn ask again, and again.
-    let cap = (w.map.w * w.map.h) as u32;
+    let cap = w.map.cells() as u32;
     match w.pf.find(&w.map, p.pos, goal, cap, p.faction) {
         Some(path) => {
             p.path = path;

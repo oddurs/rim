@@ -78,6 +78,12 @@ pub struct Snapshot {
 pub(crate) struct WorldSection {
     width: i32,
     height: i32,
+    /// Levels under and over the surface (DESIGN.md §6d). Unwritten when
+    /// there are none, so a save of a surface-only world reads as before.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    below: i32,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    above: i32,
     rng: u64,
     next_entity: u32,
     wealth: f64,
@@ -111,6 +117,10 @@ pub(crate) type DefsSection = BTreeMap<String, Vec<String>>;
 pub(crate) struct ScriptsSection {
     disabled_hooks: Vec<usize>,
     disabled_handlers: Vec<usize>,
+}
+
+fn is_zero(v: &i32) -> bool {
+    *v == 0
 }
 
 fn enc<T: Serialize>(v: &T) -> Vec<u8> {
@@ -244,6 +254,8 @@ impl Snapshot {
         let world = WorldSection {
             width: w.map.w,
             height: w.map.h,
+            below: -*w.map.levels().start(),
+            above: *w.map.levels().end(),
             rng: w.rng.state(),
             next_entity: w.next_entity,
             wealth: w.wealth,
@@ -383,7 +395,7 @@ impl Snapshot {
         let remap = Remap::new(&saved_defs, &def_table(&defs));
         let mut notes: Vec<String> = Vec::new();
         let ws: WorldSection = dec(self, "engine:world")?;
-        let mut w = World::new(defs.clone(), ws.width, ws.height, self.header.seed);
+        let mut w = World::with_levels(defs.clone(), ws.width, ws.height, ws.below, ws.above, self.header.seed);
         w.tick = self.header.tick;
         w.rng = crate::rng::Rng::from_state(ws.rng);
         w.wealth = ws.wealth;
@@ -410,7 +422,7 @@ impl Snapshot {
             .collect();
 
         let terrain: Vec<DefId> = dec(self, "engine:map")?;
-        if terrain.len() != (ws.width * ws.height) as usize {
+        if terrain.len() != w.map.cells() {
             return Err("engine:map doesn't match the map's size".into());
         }
         let mut lost_terrain: BTreeMap<&str, u32> = BTreeMap::new();
