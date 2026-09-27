@@ -7,8 +7,8 @@
 //! The bot acts only through Commands, like a player:
 //! - at once: put building first and crafting second; gather and forage
 //!   around the start, mark the nearest flint and stones; plan a small
-//!   branch hut (3x3 by default, `--hut N`) with a door and a grass pallet, on
-//!   ground cleared by hand, with a campfire by it and a crafting spot
+//!   hut from a house plan (primitive's branch hut by default, `--plan ID`),
+//!   on ground cleared by hand, with a campfire by it and a crafting spot
 //!   outside;
 //! - once the spot stands: bills for a hammerstone, a hand axe and a
 //!   digging stick;
@@ -113,7 +113,7 @@ fn add_bill(s: &mut Sim, site: Entity, recipe: &str) {
     s.push(Command::ModEvent { name: "crafting:add_bill".into(), data: Some(Data::Table(data.into_iter().collect())) });
 }
 
-fn run(mods: &Path, seed: u64, days: u64, hut: i32) -> Report {
+fn run(mods: &Path, seed: u64, days: u64, plan: &str) -> Report {
     let wanted = ["core", "crafting", "primitive", "weather"];
     let mut s = Sim::with_mods(mods, seed, &|m| wanted.contains(&m)).expect("mods load");
     let mut r = Report { seed, ..Default::default() };
@@ -121,7 +121,6 @@ fn run(mods: &Path, seed: u64, days: u64, hut: i32) -> Report {
     let des = |id: &str| defs.lookup("designation", id).expect(id);
     let thing = |id: &str| defs.thing_id(id).expect(id);
     let c = s.world.colony_center().expect("a colony");
-    let branches = Some(thing("primitive:branches"));
     let clay = Some(thing("primitive:clay"));
 
     // Shelter first: at equal priorities the nearest work wins, and some
@@ -144,11 +143,14 @@ fn run(mods: &Path, seed: u64, days: u64, hut: i32) -> Report {
     {
         s.push(Command::Designate { designation: des("core:gather"), a: p, b: p });
     }
+    let plan = defs.lookup("plan", plan).expect(plan);
+    let [pw, ph] = defs.plans[plan as usize].size;
+    let hut = pw.max(ph);
     let Some(o) = open_square(&s, c, hut) else { return r };
     let plans = |s: &Sim| {
         let (mut built, mut all) = (0, 0);
-        for y in 0..hut {
-            for x in 0..hut {
+        for y in 0..ph {
+            for x in 0..pw {
                 if let Some(f) = s.world.map.fixture_at(o.offset(x, y)) {
                     // Grass still waiting under a plan isn't built.
                     let waiting = s.world.ecs.get::<&Blueprint>(f).is_ok()
@@ -161,32 +163,11 @@ fn run(mods: &Path, seed: u64, days: u64, hut: i32) -> Report {
         (built, all)
     };
     let at = |dx: i32, dy: i32| o.offset(dx, dy);
-    for y in 0..hut {
-        for x in 0..hut {
-            let edge = x == 0 || y == 0 || x == hut - 1 || y == hut - 1;
-            if edge && (x, y) != (2, hut - 1) {
-                s.push(Command::Build {
-                    thing: thing("core:wall"),
-                    stuff: branches,
-                    a: at(x, y),
-                    b: at(x, y),
-                    facing: 0,
-                });
-            }
-        }
-    }
-    s.push(Command::Build {
-        thing: thing("core:door"),
-        stuff: branches,
-        a: at(2, hut - 1),
-        b: at(2, hut - 1),
-        facing: 0,
-    });
-    s.push(Command::Build { thing: thing("primitive:pallet"), stuff: None, a: at(1, 1), b: at(1, 1), facing: 0 });
+    s.push(Command::PlacePlan { plan, at: o, facing: 0, stuff: None });
     // The fire inside a hut with room for it, else by the door.
-    let fire = if hut >= 5 { at(3, 2) } else { at(2, hut) };
+    let fire = if hut >= 5 { at(3, 2) } else { at(2, ph) };
     s.push(Command::Build { thing: thing("core:campfire"), stuff: None, a: fire, b: fire, facing: 0 });
-    let spot_at = at(2, hut + 1);
+    let spot_at = at(2, ph + 1);
     s.push(Command::Build { thing: thing("crafting:spot"), stuff: None, a: spot_at, b: spot_at, facing: 0 });
 
     let (campfire, wall) = (thing("core:campfire"), thing("core:wall"));
@@ -327,7 +308,7 @@ fn run(mods: &Path, seed: u64, days: u64, hut: i32) -> Report {
                     s.push(Command::Designate { designation: des("core:gather"), a: p, b: p });
                 }
                 // A cob windbreak along the hut's east side.
-                s.push(Command::Build { thing: wall, stuff: clay, a: at(hut, 0), b: at(hut, hut - 1), facing: 0 });
+                s.push(Command::Build { thing: wall, stuff: clay, a: at(pw, 0), b: at(pw, ph - 1), facing: 0 });
             }
         }
         s.step();
@@ -392,13 +373,14 @@ fn track_deaths(
 fn main() {
     let mods = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mods");
     let (seeds, days, show) = (arg("--seeds", 20), arg("--days", 5), arg("--show", 0));
-    let hut = arg("--hut", 3) as i32;
+    let plan = std::env::args().skip_while(|a| a != "--plan").nth(1).unwrap_or_else(|| "primitive:branch_hut".into());
     let reports: Vec<Report> = std::thread::scope(|sc| {
         let handles: Vec<_> = (1..=seeds)
             .map(|seed| {
                 sc.spawn({
                     let mods = mods.clone();
-                    move || run(&mods, seed, days, hut)
+                    let plan = plan.clone();
+                    move || run(&mods, seed, days, &plan)
                 })
             })
             .collect();

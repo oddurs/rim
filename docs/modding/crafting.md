@@ -132,6 +132,37 @@ target = "thing/core:stone"
 set = { stuff = { requires = ["pounding"] } }
 ```
 
+## House plans
+
+A `[[plan]]` is a house as text: a grid of characters, and a `legend`
+saying what each one builds. `Command::PlacePlan { plan, at, facing, stuff }`
+puts every piece up as a blueprint at once, with the grid's corner at `at`,
+turned `facing` quarter turns clockwise; a piece that can't go there is left
+out, and grass or a tree in the way is cleared first, as for any build.
+`stuff`, when given, replaces the plan's material wherever it will do, so
+the same hut can go up in wattle or in cob.
+
+```toml
+[[plan]]
+id = "lodge"
+label = "log lodge"
+grid = """
+#####
+#...#
+#...#
+##+##
+"""
+legend = { "#" = { thing = "core:wall", stuff = "core:wood" }, "+" = { thing = "core:door", stuff = "core:wood" } }
+```
+
+`.` and space build nothing. Rows run north to south. A legend entry
+gives `thing`, its `stuff` when it's built of a material, and `facing`, its
+own quarter turns within the plan. A piece bigger than one cell is written
+at its anchor and may be repeated over the rest of its footprint (`bb` for
+a bench two wide), which the loader reads as the one piece. A character
+the legend lacks, or a piece that runs off the grid, fails the load.
+Primitive ships a branch hut and a cob house.
+
 ## Bills
 
 Selecting a station shows its bills in the inspector. A bill is a recipe and
