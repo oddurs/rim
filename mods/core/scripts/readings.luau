@@ -8,15 +8,20 @@
 
 local HOUR = rim.ticks_per_day // 24
 
--- What a unit of each food restores, and every kind of item.
+-- What a unit of each food restores.
 local foods: { { id: string, nutrition: number } } = {}
-local items: { string } = {}
 for _, d in rim.thing_defs do
-	if d.item then
-		table.insert(items, d.id)
-	end
 	if d.nutrition then
 		table.insert(foods, { id = d.id, nutrition = d.nutrition })
+	end
+end
+
+-- The top of the item category tree: every item is under one of these, so
+-- a loose count is a lookup per branch, not per kind of item.
+local roots: { string } = {}
+for _, c in rim.item_categories do
+	if c.parent == nil then
+		table.insert(roots, c.id)
 	end
 end
 
@@ -37,8 +42,8 @@ local function publish()
 	rim.set_reading("food_days", fed / (eaters * stomachs_per_day))
 
 	local loose = 0
-	for _, id in items do
-		loose += rim.stock(id, "loose")
+	for _, id in roots do
+		loose += rim.stock({ category = id }, "loose")
 	end
 	rim.set_reading("loose_items", loose)
 
