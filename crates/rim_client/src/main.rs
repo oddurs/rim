@@ -13,6 +13,7 @@ mod draw;
 mod mesh;
 mod pattern;
 mod pinch;
+mod roof;
 mod save;
 mod sky;
 mod title;
@@ -119,6 +120,8 @@ pub struct App {
     pub order_flash: Option<(IVec, f64)>,
     /// The pointer was over UI last frame (world hover is suppressed).
     pub mouse_over_ui: bool,
+    /// The world cell under the pointer, when it isn't over the UI.
+    pub hover_cell: Option<IVec>,
     /// The UI's draw list from the last frame.
     pub last_draw: Vec<rim_ui::paint::Draw>,
     /// The anchored labels among `last_draw`, to catch up with the camera
@@ -139,6 +142,8 @@ pub struct App {
     pub last_order: Option<LastOrder>,
     /// Lighting and weather on screen.
     pub sky: sky::Sky,
+    /// Roofs from far away, rebuilt when rooms are.
+    pub roofs: roof::Roofs,
     /// The terrain, baked into a texture.
     pub ground: draw::Ground,
     /// What each render pass cost last frame.
@@ -612,6 +617,7 @@ async fn game() {
         hint_key: None,
         order_flash: None,
         mouse_over_ui: false,
+        hover_cell: None,
         last_draw: Vec::new(),
         last_anchored: Vec::new(),
         profile: (Vec::new(), Vec::new(), f64::MIN),
@@ -622,6 +628,7 @@ async fn game() {
         last_precise: f64::MIN,
         last_order: None,
         sky: sky::Sky::default(),
+        roofs: roof::Roofs::default(),
         ground: draw::Ground::default(),
         render_us: RenderTimes::default(),
         meshes: mesh::Meshes::default(),
@@ -1141,6 +1148,7 @@ pub fn frame(app: &mut App, raw: &RawInput) {
     app.ui.set_dpi(dpi);
     app.ui.check_reload(raw.time);
     let cv = client_view(app, raw.mouse, raw.time);
+    app.hover_cell = cv.hover_cell;
     let input = ui_input(raw, dpi);
     let out = app.ui.frame(&app.sim.world, &cv, &input);
     app.last_draw = out.draw;
@@ -1365,6 +1373,15 @@ pub fn render(app: &mut App) {
     app.sky.weather(&app.sim.world, &app.cam, &air);
     t.weather = lap();
     app.sky.light(&app.sim.world, &app.cam, &air);
+    // Roofs are outdoors whatever is under them: after the lightmap,
+    // lit by the sky. The house under the pointer lifts its roof.
+    app.roofs.update(&app.sim.world);
+    let alpha = roof::Roofs::alpha(app.cam.zoom);
+    if alpha > 0.0 {
+        let lifted = app.hover_cell.map_or(0, |p| app.roofs.house_at(&app.sim.world, p));
+        let tint = app.sky.outdoor(&app.sim.world, &air);
+        app.roofs.draw(&app.sim.world, &app.cam, draw::visible(app), alpha, lifted, tint);
+    }
     t.light = lap();
     if let Some(rt) = &app.world_target {
         set_default_camera();

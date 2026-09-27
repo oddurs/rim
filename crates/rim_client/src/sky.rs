@@ -222,6 +222,11 @@ impl Sky {
         tinted * bright
     }
 
+    /// The light on something outdoors: the sky, never darker than night.
+    pub fn outdoor(&self, w: &World, air: &Air) -> Vec3 {
+        self.sky_color(w, air).max(rgb3(w.defs.sky.rgb_night))
+    }
+
     /// Multiply the world by the light. Call after everything lit is drawn.
     pub fn light(&mut self, w: &World, cam: &Cam, air: &Air) {
         self.update_lightmap(w);
