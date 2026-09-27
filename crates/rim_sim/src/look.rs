@@ -103,6 +103,10 @@ pub struct LayerDef {
     /// `"room"`: mirrored toward the enclosed side of the run, so a door
     /// swings into the room and not out of it.
     pub into: Option<String>,
+    /// For `pattern`: `"material"` (the default) is the wall pattern of
+    /// what the thing is made of, `"floor"` its floor pattern, and any name
+    /// in the vocabulary is that pattern whatever it's made of.
+    pub pattern: Option<String>,
     /// While it is built, the stretch of the work this layer appears over:
     /// absent before `from`, rising from the bottom (a disc from its middle)
     /// until `to`, whole after (DESIGN.md §6b).
@@ -122,6 +126,9 @@ pub enum Prim {
     /// An arc about a point, `width` points thick, from `from` to `to`
     /// radians clockwise from east: a door's swing.
     Arc { at: [f32; 2], r: f32, from: f32, to: f32, width: f32 },
+    /// Hairlines in a material's pattern, laid out in world space so they
+    /// run on from cell to cell (DESIGN.md §6c).
+    Pattern { src: PatternSrc },
     /// The whole cell, drawn a quarter at a time from its neighbours: an
     /// outer corner is rounded by the join's `round`, and everything that
     /// faces a joined neighbour is square, so a run reads as one body.
@@ -132,6 +139,73 @@ pub enum Prim {
     /// A character centred on a point, `size` of the cell high. `id`
     /// indexes `DefDb::glyphs`.
     Glyph { at: [f32; 2], size: f32, id: u16 },
+}
+
+/// How a material shows on the plan: a fixed vocabulary of hairline
+/// patterns, drawn by the renderer from no art at all.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum Pattern {
+    #[default]
+    None,
+    /// Withies woven round stakes: wattle.
+    Weave,
+    /// Flecks and a lift line: cob, earth.
+    Stipple,
+    /// Courses of log with a highlight each, ends shown where a run stops.
+    Logs,
+    /// Irregular stones: dry stone.
+    Rubble,
+    /// Dressed blocks in courses: ashlar.
+    Courses,
+    /// Small bricks in running bond, light mortar.
+    Bond,
+    /// Cracks in bare rock.
+    Crag,
+    /// Floor boards with staggered joints.
+    Planks,
+    /// Large flagstones.
+    Flags,
+    /// Scattered specks: packed earth.
+    Earth,
+    /// Strewn rushes.
+    Rushes,
+    /// Rounded cobbles.
+    Cobbles,
+}
+
+impl Pattern {
+    pub fn parse(name: &str) -> Result<Pattern, String> {
+        Ok(match name {
+            "none" => Pattern::None,
+            "weave" => Pattern::Weave,
+            "stipple" => Pattern::Stipple,
+            "logs" => Pattern::Logs,
+            "rubble" => Pattern::Rubble,
+            "courses" => Pattern::Courses,
+            "bond" => Pattern::Bond,
+            "crag" => Pattern::Crag,
+            "planks" => Pattern::Planks,
+            "flags" => Pattern::Flags,
+            "earth" => Pattern::Earth,
+            "rushes" => Pattern::Rushes,
+            "cobbles" => Pattern::Cobbles,
+            other => {
+                return Err(format!(
+                    "unknown pattern '{other}' (want none, weave, stipple, logs, rubble, courses, bond, crag, planks, flags, earth, rushes or cobbles)"
+                ))
+            }
+        })
+    }
+}
+
+/// Where a `pattern` layer's pattern comes from.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum PatternSrc {
+    /// The material's `stuff.look.pattern`.
+    Material,
+    /// The material's `stuff.look.floor`.
+    Floor,
+    Fixed(Pattern),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -260,11 +334,12 @@ impl LayerDef {
             "edges" => &["width"],
             "mass" => &[],
             "arc" => &["x", "y", "r", "width", "from", "to", "into"],
+            "pattern" => &["pattern"],
             "sprite" => &["x", "y", "w", "h", "sprite", "tint"],
             "glyph" => &["x", "y", "glyph", "size"],
             other => {
                 return Err(format!(
-                    "unknown draw '{other}' (want fill, outline, disc, arc, edges, mass, sprite or glyph)"
+                    "unknown draw '{other}' (want fill, outline, disc, arc, edges, mass, pattern, sprite or glyph)"
                 ))
             }
         };
@@ -284,6 +359,7 @@ impl LayerDef {
             ("from", self.from.is_some()),
             ("to", self.to.is_some()),
             ("into", self.into.is_some()),
+            ("pattern", self.pattern.is_some()),
         ];
         if let Some((name, _)) = given.iter().find(|(n, set)| *set && !allowed.contains(n)) {
             return Err(format!("`{name}` does not apply to draw = \"{}\"", self.draw));
@@ -339,6 +415,13 @@ impl LayerDef {
                 Prim::Glyph { at, size: self.size.unwrap_or(0.8), id: intern(art.glyphs, g.to_string()) }
             }
             "mass" => Prim::Mass,
+            "pattern" => Prim::Pattern {
+                src: match self.pattern.as_deref() {
+                    None | Some("material") => PatternSrc::Material,
+                    Some("floor") => PatternSrc::Floor,
+                    Some(name) => PatternSrc::Fixed(Pattern::parse(name)?),
+                },
+            },
             "arc" => Prim::Arc {
                 at: [self.x.unwrap_or(0.5), self.y.unwrap_or(0.5)],
                 r: self.r.unwrap_or(0.4),
@@ -535,6 +618,20 @@ mod tests {
         let mut sp = Art { sprites: &mut keys, glyphs: &mut glyphs, home: "m" };
         let lone = toml::from_str::<LookDef>("orient = \"run\"").unwrap();
         assert!(lone.compile(&mut groups, &mut sp).unwrap_err().contains("needs look.join"));
+    }
+
+    #[test]
+    fn a_pattern_is_the_materials_unless_named() {
+        assert_eq!(layer("draw = \"pattern\"").unwrap().prim, Prim::Pattern { src: PatternSrc::Material });
+        assert_eq!(
+            layer("draw = \"pattern\"\npattern = \"floor\"").unwrap().prim,
+            Prim::Pattern { src: PatternSrc::Floor }
+        );
+        assert_eq!(
+            layer("draw = \"pattern\"\npattern = \"crag\"").unwrap().prim,
+            Prim::Pattern { src: PatternSrc::Fixed(Pattern::Crag) }
+        );
+        assert!(layer("draw = \"pattern\"\npattern = \"tartan\"").unwrap_err().contains("unknown pattern"));
     }
 
     #[test]

@@ -61,6 +61,8 @@ pub fn shapes(defs: &DefDb, def: DefId, made_of: Option<DefId>) -> Vec<Shape> {
             // A door's swing: detail a token's few pixels can't show, and
             // it has no line to draw one with.
             Prim::Arc { .. } => continue,
+            // Hairlines a token's few pixels can't show.
+            Prim::Pattern { .. } => continue,
         });
     }
     out

@@ -22,6 +22,7 @@ is the middle. Line widths are in screen points.
 | `disc` | `x`, `y` (0.5, 0.5), `r` (0.4), `min_px`, `pulse` | a disc |
 | `edges` | `width` (1.5) | the cell's border, left open toward joined neighbours |
 | `mass` | | the whole cell, rounded at its outer corners (see [Joining](#joining)) |
+| `pattern` | `pattern` (`"material"`) | hairlines in a material's pattern (see [Materials](#materials)) |
 | `arc` | `x`, `y` (0.5, 0.5), `r` (0.4), `from`, `to` (0, 90), `width` (1) | an arc, in degrees clockwise from east |
 | `sprite` | see [Sprites](#sprites) | a mod's picture |
 | `glyph` | see [Glyphs](#glyphs) | one character |
@@ -165,6 +166,42 @@ blocks = true
 look.join = { group = "hedge", round = 0.35 }
 look.layers = [{ draw = "mass" }, { draw = "edges", width = 1.5, shade = 0.55 }]
 ```
+
+## Materials
+
+A material shows on the plan as a pattern, not a picture (DESIGN.md §6c).
+It names one for walls, one for floors, and the roof a house of it gets,
+all from a fixed vocabulary the renderer draws with no art:
+
+```toml
+[[thing]]
+id = "slate"
+label = "slate"
+color = "#5b6571"
+category = "item"
+stack_limit = 50
+stuff = { categories = ["structural"], look = { pattern = "courses", floor = "flags", roof = "slate" } }
+```
+
+| Pattern | Draws | Core uses it for |
+|---|---|---|
+| `weave` | withies woven round stakes | wattle (branches) |
+| `stipple` | flecks and a lift line | cob (clay) |
+| `logs` | courses of log, ends ringed where a run stops | log (wood) |
+| `rubble` | irregular stones | dry stone |
+| `courses` | dressed blocks, joints staggered | stone blocks |
+| `bond` | small bricks, light mortar | brick |
+| `crag` | cracks | granite |
+| `planks`, `flags`, `earth`, `rushes`, `cobbles` | floors | wood, stone, clay, branches floors |
+| `none` | nothing | |
+
+A `pattern` layer draws the material's wall pattern, `pattern = "floor"`
+its floor pattern, and any other name that pattern whatever the thing is
+made of (granite's `crag`). The pattern is laid out in world space and
+along the run the cell belongs to, so courses run on from cell to cell
+and turn with the wall. It keeps clear of the outline and off rounded
+corners. Below 14 points a cell it fades out, and it isn't drawn at all
+zoomed right out, where it would be noise.
 
 ## Turning with the wall
 

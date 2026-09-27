@@ -405,6 +405,26 @@ pub struct StuffDef {
     /// carries them and never interprets them (0213).
     #[serde(default)]
     pub factors: HashMap<String, f64>,
+    /// How things built of it look on the plan (DESIGN.md §6c).
+    #[serde(default)]
+    pub look: StuffLookDef,
+}
+
+/// A material's look: the patterns its walls and floors are drawn in, and
+/// the roof a house of it gets.
+#[derive(Deserialize, Clone, Debug, Default)]
+#[serde(deny_unknown_fields)]
+pub struct StuffLookDef {
+    #[serde(default)]
+    pub pattern: Option<String>,
+    #[serde(default)]
+    pub floor: Option<String>,
+    #[serde(default)]
+    pub roof: Option<String>,
+    #[serde(skip)]
+    pub pattern_r: crate::look::Pattern,
+    #[serde(skip)]
+    pub floor_r: crate::look::Pattern,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -1916,6 +1936,13 @@ impl DefDb {
                         sp.span
                     ));
                 }
+            }
+            if let Some(st) = &mut d.stuff {
+                let parse = |v: &Option<String>| {
+                    v.as_deref().map_or(Ok(crate::look::Pattern::None), crate::look::Pattern::parse)
+                };
+                st.look.pattern_r = parse(&st.look.pattern).map_err(|e| format!("{ctx}: stuff.look.pattern: {e}"))?;
+                st.look.floor_r = parse(&st.look.floor).map_err(|e| format!("{ctx}: stuff.look.floor: {e}"))?;
             }
             let [sw, sh] = d.size;
             if !(1..=MAX_SIZE).contains(&sw) || !(1..=MAX_SIZE).contains(&sh) {

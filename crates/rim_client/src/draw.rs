@@ -8,7 +8,7 @@ use macroquad::prelude::*;
 use rim_sim::defs::Exit;
 use rim_sim::defs::Wear;
 use rim_sim::hecs::Entity;
-use rim_sim::look::{Layer, Prim};
+use rim_sim::look::{Layer, Pattern, PatternSrc, Prim};
 use rim_sim::map::CHUNK;
 use rim_sim::rng::hash2_f;
 use rim_sim::world::*;
@@ -203,9 +203,10 @@ pub fn thing(
     // A thing built of something is drawn in that something's colour, so
     // marble arrives looking like marble with no change here. Anything
     // else keeps its def's colour.
-    let c = match w.ecs.get::<&MadeOf>(e) {
-        Ok(m) => rgb(defs.thing(m.0).rgb),
-        Err(_) => rgb(td.rgb),
+    let made_of = w.ecs.get::<&MadeOf>(e).ok().map(|m| m.0);
+    let c = match made_of {
+        Some(m) => rgb(defs.thing(m).rgb),
+        None => rgb(td.rgb),
     };
     let c = shade(c, tone.bright);
     // Scaled about the middle of the bottom edge, where it stands.
@@ -215,9 +216,9 @@ pub fn thing(
     let z = zt;
     let (sx, sy) = at;
     let look = &td.look_r;
-    let orient = orient_of(w, cell, look, span);
+    let cx = Ctx { join: join_of(look), orient: orient_of(w, cell, look, span), made_of };
     if let Ok(bp) = w.ecs.get::<&Blueprint>(e) {
-        plan(s, w, e, &bp, &look.layers, c, cell, at, z, t, span, orient);
+        plan(s, w, e, &bp, &look.layers, c, cell, at, z, t, span, cx);
         return None;
     }
     let layers = match w.ecs.get::<&Regrow>(e) {
@@ -239,14 +240,14 @@ pub fn thing(
                     s.rect(sx + fx * k * z, sy + fy * k * z, z, z, Color::new(1.0, 0.84, 0.47, a));
                 }
             }
-            paint(s, w, layers, join_of(look), orient, c, cell, (sx - tx * k, sy - ty * k), z, t, span);
+            paint(s, w, layers, cx, c, cell, (sx - tx * k, sy - ty * k), z, t, span);
         }
         Some(Wear::Cracks) => {
             let toward = wear::toward(w, e);
             if w.ecs.get::<&Work>(e).is_ok() {
                 wear::draw_chips(s, cell, toward, f, at, z, chip_color(w, e, td, c));
             }
-            paint(s, w, layers, join_of(look), orient, shade(c, 1.0 - 0.16 * f), cell, at, z, t, span);
+            paint(s, w, layers, cx, shade(c, 1.0 - 0.16 * f), cell, at, z, t, span);
             // Every cell cracks from its own seed, so a boulder isn't copies.
             for q in td.footprint(cell) {
                 let at = (sx + (q.x - cell.x) as f32 * z, sy + (q.y - cell.y) as f32 * z);
@@ -257,9 +258,9 @@ pub fn thing(
         // don't block: the loader refuses it for those that do.
         Some(Wear::Grow) => {
             let (grown, _) = wear::grown(layers, 1.0 - f, c, 1.0);
-            paint(s, w, &grown, join_of(look), orient, c, cell, at, z, t, span);
+            paint(s, w, &grown, cx, c, cell, at, z, t, span);
         }
-        Some(Wear::None) | None => paint(s, w, layers, join_of(look), orient, c, cell, at, z, t, span),
+        Some(Wear::None) | None => paint(s, w, layers, cx, c, cell, at, z, t, span),
     }
     if let Some(sd) = td.store.as_ref() {
         contents(s, w, e, sd, at, z, span);
@@ -331,7 +332,7 @@ fn plan(
     z: f32,
     t: f32,
     span: [u32; 2],
-    orient: Orient,
+    cx: Ctx,
 ) {
     const BLUEPRINT: Color = Color::new(0.55, 0.8, 1.0, 0.8);
     let (sx, sy) = at;
@@ -341,7 +342,7 @@ fn plan(
     s.rect(sx + 1.0, sy + 1.0, zx - 2.0, (top * zy - 1.0).max(0.0), Color::new(0.45, 0.7, 1.0, 0.3));
     if !grown.is_empty() {
         // A plan joins nothing until it stands.
-        paint(s, w, &grown, None, orient, own, cell, at, z, t, span);
+        paint(s, w, &grown, Ctx { join: None, ..cx }, own, cell, at, z, t, span);
         let hatched = (sx, sy + top * zy, zx, (1.0 - top) * zy);
         wear::hatch(s, hatched, (z / 7.0).max(4.0), Color::new(0.55, 0.8, 1.0, 0.4));
     }
@@ -376,8 +377,8 @@ const LABEL_ZOOM: f32 = 22.0;
 #[allow(clippy::too_many_arguments)]
 pub fn rock(s: &mut impl Sink, w: &World, def: rim_sim::defs::DefId, cell: IVec, at: (f32, f32), z: f32, t: f32) {
     let td = w.defs.thing(def);
-    let orient = orient_of(w, cell, &td.look_r, td.size);
-    paint(s, w, &td.look_r.layers, join_of(&td.look_r), orient, rgb(td.rgb), cell, at, z, t, td.size);
+    let cx = Ctx { join: join_of(&td.look_r), orient: orient_of(w, cell, &td.look_r, td.size), made_of: None };
+    paint(s, w, &td.look_r.layers, cx, rgb(td.rgb), cell, at, z, t, td.size);
 }
 
 /// The ground, then floors, items and fixtures: cached per chunk where
@@ -453,19 +454,7 @@ fn worksite_motion(app: &App, t: f32) {
                 let alpha = if p < 0.8 { 1.0 } else { (1.0 - p) / 0.2 };
                 let (layers, _) = wear::grown(&w.defs.thing(l.def).look_r.layers, 1.0, l.own, alpha);
                 let o = (z - zt) / 2.0;
-                paint(
-                    s,
-                    w,
-                    &layers,
-                    None,
-                    Orient::default(),
-                    l.own,
-                    l.cell,
-                    (x + o, y + o),
-                    zt,
-                    t,
-                    w.defs.thing(l.def).size,
-                );
+                paint(s, w, &layers, Ctx::default(), l.own, l.cell, (x + o, y + o), zt, t, w.defs.thing(l.def).size);
             }
             // Nine pieces hop away from the worked side, shrinking.
             Exit::Crumble => {
@@ -736,8 +725,7 @@ fn paint(
     s: &mut impl Sink,
     w: &World,
     layers: &[Layer],
-    join: Join,
-    orient: Orient,
+    cx: Ctx,
     own: Color,
     cell: IVec,
     at: (f32, f32),
@@ -746,6 +734,7 @@ fn paint(
     span: [u32; 2],
 ) {
     let (sx, sy) = at;
+    let Ctx { join, orient, .. } = cx;
     // A look is laid out over the thing's whole footprint (DESIGN.md §6a):
     // positions and sizes stretch on each axis, round things by the
     // shorter one so a disc stays a disc.
@@ -785,6 +774,15 @@ fn paint(
             }
             Prim::Edges { width } => edges(s, w, cell, span, join, (sx, sy), z, width, c),
             Prim::Mass => mass(s, w, cell, span, join, (sx, sy), z, c),
+            Prim::Pattern { src } => {
+                let pat = match (src, cx.made_of.and_then(|m| w.defs.thing(m).stuff.as_ref())) {
+                    (PatternSrc::Fixed(p), _) => p,
+                    (PatternSrc::Material, Some(st)) => st.look.pattern_r,
+                    (PatternSrc::Floor, Some(st)) => st.look.floor_r,
+                    (_, None) => Pattern::None,
+                };
+                crate::pattern::paint(s, w, cell, span, join, pat, (sx, sy), z, c);
+            }
             Prim::Arc { at, r, from, to, width } => {
                 const STEPS: usize = 8;
                 let point = |k: usize| {
@@ -870,13 +868,22 @@ fn orient_of(w: &World, cell: IVec, look: &rim_sim::look::Look, span: [u32; 2]) 
 /// A look's join group and how round its outer corners are.
 pub type Join = Option<(u16, f32)>;
 
+/// What a look needs from the thing it draws, beyond its colour.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Ctx {
+    pub join: Join,
+    pub orient: Orient,
+    /// What it is built of, for a pattern that shows the material.
+    pub made_of: Option<rim_sim::defs::DefId>,
+}
+
 pub fn join_of(look: &rim_sim::look::Look) -> Join {
     look.join.map(|g| (g, look.round))
 }
 
 /// Does the built fixture at `p` join group `join`? Plans don't: a wall
 /// planned next to one doesn't open it up until it stands.
-fn joins(w: &World, p: IVec, join: Join) -> bool {
+pub(crate) fn joins(w: &World, p: IVec, join: Join) -> bool {
     let Some((g, _)) = join else { return false };
     if w.map.fixture_at(p).is_some_and(|e| w.ecs.get::<&Blueprint>(e).is_ok()) {
         return false;

@@ -2,14 +2,14 @@
 id: 7129a537-c108-4a16-8f0f-27a5cd9419d8
 title: Openings turn to their wall and face the room
 type: feature
-status: doing
+status: done
 milestone: houses
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 depends_on:
 - 3fe8c3cb-dcba-4882-b623-0468ea9fe697
 created: 2026-09-26
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p0
 api: additive
 effort: m
