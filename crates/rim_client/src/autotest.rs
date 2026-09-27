@@ -502,8 +502,62 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         matches!(m, Mark::Brackets { rect, alpha, .. }
         if (rect[0] + z / 2.0 - cx).abs() < 0.5 && (rect[1] + z / 2.0 - cy).abs() < 0.5 && (rect[2] - z).abs() < 0.5 && *alpha == 1.0)
     });
-    t.check(around.count() == 1 && marks.len() == 1, format!("a selected tree gets one set of brackets ({marks:?})"));
+    let sets = marks.iter().filter(|m| matches!(m, Mark::Brackets { .. })).count();
+    t.check(around.count() == 1 && sets == 1, format!("a selected tree gets one set of brackets ({marks:?})"));
     t.shot("chalk-select-thing").await;
+    // Hover: an edge on what a click would pick, and nothing on bare
+    // ground or over a panel (bd7a158e).
+    t.mouse = (tx, ty);
+    for _ in 0..8 {
+        t.frame().await;
+    }
+    let hovers = |t: &T| {
+        crate::overlay::scene(&t.app)
+            .marks
+            .into_iter()
+            .filter(|m| matches!(m, Mark::Hover { .. } | Mark::HoverRing { .. }))
+            .collect::<Vec<_>>()
+    };
+    let on_tree = hovers(&t);
+    let z = t.app.cam.zoom;
+    let edge = on_tree.iter().any(|m| {
+        matches!(m, Mark::Hover { rect, alpha }
+        if (rect[0] + z / 2.0 - tx).abs() < 0.5 && (rect[1] + z / 2.0 - ty).abs() < 0.5 && *alpha == 1.0)
+    });
+    t.check(edge && on_tree.len() == 1, format!("hovering the tree puts an edge on its cell ({on_tree:?})"));
+    t.shot("chalk-hover").await;
+    // Bare ground: nothing there, no floor, no stockpile, no pawn near.
+    let bare = {
+        let w = t.w();
+        let clear = |p: IVec| {
+            w.map.fixture_at(p).is_none()
+                && w.map.item_at(p).is_none()
+                && w.map.floor_at(p).is_none()
+                && w.zones.at(&w.map, p).is_none()
+                && w.pawns.iter().all(|&e| w.pawn_pos(e).is_none_or(|q| (q.x - p.x).abs() + (q.y - p.y).abs() > 2))
+        };
+        (3..12).flat_map(|r| (-r..=r).map(move |d| tree.2.offset(d, r))).find(|&p| clear(p))
+    };
+    match bare {
+        Some(p) => t.mouse = t.screen(p),
+        None => t.check(false, "bare ground near the tree to hover"),
+    }
+    for _ in 0..12 {
+        t.frame().await;
+    }
+    let none = hovers(&t);
+    t.check(none.is_empty(), format!("bare ground gets no hover ({none:?})"));
+    match t.ui_rect("core:dock") {
+        Some(r) => {
+            t.mouse = (r[0] + r[2] / 2.0, r[1] + r[3] / 2.0);
+            for _ in 0..12 {
+                t.frame().await;
+            }
+            let none = hovers(&t);
+            t.check(none.is_empty(), format!("a panel over the map gets no hover ({none:?})"));
+        }
+        None => t.check(false, "the dock is there to hover"),
+    }
     let at = t.pawn_screen(founder);
     t.click(at).await;
     t.check(t.app.selected == Some(founder), "and a click on the colonist selects them again");
@@ -2697,6 +2751,26 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     let chipped = marks.iter().any(|m| matches!(m, Mark::Chip(c) if c.text == chip));
     t.check(chipped, format!("and a chip reads '{chip}'"));
     t.shot("chalk-select-group").await;
+    // A selected, hovered colonist: the hover ring on the body's edge, the
+    // selection further out (bd7a158e).
+    t.mouse = t.pawn_screen(founder);
+    for _ in 0..8 {
+        t.frame().await;
+    }
+    let marks = crate::overlay::scene(&t.app).marks;
+    let p = &t.app.palette;
+    let hover = marks.iter().find(|m| matches!(m, Mark::HoverRing { .. }));
+    let center = |m: &Mark| match m {
+        Mark::HoverRing { center, .. } | Mark::Ring { center, .. } => Some(*center),
+        _ => None,
+    };
+    let hover_r = hover.and_then(|m| crate::overlay::ring_radius(p, m));
+    let select_r = marks
+        .iter()
+        .filter(|m| matches!(m, Mark::Ring { .. }) && center(m) == hover.and_then(center))
+        .find_map(|m| crate::overlay::ring_radius(p, m));
+    let apart = hover_r.zip(select_r).is_some_and(|(h, s)| s - h >= p.stroke + p.firm);
+    t.check(apart, format!("hover and selection rings sit apart ({hover_r:?}, {select_r:?})"));
     // Shift-click takes one out again: whoever is under the pointer.
     let at_screen = t.pawn_screen(squad[2]);
     let taken = crate::pawn_under(&t.app, at_screen.0, at_screen.1).expect("a colonist there");

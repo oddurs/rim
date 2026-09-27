@@ -47,6 +47,7 @@ strong = 600
 radius = 4
 border = 1
 # World overlays (DESIGN.md §6f), in points on the map.
+stroke = 1.5         # hover
 firm = 2             # selection
 bracket_gap = 3      # selection sits this far outside a footprint
 bracket_arm_min = 4
