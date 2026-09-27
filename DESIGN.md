@@ -101,17 +101,17 @@ You start as *the warrior*: a strong fighter with nothing on them.
   new player doesn't know about it on night one. The first-hour goal is "four
   walls before dark", and walls should be enough.
 - **Ruling:** a **room** is an area bounded by walls, doors, rock or water,
-  cut off from the map edge, and at most `MAX_ROOM_CELLS` (400, i.e. 20×20)
-  in size. Enclosed rooms count as indoors. The size cap is what an automatic
-  roof would do: a valley ringed by mountains is not a house.
+  cut off from the map edge, and roofed everywhere: every cell within span
+  of a wall, a door, a window, a pillar or rock (§6c). Enclosed rooms count
+  as indoors. The span is what an automatic roof would do: a valley ringed
+  by mountains is not a house. (It replaced a cap of 400 cells, which did the
+  same job but couldn't be seen or explained.)
   - Doors are a def flag (`door = true`): passable for pathing, but they bound
     rooms like a wall does.
   - Rooms rebuild only when a wall, door or terrain changes, not every tick.
   - Scripts ask with `rim.indoors(x, y)` and `rim.room_at(x, y)`.
   - Explicit roofs, if ever wanted, are a plugin that marks cells roofed and
     hooks the same question.
-  - **Revised in §6c:** the size cap becomes a roof span. A room is indoors
-    when every cell is within reach of a wall or a pillar.
 
 ### Tension: does a room know what it is made of?
 

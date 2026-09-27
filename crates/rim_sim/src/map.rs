@@ -22,6 +22,17 @@ pub struct Map {
     fix_block: Vec<bool>,
     fix_cost: Vec<u16>,
     fix_door: Vec<bool>,
+    /// How far the fixture here holds the roof up, in cells; 0 for none.
+    support: Vec<u8>,
+    /// How far each terrain holds a roof up, by terrain id: solid rock
+    /// does, as the thing it stands up as (DESIGN.md §6d).
+    terrain_span: Vec<u8>,
+    /// Roof reach left at each cell plus one; 0 is beyond every support.
+    /// Worked out with the rooms.
+    cover: Vec<u8>,
+    /// Supports changed since cover was last worked out; `None` until the
+    /// first full pass, or after too many to patch.
+    support_changed: Option<Vec<u32>>,
     /// Who owns the fixture here, as `faction as u8 + 1`; 0 is nobody.
     /// Only doors read it: a door opens for its owner and blocks everyone
     /// else, which is what makes a wall with a door in it still a wall.
@@ -66,22 +77,22 @@ pub struct Map {
 /// the sim never reads them, so they are not world state.
 pub const CHUNK: i32 = 32;
 
-/// Enclosed areas larger than this count as outdoors: a valley ringed by
-/// mountains is not a house.
-pub const MAX_ROOM_CELLS: u32 = 400;
-
 /// A connected area bounded by walls, doors, rock, water or the map edge.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Room {
     pub id: u32,
     pub cells: u32,
     pub touches_edge: bool,
+    /// Cells beyond the reach of every support: open to the sky.
+    pub uncovered: u32,
 }
 
 impl Room {
-    /// Shelter: cut off from the map edge, and small enough to be a building.
+    /// Shelter: cut off from the map edge, and roofed everywhere, which is
+    /// to say within span of a wall, a pillar or rock (DESIGN.md §6c). A
+    /// valley ringed by cliffs is not a house.
     pub fn enclosed(&self) -> bool {
-        !self.touches_edge && self.cells <= MAX_ROOM_CELLS
+        !self.touches_edge && self.uncovered == 0
     }
 }
 
@@ -102,6 +113,10 @@ impl Map {
             fix_block: vec![false; n],
             fix_cost: vec![0; n],
             fix_door: vec![false; n],
+            support: vec![0; n],
+            terrain_span: Vec::new(),
+            cover: vec![0; n],
+            support_changed: None,
             fix_owner: vec![0; n],
             room: vec![0; n],
             prev_room: vec![0; n],
@@ -205,7 +220,13 @@ impl Map {
 
     pub fn set_terrain(&mut self, p: IVec, def: DefId, cost: u32) {
         let i = self.idx(p);
+        let was = self.span_at(i);
         self.terrain[i] = def;
+        if self.span_at(i) != was {
+            if let Some(c) = &mut self.support_changed {
+                c.push(i as u32);
+            }
+        }
         self.terrain_cost[i] = cost.min(u16::MAX as u32) as u16;
         self.regions_dirty = true;
         self.rooms_dirty = true;
@@ -388,7 +409,7 @@ impl Map {
                 continue;
             }
             let id = self.rooms.len() as u32 + 1;
-            let mut room = Room { id, cells: 0, touches_edge: false };
+            let mut room = Room { id, cells: 0, touches_edge: false, uncovered: 0 };
             let mut boundary = Vec::new();
             self.room[start] = id;
             stack.push(start);
@@ -421,6 +442,128 @@ impl Map {
             self.rooms.push(room);
             self.room_boundary.push(boundary);
         }
+        self.spread_cover();
+        for (i, &id) in self.room.iter().enumerate() {
+            if id > 0 && self.cover[i] == 0 {
+                self.rooms[id as usize - 1].uncovered += 1;
+            }
+        }
+    }
+
+    /// How far the roof reaches from every support: a support's reach is
+    /// its span, and each step to any of the 8 neighbours costs one. A
+    /// changed support can only move cover within the longest span of it,
+    /// so a few changes are patched in place; the first pass, and a big
+    /// batch (map generation, a load), do the whole map.
+    fn spread_cover(&mut self) {
+        match self.support_changed.take() {
+            Some(changed) if changed.len() <= 32 => {
+                let top = (0..self.support.len()).map(|i| self.span_at(i)).max().unwrap_or(0).max(1) as i32;
+                for i in changed {
+                    // Every cell a support here could have reached, or can.
+                    self.cover_window(self.pos(i as usize), top);
+                }
+            }
+            _ => {
+                let (w, h) = (self.w, self.h);
+                self.cover_window(IVec::new(w / 2, h / 2), w.max(h));
+            }
+        }
+        self.support_changed = Some(Vec::new());
+    }
+
+    /// Work cover out again for the cells within `r` of `p`. Cover is the
+    /// best of each neighbour's less one, so the ring just outside the
+    /// window, whose values nothing inside can have changed, is all the
+    /// window needs from beyond it: those cells seed the fill with what
+    /// they hold, beside the supports inside.
+    fn cover_window(&mut self, p: IVec, r: i32) {
+        let (x0, y0) = ((p.x - r).max(0), (p.y - r).max(0));
+        let (x1, y1) = ((p.x + r).min(self.w - 1), (p.y + r).min(self.h - 1));
+        let inside = |q: IVec| q.x >= x0 && q.y >= y0 && q.x <= x1 && q.y <= y1;
+        let mut buckets: Vec<Vec<u32>> = vec![Vec::new(); crate::defs::MAX_SPAN as usize + 1];
+        for y in y0..=y1 {
+            for x in x0..=x1 {
+                let i = self.idx(IVec::new(x, y));
+                let s = self.span_at(i);
+                self.cover[i] = if s > 0 { s + 1 } else { 0 };
+                if s > 0 {
+                    buckets[s as usize].push(i as u32);
+                }
+            }
+        }
+        for y in y0 - 1..=y1 + 1 {
+            for x in x0 - 1..=x1 + 1 {
+                let q = IVec::new(x, y);
+                if inside(q) || !self.inb(q) {
+                    continue;
+                }
+                let c = self.cover[self.idx(q)];
+                if c > 1 {
+                    buckets[c as usize - 1].push(self.idx(q) as u32);
+                }
+            }
+        }
+        for reach in (1..=crate::defs::MAX_SPAN).rev() {
+            for i in std::mem::take(&mut buckets[reach as usize]) {
+                if self.cover[i as usize] != reach + 1 {
+                    continue; // reached again from a nearer support
+                }
+                let q = self.pos(i as usize);
+                for (dx, dy) in NEIGHBORS8 {
+                    let n = q.offset(dx, dy);
+                    if !inside(n) {
+                        continue;
+                    }
+                    let j = self.idx(n);
+                    if self.cover[j] < reach {
+                        self.cover[j] = reach;
+                        if reach > 1 {
+                            buckets[reach as usize - 1].push(j as u32);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// How far each terrain holds a roof up, by terrain id. Set once, from
+    /// the defs, when the world is made.
+    pub fn set_terrain_spans(&mut self, spans: Vec<u8>) {
+        self.terrain_span = spans;
+        self.support_changed = None;
+        self.rooms_dirty = true;
+    }
+
+    /// The roof a cell holds up: its fixture's or its solid terrain's.
+    fn span_at(&self, i: usize) -> u8 {
+        let t = self.terrain_span.get(self.terrain[i] as usize).copied().unwrap_or(0);
+        self.support[i].max(t)
+    }
+
+    /// A support of `span` cells stands at `p` (0: none). Rooms rebuild
+    /// when one changes.
+    pub fn set_support(&mut self, p: IVec, span: u8) {
+        let i = self.idx(p);
+        if self.support[i] != span {
+            self.support[i] = span;
+            self.rooms_dirty = true;
+            if let Some(c) = &mut self.support_changed {
+                c.push(i as u32);
+            }
+        }
+    }
+
+    /// Within reach of a support on this level. Call `ensure_rooms` first.
+    pub fn covered(&self, i: usize) -> bool {
+        self.cover[i] > 0
+    }
+
+    /// Roofed: within reach of a support. With levels (DESIGN.md §6d) a
+    /// cell is also roofed when the cell above it is solid or floored;
+    /// until then a level has nothing above it. Call `ensure_rooms` first.
+    pub fn roofed(&self, i: usize) -> bool {
+        self.covered(i)
     }
 
     /// The cells enclosing room `id`: walls, doors, rock, water.
@@ -499,5 +642,46 @@ impl Map {
             return 0;
         }
         self.regions[Faction::Player as usize].iter().filter(|&&x| x == r).count()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::rng::Rng;
+
+    /// Cover by definition: the best of every support's span less its
+    /// Chebyshev distance, plus one; 0 beyond them all.
+    fn brute(m: &Map) -> Vec<u8> {
+        let mut out = vec![0u8; m.support.len()];
+        for (i, o) in out.iter_mut().enumerate() {
+            let p = m.pos(i);
+            for (j, &s) in m.support.iter().enumerate() {
+                let d = p.chebyshev(m.pos(j));
+                if s > 0 && d <= s as i32 {
+                    *o = (*o).max(s - d as u8 + 1);
+                }
+            }
+        }
+        out
+    }
+
+    /// Patching cover around a few changed supports gives exactly what
+    /// working it out from scratch does, through adds, removals and spans
+    /// that change under a support.
+    #[test]
+    fn patched_cover_matches_the_whole_map() {
+        let mut m = Map::new(40, 30);
+        let mut rng = Rng::new(7);
+        for round in 0..60 {
+            let n = if round == 0 { 50 } else { 1 + rng.below(5) };
+            for _ in 0..n {
+                let p = IVec::new(rng.below(40) as i32, rng.below(30) as i32);
+                let span = if rng.below(3) == 0 { 0 } else { 1 + rng.below(6) as u8 };
+                m.set_support(p, span);
+            }
+            m.ensure_rooms();
+            assert_eq!(m.cover, brute(&m), "round {round}");
+        }
     }
 }

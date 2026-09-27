@@ -1,9 +1,8 @@
 //! Rooms: enclosed areas bounded by walls, doors, rock and water, cut off from
-//! the map edge and no bigger than MAX_ROOM_CELLS.
+//! the map edge and roofed everywhere by the span of their supports.
 
 mod common;
 
-use rim_sim::map::MAX_ROOM_CELLS;
 use rim_sim::path::Goal;
 use rim_sim::{IVec, Sim};
 use std::path::{Path, PathBuf};
@@ -111,18 +110,102 @@ fn doors_split_rooms_but_not_paths() {
     assert!(w.pf.find(&w.map, outside, Goal::Cell(inside), 10_000, f).is_some(), "can walk in through the door");
 }
 
+/// Place a finished fixture made of `stuff`, clearing whatever grows there.
+fn put_of(s: &mut Sim, id: &str, stuff: &str, p: IVec) {
+    if let Some(f) = s.world.map.fixture_at(p) {
+        s.world.despawn_thing(f);
+    }
+    let (def, m) = (s.world.defs.thing_id(id).unwrap(), s.world.defs.thing_id(stuff).unwrap());
+    assert!(s.world.spawn_fixture_of(def, p, false, Some(m)).is_some(), "could not place {id} at {p:?}");
+}
+
 #[test]
 fn oversized_enclosures_are_outdoors() {
     let mut s = sim();
     let o = s.world.colony_center().unwrap().offset(-12, -12);
-    let size = 25; // interior 23x23 = 529 cells
-    assert!(((size - 2) * (size - 2)) as u32 > MAX_ROOM_CELLS);
+    // Interior 23 across: its middle is 12 cells from any wall, three times
+    // what a wall with no material holds up.
+    let size = 25;
     clear(&mut s, o.offset(-1, -1), size + 2);
     ring(&mut s, o, size, None, None);
     s.world.map.ensure_rooms();
     let r = s.world.map.room_at(o.offset(5, 5)).unwrap();
     assert!(!r.touches_edge, "sealed off");
-    assert!(!r.enclosed(), "but far too big to count as shelter");
+    assert!(r.uncovered > 0 && !r.enclosed(), "but its middle is open to the sky");
+}
+
+/// A room is roofed within its supports' span (DESIGN.md §6c): a log
+/// hall twelve wide and ten deep is outdoors until a pillar holds up its
+/// middle, and a pillar taken away opens it again.
+#[test]
+fn a_hall_too_wide_for_its_walls_needs_a_pillar() {
+    let mut s = sim();
+    let o = site(&s);
+    let (w, h) = (14, 12);
+    clear(&mut s, o.offset(-1, -1), w + 2);
+    for y in 0..h {
+        for x in 0..w {
+            if x == 0 || y == 0 || x == w - 1 || y == h - 1 {
+                put_of(&mut s, "wall", "wood", o.offset(x, y));
+            }
+        }
+    }
+    s.world.map.ensure_rooms();
+    let middle = o.offset(w / 2, h / 2);
+    let i = s.world.map.idx(middle);
+    let r = s.world.map.room_at(middle).unwrap();
+    assert!(!r.touches_edge && !r.enclosed(), "wood walls hold 4 cells, and the middle is 5 away");
+    assert!(!s.world.map.roofed(i));
+    assert!(s.world.map.roofed(s.world.map.idx(o.offset(4, 4))), "near the walls it is roofed");
+    put_of(&mut s, "pillar", "wood", o.offset(w / 2, h / 2));
+    s.world.map.ensure_rooms();
+    let r = s.world.map.room_at(o.offset(3, 3)).unwrap();
+    assert_eq!(r.uncovered, 0);
+    assert!(r.enclosed(), "a pillar in the middle roofs the rest");
+    let pillar = s.world.map.fixture_at(o.offset(w / 2, h / 2)).unwrap();
+    s.world.despawn_thing(pillar);
+    s.world.map.ensure_rooms();
+    assert!(!s.world.map.room_at(middle).unwrap().enclosed(), "and taking it away opens the roof again");
+}
+
+/// The material sets the span: a branch hut holds 2 cells, so a 3×3
+/// interior is roofed and a 5×5 one isn't.
+#[test]
+fn the_material_sets_the_span() {
+    let mut s = Sim::new(&mods(), 21).expect("mods load");
+    for (size, roofed) in [(5, true), (7, false)] {
+        let o = site(&s).offset(size * 3, 0);
+        clear(&mut s, o.offset(-1, -1), size + 2);
+        for y in 0..size {
+            for x in 0..size {
+                if x == 0 || y == 0 || x == size - 1 || y == size - 1 {
+                    put_of(&mut s, "wall", "branches", o.offset(x, y));
+                }
+            }
+        }
+        s.world.map.ensure_rooms();
+        let r = s.world.map.room_at(o.offset(size / 2, size / 2)).unwrap();
+        assert_eq!(r.enclosed(), roofed, "a branch hut {size} across");
+    }
+}
+
+/// Rock holds a roof: a room dug into granite is sheltered however it is
+/// shaped, as long as rock is within reach.
+#[test]
+fn rock_holds_a_roof() {
+    let mut s = sim();
+    let o = site(&s);
+    clear(&mut s, o.offset(-1, -1), 9);
+    let granite = s.world.defs.thing_id("granite").unwrap();
+    for y in 0..7 {
+        for x in 0..7 {
+            if x == 0 || y == 0 || x == 6 || y == 6 {
+                assert!(s.world.spawn_fixture(granite, o.offset(x, y), false).is_some());
+            }
+        }
+    }
+    s.world.map.ensure_rooms();
+    assert!(s.world.map.room_at(o.offset(3, 3)).unwrap().enclosed());
 }
 
 #[test]
@@ -282,4 +365,28 @@ fn a_role_that_needs_nothing_is_refused() {
     let e = Sim::new(&dir, 1).err().expect("an empty role doesn't load");
     let _ = std::fs::remove_dir_all(dir);
     assert!(e.contains("room_role/probe:any") && e.contains("`needs` is empty"), "{e}");
+}
+
+/// Untouched rock is terrain, not a thing (DESIGN.md §6d), and holds a
+/// roof all the same: a pocket dug into it is sheltered.
+#[test]
+fn a_pocket_dug_into_solid_rock_is_roofed() {
+    let mut s = sim();
+    let m = &s.world.map;
+    let solid = |p: IVec| s.world.solid_at(p).is_some();
+    let o = (0..m.h - 9)
+        .flat_map(|y| (0..m.w - 9).map(move |x| IVec::new(x, y)))
+        .find(|&o| (0..9).all(|y| (0..9).all(|x| solid(o.offset(x, y)))))
+        .expect("a stretch of solid rock");
+    let leaves = s.world.solid_at(o).unwrap().leaves_r;
+    let cost = s.world.defs.terrain[leaves as usize].path_cost;
+    for y in 3..6 {
+        for x in 3..6 {
+            s.world.map.set_terrain(o.offset(x, y), leaves, cost);
+        }
+    }
+    s.world.map.ensure_rooms();
+    let r = s.world.map.room_at(o.offset(4, 4)).expect("the pocket is a room");
+    assert_eq!(r.cells, 9);
+    assert!(r.enclosed(), "rock all round holds its roof");
 }

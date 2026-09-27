@@ -15,7 +15,7 @@ look.layers = [
 market_value = 0.4
 stack_limit = 75
 tags = ["branch", "fuel", "bulky"]
-stuff = { categories = ["structural"], factors = { hp = 0.4, work = 0.5, insulation = 0.6, flammability = 3.0, beauty = 0.8 } }
+stuff = { categories = ["structural"], factors = { hp = 0.4, work = 0.5, insulation = 0.6, flammability = 3.0, beauty = 0.8, span = 0.5 } }
 
 [[thing]]
 id = "fibre"
@@ -77,4 +77,4 @@ look.layers = [
 market_value = 0.5
 stack_limit = 75
 tags = ["clay"]
-stuff = { categories = ["structural"], factors = { hp = 0.8, work = 1.2, insulation = 1.6, flammability = 0.0, beauty = 0.9 } }
+stuff = { categories = ["structural"], factors = { hp = 0.8, work = 1.2, insulation = 1.6, flammability = 0.0, beauty = 0.9, span = 0.75 } }

@@ -1,0 +1,21 @@
+# Defs that load after the wild ones. Map generation hashes each spawn by
+# its def's place in the list (c3d18fe7), so a building defined before
+# nature.toml would reshape every map.
+
+# Holds a roof up in the middle of a room too wide for its walls to span.
+# It blocks, like the post it is, and joins nothing.
+[[thing]]
+id = "pillar"
+label = "pillar"
+color = "#8a7a64"
+category = "building"
+look.layers = [
+    { draw = "fill", x = 0.22, y = 0.22, w = 0.56, h = 0.56 },
+    { draw = "outline", x = 0.22, y = 0.22, w = 0.56, h = 0.56, width = 1.5, shade = 0.55 },
+    { draw = "outline", x = 0.34, y = 0.34, w = 0.32, h = 0.32, width = 1.0, shade = 0.7 },
+]
+blocks = true
+hp = 180
+market_value = 6
+build = { menu = "structure", work = 200, stuff = { category = "structural", count = 4 } }
+support = { span = 4 }

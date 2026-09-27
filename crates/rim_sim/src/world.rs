@@ -788,6 +788,16 @@ impl World {
     pub fn new(defs: Arc<DefDb>, w: i32, h: i32, seed: u64) -> Self {
         let fields = Fields::new(&defs, (w * h) as usize);
         let stance = defs.default_stance;
+        let map = {
+            let mut m = Map::new(w, h);
+            // Solid rock holds a roof as the thing it stands up as.
+            let span = |t: &crate::defs::TerrainDef| {
+                let sp = t.solid.as_ref().and_then(|s| defs.thing(s.thing_r).support.as_ref());
+                sp.map_or(0, |sp| sp.span.round().clamp(0.0, crate::defs::MAX_SPAN as f64) as u8)
+            };
+            m.set_terrain_spans(defs.terrain.iter().map(span).collect());
+            m
+        };
         let things = defs.things.len();
         let mut world = World {
             defs,
@@ -795,7 +805,7 @@ impl World {
             ecs: hecs::World::new(),
             next_entity: 1,
             fields,
-            map: Map::new(w, h),
+            map,
             rng: Rng::new(seed),
             tick: 0,
             pawns: Vec::new(),
@@ -1023,6 +1033,27 @@ impl World {
             .any(|t| self.defs.thing(t.def).bed.is_some() && self.map.room_at(t.pos).is_some_and(|r| r.enclosed()))
     }
 
+    /// How far a built thing holds the roof up, in cells: its def's span
+    /// times its material's `span` factor. 0 for anything that doesn't.
+    pub fn support_span(&self, e: Entity) -> u8 {
+        let Ok(t) = self.ecs.get::<&Thing>(e) else { return 0 };
+        let Some(sp) = &self.defs.thing(t.def).support else { return 0 };
+        let made_of = self.ecs.get::<&MadeOf>(e).ok().map(|m| m.0);
+        (sp.span * self.defs.factor(made_of, "span")).round().clamp(1.0, crate::defs::MAX_SPAN as f64) as u8
+    }
+
+    /// Mark a built thing's footprint with the span it holds up (0 when it
+    /// is taken away).
+    pub(crate) fn set_support(&mut self, e: Entity, span: u8) {
+        let Some(t) = self.thing(e) else { return };
+        let defs = self.defs.clone();
+        for c in defs.thing(t.def).footprint(t.pos) {
+            if self.map.inb(c) {
+                self.map.set_support(c, span);
+            }
+        }
+    }
+
     /// A thing with a tag some room role counts was built or taken away.
     pub(crate) fn touch_roles(&mut self, def: DefId) {
         if !self.defs.thing(def).room_tags_r.is_empty() {
@@ -1151,6 +1182,10 @@ impl World {
         if !blueprint {
             self.fields.add_emitters(&defs, &self.map, e, def, pos);
             self.touch_roles(def);
+            let span = self.support_span(e);
+            if span > 0 {
+                self.set_support(e, span);
+            }
         }
         Some(e)
     }
@@ -1390,6 +1425,7 @@ impl World {
                 for c in defs.thing(t.def).footprint(t.pos) {
                     if self.map.inb(c) && self.map.fixture_at(c) == Some(e) {
                         self.map.set_fixture(c, None, false, 0, false);
+                        self.map.set_support(c, 0);
                         self.map.set_owner(c, None);
                     }
                 }

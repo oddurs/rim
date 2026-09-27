@@ -2,12 +2,12 @@
 id: f709cdd4-fdb0-4de1-b0d9-4311e7fcd928
 title: Room roles as data
 type: feature
-status: doing
+status: done
 milestone: houses
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 created: 2026-09-26
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p0
 api: additive
 effort: m

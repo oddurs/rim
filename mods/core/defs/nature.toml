@@ -48,5 +48,7 @@ look.join = { group = "rock", round = 0.3 }
 look.layers = [{ draw = "mass", vary = 0.12 }, { draw = "edges", width = 1.5, shade = 0.6 }]
 natural = true
 blocks = true
+# Overhead rock holds a cave's roof: a room dug into it is sheltered.
+support = { span = 5 }
 hp = 500
 harvest = { designation = "mine", work = 500, yields = [{ thing = "stone", count = 10 }] }
