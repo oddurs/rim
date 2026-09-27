@@ -19,6 +19,9 @@ pub struct Map {
     /// Levels below the surface and above it.
     below: i32,
     above: i32,
+    /// Cells on one level, kept: every index of a level below or above
+    /// multiplies by it.
+    plane: usize,
     pub terrain: Vec<DefId>,
     pub terrain_cost: Vec<u16>,
     pub fixture: Vec<Option<Entity>>,
@@ -134,6 +137,7 @@ impl Map {
             h,
             below,
             above,
+            plane,
             terrain: vec![0; n],
             terrain_cost,
             fixture: vec![None; n],
@@ -178,7 +182,7 @@ impl Map {
 
     /// Cells on one level.
     pub fn plane(&self) -> usize {
-        (self.w * self.h) as usize
+        self.plane
     }
 
     /// Where level `z` sits among the planes: the surface first, then down,
@@ -269,11 +273,20 @@ impl Map {
     }
     #[inline]
     pub fn idx(&self, p: IVec) -> usize {
-        self.slot(p.z) * self.plane() + (p.y * self.w + p.x) as usize
+        let flat = (p.y * self.w + p.x) as usize;
+        // The surface is the first plane: no offset, and the common case.
+        if p.z == 0 {
+            flat
+        } else {
+            self.slot(p.z) * self.plane + flat
+        }
     }
     #[inline]
     pub fn pos(&self, i: usize) -> IVec {
-        let (slot, r) = (i / self.plane(), (i % self.plane()) as i32);
+        if i < self.plane {
+            return IVec::new(i as i32 % self.w, i as i32 / self.w);
+        }
+        let (slot, r) = (i / self.plane, (i % self.plane) as i32);
         IVec::at(r % self.w, r / self.w, self.level_of_slot(slot))
     }
     #[inline]
