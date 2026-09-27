@@ -1707,7 +1707,14 @@ nobody has dug.
     earlier draft generated a level only when something first dug into
     it; with the planes in one allocation that saves no memory, and
     generating everything up front keeps determinism and saves plain. A
-    level of rock is one zstd-compressed array in the save.
+    level of rock is one zstd-compressed array in the save. Measured at
+    192 × 192, core only, best of 8: a new game takes 5.9 ms for the
+    surface and 15.3 ms with three strata, about 3 ms a level.
+  - A mod may make a level itself: `rim.on_generate_level(z, fn)` runs
+    after the stratum has filled it, with `rim.set_terrain`, `terrain_at`
+    and the engine's seeded `noise`, so a Luau level is as deterministic as
+    a Rust one. Solid terrain with no `thing` is bedrock, and every stratum
+    rings its level with some: only the surface has a map edge.
 
 ### Tension: how deep?
 

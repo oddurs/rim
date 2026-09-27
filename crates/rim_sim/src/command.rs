@@ -185,7 +185,9 @@ pub fn apply(w: &mut World, c: Command) {
                     // Rock that can be marked this way is stood up to take
                     // the mark; any other rock stays terrain.
                     let wake = w.map.fixture_at(p).is_none()
-                        && w.solid_at(p).is_some_and(|s| defs.thing(s.thing_r).harvest_for(designation).is_some());
+                        && w.solid_at(p)
+                            .and_then(|s| s.thing_r)
+                            .is_some_and(|t| defs.thing(t).harvest_for(designation).is_some());
                     if wake {
                         w.wake_rock(p);
                     }

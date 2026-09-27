@@ -378,7 +378,7 @@ fn a_pocket_dug_into_solid_rock_is_roofed() {
         .flat_map(|y| (0..m.w - 9).map(move |x| IVec::new(x, y)))
         .find(|&o| (0..9).all(|y| (0..9).all(|x| solid(o.offset(x, y)))))
         .expect("a stretch of solid rock");
-    let leaves = s.world.solid_at(o).unwrap().leaves_r;
+    let leaves = s.world.solid_at(o).and_then(|s| s.leaves_r).expect("rock that can be dug");
     let cost = s.world.defs.terrain[leaves as usize].path_cost;
     for y in 3..6 {
         for x in 3..6 {

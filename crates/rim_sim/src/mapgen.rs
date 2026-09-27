@@ -1,7 +1,8 @@
 //! Data-driven map generation: terrain comes from `[terrain.gen]` bands,
-//! fixtures from `[thing.spawn]`, wildlife from `[creature.spawn]`.
+//! the levels below from `[[stratum]]`, fixtures from `[thing.spawn]`,
+//! wildlife from `[creature.spawn]`.
 
-use crate::defs::DefId;
+use crate::defs::{DefDb, DefId};
 use crate::rng::{hash2_f, mix};
 use crate::world::{Faction, World};
 use crate::IVec;
@@ -29,6 +30,7 @@ pub fn generate(w: &mut World) -> IVec {
             w.map.set_terrain(IVec::new(x, y), t as DefId, defs.terrain[t].path_cost);
         }
     }
+    strata(w, &defs, seed);
 
     for y in 0..mh {
         for x in 0..mw {
@@ -93,6 +95,51 @@ fn find_start(w: &World) -> IVec {
         }
     }
     c
+}
+
+/// Fill each level below the surface from its stratum (DESIGN.md §6d):
+/// patches of its fills, each fill only under the surface terrains it names,
+/// and a ring of its edge rock. A level the map has without a stratum stays
+/// impassable.
+fn strata(w: &mut World, defs: &DefDb, seed: u64) {
+    let (mw, mh) = (w.map.w, w.map.h);
+    let mut fits: Vec<(DefId, f64)> = Vec::new();
+    for z in w.map.levels().filter(|&z| z < 0) {
+        let Some(st) = defs.stratum(z) else { continue };
+        let salt = seed ^ mix(0x5747_A000 + z.unsigned_abs() as u64);
+        for y in 0..mh {
+            for x in 0..mw {
+                let t = if x == 0 || y == 0 || x == mw - 1 || y == mh - 1 {
+                    st.edge_r
+                } else {
+                    let above = w.map.terrain[w.map.idx(IVec::new(x, y))];
+                    fits.clear();
+                    fits.extend(
+                        st.fill
+                            .iter()
+                            .filter(|f| f.under_r.is_empty() || f.under_r.contains(&above))
+                            .map(|f| (f.terrain_r, f.weight)),
+                    );
+                    let total: f64 = fits.iter().map(|f| f.1).sum();
+                    let mut left = fbm(x as f64 / st.patch, y as f64 / st.patch, salt, 3) * total;
+                    let fallback = fits.last().map_or(st.fill[0].terrain_r, |f| f.0);
+                    fits.iter()
+                        .find(|f| {
+                            left -= f.1;
+                            left < 0.0
+                        })
+                        .map_or(fallback, |f| f.0)
+                };
+                w.map.set_terrain(IVec::at(x, y, z), t, defs.terrain[t as usize].path_cost);
+            }
+        }
+    }
+}
+
+/// Fractal noise in [0, 1] at a cell, for scripts that generate a level
+/// (`rim.noise`): the same numbers on every machine.
+pub fn noise(x: f64, y: f64, seed: u64) -> f64 {
+    fbm(x, y, seed, 3)
 }
 
 fn value_noise(x: f64, y: f64, seed: u64) -> f64 {

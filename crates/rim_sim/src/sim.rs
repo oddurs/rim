@@ -48,12 +48,16 @@ impl Sim {
     }
 
     /// Everything configurable: which mods, and the map's size (square).
+    /// The map goes as deep as the deepest `[[stratum]]` (DESIGN.md §6d).
     pub fn build(mods_dir: &Path, seed: u64, enabled: &dyn Fn(&str) -> bool, size: i32) -> Result<Sim, String> {
-        Self::build_with(mods_dir, seed, enabled, size, 0, 0)
+        let m = Self::load_mods(mods_dir, enabled)?;
+        let below = m.defs.depth();
+        Self::make(m, seed, size, below, 0)
     }
 
     /// As `build`, with `below` levels under the surface and `above` over
-    /// it (DESIGN.md §6d).
+    /// it, whatever the strata say. A level without a stratum stays
+    /// impassable.
     pub fn build_with(
         mods_dir: &Path,
         seed: u64,
@@ -63,9 +67,14 @@ impl Sim {
         above: i32,
     ) -> Result<Sim, String> {
         let m = Self::load_mods(mods_dir, enabled)?;
+        Self::make(m, seed, size, below, above)
+    }
+
+    fn make(m: Mods, seed: u64, size: i32, below: i32, above: i32) -> Result<Sim, String> {
         let defs = m.defs.clone();
         let mut world = World::with_levels(defs.clone(), size, size, below, above, seed);
         let start = mapgen::generate(&mut world);
+        m.scripts.generate_levels(&mut world)?;
 
         let s = defs.start.as_ref().unwrap();
         for i in 0..s.count {

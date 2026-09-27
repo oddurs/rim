@@ -81,18 +81,61 @@ pub struct TerrainDef {
 }
 
 /// What a solid terrain is when someone works it, and what it leaves.
-#[derive(Deserialize, Clone, Debug)]
+/// Without them it can't be worked at all: bedrock.
+#[derive(Deserialize, Clone, Debug, Default)]
 pub struct SolidDef {
     /// The thing that stands in the cell once a pawn is set to work it: its
     /// harvests, look, wear and wind all come from there, so a patch to the
     /// thing reaches every cell of the rock.
-    pub thing: String,
+    #[serde(default)]
+    pub thing: Option<String>,
     /// The terrain left when that thing is gone.
-    pub leaves: String,
+    #[serde(default)]
+    pub leaves: Option<String>,
     #[serde(skip)]
-    pub thing_r: DefId,
+    pub thing_r: Option<DefId>,
     #[serde(skip)]
-    pub leaves_r: DefId,
+    pub leaves_r: Option<DefId>,
+}
+
+/// A level below the surface, as map generation fills it (DESIGN.md §6d).
+/// The deepest stratum sets how far down the map goes.
+#[derive(Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct StratumDef {
+    pub id: String,
+    /// Below the surface: -1 is the first level down.
+    pub level: i32,
+    /// What the level is made of, in patches.
+    pub fill: Vec<StratumFill>,
+    /// The ring of cells at the level's edge. Only the surface has a map
+    /// edge that raids cross, so below it this is rock nothing can work.
+    pub edge: String,
+    /// How big a patch of one fill is, in cells.
+    #[serde(default = "d_patch")]
+    pub patch: f64,
+    #[serde(skip)]
+    pub edge_r: DefId,
+}
+
+fn d_patch() -> f64 {
+    12.0
+}
+
+/// One terrain a stratum is made of, and how much of it.
+#[derive(Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct StratumFill {
+    pub terrain: String,
+    pub weight: f64,
+    /// Only under these surface terrains (clay under marsh and water);
+    /// empty is anywhere.
+    #[serde(default)]
+    pub under: Vec<String>,
+    #[serde(skip)]
+    pub terrain_r: DefId,
+    #[serde(skip)]
+    pub under_r: Vec<DefId>,
 }
 
 /// Map generation band: the highest-priority terrain whose ranges contain
@@ -1364,6 +1407,8 @@ pub struct DefDb {
     /// The item category tree, in load order; `category_roots` has the top
     /// level in `order` order.
     pub item_categories: Vec<ItemCategoryDef>,
+    /// The levels below the surface, in no particular order.
+    pub strata: Vec<StratumDef>,
     pub category_roots: Vec<DefId>,
     /// Entries of the kinds mods declare (`[[kind]]`), by qualified kind
     /// ("weather:type"), in load order: plain data for scripts.
@@ -1485,6 +1530,7 @@ pub const KINDS: &[&str] = &[
     "names",
     "item_category",
     "store_priority",
+    "stratum",
 ];
 
 impl DefDb {
@@ -1524,9 +1570,20 @@ impl DefDb {
             "skill" => self.skills[i].id.clone(),
             "field" => self.fields[i].id.clone(),
             "item_category" => self.item_categories[i].id.clone(),
+            "stratum" => self.strata[i].id.clone(),
             _ => String::new(),
         }
     }
+    /// How many levels the map has below the surface: the deepest stratum's.
+    pub fn depth(&self) -> i32 {
+        self.strata.iter().map(|s| -s.level).max().unwrap_or(0)
+    }
+
+    /// The stratum that fills level `z`, if any.
+    pub fn stratum(&self, z: i32) -> Option<&StratumDef> {
+        self.strata.iter().find(|s| s.level == z)
+    }
+
     pub fn thing_id(&self, id: &str) -> Option<DefId> {
         self.lookup("thing", id)
     }
@@ -1588,6 +1645,9 @@ impl DefDb {
         for (i, d) in self.room_roles.iter().enumerate() {
             index.insert(("room_role", d.id.clone()), i as DefId);
         }
+        for (i, d) in self.strata.iter().enumerate() {
+            index.insert(("stratum", d.id.clone()), i as DefId);
+        }
         for (i, d) in self.priority_rules.iter().enumerate() {
             index.insert(("priority_rule", d.id.clone()), i as DefId);
         }
@@ -1625,8 +1685,8 @@ impl DefDb {
             let ctx = format!("terrain/{}", d.id);
             d.rgb = parse_color(&d.color).map_err(|e| format!("{ctx}: {e}"))?;
             if let Some(s) = &mut d.solid {
-                s.thing_r = get("thing", &s.thing, &ctx)?;
-                s.leaves_r = get("terrain", &s.leaves, &ctx)?;
+                s.thing_r = s.thing.as_deref().map(|t| get("thing", t, &ctx)).transpose()?;
+                s.leaves_r = s.leaves.as_deref().map(|t| get("terrain", t, &ctx)).transpose()?;
                 // Nothing walks into rock, whatever the def says.
                 d.path_cost = 0;
             }
@@ -1634,15 +1694,54 @@ impl DefDb {
         for (i, d) in self.terrain.iter().enumerate() {
             let Some(s) = &d.solid else { continue };
             let ctx = format!("terrain/{}", d.id);
-            let td = &self.things[s.thing_r as usize];
-            if !td.blocks || td.size != [1, 1] || !td.harvest.iter().any(|h| h.destroy) {
-                return Err(format!(
-                    "{ctx}: solid.thing '{}' must block, cover one cell and have a harvest that removes it",
-                    s.thing
-                ));
+            match (s.thing_r, s.leaves_r) {
+                // Bedrock: nothing works it.
+                (None, None) => {}
+                (Some(thing), Some(leaves)) => {
+                    let td = &self.things[thing as usize];
+                    if !td.blocks || td.size != [1, 1] || !td.harvest.iter().any(|h| h.destroy) {
+                        return Err(format!(
+                            "{ctx}: solid.thing '{}' must block, cover one cell and have a harvest that removes it",
+                            td.id
+                        ));
+                    }
+                    if leaves as usize == i || self.terrain[leaves as usize].solid.is_some() {
+                        return Err(format!(
+                            "{ctx}: solid.leaves '{}' must be ground, not rock",
+                            self.terrain[leaves as usize].id
+                        ));
+                    }
+                }
+                _ => return Err(format!("{ctx}: solid needs both `thing` and `leaves`, or neither (bedrock)")),
             }
-            if s.leaves_r as usize == i || self.terrain[s.leaves_r as usize].solid.is_some() {
-                return Err(format!("{ctx}: solid.leaves '{}' must be ground, not rock", s.leaves));
+        }
+        let mut levels = std::collections::BTreeSet::new();
+        for st in &mut self.strata {
+            let ctx = format!("stratum/{}", st.id);
+            if st.level >= 0 {
+                return Err(format!("{ctx}: level must be below the surface (-1 or lower), not {}", st.level));
+            }
+            if !levels.insert(st.level) {
+                return Err(format!("{ctx}: another stratum already fills level {}; patch that one", st.level));
+            }
+            if st.fill.is_empty() || st.fill.iter().any(|f| f.weight <= 0.0 || !f.weight.is_finite()) {
+                return Err(format!("{ctx}: fill needs at least one terrain, each with a weight above 0"));
+            }
+            if st.patch <= 0.0 || !st.patch.is_finite() {
+                return Err(format!("{ctx}: patch must be above 0"));
+            }
+            st.edge_r = get("terrain", &st.edge, &ctx)?;
+            for f in &mut st.fill {
+                f.terrain_r = get("terrain", &f.terrain, &ctx)?;
+                f.under_r = f.under.iter().map(|t| get("terrain", t, &ctx)).collect::<Result<_, _>>()?;
+            }
+            if self.terrain[st.edge_r as usize].solid.is_none() {
+                return Err(format!("{ctx}: edge '{}' must be solid, or a tunnel could reach the map's edge", st.edge));
+            }
+        }
+        if let Some(&deepest) = levels.first() {
+            if levels.len() != (-deepest) as usize {
+                return Err(format!("stratum: every level from -1 to {deepest} needs a stratum"));
             }
         }
         let field_in = |home: &str, id: &str| get("field", id, &format!("field/{home}:")).ok().map(|i| i as usize);

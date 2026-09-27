@@ -176,28 +176,55 @@ fn glyph(i: usize) -> Option<char> {
     }
 }
 
-/// The map as rows of glyphs, and a legend of which terrain each is.
-fn draw_map(terrain: &[DefId], width: usize, defs: &DefsSection) -> Result<Value, String> {
+/// The map as rows of glyphs, and a legend of which terrain each is: the
+/// surface as `rows`, and each other level (DESIGN.md §6d) as its own
+/// picture under `levels`, in the order the map holds them.
+fn draw_map(terrain: &[DefId], width: usize, height: usize, below: i64, defs: &DefsSection) -> Result<Value, String> {
     let names = defs.get("terrain").map_or(&[][..], |v| v.as_slice());
     let glyphs: Vec<char> = (0..names.len()).map(glyph).collect::<Option<_>>().ok_or("too many terrains to draw")?;
-    let rows: Vec<Value> = terrain
-        .chunks(width.max(1))
-        .map(|row| row.iter().map(|&t| glyphs.get(t as usize).copied().unwrap_or('?')).collect::<String>().into())
+    let draw = |plane: &[DefId]| -> Vec<Value> {
+        plane
+            .chunks(width.max(1))
+            .map(|row| row.iter().map(|&t| glyphs.get(t as usize).copied().unwrap_or('?')).collect::<String>().into())
+            .collect()
+    };
+    let mut planes = terrain.chunks((width * height).max(1));
+    let rows = planes.next().map(draw).unwrap_or_default();
+    let levels: Vec<Value> = planes
+        .enumerate()
+        .map(|(k, plane)| {
+            let slot = k as i64 + 1;
+            let z = if slot <= below { -slot } else { slot - below };
+            serde_json::json!({ "z": z, "rows": draw(plane) })
+        })
         .collect();
     let legend: Map<String, Value> = glyphs.iter().zip(names).map(|(g, n)| (g.to_string(), n.clone().into())).collect();
-    Ok(serde_json::json!({ "legend": legend, "rows": rows }))
+    if levels.is_empty() {
+        return Ok(serde_json::json!({ "legend": legend, "rows": rows }));
+    }
+    Ok(serde_json::json!({ "legend": legend, "rows": rows, "levels": levels }))
 }
 
 fn read_map(v: Value, defs: &DefsSection) -> Result<Vec<DefId>, String> {
     #[derive(Deserialize)]
+    struct Level {
+        z: i64,
+        rows: Vec<String>,
+    }
+    #[derive(Deserialize)]
     struct Picture {
         legend: BTreeMap<char, String>,
         rows: Vec<String>,
+        #[serde(default)]
+        levels: Vec<Level>,
     }
-    let p: Picture = serde_json::from_value(v).map_err(|e| format!("engine:map: {e}"))?;
+    let mut p: Picture = serde_json::from_value(v).map_err(|e| format!("engine:map: {e}"))?;
     let names = defs.get("terrain").map_or(&[][..], |v| v.as_slice());
+    // The map's order: the surface, then down, then up.
+    p.levels.sort_by_key(|l| if l.z < 0 { (0, -l.z) } else { (1, l.z) });
+    let all = p.rows.iter().chain(p.levels.iter().flat_map(|l| &l.rows));
     let mut out = Vec::new();
-    for (y, row) in p.rows.iter().enumerate() {
+    for (y, row) in all.enumerate() {
         for (x, c) in row.chars().enumerate() {
             let name = p.legend.get(&c).ok_or_else(|| format!("engine:map: {c} at ({x}, {y}) isn't in the legend"))?;
             let i = names.iter().position(|n| n == name).ok_or_else(|| format!("engine:map: no terrain {name}"))?;
@@ -223,9 +250,12 @@ fn snapshot_text(snap: &Snapshot) -> Result<BTreeMap<String, Value>, String> {
     }
     let defs = defs_of(Some(snap))?;
     if let Some(map) = out.remove("engine:map") {
-        let width = out.get("engine:world").and_then(|w| w["width"].as_u64()).ok_or("the world has no width")?;
+        let world = out.get("engine:world").ok_or("there is no engine:world")?;
+        let width = world["width"].as_u64().ok_or("the world has no width")?;
+        let height = world["height"].as_u64().ok_or("the world has no height")?;
+        let below = world["below"].as_i64().unwrap_or(0);
         let terrain: Vec<DefId> = serde_json::from_value(map).map_err(|e| e.to_string())?;
-        out.insert("engine:map".into(), draw_map(&terrain, width as usize, &defs)?);
+        out.insert("engine:map".into(), draw_map(&terrain, width as usize, height as usize, below, &defs)?);
     }
     for (name, v) in &mut out {
         name_defs(name, v, &defs, true)?;

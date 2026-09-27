@@ -2,12 +2,12 @@
 id: e311c029-499c-4764-a4d6-6d1f933f00f9
 title: 'Positions gain z: the map becomes a stack of levels'
 type: feature
-status: review
+status: done
 milestone: depth
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 created: 2026-09-26
-updated: 2026-09-26
+updated: 2026-09-27
+closed_at: 2026-09-27
 priority: p0
 api: breaking
 effort: l
