@@ -151,13 +151,17 @@ impl World {
     /// Bring the colony's rules up to date with the hour, the season and
     /// the stance. Cheap when nothing changed: a key compare.
     pub fn update_rules(&mut self) {
-        let defs = &self.defs;
+        let defs = self.defs.clone();
         let hour = if defs.rules_read_hour { self.hour() as u32 } else { 0 };
         let season = if defs.rules_read_season { self.season_index() } else { 0 };
         let key = (hour, season, self.stance, self.standing.generation);
         if self.rules.key == Some(key) {
             return;
         }
+        // The first work-out (a new game, a load) only learns what holds; after
+        // that, a reading rule entering or leaving is news.
+        let first = self.rules.key.is_none();
+        let before = std::mem::take(&mut self.rules.on);
         let standing = &self.standing;
         self.rules.on = (0..defs.priority_rules.len())
             .filter(|&i| {
@@ -178,11 +182,23 @@ impl World {
             .collect();
         self.rules.key = Some(key);
         self.rules.evaluations += 1;
+        if !first {
+            for (i, rd) in defs.priority_rules.iter().enumerate().filter(|(_, r)| r.when.band_r.is_some()) {
+                let (was, now) = (before.contains(&(i as u16)), self.rules.on.contains(&(i as u16)));
+                match (was, now) {
+                    (false, true) => self.events.push(GameEvent::RuleStarted { rule: rd.id.clone() }),
+                    (true, false) => self.events.push(GameEvent::RuleStopped { rule: rd.id.clone() }),
+                    _ => {}
+                }
+            }
+        }
     }
 
     /// A script publishes a colony reading. The rules that read it switch
-    /// on or off only when it crosses a mark, each announcing it; a reading
-    /// that moves inside its band costs a compare per rule reading it.
+    /// on or off only when it crosses a mark; a reading that moves inside
+    /// its band costs a compare per rule reading it. A rule is announced
+    /// when it starts or stops holding (`update_rules`), with its season
+    /// and the colony's switch taken into account.
     pub fn set_reading(&mut self, id: &str, value: f64) {
         let v = crate::defs::milli(value);
         self.standing.readings.insert(id.to_string(), v);
@@ -197,20 +213,13 @@ impl World {
             }
             let rule = rd.id.clone();
             // A rule the colony switched off keeps track of its reading, so it
-            // is right the moment it's switched back on, but says nothing and
-            // moves nothing meanwhile.
-            let quiet = self.standing.off.contains(&rule);
-            changed |= !quiet;
+            // is right the moment it's switched back on, but moves nothing
+            // meanwhile.
+            changed |= !self.standing.off.contains(&rule);
             if now {
-                self.standing.on.insert(rule.clone());
-                if !quiet {
-                    self.events.push(GameEvent::RuleStarted { rule });
-                }
+                self.standing.on.insert(rule);
             } else {
                 self.standing.on.remove(&rule);
-                if !quiet {
-                    self.events.push(GameEvent::RuleStopped { rule });
-                }
             }
         }
         if changed {
