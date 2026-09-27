@@ -211,6 +211,10 @@ pub struct ThingDef {
     /// trees some. What's behind it downwind is sheltered.
     #[serde(default)]
     pub blocks_wind: f64,
+    /// How its light looks, if it gives any (DESIGN.md §6e). The renderer's
+    /// alone: the sim only knows how bright and how far.
+    #[serde(default)]
+    pub glow: Option<GlowDef>,
     /// How tall it stands, in cells, for the shadows the renderer casts
     /// from it (DESIGN.md §6e). Blocking things and plants read it: unset, a
     /// blocking thing stands one cell tall, and a plant casts no shadow.
@@ -931,6 +935,23 @@ pub struct SkyDef {
     pub rgb_night: [u8; 3],
     #[serde(skip)]
     pub rgb_fire: [u8; 3],
+}
+
+/// How a thing that gives light looks alight.
+#[derive(Clone, Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GlowDef {
+    #[serde(default)]
+    pub flicker: Flicker,
+}
+
+/// How a light moves: a flame that dances, or a steady glow.
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum Flicker {
+    #[default]
+    Fire,
+    Steady,
 }
 
 /// A sky body's daily path: up at `rise`, down at `set` (hours), highest at

@@ -1773,6 +1773,58 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     }
     t.app.paused = false;
 
+    // ---------------------------------------------------------- 6fd6b13b firelight
+    println!("\n# firelight is baked, and a new fire redoes only its own ground (6fd6b13b)");
+    t.app.paused = true;
+    let campfire = defs.thing_id("campfire").unwrap();
+    // Two free cells six apart with free ground between: the fires compare
+    // with themselves, so what grows around them doesn't matter.
+    let free = |w: &World, p: IVec| w.map.passable(p) && w.map.fixture_at(p).is_none() && w.map.item_at(p).is_none();
+    let row = (0..60i32)
+        .flat_map(|r| (-r..=r).flat_map(move |dy| (-r..=r).map(move |dx| site.offset(dx, dy))))
+        .find(|&p| (0..=6).all(|dx| free(t.w(), p.offset(dx, 0))));
+    if let Some(o) = row.map(|p| p.offset(-3, -7)) {
+        let (a, c) = (o.offset(3, 7), o.offset(9, 7));
+        let first = t.app.sim.world.spawn_fixture(campfire, a, false);
+        t.ticks(2);
+        t.frame().await;
+        let glow = |t: &T, q: IVec| {
+            t.app.light.fire_at(q.x as f32 + 0.5, q.y as f32 + 0.5).map_or(0.0, |v| v.iter().sum::<f32>())
+        };
+        let (at_a, between) = (glow(&t, a), glow(&t, o.offset(6, 7)));
+        t.check(at_a > 0.3, format!("a campfire glows ({at_a:.2})"));
+        // Six cells away, a second fire's glow overlaps the first's.
+        let second = t.app.sim.world.spawn_fixture(campfire, c, false);
+        t.ticks(2);
+        t.frame().await;
+        let draws = t.app.light.passes.iter().find(|p| p.name == "firelight").map_or(0, |p| p.draws);
+        t.check(draws == 2, format!("the new fire redoes one area, not the map ({draws} draws)"));
+        let spots = [a, c, o.offset(6, 7), o.offset(0, 7), o.offset(12, 7)];
+        let partial: Vec<f32> = spots.iter().map(|&q| glow(&t, q)).collect();
+        t.check(
+            partial[1] > 0.3 && partial[2] > between + 0.05,
+            format!(
+                "the new one glows, and adds where they meet ({:.2}, {between:.2} to {:.2})",
+                partial[1], partial[2]
+            ),
+        );
+        // The same fires baked whole: a partial bake adds nothing twice.
+        t.app.light.invalidate();
+        t.frame().await;
+        let whole: Vec<f32> = spots.iter().map(|&q| glow(&t, q)).collect();
+        let off = partial.iter().zip(&whole).map(|(p, w)| (p - w).abs()).fold(0.0f32, f32::max);
+        t.check(
+            off < 0.02,
+            format!("a partial bake matches a whole one (off by {off:.3}; first fire {at_a:.2} to {:.2})", whole[0]),
+        );
+        for e in [first, second].into_iter().flatten() {
+            t.app.sim.world.despawn_thing(e);
+        }
+    } else {
+        t.check(false, "free ground for two campfires");
+    }
+    t.app.paused = false;
+
     // ---------------------------------------------------------- fda56c8e camera by device
     println!("\n# the camera answers a mouse and a trackpad (fda56c8e)");
     t.clear_dock().await;

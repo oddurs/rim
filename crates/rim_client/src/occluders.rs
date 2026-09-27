@@ -128,6 +128,11 @@ pub struct Occluders {
     pub texture: Option<Texture2D>,
     /// Bumped whenever the texture changes, so passes that read it can cache.
     pub version: u64,
+    /// What the last change repacked, as (x, y, w, h) in cells; empty with
+    /// `whole`. Lets a pass redo only what lies near it.
+    pub changed: Vec<(i32, i32, i32, i32)>,
+    /// The last change repacked everything.
+    pub whole: bool,
 }
 
 /// A chunk that must be packed again whatever its revisions say.
@@ -141,6 +146,8 @@ impl Occluders {
             return false;
         }
         self.version += 1;
+        self.whole = whole || self.texture.is_none();
+        self.changed = if self.whole { Vec::new() } else { dirty.clone() };
         let m = &w.map;
         match &self.texture {
             Some(t) if !whole => {

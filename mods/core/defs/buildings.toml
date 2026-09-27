@@ -185,6 +185,7 @@ emit = [
     { field = "temperature", amount = 14.0, radius = 4, cap = 26.0 },
     { field = "light", amount = 30.0, radius = 3 },
 ]
+glow = { flicker = "steady" }
 
 [[thing]]
 id = "campfire"
