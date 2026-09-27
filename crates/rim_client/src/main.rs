@@ -114,6 +114,8 @@ pub struct App {
     pub show_devtools: bool,
     /// Field layer drawn over the map, if any (cycled with O).
     pub overlay: Option<usize>,
+    /// The storage overlay: the last stop of the O cycle, after the fields.
+    pub storage_overlay: bool,
     /// What a right-click would do, recomputed only when the cursor moves to
     /// another tile or the selection changes.
     pub hint: Option<String>,
@@ -613,6 +615,7 @@ async fn game() {
         show_profiler: false,
         show_devtools: false,
         overlay: None,
+        storage_overlay: false,
         hint: None,
         stuff_for: Vec::new(),
         preview: None,
@@ -1071,6 +1074,7 @@ pub fn client_view(app: &mut App, mouse: (f32, f32), time: f64) -> ClientView {
         paused: app.paused,
         speed: app.speed,
         overlay: app.overlay,
+        storage_overlay: app.storage_overlay,
         show_profiler: app.show_profiler,
         show_devtools: app.show_devtools,
         tools: app
@@ -1548,7 +1552,10 @@ fn apply_ui(app: &mut App, a: UiAction) {
             }
         }
         UiAction::CycleOverlay => apply(app, Action::CycleOverlay),
-        UiAction::SetOverlay(o) => app.overlay = o.filter(|i| *i < app.sim.world.defs.fields.len()),
+        UiAction::SetOverlay(o) => {
+            app.overlay = o.filter(|i| *i < app.sim.world.defs.fields.len());
+            app.storage_overlay = false;
+        }
         UiAction::ToggleProfiler => apply(app, Action::ToggleProfiler),
         UiAction::ToggleDevtools => apply(app, Action::ToggleDevtools),
         UiAction::ToggleOutlines => app.ui.toggle_outlines(),
@@ -1930,10 +1937,16 @@ pub fn apply(app: &mut App, action: Action) {
             app.ui.devtools = app.show_devtools;
         }
         Action::CycleOverlay => {
-            // Only fields that vary over the map have an overlay.
-            let fields = &app.sim.world.defs.fields;
-            let from = app.overlay.map_or(0, |i| i + 1);
-            app.overlay = (from..fields.len()).find(|&i| fields[i].overlay);
+            // Off, each field that varies over the map, then storage, then
+            // off again.
+            if app.storage_overlay {
+                app.storage_overlay = false;
+            } else {
+                let fields = &app.sim.world.defs.fields;
+                let from = app.overlay.map_or(0, |i| i + 1);
+                app.overlay = (from..fields.len()).find(|&i| fields[i].overlay);
+                app.storage_overlay = app.overlay.is_none();
+            }
         }
         Action::ToggleDraft => {
             if let Some(e) = app.selected {

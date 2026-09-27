@@ -119,7 +119,8 @@ type Markable = { id: number, urgent: boolean, label: string }
 type Stance = { id: string, label: string, icon: string, active: boolean }
 type Effective = { value: number, why: string }
 type Stuff = { id: string, label: string, color: string, have: number, active: boolean, hp: number, work: number }
-type Hover = { x: number, y: number, terrain: string, shelter: string, readings: { string }, values: { Reading }, things: { string }, takes: string? }
+type Hover = { x: number, y: number, terrain: string, shelter: string, readings: { string }, values: { Reading }, things: { string }, takes: string?, store: StoreRef? }
+type StockRow = { thing: string, label: string, total: number, stored: number, loose: number, stores: number, value: number, category: string?, category_label: string?, category_order: number }
 type Reading = { label: string, value: string }
 type WorkWhy = { work: string, level: number, why: string, picked: boolean, dist: number? }
 type ProfileRow = { name: string, us: number, mod: boolean }
@@ -289,7 +290,7 @@ pub const UI_API: &[UiDoc] = &[
     d!("view.mods", "() -> { ModInfo }", "Loaded mods, in load order."),
     d!("view.orders", "(x: number, y: number, on: number?) -> { caption: string?, actors: number, actor: string?, rows: { { key: string, label: string, group: string, trailing: string?, disabled: string? } } }", "Every order the selected colonists could be given at a map spot, merged by key: group 'damaging' for ones that take something away, trailing '2 of 3' when only some can, disabled with a reason when none can. Walks the map, so call it once per menu, not per frame."),
     d!("view.outlines", "() -> boolean", "Whether layout outlines are on."),
-    d!("view.overlay", "() -> string?", "The label of the field overlay shown, if any."),
+    d!("view.overlay", "() -> string?", "The label of the overlay shown, if any: a field's, or \"Storage\"."),
     d!("view.paused", "() -> boolean", "Whether the game is paused."),
     d!("view.pawn", "(id: number) -> Pawn?", "One pawn, or nil if it's gone."),
     d!("view.people", "() -> { Person }", "Every colonist, lean: what a list of them needs (name, job, health, drafted, idle, selected) and none of the needs or skills view.colonists carries."),
@@ -313,6 +314,7 @@ pub const UI_API: &[UiDoc] = &[
     d!("view.stances", "() -> { Stance }", "The colony's stances, in bar order; `active` is the one it's in."),
     d!("view.standing", "() -> { StandingOrder }", "The standing orders: rules on colony readings, with the reading now, their marks (`band`), what they do (`effect`), a season they wait for, whether the reading has crossed the mark, whether the colony has them on, and whether they're moving priorities now (`acting`)."),
     d!("view.stats", "() -> { string }", "Client statistics lines."),
+    d!("view.stock", "() -> { StockRow }", "What the colony has, from the stock ledger: one row per thing it has any of, in def order, with units stored and loose, how many stores hold it, and its category."),
     d!("view.store", "(store: number | StoreRef) -> StoreView?", "Everything the store inspector paints, in one read: a stockpile by id (or { zone = id }) or a container ({ thing = id }). Contents are a container's slots in order (an empty one is { empty = true }) or a stockpile's totals by thing and material."),
     d!("view.store_levels", "() -> { string }", "The store priority scale's level names, lowest first."),
     d!("view.stuff", "() -> { Stuff }", "Materials for the active build tool: what you have, what you'd get."),

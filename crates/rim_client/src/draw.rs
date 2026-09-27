@@ -527,6 +527,26 @@ pub fn readouts(app: &App) -> Vec<(f32, f32, String)> {
     if z < LABEL_ZOOM {
         return out;
     }
+    if app.storage_overlay {
+        for (at, pct) in storage_view(w, visible(app)).fills {
+            let (x, y) = cam.to_screen(at.x as f32, at.y as f32);
+            out.push((x + 2.0, y + 2.0, format!("{pct}%")));
+        }
+        // Why a selected stack stays or waits; one that moves shows its way.
+        let why = app.selected.and_then(|e| Some((w.thing(e)?.pos, rim_sim::ai::haul_plan(w, e)?)));
+        let text = match why {
+            Some((p, rim_sim::ai::HaulPlan::Stays { level })) => {
+                let label = w.defs.store_priority.labels.get(level as usize).cloned().unwrap_or_default();
+                Some((p, format!("stays: nothing above {label} has room")))
+            }
+            Some((p, rim_sim::ai::HaulPlan::Waits)) => Some((p, "waits: nowhere takes it with room".to_string())),
+            _ => None,
+        };
+        if let Some((p, text)) = text {
+            let (x, y) = cam.to_screen(p.x as f32, p.y as f32);
+            out.push((x, y + z + 4.0, text));
+        }
+    }
     for e in ws.sites() {
         let Some((cell, f, hurt)) = ws.readout(w, e) else { continue };
         let Some(th) = w.thing(e) else { continue };
@@ -627,6 +647,9 @@ pub fn pawns(app: &App) {
         }
     }
 
+    if app.storage_overlay {
+        storage_overlay(app);
+    }
     // Field overlay, lit like the world so it reads the same way.
     if let Some(fi) = app.overlay {
         let (tx0, ty0, tx1, ty1) = visible(app);
@@ -641,6 +664,97 @@ pub fn pawns(app: &App) {
                 draw_rectangle(sx, sy, z + 0.5, z + 0.5, c);
             }
         }
+    }
+}
+
+/// What the storage overlay shows over a rectangle of cells (DESIGN.md §4f):
+/// every store with a cell in it, washed by its level as a share of the
+/// scale's top, and each store's fill, labelled at its anchor.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct StorageView {
+    /// (anchor, [w, h] in cells, level from 0 to 1)
+    pub washes: Vec<(IVec, [u32; 2], f32)>,
+    /// (anchor, percent full): a stockpile's cells in use, a container's
+    /// slots.
+    pub fills: Vec<(IVec, u32)>,
+}
+
+pub fn storage_view(w: &World, (x0, y0, x1, y1): (i32, i32, i32, i32)) -> StorageView {
+    let mut v = StorageView::default();
+    let top = w.defs.store_priority.labels.len().saturating_sub(1).max(1) as f32;
+    // Stockpiles: each visible cell, then each zone seen once for its fill.
+    let mut seen: std::collections::BTreeSet<u32> = std::collections::BTreeSet::new();
+    for y in y0..=y1 {
+        for x in x0..=x1 {
+            let p = IVec::new(x, y);
+            let Some(z) = w.zones.at(&w.map, p) else { continue };
+            v.washes.push((p, [1, 1], z.level as f32 / top));
+            seen.insert(z.id);
+        }
+    }
+    for id in seen {
+        let (mut first, mut cells, mut used) = (None, 0u32, 0u32);
+        for (_, c) in w.zones.members().filter(|(z, _)| z.id == id) {
+            let p = w.map.pos(c as usize);
+            first = first.or(Some(p));
+            cells += 1;
+            used += w.map.item_at(p).is_some() as u32;
+        }
+        if let Some(p) = first.filter(|p| (x0..=x1).contains(&p.x) && (y0..=y1).contains(&p.y)) {
+            v.fills.push((p, used * 100 / cells.max(1)));
+        }
+    }
+    // Containers: only those in the chunks the rectangle touches.
+    for cy in (y0 / CHUNK)..=(y1 / CHUNK) {
+        for cx in (x0 / CHUNK)..=(x1 / CHUNK) {
+            let chunk = w.map.chunk_of(IVec::new(cx * CHUNK, cy * CHUNK)) as u32;
+            for bits in w.stores.containers_in(chunk) {
+                let Some(e) = Entity::from_bits(bits) else { continue };
+                let (Some(t), Ok(st)) = (w.thing(e), w.ecs.get::<&rim_sim::world::Store>(e)) else { continue };
+                let size = w.defs.thing(t.def).size;
+                let seen =
+                    t.pos.x + size[0] as i32 > x0 && t.pos.x <= x1 && t.pos.y + size[1] as i32 > y0 && t.pos.y <= y1;
+                if !seen {
+                    continue;
+                }
+                let used = st.slots.iter().filter(|s| s.is_some()).count() as u32;
+                v.washes.push((t.pos, size, st.level as f32 / top));
+                v.fills.push((t.pos, used * 100 / (st.slots.len() as u32).max(1)));
+            }
+        }
+    }
+    v
+}
+
+/// The storage overlay: stores washed brighter the higher their level, and
+/// a selected loose stack's way to where it will go. Fills are labelled
+/// with the readouts.
+fn storage_overlay(app: &App) {
+    let (w, cam) = (&app.sim.world, &app.cam);
+    let z = cam.zoom;
+    let v = storage_view(w, visible(app));
+    for (at, [sw, sh], level) in &v.washes {
+        let (sx, sy) = cam.to_screen(at.x as f32, at.y as f32);
+        let c = alpha(crate::ZONE, 0.12 + 0.5 * level);
+        draw_rectangle(sx, sy, z * *sw as f32 + 0.5, z * *sh as f32 + 0.5, c);
+        if (*sw, *sh) != (1, 1) || w.zones.at(&w.map, *at).is_none() {
+            draw_rectangle_lines(sx, sy, z * *sw as f32, z * *sh as f32, 1.5, alpha(crate::ZONE, 0.9));
+        }
+    }
+    // A selected stack: a dashed line to where it will go.
+    let Some(e) = app.selected else { return };
+    let Some(rim_sim::ai::HaulPlan::Moves { to, .. }) = rim_sim::ai::haul_plan(w, e) else { return };
+    let Some(from) = w.thing(e).map(|t| t.pos) else { return };
+    let (ax, ay) = cam.to_screen(from.x as f32 + 0.5, from.y as f32 + 0.5);
+    let (bx, by) = cam.to_screen(to.x as f32 + 0.5, to.y as f32 + 0.5);
+    let len = ((bx - ax).powi(2) + (by - ay).powi(2)).sqrt().max(1.0);
+    let dash = (z * 0.3).max(4.0);
+    let mut d = 0.0;
+    while d < len {
+        let e = (d + dash).min(len);
+        let (p, q) = (d / len, e / len);
+        draw_line(ax + (bx - ax) * p, ay + (by - ay) * p, ax + (bx - ax) * q, ay + (by - ay) * q, 2.0, YELLOW);
+        d += dash * 2.0;
     }
 }
 
@@ -1346,6 +1460,119 @@ mod tests {
         let t = s.world.thing(e).unwrap();
         let td = s.world.defs.thing(t.def);
         orient_of(&s.world, p, &td.look_r, td.size_facing(t.facing), t.facing)
+    }
+
+    /// Core, plus a mod with a four-slot crate: a temporary mods folder.
+    fn crate_mods(name: &str) -> std::path::PathBuf {
+        fn copy(from: &std::path::Path, to: &std::path::Path) {
+            std::fs::create_dir_all(to).unwrap();
+            for e in std::fs::read_dir(from).unwrap().flatten() {
+                let p = e.path();
+                if p.is_dir() {
+                    copy(&p, &to.join(e.file_name()));
+                } else {
+                    std::fs::copy(&p, to.join(e.file_name())).unwrap();
+                }
+            }
+        }
+        let dir = std::env::temp_dir().join(format!("rim-draw-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        copy(std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../mods/core")), &dir.join("core"));
+        let probe = dir.join("probe");
+        std::fs::create_dir_all(probe.join("defs")).unwrap();
+        std::fs::write(
+            probe.join("mod.toml"),
+            "id = \"probe\"\nname = \"probe\"\nversion = \"0.0.0\"\napi = \"0.6\"\ndepends = [\"core\"]\n",
+        )
+        .unwrap();
+        std::fs::write(
+            probe.join("defs/crate.toml"),
+            "[[thing]]\nid = \"crate\"\nlabel = \"crate\"\ncolor = \"#b98a55\"\ncategory = \"building\"\nblocks = true\nstore = { slots = 4 }\n",
+        )
+        .unwrap();
+        dir
+    }
+
+    /// Open cells in a ring out from `c`, `n` of them, `gap` apart.
+    fn open_cells(s: &Sim, c: IVec, n: usize) -> Vec<IVec> {
+        let w = &s.world;
+        (2..120)
+            .flat_map(|r: i32| {
+                (-r..=r).flat_map(move |dy| {
+                    (-r..=r).filter(move |dx| dx.abs() == r || dy.abs() == r).map(move |dx| c.offset(dx, dy))
+                })
+            })
+            .filter(|&p| {
+                (p.x + p.y) % 2 == 0
+                    && w.map.passable(p)
+                    && w.map.fixture_at(p).is_none()
+                    && w.map.item_at(p).is_none()
+                    && w.zones.at(&w.map, p).is_none()
+            })
+            .take(n)
+            .collect()
+    }
+
+    #[test]
+    fn the_storage_overlay_washes_stores_by_level_and_labels_their_fill() {
+        let dir = crate_mods("overlay");
+        let mut s = Sim::new(&dir, 3).unwrap();
+        let c = s.world.colony_center().unwrap();
+        let cells = open_cells(&s, c, 3);
+        let (za, crate_at) = (cells[0], cells[2]);
+        let stone = s.world.defs.thing_id("stone").unwrap();
+        // A one-cell stockpile at Preferred, holding stone: full.
+        s.push(rim_sim::Command::Stockpile { a: za, b: za, zone: None });
+        s.push(rim_sim::Command::StoreLevel { store: rim_sim::zone::StoreRef::Zone(1), level: 2 });
+        s.step();
+        s.world.put_lot(Lot::new(stone, 10), za);
+        // A crate at Normal with one slot of four in use.
+        let def = s.world.defs.thing_id("probe:crate").unwrap();
+        let e = s.world.spawn_fixture_of(def, crate_at, false, None).unwrap();
+        s.world.put_in_store(e, Lot::new(s.world.defs.thing_id("berries").unwrap(), 5));
+        let all = (0, 0, s.world.map.w - 1, s.world.map.h - 1);
+        let v = storage_view(&s.world, all);
+        assert!(v.washes.contains(&(za, [1, 1], 0.5)), "Preferred is half the scale's top: {v:?}");
+        assert!(v.washes.contains(&(crate_at, [1, 1], 0.25)), "Normal a quarter: {v:?}");
+        assert!(v.fills.contains(&(za, 100)) && v.fills.contains(&(crate_at, 25)), "{v:?}");
+        // Out of view, a store isn't there.
+        let away = (crate_at.x + 5, crate_at.y + 5, crate_at.x + 6, crate_at.y + 6);
+        assert!(storage_view(&s.world, away).washes.is_empty());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn the_storage_overlay_over_200_stores_is_cheap() {
+        let dir = crate_mods("overlay-200");
+        let mut s = Sim::new(&dir, 3).unwrap();
+        let c = s.world.colony_center().unwrap();
+        let def = s.world.defs.thing_id("probe:crate").unwrap();
+        let berries = s.world.defs.thing_id("berries").unwrap();
+        for p in open_cells(&s, c, 200) {
+            let e = s.world.spawn_fixture_of(def, p, false, None).unwrap();
+            s.world.put_in_store(e, Lot::new(berries, 3));
+        }
+        // And a 40x40 stockpile, somewhere open near the colony.
+        s.push(rim_sim::Command::Stockpile { a: c.offset(-60, -60), b: c.offset(-21, -21), zone: None });
+        s.step();
+        let stores = s.world.ecs.query::<&rim_sim::world::Store>().iter().count();
+        assert_eq!(stores, 200);
+        // The whole map in view: the worst case, at the lowest zoom.
+        let all = (0, 0, s.world.map.w - 1, s.world.map.h - 1);
+        let t0 = std::time::Instant::now();
+        let runs = 20;
+        let mut n = 0;
+        for _ in 0..runs {
+            n += storage_view(&s.world, all).washes.len();
+        }
+        let ms = t0.elapsed().as_secs_f64() * 1e3 / runs as f64;
+        eprintln!(
+            "storage overlay, whole map, 200 containers + a 40x40 stockpile: {ms:.3} ms a frame ({} washes)",
+            n / runs
+        );
+        // DESIGN.md §8: 4 ms of CPU for the whole world renderer.
+        assert!(ms < 4.0, "{ms:.3} ms");
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]

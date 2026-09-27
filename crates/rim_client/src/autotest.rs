@@ -1335,7 +1335,10 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         t.shot(&format!("overlay_{}", defs.fields[i].id)).await;
     }
     t.key(KeyCode::O).await;
-    t.check(t.app.overlay.is_none(), "O again turns the overlay off");
+    t.check(t.app.overlay.is_none() && t.app.storage_overlay, "after the fields, O shows the storage overlay");
+    t.shot("overlay_storage").await;
+    t.key(KeyCode::O).await;
+    t.check(t.app.overlay.is_none() && !t.app.storage_overlay, "O again turns the overlay off");
     let temp = defs.lookup("field", "temperature").unwrap() as usize;
     let near = t.w().fields.value(&defs, &t.w().map, temp, spot);
     let outside = t.w().fields.ambient(temp);

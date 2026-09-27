@@ -107,7 +107,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `view.mods` | `() -> { ModInfo }` | Loaded mods, in load order. |
 | `view.orders` | `(x: number, y: number, on: number?) -> { caption: string?, actors: number, actor: string?, rows: { { key: string, label: string, group: string, trailing: string?, disabled: string? } } }` | Every order the selected colonists could be given at a map spot, merged by key: group 'damaging' for ones that take something away, trailing '2 of 3' when only some can, disabled with a reason when none can. Walks the map, so call it once per menu, not per frame. |
 | `view.outlines` | `() -> boolean` | Whether layout outlines are on. |
-| `view.overlay` | `() -> string?` | The label of the field overlay shown, if any. |
+| `view.overlay` | `() -> string?` | The label of the overlay shown, if any: a field's, or "Storage". |
 | `view.paused` | `() -> boolean` | Whether the game is paused. |
 | `view.pawn` | `(id: number) -> Pawn?` | One pawn, or nil if it's gone. |
 | `view.people` | `() -> { Person }` | Every colonist, lean: what a list of them needs (name, job, health, drafted, idle, selected) and none of the needs or skills view.colonists carries. |
@@ -127,6 +127,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `view.stances` | `() -> { Stance }` | The colony's stances, in bar order; `active` is the one it's in. |
 | `view.standing` | `() -> { StandingOrder }` | The standing orders: rules on colony readings, with the reading now, their marks (`band`), what they do (`effect`), a season they wait for, whether the reading has crossed the mark, whether the colony has them on, and whether they're moving priorities now (`acting`). |
 | `view.stats` | `() -> { string }` | Client statistics lines. |
+| `view.stock` | `() -> { StockRow }` | What the colony has, from the stock ledger: one row per thing it has any of, in def order, with units stored and loose, how many stores hold it, and its category. |
 | `view.store` | `(store: number \| StoreRef) -> StoreView?` | Everything the store inspector paints, in one read: a stockpile by id (or { zone = id }) or a container ({ thing = id }). Contents are a container's slots in order (an empty one is { empty = true }) or a stockpile's totals by thing and material. |
 | `view.store_levels` | `() -> { string }` | The store priority scale's level names, lowest first. |
 | `view.stuff` | `() -> { Stuff }` | Materials for the active build tool: what you have, what you'd get. |

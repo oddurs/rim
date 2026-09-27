@@ -278,7 +278,7 @@ fn client_hash(c: &ClientView) -> u64 {
         e.to_bits().get().hash(&mut h);
     }
     c.shift.hash(&mut h);
-    (c.paused, c.speed, c.overlay, c.show_profiler, c.show_devtools).hash(&mut h);
+    (c.paused, c.speed, c.overlay, c.storage_overlay, c.show_profiler, c.show_devtools).hash(&mut h);
     c.hint.hash(&mut h);
     // A new order (or one undone) shows at once, not at the next slow tick.
     c.last_order.as_ref().map(|o| &o.0).hash(&mut h);

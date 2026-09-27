@@ -98,7 +98,8 @@ type Markable = { id: number, urgent: boolean, label: string }
 type Stance = { id: string, label: string, icon: string, active: boolean }
 type Effective = { value: number, why: string }
 type Stuff = { id: string, label: string, color: string, have: number, active: boolean, hp: number, work: number }
-type Hover = { x: number, y: number, terrain: string, shelter: string, readings: { string }, values: { Reading }, things: { string }, takes: string? }
+type Hover = { x: number, y: number, terrain: string, shelter: string, readings: { string }, values: { Reading }, things: { string }, takes: string?, store: StoreRef? }
+type StockRow = { thing: string, label: string, total: number, stored: number, loose: number, stores: number, value: number, category: string?, category_label: string?, category_order: number }
 type Reading = { label: string, value: string }
 type WorkWhy = { work: string, level: number, why: string, picked: boolean, dist: number? }
 type ProfileRow = { name: string, us: number, mod: boolean }
@@ -319,7 +320,7 @@ declare view: {
     orders: (x: number, y: number, on: number?) -> { caption: string?, actors: number, actor: string?, rows: { { key: string, label: string, group: string, trailing: string?, disabled: string? } } },
     -- Whether layout outlines are on.
     outlines: () -> boolean,
-    -- The label of the field overlay shown, if any.
+    -- The label of the overlay shown, if any: a field's, or "Storage".
     overlay: () -> string?,
     -- Whether the game is paused.
     paused: () -> boolean,
@@ -359,6 +360,8 @@ declare view: {
     standing: () -> { StandingOrder },
     -- Client statistics lines.
     stats: () -> { string },
+    -- What the colony has, from the stock ledger: one row per thing it has any of, in def order, with units stored and loose, how many stores hold it, and its category.
+    stock: () -> { StockRow },
     -- Everything the store inspector paints, in one read: a stockpile by id (or { zone = id }) or a container ({ thing = id }). Contents are a container's slots in order (an empty one is { empty = true }) or a stockpile's totals by thing and material.
     store: (store: number | StoreRef) -> StoreView?,
     -- The store priority scale's level names, lowest first.
