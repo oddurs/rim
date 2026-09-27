@@ -42,3 +42,7 @@ and on the events a thread names.
 ## 2026-09-27
 
 Beats offer into core's incident registry, not into a particular pacer: a77aec3a splits the storyteller into the registry (shared vocabulary) and a claimed pacer that spends the tension budget. Whatever pacer holds the storyteller claim sees offers in its pool.
+
+## 2026-09-27
+
+Superseding the earlier note: the storyteller is a singleton kind with a replaceable pacer (a77aec3a), not a claim. Beats still offer into core's incident registry; whichever pacer the one [[storyteller]] names sees them in its pool.

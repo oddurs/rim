@@ -33,3 +33,7 @@ Players manage mods in-game. There is no manual load order (DESIGN.md §10): ord
 ## 2026-09-27
 
 Builds on 73751f4f (the default game is a set), which makes the New colony screen and its Change list of installed mods. This item adds the index, the read-only load order with reasons, and per-field conflict picks to that list rather than building a second mod screen. Sim options (fe54d733) are edited on the New colony screen; after a colony starts, the mod manager shows them read-only and edits only UI options.
+
+## 2026-09-27
+
+Decided 2026-09-27 (modding review, PR #246): the mod manager is where contested slots (dbb92ebe) are picked. Sim picks go to the lockfile, client picks (UI ids, theme tokens) to the player's settings. It lists client-side mods (e4b96647) apart as the player's own, edits player options, and shows colony options (fe54d733) read-only once a colony has started.

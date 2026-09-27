@@ -5,7 +5,7 @@ type: feature
 status: backlog
 milestone: plugin-api
 created: 2026-09-23
-updated: 2026-09-23
+updated: 2026-09-27
 priority: p2
 api: additive
 effort: s
@@ -24,3 +24,7 @@ Break freely before 1.0, but never silently (DESIGN.md §10). A modder should le
 - [ ] A deprecated Luau call or def field keeps working for one minor version
 - [ ] Each use logs once per mod: what to use instead and which api version removes it
 - [ ] `rim check` lists deprecated uses
+
+## 2026-09-27
+
+Scripts follow this deprecation window. Declarative data doesn't need one: it is read through a shim per past API minor (f044951c).

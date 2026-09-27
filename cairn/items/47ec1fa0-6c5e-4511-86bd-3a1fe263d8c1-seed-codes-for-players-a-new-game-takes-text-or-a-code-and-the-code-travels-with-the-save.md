@@ -31,3 +31,7 @@ New game shows a seed code and accepts any text (`hash_str`); the code includes 
 ## 2026-09-27
 
 The New colony screen is built by 73751f4f, whose World row shows the seed as a number until this lands. The code should hash sim mod options (fe54d733) with the mod lock, so a shared code under different options doesn't claim the same map.
+
+## 2026-09-27
+
+Decided 2026-09-27 (modding review, PR #246): the code hashes the colony only: sim-side mods (e4b96647) and colony option values (fe54d733). A player's UI or theme mods never change a seed code.

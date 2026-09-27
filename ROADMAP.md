@@ -30,7 +30,7 @@ The headless engine: defs, mod loading and patching, map, pathing, AI skeleton, 
 
 ## proving-ground — Proving ground
 
-`##········` 16% · 3 of 19 done
+`##········` 15% · 3 of 20 done
 
 Seeds, tests, CI and the merge queue, so that every change is checked the same way on a laptop and in CI, every failure can be brought back with one line, and a PR lands without anyone rebasing it by hand. Design: DESIGN.md §7b, §8a. Plan: https://claude.ai/artifact/KUQcdtWkNG4u63T4S8uPpt
 
@@ -49,6 +49,7 @@ Seeds, tests, CI and the merge queue, so that every change is checked the same w
 - [ ] `c2579dbc` Random streams per purpose: a new draw in one system stops reshuffling the rest <sup>feature · p0 · m · engine</sup>
 - [ ] `dabb52d6` Fuzz the save reader, the def loader and patches, and the Luau boundary <sup>feature · p2 · m · tooling</sup>
 - [ ] `dd48e551` scripts/agent: start, sync, pr and queue for the worktree workflow <sup>chore · p1 · s · tooling</sup>
+- [ ] `f32fa785` A set with no core loads, ticks a day and round-trips a save, in CI <sup>feature · p3 · s · engine</sup>
 - [ ] `e2c56c9a` UI frame-budget test asserts wall-clock time on shared CI runners <sup>bug · p0 · s · tooling</sup>
 - [x] `6b605f27` boundary_refresh_is_cheap asserts wall-clock time and fails under load <sup>bug · p0 · s · engine</sup>
 - [x] `9b435cd8` scripts/task: one gate for the laptop and CI, and a pre-push hook <sup>chore · p0 · s · tooling</sup>
@@ -396,18 +397,22 @@ The run gets a shape: eras, storyteller tiers, defensive strength in the threat 
 
 ## plugin-api — Plugin API
 
-`#####·····` 44% · 12 of 27 done · due 2027-02-01
+`####······` 39% · 12 of 31 done · due 2027-02-01
 
 The API grows up: stat pipeline, script components, custom jobs, needs and def kinds, modules and custom events, a real sandbox with hard limits, factions as data, rim test, typed API. Everything Mood needs, and everything DESIGN.md §10 says a mod from a stranger's repo must be safe to do.
 
+- [ ] `04d659f3` Room roles rank by specificity and priority, never by load order <sup>feature · p2 · s · engine</sup>
+- [ ] `276c8888` Core declares its bare tags; plugins namespace their own <sup>feature · p2 · m · core</sup>
 - [ ] `54ffec74` Event dispatch: handlers indexed by name, unheard events skipped, no allocation per call <sup>perf · p1 · s · engine</sup>
 - [ ] `63d2f10a` API deprecations warn with the replacement and the removal version <sup>feature · p2 · s · engine</sup>
 - [ ] `7f8ce379` Script-defined components on pawns and things <sup>feature · p0 · m · engine</sup>
 - [ ] `978be4f3` Factions as defs, not an engine enum <sup>feature · p0 · m · engine</sup>
 - [ ] `97e9d4a7` Stat pipeline: base values plus registered modifiers <sup>feature · p0 · l · engine</sup>
 - [ ] `99398b15` Priority rules on alerts and Luau predicates <sup>feature · p3 · m · engine</sup>
+- [ ] `a77aec3a` Storyteller as a singleton: core keeps the incident registry, a replaceable pacer decides when incidents fire <sup>feature · p2 · m · core</sup>
 - [ ] `b3df9f85` Mod-defined def kinds with schemas, and namespaced extension fields <sup>feature · p0 · l · engine</sup>
 - [ ] `c65db254` Per-mod budgets: profiler warnings and hard limits for runaway scripts <sup>feature · p1 · m · engine</sup>
+- [ ] `dbb92ebe` One ladder for contested slots: a compatibility mod, the player's pick, then labelled load order <sup>feature · p1 · l · engine</sup>
 - [ ] `e63fd9c3` Script hook for a stage of map generation <sup>feature · p3 · m · engine</sup>
 - [ ] `eb2c9422` Which platforms beyond desktop, and what do they cost? <sup>spike · p2 · s · engine</sup>
 - [ ] `ebb814ad` Sky bodies: a cycle input and coloured sky terms <sup>feature · p2 · m · engine</sup>
@@ -483,15 +488,17 @@ rim.mood — the first first-party plugin. Proves the API: if mood cannot be a p
 
 ## sdk — Modder SDK
 
-`###·······` 25% · 2 of 8 done · due 2027-03-01
+`##········` 20% · 2 of 10 done · due 2027-03-01
 
 Making a mod feels like publishing a small open-source library: rim new, typed Luau, rim test in CI, a template repo with a GitHub Action, a compatibility report and a guide. Runs alongside Mood, which is its first customer.
 
+- [ ] `31827929` Patch lints: set that creates a list, and silent compat patches for absent optional mods <sup>feature · p2 · s · engine</sup>
 - [ ] `6d24a1ec` rim new: a GitHub-ready mod repo in one command <sup>chore · p0 · m · tooling</sup>
 - [ ] `9a4e2f10` Compatibility report: what a mod changes <sup>feature · p1 · s · tooling</sup>
 - [ ] `9f30ab9d` Hot reload of defs and scripts in dev mode <sup>feature · p0 · m · tooling</sup>
 - [ ] `be5845a1` rim: one binary to play, check, test and pack mods <sup>feature · p0 · m · client</sup>
 - [ ] `d26d78a0` Modding guide, tutorial and generated API reference <sup>docs · p1 · m · tooling</sup>
+- [ ] `f044951c` Data outlives code: old API versions' defs and patches load through shims <sup>feature · p1 · m · engine</sup>
 - [ ] `f42fd04a` GitHub Action for mod repos: check and test against supported engine versions <sup>feature · p1 · s · tooling</sup>
 - [x] `2c8ab1ef` Luau types for rim test's API, and type-check tests/ <sup>feature · p1 · s · tooling</sup>
 - [x] `dc32fa23` Weather devtools: force weather, scrub time, channel graphs <sup>chore · p1 · s · tooling</sup>
@@ -519,18 +526,26 @@ Hit the performance budget: benchmark harness, hierarchical pathing, flow fields
 
 ## platform — Modding platform
 
-`##········` 11% · 1 of 9 done · due 2027-07-01
+`#·········` 6% · 1 of 17 done · due 2027-07-01
 
 Mods reach players without a closed store: versioned dependencies, a modlist lockfile, a git-backed mod index, rim add, the in-game mod manager, mod crater, and the WASM tier. See DESIGN.md §10.
 
 - [ ] `02704617` WASM plugin tier with the same API surface <sup>feature · p0 · xl · engine</sup>
+- [ ] `173de74c` Epochs key on a hash of each mod's sim side, not its version string <sup>feature · p1 · m · engine</sup>
 - [ ] `5f7eb168` Capability declarations and trust prompts <sup>feature · p1 · m · engine</sup>
+- [ ] `73751f4f` The default game is a set: New colony names it, and leaving it is labelled <sup>feature · p1 · l · client</sup>
 - [ ] `76a0bc45` Install mods from the index or a git URL: rim add <sup>feature · p0 · m · tooling</sup>
 - [ ] `7f26e2e3` Mod manager: browse, enable and resolve conflicts <sup>feature · p0 · m · client</sup>
 - [ ] `9e979a26` Modlist lockfile: exact versions, content hashes and conflict choices <sup>feature · p0 · m · engine</sup>
 - [ ] `b7f5cde1` Mod index: a git repo of mod entries, checked by CI <sup>feature · p0 · m · tooling</sup>
+- [ ] `d137353c` Opening a colony under other mods: say what changed before loading, and open it as saved <sup>feature · p1 · m · client</sup>
+- [ ] `d35b101b` migrates_from and declarative renames: a fork adopts a removed mod's things <sup>feature · p2 · m · engine</sup>
 - [ ] `d80bce19` Mod crater: engine CI runs indexed mods' tests before a change lands <sup>feature · p1 · m · tooling</sup>
 - [ ] `dbb8f031` Mod dependencies with version ranges, optional deps and incompatibilities <sup>feature · p0 · m · engine</sup>
+- [ ] `e4b96647` Mod sides: a mod with only ui/ is the player's, not the colony's <sup>feature · p1 · m · engine</sup>
+- [ ] `ead42976` A mod store keyed by hash: old versions stay while a save uses them, and Open as saved fetches what's missing <sup>feature · p2 · l · tooling</sup>
+- [ ] `f2a251f6` The mod crater publishes its results to the index, and the game marks known-broken mods <sup>feature · p2 · s · tooling</sup>
+- [ ] `fe54d733` Mod options: colony, live and player scopes, and patches gated on colony options <sup>feature · p2 · m · engine</sup>
 - [x] `c8598bbd` Mod packaging and distribution <sup>spike · p1 · m · tooling</sup>
 
 ## story — Story
