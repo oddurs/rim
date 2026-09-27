@@ -750,6 +750,22 @@ impl UiVm {
             Some(e) => UiAction::ClearPriority(e, work),
             None => return Err(rt("bad entity id")),
         });
+        // Roles are 1-based in Luau, as board.roles lists them.
+        let role = |r: u16| r.checked_sub(1).ok_or_else(|| rt("roles count from 1"));
+        act!("assign_role", (u64, u16), |(id, r)| match Entity::from_bits(id) {
+            Some(e) => UiAction::AssignWorkRole(e, role(r)?),
+            None => return Err(rt("bad entity id")),
+        });
+        act!("set_role_priority", (u16, String, Option<u8>), |(r, work, level)| UiAction::SetRolePriority(
+            role(r)?,
+            work,
+            level
+        ));
+        act!("role_from_colonist", (String, u64), |(label, id)| match Entity::from_bits(id) {
+            Some(e) => UiAction::CreateRoleFromPawn(label, e),
+            None => return Err(rt("bad entity id")),
+        });
+        act!("role_from_role", (String, u16), |(label, r)| UiAction::CreateRoleFromRole(label, role(r)?));
         act!("set_stance", String, |id| UiAction::SetStance(id));
         act!("zone_allow", (u32, String, bool), |(zone, item, on)| UiAction::ZoneAllow(zone, item, on));
         act!("store_level", (u32, u8), |(zone, level)| UiAction::StoreLevel(zone, level));
@@ -1313,6 +1329,7 @@ impl UiVm {
                 col.set("icon", d.icon.as_str())?;
                 col.set("skill", d.skill_r.map(|k| defs.skills[k as usize].label.clone()))?;
                 col.set("waiting", waiting[wt as usize])?;
+                col.set("default", d.priority.min(levels))?;
                 col.set("on", on[wt as usize].0)?;
                 col.set("high", on[wt as usize].1)?;
                 cols.push(col)?;
@@ -1327,6 +1344,12 @@ impl UiVm {
                 role.set("label", r.label.as_str())?;
                 role.set("order", r.order)?;
                 role.set("edited", r.edited)?;
+                role.set("planned", r.planner.is_some())?;
+                let set = lua.create_table()?;
+                for &(wt, l) in &r.priorities {
+                    set.set(defs.work_types[wt as usize].id.as_str(), l)?;
+                }
+                role.set("levels", set)?;
                 roles.push(role)?;
             }
             t.set("roles", roles)?;

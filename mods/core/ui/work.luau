@@ -27,13 +27,17 @@
 -- Tabs are `core:work.lens.<id>`, sorted by `order` (core's are 10 and
 -- 20), then in the order they were added.
 local kit = require("@core/ui/kit")
+local menus = require("@core/ui/menus")
 local row, col, label, button = kit.row, kit.col, kit.label, kit.button
 local t = ui.t
 
 local NAME_W = 110
+local ROLE_W = 76
 local CELL_W = 56
 local CELL_H = 20
 local JOB_W = 150
+-- Member buttons on one line of a role card.
+local CHIPS_PER_LINE = 7
 
 local function show(n: number): string
 	return if n == 0 then "–" else tostring(n)
@@ -166,6 +170,99 @@ function work.lens(def)
 	end)
 end
 
+-- The board's rows grouped by role, in the roles' order; within a role,
+-- as the colony lists them.
+local function by_role(b)
+	local rank = {}
+	for i, r in b.roles do
+		rank[r.index] = r.order * 1000 + i
+	end
+	local rows = {}
+	for i, r in b.rows do
+		table.insert(rows, { row = r, key = (rank[r.role or 0] or 0) * 1000 + i })
+	end
+	table.sort(rows, function(a, z)
+		return a.key < z.key
+	end)
+	local out = {}
+	for _, x in rows do
+		table.insert(out, x.row)
+	end
+	return out
+end
+
+-- A colonist's pins: work id to level.
+local function pins_of(b, r)
+	local pins, n = {}, 0
+	for c, k in b.cols do
+		if r.cells[c].pinned then
+			pins[k.id] = r.cells[c].base
+			n += 1
+		end
+	end
+	return pins, n
+end
+
+-- Two colonists in the same role pinned into the same shape: at least two
+-- pins each, differing in at most one work type. The first such pair the
+-- player hasn't said "Not now" to.
+local function alike(b)
+	local no = ui.state("core:work.alike_no", {})
+	for i = 1, #b.rows do
+		local a = b.rows[i]
+		local pa, na = pins_of(b, a)
+		if na >= 2 then
+			for j = i + 1, #b.rows do
+				local z = b.rows[j]
+				local pz, nz = pins_of(b, z)
+				if nz >= 2 and z.role == a.role and not no[a.id .. ":" .. z.id] then
+					local differ = 0
+					for _, k in b.cols do
+						if pa[k.id] ~= pz[k.id] then
+							differ += 1
+						end
+					end
+					if differ <= 1 then
+						return a, z
+					end
+				end
+			end
+		end
+	end
+	return nil, nil
+end
+
+-- The offer to make a role from two colonists who work alike.
+local function alike_offer(b)
+	local a, z = alike(b)
+	if not a then
+		return nil
+	end
+	local n = #b.roles + 1
+	return row({ id = "core:work.alike", gap = "s", align = "center" }, {
+		label(string.format(t("core:work.alike", "%s and %s work alike."), a.name, z.name), { weight = "strong" }),
+		label(t("core:work.alike_why", "A role changes them together, and new settlers can join it."), { size = "small", color = "muted" }),
+		button({
+			id = "core:work.alike.make",
+			label = t("core:work.alike_make", "Make a role from them"),
+			on_click = function()
+				act.role_from_colonist(string.format(t("core:work.crew", "Crew %d"), n), a.id)
+				act.assign_role(a.id, n)
+				act.assign_role(z.id, n)
+			end,
+		}),
+		button({
+			id = "core:work.alike.no",
+			label = t("core:work.alike_no", "Not now"),
+			on_click = function()
+				local no = table.clone(ui.state("core:work.alike_no", {}))
+				no[a.id .. ":" .. z.id] = true
+				ui.set_state("core:work.alike_no", no)
+			end,
+		}),
+	})
+end
+
 -- Show one colonist on the Person lens.
 local function show_person(id: number)
 	ui.set_state("core:work.person", id)
@@ -174,7 +271,8 @@ end
 
 -- The board: a row per colonist, a column per work type, painted.
 local function board_lens(view, b)
-	local levels, labels, cols, rows = b.levels, b.labels, b.cols, b.rows
+	local levels, labels, cols = b.levels, b.labels, b.cols
+	local rows = by_role(b)
 
 	-- Column headers: the label, then what's waiting.
 	local header = ui.grid({
@@ -277,6 +375,20 @@ local function board_lens(view, b)
 			return nil
 		end,
 	})
+	-- Each role's name where its group starts.
+	local role_col = ui.grid({
+		id = "core:work.rolecol",
+		rows = #rows,
+		cols = 1,
+		cell_w = ROLE_W,
+		cell_h = CELL_H,
+		gap = 2,
+		cell = function(r, _c)
+			local label = rows[r].role_label or ""
+			local first = r == 1 or rows[r - 1].role ~= rows[r].role
+			return { text = if first then label else "", color = "muted", tip = label }
+		end,
+	})
 	local jobs = ui.grid({
 		id = "core:work.jobs",
 		rows = #rows,
@@ -290,10 +402,11 @@ local function board_lens(view, b)
 	})
 
 	return col({ gap = "s" }, {
+		alike_offer(b),
 		brush_bar(levels, labels),
-		row({ gap = "s" }, { row({ w = NAME_W }), header }),
+		row({ gap = "s" }, { row({ w = ROLE_W + NAME_W + 4 }), header }),
 		-- The window scrolls; the wheel over a cell nudges it instead.
-		row({ gap = "s" }, { names, grid, jobs }),
+		row({ gap = "s" }, { role_col, names, grid, jobs }),
 	})
 end
 
@@ -359,7 +472,143 @@ local function person_lens(_view, b)
 	return col({ gap = "s" }, items)
 end
 
+-- Roles: a card per role. A fixed role's levels as shelves of tokens (a
+-- click moves one a level on; italic ones are the work type's default); a
+-- planned role says what its planner gave each member first. Members are
+-- buttons: pick one up, then put them in another role.
+local function roles_lens(_view, b)
+	local carry = ui.state("core:work.carry", nil)
+	local carried = nil
+	for _, r in b.rows do
+		if r.id == carry then
+			carried = r
+		end
+	end
+	local order = table.clone(b.roles)
+	table.sort(order, function(a, z)
+		if a.order ~= z.order then
+			return a.order < z.order
+		end
+		return a.index < z.index
+	end)
+	local cards = {}
+	for _, role in order do
+		local members = {}
+		for _, r in b.rows do
+			if r.role == role.index then
+				table.insert(members, r)
+			end
+		end
+		local head = {
+			label(role.label, { weight = "strong" }),
+			label(
+				if role.planned
+					then t("core:work.role_planned", "planned hourly")
+					elseif role.id == nil then t("core:work.role_own", "yours")
+					elseif role.edited then t("core:work.role_edited", "edited")
+					else "",
+				{ size = "small", color = "muted" }
+			),
+			label(string.format(t("core:work.role_members", "%d"), #members), { size = "small", color = "faint" }),
+		}
+		if carried and carried.role ~= role.index then
+			table.insert(
+				head,
+				button({
+					id = "core:work.role.put." .. role.index,
+					label = string.format(t("core:work.role_put", "Put %s here"), carried.name),
+					on_click = function()
+						act.assign_role(carried.id, role.index)
+						ui.set_state("core:work.carry", nil)
+					end,
+				})
+			)
+		end
+		local body = { row({ gap = "s", align = "center" }, head) }
+		if role.planned then
+			for _, m in members do
+				local firsts = {}
+				for c, k in b.cols do
+					if m.cells[c].base == 1 then
+						table.insert(firsts, k.label)
+					end
+				end
+				table.insert(
+					body,
+					label(
+						string.format(
+							t("core:work.role_first", "%s: %s"),
+							m.name,
+							if #firsts > 0 then table.concat(firsts, ", ") .. " " .. t("core:work.first", "first") else t("core:work.nothing_first", "nothing at First")
+						),
+						{ size = "small", color = "muted" }
+					)
+				)
+			end
+			table.insert(body, label(t("core:work.role_planned_how", "Levels come from skill and what's waiting. Pin a cell on the board to overrule one."), { size = "small", color = "faint" }))
+		else
+			for shelf = 1, b.levels + 1 do
+				local level = if shelf > b.levels then 0 else shelf
+				local tokens = {}
+				for _, k in b.cols do
+					local set = role.levels[k.id]
+					local at = set or k.default
+					if at == level then
+						table.insert(
+							tokens,
+							button({
+								id = "core:work.role." .. role.index .. "." .. k.id,
+								label = k.label,
+								strong = set ~= nil,
+								tooltip = if set then t("core:work.role_set", "Set by the role") else t("core:work.role_default", "The work type's default"),
+								on_click = function()
+									local nxt = next_level(at, b.levels)
+									act.set_role_priority(role.index, k.id, if nxt == k.default then nil else nxt)
+								end,
+							})
+						)
+					end
+				end
+				local name = if level == 0 then t("core:work.never", "Never") else b.labels[level] or tostring(level)
+				table.insert(
+					body,
+					row({ gap = "xs", align = "center" }, {
+						row({ w = 90 }, { label(name, { size = "small", color = "muted" }) }),
+						row({ gap = "xs" }, tokens),
+					})
+				)
+			end
+		end
+		local chips = {}
+		for _, m in members do
+			local _, n = pins_of(b, m)
+			table.insert(
+				chips,
+				button({
+					id = "core:work.member." .. m.id,
+					label = if n > 0 then string.format("%s •%d", m.name, n) else m.name,
+					active = carry == m.id,
+					tooltip = if n > 0 then string.format(t("core:work.member_pins", "%d pinned; the role doesn't move those"), n) else nil,
+					on_click = function()
+						ui.set_state("core:work.carry", if carry == m.id then nil else m.id)
+					end,
+				})
+			)
+		end
+		-- Rows don't wrap, so a big role's members come a few to a line.
+		for i = 1, #chips, CHIPS_PER_LINE do
+			table.insert(body, row({ gap = "xs", align = "center" }, table.move(chips, i, math.min(i + CHIPS_PER_LINE - 1, #chips), 1, {})))
+		end
+		table.insert(cards, col({ id = "core:work.role." .. role.index, gap = "xs", pad = "s", border = "line", radius = "radius" }, body))
+	end
+	local hint = if carried
+		then string.format(t("core:work.carrying", "Moving %s: pick their new role."), carried.name)
+		else t("core:work.roles_hint", "Click a colonist to move them to another role.")
+	return col({ gap = "s" }, { label(hint, { size = "small", color = "muted" }), table.unpack(cards) })
+end
+
 work.lens({ id = "core:work.board", label = t("core:work.lens_board", "Board"), order = 10, draw = board_lens })
+work.lens({ id = "core:work.roles", label = t("core:work.lens_roles", "Roles"), order = 15, draw = roles_lens })
 work.lens({ id = "core:work.person", label = t("core:work.lens_person", "Person"), order = 20, draw = person_lens })
 
 -- The Work screen: the stance, the lenses as tabs, and the lens shown.
@@ -394,5 +643,52 @@ ui.window("core:work", { title = t("core:work.title", "Work"), w = 760, h = 860,
 end)
 
 require("@core/ui/screens").add({ id = "core:work", label = t("core:keys.work", "Work"), key = "p", order = 10 })
+
+-- A colonist's menu: their role, their pins, a role made from them.
+menus.add("colonist", {
+	id = "core:colonist.roles",
+	group = "manage",
+	rows = function(ctx)
+		local b = view.board()
+		local me = nil
+		for _, r in b.rows do
+			if r.id == ctx.id then
+				me = r
+			end
+		end
+		if not me then
+			return {}
+		end
+		local rows = {}
+		for _, role in b.roles do
+			if role.index ~= me.role then
+				table.insert(rows, {
+					label = string.format(t("core:colonist.role", "Role: %s"), role.label),
+					run = function()
+						act.assign_role(me.id, role.index)
+					end,
+				})
+			end
+		end
+		local pins, n = pins_of(b, me)
+		if n > 0 then
+			table.insert(rows, {
+				label = t("core:colonist.hand_back", "Hand everything back"),
+				run = function()
+					for work in pins do
+						act.clear_priority(me.id, work)
+					end
+				end,
+			})
+		end
+		table.insert(rows, {
+			label = t("core:colonist.make_role", "Make a role from this colonist"),
+			run = function()
+				act.role_from_colonist(string.format(t("core:work.crew", "Crew %d"), #b.roles + 1), me.id)
+			end,
+		})
+		return rows
+	end,
+})
 
 return work

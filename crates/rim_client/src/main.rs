@@ -1476,6 +1476,18 @@ fn apply_ui(app: &mut App, a: UiAction) {
                 app.sim.push(Command::SetPriority { pawn: e, work: w, level });
             }
         }
+        UiAction::AssignWorkRole(pawn, role) => app.sim.push(Command::AssignWorkRole { pawn, role }),
+        UiAction::SetRolePriority(role, work, level) => {
+            if let Some(w) = app.sim.world.defs.lookup("work_type", &work) {
+                app.sim.push(Command::SetRolePriority { role, work: w, level });
+            }
+        }
+        UiAction::CreateRoleFromPawn(label, e) => {
+            app.sim.push(Command::CreateWorkRole { label, from: rim_sim::command::RoleSource::Pawn(e) })
+        }
+        UiAction::CreateRoleFromRole(label, r) => {
+            app.sim.push(Command::CreateWorkRole { label, from: rim_sim::command::RoleSource::Role(r) })
+        }
         UiAction::ClearPriority(e, work) => {
             if let Some(w) = app.sim.world.defs.lookup("work_type", &work) {
                 app.sim.push(Command::ClearPriority { pawn: e, work: w });

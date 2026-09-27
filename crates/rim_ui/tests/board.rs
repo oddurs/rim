@@ -379,3 +379,84 @@ fn a_name_opens_the_person_lens() {
     assert!(picked[2] > 0.0);
     assert!(!ui.is_open("core:work.ranked"), "no separate window");
 }
+
+/// Put a colonist in a role by label, as the client would.
+fn assign(sim: &mut Sim, pawn: rim_sim::hecs::Entity, label: &str) -> u16 {
+    let role = sim.world.work_roles.iter().position(|r| r.label == label).unwrap() as u16;
+    sim.push(Command::AssignWorkRole { pawn, role });
+    sim.step();
+    role
+}
+
+/// Rows are grouped by role, with the role's name where its group starts.
+#[test]
+fn the_board_groups_rows_by_role() {
+    let (mut sim, mut ui, cv) = board(3);
+    let v: Vec<_> = sim.world.colonists().collect();
+    assign(&mut sim, v[0], "Forager");
+    assign(&mut sim, v[1], "Builder");
+    frame(&mut ui, &sim, &cv, Input { time: 10.0, ..Default::default() });
+    let texts: Vec<String> = (1..=3).map(|r| ui.grid_cell("core:work.rolecol", r, 1).unwrap().text).collect();
+    let names: Vec<String> = (1..=3).map(|r| ui.grid_cell("core:work.names", r, 1).unwrap().text).collect();
+    let name = |e| sim.world.ecs.get::<&rim_sim::world::Pawn>(e).unwrap().name.clone();
+    assert_eq!(names, [name(v[2]), name(v[1]), name(v[0])], "in role order: the default first, then Builder, Forager");
+    assert_eq!(texts[1], "Builder");
+    assert_eq!(texts[2], "Forager");
+}
+
+/// In the Roles lens, a colonist is picked up and put in another role; a
+/// role's token cycles the role's level for everyone in it.
+#[test]
+fn the_roles_lens_moves_colonists_and_edits_roles() {
+    let (sim, mut ui, mut cv) = board(2);
+    let pawn = sim.world.colonists().next().unwrap();
+    let tab = ui.find("core:work.lens.core:work.roles").expect("a Roles tab");
+    click(&mut ui, &sim, &mut cv, centre(tab));
+    frame(&mut ui, &sim, &cv, Input { time: 5.0, ..Default::default() });
+    let chip = ui.find(&format!("core:work.member.{}", pawn.to_bits().get())).expect("a chip per member");
+    click(&mut ui, &sim, &mut cv, centre(chip));
+    frame(&mut ui, &sim, &cv, Input { time: 6.0, ..Default::default() });
+    let builder = sim.world.work_roles.iter().position(|r| r.label == "Builder").unwrap() as u16;
+    let put = ui.find(&format!("core:work.role.put.{}", builder + 1)).expect("Put ... here on the other cards");
+    let actions = click(&mut ui, &sim, &mut cv, centre(put));
+    assert_eq!(actions, vec![UiAction::AssignWorkRole(pawn, builder)]);
+
+    // Builder hauls Soon; a click moves it to Later, the default, so the
+    // role leaves it to the default.
+    let haul = ui.find(&format!("core:work.role.{}.core:haul", builder + 1)).unwrap();
+    let actions = click(&mut ui, &sim, &mut cv, centre(haul));
+    assert_eq!(actions, vec![UiAction::SetRolePriority(builder, "core:haul".into(), None)]);
+    let mine = ui.find(&format!("core:work.role.{}.core:mine", builder + 1)).unwrap();
+    let actions = click(&mut ui, &sim, &mut cv, centre(mine));
+    assert_eq!(
+        actions,
+        vec![UiAction::SetRolePriority(builder, "core:mine".into(), None)],
+        "Soon to Later: the default"
+    );
+}
+
+/// Two colonists pinned into the same shape are offered a role of their
+/// own, once.
+#[test]
+fn two_alike_are_offered_a_role() {
+    let (mut sim, mut ui, mut cv) = board(3);
+    let v: Vec<_> = sim.world.colonists().collect();
+    let d = sim.world.defs.clone();
+    for &e in &v[..2] {
+        sim.push(Command::SetPriority { pawn: e, work: d.lookup("work_type", "core:build").unwrap(), level: 1 });
+        sim.push(Command::SetPriority { pawn: e, work: d.lookup("work_type", "core:haul").unwrap(), level: 2 });
+    }
+    sim.step();
+    frame(&mut ui, &sim, &cv, Input { time: 10.0, ..Default::default() });
+    let make = ui.find("core:work.alike.make").expect("the offer");
+    let n = sim.world.work_roles.len() as u16;
+    let actions = click(&mut ui, &sim, &mut cv, centre(make));
+    assert_eq!(actions.len(), 3, "{actions:?}");
+    assert!(matches!(&actions[0], UiAction::CreateRoleFromPawn(_, e) if *e == v[0]));
+    assert_eq!(&actions[1..], [UiAction::AssignWorkRole(v[0], n), UiAction::AssignWorkRole(v[1], n)]);
+
+    let no = ui.find("core:work.alike.no").unwrap();
+    click(&mut ui, &sim, &mut cv, centre(no));
+    frame(&mut ui, &sim, &cv, Input { time: 20.0, ..Default::default() });
+    assert!(ui.find("core:work.alike").is_none(), "not again after Not now");
+}

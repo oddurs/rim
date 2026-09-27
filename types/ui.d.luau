@@ -68,10 +68,10 @@ type Tool = {
 type Zone = { id: number, name: string, cells: number, allows: { [string]: boolean }, level: number, level_label: string }
 type Item = { id: string, label: string, color: string }
 type WorkType = { id: string, label: string, icon: string, order: number, default: number }
-type BoardCol = { id: string, label: string, icon: string, skill: string?, waiting: number, on: number, high: number }
+type BoardCol = { id: string, label: string, icon: string, skill: string?, waiting: number, default: number, on: number, high: number }
 type BoardCell = { base: number, value: number, inherit: number, pinned: boolean, planned: boolean, why: string, skill: number?, skill_frac: number? }
 type BoardRow = { id: number, name: string, job: string, role: number?, role_label: string?, cells: { BoardCell } }
-type BoardRole = { index: number, id: string?, label: string, order: number, edited: boolean }
+type BoardRole = { index: number, id: string?, label: string, order: number, edited: boolean, planned: boolean, levels: { [string]: number } }
 type Board = { levels: number, labels: { string }, high: number, cols: { BoardCol }, rows: { BoardRow }, roles: { BoardRole } }
 type Stance = { id: string, label: string, icon: string, active: boolean }
 type Effective = { value: number, why: string }
@@ -160,6 +160,8 @@ declare ui: {
 declare act: {
     -- Run the game forward (devtools).
     advance: (hours: number) -> (),
+    -- Put a colonist in a work role, by its index in view.board().roles. Their pins stay.
+    assign_role: (id: number, role: number) -> (),
     -- Hand a colonist's work type back: forget their own setting, so they follow what they'd inherit.
     clear_priority: (id: number, work: string) -> (),
     -- Show the next field overlay.
@@ -178,6 +180,10 @@ declare act: {
     preview: (key: string?) -> (),
     -- Draw the world at this fraction of the screen's pixels, 0.25 to 1; the UI stays sharp. Saved for the player.
     render_scale: (scale: number) -> (),
+    -- Make a work role of the player's from a colonist's levels (role and pins), keeping what differs from the defaults. It joins the end of view.board().roles.
+    role_from_colonist: (label: string, id: number) -> (),
+    -- Make a work role of the player's, copying another. It joins the end of view.board().roles.
+    role_from_role: (label: string, role: number) -> (),
     -- What a scroll does on the map: 'auto' (a trackpad pans, a wheel zooms), 'zoom' or 'pan'. Saved with the player's settings.
     scroll_mode: (mode: string) -> (),
     -- Select a pawn or thing, or nothing. With add, put a colonist into the selection or take them out of it (a shift-click).
@@ -188,6 +194,8 @@ declare act: {
     set_overlay: (index: number?) -> (),
     -- Set a colonist's priority for a work type: 1 first, 0 never.
     set_priority: (id: number, work: string, level: number) -> (),
+    -- Set a work role's level for a work type, or nil to leave it to the default. A planned role (Auto) ignores it.
+    set_role_priority: (role: number, work: string, level: number?) -> (),
     -- Put the colony in a stance: its priority rules hold until another.
     set_stance: (id: string) -> (),
     -- Set the game speed.

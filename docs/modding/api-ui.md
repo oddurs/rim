@@ -8,6 +8,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | Name | Type | What it does |
 |---|---|---|
 | `act.advance` | `(hours: number) -> ()` | Run the game forward (devtools). |
+| `act.assign_role` | `(id: number, role: number) -> ()` | Put a colonist in a work role, by its index in view.board().roles. Their pins stay. |
 | `act.clear_priority` | `(id: number, work: string) -> ()` | Hand a colonist's work type back: forget their own setting, so they follow what they'd inherit. |
 | `act.cycle_overlay` | `() -> ()` | Show the next field overlay. |
 | `act.draft` | `(id: number, on: boolean) -> ()` | Draft or undraft a colonist. |
@@ -17,11 +18,14 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `act.order` | `(key: string, x: number, y: number, on: number?) -> ()` | Give the selected colonists the order named key at a map spot (a row from view.orders), each one it's on offer to. |
 | `act.preview` | `(key: string?) -> ()` | Point the materials view (view.stuff) at a buildable by its tool key, for a card describing it; nil goes back to the tool in hand. |
 | `act.render_scale` | `(scale: number) -> ()` | Draw the world at this fraction of the screen's pixels, 0.25 to 1; the UI stays sharp. Saved for the player. |
+| `act.role_from_colonist` | `(label: string, id: number) -> ()` | Make a work role of the player's from a colonist's levels (role and pins), keeping what differs from the defaults. It joins the end of view.board().roles. |
+| `act.role_from_role` | `(label: string, role: number) -> ()` | Make a work role of the player's, copying another. It joins the end of view.board().roles. |
 | `act.scroll_mode` | `(mode: string) -> ()` | What a scroll does on the map: 'auto' (a trackpad pans, a wheel zooms), 'zoom' or 'pan'. Saved with the player's settings. |
 | `act.select` | `(id: number?, add: boolean?) -> ()` | Select a pawn or thing, or nothing. With add, put a colonist into the selection or take them out of it (a shift-click). |
 | `act.send` | `(name: string, data: {[string]: any}?) -> ()` | Send an event to your mod's own sim scripts ("your_mod:event"), as a player command. |
 | `act.set_overlay` | `(index: number?) -> ()` | Show a field overlay by its index in view.fields(), or none. |
 | `act.set_priority` | `(id: number, work: string, level: number) -> ()` | Set a colonist's priority for a work type: 1 first, 0 never. |
+| `act.set_role_priority` | `(role: number, work: string, level: number?) -> ()` | Set a work role's level for a work type, or nil to leave it to the default. A planned role (Auto) ignores it. |
 | `act.set_stance` | `(id: string) -> ()` | Put the colony in a stance: its priority rules hold until another. |
 | `act.speed` | `(speed: number) -> ()` | Set the game speed. |
 | `act.store_level` | `(zone: number, level: number) -> ()` | Put a stockpile at a level of the store priority scale (0 is lowest). Stacks only move to a higher one. |

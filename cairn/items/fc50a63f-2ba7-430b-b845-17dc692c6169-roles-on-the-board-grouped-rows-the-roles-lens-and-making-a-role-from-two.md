@@ -2,13 +2,15 @@
 id: fc50a63f-2ba7-430b-b845-17dc692c6169
 title: 'Roles on the board: grouped rows, the Roles lens, and making a role from two'
 type: feature
-status: backlog
+status: done
 milestone: work
+assignee: Oddur Sigurdsson
 depends_on:
 - 4c9fc19b-3b7b-4bc3-93b4-7b5d600cbc8d
 - 992ecb92-f676-4a7b-af03-c6829269c6c2
 created: 2026-09-26
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p1
 api: none
 effort: m
@@ -30,7 +32,15 @@ Roles only save effort if the board shows them and editing one is direct. DESIGN
 
 ## Acceptance criteria
 
-- [ ] Dragging a colonist onto a role card sends `AssignWorkRole` and keeps their pins (UI test)
-- [ ] Clicking a role token changes every member without a pin (UI test)
-- [ ] The suggestion appears for two matching colonists and not again after "Not now"
-- [ ] Autotest screenshots of the board and the Roles lens
+- [x] Dragging a colonist onto a role card sends `AssignWorkRole` and keeps their pins (UI test)
+- [x] Clicking a role token changes every member without a pin (UI test)
+- [x] The suggestion appears for two matching colonists and not again after "Not now"
+- [x] Autotest screenshots of the board and the Roles lens
+
+## 2026-09-26
+
+No drag and drop in the UI engine, so moving a colonist between roles is pick up and put down: click their chip, then 'Put X here' on another card. The colonist menu also has Role rows. The why panel's role select waits for the why panel itself; the context menu covers it meanwhile. Rows don't wrap, so member chips come seven to a line.
+
+## 2026-09-26
+
+The screenshots of the board and the Roles lens come from the UI shots test (work_board_4_roles.png), not the client autotest sweep.
