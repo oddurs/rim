@@ -296,7 +296,7 @@ The run gets a shape: eras, storyteller tiers, defensive strength in the threat 
 
 - [ ] `1aab96a4` Seasonal storyteller: incidents that know the time of year <sup>feature · p2 · s · core</sup>
 - [ ] `3489c778` Era defs with conditions <sup>feature · p0 · m · engine</sup>
-- [ ] `58ba2b7a` Chronicle: notable events and an end-of-run story <sup>feature · p1 · m · engine</sup>
+- [ ] `58ba2b7a` Chronicle: notable events and an end-of-run story <sup>feature · p1 · l · engine</sup>
 - [ ] `7b51525f` Defensive strength in the threat model <sup>feature · p0 · m · core</sup>
 - [ ] `bc38c90a` Settler quality scales with wealth <sup>content · p1 · s · core</sup>
 - [ ] `f84ff7d3` era_reached event and storyteller tiers <sup>feature · p0 · m · core</sup>
@@ -304,10 +304,11 @@ The run gets a shape: eras, storyteller tiers, defensive strength in the threat 
 
 ## plugin-api — Plugin API
 
-`#####·····` 48% · 12 of 25 done · due 2027-02-01
+`#####·····` 44% · 12 of 27 done · due 2027-02-01
 
 The API grows up: stat pipeline, script components, custom jobs, needs and def kinds, modules and custom events, a real sandbox with hard limits, factions as data, rim test, typed API. Everything Mood needs, and everything DESIGN.md §10 says a mod from a stranger's repo must be safe to do.
 
+- [ ] `54ffec74` Event dispatch: handlers indexed by name, unheard events skipped, no allocation per call <sup>perf · p1 · s · engine</sup>
 - [ ] `63d2f10a` API deprecations warn with the replacement and the removal version <sup>feature · p2 · s · engine</sup>
 - [ ] `7f8ce379` Script-defined components on pawns and things <sup>feature · p0 · m · engine</sup>
 - [ ] `978be4f3` Factions as defs, not an engine enum <sup>feature · p0 · m · engine</sup>
@@ -319,6 +320,7 @@ The API grows up: stat pipeline, script components, custom jobs, needs and def k
 - [ ] `eb2c9422` Which platforms beyond desktop, and what do they cost? <sup>spike · p2 · s · engine</sup>
 - [ ] `ebb814ad` Sky bodies: a cycle input and coloured sky terms <sup>feature · p2 · m · engine</sup>
 - [ ] `ed876ad7` Monochrome icon set with mod-supplied icons <sup>feature · p2 · m · core</sup>
+- [ ] `fac45b63` rim.pawn: scripts read a pawn's place, needs, skills, traits and job <sup>feature · p0 · m · engine</sup>
 - [ ] `fdafcb10` Custom jobs and work givers from Luau <sup>feature · p0 · l · engine</sup>
 - [ ] `fecf1c87` Custom needs with script satisfiers <sup>feature · p0 · m · engine</sup>
 - [x] `01e4d9fe` Text input the engine owns <sup>feature · p1 · m · engine</sup>
@@ -428,6 +430,54 @@ Mods reach players without a closed store: versioned dependencies, a modlist loc
 - [ ] `d80bce19` Mod crater: engine CI runs indexed mods' tests before a change lands <sup>feature · p1 · m · tooling</sup>
 - [ ] `dbb8f031` Mod dependencies with version ranges, optional deps and incompatibilities <sup>feature · p0 · m · engine</sup>
 - [x] `c8598bbd` Mod packaging and distribution <sup>spike · p1 · m · tooling</sup>
+
+## story — Story
+
+`··········` 0% · 0 of 41 done
+
+Every run leaves a story you can take apart: perception, memories, relations, mourning, threads and text written from intents (DESIGN.md §4g).
+
+- [ ] `00a9f32c` Graves, burial and funerals <sup>feature · p1 · l · plugin</sup>
+- [ ] `03e95fe7` Epitaphs in the chronicle <sup>feature · p2 · s · plugin</sup>
+- [ ] `05bffb6f` Procedural premises: a seeded crew with backgrounds, bonds and a secret <sup>feature · p2 · m · plugin</sup>
+- [ ] `0721dbea` mourning plugin: grief as a phased thought, scaled by bond <sup>feature · p0 · m · plugin</sup>
+- [ ] `076fca10` Survey Crew: an example story package with three threads and its tests <sup>content · p1 · m · plugin</sup>
+- [ ] `151b41b0` Shared experience: fighting, starving and burying together build bonds <sup>feature · p1 · s · plugin</sup>
+- [ ] `17009725` Memories: the event log indexed by person, thing, place and date <sup>feature · p0 · m · engine</sup>
+- [ ] `1da662ac` Dev story console: fire a beat, add a memory, set a relation, as commands <sup>feature · p1 · s · tooling</sup>
+- [ ] `1e35144d` Speech from intents: bubbles and the social log render through the writer <sup>feature · p1 · m · client</sup>
+- [ ] `23a3d67c` Story inspector: why someone feels, likes and remembers <sup>feature · p0 · l · client</sup>
+- [ ] `27499214` Speech acts: chat, joke, complain, comfort, insult, confide, apologise, confess <sup>content · p1 · m · plugin</sup>
+- [ ] `308d1aab` social plugin: opinion from remembered reasons, and bonds as defs <sup>feature · p0 · l · plugin</sup>
+- [ ] `39915ec5` Traits: pawns carry trait ids; core declares the kind and the founder <sup>feature · p0 · m · engine</sup>
+- [ ] `41ef9b51` Interactions: staggered social acts picked from data, evaluated in Rust <sup>feature · p0 · l · engine</sup>
+- [ ] `4ce94bd2` English text packs for core and the story plugins, to the craft rules <sup>content · p1 · l · plugin</sup>
+- [ ] `55b5479b` Modding guide: premises, threads, speech acts, text packs and writers <sup>docs · p1 · m · tooling</sup>
+- [ ] `59c9329d` Contrast: thoughts measured against a person's recent average <sup>feature · p2 · s · plugin</sup>
+- [ ] `6412b135` Witnesses: who saw an event <sup>feature · p0 · m · engine</sup>
+- [ ] `66617791` A death leaves a body that remembers who it was <sup>feature · p0 · m · engine</sup>
+- [ ] `6b059681` Story on the benchmark: all story systems within 0.15 ms a tick <sup>perf · p0 · m · tooling</sup>
+- [ ] `801c8f78` Relations: sparse values between two entities, built from remembered reasons <sup>feature · p0 · l · engine</sup>
+- [ ] `95929d9b` Emotion on the body: posture, pace and where someone sits <sup>feature · p3 · m · client</sup>
+- [ ] `95e2f7d4` Grief styles: withdraw, keep vigil, overwork, take over, keep a memento, blame <sup>feature · p2 · m · plugin</sup>
+- [ ] `96db8898` Claims: defs that exclude each other, reported by the loader and picked by the player <sup>feature · p1 · m · engine</sup>
+- [ ] `9d914263` Reminders: things and places that bring grief back <sup>feature · p1 · m · plugin</sup>
+- [ ] `a519d507` Storyteller takes offered beats within one tension budget <sup>feature · p0 · m · core</sup>
+- [ ] `aa6b7157` Contagion: strong emotions spread within a room, hourly <sup>feature · p2 · m · plugin</sup>
+- [ ] `b9ed63c6` Player acts in the story: name, hold a funeral, pin a moment, rewrite words <sup>feature · p1 · m · client</sup>
+- [ ] `bb171d6e` Pawns by chunk: a spatial index for who is near <sup>perf · p0 · m · engine</sup>
+- [ ] `bdb88bff` Connected writer: an external process for lines and premises over stdio <sup>feature · p3 · l · client</sup>
+- [ ] `be517727` Text packs: format, locales, voices, overrides, a lint and instant reload <sup>feature · p0 · m · tooling</sup>
+- [ ] `bea51754` Premises: \[\[start\]\] becomes a choice, with a cast, history and an opening <sup>feature · p0 · l · core</sup>
+- [ ] `d064392a` Gatherings: people at a place for a time, facing a focus <sup>feature · p1 · l · engine</sup>
+- [ ] `d19b7e65` rim_text: templates from intents, seeded picks, lazy expansion <sup>feature · p0 · l · client</sup>
+- [ ] `dee3f7fd` Secrets: history from a premise, revealed as an event <sup>feature · p2 · m · plugin</sup>
+- [ ] `e641fbdb` story plugin: threads and beats with conditions, premise binding and claims <sup>feature · p0 · l · plugin</sup>
+- [ ] `e874ca2d` Premise picker and opening scene on a new game <sup>feature · p1 · m · client</sup>
+- [ ] `eaf3496e` rim story: run a story headless across seeds, print its chronicle and beat statistics <sup>feature · p1 · m · tooling</sup>
+- [ ] `edf162b3` What did story need that plugins could not do? <sup>spike · p0 · s · engine</sup>
+- [ ] `f8e73c05` Appraisal: traits scale thoughts, as data <sup>feature · p1 · m · plugin</sup>
+- [ ] `fa4b580d` Emotion kinds on thoughts <sup>feature · p0 · m · plugin</sup>
 
 ## defense — Defense
 
@@ -540,7 +590,8 @@ The world beyond the map: factions, traders drawn by wealth, quests, taming.
 
 ## Unscheduled
 
-`##########` 100% · 1 of 1 done
+`##########` 100% · 2 of 2 done
 
+- [x] `1cfccb62` Storytelling: scenarios, feelings, mourning, relationships and dialogue <sup>spike · p3 · l · plugin</sup>
 - [x] `cc6ac1c3` Autotest: the wall-seam check picks a row a pawn is standing on <sup>bug · p1 · s · client</sup>
 
