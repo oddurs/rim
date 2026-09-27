@@ -14,8 +14,9 @@
 --         run = function(sel) act.send("my_mod:rally", sel.id) end,
 --     })
 --
--- `sel` is the pawn table (view.pawn) or the thing table (view.thing), with
--- `kind` set to "pawn" or "thing". A label may be a function of it; an
+-- `sel` is the pawn table (view.pawn), the thing table (view.thing) or a
+-- stockpile (view.zones' row), with `kind` set to "pawn", "thing" or
+-- "zone". A label may be a function of it; an
 -- action's `active(sel)` lights its button. An action's key is a binding
 -- with the action's id, so the palette lists it; it runs on the selection
 -- when it applies.
@@ -61,10 +62,21 @@ local function text_of(v, sel, all): string
 	return if type(v) == "function" then v(sel, all or { sel }) else v
 end
 
--- The selection as the registries see it, or nil.
+-- The selection as the registries see it, or nil: a pawn, a thing, or a
+-- stockpile (`kind = "zone"`, with id, name, cells and level).
 local function selection(view)
 	local id = view.selected()
 	if not id then
+		local z = view.selected_zone()
+		if not z then
+			return nil
+		end
+		for _, zone in view.zones() do
+			if zone.id == z then
+				zone.kind = "zone"
+				return zone
+			end
+		end
 		return nil
 	end
 	local p = view.pawn(id)
@@ -271,6 +283,9 @@ inspector.action({
 	key = "c",
 	bind_label = t("core:keys.center", "Centre on the selection"),
 	label = t("core:inspector.center", "Centre"),
+	applies = function(sel)
+		return sel.kind ~= "zone"
+	end,
 	run = function(sel)
 		act.focus(sel.id)
 	end,
@@ -377,6 +392,20 @@ local function thing_panel(view, th)
 	})
 end
 
+-- A stockpile: its name and size, and whatever tabs apply to stores.
+local function zone_panel(view, z)
+	local bar, body = tab_body(view, z)
+	return kit.panel({ id = "core:inspector.panel", w = width(view), gap = "m" }, {
+		col({ gap = "xxs", menu = { kind = "zone", id = z.id } }, {
+			label(z.name, { size = "heading", weight = "strong" }),
+			label(string.format(t("core:inspector.zone", "stockpile · %d cells"), z.cells), { size = "small", color = "muted" }),
+		}),
+		action_row(z),
+		bar,
+		body,
+	})
+end
+
 -- Several colonists: who they are, how they are, and what they can all do.
 local function group_panel(view, all)
 	local buttons = {}
@@ -434,6 +463,8 @@ ui.define("core:inspector", function(view)
 		return nil
 	elseif sel.kind == "pawn" then
 		return pawn_panel(view, sel)
+	elseif sel.kind == "zone" then
+		return zone_panel(view, sel)
 	end
 	return thing_panel(view, sel)
 end)

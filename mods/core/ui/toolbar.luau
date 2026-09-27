@@ -560,7 +560,7 @@ local function tray_frame(view, tools, open: string)
 							radius = "radius",
 							hover = { bg = "surface_hover" },
 							on_click = function()
-								ui.open("core:zones")
+								act.select_zone(z.id)
 							end,
 						}, {
 							swatch("accent", 10),

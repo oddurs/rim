@@ -185,3 +185,24 @@ fn a_loose_stack_with_nowhere_to_go_waits() {
     let e: Entity = sim.world.map.item_at(at).unwrap();
     assert_eq!(haul_plan(&sim.world, e), Some(HaulPlan::Waits));
 }
+
+/// The store inspector's Accepts tab sends a category edit: the stockpile
+/// that stops taking materials lets its stone go to one that does.
+#[test]
+fn a_category_edit_from_the_inspector_changes_where_hauls_go() {
+    let (mut sim, _, site) = common::hauling_colony(5);
+    let stone = sim.world.defs.thing_id("stone").unwrap();
+    let materials = sim.world.defs.lookup("item_category", "core:materials").unwrap();
+    sim.push(Command::Stockpile { a: site, b: site, zone: None });
+    sim.push(Command::Stockpile { a: site.offset(2, 2), b: site.offset(2, 2), zone: None });
+    sim.step();
+    sim.world.put_lot(Lot::new(stone, 10), site);
+    run(&mut sim, 300);
+    assert_eq!(in_zone(&sim, stone, 1), 10);
+    sim.push(Command::StoreFilter {
+        store: StoreRef::Zone(1),
+        edit: FilterEdit::Category { category: materials, on: false },
+    });
+    run(&mut sim, 2_000);
+    assert_eq!((in_zone(&sim, stone, 1), in_zone(&sim, stone, 2)), (0, 10), "stone moved to the zone that takes it");
+}
