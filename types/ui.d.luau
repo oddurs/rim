@@ -85,7 +85,7 @@ type StoreView = {
 }
 type ItemCategory = { id: string, label: string, children: { string }, items: { string }, under: { string } }
 type ItemCategories = { roots: { string }, by_id: { [string]: ItemCategory } }
-type Zone = { id: number, name: string, cells: number, allows: { [string]: boolean }, level: number, level_label: string }
+type Zone = { id: number, name: string, cells: number, allows: { [string]: boolean }, level: number, level_label: string, plant: string?, plant_label: string? }
 type Item = { id: string, label: string, color: string }
 type WorkType = { id: string, label: string, icon: string, order: number, default: number }
 type BoardCol = { id: string, label: string, icon: string, skill: string?, waiting: number, default: number, on: number, high: number }
@@ -261,6 +261,8 @@ declare act: {
     undo: () -> (),
     -- Let a stockpile take an item, or stop it.
     zone_allow: (zone: number, item: string, on: boolean) -> (),
+    -- Change what a growing zone sows, by the plant's id.
+    zone_plant: (zone: number, plant: string) -> (),
     -- Zoom the map by a factor about the middle of the screen (1.12 is one wheel notch in).
     zoom: (factor: number) -> (),
 }
@@ -282,6 +284,8 @@ declare view: {
     compact: () -> boolean,
     -- Living pawns of "player", "hostile" or "wild".
     count_pawns: (faction: string) -> number,
+    -- The plants a growing zone can sow, in load order: each grows, and is raised by a work of its own (`build.by`).
+    crops: () -> { Item },
     -- A copy of data a sim script stored with rim.set_data, or nil.
     data: (key: string) -> any,
     -- The calendar date, counted from 1.
@@ -410,6 +414,6 @@ declare view: {
     wealth: () -> number,
     -- The work types, in tie-break order.
     work_types: () -> { WorkType },
-    -- The stockpiles, oldest first, with how many cells each has, which items it takes, and its level (0 is lowest) and that level's name.
+    -- The zones, oldest first: stockpiles, with how many cells each has, which items it takes, and its level (0 is lowest) and that level's name; and growing zones, which say the `plant` they sow and take nothing.
     zones: () -> { Zone },
 }

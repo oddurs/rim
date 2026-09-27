@@ -185,6 +185,8 @@ pub enum UiAction {
     MarkUrgent(Entity, bool),
     /// Let a stockpile take an item (by qualified id), or stop it.
     ZoneAllow(u32, String, bool),
+    /// Change what a growing zone sows, by the plant's qualified id.
+    ZonePlant(u32, String),
     /// Put a store (a stockpile or a container) at a level of the store
     /// priority scale.
     StoreLevel(rim_sim::zone::StoreRef, u8),

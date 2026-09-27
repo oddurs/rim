@@ -168,10 +168,12 @@ alerts.add({
 	id = "core:no_stockpile",
 	severity = "info",
 	check = function(view)
-		if #view.zones() == 0 then
-			return t("core:alerts.no_stockpile", "No stockpile: nothing gets hauled (Z)")
+		for _, z in view.zones() do
+			if z.plant == nil then
+				return nil
+			end
 		end
-		return nil
+		return t("core:alerts.no_stockpile", "No stockpile: nothing gets hauled (Z)")
 	end,
 })
 

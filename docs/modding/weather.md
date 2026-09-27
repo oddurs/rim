@@ -158,6 +158,41 @@ of = [{ field = "core:temperature", curve = [[-6, 2.0], [-1, 0.0]] }]
 - The weather plugin adds `weather:wetness` to core's oak and berry bush by
   patching their `growth` term (`mods/weather/defs/plants.toml`).
 
+### Growing zones and crops
+
+A crop is a plant that grows (`grow`) and that a work of its own raises
+(`build.by`): the farming plugin's potatoes are sown, not built. With the
+farming plugin loaded, a mod adds one like this:
+
+<!-- not a sample -->
+```toml
+[[thing]]
+id = "turnip_plant"
+label = "turnips"
+color = "#6a9a48"
+category = "plant"
+look.layers = [{ draw = "disc", r = 0.28 }]
+harvest = { designation = "core:harvest", work = 80, yields = [{ thing = "farming:potatoes", count = 6 }] }
+build = { by = "farming:sow", work = 50, free = true }
+
+[thing.grow]
+days = 6
+
+[thing.grow.rate.growth]
+of = [{ field = "core:temperature", curve = [[3, 0.0], [15, 1.0]] }, { terrain = "fertility" }]
+```
+
+- The player paints a growing zone with a crop's Grow tool. Every plant
+  pass, each empty cell of it gets the crop's plan while the crop would
+  grow there (its rate above 0), and a plan nobody has started is taken
+  back once it wouldn't: nothing is sown into a frost.
+- The plan is raised by its `by` work type, with that work's skill, and
+  the crop starts as a seedling. Grown, it is marked for its first harvest
+  that destroys it; harvested, the cell is sown again.
+- A growing zone takes no items, so nothing is hauled to it and what falls
+  there is hauled away. It keeps its crop across a save; one whose crop is
+  gone after a change of mods is cleared, with a note.
+
 ### Changing a term
 
 Terms are keyed by label, so a patch changes one term and leaves the rest.

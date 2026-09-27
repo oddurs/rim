@@ -341,6 +341,55 @@ pub fn spread_plants(w: &mut World) {
     }
 }
 
+/// Growing zones: lay the plant's plan on each empty cell while it would
+/// grow there, take back plans nobody has started once it wouldn't, and
+/// mark each grown plant for its harvest. Every plant pass.
+pub fn tend(w: &mut World) {
+    let defs = w.defs.clone();
+    let cells: Vec<(DefId, u32)> = w.zones.growing().collect();
+    let mut sow: Vec<(DefId, IVec)> = Vec::new();
+    let mut unsow: Vec<Entity> = Vec::new();
+    let mut reap: Vec<(Entity, DefId)> = Vec::new();
+    for (plant, c) in cells {
+        let (i, p) = (c as usize, w.map.pos(c as usize));
+        let Some(gd) = &defs.thing(plant).grow else { continue };
+        let in_season = || gd.rate_terms.is_empty() || w.fields.eval_at(&defs, &w.map, &gd.rate_terms, p) > 0;
+        match w.map.fixture[i] {
+            None if w.map.item[i].is_none() && w.map.floor[i].is_none() && w.map.passable(p) => {
+                if in_season() {
+                    sow.push((plant, p));
+                }
+            }
+            Some(f) => {
+                let Some(t) = w.thing(f).filter(|t| t.def == plant) else { continue };
+                if w.ecs.get::<&Blueprint>(f).is_ok() {
+                    let untouched = w.ecs.get::<&Work>(f).map_or(true, |k| k.done == 0);
+                    if untouched && !w.reservations.contains_key(&f) && !in_season() {
+                        unsow.push(f);
+                    }
+                } else if w.ecs.get::<&Growth>(f).is_ok_and(|g| g.progress == GROWN)
+                    && w.ecs.get::<&Designated>(f).is_err()
+                {
+                    if let Some(h) = defs.thing(t.def).harvest.iter().find(|h| h.destroy) {
+                        reap.push((f, h.desig_r));
+                    }
+                }
+            }
+            None => {}
+        }
+    }
+    for (plant, p) in sow {
+        w.spawn_fixture(plant, p, true);
+    }
+    for f in unsow {
+        w.despawn_thing(f);
+    }
+    for (f, d) in reap {
+        let _ = w.ecs.insert_one(f, Designated(d));
+        w.touch(f);
+    }
+}
+
 /// Plants are worked out once in this many plant passes, a quarter of
 /// them each pass, by entity id.
 pub const GROW_EVERY: u64 = 4;

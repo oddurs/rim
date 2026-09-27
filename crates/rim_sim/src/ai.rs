@@ -856,21 +856,24 @@ fn choose_work(w: &World, e: Entity, p: &Pawn, mut why: Option<&mut Refusals>) -
     let nearer =
         |b: &Option<(u32, Job, Entity)>, d: u32, r: Entity| b.as_ref().is_none_or(|b| (d, r.id()) < (b.0, b.2.id()));
 
-    // Blueprints, nearest first; stop at the first that yields a job.
-    if let Some(bw) = defs.build_work.filter(|&t| wanted(t)) {
-        /// (key, blueprint, where to stand, first missing material and how many)
-        type Candidate = (u32, Entity, Goal, Option<(DefId, u32)>);
-        let mut bps: Vec<Candidate> = Vec::new();
-        for (be, t, bp) in w.ecs.query::<(Entity, &Thing, &Blueprint)>().iter() {
-            if w.reserved_by_other(be, e) {
-                if let Some(r) = why.as_deref_mut() {
-                    r.note(bw, t.pos.octile(p.pos), Why::Reserved);
-                }
-                continue;
+    // Blueprints, nearest first; stop at the first that yields a job. Most
+    // are building's, but a crop is sown: each goes to the work that raises it.
+    /// (key, blueprint, where to stand, first missing material and how many)
+    type Candidate = (u32, Entity, Goal, Option<(DefId, u32)>);
+    let mut by_work: BTreeMap<DefId, Vec<Candidate>> = BTreeMap::new();
+    for (be, t, bp) in w.ecs.query::<(Entity, &Thing, &Blueprint)>().iter() {
+        let Some(bw) = defs.raised_by(t.def).filter(|&t| wanted(t)) else { continue };
+        if w.reserved_by_other(be, e) {
+            if let Some(r) = why.as_deref_mut() {
+                r.note(bw, t.pos.octile(p.pos), Why::Reserved);
             }
-            let missing = bp.cost.iter().zip(&bp.delivered).find(|(c, d)| **d < c.1).map(|(c, d)| (c.0, c.1 - d));
-            bps.push((key(t.pos.octile(p.pos), urgent_build(t.def), marked(be)), be, w.reach_goal(t), missing));
+            continue;
         }
+        let missing = bp.cost.iter().zip(&bp.delivered).find(|(c, d)| **d < c.1).map(|(c, d)| (c.0, c.1 - d));
+        let key = key(t.pos.octile(p.pos), urgent_build(t.def), marked(be));
+        by_work.entry(bw).or_default().push((key, be, w.reach_goal(t), missing));
+    }
+    for (bw, mut bps) in by_work {
         bps.sort_by_key(|b| (b.0, b.1.id()));
         // A material with nothing to bring for one plan has nothing for
         // the next: asked once, not once per plan across the whole map.
@@ -1091,8 +1094,10 @@ fn designated_work(w: &World, e: Entity, designation_work: DefId) -> DefId {
 pub fn work_waiting(w: &World) -> Vec<u32> {
     let defs = &w.defs;
     let mut n = vec![0u32; defs.work_types.len()];
-    if let Some(bw) = defs.build_work {
-        n[bw as usize] += w.ecs.query::<&Blueprint>().iter().count() as u32;
+    for t in w.ecs.query::<&Thing>().with::<&Blueprint>().iter() {
+        if let Some(by) = defs.raised_by(t.def) {
+            n[by as usize] += 1;
+        }
     }
     for (te, t, des) in w.ecs.query::<(Entity, &Thing, &Designated)>().without::<&Blueprint>().iter() {
         let dd = &defs.designations[des.0 as usize];
@@ -1815,7 +1820,8 @@ fn run_construct(w: &mut World, e: Entity, p: &mut Pawn, bp: Entity, tool: Optio
         Go::Failed => None,
         Go::Moving => Some(Job::Construct { bp, tool }),
         Go::Arrived => {
-            let skill = w.defs.build_work.and_then(|t| w.defs.work_types[t as usize].skill_r);
+            // The skill of the work that raises it: building's, or sowing's.
+            let skill = w.defs.raised_by(b.def).and_then(|t| w.defs.work_types[t as usize].skill_r);
             let amount = p.work_amount(skill);
             let work = w.work_on(bp, b.pos, p.pos, None, amount, |w| work_total(w, bp))?;
             if work.finished() {

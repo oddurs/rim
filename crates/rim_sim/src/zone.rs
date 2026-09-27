@@ -1,6 +1,7 @@
-//! Stockpile zones: cells the player paints, and which items each takes.
-//! They are the player's, so they change only by commands; hauling fills
-//! them.
+//! Zones: cells the player paints. A stockpile says which items it takes,
+//! and hauling fills it; a growing zone names a plant, and sowing fills it
+//! (it takes no items, so no store logic sees it). They are the player's,
+//! so they change only by commands.
 
 use crate::defs::{DefDb, DefId};
 use crate::filter::{Filter, FilterEdit};
@@ -30,6 +31,10 @@ pub struct Zone {
     /// core's Normal.
     #[serde(default = "normal", skip_serializing_if = "is_normal")]
     pub level: u8,
+    /// A growing zone: the plant sown on its empty cells, and harvested
+    /// when grown. Its filter takes nothing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plant: Option<DefId>,
 }
 
 fn normal() -> u8 {
@@ -101,7 +106,13 @@ impl Zones {
         let id = self.next_id;
         self.next_id += 1;
         let level = defs.store_priority.default;
-        self.list.push(Zone { id, name: format!("Stockpile {id}"), filter: Filter::everything(defs), level });
+        self.list.push(Zone {
+            id,
+            name: format!("Stockpile {id}"),
+            filter: Filter::everything(defs),
+            level,
+            plant: None,
+        });
         self.paint(map, a, b, Some(id));
         id
     }
@@ -111,6 +122,29 @@ impl Zones {
     /// preview reads this, so it shows what painting does.
     pub fn painted(&self, map: &Map, a: IVec, b: IVec, id: Option<u32>) -> Vec<usize> {
         rect(map, a, b).filter(|&i| (self.cells[i] == 0) == id.is_some()).collect()
+    }
+
+    /// A new growing zone of `plant` over the free cells from `a` to `b`.
+    pub fn create_growing(&mut self, defs: &DefDb, map: &Map, a: IVec, b: IVec, plant: DefId) -> u32 {
+        let id = self.next_id;
+        self.next_id += 1;
+        let name = format!("{} field {id}", upper_first(&defs.thing(plant).label));
+        let level = defs.store_priority.default;
+        self.list.push(Zone { id, name, filter: Filter::nothing(), level, plant: Some(plant) });
+        self.paint(map, a, b, Some(id));
+        id
+    }
+
+    /// Change what a growing zone sows. A stockpile stays a stockpile.
+    pub fn set_plant(&mut self, id: u32, plant: DefId) {
+        if let Some(z) = self.list.iter_mut().find(|z| z.id == id && z.plant.is_some()) {
+            z.plant = Some(plant);
+        }
+    }
+
+    /// Growing zones and their cells, oldest zone first, cells in map order.
+    pub fn growing(&self) -> impl Iterator<Item = (DefId, u32)> + '_ {
+        self.members().filter_map(|(z, c)| z.plant.map(|p| (p, c)))
     }
 
     /// Put the cells from `a` to `b` in zone `id`, or in none. Painting
@@ -204,11 +238,17 @@ impl Zones {
         use crate::rng::mix;
         h = mix(h ^ self.next_id as u64);
         for z in &self.list {
-            h = z.filter.hash(mix(h ^ z.id as u64 ^ (z.level as u64) << 40));
+            let plant = z.plant.map_or(0, |p| p as u64 + 1) << 48;
+            h = z.filter.hash(mix(h ^ z.id as u64 ^ (z.level as u64) << 40 ^ plant));
         }
         for (i, &c) in self.cells.iter().enumerate().filter(|(_, &c)| c != 0) {
             h = mix(h ^ (i as u64) << 20 ^ c as u64);
         }
         h
     }
+}
+
+fn upper_first(s: &str) -> String {
+    let mut c = s.chars();
+    c.next().map_or_else(String::new, |f| f.to_uppercase().chain(c).collect())
 }

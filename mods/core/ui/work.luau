@@ -845,7 +845,7 @@ work.lens({ id = "core:work.roles", label = t("core:work.lens_roles", "Roles"), 
 work.lens({ id = "core:work.person", label = t("core:work.lens_person", "Person"), order = 20, draw = person_lens })
 
 -- The Work screen: the stance, the lenses as tabs, and the lens shown.
-ui.window("core:work", { title = t("core:work.title", "Work"), w = 760, h = 860, sheet = true }, function(view)
+ui.window("core:work", { title = t("core:work.title", "Work"), w = 816, h = 860, sheet = true }, function(view)
 	local b = view.board()
 	local current = ui.state("core:work.lens", "core:work.board")
 	local shown = lenses[1]

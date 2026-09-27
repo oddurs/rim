@@ -509,10 +509,17 @@ pub struct BuildDef {
     /// (DESIGN.md §6d).
     #[serde(default)]
     pub spans: bool,
+    /// The work type that raises it, when it isn't building: a crop is
+    /// sown (`by = "farming:sow"`), with that work's skill, by whoever does
+    /// that work, and it stays out of the build menu.
+    #[serde(default)]
+    pub by: Option<String>,
     #[serde(skip)]
     pub cost_r: Vec<(DefId, u32)>,
     #[serde(skip)]
     pub requires_r: ToolMask,
+    #[serde(skip)]
+    pub by_r: Option<DefId>,
 }
 
 /// A way between levels.
@@ -2012,6 +2019,19 @@ impl DefDb {
         self.strata.iter().find(|s| s.level == z)
     }
 
+    /// A plant a growing zone can sow: it grows, and its plans are raised by
+    /// a work of their own (`build.by`).
+    pub fn sowable(&self, thing: DefId) -> bool {
+        self.things
+            .get(thing as usize)
+            .is_some_and(|t| t.grow.is_some() && t.build.as_ref().is_some_and(|b| b.by_r.is_some()))
+    }
+
+    /// The work type that raises a buildable: its own `by`, or building.
+    pub fn raised_by(&self, thing: DefId) -> Option<DefId> {
+        self.thing(thing).build.as_ref().and_then(|b| b.by_r).or(self.build_work)
+    }
+
     pub fn thing_id(&self, id: &str) -> Option<DefId> {
         self.lookup("thing", id)
     }
@@ -2678,6 +2698,7 @@ impl DefDb {
                     return Err(format!("{ctx}: build.spans is for a one-cell floor or door"));
                 }
                 b.cost_r = counts(&b.cost, &ctx)?;
+                b.by_r = b.by.as_deref().map(|t| get("work_type", t, &ctx)).transpose()?;
                 match (b.cost.is_empty(), b.stuff.is_some()) {
                     (true, false) if !b.free => {
                         return Err(format!("{ctx}: build needs `cost`, `stuff`, or `free = true`"))
