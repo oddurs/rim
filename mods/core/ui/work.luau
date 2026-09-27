@@ -36,8 +36,6 @@ local ROLE_W = 76
 local CELL_W = 56
 local CELL_H = 20
 local JOB_W = 150
--- Member buttons on one line of a role card.
-local CHIPS_PER_LINE = 7
 
 local function show(n: number): string
 	return if n == 0 then "–" else tostring(n)
@@ -651,9 +649,9 @@ local function person_lens(_view, b)
 		local name = if level == 0 then t("core:work.never", "Never") else b.labels[level] or tostring(level)
 		table.insert(
 			items,
-			row({ id = "core:work.shelf." .. level, gap = "xs", align = "center" }, {
+			row({ id = "core:work.shelf." .. level, gap = "xs", align = "start" }, {
 				row({ w = 90 }, { label(name, { size = "small", color = "muted" }) }),
-				row({ gap = "xs" }, tokens),
+				row({ gap = "xs", wrap = true, grow = 1 }, tokens),
 			})
 		)
 	end
@@ -810,9 +808,9 @@ local function roles_lens(_view, b)
 				local name = if level == 0 then t("core:work.never", "Never") else b.labels[level] or tostring(level)
 				table.insert(
 					body,
-					row({ gap = "xs", align = "center" }, {
+					row({ gap = "xs", align = "start" }, {
 						row({ w = 90 }, { label(name, { size = "small", color = "muted" }) }),
-						row({ gap = "xs" }, tokens),
+						row({ gap = "xs", wrap = true, grow = 1 }, tokens),
 					})
 				)
 			end
@@ -833,10 +831,7 @@ local function roles_lens(_view, b)
 				})
 			)
 		end
-		-- Rows don't wrap, so a big role's members come a few to a line.
-		for i = 1, #chips, CHIPS_PER_LINE do
-			table.insert(body, row({ gap = "xs", align = "center" }, table.move(chips, i, math.min(i + CHIPS_PER_LINE - 1, #chips), 1, {})))
-		end
+		table.insert(body, row({ id = "core:work.members." .. role.index, gap = "xs", align = "center", wrap = true }, chips))
 		table.insert(cards, col({ id = "core:work.role." .. role.index, gap = "xs", pad = "s", border = "line", radius = "radius" }, body))
 	end
 	local hint = if carried
@@ -1050,10 +1045,8 @@ ui.define("core:settler", function(view)
 		label(string.format(t("core:settler.joined", "%s joined the colony"), p.name), { weight = "strong" }),
 		label(table.concat(best, " · "), { size = "small", color = "muted" }),
 		label(t("core:settler.ask", "How should they work?"), { size = "small" }),
-		col({ gap = "xs" }, {
-			row({ gap = "xs" }, table.move(choices, 1, math.min(3, #choices), 1, {})),
-			#choices > 3 and row({ gap = "xs" }, table.move(choices, 4, #choices, 1, {})) or nil,
-		}),
+		-- As many roles to a line as fit a narrow panel over the map.
+		row({ id = "core:settler.roles", gap = "xs", wrap = true, maxw = 340 }, choices),
 	})
 end)
 ui.mount("float", "core:settler", { align = "start", order = 5 })

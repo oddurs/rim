@@ -60,6 +60,7 @@ fn style_of(n: &Node) -> Style {
     let s = &n.style;
     Style {
         flex_direction: if s.row { FlexDirection::Row } else { FlexDirection::Column },
+        flex_wrap: if s.wrap { FlexWrap::Wrap } else { FlexWrap::NoWrap },
         gap: Size { width: LengthPercentage::length(s.gap), height: LengthPercentage::length(s.gap) },
         padding: taffy::Rect {
             top: LengthPercentage::length(s.pad[0]),
@@ -393,6 +394,12 @@ mod tests {
         plain(key, S { gap: 6.0, pad: [8.0; 4], ..Default::default() }, kids)
     }
 
+    /// A row `w` wide of `n` words that wraps them in lines, or doesn't.
+    fn flow(key: u64, n: u64, w: f32, wrap: bool) -> Node {
+        let words = (0..n).map(|i| label(key + 1 + i, &format!("word {i}"), false)).collect();
+        plain(key, S { row: true, wrap, gap: 4.0, w: Len::Px(w), ..Default::default() }, words)
+    }
+
     /// A shell like the docked layer: a bar on top, then a band of left
     /// column, growing centre and right column.
     fn shell(left: Vec<Node>, right: Vec<Node>, gap: f32) -> Node {
@@ -433,6 +440,10 @@ mod tests {
             shell(vec![label(32, "Gunnar", false)], vec![label(51, "Dirt", false), label(52, "outdoors", false)], 12.0),
             shell(vec![column(33, vec![label(34, "a box now", false)])], vec![label(51, "Dirt", false)], 12.0),
             shell(vec![label(33, "a leaf again", false)], vec![], 12.0),
+            // A row that wraps, then stops wrapping, then wraps again.
+            shell(vec![flow(60, 12, 300.0, true)], vec![], 12.0),
+            shell(vec![flow(60, 12, 300.0, false)], vec![], 12.0),
+            shell(vec![flow(60, 14, 300.0, true)], vec![], 12.0),
         ];
         for (i, tree) in steps.iter().enumerate() {
             let got = kept.layout_kept("docked", i as u64, tree, (1600.0, 960.0), (0.0, 0.0), &mut text);
@@ -440,8 +451,29 @@ mod tests {
             assert_eq!(got, want, "step {i}");
         }
         assert_eq!(kept.computed, steps.len() as u64, "every step changed the tree");
-        let again = kept.layout_kept("docked", 6, &steps[6], (1600.0, 960.0), (0.0, 0.0), &mut text);
+        let last = steps.len() - 1;
+        let again = kept.layout_kept("docked", last as u64, &steps[last], (1600.0, 960.0), (0.0, 0.0), &mut text);
         assert_eq!(kept.computed, steps.len() as u64, "the same tree again is served, not laid out");
-        assert_eq!(again, fresh.layout(&steps[6], (1600.0, 960.0), (0.0, 0.0), &mut text));
+        assert_eq!(again, fresh.layout(&steps[last], (1600.0, 960.0), (0.0, 0.0), &mut text));
+    }
+
+    /// Twenty words in a row 300 wide: wrapped, every one inside the row,
+    /// in lines `gap` apart; unwrapped, they run past its edge.
+    #[test]
+    fn a_wrapping_row_lays_its_children_in_lines() {
+        let mut text = Text::new(None, &[]).expect("a font");
+        let mut e = Engine::default();
+        let rects = e.layout(&flow(100, 20, 300.0, true), (1600.0, 960.0), (0.0, 0.0), &mut text);
+        let words = &rects[1..];
+        assert_eq!(words.len(), 20);
+        assert!(words.iter().all(|r| r[0] >= 0.0 && r[0] + r[2] <= 300.0 + 0.01), "all inside: {words:?}");
+        let mut lines: Vec<f32> = words.iter().map(|r| r[1]).collect();
+        lines.dedup();
+        assert!(lines.len() >= 3, "twenty words take several lines: {lines:?}");
+        assert!((lines[1] - lines[0] - (words[0][3] + 4.0)).abs() < 0.01, "a gap between lines");
+        assert!(rects[0][3] >= lines.len() as f32 * words[0][3], "the row is as tall as its lines");
+
+        let rects = e.layout(&flow(100, 20, 300.0, false), (1600.0, 960.0), (0.0, 0.0), &mut text);
+        assert!(rects[1..].iter().all(|r| r[1] == rects[1][1]), "without wrap, one line");
     }
 }

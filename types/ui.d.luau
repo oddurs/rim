@@ -148,7 +148,7 @@ declare ui: {
     remove: (id: string) -> (),
     -- Take over a node by id.
     replace: (id: string, build: (view: any) -> Node?) -> (),
-    -- A row: children left to right.
+    -- A row: children left to right. With wrap = true they go on in lines within the row's width.
     row: (node: Node?) -> Node,
     -- Run a bound action, as its key would.
     run: (id: string) -> (),

@@ -2203,3 +2203,50 @@ fn a_new_hover_rebuilds_only_the_trees_that_read_it() {
     assert_eq!(line(&ui, "pawns "), pawns_before, "nor one that reads only who is hovered, while nobody is");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// A row with `wrap = true` lays twenty buttons in lines inside a 300 px
+/// panel; without it, they run out past the panel's edge.
+#[test]
+fn a_wrapping_row_fits_twenty_buttons_in_a_narrow_panel() {
+    let script = |wrap: bool| {
+        format!(
+            r#"
+local kit = require("@core/ui/kit")
+ui.define("flow:panel", function(view)
+  local buttons = {{}}
+  for i = 1, 20 do
+    table.insert(buttons, kit.button({{ id = "flow:b." .. i, label = "Button " .. i }}))
+  end
+  return kit.panel({{ id = "flow:panel", w = 300, pad = "s" }}, {{
+    kit.row({{ id = "flow:row", gap = "xs", wrap = {wrap} }}, buttons),
+  }})
+end)
+ui.mount("float", "flow:panel", {{ order = 1 }})
+"#
+        )
+    };
+    for wrap in [true, false] {
+        let name = if wrap { "flow-wrap" } else { "flow-nowrap" };
+        let dir = scratch_mods(name, &[("flow", "", &[("ui/flow.luau", &script(wrap))])]);
+        let sim = sim_at(&dir);
+        let mut ui = ui_for(&sim);
+        let cv = client(&sim);
+        frame(&mut ui, &sim, &cv, Input::default());
+        frame(&mut ui, &sim, &cv, Input { time: 0.5, ..Default::default() });
+        assert!(ui.warnings().is_empty(), "{:?}", ui.warnings());
+        let panel = ui.find("flow:panel").expect("the panel");
+        let buttons: Vec<[f32; 4]> = (1..=20).filter_map(|i| ui.find(&format!("flow:b.{i}"))).collect();
+        assert_eq!(buttons.len(), 20, "every button is laid out");
+        let inside = buttons.iter().all(|b| b[0] >= panel[0] && b[0] + b[2] <= panel[0] + panel[2] + 0.5);
+        let mut lines: Vec<i32> = buttons.iter().map(|b| b[1].round() as i32).collect();
+        lines.dedup();
+        if wrap {
+            assert!(inside, "wrapped, every button fits the panel: {panel:?} {buttons:?}");
+            assert!(lines.len() > 2, "in several lines: {lines:?}");
+            assert!(panel[3] > (lines.len() as f32) * buttons[0][3], "and the panel grows to hold them");
+        } else {
+            assert!(!inside && lines.len() == 1, "unwrapped, one line past the edge");
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}

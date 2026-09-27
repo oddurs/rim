@@ -157,6 +157,9 @@ pub enum Anchor {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Style {
     pub row: bool,
+    /// A row lays its children in lines within its width, `gap` apart:
+    /// `wrap = true` on a row (on text it wraps the words instead).
+    pub wrap: bool,
     pub gap: f32,
     /// top, right, bottom, left
     pub pad: [f32; 4],
@@ -277,7 +280,7 @@ impl Node {
     pub fn layout_hash<H: Hasher>(&self, h: &mut H, text: &mut crate::text::Text) {
         (self.kind as u8).hash(h);
         let s = &self.style;
-        s.row.hash(h);
+        (s.row, s.wrap).hash(h);
         for v in [s.gap, s.pad[0], s.pad[1], s.pad[2], s.pad[3], s.grow] {
             v.to_bits().hash(h);
         }
@@ -927,7 +930,7 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
         });
     }
     n.kind = kind;
-    n.style = style;
+    n.style = Style { wrap: wrap && style.row && kind != Kind::Text, ..style };
     Ok(n)
 }
 

@@ -229,7 +229,7 @@ pub const UI_API: &[UiDoc] = &[
     d!("ui.open", "(id: string) -> ()", "Open a window (and bring it to the front)."),
     d!("ui.remove", "(id: string) -> ()", "Hide a node by id."),
     d!("ui.replace", "(id: string, build: (view: any) -> Node?) -> ()", "Take over a node by id."),
-    d!("ui.row", "(node: Node?) -> Node", "A row: children left to right."),
+    d!("ui.row", "(node: Node?) -> Node", "A row: children left to right. With wrap = true they go on in lines within the row's width."),
     d!("ui.run", "(id: string) -> ()", "Run a bound action, as its key would."),
     d!("ui.scroll", "(node: Node?) -> Node", "A column that scrolls."),
     d!("ui.set_input", "(id: string, text: string) -> ()", "Replace what a text input holds, caret at the end (the buffer is otherwise the player's)."),

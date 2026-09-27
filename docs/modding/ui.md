@@ -111,6 +111,7 @@ ui.mount("windows", "my_mod:greeting")
 | `w`, `h` | Size: a number, `"fill"`, or a percentage like `"50%"` |
 | `minw`, `maxw`, `minh`, `maxh` | Size limits |
 | `grow` | Share of leftover space (spacers grow by default) |
+| `wrap` (on a row) | Lay the children in lines within the row's width, `gap` apart, rather than one line that overflows. The row needs a width to wrap at: from its parent, `grow`, `w` or `maxw` |
 | `align`, `justify` | `start`, `center`, `end`, `stretch`, `between` |
 | `bg`, `border`, `color` | A `color` token (`"surface"`, `"accent"`) or `"#rrggbb[aa]"` |
 | `radius` | A `shape` token or a number (defaults to `radius` on anything with a background) |
