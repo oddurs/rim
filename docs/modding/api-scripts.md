@@ -27,6 +27,8 @@ are in [Scripting rules](scripting.md).
 | `rim.explain` | `(field: string) -> {Part}` | Each part of a field's outdoor value: its terms, then pushes. |
 | `rim.explain_work` | `(id: number) -> { WorkWhy }` | Why a colonist would do what it would, and passes over the rest, work type by work type in tie-break order. `urgent` if the pick is a job the player marked. Empty if it isn't a pawn. |
 | `rim.field` | `(id: string, x: number, y: number, z: number?) -> number` | A field's value at a cell (temperature, light, ...), on level z (the surface if nil). |
+| `rim.field_add` | `(id: string, x: number, y: number, amount: number, z: number?) -> number` | Add to a stock field at a cell on level z (the surface if nil), within its range; returns the new value. Only stock fields keep what is added. |
+| `rim.field_set` | `(id: string, x: number, y: number, value: number, z: number?) -> number` | Set a stock field at a cell on level z (the surface if nil), within its range; returns the new value. |
 | `rim.get_data` | `(key: string) -> any` | A copy of stored script data, or nil. A bare key is your mod's; "weather:forecast" reads another's. |
 | `rim.has_tool` | `(tags: { string }) -> boolean` | Whether some tool in the colony, lying about or in a hand, has every one of these tool tags. False for a tag no tool has. |
 | `rim.hour` | `() -> number` | Hour of the day, 0 to 24 (tick 0 is 06:00). |

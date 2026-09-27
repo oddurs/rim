@@ -15,10 +15,13 @@
 //! transcendental maths, so lockstep holds on every platform.
 //!
 //! Inputs are global (time of day and year, other fields' outdoor values,
-//! noise, constants), plus three read at the cell a derived field is read
-//! at: `field`, another field's value there (its outdoor value where there
-//! is no cell); `terrain`, a property of the ground there; and `near`, how
-//! many cells it is to the nearest terrain with a tag.
+//! noise, constants), plus those read at the cell a derived or stock field
+//! is worked out at: `field`, another field's value there (its outdoor value
+//! where there is no cell); `terrain`, a property of the ground there;
+//! `near`, how many cells it is to the nearest terrain with a tag; and
+//! `input = "sky"`, 0 in an enclosed room and 1 elsewhere. A stock field's
+//! rate also reads its own value there (`self`), the value its `base` terms
+//! settle to (`base`), and how far it is above that (`above_base`).
 
 use crate::rng::mix;
 use serde::Deserialize;
@@ -68,7 +71,9 @@ pub enum InputDef {
 #[derive(Deserialize, Clone, Debug, Default)]
 #[serde(deny_unknown_fields)]
 pub struct SourceDef {
-    /// `"year"` (0..1) or `"hour"` (0..24).
+    /// `"year"` (0..1), `"hour"` (0..24), `"sky"` (0 in an enclosed room, 1
+    /// elsewhere), or for a stock field's rate `"self"`, `"base"` or
+    /// `"above_base"`.
     pub input: Option<String>,
     /// Another field's outdoor value.
     pub ambient: Option<String>,
@@ -99,6 +104,10 @@ pub type TermsDef = BTreeMap<String, TermDef>;
 enum Src {
     Year,
     Hour,
+    Sky,
+    Own,
+    Base,
+    AboveBase,
     Ambient(usize),
     Field(usize),
     Noise { key: u64, period: u64 },
@@ -187,6 +196,18 @@ pub trait Env {
     fn near(&self, _tag: usize) -> i64 {
         NEAR_CAP as i64 * Q
     }
+    /// 0 in an enclosed room, `Q` elsewhere; open sky by default.
+    fn sky(&self) -> i64 {
+        Q
+    }
+    /// A stock field's own value where it is being worked out.
+    fn own(&self) -> i64 {
+        0
+    }
+    /// What a stock field's `base` terms give where it is being worked out.
+    fn base(&self) -> i64 {
+        0
+    }
 }
 
 /// What the names in terms resolve to, as indices.
@@ -249,6 +270,12 @@ impl Terms {
         v
     }
 
+    /// Whether any term reads a stock field's own state: `self`, `base` or
+    /// `above_base`.
+    pub fn reads_own(&self) -> bool {
+        self.terms.iter().flat_map(|t| t.inputs.iter()).any(|i| matches!(i.src, Src::Own | Src::Base | Src::AboveBase))
+    }
+
     /// Terrain tags this list reads with `near`.
     pub fn nears(&self) -> impl Iterator<Item = usize> + '_ {
         self.terms.iter().flat_map(|t| t.inputs.iter()).filter_map(|i| match i.src {
@@ -263,6 +290,10 @@ impl Terms {
             let mut v = match i.src {
                 Src::Year => env.year(),
                 Src::Hour => env.hour(),
+                Src::Sky => env.sky(),
+                Src::Own => env.own(),
+                Src::Base => env.base(),
+                Src::AboveBase => env.own() - env.base(),
                 Src::Ambient(f) => env.ambient(f),
                 Src::Field(f) => env.field(f),
                 Src::Noise { key, period } => noise(env.seed() ^ key, env.tick(), period),
@@ -303,7 +334,13 @@ fn compile_source(s: &SourceDef, ctx: &str, names: &dyn Names, warnings: &mut Ve
         match i.as_str() {
             "year" => Src::Year,
             "hour" => Src::Hour,
-            other => return Err(format!("{ctx}: unknown input '{other}' (have: year, hour)")),
+            "sky" => Src::Sky,
+            "self" => Src::Own,
+            "base" => Src::Base,
+            "above_base" => Src::AboveBase,
+            other => {
+                return Err(format!("{ctx}: unknown input '{other}' (have: year, hour, sky, self, base, above_base)"))
+            }
         }
     } else if let Some(a) = &s.ambient {
         Src::Ambient(names.field(a).ok_or_else(|| format!("{ctx}: unknown field '{a}'"))?)

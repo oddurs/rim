@@ -71,6 +71,51 @@ That reads: 10°C, plus 9° times a curve over the hour of the day.
   Don't compute simulation values in Luau with `math.sin` or `math.cos`: they
   can differ in the last bit between platforms.
 
+### Fields that remember
+
+A field with `kind = "stock"` keeps a value in every cell and changes it
+over time, so the ground can stay wet after the rain stops. Instead of
+`ambient` it has:
+
+| Key | What it is |
+|---|---|
+| `rate` | Terms for how fast the value changes, in its units per game hour |
+| `base` | Terms for what it settles to, which `rate` reads as `base` and `above_base` |
+| `init` | Terms for each cell's value when the map is made (0 without) |
+| `period_minutes` | How often each cell is worked out, 60 by default |
+| `levels` | `"surface"` (the default) or `"all"`, for what lives underground too, such as ore |
+| `range` | The value is kept within it |
+
+```toml
+[[field]]
+id = "wetness"
+label = "wetness"
+kind = "stock"
+range = [0.0, 1.0]
+color_low = "#cdbb85"
+color_high = "#3d7ab8"
+
+[field.base.ground]
+of = [{ terrain = "water_table" }]
+
+# Half the way back to the ground's own dampness each hour.
+[field.rate.settle]
+scale = -0.5
+of = [{ input = "above_base" }]
+
+# Rain soaks in where the sky is open.
+[field.rate.rain]
+scale = 0.1
+of = [{ field = "core:precipitation" }, { input = "sky" }]
+```
+
+Rate terms may read `{ input = "self" }` (the value here), `"base"` and
+`"above_base"`; every term at a cell may read `{ input = "sky" }`, 0 in an
+enclosed room and 1 elsewhere. Emitters on a stock field add to its rate, so
+`emit = [{ field = "wetness", amount = 2.0, radius = 2 }]` is a sprinkler.
+Scripts change it with `rim.field_add(id, x, y, amount)` and
+`rim.field_set(id, x, y, value)`. The values are saved and in the state hash.
+
 ### Changing a term
 
 Terms are keyed by label, so a patch changes one term and leaves the rest.
