@@ -28,7 +28,15 @@ fn every_item_lands_in_the_categories_it_should() {
     assert_eq!(direct("core:food"), ["core:berries", "core:raw_meat", "crafting:roast_meat", "primitive:stew"]);
     assert_eq!(
         direct("core:materials"),
-        ["core:stone", "core:wood", "primitive:branches", "primitive:clay", "timber:planks"]
+        [
+            "core:stone",
+            "core:wood",
+            "primitive:branches",
+            "primitive:brick",
+            "primitive:clay",
+            "primitive:stones",
+            "timber:planks"
+        ]
     );
     assert_eq!(direct("primitive:knapping"), ["primitive:bone", "primitive:flint"]);
     assert_eq!(direct("primitive:fibres"), ["primitive:cordage", "primitive:fibre"]);

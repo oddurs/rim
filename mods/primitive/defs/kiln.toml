@@ -1,0 +1,44 @@
+# The top of the stone age's building ladder (DESIGN.md §6c): clay moulded
+# by hand and fired hard in a kiln, laid in bond and roofed in tile.
+
+[[thing]]
+id = "brick"
+label = "bricks"
+color = "#a8553a"
+category = "item"
+look.layers = [
+    { draw = "box", x = 0.2, y = 0.5, w = 0.6, h = 0.26, round = 0.04 },
+    { draw = "box", x = 0.26, y = 0.26, w = 0.6, h = 0.26, round = 0.04, shade = 1.1 },
+]
+market_value = 0.6
+stack_limit = 50
+stuff = { categories = ["structural"], factors = { hp = 1.4, work = 1.3, insulation = 1.4, flammability = 0.0, beauty = 1.2, span = 1.0 }, look = { pattern = "bond", floor = "bond", roof = "tile" } }
+
+# A dome of clay, fed from the front, where whoever fires it stands. Clay
+# alone: loose stones are too scarce to build with this early.
+[[thing]]
+id = "kiln"
+label = "kiln"
+color = "#9a6a4a"
+category = "building"
+look.layers = [
+    { draw = "box", x = 0.08, y = 0.08, w = 0.84, h = 0.84, round = 0.4, shade = 0.95 },
+    { draw = "box", x = 0.3, y = 0.56, w = 0.4, h = 0.3, round = 0.12, color = "#2a211c" },
+    { draw = "disc", x = 0.5, y = 0.72, r = 0.1, color = "#ff8c3a" },
+    { draw = "line", start = [0.24, 0.34], end = [0.76, 0.34], line = "hair", shade = 0.7 },
+]
+blocks = true
+hp = 200
+market_value = 25
+tags = ["crafting:kiln"]
+spots = [{ dx = 0, dy = 1 }]
+build = { menu = "production", work = 400, cost = [{ thing = "clay", count = 12 }] }
+
+[[crafting.recipe]]
+id = "brick"
+label = "bricks"
+station = "crafting:kiln"
+inputs = [{ tag = "clay", count = 2 }, { tag = "fuel", count = 1 }]
+outputs = [{ thing = "brick", count = 5 }]
+work = 400
+stuff = false

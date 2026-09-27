@@ -2,13 +2,15 @@
 id: ff479390-38f9-45e1-9d6c-04e98fcd471d
 title: 'The building ladder: dry stone, logs, bricks and a kiln'
 type: content
-status: backlog
+status: doing
 milestone: houses
+assignee: Oddur Sigurdsson
+claimed: 2026-09-27
 depends_on:
 - 7c53ec62-85bb-4752-8bed-9b1271d0eef3
 - fff4fb42-0b68-454c-b5ff-204609564b6a
 created: 2026-09-26
-updated: 2026-09-26
+updated: 2026-09-27
 priority: p1
 api: none
 effort: m
@@ -28,6 +30,14 @@ Materials should climb from hands to kiln, like tools do, and each step should l
 
 ## Acceptance criteria
 
-- [ ] Every structural material has a pattern, a roof and a span
-- [ ] The stone_age sweep holds its targets
+- [x] Every structural material has a pattern, a roof and a span
+- [x] The stone_age sweep holds its targets
 - [ ] A brick house is reachable by day 10 on 80% of seeds (new sweep step)
+
+## 2026-09-27
+
+Primitive: stones are dry stone (rubble, cobbles, turf roof, span 0.75); bricks are fired in a new kiln (a clay dome, 12 clay) from 2 clay and a branch, 5 at a time, laid in bond under tile. The kiln is a crafting:kiln station tag in primitive, so the crafting plugin is untouched. First tuning pass on 40 seeds x 10 days: every earlier target holds (98/98/98/92%). A brick house by day 10: 78% of all seeds, but 27 of the 29 colonists still alive at day 10 (93%). The misses are almost all lone colonists killed by wolves or raiders before day 10, which the ladder doesn't touch. Criterion 3 as written (80% of seeds) is not met; the sweep prints both numbers. Measuring it over survivors, or waiting on defence, is the owner's call. Stones as a cost made the kiln unreachable (loose stones run out with the first tools), so the kiln is clay only.
+
+## 2026-09-27
+
+Re-measured on main c5d2161e after cooking, research, spoilage and pits landed, 40 seeds x 10 days: the earlier targets hold (100/95/95/70%, cob walls down from 92% but above its 60%), and a brick house by day 10 is 60% of seeds, 23 of 33 colonists alive at day 10. Something merged since the first measurement is costing the lone colonist time before the cob and brick steps. Tuning the ladder further can't fix that; the criterion stays unticked for the owner's call.

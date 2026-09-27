@@ -110,6 +110,8 @@ station = "crafting:hand"
 inputs = [{ thing = "stones", count = 1 }]
 outputs = [{ thing = "hammerstone" }]
 work = 60
+# A stone, not a "stones hammerstone": stones are a building material too.
+stuff = false
 
 [[crafting.recipe]]
 id = "flake"

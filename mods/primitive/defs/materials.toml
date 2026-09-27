@@ -45,6 +45,9 @@ look.layers = [
 market_value = 0.2
 stack_limit = 50
 tags = ["stone_raw", "mineral"]
+# Dry stone: laid by hand without mortar, a rung above cob and roofed in
+# turf (DESIGN.md §6c).
+stuff = { categories = ["structural"], factors = { hp = 1.2, work = 1.0, insulation = 1.3, flammability = 0.0, beauty = 0.9, span = 0.75 }, look = { pattern = "rubble", floor = "cobbles", roof = "turf" } }
 
 # What every stone-age edge is knapped from. Scarce on the surface.
 [[thing]]

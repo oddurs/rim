@@ -313,6 +313,57 @@ fn a_pot_is_fired_at_a_campfire() {
     assert_eq!(s.world.made_of(e), Some(def(&s, "primitive:clay")));
 }
 
+/// The top rung: clay and a branch go into a kiln and come out bricks,
+/// which build walls laid in bond and roofed in tile.
+#[test]
+fn bricks_are_fired_in_a_kiln() {
+    let (mut s, founder) = alone(3);
+    let home = s.world.pawn_pos(founder).unwrap();
+    let def = |s: &Sim, id: &str| s.world.defs.thing_id(id).unwrap();
+    let open = |s: &Sim, p: IVec| {
+        s.world.map.passable(p) && s.world.map.fixture_at(p).is_none() && s.world.map.item_at(p).is_none()
+    };
+    let at = (2..12)
+        .flat_map(|d| [home.offset(d, 0), home.offset(-d, 0), home.offset(0, d), home.offset(0, -d)])
+        .find(|&p| open(&s, p) && open(&s, p.offset(0, 1)))
+        .expect("room for a kiln and its stoker");
+    let kiln = s.world.spawn_fixture_of(def(&s, "primitive:kiln"), at, false, None).unwrap();
+    rim_sim::ai::complete_building(&mut s.world, kiln);
+    s.world.place_item(def(&s, "primitive:clay"), home, 3);
+    s.world.place_item(def(&s, "primitive:branches"), home, 1);
+    let data = [
+        (Key::Str("site".into()), Data::Int(kiln.to_bits().get() as i64)),
+        (Key::Str("recipe".into()), Data::Str("primitive:brick".into())),
+    ];
+    s.push(Command::ModEvent { name: "crafting:add_bill".into(), data: Some(Data::Table(data.into_iter().collect())) });
+    assert!(run_until(&mut s, 12_000, |s| count(s, "primitive:brick") == 5), "five bricks come out of the kiln");
+    let brick = s.world.defs.thing(def(&s, "primitive:brick"));
+    let st = brick.stuff.as_ref().expect("bricks build");
+    assert!(st.categories.iter().any(|c| c == "structural"));
+    assert_eq!((st.look.pattern.as_deref(), st.look.roof.as_deref()), (Some("bond"), Some("tile")));
+}
+
+/// Every rung has a look and a reach: each structural material names its
+/// wall pattern, its roof, and how far its walls hold a roof up.
+#[test]
+fn every_structural_material_has_a_pattern_a_roof_and_a_span() {
+    let s = Sim::new(&common::mods(), 3).unwrap();
+    let structural: Vec<_> = s
+        .world
+        .defs
+        .things
+        .iter()
+        .filter(|t| t.stuff.as_ref().is_some_and(|st| st.categories.iter().any(|c| c == "structural")))
+        .collect();
+    assert!(structural.len() >= 7, "wood, stone, branches, clay, stones, bricks and planks at least");
+    for t in structural {
+        let st = t.stuff.as_ref().unwrap();
+        assert!(st.look.pattern.is_some(), "{} has a wall pattern", t.id);
+        assert!(st.look.roof.is_some(), "{} has a roof", t.id);
+        assert!(st.factors.contains_key("span"), "{} has a span", t.id);
+    }
+}
+
 /// A dead deer gives bone as well as its meat.
 #[test]
 fn a_deer_gives_bone() {

@@ -14,7 +14,10 @@
 //!   digging stick;
 //! - with an axe: fell the trees around, felling second only to building;
 //! - with a digging stick: dig the nearest clay, and plan a row of cob
-//!   walls beside the hut.
+//!   walls beside the hut;
+//! - once the cob stands: plan a kiln, and fire bricks in it;
+//! - once the kiln stands: plan a brick house, four cells across, and
+//!   lay its walls as the bricks come out.
 //!
 //! Every death is recorded with its day and cause: what last attacked the
 //! colonist (within the last few hours), or else the need that ran out.
@@ -47,6 +50,8 @@ struct Report {
     felled: Option<f64>,
     clay: Option<f64>,
     cob: Option<f64>,
+    /// Every piece of the brick house built.
+    brick: Option<f64>,
     died: Option<f64>,
     /// Every colonist's death: (day, cause).
     deaths: Vec<(f64, String)>,
@@ -172,6 +177,15 @@ fn run(mods: &Path, seed: u64, days: u64, plan: &str) -> Report {
 
     let (campfire, wall) = (thing("core:campfire"), thing("core:wall"));
     let (billed, chopping, digging) = (&mut false, &mut false, &mut false);
+    let (mut kiln_at, mut firing, mut house): (Option<IVec>, bool, Option<IVec>) = (None, false, None);
+    let brick = Some(thing("primitive:brick"));
+    // The brick house's ring, four across, its door in the south wall.
+    let ring = |o: IVec| {
+        (0..4)
+            .flat_map(move |y| (0..4).map(move |x| (x, y)))
+            .filter(|&(x, y)| x == 0 || y == 0 || x == 3 || y == 3)
+            .map(move |(x, y)| o.offset(x, y))
+    };
     let now = |s: &Sim| s.world.tick as f64 / TICKS_PER_DAY as f64;
     let every = TICKS_PER_DAY / 48;
     let mut tick = 0;
@@ -267,6 +281,16 @@ fn run(mods: &Path, seed: u64, days: u64, plan: &str) -> Report {
                     r.cob = Some(t);
                 }
             }
+            if let (None, Some(o)) = (r.brick, house) {
+                let done = ring(o).all(|p| {
+                    w.map.fixture_at(p).is_some_and(|f| {
+                        w.ecs.get::<&Blueprint>(f).is_err() && w.ecs.get::<&MadeOf>(f).ok().map(|m| m.0) == brick
+                    })
+                });
+                if done {
+                    r.brick = Some(t);
+                }
+            }
             if r.died.is_none() && w.colonists().next().is_none() {
                 r.died = Some(t);
             }
@@ -309,6 +333,38 @@ fn run(mods: &Path, seed: u64, days: u64, plan: &str) -> Report {
                 }
                 // A cob windbreak along the hut's east side.
                 s.push(Command::Build { thing: wall, stuff: clay, a: at(pw, 0), b: at(pw, ph - 1), facing: 0 });
+            }
+            // The cob stands: a kiln, and more clay dug for it.
+            if r.cob.is_some() && kiln_at.is_none() {
+                if let Some(k) = open_square(&s, c, 1) {
+                    kiln_at = Some(k);
+                    s.push(Command::Build { thing: thing("primitive:kiln"), stuff: None, a: k, b: k, facing: 0 });
+                    for p in nearest(&s, "primitive:clay_bank", c, 12) {
+                        s.push(Command::Designate { designation: des("core:gather"), a: p, b: p });
+                    }
+                }
+            }
+            let kiln = kiln_at.and_then(|k| s.world.map.fixture_at(k)).filter(|&e| {
+                s.world.thing(e).is_some_and(|x| x.def == thing("primitive:kiln"))
+                    && s.world.ecs.get::<&Blueprint>(e).is_err()
+            });
+            if let (Some(site), false) = (kiln, firing) {
+                firing = true;
+                // A bill is one firing; enough of them for the house.
+                for _ in 0..20 {
+                    add_bill(&mut s, site, "primitive:brick");
+                }
+            }
+            // The house is planned once the kiln stands: bricks go into it
+            // as they come out.
+            if house.is_none() && firing {
+                if let Some(o) = open_square(&s, c, 4) {
+                    house = Some(o);
+                    for p in ring(o) {
+                        let piece = if p == o.offset(1, 3) { "core:door" } else { "core:wall" };
+                        s.push(Command::Build { thing: thing(piece), stuff: brick, a: p, b: p, facing: 0 });
+                    }
+                }
             }
         }
         s.step();
@@ -387,10 +443,10 @@ fn main() {
         handles.into_iter().map(|h| h.join().expect("a run")).collect()
     });
     let d = |x: Option<f64>| x.map_or("   -  ".to_string(), |v| format!("{v:>6.2}"));
-    println!("seed  campfire shelter  flint   edge  felled   clay    cob   died   at nightfall");
+    println!("seed  campfire shelter  flint   edge  felled   clay    cob  brick   died   at nightfall");
     for r in &reports {
         println!(
-            "{:>4}  {}  {}  {} {} {}  {} {} {}   {} branches, {}/{} built",
+            "{:>4}  {}  {}  {} {} {}  {} {} {} {}   {} branches, {}/{} built",
             r.seed,
             d(r.campfire),
             d(r.shelter),
@@ -399,6 +455,7 @@ fn main() {
             d(r.felled),
             d(r.clay),
             d(r.cob),
+            d(r.brick),
             d(r.died),
             r.night_branches,
             r.night_built,
@@ -414,7 +471,7 @@ fn main() {
     let n = reports.len() as f64;
     let share = |f: &dyn Fn(&Report) -> bool| 100.0 * reports.iter().filter(|r| f(r)).count() as f64 / n;
     let night = NIGHT;
-    let targets = [
+    let mut targets = vec![
         (
             "campfire and an enclosed bed before the first night",
             share(&|r| r.campfire.is_some_and(|t| t < night) && r.shelter.is_some_and(|t| t < night)),
@@ -424,6 +481,9 @@ fn main() {
         ("a felled tree by the end of day 3", share(&|r| r.felled.is_some_and(|t| t < 3.0)), 80.0),
         ("cob walls by the end of day 4", share(&|r| r.cob.is_some_and(|t| t < 4.0)), 60.0),
     ];
+    if days >= 10 {
+        targets.push(("a brick house by the end of day 10", share(&|r| r.brick.is_some_and(|t| t < 10.0)), 80.0));
+    }
     // Deaths by cause, in five-day spans, over every seed.
     let mut by: BTreeMap<String, Vec<u32>> = BTreeMap::new();
     let spans = (days as usize).div_ceil(5).max(1);
@@ -446,5 +506,12 @@ fn main() {
     println!();
     for (what, got, want) in targets {
         println!("{} {what}: {got:.0}% (target {want:.0}%)", if got >= want { "ok  " } else { "MISS" });
+    }
+    // A colonist killed first never gets to build: the house as the
+    // survivors saw it, apart from how many survived.
+    if days >= 10 {
+        let alive: Vec<&Report> = reports.iter().filter(|r| r.died.is_none_or(|t| t >= 10.0)).collect();
+        let built = alive.iter().filter(|r| r.brick.is_some_and(|t| t < 10.0)).count();
+        println!("     of colonists alive at day 10, a brick house: {built}/{}", alive.len());
     }
 }
