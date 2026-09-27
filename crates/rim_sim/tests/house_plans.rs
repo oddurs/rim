@@ -90,3 +90,29 @@ fn a_character_not_in_the_legend_fails_the_load() {
     let err = shed("plans-bad", &bad).err().expect("refused");
     assert!(err.contains("'x' at row 1, column 3 isn't in the legend"), "{err}");
 }
+
+/// A plan keeps the level it's placed on: at z -1 every piece is planned
+/// there (the rock in the way marked to be dug), and none on the surface.
+#[test]
+fn a_plan_placed_below_the_surface_stays_there() {
+    let mut s = shed("plans-below", DEFS).unwrap_or_else(|e| panic!("loads: {e}"));
+    assert!(*s.world.map.levels().start() < 0, "the map has a level below ({:?})", s.world.map.levels());
+    let plan = s.world.defs.lookup("plan", "house:shed").unwrap();
+    let o = open_square(&s, 5);
+    let below = IVec::at(o.x, o.y, -1);
+    let surface: Vec<_> =
+        (0..4).flat_map(|y| (0..4).map(move |x| o.offset(x, y))).map(|p| s.world.map.fixture_at(p)).collect();
+    s.push(Command::PlacePlan { plan, at: below, facing: 0, stuff: None });
+    s.step();
+    let defs = s.world.defs.clone();
+    for piece in defs.plans[plan as usize].placed(&defs, below, 0) {
+        let at = IVec::at(piece.at.0, piece.at.1, -1);
+        let f = s.world.map.fixture_at(at).unwrap_or_else(|| panic!("something planned at {at:?}"));
+        let planned = s.world.ecs.get::<&rim_sim::world::Planned>(f).is_ok_and(|p| p.thing == piece.thing)
+            || s.world.thing(f).is_some_and(|t| t.def == piece.thing);
+        assert!(planned, "the piece at {at:?} is planned on its level");
+    }
+    let after: Vec<_> =
+        (0..4).flat_map(|y| (0..4).map(move |x| o.offset(x, y))).map(|p| s.world.map.fixture_at(p)).collect();
+    assert_eq!(after, surface, "nothing new on the surface");
+}

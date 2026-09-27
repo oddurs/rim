@@ -430,7 +430,7 @@ The API grows up: stat pipeline, script components, custom jobs, needs and def k
 
 ## houses — Houses
 
-`########··` 78% · 18 of 23 done
+`########··` 79% · 19 of 24 done
 
 A house is drawn as its plan and built as an order (DESIGN.md §6c). Walls join from their neighbours in quarters, with rounded ends and square junctions, and no sprites. Materials show as patterns and climb a ladder of tools from wattle to brick. Doors and windows orient themselves in the run and toward the room. Rooms take roles from what is in them, a roof span set by the materials replaces the 400-cell cap, and from far away the colony is a village of hipped roofs. The prototype, docs/engineering/houses-prototype.html, is the reference.
 
@@ -452,6 +452,7 @@ A house is drawn as its plan and built as an order (DESIGN.md §6c). Walls join 
 - [x] `ae5c3807` Lit edges: a mass catches the light on its top and left <sup>feature · p2 · s · client</sup>
 - [x] `ba18a8e4` Facing: things turn in four directions <sup>feature · p1 · m · engine</sup>
 - [x] `c2d73146` The seam where a wall's material changes is covered by the pattern <sup>bug · p1 · s · client</sup>
+- [x] `c80a071d` A house plan placed below the surface lands on the surface <sup>bug · p1 · s · engine</sup>
 - [x] `df049dac` Roofs from far away, hipped by the span field <sup>feature · p2 · m · client</sup>
 - [x] `eb469f44` Houses concept: drawn as their plan, built as orders <sup>spike · p0 · m · tooling</sup>
 - [x] `f709cdd4` Room roles as data <sup>feature · p0 · m · engine</sup>
