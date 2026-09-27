@@ -2,12 +2,14 @@
 id: 26ba97aa-2069-4617-9af0-9cd3df8c8b16
 title: Plan a multi-cell building over grass, trees and rock
 type: feature
-status: backlog
+status: done
 milestone: houses
+assignee: Oddur Sigurdsson
 depends_on:
 - 8cf4db07-217d-42f9-aed0-8c119d5acf0c
 created: 2026-09-25
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p2
 api: none
 effort: m
@@ -27,8 +29,8 @@ Planning a building over a natural thing (#116) marks it to be cleared and puts 
 
 ## Acceptance criteria
 
-- [ ] A 2x1 planned over grass and a tree goes up once both are cleared (test)
-- [ ] Cancelling leaves the grass and the tree unmarked
+- [x] A 2x1 planned over grass and a tree goes up once both are cleared (test)
+- [x] Cancelling leaves the grass and the tree unmarked
 
 ## 2026-09-26
 
@@ -37,3 +39,7 @@ Moved from building, which had already shipped when this was filed: multi-cell w
 ## 2026-09-26
 
 Moved to houses: facing (ba18a8e4) makes 1x2 beds and 2x1 benches the norm, and they must be plannable over grass.
+
+## 2026-09-26
+
+Planned carries the building's anchor when it covers more than its own cell; the blueprint's spawn is tried whenever one is cleared, and spawn_fixture already refuses while any footprint cell is occupied, so it goes up with the last. Cancelling any marked cell unplans its siblings (World::unplan).

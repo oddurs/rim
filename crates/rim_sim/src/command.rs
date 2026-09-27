@@ -240,7 +240,12 @@ pub fn apply(w: &mut World, c: Command) {
                 }
             }
             let floor = defs.thing(thing).category == crate::defs::Category::Floor;
+            let big = defs.thing(thing).size != [1, 1];
             for p in cells(w, a, b).collect::<Vec<_>>() {
+                if big && !floor {
+                    w.plan_footprint(thing, stuff, p, facing);
+                    continue;
+                }
                 // Grass, a tree or rock in the way is cleared first, not
                 // silently left out: a wall with a gap is no wall.
                 // (On ground that can be built on: nothing is planned over water.)
@@ -266,8 +271,7 @@ pub fn apply(w: &mut World, c: Command) {
                 cells(w, a, b).flat_map(|p| [w.map.fixture_at(p), w.map.floor_at(p)]).flatten().collect();
             for f in targets {
                 // Cancelling a plan over grass or a tree leaves it be.
-                let planned = w.ecs.remove_one::<Planned>(f).is_ok();
-                if w.ecs.remove_one::<Designated>(f).is_ok() || planned {
+                if !w.unplan(f) && w.ecs.remove_one::<Designated>(f).is_ok() {
                     w.touch(f);
                     // Rock nobody will work goes back to being terrain.
                     w.settle_rock(f);

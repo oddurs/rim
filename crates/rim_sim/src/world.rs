@@ -456,6 +456,10 @@ pub struct Planned {
     pub stuff: Option<DefId>,
     #[serde(default, skip_serializing_if = "is_zero")]
     pub facing: u8,
+    /// The building's anchor, when it covers more than this one cell: it
+    /// goes up there once the last thing in its footprint is cleared.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub at: Option<IVec>,
 }
 
 /// Bring these things to a site, then work there (DESIGN.md §4e). A mod
@@ -1456,19 +1460,86 @@ impl World {
 
     /// `plan_over`, for a building that will face `facing`.
     pub fn plan_over_facing(&mut self, e: Entity, thing: DefId, stuff: Option<DefId>, facing: u8) {
+        self.plan_over_at(e, Planned { thing, stuff, facing, at: None });
+    }
+
+    fn plan_over_at(&mut self, e: Entity, plan: Planned) {
         let Some(t) = self.thing(e) else { return };
         let td = self.defs.thing(t.def);
         match td.harvest.iter().find(|h| h.destroy).map(|h| h.desig_r) {
             Some(d) => {
-                let _ = self.ecs.insert(e, (Designated(d), Planned { thing, stuff, facing }));
+                let _ = self.ecs.insert(e, (Designated(d), plan));
                 self.map.touch(t.pos);
             }
             None if !td.blocks => {
                 self.despawn_thing(e);
-                self.spawn_fixture_facing(thing, t.pos, true, stuff, facing);
+                self.spawn_fixture_facing(plan.thing, plan.at.unwrap_or(t.pos), true, plan.stuff, plan.facing);
             }
             None => {}
         }
+    }
+
+    /// Plan a building bigger than one cell at `at`: every cell of its
+    /// footprint must be open, or hold a natural thing that can be cleared
+    /// and isn't already cleared for another plan, or nothing is planned.
+    /// Each one is marked, and the blueprint goes up when the last is gone.
+    pub fn plan_footprint(&mut self, thing: DefId, stuff: Option<DefId>, at: IVec, facing: u8) {
+        let defs = self.defs.clone();
+        let cells: Vec<IVec> = defs.thing(thing).footprint(at, facing).collect();
+        let clearable = |f: Entity| {
+            self.ecs.get::<&Planned>(f).is_err()
+                && self.ecs.get::<&Blueprint>(f).is_err()
+                && self.thing(f).is_some_and(|t| {
+                    let td = defs.thing(t.def);
+                    td.natural && (!td.blocks || td.harvest.iter().any(|h| h.destroy))
+                })
+        };
+        let open = cells.iter().all(|&c| {
+            if !self.map.inb(c) {
+                return false;
+            }
+            let ground = self.map.terrain_cost[self.map.idx(c)] > 0;
+            match (self.map.fixture_at(c), self.solid_at(c).is_some()) {
+                (Some(f), rock) => (ground || rock) && clearable(f),
+                (None, true) => true,
+                (None, false) => self.map.passable(c),
+            }
+        });
+        if !open {
+            return;
+        }
+        let plan = Planned { thing, stuff, facing, at: Some(at) };
+        for c in cells {
+            // Rock is cleared by mining it, so it stands up to be marked.
+            let f = if self.solid_at(c).is_some() { self.wake_rock(c) } else { self.map.fixture_at(c) };
+            if let Some(f) = f {
+                self.plan_over_at(f, plan);
+            }
+        }
+        // Nothing needed clearing, or only what was cleared at once.
+        self.spawn_fixture_facing(thing, at, true, stuff, facing);
+    }
+
+    /// Take back a plan over a natural thing, leaving the thing be. A
+    /// building bigger than one cell loses its marks on the rest of its
+    /// footprint too. Whether `e` carried one.
+    pub fn unplan(&mut self, e: Entity) -> bool {
+        let Ok(plan) = self.ecs.remove_one::<Planned>(e) else { return false };
+        let _ = self.ecs.remove_one::<Designated>(e);
+        self.touch(e);
+        // Rock nobody will work goes back to being terrain.
+        self.settle_rock(e);
+        if let Some(at) = plan.at {
+            let cells: Vec<IVec> = self.defs.thing(plan.thing).footprint(at, plan.facing).collect();
+            for c in cells {
+                let sibling =
+                    self.map.fixture_at(c).filter(|&f| self.ecs.get::<&Planned>(f).is_ok_and(|p| p.at == Some(at)));
+                if let Some(f) = sibling {
+                    self.unplan(f);
+                }
+            }
+        }
+        true
     }
 
     pub fn despawn_thing(&mut self, e: Entity) {
@@ -1590,7 +1661,7 @@ impl World {
         }
         // Cleared for a building: it goes up in its place.
         if let Some(p) = planned {
-            self.spawn_fixture_facing(p.thing, t.pos, true, p.stuff, p.facing);
+            self.spawn_fixture_facing(p.thing, p.at.unwrap_or(t.pos), true, p.stuff, p.facing);
         }
     }
 
