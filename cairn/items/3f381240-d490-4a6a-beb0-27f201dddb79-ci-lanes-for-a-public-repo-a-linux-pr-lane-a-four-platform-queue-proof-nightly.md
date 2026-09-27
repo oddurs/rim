@@ -2,12 +2,14 @@
 id: 3f381240-d490-4a6a-beb0-27f201dddb79
 title: 'CI lanes for a public repo: a Linux PR lane, a four-platform queue proof, nightly'
 type: chore
-status: backlog
+status: review
 milestone: proving-ground
+assignee: Oddur Sigurdsson
+claimed: 2026-09-27
 depends_on:
 - 9b435cd8-40ed-4c0f-8a41-ef3b892811c2
 created: 2026-09-27
-updated: 2026-09-27
+updated: 2026-09-28
 priority: p0
 api: none
 effort: m
@@ -31,8 +33,20 @@ Every PR push runs seven jobs on Linux, macOS, Windows and ARM and cancels its p
 ## Acceptance criteria
 
 - [ ] A PR run starts only Linux jobs and finishes in under 7 minutes (run linked, timings recorded)
-- [ ] A queue-lane run (by `workflow_dispatch` on a branch) runs all four platforms and `agree` (run linked)
+- [x] A queue-lane run (by `workflow_dispatch` on a branch) runs all four platforms and `agree` (run linked)
 - [ ] A docs-only PR runs the checks job alone, and a draft runs nothing (runs linked)
-- [ ] A nightly run by `workflow_dispatch` runs the full macOS and Windows suites (run linked)
-- [ ] Every job has a timeout; only PR runs cancel in progress
-- [ ] PR #138 closed with a pointer to this item
+- [x] A nightly run by `workflow_dispatch` runs the full macOS and Windows suites (run linked)
+- [x] Every job has a timeout; only PR runs cancel in progress
+- [x] PR #138 closed with a pointer to this item
+
+## 2026-09-27
+
+Built: scripts/ci-plan picks the lane (pr, queue, nightly, main, none) from the event, and every event type was run through it locally. The PR lane is Linux only; the queue lane (a PR pushed while labelled full-ci, Mergify's mergify/merge-queue/* PRs, or workflow_dispatch lane=queue) adds macOS and Windows proof jobs (save round trip, crosscheck, FMA check on macOS), the ARM crosscheck with the save round trip and FMA, and agree; nightly (schedule, main) runs the proof plus full lint, test and mods on macOS and Windows, which also saves their caches. A push to main runs checks only. Every job has a timeout; only PR runs cancel in progress, and Mergify's queue PRs never do. The labeled trigger was removed after review: a run for a label would skip every job, and a skipped check passes a ruleset. rim-c2's queue script requires a SUCCESS agree on the readied sha and dispatches the queue lane itself. An independent review found 7 problems, all fixed. Criteria 1-4 need real runs and are ticked from this PR's own runs and the first dispatch and nightly after merge.
+
+## 2026-09-28
+
+Runs on 97c09a9e (base b591c0c3, before #290's autotest founder fix, so Client fails in all three with the known autotest.rs:97 panic):
+- PR lane https://github.com/oddurs/rim/actions/runs/36379055603 : Plan, checks, Test (ubuntu), Sim, Client only; Proof, Nightly, ARM crosscheck and agree skipped. Plan start 05:00:19 to last job 05:07:35 = 7m16s (50 s of it waiting for a runner); Test job 6m21s on a cold PR cache.
+- Queue lane https://github.com/oddurs/rim/actions/runs/36379984853 : Proof macOS 3m28s, Proof Windows 4m15s, ARM crosscheck 2m10s, Test ubuntu 5m12s, agree success.
+- Nightly lane https://github.com/oddurs/rim/actions/runs/36379069658 : Nightly macOS 6m42s, Nightly Windows 11m29s, both proofs, ARM, agree success.
+Every job has timeout-minutes (plan 5, checks 15, test 45, proof 30, crosscheck-arm 30, agree 5, sim 20, client 20, nightly 60), and cancel-in-progress is true only for pull_request events outside mergify/merge-queue/*. #138 closed with a pointer here. The checks job now also runs scripts/task scripts (#308's hook tests). Left for after merge: criterion 1 on a run with main's warm cache (this cold run took 7m16s wall, 16 s over), and criterion 3 from the cairn-only PR that closes this item, opened as a draft first.
