@@ -2,10 +2,12 @@
 id: e8673d3f-d5fb-4922-86ea-d71c521b2a3a
 title: scripting test a_slow_mod_is_named_in_the_warnings flakes under load
 type: bug
-status: backlog
+status: done
 milestone: proving-ground
+assignee: Oddur Sigurdsson
 created: 2026-09-25
 updated: 2026-09-27
+closed_at: 2026-09-27
 priority: p0
 api: none
 effort: s
@@ -24,5 +26,9 @@ area: tests
 
 ## Acceptance criteria
 
-- [ ] The test passes under a parallel full-suite run on a busy machine
-- [ ] It still fails when the probe mod is not slow
+- [x] The test passes under a parallel full-suite run on a busy machine
+- [x] It still fails when the probe mod is not slow
+
+## 2026-09-27
+
+Fixed without timing: the test runs the probe to check its hook calls are profiled, then hands check_mod_budgets a profile (probe 1.8x budget, core 0.4x, a system 10x) and asserts which are named, once. check_mod_budgets is now pub for that. Deliberately treating every mod as over budget fails it ('a mod under budget isn't named'). With no clock in the test, a busy machine can't fail it. rim-c2 closed its overlapping #232 in favour of this.

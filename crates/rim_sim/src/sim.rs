@@ -231,8 +231,9 @@ impl Sim {
     /// Warn (once per mod, in the load warnings the profiler shows) when a
     /// mod's hooks take longer than `MOD_BUDGET_US` per call on average.
     /// Wall-clock, so it only ever warns: it must never change the game. The
-    /// hard, deterministic limit is the step budget.
-    fn check_mod_budgets(&mut self) {
+    /// hard, deterministic limit is the step budget. Runs every 600 ticks;
+    /// public so a test can hand it a profile instead of racing a busy machine.
+    pub fn check_mod_budgets(&mut self) {
         for (name, us) in &self.profile.entries {
             let Some(m) = name.strip_prefix("mod:") else { continue };
             if *us > crate::script::MOD_BUDGET_US && !self.over_budget.iter().any(|w| w == m) {
