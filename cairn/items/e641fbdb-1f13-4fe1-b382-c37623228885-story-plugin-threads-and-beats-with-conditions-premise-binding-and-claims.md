@@ -10,7 +10,7 @@ depends_on:
 - a519d507-a1de-42eb-ac50-314a1dc93f50
 - bea51754-c7d0-4353-b763-1a6a11e6f383
 created: 2026-09-26
-updated: 2026-09-26
+updated: 2026-09-27
 priority: p0
 api: additive
 effort: l
@@ -38,3 +38,7 @@ and on the events a thread names.
 - [ ] Conditions evaluated daily and on named events, never per tick
 - [ ] Beat state saved in the plugin's data; fired beats become memories
 - [ ] `rim test` helpers: assert a beat fired, by day, across seeds
+
+## 2026-09-27
+
+Beats offer into core's incident registry, not into a particular pacer: a77aec3a splits the storyteller into the registry (shared vocabulary) and a claimed pacer that spends the tension budget. Whatever pacer holds the storyteller claim sees offers in its pool.

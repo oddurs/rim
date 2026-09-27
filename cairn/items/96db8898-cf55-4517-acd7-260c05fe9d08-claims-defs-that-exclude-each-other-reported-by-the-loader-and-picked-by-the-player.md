@@ -5,7 +5,7 @@ type: feature
 status: backlog
 milestone: story
 created: 2026-09-26
-updated: 2026-09-26
+updated: 2026-09-27
 priority: p1
 api: additive
 effort: m
@@ -27,3 +27,7 @@ should say so, as it does for patch conflicts, and never pick silently (DESIGN.m
 - [ ] Two enabled defs claiming a tag are reported as a conflict with both names
 - [ ] The player picks one; the pick is kept in the save (the modlist lockfile takes it when it lands)
 - [ ] With no pick, the conflict blocks a new game rather than choosing
+
+## 2026-09-27
+
+First non-story user: the storyteller itself (a77aec3a). Core's [[storyteller]] def claims "storyteller", and a replacement pacer mod claims it too, so claims must work for any def kind, not only threads.

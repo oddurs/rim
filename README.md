@@ -5,8 +5,8 @@ You build shelter, draw in settlers, and grow a colony. Everything you build
 makes you visible, and visibility brings the world to you: settlers, traders,
 beasts and raiders.
 
-There are no difficulty settings and no scenarios. Your wealth *is* the
-difficulty curve.
+The default game has no difficulty setting and no scenarios: your wealth
+*is* the difficulty curve.
 
 ## Plugin-first
 
