@@ -382,21 +382,26 @@ fn script_data_belongs_to_the_mod_that_wrote_it() {
 
 #[test]
 fn a_slow_mod_is_named_in_the_warnings() {
-    // Slow but not runaway: about 20k steps of work every tick.
-    let s = run(
-        "slow",
-        r#"
-        rim.every(1, function()
-            local t = {}
-            for i = 1, 20000 do t[i % 64 + 1] = tostring(i) end
-        end)
-    "#,
-        1300,
-    );
+    // The warning reads the wall-clock profile, so this test gives it one
+    // rather than timing a script on a machine that may be busy (DESIGN.md
+    // §8a: tests count work). First, a mod's hook calls are profiled at all.
+    let mut s = run("slow", "rim.every(1, function() end)", 5);
     assert!(
-        s.warnings.iter().any(|w| w.contains("mod 'probe' is slow")),
-        "the profiler names the slow mod: {:?}",
-        s.warnings
+        s.profile.entries.iter().any(|(n, _)| n == "mod:probe"),
+        "each mod's hook calls are profiled: {:?}",
+        s.profile.entries
     );
-    assert!(!s.warnings.iter().any(|w| w.contains("mod 'core' is slow")), "{:?}", s.warnings);
+    // Then, over the budget is named; under it, and a system, are not.
+    let budget = rim_sim::script::MOD_BUDGET_US;
+    s.profile.entries =
+        vec![("mod:probe".into(), budget * 1.8), ("mod:core".into(), budget * 0.4), ("pawns".into(), budget * 10.0)];
+    s.check_mod_budgets();
+    fn named(warnings: &[String], m: &str) -> usize {
+        warnings.iter().filter(|w| w.contains(&format!("mod '{m}' is slow"))).count()
+    }
+    assert_eq!(named(&s.warnings, "probe"), 1, "the profiler names the slow mod: {:?}", s.warnings);
+    assert_eq!(named(&s.warnings, "core"), 0, "a mod under budget isn't named: {:?}", s.warnings);
+    assert!(!s.warnings.iter().any(|w| w.contains("pawns")), "systems aren't mods: {:?}", s.warnings);
+    s.check_mod_budgets();
+    assert_eq!(named(&s.warnings, "probe"), 1, "and only once");
 }
