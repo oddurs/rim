@@ -53,12 +53,27 @@ struct Lent {
     world: Cell<*const World>,
     client: Cell<*const ClientView>,
     engine: Cell<*const EngineInfo>,
+    /// What of the hover the tree being built has read (`Hover` bits):
+    /// it depends on those (see `UiVm::reads_hover`).
+    hover_read: Cell<u8>,
 }
 
 struct Lease<'a> {
     world: &'a World,
     client: &'a ClientView,
     engine: &'a EngineInfo,
+    hover_read: &'a Cell<u8>,
+}
+
+/// What the pointer is over, as bits: which part of it a tree read, or
+/// which part changed.
+pub struct Hover;
+
+impl Hover {
+    /// The cell (`view.hover`).
+    pub const CELL: u8 = 1;
+    /// The pawn (who is `hovered` among `view.visible_pawns`).
+    pub const PAWN: u8 = 2;
 }
 
 fn lease(l: &Lent) -> mlua::Result<Lease<'_>> {
@@ -68,7 +83,7 @@ fn lease(l: &Lent) -> mlua::Result<Lease<'_>> {
     }
     // SAFETY: set only for the duration of `UiVm::build`/`call_handler`,
     // which hold shared borrows of all three for that whole time.
-    Ok(unsafe { Lease { world: &*w, client: &*c, engine: &*e } })
+    Ok(unsafe { Lease { world: &*w, client: &*c, engine: &*e, hover_read: &l.hover_read } })
 }
 
 #[derive(Clone)]
@@ -233,6 +248,10 @@ pub struct UiVm {
     pub errors: Vec<String>,
     /// Microseconds spent in each mod's UI code, smoothed.
     pub mod_time: HashMap<String, f64>,
+    /// Mounts (by key) and windows (by "window:" and id) whose last build
+    /// read the hover, and which part (`Hover` bits). Only these rebuild
+    /// when the pointer moves to another cell or pawn.
+    hover_readers: HashMap<String, u8>,
     seen_ids: RefCell<HashSet<String>>,
     /// The player's UI scale, for `view.ui_scale`; set by the engine.
     pub(crate) ui_scale: Rc<Cell<f32>>,
@@ -298,6 +317,7 @@ impl UiVm {
             world: Cell::new(std::ptr::null()),
             client: Cell::new(std::ptr::null()),
             engine: Cell::new(std::ptr::null()),
+            hover_read: Cell::new(0),
         });
         let mut vm = UiVm {
             lua,
@@ -307,6 +327,7 @@ impl UiVm {
             warnings: Vec::new(),
             errors: Vec::new(),
             mod_time: HashMap::new(),
+            hover_readers: HashMap::new(),
             seen_ids: RefCell::new(HashSet::new()),
             unknown_checked: false,
             ui_scale: Rc::new(Cell::new(1.0)),
@@ -946,6 +967,7 @@ impl UiVm {
         });
         // Pawns on screen, for anchored labels.
         view!("visible_pawns", (), |lua, l, _a| {
+            l.hover_read.set(l.hover_read.get() | Hover::PAWN);
             let t = lua.create_table()?;
             let (sw, sh) = l.client.screen;
             for &e in &l.world.pawns {
@@ -1392,7 +1414,10 @@ impl UiVm {
             }
             Ok(t)
         });
-        view!("hover", (), |lua, l, _a| hover_table(lua, l.world, l.client));
+        view!("hover", (), |lua, l, _a| {
+            l.hover_read.set(l.hover_read.get() | Hover::CELL);
+            hover_table(lua, l.world, l.client)
+        });
         view!("profile", (), |lua, l, _a| {
             let t = lua.create_table()?;
             for (name, us) in &l.client.profile {
@@ -1698,11 +1723,12 @@ impl UiVm {
     ) -> Vec<(String, Node)> {
         let decls = self.windows();
         let chrome = self.reg.borrow().chrome.clone();
-        self.run_build(world, client, engine, theme, lists, |b| {
+        let built: Vec<(String, Node, u8)> = self.run_build(world, client, engine, theme, lists, |b| {
             open.iter()
                 .filter_map(|(id, size)| {
                     let decl = decls.iter().find(|d| d.id == *id)?;
                     let key = key_for(1, 0, Some(id));
+                    b.vm.lent.hover_read.set(0);
                     let node = match &chrome {
                         Some((chrome_owner, f)) => {
                             let win = b.vm.lua.create_table().ok()?;
@@ -1721,10 +1747,37 @@ impl UiVm {
                         }
                         None => b.expand_slot(&decl.comp, key, &decl.owner),
                     }?;
-                    Some((id.clone(), node))
+                    Some((id.clone(), node, b.vm.lent.hover_read.get()))
                 })
                 .collect()
-        })
+        });
+        self.hover_readers.retain(|k, _| !k.starts_with("window:"));
+        built
+            .into_iter()
+            .map(|(id, node, read)| {
+                self.note_hover(format!("window:{id}"), read);
+                (id, node)
+            })
+            .collect()
+    }
+
+    fn note_hover(&mut self, key: String, read: u8) {
+        if read != 0 {
+            self.hover_readers.insert(key, read);
+        } else {
+            self.hover_readers.remove(&key);
+        }
+    }
+
+    /// Did this mount's last build read a part of the hover that `moved`
+    /// (`Hover` bits)?
+    pub fn reads_hover(&self, mount_key: &str, moved: u8) -> bool {
+        self.hover_readers.get(mount_key).is_some_and(|r| r & moved != 0)
+    }
+
+    /// Did any open window's last build read a part that `moved`?
+    pub fn windows_read_hover(&self, moved: u8) -> bool {
+        self.hover_readers.iter().any(|(k, r)| k.starts_with("window:") && r & moved != 0)
     }
 
     /// Run `f` with a builder: scripts may read the world, their time is
@@ -1781,16 +1834,23 @@ impl UiVm {
         theme: &Theme,
         lists: &ListEnv,
     ) -> Vec<(Mount, Node)> {
-        let out = self.run_build(world, client, engine, theme, lists, |b| {
+        let built = self.run_build(world, client, engine, theme, lists, |b| {
             mounts
                 .into_iter()
-                .filter_map(|m| {
+                .map(|m| {
                     let key = key_for(0, 0, Some(&m.id));
                     let owner = m.owner.clone();
-                    b.expand_slot(&m.id, key, &owner).map(|n| (m, n))
+                    b.vm.lent.hover_read.set(0);
+                    let n = b.expand_slot(&m.id, key, &owner);
+                    (m, n, b.vm.lent.hover_read.get())
                 })
                 .collect::<Vec<_>>()
         });
+        let mut out = Vec::with_capacity(built.len());
+        for (m, n, read) in built {
+            self.note_hover(m.key(), if n.is_some() { read } else { 0 });
+            out.extend(n.map(|n| (m, n)));
+        }
         if !self.unknown_checked {
             self.unknown_checked = true;
             let seen = self.seen_ids.borrow();

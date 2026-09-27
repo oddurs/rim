@@ -265,7 +265,10 @@ const REBUILD_EVERY: f64 = 1.0 / 20.0;
 /// How often a `refresh = "slow"` mount rebuilds.
 const SLOW_EVERY: f64 = 0.25;
 
-/// The client state trees depend on (not the mouse: hover is paint-time).
+/// The client state every tree depends on. Not the mouse (a node's hover
+/// style is applied at paint time) and not what the pointer is over: that
+/// changes at every cell the pointer crosses, and only the few trees that
+/// read it rebuild then (`vm::Hover`).
 fn client_hash(c: &ClientView) -> u64 {
     let mut h = std::collections::hash_map::DefaultHasher::new();
     use std::hash::Hash;
@@ -278,8 +281,6 @@ fn client_hash(c: &ClientView) -> u64 {
     c.hint.hash(&mut h);
     // A new order (or one undone) shows at once, not at the next slow tick.
     c.last_order.as_ref().map(|o| &o.0).hash(&mut h);
-    c.hover_cell.map(|p| (p.x, p.y)).hash(&mut h);
-    c.hover_pawn.map(|e| e.to_bits().get()).hash(&mut h);
     for t in &c.tools {
         (&t.key, t.active).hash(&mut h);
     }
@@ -336,6 +337,8 @@ pub struct Ui {
     built_at_by: HashMap<String, f64>,
     built_at: f64,
     built_for: u64,
+    /// What the pointer was over when the trees were built.
+    built_hover: (Option<rim_sim::IVec>, Option<rim_sim::hecs::Entity>),
     /// Tree rebuilds so far (tests and the profiler).
     pub builds: u64,
     /// The screen as of the last frame, for placing a window opened from a handler.
@@ -440,6 +443,7 @@ impl Ui {
             built_at_by: HashMap::new(),
             built_at: f64::MIN,
             built_for: 0,
+            built_hover: (None, None),
             builds: 0,
             screen: (0.0, 0.0),
             windows: Vec::new(),
@@ -1257,9 +1261,15 @@ impl Ui {
             || ch != self.built_for
             || self.built.is_empty()
             || self.devtools;
+        // The pointer on another cell or pawn: only the trees that read
+        // the part that changed.
+        let over = (client.hover_cell, client.hover_pawn);
+        let was = std::mem::replace(&mut self.built_hover, over);
+        let moved =
+            if over.0 != was.0 { vm::Hover::CELL } else { 0 } | if over.1 != was.1 { vm::Hover::PAWN } else { 0 };
         let now = input.time;
         let stale = |built_at: f64, every: f64| now - built_at >= every || now < built_at;
-        let fast_due = force || stale(self.built_at, REBUILD_EVERY);
+        let fast_due = force || stale(self.built_at, REBUILD_EVERY) || self.vm.windows_read_hover(moved);
         // The title screen is its own layer: before a colony exists nothing
         // else is built, and in a game it isn't.
         let mounts: Vec<vm::Mount> =
@@ -1268,6 +1278,7 @@ impl Ui {
             .iter()
             .filter(|m| {
                 force
+                    || self.vm.reads_hover(&m.key(), moved)
                     || match m.refresh {
                         vm::Refresh::Frame => true,
                         vm::Refresh::Fast => {
