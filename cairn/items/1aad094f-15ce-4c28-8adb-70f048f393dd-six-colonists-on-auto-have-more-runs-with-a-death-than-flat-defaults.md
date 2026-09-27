@@ -2,10 +2,12 @@
 id: 1aad094f-15ce-4c28-8adb-70f048f393dd
 title: Six colonists on Auto have more runs with a death than flat defaults
 type: spike
-status: backlog
+status: done
 milestone: work
+assignee: Oddur Sigurdsson
 created: 2026-09-26
-updated: 2026-09-26
+updated: 2026-09-27
+closed_at: 2026-09-27
 priority: p2
 api: none
 effort: m
@@ -24,5 +26,9 @@ The balance run for c59d67ed (80 seeds, 8 days, six colonists) had 29/80 runs wi
 
 ## Acceptance criteria
 
-- [ ] Deaths per mode at 200+ seeds, with causes, recorded in DESIGN.md §4d
-- [ ] Either Auto's rate is within noise of flat's, or a planner change brings it there
+- [x] Deaths per mode at 200+ seeds, with causes, recorded in DESIGN.md §4d
+- [x] Either Auto's rate is within noise of flat's, or a planner change brings it there
+
+## 2026-09-27
+
+200 seeds, six colonists: runs with a death Auto 63, flat 57, tuned 60; under one standard deviation. Causes and distances match across modes (wolves most; 22-23 cells out; mostly idle or harvesting). No planner change. The harness now reports deaths by cause and by job, with the mean distance from home.

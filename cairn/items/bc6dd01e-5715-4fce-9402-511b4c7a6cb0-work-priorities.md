@@ -3,9 +3,10 @@ id: bc6dd01e-5715-4fce-9402-511b4c7a6cb0
 key: work
 title: Work priorities
 type: milestone
-status: planned
+status: done
 created: 2026-09-26
-updated: 2026-09-26
+updated: 2026-09-27
+closed_at: 2026-09-27
 priority: p1
 api: additive
 ---
@@ -41,3 +42,7 @@ On the default install, a new player who never opens the Work screen still has a
 ## Due
 
 Not set. Where it sits against Colony and Mood is a person's call.
+
+## 2026-09-27
+
+Shipped: named levels and pins (#159), standing orders (#164), work roles (#167), lenses (#168), Auto (#172), default orders (#178), the planner and Auto as the default (#180), the Roles lens (#183), the orders panel (#189), urgent marks (#193), Auto on the board (#198), modding docs (#199), the balance spike (#200) and the deaths follow-up; fixes #186 and #195.
