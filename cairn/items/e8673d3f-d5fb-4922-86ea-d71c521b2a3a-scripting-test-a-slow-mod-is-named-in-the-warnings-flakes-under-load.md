@@ -3,10 +3,10 @@ id: e8673d3f-d5fb-4922-86ea-d71c521b2a3a
 title: scripting test a_slow_mod_is_named_in_the_warnings flakes under load
 type: bug
 status: backlog
-milestone: scale
+milestone: proving-ground
 created: 2026-09-25
-updated: 2026-09-25
-priority: p2
+updated: 2026-09-27
+priority: p0
 api: none
 effort: s
 layer: engine

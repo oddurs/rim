@@ -2367,6 +2367,58 @@ doesn't round-trip is a desync that hasn't happened yet.
 
 ---
 
+## 7b. Seeds: every run is named, every failure comes back
+
+The world owns one RNG, and 29 draw sites in seven files share it: terms,
+systems, scripts, AI, world, mapgen and the map. A new draw anywhere
+reshuffles every roll after it, so an unrelated change moves where wolves
+spawn, which colonist a raid picks, and what `rim.random()` returns to every
+mod. Tests written against what seed 1 does break for no reason (#207, #211),
+and a balance number measured on one seed means little. The plan, with the
+testing and CI around it, is at
+<https://claude.ai/artifact/KUQcdtWkNG4u63T4S8uPpt>.
+
+### Tension: one stream, or one per purpose?
+
+- **One stream:** simplest, and it's what the save stores today.
+- **Against:** every system and every mod perturbs every other. Installing
+  mod B changes mod A's dice; a new AI roll changes the map's animals.
+- **Ruling:** **a stream per purpose, derived from the world seed.**
+  - Each stream is `Rng::new(mix(seed ^ hash_str(name)))`: `spawns`, `sim`,
+    `ai`, `weather`, `story`, and one `mod:<id>` per mod behind
+    `rim.random()`. Terrain already uses stateless hashes of position and
+    stays that way.
+  - A per-entity decision uses a counter-based draw, a hash of the stream,
+    the entity, the tick and a draw index. It doesn't depend on the order
+    systems run in, so it stays correct if they ever run in parallel.
+  - Every stream's state is saved with the snapshot. The switch changes every
+    map once, so it lands with a save-format bump, and saves from before it
+    replay under their own engine version (§7a).
+
+### Tests and seeds
+
+A seed names a run, never a map. A test may use a seed to make its randomness
+reproducible, never to rely on what that seed's map contains.
+
+- **Scene tests build their own ground** and are the default for behaviour.
+  **Seeded properties** assert invariants over a corpus of seeds.
+  **Determinism tests** compare a run with itself (twice, after a save and
+  load, on four platforms) and never with a stored hash, which would churn
+  with every sim change.
+- A test that doesn't name a seed gets `hash(test name) ^ RIM_SEED_SHIFT`.
+  The shift is 0 on a PR and the date at night, so a test that secretly
+  depends on its map fails at night, is quarantined, and is rewritten as a
+  scene. Luau's `t.world()` does the same instead of defaulting to seed 1.
+- Every failure prints the line that brings it back: the seed, how it was
+  made, the tick, and the command to rerun it.
+- `tests/seeds.toml` keeps maps worth keeping, each with a `why`, chosen with
+  `rim seeds find`, which runs mapgen alone. A nightly sweep runs 200 seeds
+  derived from the date; a failure files a cairn item with its repro line,
+  and once fixed its seed joins the corpus, which every PR runs.
+- Balance changes report distributions over 200 seeds, not one map.
+
+---
+
 ## 8. Performance budget
 
 Target: **250×250 map, 30 colonists, 200 total pawns, 6× speed, 60 fps** on a
@@ -2400,6 +2452,36 @@ dense colony, per pass, with draw calls; CI fails over budget.
   full. One target, not several passes on the window: on macOS's GL each
   pass on the window's framebuffer costs more than all the drawing.
 - Per-system and per-mod profiler overlay from day one.
+
+---
+
+## 8a. Proving: tests, CI and the merge queue
+
+Rim lands about forty PRs a day, mostly from agents, on a public repo. Actions
+minutes are free there; runner slots aren't (20 jobs at once, 5 of them
+macOS), and time isn't. Until September a PR push ran every platform and
+cancelled its previous run, a fifth of runs were thrown away, and a merge
+needed a person-shaped queue that asked each PR to rebase and wait again.
+
+- **The gate is one command, and CI runs that command.** `scripts/task check`
+  runs what CI's jobs run; each CI job calls a `scripts/task` verb, and a
+  pre-push hook runs `check`.
+- **Tests count work; benches measure time.** No wall-clock assertion in the
+  suite: a test asserts steps, cells visited or draw calls. Time lives in the
+  benches, compared with main's last numbers on the same runner type.
+- **A flake is fixed, not retried.** nextest keeps `retries = 0`. A test that
+  fails once on main is quarantined the same day (it runs, and doesn't gate)
+  with a cairn item, and leaves quarantine by counting work instead of time.
+- **The queue proves; a push only checks.** A PR push runs Linux only. The
+  full proof runs in the merge queue on the exact result that will land: the
+  crosscheck and save round trip on Linux x64, Linux ARM, Windows and macOS,
+  and the platforms' hashes compared. Full macOS and Windows suites, fuzzing
+  and the 200-seed sweep run nightly. A push to main re-runs nothing heavy,
+  and queue and main runs are never cancelled.
+- **The queue is configured in the repo.** Mergify, from `.mergify.yml`,
+  with a docs lane and a code lane. An agent adds the `queue` label; the
+  queue tests the PR on top of main and the PRs ahead of it and merges in
+  order. Nobody rebases by hand to chase main.
 
 ---
 
@@ -2711,3 +2793,62 @@ another mod.
   when it's given one. Ignoring it collapsed every spacer to zero and
   stacked docked panels at the top; the shell test now checks that panels sit
   *against* their edges, not merely inside the screen.
+
+---
+
+## 11a. The workbench: acting on the sim from inside the game
+
+The UI has its tools (§11: F12, hot reload, error boxes). The sim has none:
+there is no console, no single-tick step, no way to see an entity's raw
+state, and defs and sim scripts don't reload. Agents, who write most of rim,
+can't ask a running game a question at all.
+
+### Tension: a debug side door, or commands?
+
+- **A side door** (poke the ECS directly) is quick to build.
+- **Against:** it breaks the one rule everything rests on (§7). A save
+  touched by it no longer replays, and a bug report no longer explains itself.
+- **Ruling:** **a dev tool is a command.** Spawn, set a stat, heal, kill,
+  teleport, fire an incident, force weather and finish a build are a
+  `Command::Dev` family: logged, replayed, and marking the save's epoch
+  `dev_touched`, so achievements and balance statistics can ignore the run.
+  The epoch's engine version becomes the git commit, so a replay across
+  commits reports a version change instead of a divergence.
+
+### Tension: an engine feature, or a plugin?
+
+- **In the engine:** one place, no API to design.
+- **Against:** §6's rule. A console, an inspector and a timeline are UI and
+  opinions, and every one of them is something a modder will want to extend
+  or replace, as the weather mod already adds its own F12 panel.
+- **Ruling:** **mechanisms in the engine, tools in a plugin.** The engine
+  provides dev commands, a dev read API (an entity's raw components, job,
+  reservations and path; the session's snapshots; stepping), and the dev
+  port. Everything you see is `mods/devtools`, a first-party plugin that
+  loads only with `--dev`. A mod gets the dev API by declaring the `dev`
+  capability, and only in a `--dev` game.
+
+### What the plugin holds
+
+- **Console:** a Luau REPL over the read API and a `dev.*` table.
+- **Time:** a single tick, N ticks, run until a condition, fast-forward on a
+  worker thread, and this session's snapshots as a timeline to scrub and
+  branch from (§7a's log truncation).
+- **Inspector:** any entity's raw components, job step, reservations and
+  path, what touched it, and watch expressions that pause the game.
+- **Profiler:** per-system history with p99 against §8, and a spike trap that
+  pauses and snapshots on a tick over budget.
+- **Log:** one structured log with per-mod targets, in a file and a panel.
+- **Bug capture:** F8 writes one bundle (save, mod lock, commit, seed, the
+  last day of commands, a screenshot, the log); `rim repro` opens it at its
+  tick.
+
+### Tension: only for people?
+
+- **Ruling:** **what a person can do in the workbench, an agent can do over
+  the wire.** `rim --dev-port` serves the console's API as JSON lines on a
+  local socket, headless or windowed, and `rim mcp` exposes it as an MCP
+  server. Everything an agent does is a logged command.
+- `mods/devtools` ships in release builds and loads only with `--dev` or a
+  setting, since a modder needs it (§10) and a player shouldn't stumble into
+  it.
