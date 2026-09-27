@@ -1576,6 +1576,47 @@ mod tests {
         let _ = std::fs::remove_dir_all(dir);
     }
 
+    /// Records the rectangles drawn; nothing else is expected.
+    struct Rects(Vec<Color>);
+    impl Sink for Rects {
+        fn rect(&mut self, _: f32, _: f32, _: f32, _: f32, c: Color) {
+            self.0.push(c);
+        }
+        fn poly(&mut self, _: f32, _: f32, _: u8, _: f32, _: Color) {}
+        fn line(&mut self, _: f32, _: f32, _: f32, _: f32, _: f32, _: Color) {}
+        fn tri(&mut self, _: [[f32; 2]; 3], _: Color) {}
+        fn image(&mut self, _: f32, _: f32, _: f32, _: f32, _: Slot, _: Color) {}
+        fn atlas(&self) -> &WorldAtlas {
+            unreachable!("a container's contents are drawn without sprites")
+        }
+    }
+
+    #[test]
+    fn a_shelf_draws_what_it_holds() {
+        let mut s = Sim::new(std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../mods")), 1).unwrap();
+        let defs = s.world.defs.clone();
+        let shelf = defs.thing_id("timber:shelf").expect("timber's shelf");
+        let o = s.world.colony_center().unwrap().offset(10, 10);
+        for x in 0..2 {
+            if let Some(e) = s.world.map.fixture_at(o.offset(x, 0)) {
+                s.world.despawn_thing(e);
+            }
+        }
+        let e = s.world.spawn_fixture_of(shelf, o, false, defs.thing_id("timber:planks")).expect("a shelf");
+        let sd = defs.thing(shelf).store.clone().unwrap();
+        let mut empty = Rects(Vec::new());
+        contents(&mut empty, &s.world, e, &sd, (0.0, 0.0), 32.0, [2, 1]);
+        assert!(empty.0.is_empty(), "an empty shelf shows nothing");
+        let held = ["primitive:flint", "primitive:cordage", "primitive:fibre"];
+        for id in held {
+            s.world.put_in_store(e, rim_sim::world::Lot::new(defs.thing_id(id).unwrap(), 5));
+        }
+        let mut drawn = Rects(Vec::new());
+        contents(&mut drawn, &s.world, e, &sd, (0.0, 0.0), 32.0, [2, 1]);
+        let want: Vec<Color> = held.iter().map(|id| rgb(defs.thing(defs.thing_id(id).unwrap()).rgb)).collect();
+        assert_eq!(drawn.0, want, "each held thing in its own colour, in slot order");
+    }
+
     #[test]
     fn a_door_follows_its_wall_and_faces_the_room() {
         let mut s = Sim::new(std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../mods")), 1).unwrap();
