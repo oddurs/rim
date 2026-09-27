@@ -302,7 +302,7 @@ mod surfaces {
         let z = s.sim.world.zones.list[0].id;
         s.right_click(&format!("core:dock.zone.{z}"));
         let menu = s.menu();
-        for row in ["What it takes…", "Take everything", "Take nothing"] {
+        for row in ["What it takes…", "Take everything", "Take nothing", "Raise priority", "Lower priority"] {
             assert!(menu.contains(row), "{row}:\n{menu}");
         }
         let actions = s.key("3");
@@ -310,5 +310,9 @@ mod surfaces {
             actions.iter().all(|a| matches!(a, UiAction::ZoneAllow(_, _, false))) && !actions.is_empty(),
             "{actions:?}"
         );
+        // Raise priority: Normal (1) to Preferred (2).
+        s.right_click(&format!("core:dock.zone.{z}"));
+        let actions = s.key("4");
+        assert_eq!(actions, vec![UiAction::StoreLevel(z, 2)]);
     }
 }

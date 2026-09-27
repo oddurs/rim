@@ -477,7 +477,7 @@ Dig down. The map becomes a stack of 2D levels joined only at stairs, ladders an
 
 ## crafting — Crafting
 
-`#·········` 4% · 1 of 26 done · due 2027-05-01
+`##········` 19% · 5 of 26 done · due 2027-05-01
 
 Production chains: workbenches and bills, cooking, farming, tailoring, research as a plugin.
 
@@ -499,14 +499,14 @@ Production chains: workbenches and bills, cooking, farming, tailoring, research 
 - [ ] `d77d9e1f` Stock fields: per-cell state with staggered updates <sup>feature · p0 · l · engine</sup>
 - [ ] `db7f1e06` Mining that rewards looking: rock kinds, veins and prospecting <sup>content · p1 · m · core</sup>
 - [ ] `e1be8ebd` Plants grow in the weather <sup>feature · p0 · m · engine</sup>
-- [ ] `e953d711` Store levels: sorting that only climbs, and room reserved by count <sup>feature · p1 · l · engine</sup>
 - [ ] `f22f1a62` Stores sheet, storage overlay and hover card <sup>feature · p2 · m · core</sup>
-- [ ] `629e1fa7` Nothing is lost when a carried stack doesn't fit where it's set down <sup>bug · p1 · s · engine</sup>
-- [ ] `6ce26632` The UI draws a thing's look: the item token <sup>feature · p1 · m · client</sup>
-- [ ] `ac643c1f` Stock ledger and holdings: counts by thing, material and chunk <sup>perf · p1 · m · engine</sup>
-- [ ] `dce75339` A build takes a material and parts, and may require a tool <sup>feature · p1 · m · engine</sup>
+- [ ] `e953d711` Store levels: sorting that only climbs, and room reserved by count <sup>feature · p1 · l · engine</sup>
 - [ ] `9bd9e8ab` Fire: burning, spread by wind, put out by rain <sup>feature · p1 · l · engine</sup>
 - [x] `01691032` Item categories and one filter: things, materials and condition <sup>feature · p1 · m · engine</sup>
+- [x] `629e1fa7` Nothing is lost when a carried stack doesn't fit where it's set down <sup>bug · p1 · s · engine</sup>
+- [x] `6ce26632` The UI draws a thing's look: the item token <sup>feature · p1 · m · client</sup>
+- [x] `ac643c1f` Stock ledger and holdings: counts by thing, material and chunk <sup>perf · p1 · m · engine</sup>
+- [x] `dce75339` A build takes a material and parts, and may require a tool <sup>feature · p1 · m · engine</sup>
 
 ## 1.0 — 1.0
 

@@ -161,6 +161,7 @@ impl Sim {
             w.ensure_roles();
         });
         prof.time("boundary", || w.refresh_boundaries());
+        prof.time("stores", || w.sync_stores());
         let defs = w.defs.clone();
         let clock = w.clock();
         prof.time("fields", || w.fields.update(&defs, &mut w.map, clock));

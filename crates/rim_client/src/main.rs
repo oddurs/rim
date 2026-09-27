@@ -1470,6 +1470,9 @@ fn apply_ui(app: &mut App, a: UiAction) {
                 }
             }
         }
+        UiAction::StoreLevel(zone, level) => {
+            app.sim.push(Command::StoreLevel { store: rim_sim::zone::StoreRef::Zone(zone), level });
+        }
         UiAction::ZoneAllow(zone, item, on) => {
             if let Some(thing) = app.sim.world.defs.thing_id(&item) {
                 app.sim.push(Command::ZoneAllow { zone, thing, on });

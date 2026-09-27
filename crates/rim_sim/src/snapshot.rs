@@ -822,6 +822,9 @@ impl Snapshot {
                 notes.push(format!("{n} stockpiles no longer take {id}"));
             }
             zones.tidy();
+            // A scale a mod shortened can't hold a level past its top.
+            let top = defs.store_priority.labels.len().saturating_sub(1) as u8;
+            zones.list.iter_mut().for_each(|z| z.level = z.level.min(top));
             w.zones = zones;
         }
         // Derived from the stacks and the zones, both now in place.

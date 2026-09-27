@@ -24,6 +24,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `act.set_priority` | `(id: number, work: string, level: number) -> ()` | Set a colonist's priority for a work type: 1 first, 0 never. |
 | `act.set_stance` | `(id: string) -> ()` | Put the colony in a stance: its priority rules hold until another. |
 | `act.speed` | `(speed: number) -> ()` | Set the game speed. |
+| `act.store_level` | `(zone: number, level: number) -> ()` | Put a stockpile at a level of the store priority scale (0 is lowest). Stacks only move to a higher one. |
 | `act.stuff` | `(id: string) -> ()` | Choose the material for the active build tool. |
 | `act.toggle_devtools` | `() -> ()` | Show or hide devtools. |
 | `act.toggle_outlines` | `() -> ()` | Show or hide layout outlines (devtools). |
@@ -113,6 +114,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `view.speed` | `() -> number` | The game speed. |
 | `view.stances` | `() -> { Stance }` | The colony's stances, in bar order; `active` is the one it's in. |
 | `view.stats` | `() -> { string }` | Client statistics lines. |
+| `view.store_levels` | `() -> { string }` | The store priority scale's level names, lowest first. |
 | `view.stuff` | `() -> { Stuff }` | Materials for the active build tool: what you have, what you'd get. |
 | `view.thing` | `(id: number) -> ThingInfo?` | A thing on the map: a building, plant, rock or item stack, or nil. why says what stops its designated work. |
 | `view.tick` | `() -> number` | The current tick. |
@@ -126,4 +128,4 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `view.warnings` | `() -> { string }` | Load warnings. |
 | `view.wealth` | `() -> number` | The colony's wealth. |
 | `view.work_types` | `() -> { WorkType }` | The work types, in tie-break order. |
-| `view.zones` | `() -> { Zone }` | The stockpiles, oldest first, with how many cells each has and which items it takes. |
+| `view.zones` | `() -> { Zone }` | The stockpiles, oldest first, with how many cells each has, which items it takes, and its level (0 is lowest) and that level's name. |

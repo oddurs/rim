@@ -236,6 +236,7 @@ pub fn load_only(mods_dir: &Path, enabled: &dyn Fn(&str) -> bool) -> Result<Load
     let mut calendars = 0;
     let mut skies = 0;
     let mut scales = 0;
+    let mut store_scales = 0;
     for e in entries.into_iter().filter(|e| !e.removed) {
         let ctx = format!("{}/{} (from {})", e.kind, e.id, e.origin);
         let v = toml::Value::Table(e.value);
@@ -271,6 +272,16 @@ pub fn load_only(mods_dir: &Path, enabled: &dyn Fn(&str) -> bool) -> Result<Load
                 defs.priority_scale = de!(v)?;
             }
             "field" => defs.fields.push(de!(v)?),
+            "store_priority" => {
+                if store_scales > 0 {
+                    return Err(format!(
+                        "{ctx}: only one [[store_priority]] may exist; patch store_priority/{} instead",
+                        defs.store_priority.id
+                    ));
+                }
+                store_scales += 1;
+                defs.store_priority = de!(v)?;
+            }
             "calendar" => {
                 if calendars > 0 {
                     return Err(format!(

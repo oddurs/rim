@@ -65,7 +65,7 @@ type Tool = {
     key: string, label: string, color: string, active: boolean, category: string, group: string,
     cost: string, work: number, hp: number,
 }
-type Zone = { id: number, name: string, cells: number, allows: { [string]: boolean } }
+type Zone = { id: number, name: string, cells: number, allows: { [string]: boolean }, level: number, level_label: string }
 type Item = { id: string, label: string, color: string }
 type WorkType = { id: string, label: string, icon: string, order: number, default: number }
 type BoardCol = { id: string, label: string, icon: string, skill: string?, waiting: number, on: number, high: number }
@@ -192,6 +192,8 @@ declare act: {
     set_stance: (id: string) -> (),
     -- Set the game speed.
     speed: (speed: number) -> (),
+    -- Put a stockpile at a level of the store priority scale (0 is lowest). Stacks only move to a higher one.
+    store_level: (zone: number, level: number) -> (),
     -- Choose the material for the active build tool.
     stuff: (id: string) -> (),
     -- Show or hide devtools.
@@ -309,6 +311,8 @@ declare view: {
     stances: () -> { Stance },
     -- Client statistics lines.
     stats: () -> { string },
+    -- The store priority scale's level names, lowest first.
+    store_levels: () -> { string },
     -- Materials for the active build tool: what you have, what you'd get.
     stuff: () -> { Stuff },
     -- A thing on the map: a building, plant, rock or item stack, or nil. why says what stops its designated work.
@@ -335,6 +339,6 @@ declare view: {
     wealth: () -> number,
     -- The work types, in tie-break order.
     work_types: () -> { WorkType },
-    -- The stockpiles, oldest first, with how many cells each has and which items it takes.
+    -- The stockpiles, oldest first, with how many cells each has, which items it takes, and its level (0 is lowest) and that level's name.
     zones: () -> { Zone },
 }

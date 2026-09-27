@@ -44,6 +44,15 @@ local function allow_all(on: boolean)
 end
 menus.add("zone", { id = "core:zone.allow_all", label = t("core:zone.allow_all", "Take everything"), group = "manage", run = allow_all(true) })
 menus.add("zone", { id = "core:zone.forbid_all", label = t("core:zone.forbid_all", "Take nothing"), group = "manage", run = allow_all(false) })
+-- A stack only moves to a store at a higher level (DESIGN.md §4f).
+local function step_level(by: number)
+	return function(ctx)
+		local top = #view.store_levels() - 1
+		act.store_level(ctx.id, math.clamp(ctx.subject.level + by, 0, top))
+	end
+end
+menus.add("zone", { id = "core:zone.raise", label = t("core:zone.raise", "Raise priority"), group = "manage", run = step_level(1) })
+menus.add("zone", { id = "core:zone.lower", label = t("core:zone.lower", "Lower priority"), group = "manage", run = step_level(-1) })
 
 local PER_ROW = 4
 
@@ -55,12 +64,30 @@ ui.window("core:zones", { title = t("core:zones.title", "Stockpiles"), w = 460, 
 		})
 	end
 	local items = view.items()
+	local top = #view.store_levels() - 1
 	local parts = {}
 	for _, z in zones do
 		table.insert(
 			parts,
-			row({ id = "core:zones.zone." .. z.id, menu = { kind = "zone", id = z.id } }, {
+			row({ id = "core:zones.zone." .. z.id, menu = { kind = "zone", id = z.id }, gap = "xs" }, {
 				kit.heading(z.name, string.format(t("core:zones.cells", "%d cells"), z.cells)),
+				kit.button({
+					id = "core:zones.lower." .. z.id,
+					label = "−",
+					tooltip = t("core:zone.lower", "Lower priority"),
+					on_click = function()
+						act.store_level(z.id, math.max(z.level - 1, 0))
+					end,
+				}),
+				label(z.level_label, { id = "core:zones.level." .. z.id, minw = 72 }),
+				kit.button({
+					id = "core:zones.raise." .. z.id,
+					label = "+",
+					tooltip = t("core:zone.raise", "Raise priority"),
+					on_click = function()
+						act.store_level(z.id, math.min(z.level + 1, top))
+					end,
+				}),
 			})
 		)
 		local toggles = {}

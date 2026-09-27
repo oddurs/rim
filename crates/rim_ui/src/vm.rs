@@ -752,6 +752,7 @@ impl UiVm {
         });
         act!("set_stance", String, |id| UiAction::SetStance(id));
         act!("zone_allow", (u32, String, bool), |(zone, item, on)| UiAction::ZoneAllow(zone, item, on));
+        act!("store_level", (u32, u8), |(zone, level)| UiAction::StoreLevel(zone, level));
         act!("cycle_overlay", (), |_a| UiAction::CycleOverlay);
         act!("set_overlay", Option<usize>, |i| UiAction::SetOverlay(i.map(|i| i.saturating_sub(1))));
         act!("toggle_profiler", (), |_a| UiAction::ToggleProfiler);
@@ -1228,6 +1229,9 @@ impl UiVm {
             }
             Ok(t)
         });
+        view!("store_levels", (), |lua, l, _a| {
+            lua.create_sequence_from(l.world.defs.store_priority.labels.iter().map(String::as_str))
+        });
         view!("zones", (), |lua, l, _a| {
             let t = lua.create_table()?;
             let zones = &l.world.zones;
@@ -1241,6 +1245,9 @@ impl UiVm {
                     allows.set(l.world.defs.thing(d).id.as_str(), true)?;
                 }
                 row.set("allows", allows)?;
+                row.set("level", z.level)?;
+                let labels = &l.world.defs.store_priority.labels;
+                row.set("level_label", labels.get(z.level as usize).map_or("", String::as_str))?;
                 t.push(row)?;
             }
             Ok(t)

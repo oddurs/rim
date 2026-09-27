@@ -1013,15 +1013,20 @@ pub fn work_waiting(w: &World) -> Vec<u32> {
         n[o.work_type as usize] += 1;
     }
     if let Some(hw) = defs.haul_work.filter(|_| !w.zones.list.is_empty()) {
-        let mut taken: BTreeMap<(DefId, Option<DefId>, i32), bool> = BTreeMap::new();
-        for (te, t) in w.ecs.query::<(Entity, &Thing)>().without::<&Blueprint>().iter() {
-            let of = w.made_of(te);
-            let keeps = |z: &crate::zone::Zone| z.keeps(&w.defs, t.def, of, Some(t.hp));
-            if w.map.item_at(t.pos) != Some(te) || w.zones.at(&w.map, t.pos).is_some_and(keeps) {
-                continue;
-            }
-            if *taken.entry((t.def, of, t.hp)).or_insert_with(|| w.zones.list.iter().any(keeps)) {
-                n[hw as usize] += 1;
+        // Stacks with somewhere better to be and a store with room for them.
+        let claimed = BTreeSet::new();
+        let mut room: BTreeMap<(crate::store::Kind, i32, Option<u8>, u32), bool> = BTreeMap::new();
+        for (_, set) in w.stores.unsorted() {
+            for &bits in set {
+                let Some(te) = Entity::from_bits(bits) else { continue };
+                let (Some(s), Some(t)) = (w.stack_at(te), w.thing(te)) else { continue };
+                let key = (s.kind, t.hp, s.level, w.map.region_at(t.pos));
+                let has = *room
+                    .entry(key)
+                    .or_insert_with(|| haul_destination(w, s.kind, Some(t.hp), t.pos, s.level, &claimed).is_some());
+                if has {
+                    n[hw as usize] += 1;
+                }
             }
         }
     }
@@ -1033,64 +1038,140 @@ pub fn work_waiting(w: &World) -> Vec<u32> {
     n
 }
 
-/// The nearest stack lying where no stockpile keeps it that one would take,
-/// and the nearest cell with room for it: (the walk there and on to the
-/// cell, the job, the stack to reserve).
-fn find_haul(w: &World, e: Entity, from: IVec) -> Option<(u32, Job, Entity)> {
-    if w.zones.list.is_empty() {
-        return None;
-    }
-    // Cells other haulers are already bound for.
-    let claimed: Vec<IVec> = w
-        .pawns
+/// Where a stack on the item layer should go, and why (DESIGN.md §4f).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HaulPlan {
+    /// It lies in a store that keeps it, and no store higher has room.
+    Stays { level: u8 },
+    /// To this cell of this zone, at this level.
+    Moves { zone: u32, level: u8, to: IVec },
+    /// Loose, or in a store that lets it go, and nowhere has room for it.
+    Waits,
+}
+
+/// Where a stack on the item layer should go, and why.
+pub fn haul_plan(w: &World, te: Entity) -> Option<HaulPlan> {
+    let s = w.stack_at(te)?;
+    let t = w.thing(te)?;
+    Some(match haul_destination(w, s.kind, Some(t.hp), t.pos, s.level, &claimed_cells(w, None)) {
+        Some((zone, level, to)) => HaulPlan::Moves { zone, level, to },
+        None => s.level.map_or(HaulPlan::Waits, |level| HaulPlan::Stays { level }),
+    })
+}
+
+/// Cells haulers other than `except` are bound for: each is one stack's
+/// room, reserved.
+fn claimed_cells(w: &World, except: Option<Entity>) -> BTreeSet<u32> {
+    w.pawns
         .iter()
-        .filter(|&&o| o != e)
+        .filter(|&&o| Some(o) != except)
         .filter_map(|&o| match w.ecs.get::<&Pawn>(o).ok()?.job {
-            Job::Haul { to, .. } => Some(to),
+            Job::Haul { to, .. } if w.map.inb(to) => Some(w.map.idx(to) as u32),
             _ => None,
         })
+        .collect()
+}
+
+/// The best cell for a stack of `kind` at `hp` lying at `at`, in a zone
+/// above level `above` (any level for `None`): the highest level that has
+/// room, then the nearest cell there, a partial stack of the same kind or
+/// an open cell alike, ties to the lower cell. (zone, level, cell).
+pub fn haul_destination(
+    w: &World,
+    kind: crate::store::Kind,
+    hp: Option<i32>,
+    at: IVec,
+    above: Option<u8>,
+    claimed: &BTreeSet<u32>,
+) -> Option<(u32, u8, IVec)> {
+    let accepts = w.stores.accepts(kind.0);
+    let mut i = 0;
+    while i < accepts.len() {
+        let level = accepts[i].0;
+        if above.is_some_and(|a| level <= a) {
+            break;
+        }
+        let mut best: Option<(u32, u32, u32)> = None;
+        while i < accepts.len() && accepts[i].0 == level {
+            let zone = accepts[i].1;
+            i += 1;
+            if !w.zones.get(zone).is_some_and(|z| z.keeps(&w.defs, kind.0, kind.1, hp)) {
+                continue;
+            }
+            for c in w.stores.partial(zone, kind).chain(w.stores.open(zone)) {
+                let p = w.map.pos(c as usize);
+                let d = p.octile(at);
+                if claimed.contains(&c)
+                    || best.is_some_and(|b| (b.0, b.1) <= (d, c))
+                    || w.room_for(kind.0, kind.1, p) == 0
+                    || !w.map.can_reach(at, Goal::Cell(p))
+                {
+                    continue;
+                }
+                best = Some((d, c, zone));
+            }
+        }
+        if let Some((_, c, zone)) = best {
+            return Some((zone, level, w.map.pos(c as usize)));
+        }
+    }
+    None
+}
+
+/// The nearest stack that has somewhere better to be, and the best cell
+/// for it: (the walk there and on to the cell, the job, the stack to
+/// reserve). It looks only at the store index's unsorted stacks, in the
+/// chunks nearest `from` first, and stops once no chunk left could hold a
+/// nearer one.
+fn find_haul(w: &World, e: Entity, from: IVec) -> Option<(u32, Job, Entity)> {
+    if w.zones.list.is_empty() || w.stores.unsorted_count() == 0 {
+        return None;
+    }
+    let claimed = claimed_cells(w, Some(e));
+    let (mw, mh) = (w.map.w, w.map.h);
+    let mut order: Vec<(u32, u32)> = w
+        .stores
+        .unsorted()
+        .map(|(c, _)| {
+            let o = w.map.chunk_origin(c as usize);
+            let hi = IVec::new((o.x + CHUNK).min(mw) - 1, (o.y + CHUNK).min(mh) - 1);
+            (IVec::new(from.x.clamp(o.x, hi.x), from.y.clamp(o.y, hi.y)).octile(from), c)
+        })
         .collect();
-    let free = |def: DefId, of: Option<DefId>, c: IVec| !claimed.contains(&c) && w.room_for(def, of, c) > 0;
-    // Whether any zone has room for a thing at all, worked out once per def
-    // and material: with every stockpile full, that's all an idle hauler
-    // has to learn.
-    let mut room: BTreeMap<(DefId, Option<DefId>, i32), bool> = BTreeMap::new();
-    let mut best: Option<(u32, Entity, IVec)> = None;
-    for (te, t) in w.ecs.query::<(Entity, &Thing)>().without::<&Blueprint>().iter() {
-        let of = w.made_of(te);
-        let keeps = |z: &crate::zone::Zone| z.keeps(&w.defs, t.def, of, Some(t.hp));
-        if w.map.item_at(t.pos) != Some(te) || w.zones.at(&w.map, t.pos).is_some_and(keeps) {
-            continue;
+    order.sort_unstable();
+    // Kinds found to have nowhere to go from a region, this search: with
+    // every store full, that's all an idle hauler has to learn.
+    let mut nowhere: BTreeSet<(crate::store::Kind, i32, Option<u8>, u32)> = BTreeSet::new();
+    let mut best: Option<(u32, Entity, IVec, IVec)> = None;
+    let chunks: BTreeMap<u32, &BTreeSet<u64>> = w.stores.unsorted().collect();
+    for (near, c) in order {
+        if best.is_some_and(|b| near > b.0) {
+            break;
         }
-        let any_room = *room
-            .entry((t.def, of, t.hp))
-            .or_insert_with(|| w.zones.members().any(|(z, c)| keeps(z) && free(t.def, of, w.map.pos(c as usize))));
-        if !any_room {
-            continue;
-        }
-        let d = t.pos.octile(from);
-        if best.is_some_and(|b| (b.0, b.1.id()) <= (d, te.id()))
-            || w.reserved_by_other(te, e)
-            || !w.map.can_reach(from, Goal::Cell(t.pos))
-        {
-            continue;
-        }
-        let dest = w
-            .zones
-            .members()
-            .filter(|(z, _)| keeps(z))
-            .map(|(_, c)| w.map.pos(c as usize))
-            .filter(|&c| free(t.def, of, c))
-            .map(|c| (c.octile(t.pos), c))
-            .filter(|&(_, c)| w.map.can_reach(t.pos, Goal::Cell(c)))
-            .min();
-        if let Some((d2, to)) = dest {
-            if best.is_none_or(|b| (d + d2, te.id()) < (b.0, b.1.id())) {
-                best = Some((d + d2, te, to));
+        for &bits in chunks[&c].iter() {
+            let Some(te) = Entity::from_bits(bits) else { continue };
+            let Some(s) = w.stack_at(te) else { continue };
+            let Some(t) = w.thing(te) else { continue };
+            let d = t.pos.octile(from);
+            if best.is_some_and(|b| (b.0, b.1.id()) <= (d, te.id()))
+                || w.reserved_by_other(te, e)
+                || !w.map.can_reach(from, Goal::Cell(t.pos))
+            {
+                continue;
+            }
+            let key = (s.kind, t.hp, s.level, w.map.region_at(t.pos));
+            if nowhere.contains(&key) {
+                continue;
+            }
+            match haul_destination(w, s.kind, Some(t.hp), t.pos, s.level, &claimed) {
+                Some((_, _, to)) => best = Some((d, te, t.pos, to)),
+                None => {
+                    nowhere.insert(key);
+                }
             }
         }
     }
-    best.map(|(d, src, to)| (d, Job::Haul { src, to, stage: 0 }, src))
+    best.map(|(d, src, at, to)| (d + to.octile(at), Job::Haul { src, to, stage: 0 }, src))
 }
 
 /// Nearest reachable stack of `def` that nobody but `e` has claimed.
@@ -1457,8 +1538,16 @@ fn run_haul(w: &mut World, p: &mut Pawn, src: Entity, to: IVec, stage: u8) -> Op
         Go::Arrived => {
             let lot = p.carry?;
             let left = w.put_lot(lot, to);
-            p.carry = (left > 0).then_some(Lot { count: left, ..lot });
-            None
+            if left == 0 {
+                p.carry = None;
+                return None;
+            }
+            // The cell filled on the way: on to the next best place, or,
+            // with none, set down nearby when the job ends.
+            let lot = Lot { count: left, ..lot };
+            p.carry = Some(lot);
+            let next = haul_destination(w, (lot.def, lot.made_of), lot.hp, p.pos, None, &claimed_cells(w, None));
+            next.map(|(_, _, to)| Job::Haul { src, to, stage: 1 })
         }
     }
 }
