@@ -37,6 +37,7 @@ are in [Scripting rules](scripting.md).
 | `rim.map_size` | `() -> (number, number)` | Map width and height in cells. |
 | `rim.message` | `(text: string, kind: MessageKind?) -> ()` | Post a message to the feed (default kind "info"). |
 | `rim.near_cell` | `(x: number, y: number, r: number) -> (number?, number?)` | A random open cell within r of (x, y). |
+| `rim.need_defs` | `{NeedInfo}` | Every need def: what satisfies it ("food", "rest", "field") and how many days a full one lasts. |
 | `rim.on` | `(event: string, fn: (event: {[string]: any}) -> ()) -> ()` | Handle an engine event (`pawn_died`, `season_changed`, ...) or a mod event (`weather:changed`). |
 | `rim.on_migrate` | `(fn: (from_version: string, data: {[string]: any}) -> {[string]: any}) -> ()` | Upgrade your script data from a save made with a different version of your mod: fn gets that version and your data (bare keys) and returns the data to keep. It sees no world: only your data. Runs on load, before any hook. Register at load time. |
 | `rim.order` | `(site: number) -> OrderInfo?` | The work order on a thing and how far it's got, or nil. |
@@ -62,7 +63,7 @@ are in [Scripting rules](scripting.md).
 | `rim.stat` | `(id: number, name: string) -> number?` | A thing's stat by name: its def's base times its material's factor. |
 | `rim.stock` | `(what: string \| StockQuery, place: ("stored" \| "loose")?) -> number` | How many the colony has on the map, read from the stock ledger (never counted): a thing by id, or { thing = }, { tag = } or { category = } (an item category and those under it). `place` narrows it to what lies where a stockpile keeps it, or to what doesn't. |
 | `rim.thing` | `(id: number) -> ThingAt?` | A thing by id: what it is and where, or nil if it's gone. |
-| `rim.thing_defs` | `{ThingInfo}` | Every thing def. |
+| `rim.thing_defs` | `{ThingInfo}` | Every thing def. A food's nutrition is the fraction of a full stomach one unit restores. |
 | `rim.tick` | `() -> number` | The current tick. A day is `rim.ticks_per_day` ticks. |
 | `rim.ticks_per_day` | `number` | Ticks in a game day. |
 | `rim.wealth` | `() -> number` | The colony's wealth (recomputed every few hundred ticks). |
@@ -78,7 +79,8 @@ Types used above:
 type Faction = "player" | "hostile" | "wild"
 type MessageKind = "info" | "good" | "threat" | "bad"
 type CreatureInfo = { id: string, label: string, intelligent: boolean, aggressive: boolean, flees: boolean, plural: string, market_value: number, max_hp: number, wild: boolean }
-type ThingInfo = { id: string, label: string, market_value: number, food: boolean, item: boolean, tags: { string } }
+type ThingInfo = { id: string, label: string, market_value: number, food: boolean, nutrition: number?, item: boolean, tags: { string } }
+type NeedInfo = { id: string, label: string, satisfier: string, days_to_empty: number }
 type StockQuery = { thing: string?, tag: string?, category: string? }
 type ItemCategoryInfo = { id: string, label: string, parent: string?, order: number, children: { string }, items: { string } }
 type Date = { year: number, season: string, season_index: number, day: number, day_of_year: number, year_days: number, year_fraction: number }

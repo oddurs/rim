@@ -195,14 +195,22 @@ impl World {
             if now == was {
                 continue;
             }
-            changed = true;
             let rule = rd.id.clone();
+            // A rule the colony switched off keeps track of its reading, so it
+            // is right the moment it's switched back on, but says nothing and
+            // moves nothing meanwhile.
+            let quiet = self.standing.off.contains(&rule);
+            changed |= !quiet;
             if now {
                 self.standing.on.insert(rule.clone());
-                self.events.push(GameEvent::RuleStarted { rule });
+                if !quiet {
+                    self.events.push(GameEvent::RuleStarted { rule });
+                }
             } else {
                 self.standing.on.remove(&rule);
-                self.events.push(GameEvent::RuleStopped { rule });
+                if !quiet {
+                    self.events.push(GameEvent::RuleStopped { rule });
+                }
             }
         }
         if changed {

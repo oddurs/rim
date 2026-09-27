@@ -2,12 +2,14 @@
 id: bbc59ec3-10da-4c12-8e05-45f20dac8c75
 title: 'Core''s default orders: food, loose items, firewood'
 type: content
-status: backlog
+status: done
 milestone: work
+assignee: Oddur Sigurdsson
 depends_on:
 - 97a12814-63c8-4096-9009-c5c45712cbf7
 created: 2026-09-26
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p1
 api: none
 effort: m
@@ -31,10 +33,14 @@ Auto reacts to waiting work; the colony also needs to react to what it is short 
 
 ## Acceptance criteria
 
-- [ ] Each reading matches a hand count in a fixture colony (test)
-- [ ] Each order starts and stops at its marks in a scripted scenario (test)
-- [ ] The survival harness loses no more colonies with the orders on than off, recorded in DESIGN.md §4d
+- [x] Each reading matches a hand count in a fixture colony (test)
+- [x] Each order starts and stops at its marks in a scripted scenario (test)
+- [x] The survival harness loses no more colonies with the orders on than off, recorded in DESIGN.md §4d
 
 ## 2026-09-26
 
 The storage work (DESIGN §4f) is adding a stock ledger: rim.stock(thing | {tag} | {category}, "stored" | "loose"), O(1). Read core:loose_items from rim.stock(..., "loose") instead of scanning items.
+
+## 2026-09-26
+
+Firewood for winter became wood before winter: core's fires burn nothing yet, so there's no fuel to count. It holds in autumn under 60 wood, until 120. Loose items count every item outside a store that takes it, so with no stockpile everything is loose; the Haul shift then does nothing, since there's no haul work without a stockpile. A switched-off order now keeps tracking its reading but posts no news and bumps no evaluation.

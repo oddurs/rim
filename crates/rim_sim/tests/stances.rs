@@ -122,10 +122,21 @@ fn a_mod_adds_a_stance_and_rules_with_data_alone() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// Switch core's standing orders off, so only the rules under test move.
+fn orders_off(s: &mut Sim) {
+    for id in ["core:food_low", "core:loose_items", "core:wood_for_winter"] {
+        let rule = s.world.defs.lookup("priority_rule", id).unwrap();
+        s.push(Command::SetRuleEnabled { rule, on: false });
+    }
+    s.step();
+}
+
 #[test]
 fn rules_are_worked_out_only_when_their_inputs_change() {
-    // Core's rules read only the stance: a day passes without a look.
+    // Core's rules, its standing orders switched off, read only the stance
+    // and the season: a day passes without a look.
     let mut s = Sim::new(&common::mods(), 1).unwrap();
+    orders_off(&mut s);
     let n = s.world.rules.evaluations;
     for _ in 0..rim_sim::TICKS_PER_DAY {
         s.step();
@@ -138,6 +149,7 @@ fn rules_are_worked_out_only_when_their_inputs_change() {
     // An hour rule: once an hour, and it holds across midnight.
     let dir = modded("stances-hours");
     let mut s = Sim::new(&dir, 1).unwrap();
+    orders_off(&mut s);
     let n = s.world.rules.evaluations;
     let mut night = Vec::new();
     for _ in 0..rim_sim::TICKS_PER_DAY {
@@ -147,7 +159,7 @@ fn rules_are_worked_out_only_when_their_inputs_change() {
         let on = explained(&s, "core:haul").1.iter().any(|p| p.label == "Night");
         night.push((h, on));
     }
-    assert_eq!(s.world.rules.evaluations - n, 23, "once an hour: a day's 24, the first worked out at the start");
+    assert_eq!(s.world.rules.evaluations - n, 24, "once an hour: a day from the second tick crosses 24 hours");
     assert!(night.iter().all(|&(h, on)| on == !(6..22).contains(&h)), "night is 22:00 to 06:00");
     let _ = std::fs::remove_dir_all(dir);
 }

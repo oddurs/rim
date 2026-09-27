@@ -6,7 +6,8 @@
 //! The bot: designate trees and berry bushes near the start, then build a
 //! 5x5 wooden hut (walls, a door, a bed inside). Colonists defend themselves.
 //!
-//! Flags: `--nohut`, `--fire` (a campfire in the hut), `--cold-snap DAY`, `--core` (core alone,
+//! Flags: `--nohut`, `--no-orders` (core's standing orders switched off),
+//! `--fire` (a campfire in the hut), `--cold-snap DAY`, `--core` (core alone,
 //! no weather plugin), `--start-day N` (start on day N of the year, by adding
 //! a patch mod to a copy of the mods folder), `--show SEED` (print that run's
 //! messages). Runs over more than one season also report each season. Seeds
@@ -73,6 +74,14 @@ fn open_square(s: &Sim, c: IVec, size: i32) -> Option<IVec> {
 fn play(mods: &Path, seed: u64, days: u64) -> Report {
     let core = std::env::args().any(|a| a == "--core");
     let mut s = Sim::with_mods(mods, seed, &|m| !core || m == "core").expect("mods load");
+    // The colony switches off core's standing orders, as a player can.
+    if std::env::args().any(|a| a == "--no-orders") {
+        for id in ["core:food_low", "core:loose_items", "core:wood_for_winter"] {
+            if let Some(rule) = s.world.defs.lookup("priority_rule", id) {
+                s.push(Command::SetRuleEnabled { rule, on: false });
+            }
+        }
+    }
     let seasons = s.world.defs.calendar.seasons.len();
     let defs = s.world.defs.clone();
     let c = s.world.colony_center().unwrap();

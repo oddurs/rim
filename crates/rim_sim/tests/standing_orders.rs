@@ -138,7 +138,9 @@ rim.every(100, function()
     rim.set_data("stores:seen", rim.reading("stores:food_days"))
 end)
 rim.on("rule_started", function(e)
-    rim.set_data("stores:started", e.rule .. " " .. e.label .. " " .. e.reading)
+    if string.sub(e.rule, 1, 7) == "stores:" then
+        rim.set_data("stores:started", e.rule .. " " .. e.label .. " " .. e.reading)
+    end
 end)
 "#;
     let dir = stores("orders-script", script);
@@ -195,4 +197,24 @@ fn a_reading_rule_says_what_it_needs() {
         assert!(err.contains(want), "{when}: {err}");
         let _ = std::fs::remove_dir_all(dir);
     }
+}
+
+/// A switched-off order keeps up with its reading without a word, and is
+/// right the moment it's switched back on.
+#[test]
+fn a_switched_off_order_is_quiet_but_keeps_count() {
+    let dir = stores("orders-quiet", "");
+    let mut s = Sim::new(&dir, 1).unwrap();
+    let rule = s.world.defs.lookup("priority_rule", "stores:food_low").unwrap();
+    s.push(Command::SetRuleEnabled { rule, on: false });
+    s.step();
+    s.world.events.clear();
+    let before = s.world.rules.evaluations;
+    s.world.set_reading("stores:food_days", 2.0);
+    assert!(s.world.events.is_empty(), "no news for an order that's off");
+    assert_eq!(s.world.rules.evaluations, before, "nothing to work out");
+    s.push(Command::SetRuleEnabled { rule, on: true });
+    s.step();
+    assert_eq!(harvest(&s), 2, "on again, and the reading was low all along");
+    let _ = std::fs::remove_dir_all(dir);
 }

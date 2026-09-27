@@ -178,6 +178,29 @@ when = { stance = "siege" }
 set = { hunt = 0 }
 shift = { build = -2, chop = 1, mine = 1 }
 
+# Standing orders (DESIGN.md §4d): rules on colony readings, which
+# scripts/readings.luau publishes hourly. Each turns on past one mark and
+# off past the other, so it doesn't flap, and the colony can switch any of
+# them off. They shift everyone, whatever their role.
+[[priority_rule]]
+id = "food_low"
+label = "Food is low"
+when = { reading = "core:food_days", below = 5, until = 8 }
+shift = { harvest = -1, hunt = -1 }
+
+[[priority_rule]]
+id = "loose_items"
+label = "Loose items piling up"
+when = { reading = "core:loose_items", above = 30, until = 10 }
+shift = { haul = -1 }
+
+# Core's fires burn nothing yet, so winter's want is wood to build with.
+[[priority_rule]]
+id = "wood_for_winter"
+label = "Wood before winter"
+when = { season = ["autumn"], reading = "core:wood", below = 60, until = 120 }
+shift = { chop = -1 }
+
 [[designation]]
 id = "chop"
 label = "Chop"
