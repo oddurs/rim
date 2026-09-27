@@ -6,11 +6,18 @@
 //! of the map. It is drawn through the game's own `frame` and `render` in
 //! six views: the whole map at the lowest zoom, mid, close, the whole map
 //! in a storm, a zoom gesture from the whole map to close and back, and the
-//! storm again at half render scale. Per view: each pass's CPU time, the time macroquad
+//! storm again at half render scale, and the whole map at dusk, when the
+//! colony's fires matter. Per view: each pass's CPU time, the time macroquad
 //! takes to hand the frame to GL ("submit"), the time the GPU takes to
 //! finish it (Linux only, where macroquad calls glFinish under telemetry),
 //! one frame's draw calls and indices, and how many things it draws live
-//! rather than from the chunk meshes.
+//! rather than from the chunk meshes. Then each lighting pass on its own:
+//! CPU, and the GPU's time for it from a timer query, taken over extra
+//! frames (DESIGN.md §6e): reading a query back waits for the GPU, which
+//! would disturb the main numbers. On a tile-based GPU (Apple silicon) a
+//! query around part of a frame times the tile pass it lands in, so read
+//! GPU numbers from an immediate-mode GPU. Last, what a change costs: every
+//! cached lighting result rebuilt, frame after frame.
 //!
 //! `--check` exits 1 when the world's CPU time on the whole map (clear, in
 //! a storm, or zooming through it) is over budget. `--sprite-mods N` adds N
@@ -18,12 +25,12 @@
 //! writes the numbers, `--shots DIR` saves a screenshot of each view, and
 //! `--frames N` sets the frames per view.
 
-use crate::{frame, render, App, RawInput, RenderTimes, MIN_ZOOM};
+use crate::{frame, render, sky::PassTime, App, RawInput, RenderTimes, MIN_ZOOM};
 use macroquad::prelude::*;
 use macroquad::telemetry;
 use rim_sim::defs::Category;
 use rim_sim::world::{Faction, Owner};
-use rim_sim::{Command, IVec, Sim};
+use rim_sim::{Command, IVec, Sim, TICKS_PER_DAY};
 use std::path::{Path, PathBuf};
 
 /// The world renderer's CPU budget per frame on the reference machine, in
@@ -188,6 +195,36 @@ pub fn world(mods: &Path, seed: u64, sprite_mods: usize) -> Result<Sim, String> 
     Ok(s)
 }
 
+/// A light in one room in four of the stamped colony, about forty: the
+/// fires a dusk colony is lit by. Only the dusk view has them, so the
+/// other views stay comparable with every earlier run.
+fn light_the_colony(s: &mut Sim) {
+    let defs = s.world.defs.clone();
+    // Whatever gives light, chosen by what defs do rather than by name.
+    let lamps: Vec<usize> = (0..defs.things.len())
+        .filter(|&d| defs.things[d].build.is_some() && defs.things[d].emit.iter().any(|e| e.field == "light"))
+        .collect();
+    if lamps.is_empty() {
+        return;
+    }
+    let Some(c) = s.world.colony_center() else { return };
+    let o = c.offset(-COLONY / 2, -COLONY / 2);
+    let across = COLONY / ROOM + 1;
+    for room in (0..across * across).step_by(4) {
+        let lamp = lamps[room as usize / 4 % lamps.len()];
+        let p = o.offset((room % across) * ROOM + 5, (room / across) * ROOM + 5);
+        if !s.world.map.inb(p) || s.world.map.fixture_at(p).is_some() {
+            continue;
+        }
+        if let Some(e) = s.world.map.item_at(p) {
+            s.world.despawn_thing(e);
+        }
+        if let Some(e) = s.world.spawn_fixture_of(lamp as _, p, false, None) {
+            let _ = s.world.ecs.insert_one(e, Owner(Faction::Player));
+        }
+    }
+}
+
 struct View {
     name: &'static str,
     /// None: the lowest zoom, centred on the map.
@@ -197,17 +234,39 @@ struct View {
     zooming: bool,
     /// The world's resolution (render scale).
     scale: f32,
+    /// The hour to set the clock to; None keeps it.
+    hour: Option<f64>,
+    /// Light the colony's rooms first (`light_the_colony`).
+    lit: bool,
 }
 
-const VIEWS: [View; 6] = [
-    View { name: "whole map", zoom: None, storm: false, zooming: false, scale: 1.0 },
-    View { name: "mid", zoom: Some(12.0), storm: false, zooming: false, scale: 1.0 },
-    View { name: "close", zoom: Some(28.0), storm: false, zooming: false, scale: 1.0 },
-    View { name: "storm", zoom: None, storm: true, zooming: false, scale: 1.0 },
-    View { name: "zooming", zoom: Some(12.0), storm: false, zooming: true, scale: 1.0 },
+const VIEWS: [View; 7] = [
+    View { name: "whole map", zoom: None, storm: false, zooming: false, scale: 1.0, hour: None, lit: false },
+    View { name: "mid", zoom: Some(12.0), storm: false, zooming: false, scale: 1.0, hour: None, lit: false },
+    View { name: "close", zoom: Some(28.0), storm: false, zooming: false, scale: 1.0, hour: None, lit: false },
+    View { name: "storm", zoom: None, storm: true, zooming: false, scale: 1.0, hour: None, lit: false },
+    View { name: "zooming", zoom: Some(12.0), storm: false, zooming: true, scale: 1.0, hour: None, lit: false },
     // The storm at half the pixels: what render scale saves the GPU.
-    View { name: "storm 50%", zoom: None, storm: true, zooming: false, scale: 0.5 },
+    View { name: "storm 50%", zoom: None, storm: true, zooming: false, scale: 0.5, hour: None, lit: false },
+    // Long shadows and lit fires: the most the lighting does.
+    View { name: "dusk", zoom: None, storm: false, zooming: false, scale: 1.0, hour: Some(18.67), lit: true },
 ];
+
+/// Ticks between evaluations of outdoor terms, which the sky is made of.
+const TERMS_EVERY: usize = 20;
+
+/// Frames per view that time each lighting pass on the GPU.
+const GPU_FRAMES: usize = 30;
+/// Frames that each rebuild every cached lighting result.
+const REBUILDS: usize = 10;
+
+/// The tick of `hour` on the current day, from `tick`.
+fn tick_at_hour(tick: u64, hour: f64) -> u64 {
+    let day = tick / TICKS_PER_DAY;
+    // Tick 0 is 06:00.
+    let into = (hour / 24.0 * TICKS_PER_DAY as f64) as u64 + TICKS_PER_DAY - TICKS_PER_DAY / 4;
+    day * TICKS_PER_DAY + into % TICKS_PER_DAY
+}
 
 /// Frames in one zoom gesture, lowest zoom to close and back.
 const GESTURE: usize = 120;
@@ -239,6 +298,45 @@ struct Run {
     rebuilt: usize,
     /// Held to the budget: the whole map, and a zoom gesture through it.
     gated: bool,
+    /// Per lighting pass, over the measured frames.
+    passes: Vec<PassMean>,
+}
+
+/// One lighting pass over a view's frames.
+struct PassMean {
+    name: &'static str,
+    /// Mean CPU, µs.
+    cpu: f64,
+    /// Mean GPU from the timed frames, µs; None where GL has no timer.
+    gpu: Option<f64>,
+    /// Share of frames it did its work in.
+    ran: f64,
+    /// Most draw calls it made in a frame.
+    draws: u32,
+}
+
+/// Mean CPU per lighting pass, and how often it ran, over `frames`; mean
+/// GPU per pass over `waited`.
+fn pass_means(frames: &[Vec<PassTime>], waited: &[Vec<PassTime>]) -> Vec<PassMean> {
+    let names: Vec<&'static str> = frames.first().map_or(Vec::new(), |f| f.iter().map(|p| p.name).collect());
+    names
+        .into_iter()
+        .map(|name| {
+            let of = |fs: &[Vec<PassTime>]| -> Vec<PassTime> {
+                fs.iter().filter_map(|f| f.iter().find(|p| p.name == name).copied()).collect()
+            };
+            let (cpu, gpu) = (of(frames), of(waited));
+            let n = cpu.len().max(1) as f64;
+            let gpus: Vec<f64> = gpu.iter().filter_map(|p| p.gpu_us).collect();
+            PassMean {
+                name,
+                cpu: cpu.iter().map(|p| p.cpu_us).sum::<f64>() / n,
+                gpu: (!gpus.is_empty()).then(|| gpus.iter().sum::<f64>() / gpus.len() as f64),
+                ran: cpu.iter().filter(|p| p.ran).count() as f64 / n,
+                draws: cpu.iter().map(|p| p.draws).max().unwrap_or(0),
+            }
+        })
+        .collect()
 }
 
 impl Run {
@@ -311,8 +409,21 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
     let mut results = Vec::new();
     for v in &VIEWS {
         pin(&mut app, if v.storm { STORM } else { CLEAR });
-        // Pinned channels reach the world's outdoor values on a tick.
-        app.sim.step();
+        if v.lit {
+            light_the_colony(&mut app.sim);
+        }
+        // Pinned channels reach the world's outdoor values on a tick; the
+        // hour's terms (the sky) are evaluated every 20.
+        let settle = match v.hour {
+            Some(h) => {
+                app.sim.world.tick = tick_at_hour(app.sim.world.tick, h);
+                TERMS_EVERY
+            }
+            None => 1,
+        };
+        for _ in 0..settle {
+            app.sim.step();
+        }
         let (w, h) = (app.sim.world.map.w as f32, app.sim.world.map.h as f32);
         let (x, y) = match v.zoom {
             None => (w / 2.0, h / 2.0),
@@ -333,6 +444,7 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
         }
         let mut r =
             Run { name: v.name, zoom: app.cam.zoom, gated: v.zoom.is_none() || v.zooming, ..Default::default() };
+        let mut passes = Vec::with_capacity(frames);
         for k in WARM..WARM + frames {
             if v.zooming {
                 app.cam.zoom = gesture_zoom(k);
@@ -343,6 +455,7 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
             // Submit: macroquad's end of frame, and the meshes' mid-frame.
             let submit = zone(&zones, "Event::draw end_frame").unwrap_or(0.0) + app.render_us.gl;
             r.frames.push((app.render_us, submit, zone(&zones, "glFinish/glFLush")));
+            passes.push(app.sky.passes.clone());
         }
         // A gesture's numbers are for the zoom it ended on.
         r.zoom = app.cam.zoom;
@@ -358,8 +471,35 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
         r.indices = calls.iter().map(|c| c.indices_count).sum::<usize>() + app.meshes.indices;
         r.particles = app.sky.particles();
         r.live = app.meshes.live_count();
+        // The lighting passes' GPU time, on frames of their own after
+        // everything above, which they would disturb.
+        app.sky.time_gpu(true);
+        let mut waited = Vec::with_capacity(GPU_FRAMES);
+        for _ in 0..GPU_FRAMES {
+            draw_one(&mut app, &mut time, None).await;
+            waited.push(app.sky.passes.clone());
+        }
+        app.sky.time_gpu(false);
+        r.passes = pass_means(&passes, &waited);
         results.push(r);
     }
+
+    // What a change costs: every cached lighting result rebuilt, on the
+    // view the loop ended on, a frame at a time. Only the passes that cache:
+    // one that runs every frame costs the same whether anything changed.
+    let last = results.last().map_or("", |r: &Run| r.name);
+    let cached: Vec<&'static str> =
+        results.last().map_or(Vec::new(), |r| r.passes.iter().filter(|p| p.ran < 1.0).map(|p| p.name).collect());
+    app.sky.time_gpu(true);
+    let mut rebuilds: Vec<Vec<PassTime>> = Vec::with_capacity(REBUILDS);
+    for _ in 0..REBUILDS {
+        app.sky.invalidate();
+        draw_one(&mut app, &mut time, None).await;
+        rebuilds.push(app.sky.passes.iter().filter(|p| cached.contains(&p.name)).copied().collect());
+    }
+    app.sky.time_gpu(false);
+    let rebuilt = pass_means(&rebuilds, &rebuilds);
+    let renderer = crate::sky::gl_renderer();
 
     println!(
         "render bench: {SIZE}×{SIZE}, {} colonists, {} pawns, {}×{} points at {dpi}x, {frames} frames per view",
@@ -410,14 +550,55 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
         );
     }
     println!("ms per frame, CPU unless named; world = every pass but the UI; budget {BUDGET_MS} ms on the whole map");
+    println!();
+    println!("{:<10} {:<10} {:>7} {:>7} {:>5} {:>6}", "view", "light pass", "cpu", "gpu", "ran", "calls");
+    for r in &results {
+        for p in &r.passes {
+            let gpu = p.gpu.map_or("-".into(), |g| format!("{:.3}", g / 1e3));
+            println!(
+                "{:<10} {:<10} {:>7.3} {:>7} {:>4.0}% {:>6}",
+                r.name,
+                p.name,
+                p.cpu / 1e3,
+                gpu,
+                p.ran * 100.0,
+                p.draws
+            );
+        }
+    }
+    println!("ms per frame; gpu from a timer query over {GPU_FRAMES} more frames, - where GL has none; ran = frames it did work");
+    let costs: Vec<String> = rebuilt
+        .iter()
+        .map(|p| {
+            let gpu = p.gpu.map_or("-".into(), |g| format!("{:.3}", g / 1e3));
+            format!("{} {:.3} cpu, {gpu} gpu", p.name, p.cpu / 1e3)
+        })
+        .collect();
+    println!("light rebuild on {last}, ms: {}", costs.join("; "));
+    let soft = if crate::sky::software_gl(&renderer) { " (software: gpu times are the CPU rasterising)" } else { "" };
+    println!("gl: {renderer}{soft}");
 
     if let Some(path) = opt("--json") {
         let views: Vec<String> = results
             .iter()
             .map(|r| {
                 let sorted = r.world_ms();
+                let passes: Vec<String> = r
+                    .passes
+                    .iter()
+                    .map(|p| {
+                        format!(
+                            "{{\"name\": \"{}\", \"cpu_ms\": {:.4}, \"gpu_ms\": {}, \"ran\": {:.3}, \"draw_calls\": {}}}",
+                            p.name,
+                            p.cpu / 1e3,
+                            p.gpu.map_or("null".into(), |g| format!("{:.4}", g / 1e3)),
+                            p.ran,
+                            p.draws
+                        )
+                    })
+                    .collect();
                 format!(
-                    "    {{\"view\": \"{}\", \"zoom\": {}, \"world_ms\": {:.4}, \"world_p50_ms\": {:.4}, \"world_p99_ms\": {:.4}, \"ground_ms\": {:.4}, \"things_ms\": {:.4}, \"pawns_ms\": {:.4}, \"weather_ms\": {:.4}, \"light_ms\": {:.4}, \"ui_ms\": {:.4}, \"submit_ms\": {:.4}, \"gpu_ms\": {}, \"draw_calls\": {}, \"indices\": {}, \"particles\": {}, \"rebuilt\": {}, \"live\": {}}}",
+                    "    {{\"view\": \"{}\", \"zoom\": {}, \"world_ms\": {:.4}, \"world_p50_ms\": {:.4}, \"world_p99_ms\": {:.4}, \"ground_ms\": {:.4}, \"things_ms\": {:.4}, \"pawns_ms\": {:.4}, \"weather_ms\": {:.4}, \"light_ms\": {:.4}, \"ui_ms\": {:.4}, \"submit_ms\": {:.4}, \"gpu_ms\": {}, \"draw_calls\": {}, \"indices\": {}, \"particles\": {}, \"rebuilt\": {}, \"live\": {}, \"light_passes\": [{}]}}",
                     r.name,
                     r.zoom,
                     r.mean(|f| f.0.world()),
@@ -435,14 +616,24 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
                     r.indices,
                     r.particles,
                     r.rebuilt,
-                    r.live
+                    r.live,
+                    passes.join(", ")
                 )
             })
             .collect();
+        let rebuild: Vec<String> = rebuilt
+            .iter()
+            .map(|p| {
+                let gpu = p.gpu.map_or("null".into(), |g| format!("{:.4}", g / 1e3));
+                format!("\"{}\": {{\"cpu_ms\": {:.4}, \"gpu_ms\": {gpu}}}", p.name, p.cpu / 1e3)
+            })
+            .collect();
         let json = format!(
-            "{{\n  \"screen\": [{}, {}],\n  \"dpi\": {dpi},\n  \"frames\": {frames},\n  \"budget_ms\": {BUDGET_MS},\n  \"views\": [\n{}\n  ]\n}}\n",
+            "{{\n  \"screen\": [{}, {}],\n  \"dpi\": {dpi},\n  \"frames\": {frames},\n  \"budget_ms\": {BUDGET_MS},\n  \"gl_renderer\": \"{}\",\n  \"light_rebuild_view\": \"{last}\",\n  \"light_rebuild\": {{{}}},\n  \"views\": [\n{}\n  ]\n}}\n",
             screen_width(),
             screen_height(),
+            renderer.replace('"', "'"),
+            rebuild.join(", "),
             views.join(",\n")
         );
         if let Err(e) = std::fs::write(&path, json) {
@@ -469,4 +660,18 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
         println!("render bench: within budget ({name}: {mean:.3} <= {limit:.1} ms)");
     }
     std::process::exit(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_dusk_view_sets_the_clock_to_its_hour_on_the_same_day() {
+        for tick in [0, 7_777, 3 * TICKS_PER_DAY + 19_999] {
+            let t = tick_at_hour(tick, 18.67);
+            assert_eq!(t / TICKS_PER_DAY, tick / TICKS_PER_DAY, "same day");
+            assert!((rim_sim::world::hour_at(t) - 18.67).abs() < 0.01, "{}", rim_sim::world::hour_at(t));
+        }
+    }
 }
