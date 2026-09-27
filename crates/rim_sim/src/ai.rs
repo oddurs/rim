@@ -210,6 +210,9 @@ fn think_colonist(w: &mut World, e: Entity, p: &mut Pawn) -> Option<Job> {
             _ => {}
         }
     }
+    if let Some(j) = dress(w, e, p) {
+        return Some(j);
+    }
     if let Some(j) = find_work(w, e, p) {
         return Some(j);
     }
@@ -1443,6 +1446,7 @@ fn run_job(w: &mut World, e: Entity, p: &mut Pawn) {
         Job::Eat { src, t, seat, stage } => (run_eat(w, p, src, t, seat, stage), 0),
         Job::Sleep { bed, spot, stage } => (run_sleep(w, e, p, bed, spot, stage), 0),
         Job::Comfort { to, need, until } => (run_comfort(w, p, to, need, until), 0),
+        Job::Dress { item } => (run_dress(w, e, p, item), 0),
         Job::Attack { target, until } => (run_attack(w, e, p, target, until), 0),
         Job::Breach { target } => (run_breach(w, p, target), 0),
         Job::Bridge { at, left } => (run_bridge(w, p, at, left), 0),
@@ -2012,6 +2016,61 @@ fn run_eat(w: &mut World, p: &mut Pawn, src: Entity, t: u32, seat: Option<(Entit
             } else {
                 Some(again(src, None))
             }
+        }
+    }
+}
+
+/// Put on outdoor degrees of this many below comfort, take off above it.
+const DRESS_BELOW: f64 = 0.0;
+const UNDRESS_ABOVE: f64 = 6.0;
+
+/// Dress for the weather (DESIGN.md §4c): when it's colder outdoors than an
+/// insulated need's comfort allows, fetch the warmest garment for a layer
+/// not already worn warmer; once it's well above, take the warmest off.
+fn dress(w: &mut World, e: Entity, p: &mut Pawn) -> Option<Job> {
+    let defs = w.defs.clone();
+    let nd = p.needs.iter().map(|n| defs.need(n.0)).find(|nd| nd.satisfier == Satisfier::Field && nd.insulated)?;
+    let out = w.fields.ambient(nd.field_r as usize);
+    let worn = w.insulation(p);
+    if out > nd.comfort[0] + UNDRESS_ABOVE {
+        let warmest =
+            p.worn.iter().copied().max_by(|&a, &b| warmth(w, a).total_cmp(&warmth(w, b)).then(a.id().cmp(&b.id())))?;
+        let at = p.pos;
+        w.take_off(p, warmest, at);
+        return None;
+    }
+    if out >= nd.comfort[0] - worn + DRESS_BELOW {
+        return None;
+    }
+    // Worth fetching: warmer than what's on its layer now.
+    let on_layer = |w: &World, layer: &str| {
+        p.worn.iter().filter(|&&g| w.layer_of(g) == Some(layer)).map(|&g| warmth(w, g)).fold(0.0, f64::max)
+    };
+    let takes = |d: DefId| defs.thing(d).apparel.as_ref().is_some_and(|a| a.insulation > 0.0);
+    let seen: &World = w;
+    let (_, item) = nearest_stack_where(seen, e, p.pos, takes, |g, _| {
+        seen.layer_of(g).is_some_and(|l| warmth(seen, g) > on_layer(seen, l))
+    })?;
+    w.reserve(item, e);
+    Some(Job::Dress { item })
+}
+
+/// A garment's insulation, times its material's factor.
+fn warmth(w: &World, g: Entity) -> f64 {
+    let Some(t) = w.thing(g) else { return 0.0 };
+    let made_of = w.ecs.get::<&MadeOf>(g).ok().map(|m| m.0);
+    w.defs.thing(t.def).apparel.as_ref().map_or(0.0, |a| a.insulation * w.defs.factor(made_of, "insulation"))
+}
+
+fn run_dress(w: &mut World, e: Entity, p: &mut Pawn, item: Entity) -> Option<Job> {
+    let lying = w.ecs.get::<&Worn>(item).is_err() && w.ecs.get::<&Held>(item).is_err();
+    let at = w.thing(item).map(|t| t.pos).filter(|_| lying)?;
+    match go_to(w, p, w.stack_goal(item, at)) {
+        Go::Failed => None,
+        Go::Moving => Some(Job::Dress { item }),
+        Go::Arrived => {
+            w.put_on(e, p, item);
+            None
         }
     }
 }

@@ -22,7 +22,7 @@ use crate::savefile::{self, Epoch, EpochRead, Log, Root};
 use crate::snapshot::{DefsSection, Header, ScriptsSection, Snapshot, WorldSection};
 use crate::world::{
     Blueprint, Contained, Designated, Growth, Held, MadeOf, Order, Owner, Pawn, Planned, Regrow, Spoiling, Store,
-    Thing, Work,
+    Thing, Work, Worn,
 };
 use hecs::Entity;
 use serde::de::DeserializeOwned;
@@ -125,6 +125,7 @@ fn codec_of(section: &str) -> Result<Codec, String> {
         "engine:spoiling" => codec::<Vec<(Entity, Spoiling)>>(),
         "engine:growth" => codec::<Vec<(Entity, Growth)>>(),
         "engine:held" => codec::<Vec<(Entity, Held)>>(),
+        "engine:worn" => codec::<Vec<(Entity, Worn)>>(),
         "engine:store" => codec::<Vec<(Entity, Store)>>(),
         "engine:contained" => codec::<Vec<(Entity, Contained)>>(),
         "engine:replaces" => codec::<Vec<(Entity, crate::world::Replaces)>>(),

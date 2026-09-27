@@ -91,6 +91,8 @@ pub fn needs(w: &mut World) {
         let pos = p.pos;
         let talks = defs.creature(p.def).intelligent;
         let mut dmg = 0.0;
+        // What it wears keeps the cold off an insulated need.
+        let warmth = if p.worn.is_empty() { 0.0 } else { w.insulation(&p) };
         for (k, n) in p.needs.iter_mut().enumerate() {
             let nd = defs.need(n.0);
             let was = n.1;
@@ -102,7 +104,8 @@ pub fn needs(w: &mut World) {
                     // cell is (days_to_empty is the rate at 10 units out);
                     // refills while comfortable.
                     let v = w.fields.value(&defs, &w.map, nd.field_r as usize, pos);
-                    let off = (nd.comfort[0] - v).max(v - nd.comfort[1]).max(0.0);
+                    let low = nd.comfort[0] - if nd.insulated { warmth } else { 0.0 };
+                    let off = (low - v).max(v - nd.comfort[1]).max(0.0);
                     if off > 0.0 {
                         -(NEED_MAX as f64) * frac / nd.days_to_empty * off / 10.0
                     } else {
@@ -135,6 +138,7 @@ pub fn needs(w: &mut World) {
             p.hp = (p.hp + w.rng.round(rate)).min(max);
         }
     }
+    wear_apparel(w, frac);
     for (e, k) in said {
         let Some(need) = w.ecs.get::<&Pawn>(e).ok().map(|p| p.needs[k].0) else { continue };
         let Some(say) = defs.need(need).say.as_ref() else { continue };
@@ -162,6 +166,9 @@ pub fn deaths(w: &mut World) {
             if let Some(t) = p.hand {
                 w.despawn_thing(t);
             }
+            for &g in &p.worn {
+                w.despawn_thing(g);
+            }
             let cd = w.defs.creature(p.def);
             if p.faction == Faction::Hostile {
                 let who = if cd.intelligent { format!("Raider {}", p.name) } else { format!("The {}", cd.label) };
@@ -187,6 +194,10 @@ pub fn deaths(w: &mut World) {
         }
         if let Some(t) = p.hand {
             w.put_down(t, p.pos);
+        }
+        for &g in &p.worn {
+            let _ = w.ecs.remove_one::<Worn>(g);
+            w.put_down(g, p.pos);
         }
         for &(d, n) in &cd.butcher_r {
             w.place_item(d, p.pos, n);
@@ -229,6 +240,46 @@ pub fn regrow(w: &mut World) {
     for e in ready {
         let _ = w.ecs.remove_one::<Regrow>(e);
         w.touch(e);
+    }
+}
+
+/// Garments wear as they're worn, by their `wear_per_day`; one with no hit
+/// points left is worn out and gone.
+fn wear_apparel(w: &mut World, frac: f64) {
+    let defs = w.defs.clone();
+    let mut worn_out: Vec<(Entity, Entity)> = Vec::new();
+    for i in 0..w.pawns.len() {
+        let e = w.pawns[i];
+        let worn = match w.ecs.get::<&Pawn>(e) {
+            Ok(p) if !p.worn.is_empty() => p.worn.clone(),
+            _ => continue,
+        };
+        for g in worn {
+            let Some(t) = w.thing(g) else { continue };
+            let per_day = defs.thing(t.def).apparel.as_ref().map_or(0.0, |a| a.wear_per_day);
+            if per_day <= 0.0 {
+                continue;
+            }
+            let hp = t.hp - w.rng.round(per_day * frac);
+            if hp > 0 {
+                if let Ok(mut t) = w.ecs.get::<&mut Thing>(g) {
+                    t.hp = hp;
+                }
+            } else {
+                worn_out.push((e, g));
+            }
+        }
+    }
+    for (e, g) in worn_out {
+        let label = w.thing(g).map(|t| defs.thing(t.def).label.clone()).unwrap_or_default();
+        let name = w.ecs.get::<&mut Pawn>(e).ok().map(|mut p| {
+            p.worn.retain(|&x| x != g);
+            p.name.clone()
+        });
+        if let Some(name) = name {
+            w.message(format!("{name}'s {label} wore out."), MsgKind::Info);
+        }
+        w.despawn_thing(g);
     }
 }
 

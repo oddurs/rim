@@ -255,6 +255,9 @@ pub struct ThingDef {
     /// Present on things a pawn can hold and work with (DESIGN.md §4e).
     #[serde(default)]
     pub tool: Option<ToolDef>,
+    /// Something a pawn wears (DESIGN.md §4c): one garment a layer.
+    #[serde(default)]
+    pub apparel: Option<ApparelDef>,
     pub food: Option<FoodDef>,
     /// An item that spoils: it loses condition as it lies, and rots away
     /// at none (DESIGN.md §4f).
@@ -422,6 +425,20 @@ pub struct ToolDef {
     pub wear: u32,
     #[serde(skip)]
     pub tags_r: ToolMask,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct ApparelDef {
+    /// Where it's worn: one garment a layer ("body", "outer"). Any names.
+    pub layer: String,
+    /// Degrees the cold end of an `insulated` need's comfort goes down
+    /// while it's worn, times its material's `insulation` factor.
+    #[serde(default)]
+    pub insulation: f64,
+    /// Hit points a day of wearing costs; at none it's worn out.
+    #[serde(default)]
+    pub wear_per_day: f64,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -731,6 +748,10 @@ pub struct NeedDef {
     /// comfort; this is how fast it refills inside comfort.
     #[serde(default = "d01")]
     pub recover_days: f64,
+    /// A field need that clothing eases: its comfort's cold end goes down by
+    /// what the pawn wears (`apparel.insulation`).
+    #[serde(default)]
+    pub insulated: bool,
     /// What a pawn who can talk says as the need drops below a level.
     #[serde(default)]
     pub say: Option<NeedSay>,
@@ -2478,6 +2499,10 @@ impl DefDb {
             tags.iter().filter_map(|t| names.iter().position(|n| n == t)).fold(0, |m, i| m | 1 << i)
         };
         for d in &mut self.things {
+            // A garment is worn whole: a stack of two would be two on one back.
+            if d.apparel.is_some() && d.stack_limit != 1 {
+                return Err(format!("thing/{}: apparel is worn one at a time: give it stack_limit = 1", d.id));
+            }
             if let Some(t) = &mut d.tool {
                 t.tags_r = mask(&t.tags);
             }
