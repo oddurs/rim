@@ -870,6 +870,8 @@ fn paint(
         let pad = |a: f32, len: f32| if a == 0.0 && len == 1.0 { 0.5 } else { 0.0 };
         (sx + x * zx, sy + y * zy, rw * zx + pad(x, rw), rh * zy + pad(y, rh))
     };
+    // The colour of the mass, for the seam drawn over everything else.
+    let mut massed = None;
     for l in layers {
         let base = l.color.map_or(own, |[r, g, b, a]| Color::from_rgba(r, g, b, a));
         let mut f = l.shade;
@@ -896,7 +898,10 @@ fn paint(
                 disc(s, sx + x * zx, sy + y * zy, (r * zr).max(min_px) * f, c);
             }
             Prim::Edges { width } => edges(s, w, cell, span, join, (sx, sy), z, width, c),
-            Prim::Mass => mass(s, w, cell, span, join, (sx, sy), z, c),
+            Prim::Mass => {
+                mass(s, w, cell, span, join, (sx, sy), z, c);
+                massed = Some(c);
+            }
             Prim::Pipe { width, rails, post, spacing } => {
                 pipe(s, w, cell, join, (sx, sy), z, c, (width, rails, post, spacing))
             }
@@ -937,6 +942,9 @@ fn paint(
                 s.image(sx + x * zx - gw / 2.0, sy + y * zy + g.top * k, gw, gh, g.slot, c);
             }
         }
+    }
+    if let Some(c) = massed {
+        seam(s, w, cell, span, join, (sx, sy), z, c);
     }
 }
 
@@ -1249,18 +1257,25 @@ fn mass(s: &mut impl Sink, w: &World, p: IVec, span: [u32; 2], join: Join, (sx, 
         let (a0, a1, dx, dy) = CORNERS[0];
         arc(s, (lx + dx * rr, ly + dy * rr), rr, a0, a1, t, lit);
     }
-    // A seam where the material changes, on the west and north sides: the
-    // neighbours there are painted first, so it isn't covered.
-    if span == [1, 1] {
-        let made = |q: IVec| w.map.fixture_at(q).and_then(|e| w.ecs.get::<&MadeOf>(e).ok().map(|m| m.0));
-        let own = made(p);
-        let seam = shade(c, 0.62);
-        if sides.w && made(p.offset(-1, 0)) != own {
-            s.rect(sx, sy, 1.0, zy, seam);
-        }
-        if sides.n && made(p.offset(0, -1)) != own {
-            s.rect(sx, sy, zx, 1.0, seam);
-        }
+}
+
+/// A seam where the material changes along a joined run, on the cell's
+/// west and north sides: the neighbours there are painted first, and it
+/// goes on after every layer of the cell, so its pattern can't cover it.
+#[allow(clippy::too_many_arguments)]
+fn seam(s: &mut impl Sink, w: &World, p: IVec, span: [u32; 2], join: Join, (sx, sy): (f32, f32), z: f32, c: Color) {
+    if span != [1, 1] {
+        return;
+    }
+    let sides = Sides::of(w, p, span, join);
+    let made = |q: IVec| w.map.fixture_at(q).and_then(|e| w.ecs.get::<&MadeOf>(e).ok().map(|m| m.0));
+    let own = made(p);
+    let line = shade(c, 0.62);
+    if sides.w && made(p.offset(-1, 0)) != own {
+        s.rect(sx, sy, 1.0, z, line);
+    }
+    if sides.n && made(p.offset(0, -1)) != own {
+        s.rect(sx, sy, z, 1.0, line);
     }
 }
 
@@ -1529,6 +1544,103 @@ pub fn ui(list: &[Draw], atlas: &Texture2D, white: (f32, f32), dpi: f32) {
 mod tests {
     use super::*;
     use rim_sim::Sim;
+
+    /// What was painted, in order, so a test can ask what ends up on top.
+    #[derive(Default)]
+    struct Canvas(Vec<(Painted, Color)>);
+
+    enum Painted {
+        Rect([f32; 4]),
+        Line([f32; 5]),
+        Tri([[f32; 2]; 3]),
+        Disc([f32; 3]),
+    }
+
+    impl Sink for Canvas {
+        fn rect(&mut self, x: f32, y: f32, w: f32, h: f32, c: Color) {
+            self.0.push((Painted::Rect([x, y, w, h]), c));
+        }
+        fn poly(&mut self, x: f32, y: f32, _: u8, r: f32, c: Color) {
+            self.0.push((Painted::Disc([x, y, r]), c));
+        }
+        fn line(&mut self, x0: f32, y0: f32, x1: f32, y1: f32, t: f32, c: Color) {
+            self.0.push((Painted::Line([x0, y0, x1, y1, t]), c));
+        }
+        fn tri(&mut self, p: [[f32; 2]; 3], c: Color) {
+            self.0.push((Painted::Tri(p), c));
+        }
+        fn image(&mut self, _: f32, _: f32, _: f32, _: f32, _: Slot, _: Color) {
+            unreachable!("walls draw no pictures")
+        }
+        fn atlas(&self) -> &WorldAtlas {
+            unreachable!("walls draw no pictures")
+        }
+    }
+
+    impl Canvas {
+        /// The colour last painted over a point.
+        fn top(&self, (x, y): (f32, f32)) -> Option<Color> {
+            let covers = |p: &Painted| match *p {
+                Painted::Rect([rx, ry, w, h]) => x >= rx && x < rx + w && y >= ry && y < ry + h,
+                Painted::Disc([cx, cy, r]) => (x - cx).hypot(y - cy) <= r,
+                Painted::Line([x0, y0, x1, y1, t]) => {
+                    let (dx, dy) = (x1 - x0, y1 - y0);
+                    let k = (((x - x0) * dx + (y - y0) * dy) / (dx * dx + dy * dy).max(1e-6)).clamp(0.0, 1.0);
+                    (x - x0 - k * dx).hypot(y - y0 - k * dy) <= t / 2.0
+                }
+                Painted::Tri([a, b, c]) => {
+                    let side = |p: [f32; 2], q: [f32; 2]| (q[0] - p[0]) * (y - p[1]) - (q[1] - p[1]) * (x - p[0]);
+                    let (s0, s1, s2) = (side(a, b), side(b, c), side(c, a));
+                    (s0 >= 0.0 && s1 >= 0.0 && s2 >= 0.0) || (s0 <= 0.0 && s1 <= 0.0 && s2 <= 0.0)
+                }
+            };
+            self.0.iter().rev().find(|(p, _)| covers(p)).map(|(_, c)| *c)
+        }
+    }
+
+    /// Where a run of wall changes material, the thin seam at the joint is
+    /// the last thing drawn there, whatever the pattern does: patterns lie
+    /// in world space, so every place along a row is tried.
+    #[test]
+    fn a_seam_between_materials_is_on_top_of_the_pattern() {
+        let mut s = Sim::with_mods(std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../mods")), 1, &|m| {
+            m == "core"
+        })
+        .unwrap();
+        let d = &s.world.defs;
+        let (wall, wood, stone) =
+            (d.thing_id("wall").unwrap(), d.thing_id("wood").unwrap(), d.thing_id("stone").unwrap());
+        let o = IVec::new(20, 20);
+        let n = 24;
+        for x in -1..=n {
+            for dy in -1..=1 {
+                if let Some(e) = s.world.map.fixture_at(o.offset(x, dy)) {
+                    s.world.despawn_thing(e);
+                }
+            }
+        }
+        for x in 0..n {
+            let m = if x % 2 == 0 { wood } else { stone };
+            s.world.spawn_fixture_of(wall, o.offset(x, 0), false, Some(m)).expect("a wall");
+        }
+        let w = &s.world;
+        let z = 48.0;
+        for x in 1..n {
+            let p = o.offset(x, 0);
+            let mut canvas = Canvas::default();
+            for q in [p.offset(-1, 0), p] {
+                let e = w.map.fixture_at(q).unwrap();
+                thing(&mut canvas, w, e, q, (q.x as f32 * z, q.y as f32 * z), z, 0.0, Tone::default());
+            }
+            let m = if x % 2 == 0 { wood } else { stone };
+            let want = shade(rgb(w.defs.thing(m).rgb), 0.62);
+            for k in 2..=8 {
+                let at = (p.x as f32 * z + 0.5, p.y as f32 * z + k as f32 * z / 10.0);
+                let got = canvas.top(at);
+                assert_eq!(got, Some(want), "the seam at {p:?}, {k}/10 of the way down, is on top");
+            }
+        }
+    }
 
     /// A ring of wood walls with pieces at `doors`, on cleared ground.
     fn building(s: &mut Sim, o: IVec, w: i32, h: i32, inner_x: Option<i32>, doors: &[IVec]) {
