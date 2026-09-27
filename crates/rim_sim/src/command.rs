@@ -497,7 +497,7 @@ pub fn apply(w: &mut World, c: Command) {
             for piece in pd.placed(&defs, at, facing) {
                 let stuff =
                     stuff.filter(|_| piece.stuff.is_some()).filter(|&m| stuff_fits(&defs, piece.thing, Some(m)));
-                let (p, stuff) = (IVec::new(piece.at.0, piece.at.1), stuff.or(piece.stuff));
+                let (p, stuff) = (IVec::at(piece.at.0, piece.at.1, at.z), stuff.or(piece.stuff));
                 for (q, place) in build_preview(w, piece.thing, stuff, p, p, piece.facing) {
                     realize(w, piece.thing, stuff, q, piece.facing, place);
                 }
