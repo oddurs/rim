@@ -524,14 +524,26 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     );
     t.click_tool("build:core:wall").await;
     t.drag(site, site.offset(4, 0)).await;
-    t.click_tool("build:door").await;
+    let (door, bed) = (defs.thing_id("door").unwrap(), defs.thing_id("bed").unwrap());
+    t.click_tool("build:core:door").await;
+    t.check(t.app.tool == Tool::Build(door), "clicking door selects the door tool");
     t.drag(site.offset(5, 0), site.offset(5, 0)).await;
-    t.click_tool("build:bed").await;
+    t.click_tool("build:core:bed").await;
+    t.check(t.app.tool == Tool::Build(bed), "clicking bed selects the bed tool");
     t.drag(site.offset(2, 2), site.offset(2, 2)).await;
     t.ticks(1);
     t.check(
         t.count::<&Blueprint>() == 21,
         format!("walls, a door and a bed are planned ({})", t.count::<&Blueprint>()),
+    );
+    // Drawing the room again over its door: the ring skips what is there.
+    t.click_tool("build:core:wall").await;
+    t.drag(site, site.offset(5, 5)).await;
+    t.ticks(1);
+    let kept = t.w().map.fixture_at(site.offset(5, 0)).and_then(|e| t.w().thing(e)).map(|th| th.def);
+    t.check(
+        kept == Some(door) && t.count::<&Blueprint>() == 21,
+        format!("a ring drawn over a door keeps the door ({kept:?}, {} plans)", t.count::<&Blueprint>()),
     );
     t.right_click((600.0, 500.0)).await;
     t.check(t.app.tool == Tool::Select, "right-click drops the current tool");
