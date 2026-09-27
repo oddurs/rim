@@ -26,7 +26,10 @@ fn every_item_lands_in_the_categories_it_should() {
     let defs = &sim.world.defs;
     let direct = |id: &str| ids(defs, &defs.item_categories[category(defs, id) as usize].items);
     assert_eq!(direct("core:food"), ["core:berries", "core:raw_meat"]);
-    assert_eq!(direct("core:materials"), ["core:stone", "core:wood", "primitive:branches", "primitive:clay"]);
+    assert_eq!(
+        direct("core:materials"),
+        ["core:stone", "core:wood", "primitive:branches", "primitive:clay", "timber:planks"]
+    );
     assert_eq!(direct("primitive:knapping"), ["primitive:bone", "primitive:flint"]);
     assert_eq!(direct("primitive:fibres"), ["primitive:cordage", "primitive:fibre"]);
     assert_eq!(direct("primitive:stones"), ["primitive:stones"]);

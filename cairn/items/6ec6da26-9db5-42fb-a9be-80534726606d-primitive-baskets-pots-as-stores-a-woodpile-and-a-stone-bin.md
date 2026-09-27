@@ -2,14 +2,14 @@
 id: 6ec6da26-9db5-42fb-a9be-80534726606d
 title: 'primitive: baskets, pots as stores, a woodpile and a stone bin'
 type: content
-status: review
+status: done
 milestone: crafting
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 depends_on:
 - 282efef8-78c1-4d2d-ad5d-4a3dd1246589
 created: 2026-09-26
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p2
 api: none
 effort: s

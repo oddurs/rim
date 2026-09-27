@@ -150,7 +150,9 @@ fn a_colonist_panel_has_overview_skills_and_work_tabs() {
     cv.selected = Some(founder);
     frame(&mut ui, &sim, &cv, Input::default());
     assert!(ui.find("core:inspector.bars").is_some(), "overview first");
-    assert!(ui.snapshot().contains("carrying wood ×7"), "{}", ui.snapshot());
+    // By the wood's own label: a plugin may rename it ("logs", with timber).
+    let label = &sim.world.defs.thing(wood).label;
+    assert!(ui.snapshot().contains(&format!("carrying {label} ×7")), "{}", ui.snapshot());
 
     let tab = ui.find("core:inspector.tabs.skills").expect("a skills tab");
     click(&mut ui, &sim, &mut cv, centre(tab));
