@@ -1155,8 +1155,10 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.check(t.pawn(founder).drafted, "R drafts the selected colonist");
 
     let here = t.pawn(founder).pos;
-    let dest = (3..12)
-        .flat_map(|r| [here.offset(r, 0), here.offset(-r, 0), here.offset(0, r), here.offset(0, -r)])
+    // Any open cell a few steps off that the founder can reach, ring by
+    // ring: whatever the map put around them.
+    let dest = (3..30)
+        .flat_map(|r| (-r..=r).flat_map(move |d| [here.offset(r, d), here.offset(-r, d), here.offset(d, r), here.offset(d, -r)]))
         .find(|p| t.w().map.passable(*p) && t.w().map.region_at(*p) == t.w().map.region_at(here))
         .expect("somewhere to walk");
     let d = t.screen(dest);
