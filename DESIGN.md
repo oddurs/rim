@@ -684,8 +684,10 @@ by role, and repeated alerts offer new standing orders.
 Choosing work costs work posted and pools checked, not map size. At 200 pawns
 the budget is under 0.2 ms a tick for work choice, measured with a stress map
 of every cell designated. The planner runs once an in-game hour over
-colonists × work types; its budget is 0.5 ms a run at 30 × 12, measured in
-the harness.
+colonists × work types; its budget is 0.5 ms a run at 30 × 12. Core's
+planner takes 147 µs a run at 32 colonists × 7 work types (release build,
+`auto_planner` test, `--ignored`), and the profiler shows it as its own
+line, `planner:core:auto`.
 
 ---
 

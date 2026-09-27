@@ -141,6 +141,7 @@ fn copy(from: &std::path::Path, to: &std::path::Path) {
 #[test]
 fn a_colonist_panel_has_overview_skills_and_work_tabs() {
     let mut sim = sim_at(&mods());
+    hands(&mut sim);
     let founder = sim.world.colonists().next().unwrap();
     let wood = sim.world.defs.thing_id("core:wood").unwrap();
     sim.world.ecs.get::<&mut rim_sim::world::Pawn>(founder).unwrap().carry = Some(rim_sim::world::Lot::new(wood, 7));

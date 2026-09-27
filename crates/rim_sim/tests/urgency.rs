@@ -8,8 +8,11 @@ use rim_sim::hecs::Entity;
 use rim_sim::world::{Blueprint, Job, Pawn, Thing};
 use rim_sim::{Command, IVec, Sim};
 
+/// Core alone, colonists in Hand so Auto's plan doesn't enter into it.
 fn core() -> Sim {
-    Sim::with_mods(&common::mods(), 2, &|m| m == "core").unwrap()
+    let mut s = Sim::with_mods(&common::mods(), 2, &|m| m == "core").unwrap();
+    common::hands(&mut s);
+    s
 }
 
 /// The first work the founder takes up over `ticks`.

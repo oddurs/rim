@@ -1988,7 +1988,11 @@ impl ScriptHost {
                     continue;
                 }
             };
-            let Some(v) = self.call_value(w, prof, &m, &f, board) else { continue };
+            // Its own line in the profiler too, beside its mod's.
+            let t = Instant::now();
+            let v = self.call_value(w, prof, &m, &f, board);
+            prof.add(&format!("planner:{name}"), t.elapsed().as_secs_f64() * 1e6);
+            let Some(v) = v else { continue };
             let plans = match read_plan(w, &m, v) {
                 Ok(p) => p,
                 Err(e) => {

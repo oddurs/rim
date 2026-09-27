@@ -39,6 +39,7 @@ order = 5
 fn busy_colony(build: u8, chop: u8) -> (Sim, rim_sim::hecs::Entity) {
     // Core alone: with the stone age on, the oaks would wait for an axe.
     let mut sim = Sim::with_mods(&common::mods(), 2, &|m| m == "core").unwrap();
+    common::hands(&mut sim);
     let defs = sim.world.defs.clone();
     let pawn = sim.world.colonists().next().unwrap();
     let c = sim.world.pawn_pos(pawn).unwrap();
@@ -165,7 +166,7 @@ fn a_pin_handed_back_is_forgotten() {
     twin.step();
     let p = sim.world.ecs.get::<&Pawn>(pawn).unwrap();
     assert_eq!(p.own_priority(hunt), None);
-    assert_eq!(sim.world.base_priority(&p, hunt), 3, "back to core's default");
+    assert_eq!(sim.world.base_priority(&p, hunt), sim.world.inherited_priority(&p, hunt), "back to what they inherit");
     drop(p);
     assert_eq!(sim.world.state_hash(), twin.world.state_hash(), "no trace of the pin");
 }

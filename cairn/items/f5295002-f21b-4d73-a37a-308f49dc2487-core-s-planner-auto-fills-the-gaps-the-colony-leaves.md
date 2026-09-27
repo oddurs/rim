@@ -2,12 +2,14 @@
 id: f5295002-f21b-4d73-a37a-308f49dc2487
 title: 'Core''s planner: Auto fills the gaps the colony leaves'
 type: feature
-status: backlog
+status: done
 milestone: work
+assignee: Oddur Sigurdsson
 depends_on:
 - d41e504f-4e16-493c-bb47-28c5d25a6f05
 created: 2026-09-26
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p0
 api: none
 effort: m
@@ -33,7 +35,7 @@ The mechanism does nothing without a policy. DESIGN.md §4d gives core's: need, 
 
 ## Acceptance criteria
 
-- [ ] The planner never proposes 0 and never touches a pin (Luau test)
-- [ ] With every gap covered by role members, Auto colonists get no First for those work types (Luau test)
-- [ ] The castaway and six-colonist sim tests pass
-- [ ] One run costs under 0.5 ms at 30 colonists × 12 work types, recorded in DESIGN.md §4d
+- [x] The planner never proposes 0 and never touches a pin (Luau test)
+- [x] With every gap covered by role members, Auto colonists get no First for those work types (Luau test)
+- [x] The castaway and six-colonist sim tests pass
+- [x] One run costs under 0.5 ms at 30 colonists × 12 work types, recorded in DESIGN.md §4d

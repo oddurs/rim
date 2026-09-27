@@ -48,6 +48,7 @@ icon = "R"
 skill = "crafting"
 priority = 3
 order = 45
+auto = { per_person = 2, weight = 2 }
 
 # A crew for the benches, and builders who craft when nothing else waits
 # (DESIGN.md §4d).

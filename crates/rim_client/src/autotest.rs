@@ -1195,13 +1195,14 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     for _ in 0..20 {
         t.frame().await;
     }
-    let build = {
+    // Siege sets Hunt to never, wherever Auto's plan had it.
+    let hunt = {
         let d = &t.w().defs;
-        d.work_order.iter().position(|&w| d.work_types[w as usize].id == "core:build").unwrap() + 1
+        d.work_order.iter().position(|&w| d.work_types[w as usize].id == "core:hunt").unwrap() + 1
     };
-    let cell = t.app.ui.grid_cell("core:work.grid", 1, build).map(|c| c.text);
+    let cell = t.app.ui.grid_cell("core:work.grid", 1, hunt).map(|c| c.text);
     t.check(
-        cell.as_deref() == Some("3→1"),
+        cell.as_deref().is_some_and(|c| c.ends_with("→–") && c.len() > "→–".len()),
         format!("a cell a stance moves reads where it was and where it is ({cell:?})"),
     );
     t.shot("stance_siege").await;
@@ -1598,7 +1599,12 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         );
         t.check(t.app.ui.find("core:undo").is_none(), "and the toast goes");
         // Held on open ground: the menu, with Go here in it.
-        let ground = (1..8).map(|d| at.offset(d, 0)).find(|&p| t.w().map.passable(p)).unwrap_or(at);
+        // Ground the founder can walk to: on Auto they may have walled some off.
+        let from = t.pawn(founder).pos;
+        let ground = (1..8)
+            .flat_map(|d| [at.offset(d, 0), at.offset(-d, 0), at.offset(0, d), at.offset(0, -d)])
+            .find(|&p| t.w().map.passable(p) && t.w().map.can_reach(from, rim_sim::path::Goal::Cell(p)))
+            .unwrap_or(at);
         t.right_hold(t.screen(ground)).await;
         t.frame().await;
         t.check(
