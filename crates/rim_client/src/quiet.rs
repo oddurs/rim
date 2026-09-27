@@ -15,7 +15,7 @@
 pub fn install() -> bool {
     #[cfg(target_os = "macos")]
     {
-        mac::install()
+        mac::install().is_some()
     }
     #[cfg(not(target_os = "macos"))]
     {
@@ -46,18 +46,22 @@ mod mac {
         0
     }
 
-    pub fn install() -> bool {
+    /// The implementation now answering, if it took. Rust promises a
+    /// function no single address across codegen units, so this is the one
+    /// pointer to compare the runtime's answer with.
+    pub fn install() -> Option<*const c_void> {
         // SAFETY: plain Objective-C runtime calls on an AppKit class, which
         // is loaded before main (miniquad links AppKit); "c@:Q" matches
         // `decline` (BOOL return, self, _cmd, an NSUInteger).
         unsafe {
             let cls = objc_getClass(c"NSRunningApplication".as_ptr());
             if cls.is_null() {
-                return false;
+                return None;
             }
             let sel = sel_registerName(c"activateWithOptions:".as_ptr());
-            class_replaceMethod(cls, sel, decline as *const c_void, c"c@:Q".as_ptr());
-            true
+            let imp = decline as *const c_void;
+            class_replaceMethod(cls, sel, imp, c"c@:Q".as_ptr());
+            Some(imp)
         }
     }
 
@@ -66,18 +70,19 @@ mod mac {
         use super::*;
 
         /// Nothing can watch the focus from a test, but the app's own
-        /// activation is only ever this method: after `install` it is ours.
+        /// activation is only ever this method: after `install` it is the
+        /// one `install` registered, and it declines.
         #[test]
         fn activating_the_app_is_declined() {
-            assert!(install(), "AppKit's NSRunningApplication is there to patch");
-            // SAFETY: runtime lookups of a class and a selector that exist.
-            let imp = unsafe {
-                class_getMethodImplementation(
-                    objc_getClass(c"NSRunningApplication".as_ptr()),
-                    sel_registerName(c"activateWithOptions:".as_ptr()),
-                )
-            };
-            assert_eq!(imp, decline as *const c_void);
+            let ours = install().expect("AppKit's NSRunningApplication is there to patch");
+            let sel = unsafe { sel_registerName(c"activateWithOptions:".as_ptr()) };
+            // SAFETY: a runtime lookup of a class and selector that exist.
+            let imp = unsafe { class_getMethodImplementation(objc_getClass(c"NSRunningApplication".as_ptr()), sel) };
+            assert_eq!(imp, ours, "the runtime answers with what install registered");
+            // SAFETY: `imp` is `decline` (just checked), which reads none of
+            // its arguments; the signature is the one it was registered with.
+            let call: extern "C" fn(Id, Sel, usize) -> i8 = unsafe { std::mem::transmute(imp) };
+            assert_eq!(call(std::ptr::null_mut(), sel, 2), 0, "and it declines");
         }
     }
 }
