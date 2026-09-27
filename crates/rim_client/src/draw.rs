@@ -1,6 +1,7 @@
 //! Rendering. Read-only access to the simulation.
 
 use crate::atlas::{Slot, WorldAtlas};
+use crate::overlay;
 use crate::wear;
 use crate::worksite::{Kind, Tone, DETAIL_ZOOM};
 use crate::{rgb, App, Tool};
@@ -834,10 +835,17 @@ fn storage_overlay(app: &App) {
     let v = storage_view(w, visible(app), app.cam.z);
     for (at, [sw, sh], level) in &v.washes {
         let (sx, sy) = cam.to_screen(at.x as f32, at.y as f32);
-        let c = alpha(crate::ZONE, 0.12 + 0.5 * level);
+        let c = overlay::fade(app.palette.zone, 0.12 + 0.5 * level);
         draw_rectangle(sx, sy, z * *sw as f32 + 0.5, z * *sh as f32 + 0.5, c);
         if (*sw, *sh) != (1, 1) || w.zones.at(&w.map, *at).is_none() {
-            draw_rectangle_lines(sx, sy, z * *sw as f32, z * *sh as f32, 1.5, alpha(crate::ZONE, 0.9));
+            draw_rectangle_lines(
+                sx,
+                sy,
+                z * *sw as f32,
+                z * *sh as f32,
+                app.palette.stroke,
+                overlay::fade(app.palette.zone, 0.9),
+            );
         }
     }
 }
@@ -868,6 +876,15 @@ pub fn world_ui(app: &App) {
             Tool::Build(t) => w.defs.thing(t).blocks,
             _ => false,
         };
+        if matches!(app.tool, Tool::Stockpile | Tool::ClearZone) {
+            // The cells themselves show in `zones`; the box is a line.
+            let p = &app.palette;
+            let (bw, bh) = (s1x - s0x, s1y - s0y);
+            draw_rectangle_lines(s0x - 1.0, s0y - 1.0, bw + 2.0, bh + 2.0, p.hair + 2.0, p.keyline);
+            draw_rectangle_lines(s0x, s0y, bw, bh, p.hair, p.zone);
+            order_flash(app);
+            return;
+        }
         if outline {
             // Show exactly the cells that will get walls.
             for (ra, rb) in crate::build_rects(true, a, b) {
@@ -934,38 +951,186 @@ fn replacements(app: &App) {
     }
 }
 
-/// Stockpiles: a light wash over each cell, and a line where a zone ends.
+/// What a stockpile or clear-zone drag will change, from the sim's own
+/// `Zones::painted`: the cells, and the zone they join (`None` for a
+/// clear; `NEW_ZONE` for one the drag makes). Made once a frame.
+pub struct ZonePreview {
+    /// Map indices, in map order.
+    pub cells: Vec<usize>,
+    pub joins: Option<u32>,
+    /// The drag's rectangle, clamped to the map, and which of its cells
+    /// change, row by row: a cell's answer without a search.
+    rect: (i32, i32, i32, i32),
+    marked: Vec<bool>,
+}
+
+/// The zone a stockpile drag starts, before it has an id.
+const NEW_ZONE: u32 = u32::MAX;
+
+impl ZonePreview {
+    pub fn of(app: &App) -> Option<ZonePreview> {
+        let a = app.drag_start?;
+        let b = app.cam.tile_at(app.pointer.0, app.pointer.1);
+        let w = &app.sim.world;
+        let joins = match app.tool {
+            Tool::Stockpile => Some(w.zones.touched(&w.map, a, b).unwrap_or(NEW_ZONE)),
+            Tool::ClearZone => None,
+            _ => return None,
+        };
+        let cells = w.zones.painted(&w.map, a, b, joins);
+        let (x0, y0) = (a.x.min(b.x).max(0), a.y.min(b.y).max(0));
+        let (x1, y1) = (a.x.max(b.x).min(w.map.w - 1), a.y.max(b.y).min(w.map.h - 1));
+        let (rw, rh) = ((x1 - x0 + 1).max(0), (y1 - y0 + 1).max(0));
+        let mut marked = vec![false; (rw * rh) as usize];
+        for &i in &cells {
+            let (x, y) = ((i % w.map.w as usize) as i32, (i / w.map.w as usize) as i32 % w.map.h);
+            marked[((y - y0) * rw + (x - x0)) as usize] = true;
+        }
+        Some(ZonePreview { cells, joins, rect: (x0, y0, rw, rh), marked })
+    }
+
+    /// Does the drag change the cell at `(x, y)`?
+    pub fn has(&self, x: i32, y: i32) -> bool {
+        let (x0, y0, rw, rh) = self.rect;
+        let (dx, dy) = (x - x0, y - y0);
+        (0..rw).contains(&dx) && (0..rh).contains(&dy) && self.marked[(dy * rw + dx) as usize]
+    }
+}
+
+/// Stockpiles (DESIGN.md §6f): a violet wash over each cell and a line
+/// where a zone ends. The selected one's edge is chalk and its wash
+/// deeper; the hovered one's edge is stronger. A stockpile drag shows the
+/// cells it adds as part of the zone they join; a clear-zone drag hatches
+/// the cells it frees.
 fn zones(app: &App) {
-    let (w, cam) = (&app.sim.world, &app.cam);
+    let (w, cam, p) = (&app.sim.world, &app.cam, &app.palette);
     let z = cam.zoom;
     let (x0, y0, x1, y1) = visible(app);
+    let preview = app.zone_preview.as_ref();
+    let changed = |x: i32, y: i32| preview.is_some_and(|zp| zp.has(x, y));
     let zone = |x: i32, y: i32| {
-        let p = IVec::at(x, y, cam.z);
-        w.zones.cells.get(w.map.idx(p)).copied().filter(|_| w.map.inb(p))
+        let q = IVec::at(x, y, cam.z);
+        if !w.map.inb(q) {
+            return 0;
+        }
+        match preview {
+            Some(zp) if zp.has(x, y) => zp.joins.unwrap_or(0),
+            _ => w.zones.cells[w.map.idx(q)],
+        }
     };
-    let fill = alpha(crate::ZONE, 0.13);
-    // A hovered stockpile's edge is stronger (DESIGN.md §6f).
+    let clearing = preview.is_some_and(|zp| zp.joins.is_none());
+    // Hatching runs in world space, so it flows from cell to cell.
+    let origin = cam.to_screen(0.0, 0.0);
     for y in y0..=y1 {
         for x in x0..=x1 {
-            let Some(id) = zone(x, y).filter(|&id| id != 0) else { continue };
+            let id = zone(x, y);
             let (sx, sy) = cam.to_screen(x as f32, y as f32);
-            draw_rectangle(sx, sy, z, z, fill);
-            let lift = app.chalk.zone_hover(id);
-            let line = alpha(crate::ZONE, 0.7 + 0.3 * lift);
-            let t = (z * 0.06).clamp(1.0, 2.0) + (app.palette.stroke - 1.0) * lift;
-            if zone(x, y - 1) != Some(id) {
-                draw_rectangle(sx, sy, z, t, line);
+            if id == 0 {
+                if clearing && changed(x, y) {
+                    let lone = [!changed(x, y - 1), !changed(x + 1, y), !changed(x, y + 1), !changed(x - 1, y)];
+                    freed(p, sx, sy, z, lone, origin);
+                }
+                continue;
             }
-            if zone(x, y + 1) != Some(id) {
-                draw_rectangle(sx, sy + z - t, z, t, line);
+            let wash = if changed(x, y) {
+                2.0
+            } else if app.selected_zone == Some(id) {
+                1.6
+            } else {
+                1.0
+            };
+            draw_rectangle(sx, sy, z, z, overlay::fade(p.zone_fill, wash));
+            let open = |dx: i32, dy: i32| zone(x + dx, y + dy) != id;
+            let edges = [open(0, -1), open(1, 0), open(0, 1), open(-1, 0)];
+            // An inner corner: both sides joined, the cell between them not.
+            let inner = [
+                !edges[0] && !edges[3] && open(-1, -1),
+                !edges[0] && !edges[1] && open(1, -1),
+                !edges[2] && !edges[1] && open(1, 1),
+                !edges[2] && !edges[3] && open(-1, 1),
+            ];
+            let (c, t, keyed) = zone_edge(app, id);
+            let t = t.min(z / 3.0);
+            if keyed {
+                zone_edges(sx, sy, z, edges, inner, t + 2.0, -1.0, p.keyline);
             }
-            if zone(x - 1, y) != Some(id) {
-                draw_rectangle(sx, sy, t, z, line);
-            }
-            if zone(x + 1, y) != Some(id) {
-                draw_rectangle(sx + z - t, sy, t, z, line);
+            zone_edges(sx, sy, z, edges, inner, t, 0.0, c);
+        }
+    }
+}
+
+/// How stockpile `id`'s edge is drawn: its colour, its width, and whether
+/// it sits on a keyline. Chalk when it's selected; violet otherwise,
+/// stronger while it's hovered.
+pub fn zone_edge(app: &App, id: u32) -> (Color, f32, bool) {
+    let p = &app.palette;
+    if app.selected_zone == Some(id) {
+        return (p.chalk, p.stroke, true);
+    }
+    let lift = app.chalk.zone_hover(id);
+    (overlay::fade(p.zone, 0.8 + 0.2 * lift), p.hair + (p.stroke - p.hair) * lift, false)
+}
+
+/// A zone cell's edges `[top, right, bottom, left]` and inner corners
+/// `[nw, ne, se, sw]`, `t` thick, reaching `out` beyond the cell (a
+/// keyline's point). The sides of one cell share no pixels.
+#[allow(clippy::too_many_arguments)]
+fn zone_edges(sx: f32, sy: f32, z: f32, [n, e, s, w]: [bool; 4], inner: [bool; 4], t: f32, out: f32, c: Color) {
+    let (x0, y0, x1, y1) = (sx + out, sy + out, sx + z - out, sy + z - out);
+    let (l, r) = (if w { x0 } else { sx }, if e { x1 } else { sx + z });
+    if n {
+        draw_rectangle(l, y0, r - l, t, c);
+    }
+    if s {
+        draw_rectangle(l, y1 - t, r - l, t, c);
+    }
+    let (top, bottom) = (if n { y0 + t } else { sy }, if s { y1 - t } else { sy + z });
+    if bottom > top {
+        if w {
+            draw_rectangle(x0, top, t, bottom - top, c);
+        }
+        if e {
+            draw_rectangle(x1 - t, top, t, bottom - top, c);
+        }
+    }
+    // An inner corner's square closes the notch the neighbours' sides
+    // leave there.
+    let k = t + out.min(0.0);
+    for (on, cx, cy) in
+        [(inner[0], sx, sy), (inner[1], sx + z - k, sy), (inner[2], sx + z - k, sy + z - k), (inner[3], sx, sy + z - k)]
+    {
+        if on {
+            draw_rectangle(cx, cy, k, k, c);
+        }
+    }
+}
+
+/// A cell a clear-zone drag will free: hatched in world space, with a
+/// dashed edge where the freed region ends (`lone`: top, right, bottom,
+/// left).
+fn freed(p: &overlay::Palette, sx: f32, sy: f32, z: f32, lone: [bool; 4], (ox, oy): (f32, f32)) {
+    let step = z / (z / 6.0).round().max(1.0);
+    // The first diagonal x + y = c past the cell's corner, on the world's lattice.
+    let base = (sx - ox) + (sy - oy);
+    let mut c = step - base.rem_euclid(step);
+    while c < 2.0 * z {
+        let (u, v) = (c.min(z), c - c.min(z));
+        draw_line(sx + u, sy + v, sx + v, sy + u, p.hair, overlay::fade(p.chalk, 0.3));
+        c += step;
+    }
+    let dash = (z / 6.0).max(2.0);
+    let t = p.hair;
+    let mut d = 0.0;
+    while d < z {
+        let len = dash.min(z - d);
+        let sides =
+            [(sx + d, sy, len, t), (sx + z - t, sy + d, t, len), (sx + d, sy + z - t, len, t), (sx, sy + d, t, len)];
+        for (on, (x, y, w, h)) in lone.iter().zip(sides) {
+            if *on {
+                draw_rectangle(x, y, w, h, p.zone);
             }
         }
+        d += dash * 2.0;
     }
 }
 
@@ -1522,7 +1687,7 @@ fn order_flash(app: &App) {
 }
 
 fn tool_color(app: &App) -> Color {
-    app.tools.iter().find(|b| b.tool == app.tool).map_or(WHITE, |b| b.color)
+    app.tools.iter().find(|b| b.tool == app.tool).map_or(WHITE, |b| crate::tool_colour(app, b))
 }
 
 // ================================================================== UI

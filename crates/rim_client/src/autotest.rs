@@ -1660,6 +1660,47 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         t.w().zones.list.len() == 1 && t.w().zones.at(&t.w().map, spot.offset(5, 0)).map(|z| z.id) == zone,
         "a touching drag extends it",
     );
+    // Zones in violet (11080b20): a drag shows the cells it adds, counted,
+    // and they are the cells the zone gains.
+    let count = |t: &T| t.w().zones.cells.iter().filter(|&&c| Some(c) == zone).count();
+    let before = count(&t);
+    let (a, b) = (spot.offset(0, 2), spot.offset(1, 6));
+    t.input(RawInput { mouse: t.screen(a), left_pressed: true, ..Default::default() }).await;
+    t.input(RawInput { mouse: t.screen(b), ..Default::default() }).await;
+    let chip = crate::overlay::drag_hint(&t.app);
+    t.shot("chalk-zone-paint").await;
+    t.input(RawInput { mouse: t.screen(b), left_released: true, ..Default::default() }).await;
+    t.ticks(1);
+    let gained = count(&t) - before;
+    t.check(
+        chip.as_deref() == Some("Stockpile · +8") && gained == 8,
+        format!("a stockpile drag counts the cells it adds, and adds them ({chip:?}, +{gained})"),
+    );
+    t.click_tool("clear_zone").await;
+    let (a, b) = (spot.offset(0, 5), spot.offset(1, 6));
+    t.input(RawInput { mouse: t.screen(a), left_pressed: true, ..Default::default() }).await;
+    t.input(RawInput { mouse: t.screen(b), ..Default::default() }).await;
+    let hatched = t.app.zone_preview.as_ref().map(|zp| zp.cells.clone()).unwrap_or_default();
+    t.shot("chalk-zone-clear").await;
+    t.input(RawInput { mouse: t.screen(b), left_released: true, ..Default::default() }).await;
+    t.ticks(1);
+    let freed: Vec<usize> = hatched.iter().copied().filter(|&i| t.w().zones.cells[i] == 0).collect();
+    t.check(
+        hatched.len() == 4 && freed == hatched,
+        format!("a clear-zone drag hatches the cells it frees ({} hatched, {} freed)", hatched.len(), freed.len()),
+    );
+    t.clear_dock().await;
+    t.app.tool = Tool::Select;
+    t.click(t.screen(spot.offset(1, 1))).await;
+    t.frame().await;
+    let edge = zone.map(|z| draw::zone_edge(&t.app, z));
+    t.check(
+        t.app.selected_zone == zone && edge.is_some_and(|(c, _, keyed)| c == t.app.palette.chalk && keyed),
+        format!("a selected stockpile's edge is chalk on a keyline ({edge:?})"),
+    );
+    t.shot("chalk-zone").await;
+    t.key(KeyCode::Escape).await;
+    t.check(t.app.selected_zone.is_none(), "Escape lets go of the stockpile");
     t.clear_dock().await;
     t.focus(spot);
     t.shot("stockpile").await;
