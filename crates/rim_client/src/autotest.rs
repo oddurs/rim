@@ -620,8 +620,14 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         ),
     );
     // The seam between the two wood walls carries no outline; the run's west end does.
+    // A seam is an outline across the joint, dark its whole height; the
+    // wood's own plank lines run along it, and one pixel can land on one.
+    // So look down a short span of the joint for the fill.
     let (cx, cy) = t.screen(row);
-    let seam = px(&img, (cx + z / 2.0, cy));
+    let seam = (-3..=3)
+        .map(|k| px(&img, (cx + z / 2.0, cy + k as f32 * z / 10.0)))
+        .min_by(|a, b| dist(*a, wood_c).total_cmp(&dist(*b, wood_c)))
+        .expect("seven samples");
     t.check(dist(seam, wood_c) < 0.08, format!("no seam between joined walls ({seam:?} vs fill {wood_c:?})"));
     // Wood meets stone at the second wall's east side: a hairline, darker than either.
     let (sx2, _) = t.screen(row.offset(2, 0));
