@@ -3,6 +3,7 @@
   "aliases": {
     "core": "./mods/core",
     "crafting": "./mods/crafting",
+    "iron": "./mods/iron",
     "primitive": "./mods/primitive",
     "timber": "./mods/timber",
     "weather": "./mods/weather",

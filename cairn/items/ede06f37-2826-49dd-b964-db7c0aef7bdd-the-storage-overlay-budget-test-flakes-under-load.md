@@ -2,12 +2,12 @@
 id: ede06f37-2826-49dd-b964-db7c0aef7bdd
 title: The storage overlay budget test flakes under load
 type: bug
-status: review
+status: done
 milestone: crafting
 assignee: Oddur Sigurdsson
-claimed: 2026-09-27
 created: 2026-09-27
 updated: 2026-09-27
+closed_at: 2026-09-27
 priority: p2
 api: none
 effort: s

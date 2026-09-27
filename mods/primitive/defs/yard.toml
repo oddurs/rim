@@ -1,7 +1,4 @@
 # ─── Storage: the first rungs of the ladder (DESIGN.md §4f) ─────────────────
-# (This file sorts after wild.toml on purpose: mapgen seeds each spawnable
-# thing by its def index, so a def loaded before wild.toml would reshuffle
-# every map. See the cairn item on spawn seeds.)
 # Each holds more stacks in a cell than the ground, or keeps what the ground
 # can't. Bulky things (wood, stone, branches) don't go in baskets; bulk
 # stores take them deep instead.

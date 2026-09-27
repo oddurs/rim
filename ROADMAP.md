@@ -584,12 +584,11 @@ Dig down. The map becomes a stack of 2D levels joined only at stairs, ladders an
 
 ## crafting — Crafting
 
-`###·······` 29% · 8 of 28 done · due 2027-05-01
+`#####·····` 46% · 13 of 28 done · due 2027-05-01
 
 Production chains: workbenches and bills, cooking, farming, tailoring, research as a plugin.
 
 - [ ] `0927f0af` Tailoring: make apparel <sup>content · p2 · s · core</sup>
-- [ ] `27d51e02` mods/iron: bog iron, charcoal, bloomery and forge, nails, fittings, saw and pick <sup>content · p2 · l · plugin</sup>
 - [ ] `2c03427e` Cooking: raw food into meals <sup>content · p1 · s · core</sup>
 - [ ] `308074c6` Getting wet: pawn wetness and clothing insulation <sup>feature · p2 · m · engine</sup>
 - [ ] `63811969` Spoilage, and keeping things by where they're stored <sup>feature · p3 · m · engine</sup>
@@ -598,24 +597,25 @@ Production chains: workbenches and bills, cooking, farming, tailoring, research 
 - [ ] `704889c9` Research as a plugin <sup>feature · p1 · l · plugin</sup>
 - [ ] `9b569a33` Terrain properties, tags and distance-to inputs <sup>feature · p0 · s · engine</sup>
 - [ ] `b1444a26` Farming: growing zones and crops <sup>feature · p0 · l · engine</sup>
-- [ ] `c2b1b623` Map generation seeds spawns by def index, so adding a def reshuffles maps <sup>bug · p2 · s · engine</sup>
 - [ ] `ca22f222` Bills pick their ingredients: one material per order, and a filter <sup>feature · p2 · m · plugin</sup>
 - [ ] `d77d9e1f` Stock fields: per-cell state with staggered updates <sup>feature · p0 · l · engine</sup>
 - [ ] `db7f1e06` Mining that rewards looking: rock kinds, veins and prospecting <sup>content · p1 · m · core</sup>
 - [ ] `e1be8ebd` Plants grow in the weather <sup>feature · p0 · m · engine</sup>
-- [ ] `4f3e5d8d` mods/timber: planks, plank walls, crates, shelves, racks and a granary <sup>content · p2 · m · plugin</sup>
-- [ ] `5e323021` Store inspector: Contents and Accepts tabs <sup>feature · p1 · m · core</sup>
-- [ ] `ede06f37` The storage overlay budget test flakes under load <sup>bug · p2 · s · client</sup>
-- [ ] `f22f1a62` Stores sheet, storage overlay and hover card <sup>feature · p2 · m · core</sup>
+- [ ] `27d51e02` mods/iron: bog iron, charcoal, bloomery and forge, nails, fittings, saw and pick <sup>content · p2 · l · plugin</sup>
 - [ ] `9bd9e8ab` Fire: burning, spread by wind, put out by rain <sup>feature · p1 · l · engine</sup>
 - [x] `01691032` Item categories and one filter: things, materials and condition <sup>feature · p1 · m · engine</sup>
 - [x] `282efef8` Containers: a store block with slots <sup>feature · p1 · l · engine</sup>
+- [x] `4f3e5d8d` mods/timber: planks, plank walls, crates, shelves, racks and a granary <sup>content · p2 · m · plugin</sup>
+- [x] `5e323021` Store inspector: Contents and Accepts tabs <sup>feature · p1 · m · core</sup>
 - [x] `629e1fa7` Nothing is lost when a carried stack doesn't fit where it's set down <sup>bug · p1 · s · engine</sup>
 - [x] `6ce26632` The UI draws a thing's look: the item token <sup>feature · p1 · m · client</sup>
 - [x] `6ec6da26` primitive: baskets, pots as stores, a woodpile and a stone bin <sup>content · p2 · s · plugin</sup>
 - [x] `ac643c1f` Stock ledger and holdings: counts by thing, material and chunk <sup>perf · p1 · m · engine</sup>
+- [x] `c2b1b623` Map generation seeds spawns by def index, so adding a def reshuffles maps <sup>bug · p2 · s · engine</sup>
 - [x] `dce75339` A build takes a material and parts, and may require a tool <sup>feature · p1 · m · engine</sup>
 - [x] `e953d711` Store levels: sorting that only climbs, and room reserved by count <sup>feature · p1 · l · engine</sup>
+- [x] `ede06f37` The storage overlay budget test flakes under load <sup>bug · p2 · s · client</sup>
+- [x] `f22f1a62` Stores sheet, storage overlay and hover card <sup>feature · p2 · m · core</sup>
 
 ## 1.0 — 1.0
 
