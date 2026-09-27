@@ -106,8 +106,17 @@ fn a_zone_that_refuses_bone_takes_the_flint_axe_and_leaves_the_bone_one() {
     });
     sim.step();
     let at = sim.world.pawn_pos(pawn).unwrap();
-    sim.world.put_lot(Lot { def: axe, count: 1, made_of: Some(bone), hp: None }, at.offset(-2, 0));
-    sim.world.put_lot(Lot { def: axe, count: 1, made_of: Some(flint), hp: None }, at.offset(0, -2));
+    // Dropped outside the stockpile, wherever the map put it: an axe that
+    // lands in the zone would count as stored without anyone hauling it.
+    let free = |s: &Sim, p: IVec| {
+        s.world.map.passable(p) && s.world.map.item_at(p).is_none() && s.world.zones.at(&s.world.map, p).is_none()
+    };
+    let mut spots = (2..30)
+        .flat_map(|r| [at.offset(-r, 0), at.offset(0, -r), at.offset(r, 0), at.offset(0, r)])
+        .filter(|&p| free(&sim, p));
+    let (a, b) = (spots.next().unwrap(), spots.next().unwrap());
+    sim.world.put_lot(Lot { def: axe, count: 1, made_of: Some(bone), hp: None }, a);
+    sim.world.put_lot(Lot { def: axe, count: 1, made_of: Some(flint), hp: None }, b);
     for _ in 0..3_000 {
         sim.step();
     }

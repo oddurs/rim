@@ -289,7 +289,7 @@ impl Meshes {
     /// Paint chunk `c` into fresh buffers.
     #[allow(clippy::too_many_arguments)]
     fn build(&mut self, ctx: &mut dyn RenderingBackend, w: &World, atlas: &WorldAtlas, c: usize, z: f32, t: f32) {
-        let IVec { x: x0, y: y0 } = w.map.chunk_origin(c);
+        let IVec { x: x0, y: y0, .. } = w.map.chunk_origin(c);
         let chunk = &mut self.chunks[c];
         chunk.free(ctx);
         chunk.live = Default::default();

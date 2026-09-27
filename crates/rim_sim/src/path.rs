@@ -80,7 +80,7 @@ impl Pathfinder {
 
     /// A fresh generation: every cell unvisited, without clearing a thing.
     fn next_gen(&mut self, map: &Map) -> u32 {
-        let n = (map.w * map.h) as usize;
+        let n = map.cells();
         if self.g.len() != n {
             self.g = vec![0; n];
             self.parent = vec![0; n];

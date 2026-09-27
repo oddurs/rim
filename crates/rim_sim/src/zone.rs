@@ -106,9 +106,11 @@ impl Zones {
         }
         let (x0, x1) = (a.x.min(b.x).max(0), a.x.max(b.x).min(map.w - 1));
         let (y0, y1) = (a.y.min(b.y).max(0), a.y.max(b.y).min(map.h - 1));
+        // Nothing on a level the map doesn't have.
+        let y1 = if map.levels().contains(&a.z) { y1 } else { y0 - 1 };
         for y in y0..=y1 {
             for x in x0..=x1 {
-                let i = map.idx(IVec::new(x, y));
+                let i = map.idx(IVec::at(x, y, a.z));
                 match id {
                     Some(id) if self.cells[i] == 0 => self.cells[i] = id,
                     Some(_) => {}
@@ -158,10 +160,12 @@ impl Zones {
     pub fn touched(&self, map: &Map, a: IVec, b: IVec) -> Option<u32> {
         let (x0, x1) = (a.x.min(b.x).max(0), a.x.max(b.x).min(map.w - 1));
         let (y0, y1) = (a.y.min(b.y).max(0), a.y.max(b.y).min(map.h - 1));
+        // Nothing on a level the map doesn't have.
+        let y1 = if map.levels().contains(&a.z) { y1 } else { y0 - 1 };
         let mut found = None;
         for y in y0..=y1 {
             for x in x0..=x1 {
-                match (self.cells[map.idx(IVec::new(x, y))], found) {
+                match (self.cells[map.idx(IVec::at(x, y, a.z))], found) {
                     (0, _) => {}
                     (id, None) => found = Some(id),
                     (id, Some(f)) if id != f => return None,

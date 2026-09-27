@@ -620,8 +620,14 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         ),
     );
     // The seam between the two wood walls carries no outline; the run's west end does.
+    // A seam is an outline across the joint, dark its whole height; the
+    // wood's own plank lines run along it, and one pixel can land on one.
+    // So look down a short span of the joint for the fill.
     let (cx, cy) = t.screen(row);
-    let seam = px(&img, (cx + z / 2.0, cy));
+    let seam = (-3..=3)
+        .map(|k| px(&img, (cx + z / 2.0, cy + k as f32 * z / 10.0)))
+        .min_by(|a, b| dist(*a, wood_c).total_cmp(&dist(*b, wood_c)))
+        .expect("seven samples");
     t.check(dist(seam, wood_c) < 0.08, format!("no seam between joined walls ({seam:?} vs fill {wood_c:?})"));
     // Wood meets stone at the second wall's east side: a hairline, darker than either.
     let (sx2, _) = t.screen(row.offset(2, 0));
@@ -745,11 +751,16 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     println!("\n# a door turns to its wall and swings into the room (DESIGN.md §6c)");
     let door = defs.thing_id("door").unwrap();
     let hut = slot.offset(0, 6);
-    for x in -1..=6 {
+    // Grass all round, whatever the map put here: the checks tell wood from
+    // the ground by colour, and dirt is nearly wood.
+    let grass = defs.lookup("terrain", "core:grass").expect("grass");
+    let grass_cost = defs.terrain[grass as usize].path_cost;
+    for x in -3..=7 {
         for y in -1..=6 {
             if let Some(e) = t.w().map.fixture_at(hut.offset(x, y)) {
                 t.app.sim.world.despawn_thing(e);
             }
+            t.app.sim.world.map.set_terrain(hut.offset(x, y), grass, grass_cost);
         }
     }
     let west = hut.offset(0, 2);
@@ -765,9 +776,10 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.focus(west);
     let img = t.grab().await;
     let z = t.app.cam.zoom;
-    let wood_c = of(defs.thing(wood).rgb);
-    let ground = px(&img, at(&t, west, -1.5, 0.5));
-    let near = |c: [f32; 3]| dist(c, wood_c) < dist(c, ground);
+    // Wood is red over green and the grass laid above is green over red,
+    // whatever shade a cell's variation or a wall's edge gives them. (By
+    // distance to wood, a darkened edge sat halfway to the grass.)
+    let near = |c: [f32; 3]| c[0] > c[1] + 0.03;
     // In a north–south wall the wall's ends are the door's top and bottom.
     let jamb = px(&img, at(&t, west, 0.5, 2.0 / z));
     let side = px(&img, at(&t, west, 2.0 / z, 0.5));

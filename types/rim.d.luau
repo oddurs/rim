@@ -26,7 +26,7 @@ type OrderSpec = { label: string, needs: { OrderNeed }, work: number, work_type:
 type OrderInput = { thing: string?, tag: string?, count: number, have: number }
 type OrderInfo = { owner: string, label: string, needs: { OrderInput }, work: number, done: number, total: number, requires: { string } }
 type ItemQuery = { thing: string?, tag: string? }
-type ThingAt = { id: number, thing: string, x: number, y: number, count: number, blueprint: boolean }
+type ThingAt = { id: number, thing: string, x: number, y: number, z: number, count: number, blueprint: boolean }
 
 declare rim: {
     -- A field's outdoor value.
@@ -65,16 +65,16 @@ declare rim: {
     explain: (field: string) -> {Part},
     -- Why a colonist would do what it would, and passes over the rest, work type by work type in tie-break order. Empty if it isn't a pawn.
     explain_work: (id: number) -> { WorkWhy },
-    -- A field's value at a cell (temperature, light, ...).
-    field: (id: string, x: number, y: number) -> number,
+    -- A field's value at a cell (temperature, light, ...), on level z (the surface if nil).
+    field: (id: string, x: number, y: number, z: number?) -> number,
     -- A copy of stored script data, or nil. A bare key is your mod's; "weather:forecast" reads another's.
     get_data: (key: string) -> any,
     -- Whether some tool in the colony, lying about or in a hand, has every one of these tool tags. False for a tag no tool has.
     has_tool: (tags: { string }) -> boolean,
     -- Hour of the day, 0 to 24 (tick 0 is 06:00).
     hour: () -> number,
-    -- Whether a cell is inside an enclosed room.
-    indoors: (x: number, y: number) -> boolean,
+    -- Whether a cell is inside an enclosed room, on level z (the surface if nil).
+    indoors: (x: number, y: number, z: number?) -> boolean,
     -- The item category tree stores and bills filter by, in load order. Each lists its children and the items directly in it, by id.
     item_categories: {ItemCategoryInfo},
     -- Make a pawn give up and walk off the map after `ticks`.
@@ -85,8 +85,8 @@ declare rim: {
     map_size: () -> (number, number),
     -- Post a message to the feed (default kind "info").
     message: (text: string, kind: MessageKind?) -> (),
-    -- A random open cell within r of (x, y).
-    near_cell: (x: number, y: number, r: number) -> (number?, number?),
+    -- A random open cell within r of (x, y), on level z (the surface if nil).
+    near_cell: (x: number, y: number, r: number, z: number?) -> (number?, number?),
     -- Every need def: what satisfies it ("food", "rest", "field") and how many days a full one lasts.
     need_defs: {NeedInfo},
     -- Handle an engine event (`pawn_died`, `season_changed`, ...) or a mod event (`weather:changed`).
@@ -111,8 +111,8 @@ declare rim: {
     random_int: (lo: number, hi: number) -> number,
     -- A colony reading, by qualified id ("core:food_days"); a bare name is your own mod's. Nil until published.
     reading: (id: string) -> number?,
-    -- The room at a cell, or nil on a wall or door. `uncovered` counts cells beyond every roof support's span; `role` is the first [[room_role]] it meets, if any.
-    room_at: (x: number, y: number) -> Room?,
+    -- The room at a cell on level z (the surface if nil), or nil on a wall or door. `uncovered` counts cells beyond every roof support's span; `role` is the first [[room_role]] it meets, if any.
+    room_at: (x: number, y: number, z: number?) -> Room?,
     -- A pawn says something: a speech bubble over it for `ticks` ticks (600 unless given). Higher `priority` wins when it has several lines or the screen is crowded; needs speak at 1, and 2 is the default. Only presentation: nothing in the sim reads it back.
     say: (id: number, text: string, ticks: number?, priority: number?) -> (),
     -- The current season's name.
@@ -127,10 +127,10 @@ declare rim: {
     set_reading: (id: string, value: number) -> (),
     -- Put the colony in a stance: its priority rules hold until another. For incidents; the player's comes as a command.
     set_stance: (stance: string) -> (),
-    -- Drop items near a cell, merging into stacks; returns how many didn't fit. stuff is what they're made of (a flint axe): it sets their hp and quality, and they stack only with the same.
-    spawn_item: (thing: string, x: number, y: number, count: number, stuff: string?) -> number,
-    -- Spawn a creature; returns its id and name, or nil if the cell is blocked.
-    spawn_pawn: (creature: string, faction: Faction, x: number, y: number, name: string?) -> (number?, string?),
+    -- Drop items near a cell, merging into stacks; returns how many didn't fit. stuff is what they're made of (a flint axe): it sets their hp and quality, and they stack only with the same. z is the level (the surface if nil).
+    spawn_item: (thing: string, x: number, y: number, count: number, stuff: string?, z: number?) -> number,
+    -- Spawn a creature on level z (the surface if nil); returns its id and name, or nil if the cell is blocked.
+    spawn_pawn: (creature: string, faction: Faction, x: number, y: number, name: string?, z: number?) -> (number?, string?),
     -- The colony's stance, or nil if no mod defines any.
     stance: () -> string?,
     -- A thing's stat by name: its def's base times its material's factor.

@@ -484,7 +484,7 @@ impl Fields {
             let old = std::mem::take(&mut layer.rooms);
             let mut sum = vec![0i64; n];
             let mut count = vec![0i64; n];
-            for i in 0..map.w as usize * map.h as usize {
+            for i in 0..map.cells() {
                 let (new_id, old_id) = map.room_ids(i);
                 if new_id == 0 {
                     continue;

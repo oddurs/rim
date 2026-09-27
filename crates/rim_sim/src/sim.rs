@@ -10,7 +10,10 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Instant;
 
-pub const MAP_SIZE: i32 = 200;
+/// The default map's side: six chunks, so no chunk is cut short. Levels
+/// below add the area of whole maps, so the surface needn't be bigger
+/// (DESIGN.md §6d).
+pub const MAP_SIZE: i32 = 192;
 
 /// Mods loaded and their scripts started, before there is a world.
 pub(crate) struct Mods {
@@ -46,9 +49,22 @@ impl Sim {
 
     /// Everything configurable: which mods, and the map's size (square).
     pub fn build(mods_dir: &Path, seed: u64, enabled: &dyn Fn(&str) -> bool, size: i32) -> Result<Sim, String> {
+        Self::build_with(mods_dir, seed, enabled, size, 0, 0)
+    }
+
+    /// As `build`, with `below` levels under the surface and `above` over
+    /// it (DESIGN.md §6d).
+    pub fn build_with(
+        mods_dir: &Path,
+        seed: u64,
+        enabled: &dyn Fn(&str) -> bool,
+        size: i32,
+        below: i32,
+        above: i32,
+    ) -> Result<Sim, String> {
         let m = Self::load_mods(mods_dir, enabled)?;
         let defs = m.defs.clone();
-        let mut world = World::new(defs.clone(), size, size, seed);
+        let mut world = World::with_levels(defs.clone(), size, size, below, above, seed);
         let start = mapgen::generate(&mut world);
 
         let s = defs.start.as_ref().unwrap();
