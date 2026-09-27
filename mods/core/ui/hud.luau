@@ -90,7 +90,8 @@ ui.define("core:hover", function(view)
 	end
 	return kit.panel({ gap = "item", maxw = 460 }, parts)
 end)
-ui.mount("right", "core:hover", { align = "end" })
+-- A slot, so the header stays put as the pointer crosses busier cells.
+ui.mount("right", "core:hover", { align = "end", slot = 132 })
 
 -- ─── Order hint: what a right-click would do, beside the cursor ────────────
 

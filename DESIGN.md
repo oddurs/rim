@@ -2344,12 +2344,40 @@ another mod.
   edges; panels declare a region, an order and size limits, and regions
   stack them. The world stays visible under translucent panels.
 - **Layers**, bottom to top: world, anchored (labels, bars, bubbles tied to
-  entities or cells), docked, windows, menus and tooltips, modal, toasts.
-  Input goes to the top layer first; whatever the UI doesn't handle falls
-  through to the world.
+  entities or cells), docked, float, windows, menus and tooltips, modal,
+  toasts. Input goes to the top layer first; whatever the UI doesn't handle
+  falls through to the world.
 - **Anchored UI avoids collisions:** labels near each other are nudged apart
   by priority (selected, colonists, hostiles, others), which fixes overlapping
   names once for everything.
+
+### Tension: should a region grow with what's in it?
+
+- **For:** a region sized to its content never wastes space, and a tray that
+  pushes the map up keeps every cell visible.
+- **Against:** the bottom region held the undo toast, the Build tray and the
+  placing pill, so every order, every pick and every Escape changed its
+  height, and the inspector and the hover card, which sit on the band's
+  floor, jumped by tens to hundreds of pixels. A panel that moves under the
+  pointer is a misclick waiting to happen.
+- **Ruling:** the HUD holds still.
+  1. **The frame is fixed.** The top bar and the dock bar have fixed heights,
+     so the map band between them never changes size.
+  2. **What comes and goes floats.** The `float` layer places panels over
+     the map, from the left column's edge, above the dock; it never reflows
+     the shell. Trays live there. One too wide for the room slides left to
+     stay on screen.
+  3. **Status lives in the bar.** What the next click does (the placing
+     pill) and what can be taken back (Undo) sit in the dock bar's
+     `core:dock.status` slot, not above it.
+  4. **Headers don't move.** A panel docked at a column's end reserves a
+     `slot`, a minimum height, and hangs from its top, so content that
+     changes height grows down into the slot and the header stays put.
+  5. **A test holds it.** `rim_ui`'s `steady` tests play select, tabs, an
+     order, a tray, a pick, Escape and a busier hover, and fail if the dock,
+     the colonist list or a docked header moves.
+- The right column's start stack is not held yet: an alert arriving still
+  pushes the news down.
 
 ### Looks: plain, minimal, tokens
 

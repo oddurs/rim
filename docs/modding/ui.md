@@ -59,7 +59,8 @@ To use the kit from your own mod, list `core` in `depends` in your
 | Layer | What it's for | Options |
 |---|---|---|
 | `top`, `bottom` | Full-width bars at the screen edges | `order` |
-| `left`, `right` | Columns at the sides; `align = "start"` stacks from the top, `"end"` from the bottom | `order`, `align` |
+| `left`, `right` | Columns at the sides; `align = "start"` stacks from the top, `"end"` from the bottom | `order`, `align`, `slot` |
+| `float` | Over the map, above the dock, from the left column's edge; never moves a docked panel. A tray belongs here | `order`, `align` |
 | `anchored` | Labels attached to pawns or cells (see below) | |
 | `cursor` | A small label that follows the mouse | |
 | `windows` | Panels in the middle of the screen | |
@@ -77,6 +78,14 @@ behind translucent panels, and clicks on empty screen go to the world.
 A side column's `start` stack gives way before its `end` stack: a panel
 there that says `minh = 0` and holds a `scroll` or `list` shrinks to the
 room left and scrolls, instead of running under the panels at the bottom.
+
+Docked panels hold still (DESIGN.md §11). The bars have fixed heights, so
+something that comes and goes (a tray, a toast) belongs on the `float`
+layer or in the dock bar's `core:dock.status` slot, never in `bottom`,
+where it would move every panel above it. A panel at a column's end whose
+height changes with its content should mount with `slot = <height>`: the
+column reserves that much and the panel hangs from its top, so its header
+stays put while tabs or content change.
 Core's people column does this above the inspector.
 
 ## Nodes
