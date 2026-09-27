@@ -23,7 +23,11 @@ fn shell_docks_regions_to_the_edges() {
     let near = |a: f32, b: f32| (a - b).abs() <= 12.0;
     let inspector = ui.find("core:inspector").unwrap();
     assert!(inspector[0] < 12.0, "inspector docks left: {inspector:?}");
-    assert!(near(inspector[1] + inspector[3], bottom[1]), "inspector sits on the toolbar: {inspector:?} vs {bottom:?}");
+    // Its slot (280) sits on the toolbar, and the panel hangs from the slot's top.
+    assert!(
+        near(inspector[1] + inspector[3].max(280.0), bottom[1]),
+        "inspector's slot sits on the toolbar: {inspector:?} vs {bottom:?}"
+    );
     let people = ui.find("core:colonists").unwrap();
     assert!(people[0] < 12.0 && near(people[1], top[1] + top[3]), "people start just under the top bar: {people:?}");
     let messages = ui.find("core:messages").unwrap();
@@ -33,7 +37,7 @@ fn shell_docks_regions_to_the_edges() {
     assert!(near(messages[1], alerts[1] + alerts[3]), "and the news sits under them: {messages:?}");
     let hover = ui.find("core:hover").unwrap();
     assert!(near(hover[0] + hover[2], 1600.0), "hover readout docks right: {hover:?}");
-    assert!(near(hover[1] + hover[3], bottom[1]), "hover readout sits on the toolbar: {hover:?}");
+    assert!(near(hover[1] + hover[3].max(132.0), bottom[1]), "hover readout's slot sits on the toolbar: {hover:?}");
     // Grown boxes take their share: the top bar's spacer pushes the help text right.
     let right = ui.find("core:topbar.right").unwrap();
     assert!(right[0] > 600.0, "the top bar's spacer should grow: {right:?}");

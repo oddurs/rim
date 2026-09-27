@@ -1,9 +1,12 @@
 -- The command dock: the bottom edge holds verbs only (Select, Orders, Build,
--- Zones). Picking one raises a tray above the dock that reads in the order
--- the player decides: Build's group rail, then its things as tiles, then a
--- card for the thing under the pointer with its cost and materials. Picking
--- a thing folds the tray to a pill that says what the next click places;
--- Escape unfolds it again.
+-- Zones), in a bar of fixed height. Picking one floats a tray over the map,
+-- above the dock, that reads in the order the player decides: Build's group
+-- rail, then its things as tiles, then a card for the thing under the
+-- pointer with its cost and materials. Picking a thing folds the tray to a
+-- pill in the bar that says what the next click places; Escape unfolds it.
+--
+-- Nothing here changes the bar's height: the tray floats and the pill sits
+-- in the bar, so the panels docked above the bar never move (DESIGN.md §11).
 --
 -- The client files every tool under a category and group (a buildable's
 -- group is its `build.menu`), so a mod's designation, building or menu
@@ -12,9 +15,11 @@
 -- Ids: the bar `core:dock`, each verb `core:dock.<category>`, the tray
 -- `core:dock.tray`, its group rail `core:dock.groups.<group>`, its tiles
 -- `core:toolbar.<key>` in `core:toolbar.buttons`, materials `core:stuff.<id>`
--- in `core:stuff`, the pill `core:dock.pill`. Extension points, empty for
--- mods: `core:dock.right` on the bar, and `core:dock.palette.<category>`
--- at the foot of a tray's list (built only while that tray is open).
+-- in `core:stuff`, the pill `core:dock.pill`. Extension points:
+-- `core:dock.status` on the bar for what the player can act on now (core's
+-- undo is there), `core:dock.right` on the bar, empty for mods, and
+-- `core:dock.palette.<category>` at the foot of a tray's list (built only
+-- while that tray is open).
 
 local kit = require("@core/ui/kit")
 local row, col, label, button = kit.row, kit.col, kit.label, kit.button
@@ -45,6 +50,8 @@ local NUMBERED = 9
 -- a tray that grew with it would slide the tiles out from under the pointer.
 -- A column with more than fits scrolls.
 local TRAY_H = 272
+-- The bar's height, fixed: the pill and the undo chip sit inside it.
+local BAR_H = 40
 
 local function cap(s: string): string
 	return string.upper(string.sub(s, 1, 1)) .. string.sub(s, 2)
@@ -624,22 +631,18 @@ local function pill(view, tool)
 	local sub = if tool.category == "build"
 		then (if tool.cost ~= "" then tool.cost .. " · " else "") .. string.format(t("core:dock.work_n", "%d work"), tool.work)
 		else t("core:dock.drag", "drag on the map")
+	-- One line, so it fits the bar without changing its height.
 	return row({
 		id = "core:dock.pill",
-		padx = "l",
-		pady = "s",
-		gap = "l",
+		padx = "m",
+		gap = "m",
 		align = "center",
-		bg = "surface",
-		border = "accent",
-		radius = "radius",
 	}, {
-		swatch(tool.color, 16),
-		col({ gap = "xxs" }, { label(what, { weight = "strong" }), label(sub, { size = "small", color = "faint" }) }),
+		swatch(tool.color, 12),
+		label(what, { weight = "strong" }),
+		label(sub, { size = "small", color = "faint" }),
 		materials(view, true),
-		row({ gap = "m", align = "center" }, {
-			label(t("core:dock.esc_back", "Esc back"), { size = "small", color = "faint" }),
-		}),
+		label(t("core:dock.esc_back", "Esc back"), { size = "small", color = "faint" }),
 	})
 end
 
@@ -697,24 +700,29 @@ ui.define("core:toolbar", function(view)
 		end
 	end
 	table.insert(bar, { kind = "spacer" })
-	local state = if hand
-		then string.format(t("core:dock.state_placing", "Placing · %s"), hand.label)
-		elseif open then string.format(t("core:dock.state_choosing", "Choosing · %s"), category_label(open))
+	-- What the next click does, and what can be taken back, in the bar.
+	local placing_now = hand and placing(tools)
+	local state = if placing_now
+		then pill(view, hand)
+		elseif open then label(string.format(t("core:dock.state_choosing", "Choosing · %s"), category_label(open)), { size = "small", color = "faint" })
 		else nil
-	table.insert(bar, state and label(state, { size = "small", color = "faint" }))
+	table.insert(bar, row({ id = "core:dock.status", gap = "l", align = "center" }, { state }))
 	table.insert(bar, row({ id = "core:dock.right", gap = "s", align = "center" }))
-
-	local above = nil
-	if hand and placing(tools) then
-		above = row({ padx = "l", pady = "s", justify = "center" }, { pill(view, hand) })
-	elseif open then
-		above = row({ padx = "l", pady = "s" }, { tray_frame(view, tools, open) })
-	end
-	return col({}, {
-		above,
-		row({ id = "core:dock", padx = "l", pady = "s", gap = "s", bg = "surface", radius = 0, align = "center" }, bar),
-	})
+	return row({ id = "core:dock", h = BAR_H, padx = "l", gap = "s", bg = "surface", radius = 0, align = "center" }, bar)
 end)
 ui.mount("bottom", "core:toolbar")
+
+-- The open tray floats over the map, above the dock: it comes and goes
+-- without moving anything docked.
+ui.define("core:toolbar.tray", function(view)
+	local tools = view.tools()
+	local open = open_category(tools)
+	local hand = in_hand(tools)
+	if not open or (hand and placing(tools)) then
+		return nil
+	end
+	return tray_frame(view, tools, open)
+end)
+ui.mount("float", "core:toolbar.tray", { align = "end" })
 
 return dock

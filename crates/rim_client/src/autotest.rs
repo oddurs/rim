@@ -193,7 +193,11 @@ impl T {
             self.click_ui(&format!("core:dock.groups.{group}")).await;
             self.frame().await;
         }
-        self.click_ui(&id).await
+        let clicked = self.click_ui(&id).await;
+        // Let the pick land: the tray folds on the next frame, and the tray
+        // floats over the map, so a press in the same frame would hit it.
+        self.frame().await;
+        clicked
     }
 
     /// Back out of the dock: stop placing, close its tray and any sheet,
@@ -331,9 +335,12 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.frame().await;
     t.check(t.ui_rect("core:dock.tray").is_none(), "a second Escape closes the tray");
     let selected = t.app.selected;
+    let docked = (t.ui_rect("core:dock"), t.ui_rect("core:inspector"), t.ui_rect("core:colonists"));
     t.key(KeyCode::B).await;
     t.frame().await;
     t.check(t.ui_rect("core:dock.palette.build").is_some(), "B opens the Build palette");
+    let now = (t.ui_rect("core:dock"), t.ui_rect("core:inspector"), t.ui_rect("core:colonists"));
+    t.check(now == docked, format!("the tray floats: nothing docked moved ({docked:?} → {now:?})"));
     t.shot("build_tray").await;
     t.key(KeyCode::Escape).await;
     t.frame().await;
@@ -793,7 +800,7 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.click_tool("build:core:wall").await;
     t.frame().await;
     t.check(t.ui_rect("core:stuff").is_some(), "the wall tool brings up the material row");
-    t.check(t.ui_rect("core:dock.pill").is_some(), "in the placing pill, over the dock");
+    t.check(t.ui_rect("core:dock.pill").is_some(), "in the placing pill, in the dock bar");
     t.check(t.ui_rect("core:stuff.core:wood").is_some(), "the wall tool offers wood");
     t.check(t.ui_rect("core:stuff.core:stone").is_some(), "and stone, whether or not there is any");
     let have_stone: u32 = t

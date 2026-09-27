@@ -95,6 +95,10 @@ pub struct Mount {
     pub align: String,
     pub owner: Rc<str>,
     pub refresh: Refresh,
+    /// A side panel's reserved height, in logical pixels: the panel's top
+    /// stays at the top of it, so content that changes height grows down
+    /// into the room instead of moving the header.
+    pub slot: Option<f32>,
 }
 
 impl Mount {
@@ -494,8 +498,10 @@ impl UiVm {
         ui.set(
             "mount",
             lua.create_function(move |_, (layer, id, opts): (String, String, Option<Table>)| {
-                const LAYERS: &[&str] =
-                    &["top", "bottom", "left", "right", "anchored", "cursor", "popup", "modal", "windows", "title"];
+                const LAYERS: &[&str] = &[
+                    "top", "bottom", "left", "right", "float", "anchored", "cursor", "popup", "modal", "windows",
+                    "title",
+                ];
                 if !LAYERS.contains(&layer.as_str()) {
                     return Err(rt(format!("unknown layer '{layer}' (one of {})", LAYERS.join(", "))));
                 }
@@ -513,9 +519,15 @@ impl UiVm {
                         other => return Err(rt(format!("unknown refresh '{other}' (frame, fast or slow)"))),
                     },
                 };
+                let slot = opts.as_ref().and_then(|o| o.get::<Option<f32>>("slot").ok().flatten());
+                if let Some(s) = slot {
+                    if !(s > 0.0 && s.is_finite()) {
+                        return Err(rt(format!("slot must be a positive height, got {s}")));
+                    }
+                }
                 let mut reg = r.borrow_mut();
                 let owner: Rc<str> = reg.current.as_str().into();
-                reg.mounts.push(Mount { layer, id, order, align, owner, refresh });
+                reg.mounts.push(Mount { layer, id, order, align, owner, refresh, slot });
                 Ok(())
             })?,
         )?;

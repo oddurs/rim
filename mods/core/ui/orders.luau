@@ -68,29 +68,28 @@ menus.add("tile", {
 })
 
 -- ─── Taking an order back ──────────────────────────────────────────────────
--- For a few seconds after an order, a pill over the dock says what it was,
--- with Undo; Cmd/Ctrl+Z does the same for the newest order.
+-- For a few seconds after an order, a chip in the dock bar says what it was,
+-- with Undo; Cmd/Ctrl+Z does the same for the newest order. It sits in the
+-- bar rather than over it, so it never moves the panels docked above.
 ui.bind("core:undo", { key = "ctrl+z", label = t("core:keys.undo", "Undo the last order") }, function()
 	act.undo()
 end)
 
-ui.define("core:undo", function(view)
+ui.extend("core:dock.status", function(view)
 	local o = view.last_order()
 	if not o or o.age > UNDO_SECS then
 		return nil
 	end
-	return kit.row({ justify = "center", pady = "tight" }, {
-		kit.row({ id = "core:undo", gap = "item", align = "center", padx = "inset", pady = "tight", bg = "surface_raised", border = "line_strong", radius = "radius" }, {
-			kit.label(o.label),
-			kit.button({
-				id = "core:undo.button",
-				label = t("core:undo.label", "Undo"),
-				hint = "⌘Z",
-				on_click = function()
-					act.undo()
-				end,
-			}),
+	return kit.row({ id = "core:undo", gap = "m", align = "center", padx = "m", border = "line_strong", radius = "radius" }, {
+		kit.label(o.label, { size = "small" }),
+		kit.button({
+			id = "core:undo.button",
+			label = t("core:undo.label", "Undo"),
+			hint = "⌘Z",
+			pady = "xs",
+			on_click = function()
+				act.undo()
+			end,
 		}),
 	})
 end)
-ui.mount("bottom", "core:undo", { order = -1, refresh = "slow" })

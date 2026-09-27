@@ -236,7 +236,11 @@ const WIN_KEEP: f32 = 80.0;
 type CachedLayout = (u64, (f32, f32), Vec<Rect>);
 
 /// Layers bottom to top.
-const LAYERS: &[&str] = &["anchored", "docked", "title", "windows", "cursor", "popup", "modal", "tooltip"];
+const LAYERS: &[&str] = &["anchored", "docked", "float", "title", "windows", "cursor", "popup", "modal", "tooltip"];
+
+/// The shell's centre: the map between the side columns and the bars. Its
+/// key is how the float layer finds its rect after the shell is laid out.
+const CENTRE_KEY: u64 = 30;
 const TOOLTIP_DELAY: f64 = 0.45;
 /// A sheet's share of the screen at most: wide enough for a board, narrow
 /// enough to leave both side columns clear at 1280 wide and up.
@@ -1362,6 +1366,8 @@ impl Ui {
         let mut id_keys = HashMap::new();
         let mut nodes = 0;
         let mut layouts = self.info.layouts;
+        // Set by the docked layer, read by the float layer after it.
+        let mut centre: Option<Rect> = None;
         let state_scroll = std::mem::take(&mut self.scroll);
         let state_edits = std::mem::take(&mut self.edits);
         let state = PaintState {
@@ -1391,7 +1397,39 @@ impl Ui {
                 "docked" => {
                     let shell = self.shell(&built, (sw, sh));
                     let rects = self.layout_cached("docked", &shell, (sw, sh), (0.0, 0.0), &mut layouts);
+                    centre = rect_of_key(&shell, &rects, plain_key(CENTRE_KEY));
                     placed.push((shell, rects));
+                }
+                "float" => {
+                    // Over the map, from the left column's edge: a panel here
+                    // comes and goes without moving anything docked. "end"
+                    // stacks up from the dock, "start" down from the top bar.
+                    // One too wide for the room to its right slides left to
+                    // stay on screen, over the left column.
+                    let [cx, cy, _, ch] = centre.unwrap_or([0.0, 0.0, sw, sh]);
+                    let gap = self.theme.space.get("panel").copied().unwrap_or(8.0) * self.theme.scale;
+                    let max = ((sw - 2.0 * gap).max(0.0), (ch - 2.0 * gap).max(0.0));
+                    let x_for = |w: f32| (cx + gap).min(sw - gap - w).max(gap);
+                    let mut floats: Vec<&(vm::Mount, Node)> =
+                        built.iter().filter(|(m, _)| m.layer == "float").collect();
+                    floats.sort_by_key(|(m, _)| m.order);
+                    let (mut top, mut bottom) = (cy + gap, cy + ch - gap);
+                    for (m, tree) in floats {
+                        let end = m.align == "end";
+                        let rects = self.place_small(tree, max, |(w, h)| {
+                            if end {
+                                bottom -= h;
+                                let y = bottom;
+                                bottom -= gap;
+                                (x_for(w), y)
+                            } else {
+                                let y = top;
+                                top += h + gap;
+                                (x_for(w), y)
+                            }
+                        });
+                        placed.push((tree.clone(), rects));
+                    }
                 }
                 "anchored" => {
                     for (_, tree) in built.iter().filter(|(m, _)| m.layer == "anchored") {
@@ -1526,7 +1564,7 @@ impl Ui {
                     h.path.insert(0, ri);
                     lo.hits.push(h);
                 }
-                let solid_layer = matches!(layer, "docked" | "title" | "windows" | "popup" | "modal");
+                let solid_layer = matches!(layer, "docked" | "float" | "title" | "windows" | "popup" | "modal");
                 let mut i = 0;
                 let mut path = vec![ri];
                 collect_nodes(&root, &rects, &mut i, &mut path, &mut |n, r, p| {
@@ -1695,6 +1733,7 @@ impl Ui {
 
     /// The docking shell: regions at the screen edges stack their panels.
     fn shell(&self, built: &[(vm::Mount, Node)], screen: (f32, f32)) -> Node {
+        let scale = self.theme.scale;
         let group = |region: &str, align: Option<&str>| -> Vec<Node> {
             let mut v: Vec<(&vm::Mount, &Node)> = built
                 .iter()
@@ -1702,7 +1741,29 @@ impl Ui {
                 .map(|(m, n)| (m, n))
                 .collect();
             v.sort_by_key(|(m, _)| m.order);
-            v.into_iter().map(|(_, n)| n.clone()).collect()
+            v.into_iter()
+                .map(|(m, n)| match m.slot {
+                    // A slotted panel sits at the top of its reserved height,
+                    // against its column's edge: content that changes height
+                    // grows down into the slot, and the header stays put.
+                    Some(slot) => {
+                        let edge = if region == "right" { node::Align::End } else { node::Align::Start };
+                        let mut h = std::collections::hash_map::DefaultHasher::new();
+                        h.write(m.key().as_bytes());
+                        plain(
+                            h.finish(),
+                            Style {
+                                min_h: Some(slot * scale),
+                                justify: Some(node::Align::Start),
+                                align: Some(edge),
+                                ..Default::default()
+                            },
+                            vec![n.clone()],
+                        )
+                    }
+                    None => n.clone(),
+                })
+                .collect()
         };
         // Between panels stacked in a region: the theme's `panel` space.
         let gap =
@@ -1732,7 +1793,7 @@ impl Ui {
         };
         let top = plain(10, Style { w: Len::Frac(1.0), ..Default::default() }, group("top", None));
         let bottom = plain(20, Style { w: Len::Frac(1.0), ..Default::default() }, group("bottom", None));
-        let center = plain(30, Style { grow: 1.0, ..Default::default() }, vec![]);
+        let center = plain(CENTRE_KEY, Style { grow: 1.0, ..Default::default() }, vec![]);
         let middle = plain(
             40,
             // min_h 0: the band between the bars is the screen's, not its
@@ -1883,13 +1944,30 @@ impl Ui {
 }
 
 /// An engine-built container node.
+/// The node key `plain` gives a shell node made with `key`.
+fn plain_key(key: u64) -> u64 {
+    key.wrapping_mul(0x9E37_79B9_7F4A_7C15)
+}
+
+/// Where the node with `key` was laid out, if the tree has one.
+fn rect_of_key(root: &Node, rects: &[Rect], key: u64) -> Option<Rect> {
+    let mut found = None;
+    let mut i = 0;
+    collect_nodes(root, rects, &mut i, &mut Vec::new(), &mut |n, r, _| {
+        if found.is_none() && n.key == key {
+            found = Some(r);
+        }
+    });
+    found
+}
+
 fn plain(key: u64, style: Style, children: Vec<Node>) -> Node {
     Node {
         kind: Kind::Box,
         id: None,
         aka: None,
         owner: Rc::from("rim"),
-        key: key.wrapping_mul(0x9E37_79B9_7F4A_7C15),
+        key: plain_key(key),
         style,
         text: None,
         hover: None,

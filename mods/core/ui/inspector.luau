@@ -468,6 +468,8 @@ ui.define("core:inspector", function(view)
 	end
 	return thing_panel(view, sel)
 end)
-ui.mount("left", "core:inspector", { align = "end" })
+-- The slot holds the tallest tab (Work) with room to spare, so switching
+-- tabs or subjects changes what's under the header, never where it is.
+ui.mount("left", "core:inspector", { align = "end", slot = 280 })
 
 return inspector
