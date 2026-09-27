@@ -73,6 +73,7 @@ and a selected thing says so: "Needs a chopping tool."
 | `bed` | Somewhere to sleep, as a room role counts it (core's bed, primitive's grass pallet) |
 | `fire` | A hearth: core's campfire and stove |
 | `seat` | Something to sit on: core's chair |
+| `mineral` | Dug or quarried stone and ore: what a stone bin takes |
 
 ## Item categories
 

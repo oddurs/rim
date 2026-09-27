@@ -44,7 +44,7 @@ look.layers = [
 ]
 market_value = 0.2
 stack_limit = 50
-tags = ["stone_raw"]
+tags = ["stone_raw", "mineral"]
 
 # What every stone-age edge is knapped from. Scarce on the surface.
 [[thing]]
