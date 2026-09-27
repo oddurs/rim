@@ -67,6 +67,24 @@ The grid, hover, selection, drag previews, placement ghosts and marks, drawn in 
 - [ ] `e8f313d6` Build ghosts: fits, clears first, or blocked <sup>feature · p0 · m · client</sup>
 - [ ] `f5bc43e3` Measure: G holds a counting grid with rulers <sup>feature · p2 · s · client</sup>
 
+## rock-face — Rock face
+
+`··········` 0% · 0 of 11 done
+
+What mining looks like: a hill with height, rock kinds you can tell apart, ore set into the stone and found by looking, an order to dig that reads at a glance, the blow and what it leaves, and the pit. Design: DESIGN.md §6g. Concept with a live mining scene and every state drawn: https://claude.ai/artifact/Je86GRjsT2dTPN6ZS1bqMt
+
+- [ ] `04fa9b7d` Pits and stairs drawn as a plan draws openings <sup>feature · p1 · s · client</sup>
+- [ ] `1bb64fd0` Rock height in the occluder texture <sup>feature · p1 · s · client</sup>
+- [ ] `2763e32b` Unseen rock is plain until someone stands beside it <sup>feature · p1 · s · client</sup>
+- [ ] `78393567` Light in the mine: torch-lit adits, sunlit pits, a hill's long shadow <sup>feature · p2 · s · client</sup>
+- [ ] `8fea2eef` A quarry view in the render bench and the autotest <sup>chore · p0 · s · tooling</sup>
+- [ ] `9259bafa` Ore set into the stone <sup>feature · p1 · m · client</sup>
+- [ ] `d8a98377` Rock is drawn as rock: a broken outline, bevelled corners and scree <sup>feature · p0 · m · client</sup>
+- [ ] `d994346a` Relief: depth into rock as a smooth fill and contours <sup>feature · p0 · m · client</sup>
+- [ ] `da889091` Rock patterns laid along the bed <sup>feature · p0 · m · client</sup>
+- [ ] `e77facff` The mining worksite: fresh break, fracture, sparks and hewn floor <sup>feature · p1 · m · client</sup>
+- [ ] `e856a44d` The mine order as a cut line <sup>feature · p1 · s · client</sup>
+
 ## graphics — Graphics
 
 `##########` 100% · 8 of 8 done

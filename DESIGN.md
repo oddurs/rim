@@ -2107,6 +2107,106 @@ Everything else is a handful of strokes per selected or hovered thing.
 
 ---
 
+## 6g. Rock face: what mining looks like
+
+Rock is terrain (§6d) and has a look, but not a picture. A hill is a grey
+plate with a per-cell tint, so it reads as tiles. It has no height, so the
+one light of §6c never reaches it. `crag` puts two random squiggles in every
+cell. The mine designation is `#b0a89e`, grey on grey. Strata adds six rock
+kinds that differ only in tint, and nothing shows a vein, a tool gate or the
+face a miner can reach. The concept, with a live mining scene and every state
+drawn, is at <https://claude.ai/artifact/Je86GRjsT2dTPN6ZS1bqMt>. Its working
+name is Rock face.
+
+### Tension: a mass like a wall, or a picture of rock?
+
+- **For the wall's mass:** it is already built, joins by rule and carries the
+  lit edge. A rounded rectangle per cell is honest about the grid.
+- **Against:** a run of rounded squares reads as masonry. Nobody sees a hill.
+- **Ruling:** **rock is a mass with a broken outline.** The join is the same
+  and the fill still covers the cell, so the look never lies about what
+  blocks (§6b). Where a cell faces open ground its edge is broken into a few
+  facets and its outer corners are bevelled, by hashes of the world edge and
+  corner, so neighbours agree and a cell always looks the same. Where rock
+  joins rock the edge is straight. Scree (a few broken stones in the rock's
+  colour) lies at the foot of each face. Per-cell tint goes; tone drifts with
+  low-frequency noise. `look.join = { group = "rock", style = "rough" }`.
+
+### Height
+
+One number drives the plan and the light: a solid cell's distance to open
+ground, capped at 4, flood-filled per chunk with a border of 4 when terrain
+changes.
+
+- The plan multiplies a smooth relief from it (100, 84, 73, 65%) and draws a
+  hairline contour where it steps, as a topographic map does.
+- The occluder texture (§6e) takes it as height: `1 + 0.4 · min(d − 1, 3)`
+  storeys. A hill casts a longer shadow than a wall, and a deep adit is dark
+  at noon. Walls stay at 1.
+
+### Tension: whose pattern does rock use?
+
+- **The walls':** `rubble` and `courses` exist and are cheap.
+- **Against:** bedded limestone drawn as courses is a wall. Material patterns
+  follow a run (§6c); rock has no run.
+- **Ruling:** **built things follow their run; rock follows its bed.** Each
+  rock kind has a pattern after the lithology symbols on geological maps:
+  `igneous` (crosses, ticks and joint sets), `bedded` (beds with staggered
+  joints), `nodular` (faint beds with flint nodules strung along them),
+  `laminated` (short dashes), `pebbly` (pebbles and grit), `hatch` (bedrock)
+  and `seep` (bedded, with a damp band on an exposed face). They are laid in
+  world space along one dip per stratum, `bed = { dip = 6 }`, wobble a little,
+  and never turn with a facing. They share the walls' fade band.
+
+### Finding it
+
+- **The seen bit (§6d) gates the kind's colour, its pattern and its ore
+  together.** Unseen rock is one neutral per stratum (`unseen`), with neutral
+  fractures and grit so it still reads as stone. A seen cell draws in over half
+  a second. A kind that showed through its colour alone would give prospecting
+  away.
+- **Ore is set into the stone, as Minecraft does it.** A veined cell keeps its
+  kind's fill and pattern, takes a faint cast of the ore's colour, and has one
+  to four nuggets set in it, or a raw lump when it is richest. A vein is the
+  set of cells carrying ore, never a line drawn over rock, and it depletes a
+  nugget at a time. The `ore` layer reads a stock field (§4a). Ore is the one
+  mark that outlasts the pattern fade: far out, a veined cell keeps a tint.
+
+### The work
+
+- **An order to dig is a cut line.** Plans draw what is to be removed as a
+  dashed outline. A mine order is a dashed line around its region, on a
+  keyline, over a light wash, in survey yellow (`#e9d44a`). At each cell's
+  designation corner (§6f), a solid dot means a miner can reach it now, a
+  hollow one that it waits behind the face, and an amber triangle that no one
+  holds the tool. Bedrock takes no order: the preview crosses it out.
+- **The stage (§6b) gains two layers and the strike one effect.** Fresh break
+  is pale flakes on the worked side, since newly broken rock is lighter than a
+  weathered face. From 6/8 a fracture crosses the cell. `sparks` fly when the
+  worker's tool has the style's tag (`sparks = "metal"`) and the rock is
+  `hard`. The cell never shrinks.
+- **What is left:** the yield where the rock stood, and `hewn` floor, short
+  pick strokes on the `leaves` terrain, so a dug gallery reads as dug.
+
+### Holes
+
+An air cell is a plan's floor opening: an outline, an X across it, and the
+level below showing through with §6e's depth tint. The near rim (top, left)
+is shaded and the far wall lit, which is the mass's light turned inside out.
+Stairs keep §6c's symbol. Underground, light is §6e's: zero ambient, torches
+baked into flicker channels, and sky down a shaft by its width and depth.
+
+### Cost
+
+Outline, relief, contours, patterns and ore are built with the chunk mesh.
+Nothing new runs per frame except a reveal fading and the strike effects §6b
+already pays for. Rock height needs no new texel format. Patterns share the
+walls' fade band, and ore draws one fill per cell below 10 points a cell, so
+the whole-map view pays what it does today. The render bench gains a quarry
+view to hold that.
+
+---
+
 ## 7. Determinism is non-negotiable
 
 - All player input becomes a `Command` that is applied at a tick boundary.

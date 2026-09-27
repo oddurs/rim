@@ -9,7 +9,7 @@ depends_on:
 - d77d9e1f-f0ae-4e30-ae9c-95cd35c1346b
 - e3846c47-f425-46f5-8e96-fec056074052
 created: 2026-09-24
-updated: 2026-09-26
+updated: 2026-09-27
 priority: p1
 api: none
 effort: m
@@ -62,3 +62,7 @@ are a separate mechanism and this ticket is content.
 ## 2026-09-26
 
 DESIGN.md §6d (Depth) rules that rock is terrain. Build rock kinds and veins as solid [[terrain]] with a mine block on top of 8cc6252d-67a0-4652-b764-851f3e6bc72a, not as more rock things. Rock kinds per level come from [[stratum]] defs (3f90e043-bf62-48c8-ac67-d043dc755b6e). The seen bit for prospecting is part of 5689930d-2bd1-4838-b403-a72bc61c31e9.
+
+## 2026-09-27
+
+How rock kinds, veins and the seen state look is planned in the Rock face milestone (DESIGN.md §6g): patterns along the bed (da889091-a8c1-4f7c-96a2-89c6c19db2b7), unseen rock plain (2763e32b-d779-471e-9f74-1d24f810c4a8) and ore set into the stone (9259bafa-bbd4-49b6-ab51-3fac4a6e3a70). This item stays content: kinds, veins, amounts and the overlay.
