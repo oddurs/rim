@@ -1560,19 +1560,25 @@ mod tests {
         assert_eq!(stores, 200);
         // The whole map in view: the worst case, at the lowest zoom.
         let all = (0, 0, s.world.map.w - 1, s.world.map.h - 1);
-        let t0 = std::time::Instant::now();
-        let runs = 20;
-        let mut n = 0;
-        for _ in 0..runs {
-            n += storage_view(&s.world, all).washes.len();
+        // The fastest of the runs, as the other budget tests take it: a mean
+        // on a loaded machine measures the machine.
+        let (mut ms, mut washes) = (f64::MAX, 0);
+        for _ in 0..20 {
+            let t0 = std::time::Instant::now();
+            washes = storage_view(&s.world, all).washes.len();
+            ms = ms.min(t0.elapsed().as_secs_f64() * 1e3);
         }
-        let ms = t0.elapsed().as_secs_f64() * 1e3 / runs as f64;
         eprintln!(
-            "storage overlay, whole map, 200 containers + a 40x40 stockpile: {ms:.3} ms a frame ({} washes)",
-            n / runs
+            "storage overlay, whole map, 200 containers + a 40x40 stockpile: {ms:.3} ms a frame ({washes} washes)"
         );
-        // DESIGN.md §8: 4 ms of CPU for the whole world renderer.
-        assert!(ms < 4.0, "{ms:.3} ms");
+        // DESIGN.md §8: 4 ms of CPU for the whole world renderer, with the
+        // slack rim_ui's budget tests give shared CI runners.
+        let slack = match (std::env::var_os("CI").is_some(), cfg!(windows)) {
+            (false, _) => 1.0,
+            (true, false) => 3.0,
+            (true, true) => 6.0,
+        };
+        assert!(ms < 4.0 * slack, "{ms:.3} ms (budget {:.1} ms)", 4.0 * slack);
         let _ = std::fs::remove_dir_all(dir);
     }
 
