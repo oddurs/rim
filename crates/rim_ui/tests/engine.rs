@@ -2138,7 +2138,36 @@ ui.define("probe:pawns", function(view)
     return ui.text({ string.format("pawns %d built %d", n, pawns), id = "probe:pawns" })
 end)
 ui.mount("top", "probe:pawns", { order = 97 })
+ui.define("probe:only", function(view)
+    local h = view.hover()
+    if not h then
+        return nil
+    end
+    return ui.text({ string.format("only at %d", h.x), id = "probe:only" })
+end)
+ui.mount("top", "probe:only", { order = 98 })
 "#;
+
+/// A tree that shows nothing until something is hovered appears on the
+/// very frame the pointer comes onto the map, not a rebuild period later.
+#[test]
+fn a_tree_that_shows_only_a_hover_appears_as_soon_as_there_is_one() {
+    let dir = scratch_mods("hoveronly", &[("probe", "", &[("ui/probes.luau", HOVER_PROBES)])]);
+    let sim = sim_at(&dir);
+    let mut ui = ui_for(&sim);
+    let mut cv = client(&sim);
+    let c = sim.world.colony_center().unwrap();
+    cv.hover_cell = None;
+    cv.time = 10.0;
+    frame(&mut ui, &sim, &cv, Input { time: cv.time, ..Default::default() });
+    assert!(!ui.snapshot().contains("only at"), "nothing hovered, nothing shown\n{}", ui.snapshot());
+    cv.hover_cell = Some(c);
+    cv.time = 10.0 + 1.0 / 240.0;
+    frame(&mut ui, &sim, &cv, Input { time: cv.time, ..Default::default() });
+    let at = format!("only at {}", c.x);
+    assert!(ui.snapshot().contains(&at), "the hover shows on the next frame\n{}", ui.snapshot());
+    let _ = std::fs::remove_dir_all(&dir);
+}
 
 /// The pointer crosses a cell at nearly every step over the map: only the
 /// trees that read the hover rebuild, not the whole UI, or mousing over
