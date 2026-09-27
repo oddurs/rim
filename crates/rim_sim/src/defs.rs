@@ -872,6 +872,34 @@ pub struct WorkTypeDef {
     /// raising blueprints and bringing them materials.
     #[serde(default)]
     pub jobs: Vec<String>,
+    /// What a planner (Auto, DESIGN.md §4d) reads about this work.
+    #[serde(default)]
+    pub auto: AutoDef,
+}
+
+/// A work type's numbers for a planner: how many waiting jobs one person
+/// keeps up with, and how much a waiting job matters beside others. The
+/// engine only passes them on.
+#[derive(Deserialize, Clone, Debug)]
+pub struct AutoDef {
+    #[serde(default = "d4u")]
+    pub per_person: u32,
+    #[serde(default = "d1u")]
+    pub weight: u32,
+}
+
+impl Default for AutoDef {
+    fn default() -> Self {
+        AutoDef { per_person: 4, weight: 1 }
+    }
+}
+
+fn d4u() -> u32 {
+    4
+}
+
+fn d1u() -> u32 {
+    1
 }
 
 fn d4() -> u8 {
@@ -1036,6 +1064,10 @@ pub struct WorkRoleDef {
     /// Levels by work type: `{ build = 1, haul = 2 }`.
     #[serde(default)]
     pub priorities: BTreeMap<String, u8>,
+    /// A planned role: this names the planner (`rim.planner`) that sets
+    /// its members' levels each in-game hour, and `priorities` is unused.
+    #[serde(default)]
+    pub planner: Option<String>,
     /// `priorities` resolved, in work-type id order.
     #[serde(skip)]
     pub priorities_r: Vec<(DefId, u8)>,

@@ -217,6 +217,13 @@ pub struct Pawn {
     /// for a colonist from before roles, who is in the default one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub work_role: Option<u16>,
+    /// In a planned role: the levels its planner set, by work type, sorted.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub plan: Vec<crate::rules::Planned>,
+    /// The planner's last proposal, which the next must match to change a
+    /// planned level.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub proposal: Vec<(DefId, u8)>,
     /// The tool it holds, off the map while it's held (DESIGN.md §4e).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hand: Option<Entity>,
@@ -278,6 +285,11 @@ impl Pawn {
     /// pin, which beats what the colonist would otherwise inherit.
     pub fn own_priority(&self, work: DefId) -> Option<u8> {
         self.priorities.iter().find(|p| p.0 == work).map(|p| p.1)
+    }
+
+    /// What a planner set for a work type, if the colonist has a plan.
+    pub fn planned(&self, work: DefId) -> Option<&crate::rules::Planned> {
+        self.plan.binary_search_by_key(&work, |x| x.work).ok().map(|i| &self.plan[i])
     }
 
     /// Hand a work type back: forget the colonist's own setting, so they
@@ -1828,6 +1840,14 @@ impl World {
                     h = crate::rng::mix(h ^ (w as u64) << 8 ^ l as u64);
                 }
                 h = crate::rng::mix(h ^ p.work_role.map_or(0xf0f0, |r| r as u64));
+                for x in &p.plan {
+                    h = x.reason.bytes().fold(crate::rng::mix(h ^ (x.work as u64) << 8 ^ x.level as u64), |h, b| {
+                        crate::rng::mix(h ^ b as u64)
+                    });
+                }
+                for &(w, l) in &p.proposal {
+                    h = crate::rng::mix(h ^ (w as u64) << 16 ^ l as u64 ^ 0x5a);
+                }
                 for &(s, xp) in &p.skills {
                     h = crate::rng::mix(h ^ (s as u64) << 40 ^ xp as u64);
                 }

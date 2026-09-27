@@ -1283,6 +1283,8 @@ impl UiVm {
                     cell.set("value", value)?;
                     cell.set("inherit", w.inherited_priority(&p, wt))?;
                     cell.set("pinned", p.own_priority(wt).is_some())?;
+                    // A ring on the board: a planner chose it and may change it.
+                    cell.set("planned", p.own_priority(wt).is_none() && w.is_planned(&p) && p.planned(wt).is_some())?;
                     cell.set("why", why_text(defs, &d.label, value, &parts))?;
                     if let Some(s) = skill {
                         cell.set("skill", s)?;
@@ -2377,6 +2379,8 @@ fn why_text(defs: &rim_sim::defs::DefDb, work: &str, value: u8, parts: &[rim_sim
                 PartKind::Default => format!("default {level}"),
                 PartKind::Role => format!("{} {level}", s.label),
                 PartKind::Pin => format!("{}'s setting {level}", s.label),
+                PartKind::Plan if s.label.is_empty() => format!("planned {level}"),
+                PartKind::Plan => format!("planned {level} ({})", s.label),
                 PartKind::Rule if s.delta < 0 => format!("{} −{}", s.label, -s.delta),
                 PartKind::Rule if s.delta > 0 => format!("{} +{}", s.label, s.delta),
                 PartKind::Rule => format!("{} ±0", s.label),

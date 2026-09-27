@@ -40,6 +40,7 @@ are in [Scripting rules](scripting.md).
 | `rim.on` | `(event: string, fn: (event: {[string]: any}) -> ()) -> ()` | Handle an engine event (`pawn_died`, `season_changed`, ...) or a mod event (`weather:changed`). |
 | `rim.on_migrate` | `(fn: (from_version: string, data: {[string]: any}) -> {[string]: any}) -> ()` | Upgrade your script data from a save made with a different version of your mod: fn gets that version and your data (bare keys) and returns the data to keep. It sees no world: only your data. Runs on load, before any hook. Register at load time. |
 | `rim.order` | `(site: number) -> OrderInfo?` | The work order on a thing and how far it's got, or nil. |
+| `rim.planner` | `(name: string, fn: (board: WorkBoard) -> { [number]: { [string]: PlanCell \| number } }) -> ()` | Register a planner under your mod's name, for a planned work role (`planner = "mod:name"`). Once an in-game hour the engine calls it with the board (rim.work_board, its members marked) and takes back levels for its members: `{ [colonist id] = { [work] = { level = 2, reason = "..." } } }`. A level changes when two plans in a row agree. Never (0) and pinned cells are refused. Register at load time. |
 | `rim.post_order` | `(site: number, order: OrderSpec) -> ()` | Post a work order on a thing (a station): bring what `needs` lists, by thing or by tag, then work `work` ticks there, holding a tool with every tag in `requires`. Colonists take it as `work_type` work. When it's done, `order_done` names what went in; make what it makes then. One order a site at a time. |
 | `rim.priority` | `(id: number, work: string) -> number?` | A colonist's priority for a work type, rules and stance included: 1 first, 0 never. Nil if it isn't a pawn. |
 | `rim.priority_parts` | `(id: number, work: string) -> { PriorityPart }?` | How a colonist's priority came about: the work type's default, their work role if it sets one, their pin if they have one, then each rule that moved it. The deltas sum to rim.priority. |
@@ -66,6 +67,7 @@ are in [Scripting rules](scripting.md).
 | `rim.ticks_per_day` | `number` | Ticks in a game day. |
 | `rim.wealth` | `() -> number` | The colony's wealth (recomputed every few hundred ticks). |
 | `rim.who_takes` | `(id: number) -> { Taker }` | Who would take the job on a thing next, soonest first, with about how many ticks until they're there: colonists free to choose. Empty if someone already holds it. |
+| `rim.work_board` | `() -> WorkBoard` | What a planner reads: the scale, each work type (in tie-break order) with what's waiting and its `auto` numbers, and each colonist with their role, skills, pins and level before the rules. |
 | `rim.work_role` | `(id: number) -> number?` | A colonist's work role, as an index into rim.work_roles(). Nil if it isn't a colonist or the colony has no roles. |
 | `rim.work_roles` | `() -> { WorkRoleInfo }` | The colony's work roles in its own order, each with its index (what a colonist's role names), the def it came from (nil for the player's own) and whether the player edited it. |
 | `rim.year` | `() -> number` | The year, from 1. |
@@ -83,6 +85,10 @@ type Date = { year: number, season: string, season_index: number, day: number, d
 type Room = { id: number, cells: number, enclosed: boolean, role: string?, role_label: string? }
 type PriorityPart = { kind: "default" | "role" | "pin" | "rule", label: string, delta: number }
 type WorkRoleInfo = { index: number, id: string?, label: string, edited: boolean }
+type BoardWork = { id: string, label: string, skill: string?, waiting: number, per_person: number, weight: number, default: number }
+type BoardColonist = { id: number, name: string, role: number?, member: boolean, skills: { [string]: number }, pins: { [string]: number }, base: { [string]: number } }
+type WorkBoard = { levels: number, role: number?, work: { BoardWork }, colonists: { BoardColonist } }
+type PlanCell = { level: number, reason: string? }
 type WorkWhy = { work: string, level: number, why: string, dist: number? }
 type Taker = { id: number, ticks: number }
 type Part = { label: string, value: number }

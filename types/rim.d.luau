@@ -11,6 +11,10 @@ type Date = { year: number, season: string, season_index: number, day: number, d
 type Room = { id: number, cells: number, enclosed: boolean, role: string?, role_label: string? }
 type PriorityPart = { kind: "default" | "role" | "pin" | "rule", label: string, delta: number }
 type WorkRoleInfo = { index: number, id: string?, label: string, edited: boolean }
+type BoardWork = { id: string, label: string, skill: string?, waiting: number, per_person: number, weight: number, default: number }
+type BoardColonist = { id: number, name: string, role: number?, member: boolean, skills: { [string]: number }, pins: { [string]: number }, base: { [string]: number } }
+type WorkBoard = { levels: number, role: number?, work: { BoardWork }, colonists: { BoardColonist } }
+type PlanCell = { level: number, reason: string? }
 type WorkWhy = { work: string, level: number, why: string, dist: number? }
 type Taker = { id: number, ticks: number }
 type Part = { label: string, value: number }
@@ -86,6 +90,8 @@ declare rim: {
     on_migrate: (fn: (from_version: string, data: {[string]: any}) -> {[string]: any}) -> (),
     -- The work order on a thing and how far it's got, or nil.
     order: (site: number) -> OrderInfo?,
+    -- Register a planner under your mod's name, for a planned work role (`planner = "mod:name"`). Once an in-game hour the engine calls it with the board (rim.work_board, its members marked) and takes back levels for its members: `{ [colonist id] = { [work] = { level = 2, reason = "..." } } }`. A level changes when two plans in a row agree. Never (0) and pinned cells are refused. Register at load time.
+    planner: (name: string, fn: (board: WorkBoard) -> { [number]: { [string]: PlanCell | number } }) -> (),
     -- Post a work order on a thing (a station): bring what `needs` lists, by thing or by tag, then work `work` ticks there, holding a tool with every tag in `requires`. Colonists take it as `work_type` work. When it's done, `order_done` names what went in; make what it makes then. One order a site at a time.
     post_order: (site: number, order: OrderSpec) -> (),
     -- A colonist's priority for a work type, rules and stance included: 1 first, 0 never. Nil if it isn't a pawn.
@@ -138,6 +144,8 @@ declare rim: {
     wealth: () -> number,
     -- Who would take the job on a thing next, soonest first, with about how many ticks until they're there: colonists free to choose. Empty if someone already holds it.
     who_takes: (id: number) -> { Taker },
+    -- What a planner reads: the scale, each work type (in tie-break order) with what's waiting and its `auto` numbers, and each colonist with their role, skills, pins and level before the rules.
+    work_board: () -> WorkBoard,
     -- A colonist's work role, as an index into rim.work_roles(). Nil if it isn't a colonist or the colony has no roles.
     work_role: (id: number) -> number?,
     -- The colony's work roles in its own order, each with its index (what a colonist's role names), the def it came from (nil for the player's own) and whether the player edited it.

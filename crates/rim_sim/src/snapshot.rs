@@ -456,6 +456,18 @@ impl Snapshot {
             }
             priorities.sort_unstable_by_key(|p| p.0);
             p.priorities = priorities;
+            // A plan for work that's gone is simply dropped: the next
+            // planner run fills in what's there.
+            p.plan = std::mem::take(&mut p.plan)
+                .into_iter()
+                .filter_map(|mut x| {
+                    x.work = remap.get("work_type", x.work)?;
+                    Some(x)
+                })
+                .collect();
+            p.plan.sort_unstable_by_key(|x| x.work);
+            p.proposal = p.proposal.iter().filter_map(|&(t, l)| Some((remap.get("work_type", t)?, l))).collect();
+            p.proposal.sort_unstable();
             let mut skills = Vec::new();
             for &(s, xp) in &p.skills {
                 match remap.get("skill", s) {

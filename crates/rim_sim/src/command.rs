@@ -324,6 +324,11 @@ pub fn apply(w: &mut World, c: Command) {
                 return;
             }
             if let Ok(mut p) = w.ecs.get::<&mut Pawn>(pawn) {
+                // A plan belongs to the planned role; leaving it drops it.
+                if p.work_role != Some(role) {
+                    p.plan.clear();
+                    p.proposal.clear();
+                }
                 p.work_role = Some(role);
             }
         }
@@ -332,7 +337,8 @@ pub fn apply(w: &mut World, c: Command) {
                 return;
             }
             let levels = defs.priority_scale.levels;
-            if let Some(r) = w.work_roles.get_mut(role as usize) {
+            // A planned role's levels are its planner's to set.
+            if let Some(r) = w.work_roles.get_mut(role as usize).filter(|r| r.planner.is_none()) {
                 r.set(work, level.map(|l| l.min(levels)));
                 r.edited = true;
             }
@@ -358,7 +364,14 @@ pub fn apply(w: &mut World, c: Command) {
                 }
             };
             let order = w.work_roles.iter().map(|r| r.order).max().unwrap_or(0) + 10;
-            w.work_roles.push(crate::rules::WorkRole { def: None, label, order, priorities, edited: true });
+            w.work_roles.push(crate::rules::WorkRole {
+                def: None,
+                label,
+                order,
+                priorities,
+                edited: true,
+                planner: None,
+            });
         }
         Command::SetStance { stance } => {
             if (stance as usize) < defs.stances.len() {
