@@ -209,6 +209,13 @@ look.join = { group = "hedge", round = 0.35 }
 look.layers = [{ draw = "mass" }, { draw = "edges", width = 1.5, shade = 0.55 }]
 ```
 
+A join group also says what can take a piece's place. A one-cell thing
+planned over a standing one of the same group replaces it in place: the old
+piece stands, and keeps its room shut, until the new one is built and they
+swap. A drag replaces only a piece of another material, so redrawing a
+room in stone keeps its door; a single click can also put a door into a
+wall.
+
 ## Materials
 
 A material shows on the plan as a pattern, not a picture (DESIGN.md §6c).

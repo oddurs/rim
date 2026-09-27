@@ -1139,6 +1139,35 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.check(made == Some(stone), format!("the blueprint is made of the chosen material ({made:?})"));
     t.shot("materials").await;
 
+    // ---------------------------------------------------------- replace in place
+    println!("\n# a wall planned over another is drawn hatched over it until they swap (DESIGN.md §6c)");
+    let north = hut.offset(2, 0);
+    let old = t.w().map.fixture_at(north);
+    t.focus(north);
+    // Blue less red, over the cell: the hatch is pale blue on wood.
+    let blueness = |img: &Image, t: &T| {
+        let mut sum = 0.0;
+        for i in 1..8 {
+            for j in 1..8 {
+                let c = px(img, at(t, north, i as f32 / 8.0, j as f32 / 8.0));
+                sum += c[2] - c[0];
+            }
+        }
+        sum / 49.0
+    };
+    let img = t.grab().await;
+    let before = blueness(&img, &t);
+    t.app.sim.push(Command::Build { thing: wall, stuff: Some(stone), a: north, b: north, facing: 0 });
+    t.ticks(1);
+    let planned = old.and_then(|o| t.w().replacement_of(o)).is_some();
+    t.check(planned && t.w().map.fixture_at(north) == old, "stone planned over the wood wall, which still stands");
+    let img = t.grab().await;
+    let after = blueness(&img, &t);
+    t.check(after > before + 0.05, format!("the plan is drawn over the wall ({before:.2} -> {after:.2})"));
+    t.shot("replace").await;
+    t.app.sim.push(Command::Cancel { a: north, b: north });
+    t.ticks(1);
+
     // A mod's sprite: wildlife_plus ships a salt lick drawn from the world
     // atlas, built beside the material test and seen up close.
     if let Some(lick) = t.w().defs.thing_id("wildlife_plus:salt_lick") {

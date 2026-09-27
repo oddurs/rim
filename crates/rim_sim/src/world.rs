@@ -604,6 +604,18 @@ impl Order {
     }
 }
 
+/// On a blueprint that takes the place of a standing piece (DESIGN.md
+/// §6c): off the fixture layer, so the old one stands and keeps its room
+/// shut while the new material comes, and one work session swaps them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Replaces(pub Entity);
+
+/// On a standing piece with a replacement waiting (`Replaces`), naming it:
+/// derived, and rebuilt on a load, so finding a piece's replacement is a
+/// lookup and not a search whenever something is taken out of the world.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ReplacedBy(pub Entity);
+
 /// On a stack held in a container's slot: off the item layer, at the
 /// container's `pos` (DESIGN.md §4f).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -1372,29 +1384,19 @@ impl World {
         {
             return None;
         }
-        let made_of = stuff.filter(|_| td.build.as_ref().is_some_and(|b| b.stuff.is_some()));
-        // The material scales what the def says. Nothing here knows which
-        // names exist; it asks for two and multiplies by whatever comes back.
-        let hp = (td.hp as f64 * defs.factor(made_of, "hp")).round().max(1.0) as i32;
-        let t = Thing { def, pos, count: 1, hp, facing };
         let e = if blueprint {
-            let b = td.build.as_ref()?;
-            // The material first, then the parts, delivered in that order.
-            let material = match (&b.stuff, made_of) {
-                (Some(sc), Some(m)) => Some((m, sc.count)),
-                (Some(_), None) => return None, // needs a material and was given none
-                (None, _) => None,
-            };
-            let cost: Vec<(DefId, u32)> = material.into_iter().chain(b.cost_r.iter().copied()).collect();
-            let total = (b.work as f64 * defs.factor(made_of, "work")).round().max(1.0) as u32;
-            let bp = Blueprint { delivered: vec![0; cost.len()], cost };
-            self.spawn((t, bp, Work::new(total, None)))
+            self.spawn_blueprint(def, pos, stuff, facing)?
         } else {
-            self.spawn((t,))
+            let made_of = stuff.filter(|_| td.build.as_ref().is_some_and(|b| b.stuff.is_some()));
+            // The material scales what the def says. Nothing here knows which
+            // names exist; it asks for two and multiplies by whatever comes back.
+            let hp = (td.hp as f64 * defs.factor(made_of, "hp")).round().max(1.0) as i32;
+            let e = self.spawn((Thing { def, pos, count: 1, hp, facing },));
+            if let Some(m) = made_of {
+                let _ = self.ecs.insert_one(e, MadeOf(m));
+            }
+            e
         };
-        if let Some(m) = made_of {
-            let _ = self.ecs.insert_one(e, MadeOf(m));
-        }
         // A plant placed whole (map generation, a script) is grown; one that
         // seeds itself starts over (`spread_plants`).
         if !blueprint && td.grow.is_some() {
@@ -1420,6 +1422,62 @@ impl World {
             }
             self.open_store(e);
         }
+        Some(e)
+    }
+
+    /// A blueprint of `def`, on no map layer yet.
+    fn spawn_blueprint(&mut self, def: DefId, pos: IVec, stuff: Option<DefId>, facing: u8) -> Option<Entity> {
+        let defs = self.defs.clone();
+        let td = defs.thing(def);
+        let b = td.build.as_ref()?;
+        let made_of = stuff.filter(|_| b.stuff.is_some());
+        // The material first, then the parts, delivered in that order.
+        let material = match (&b.stuff, made_of) {
+            (Some(sc), Some(m)) => Some((m, sc.count)),
+            (Some(_), None) => return None, // needs a material and was given none
+            (None, _) => None,
+        };
+        let cost: Vec<(DefId, u32)> = material.into_iter().chain(b.cost_r.iter().copied()).collect();
+        let hp = (td.hp as f64 * defs.factor(made_of, "hp")).round().max(1.0) as i32;
+        let total = (b.work as f64 * defs.factor(made_of, "work")).round().max(1.0) as u32;
+        let bp = Blueprint { delivered: vec![0; cost.len()], cost };
+        let e = self.spawn((Thing { def, pos, count: 1, hp, facing: facing & 3 }, bp, Work::new(total, None)));
+        if let Some(m) = made_of {
+            let _ = self.ecs.insert_one(e, MadeOf(m));
+        }
+        Some(e)
+    }
+
+    /// Whether `def` of `stuff` could take the place of the standing piece
+    /// `old`: both one cell, in the same join group, built, and different.
+    /// `other_kind` lets a different thing in (a door into a wall), not
+    /// only a different material.
+    pub fn can_replace(&self, old: Entity, def: DefId, stuff: Option<DefId>, other_kind: bool) -> bool {
+        let Some(t) = self.thing(old) else { return false };
+        let (od, nd) = (self.defs.thing(t.def), self.defs.thing(def));
+        let same_group = od.look_r.join.is_some() && od.look_r.join == nd.look_r.join;
+        let differs = if t.def == def { self.made_of(old) != stuff } else { other_kind };
+        same_group
+            && differs
+            && !od.natural
+            && od.size == [1, 1]
+            && nd.size == [1, 1]
+            && self.ecs.get::<&Blueprint>(old).is_err()
+            && self.replacement_of(old).is_none()
+    }
+
+    /// The plan waiting to take `old`'s place, if there is one.
+    pub fn replacement_of(&self, old: Entity) -> Option<Entity> {
+        self.ecs.get::<&ReplacedBy>(old).ok().map(|r| r.0)
+    }
+
+    /// Plan `def` to take the place of the standing piece `old`.
+    pub fn plan_replacement(&mut self, old: Entity, def: DefId, stuff: Option<DefId>, facing: u8) -> Option<Entity> {
+        let pos = self.thing(old)?.pos;
+        let e = self.spawn_blueprint(def, pos, stuff, facing)?;
+        let _ = self.ecs.insert_one(e, Replaces(old));
+        let _ = self.ecs.insert_one(old, ReplacedBy(e));
+        self.map.touch(pos);
         Some(e)
     }
 
@@ -1925,6 +1983,11 @@ impl World {
             self.map.touch(t.pos);
         }
         let planned = self.ecs.get::<&Planned>(e).ok().map(|p| *p);
+        let replacement = self.replacement_of(e);
+        // A replacement taken back: its piece has none waiting any more.
+        if let Ok(old) = self.ecs.get::<&Replaces>(e).map(|r| r.0) {
+            let _ = self.ecs.remove_one::<ReplacedBy>(old);
+        }
         // A site taken down mid-order: what was brought stays, and the mod
         // that posted it hears.
         if let Ok(o) = self.ecs.remove_one::<Order>(e) {
@@ -1982,6 +2045,16 @@ impl World {
         // A bridge gone: what stood on it goes down.
         if !footing && self.map.inb(t.pos) && self.map.is_air(self.map.idx(t.pos)) {
             self.fall(t.pos);
+        }
+        // Taken down or destroyed before its replacement was built: the
+        // replacement is an ordinary plan on the empty cell.
+        if let Some(r) = replacement {
+            let _ = self.ecs.remove_one::<Replaces>(r);
+            if let Some(rt) = self.thing(r) {
+                for c in self.defs.thing(rt.def).footprint(rt.pos, rt.facing) {
+                    self.map.set_fixture(c, Some(r), false, 0, false);
+                }
+            }
         }
         // Cleared for a building: it goes up in its place.
         if let Some(p) = planned {
