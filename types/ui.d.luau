@@ -52,6 +52,10 @@ type VisiblePawn = {
     id: number, name: string, faction: string, intelligent: boolean, asleep: boolean,
     selected: boolean, hovered: boolean, radius: number,
 }
+type VisibleRoom = {
+    id: number, x: number, y: number, cells: number, open: boolean,
+    role: string?, role_id: string?, temperature: string?,
+}
 type Speech = { id: number, text: string, age: number, priority: number }
 type Message = { text: string, kind: string, age: number, day: number, clock: string }
 type WorldEvent = { tick: number, kind: string, id: number, name: string }
@@ -372,6 +376,8 @@ declare view: {
     ui_tree: () -> { TreeRow },
     -- Pawns on screen, for anchored labels.
     visible_pawns: () -> { VisiblePawn },
+    -- Walled rooms on screen, each with the free cell nearest its middle on screen, for their labels. `open` is walled in but not roofed. Empty zoomed out.
+    visible_rooms: () -> { VisibleRoom },
     -- Load warnings.
     warnings: () -> { string },
     -- The colony's wealth.

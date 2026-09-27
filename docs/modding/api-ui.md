@@ -136,6 +136,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `view.ui_stats` | `() -> UiStats` | The UI's own timings. |
 | `view.ui_tree` | `() -> { TreeRow }` | The node tree (devtools). |
 | `view.visible_pawns` | `() -> { VisiblePawn }` | Pawns on screen, for anchored labels. |
+| `view.visible_rooms` | `() -> { VisibleRoom }` | Walled rooms on screen, each with the free cell nearest its middle on screen, for their labels. `open` is walled in but not roofed. Empty zoomed out. |
 | `view.warnings` | `() -> { string }` | Load warnings. |
 | `view.wealth` | `() -> number` | The colony's wealth. |
 | `view.work_types` | `() -> { WorkType }` | The work types, in tie-break order. |
