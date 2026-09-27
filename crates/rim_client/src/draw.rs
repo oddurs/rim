@@ -19,15 +19,8 @@ const PLAYER: Color = Color::new(0.35, 0.8, 1.0, 1.0);
 const HOSTILE: Color = Color::new(1.0, 0.3, 0.25, 1.0);
 
 /// Interpolated position of a pawn's center, in tiles.
-pub fn pawn_pos(p: &Pawn) -> (f32, f32) {
-    let (x, y) = (p.pos.x as f32 + 0.5, p.pos.y as f32 + 0.5);
-    match p.next {
-        Some(n) => {
-            let t = p.progress as f32 / p.step_ticks.max(1) as f32;
-            (x + (n.x as f32 + 0.5 - x) * t, y + (n.y as f32 + 0.5 - y) * t)
-        }
-        None => (x, y),
-    }
+pub fn pawn_pos(p: &Pawn, frac: f32) -> (f32, f32) {
+    p.drawn_at(frac)
 }
 
 fn shade(c: Color, f: f32) -> Color {
@@ -571,7 +564,7 @@ pub fn pawns(app: &App) {
             continue;
         }
         let cd = defs.creature(p.def);
-        let (mut px, mut py) = pawn_pos(&p);
+        let (mut px, mut py) = pawn_pos(&p, app.tick_frac());
         if z >= DETAIL_ZOOM {
             let (lx, ly) = app.worksites.lunge(w, &p);
             (px, py) = (px + lx, py + ly);

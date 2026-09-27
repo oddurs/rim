@@ -398,7 +398,7 @@ Making a mod feels like publishing a small open-source library: rim new, typed L
 
 ## scale — Scale
 
-`###·······` 27% · 4 of 15 done · due 2027-03-15
+`####······` 31% · 5 of 16 done · due 2027-03-15
 
 Hit the performance budget: benchmark harness, hierarchical pathing, flow fields, spatial indices, incremental regions, render caching.
 
@@ -414,6 +414,7 @@ Hit the performance budget: benchmark harness, hierarchical pathing, flow fields
 - [ ] `dab55ea2` Meet the budget: 6x speed at 60 fps <sup>perf · p0 · l · engine</sup>
 - [ ] `e8673d3f` scripting test a_slow_mod_is_named_in_the_warnings flakes under load <sup>bug · p2 · s · engine</sup>
 - [x] `4819db9c` Pathfinding and movement: measure the spikes, then cut them <sup>perf · p1 · m · engine</sup>
+- [x] `8baaf318` Pawns jitter as they walk: draw them at the fraction of a tick <sup>bug · p0 · s · client</sup>
 - [x] `8ee7a610` Anchored labels capped by priority inside the viewport <sup>perf · p2 · s · engine</sup>
 - [x] `ee7fe7fd` Benchmark harness: target map, 30 colonists, 200 pawns <sup>perf · p0 · m · tooling</sup>
 - [x] `fbf3ee1c` Spatial index for things by def <sup>perf · p1 · m · engine</sup>

@@ -1195,7 +1195,7 @@ fn a_name_follows_its_pawn_when_the_camera_and_the_pawn_move() {
             .expect("the name draws something")
     };
     let was = first(&out);
-    let at = |sim: &rim_sim::Sim, cam| rim_ui::view::anchor_screen(anchor, &sim.world, cam, cv.screen).unwrap();
+    let at = |sim: &rim_sim::Sim, cam| rim_ui::view::anchor_screen(anchor, &sim.world, cam, cv.screen, 0.0).unwrap();
     let old = at(&sim, cv.cam);
 
     // What happens after the UI's frame: a zoom, a pan, and a step to the next cell.
@@ -1206,13 +1206,13 @@ fn a_name_follows_its_pawn_when_the_camera_and_the_pawn_move() {
         p.next = None;
     }
     let now = at(&sim, cam);
-    rim_ui::reanchor(&mut out.draw, &mut out.anchored, &sim.world, cam, cv.screen);
+    rim_ui::reanchor(&mut out.draw, &mut out.anchored, &sim.world, cam, cv.screen, 0.0);
     let moved = first(&out);
     let (dx, dy) = (moved.0 - was.0, moved.1 - was.1);
     assert!((dx - (now.0 - old.0)).abs() < 0.01 && (dy - (now.1 - old.1)).abs() < 0.01, "moved by {dx},{dy}");
 
     // Catching up twice doesn't move it twice.
-    rim_ui::reanchor(&mut out.draw, &mut out.anchored, &sim.world, cam, cv.screen);
+    rim_ui::reanchor(&mut out.draw, &mut out.anchored, &sim.world, cam, cv.screen, 0.0);
     assert_eq!(first(&out), moved);
 }
 
