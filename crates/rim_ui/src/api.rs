@@ -95,6 +95,7 @@ type BoardRow = { id: number, name: string, job: string, role: number?, role_lab
 type BoardRole = { index: number, id: string?, label: string, order: number, edited: boolean, planned: boolean, levels: { [string]: number } }
 type Board = { levels: number, labels: { string }, high: number, cols: { BoardCol }, rows: { BoardRow }, roles: { BoardRole } }
 type StandingOrder = { id: string, label: string, reading: string, value: number?, band: string, effect: string, season: string?, crossed: boolean, enabled: boolean, acting: boolean }
+type Markable = { id: number, urgent: boolean, label: string }
 type Stance = { id: string, label: string, icon: string, active: boolean }
 type Effective = { value: number, why: string }
 type Stuff = { id: string, label: string, color: string, have: number, active: boolean, hp: number, work: number }
@@ -127,6 +128,7 @@ pub const UI_API: &[UiDoc] = &[
     d!("act.draft", "(id: number, on: boolean) -> ()", "Draft or undraft a colonist."),
     d!("act.focus", "(id: number) -> ()", "Move the camera to a pawn or thing."),
     d!("act.load", "(path: string) -> ()", "Play a save from view.saves() (the title screen)."),
+    d!("act.mark_urgent", "(id: number, on: boolean) -> ()", "Mark a job urgent (a blueprint, a thing or creature marked for work, an order's site), or clear it: everyone takes it a level sooner than its work type."),
     d!("act.new_colony", "() -> ()", "Start a new colony (the title screen)."),
     d!("act.order", "(key: string, x: number, y: number, on: number?) -> ()", "Give the selected colonists the order named key at a map spot (a row from view.orders), each one it's on offer to."),
     d!("act.preview", "(key: string?) -> ()", "Point the materials view (view.stuff) at a buildable by its tool key, for a card describing it; nil goes back to the tool in hand."),
@@ -256,6 +258,7 @@ pub const UI_API: &[UiDoc] = &[
     d!("view.items", "() -> { Item }", "Every item def, which a stockpile can take or refuse."),
     d!("view.last_order", "() -> { label: string, age: number }?", "The last order given (\"Gunnar will deconstruct wall\") and how many seconds ago, or nil once it's been undone."),
     d!("view.look", "(thing: string, made_of: string?) -> number", "A thing's world look, tinted by what it's made of, as an index a token node's `look` takes (kind = \"token\"; `kit.item` builds one). Made once per thing and material."),
+    d!("view.markable", "(x: number, y: number) -> Markable?", "The job on a tile an urgent mark could go on, with whether it has one."),
     d!("view.marked", "() -> { [string]: number }", "How many things each designation has marked, by designation id; ones with none are left out."),
     d!("view.message_count", "() -> number", "How many messages the log holds."),
     d!("view.messages", "(max: number, skip: number?) -> { Message }", "The newest messages, newest first; skip that many of the newest to page back through the log."),
@@ -299,6 +302,7 @@ pub const UI_API: &[UiDoc] = &[
     d!("view.ui_scale", "() -> number", "The player's UI scale, on top of the display's (1 is normal)."),
     d!("view.ui_stats", "() -> UiStats", "The UI's own timings."),
     d!("view.ui_tree", "() -> { TreeRow }", "The node tree (devtools)."),
+    d!("view.urgent_count", "() -> number", "How many jobs are marked urgent."),
     d!("view.visible_pawns", "() -> { VisiblePawn }", "Pawns on screen, for anchored labels."),
     d!("view.warnings", "() -> { string }", "Load warnings."),
     d!("view.wealth", "() -> number", "The colony's wealth."),

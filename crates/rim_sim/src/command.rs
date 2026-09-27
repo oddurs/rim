@@ -128,6 +128,12 @@ pub enum Command {
         label: String,
         from: RoleSource,
     },
+    /// Mark a job urgent, or clear the mark (DESIGN.md §4d): a blueprint, a
+    /// thing or creature marked for work, or an order's site.
+    MarkUrgent {
+        target: Entity,
+        on: bool,
+    },
     /// Put the colony in a stance: its priority rules hold until another.
     SetStance {
         stance: DefId,
@@ -376,6 +382,17 @@ pub fn apply(w: &mut World, c: Command) {
                 edited: true,
                 planner: None,
             });
+        }
+        Command::MarkUrgent { target, on } => {
+            let changed = if on && w.is_markable(target) {
+                w.ecs.insert_one(target, crate::world::Urgent).is_ok()
+            } else {
+                !on && w.ecs.remove_one::<crate::world::Urgent>(target).is_ok()
+            };
+            // The mark is drawn on the thing, in its chunk's mesh.
+            if changed {
+                w.touch(target);
+            }
         }
         Command::SetStance { stance } => {
             if (stance as usize) < defs.stances.len() {

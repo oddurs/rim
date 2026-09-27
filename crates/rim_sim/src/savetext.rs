@@ -115,6 +115,7 @@ fn codec_of(section: &str) -> Result<Codec, String> {
         "engine:made_of" => codec::<Vec<(Entity, MadeOf)>>(),
         "engine:owner" => codec::<Vec<(Entity, Owner)>>(),
         "engine:designated" => codec::<Vec<(Entity, Designated)>>(),
+        "engine:urgent" => codec::<Vec<(Entity, crate::world::Urgent)>>(),
         "engine:planned" => codec::<Vec<(Entity, Planned)>>(),
         "engine:regrow" => codec::<Vec<(Entity, Regrow)>>(),
         "engine:held" => codec::<Vec<(Entity, Held)>>(),

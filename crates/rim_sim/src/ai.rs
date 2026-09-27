@@ -755,6 +755,10 @@ fn choose_work(w: &World, e: Entity, p: &Pawn, mut why: Option<&mut Refusals>) -
     let defs = w.defs.clone();
     let level: Vec<u8> = (0..defs.work_types.len() as DefId).map(|t| crate::rules::effective(w, p, t)).collect();
     let wanted = |t: DefId| level[t as usize] > 0;
+    // A job the player marked urgent counts a level sooner than its work
+    // type, never from 0 (a 0 never gets a job) and never past the first.
+    // Its key is under CALM, below.
+    let at = |t: DefId, k: u32| if k < CALM { level[t as usize].saturating_sub(1).max(1) } else { level[t as usize] };
     // Within a level, urgent work comes before calm work, and then the
     // nearest (DESIGN.md §4d): the key is the distance, plus CALM for work
     // that isn't urgent. Urgent: raising a shelter (walls, doors, a bed)
@@ -766,7 +770,14 @@ fn choose_work(w: &World, e: Entity, p: &Pawn, mut why: Option<&mut Refusals>) -
         ((td.blocks || td.door || td.bed.is_some()) && *shelterless.get_or_init(|| !w.has_shelter()))
             || (td.comforts && *comfortless.get_or_init(|| !w.has_comfort()))
     };
-    let key = |d: u32, urgent: bool| if urgent { d } else { d.saturating_add(CALM) };
+    // A job the player marked urgent comes before either: its key is the
+    // bare distance, under CALM, and it counts a level sooner below.
+    let marked = |e: Entity| w.ecs.get::<&crate::world::Urgent>(e).is_ok();
+    let key = |d: u32, urgent: bool, mark: bool| match (mark, urgent) {
+        (true, _) => d,
+        (false, true) => d.saturating_add(CALM),
+        (false, false) => d.saturating_add(2 * CALM),
+    };
     // The best job of each work type: (key, job, what to reserve).
     let mut best: Vec<Option<(u32, Job, Entity)>> = vec![None; defs.work_types.len()];
     let nearer =
@@ -785,7 +796,7 @@ fn choose_work(w: &World, e: Entity, p: &Pawn, mut why: Option<&mut Refusals>) -
                 continue;
             }
             let missing = bp.cost.iter().zip(&bp.delivered).find(|(c, d)| **d < c.1).map(|(c, d)| (c.0, c.1 - d));
-            bps.push((key(t.pos.octile(p.pos), urgent_build(t.def)), be, w.reach_goal(t), missing));
+            bps.push((key(t.pos.octile(p.pos), urgent_build(t.def), marked(be)), be, w.reach_goal(t), missing));
         }
         bps.sort_by_key(|b| (b.0, b.1.id()));
         // A material with nothing to bring for one plan has nothing for
@@ -841,7 +852,7 @@ fn choose_work(w: &World, e: Entity, p: &Pawn, mut why: Option<&mut Refusals>) -
         let wt = designated_work(w, te, dd.work_r);
         let d = t.pos.octile(p.pos);
         let urgent = w.ecs.get::<&Planned>(te).is_ok_and(|pl| urgent_build(pl.thing));
-        let k = key(d, urgent);
+        let k = key(d, urgent, marked(te));
         if !wanted(wt) || !nearer(&best[wt as usize], k, te) {
             continue;
         }
@@ -881,7 +892,8 @@ fn choose_work(w: &World, e: Entity, p: &Pawn, mut why: Option<&mut Refusals>) -
     for (se, t, o) in w.ecs.query::<(Entity, &Thing, &Order)>().without::<&Blueprint>().iter() {
         let wt = o.work_type;
         let d = t.pos.octile(p.pos);
-        if !wanted(wt) || !nearer(&best[wt as usize], key(d, false), se) {
+        let mark = marked(se);
+        if !wanted(wt) || !nearer(&best[wt as usize], key(d, false, mark), se) {
             continue;
         }
         let reserved = w.reserved_by_other(se, e);
@@ -902,7 +914,7 @@ fn choose_work(w: &World, e: Entity, p: &Pawn, mut why: Option<&mut Refusals>) -
                 .and_then(|need| tool_for(w, e, p, need, have))
                 .map(|(extra, tool)| (d + extra, Job::Craft { site: se, tool })),
         };
-        match job.map(|(dist, job)| (key(dist, false), job)) {
+        match job.map(|(dist, job)| (key(dist, false, mark), job)) {
             Some((k, job)) if nearer(&best[wt as usize], k, se) => best[wt as usize] = Some((k, job, se)),
             Some(_) => {}
             None => {
@@ -920,7 +932,10 @@ fn choose_work(w: &World, e: Entity, p: &Pawn, mut why: Option<&mut Refusals>) -
     // Loose items a stockpile would take, unless work at a better level
     // was already found: hauling is the costliest search.
     if let Some(hw) = defs.haul_work.filter(|&t| wanted(t)) {
-        let beaten = best.iter().enumerate().find(|(t, b)| b.is_some() && level[*t] < level[hw as usize]);
+        let beaten = best
+            .iter()
+            .enumerate()
+            .find(|(t, b)| b.as_ref().is_some_and(|b| at(*t as DefId, b.0) < level[hw as usize]));
         // Not searched: the costliest search, and it couldn't win.
         if let (Some((t, _)), Some(r)) = (beaten, why.as_deref_mut()) {
             if !w.zones.list.is_empty() {
@@ -929,8 +944,8 @@ fn choose_work(w: &World, e: Entity, p: &Pawn, mut why: Option<&mut Refusals>) -
         }
         if beaten.is_none() {
             if let Some((d, job, src)) = find_haul(w, e, p.pos) {
-                if nearer(&best[hw as usize], key(d, false), src) {
-                    best[hw as usize] = Some((key(d, false), job, src));
+                if nearer(&best[hw as usize], key(d, false, false), src) {
+                    best[hw as usize] = Some((key(d, false, false), job, src));
                 }
             }
         }
@@ -951,9 +966,10 @@ fn choose_work(w: &World, e: Entity, p: &Pawn, mut why: Option<&mut Refusals>) -
             }
             continue;
         }
-        if nearer(&best[wt as usize], key(d, false), o) {
+        let k = key(d, false, marked(o));
+        if nearer(&best[wt as usize], k, o) {
             if w.map.can_reach(p.pos, Goal::Touch(op)) {
-                best[wt as usize] = Some((key(d, false), Job::Attack { target: o, until: w.tick + 2400 }, o));
+                best[wt as usize] = Some((k, Job::Attack { target: o, until: w.tick + 2400 }, o));
             } else if let Some(r) = why.as_deref_mut() {
                 r.note(wt, d, Why::Unreachable);
             }
@@ -965,7 +981,7 @@ fn choose_work(w: &World, e: Entity, p: &Pawn, mut why: Option<&mut Refusals>) -
         .iter()
         .enumerate()
         .filter_map(|(t, b)| Some((t as DefId, b.as_ref()?)))
-        .min_by_key(|(t, b)| (level[*t as usize], b.0, rank(*t), b.2.id()))
+        .min_by_key(|(t, b)| (at(*t, b.0), b.0, rank(*t), b.2.id()))
         .map(|(t, _)| t)?;
     // Every other type that had a job lost to this one.
     if let Some(r) = why {

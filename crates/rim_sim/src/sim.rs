@@ -169,6 +169,7 @@ impl Sim {
         prof.time("rules", || w.update_rules());
         prof.time("pawns", || ai::tick_pawns(w));
         prof.time("worksites", || w.sweep_worksites());
+        w.sweep_urgent();
         prof.time("deaths", || systems::deaths(w));
         if w.tick.is_multiple_of(systems::NEEDS_INTERVAL) {
             prof.time("needs", || systems::needs(w));

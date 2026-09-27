@@ -74,6 +74,7 @@ type BoardRow = { id: number, name: string, job: string, role: number?, role_lab
 type BoardRole = { index: number, id: string?, label: string, order: number, edited: boolean, planned: boolean, levels: { [string]: number } }
 type Board = { levels: number, labels: { string }, high: number, cols: { BoardCol }, rows: { BoardRow }, roles: { BoardRole } }
 type StandingOrder = { id: string, label: string, reading: string, value: number?, band: string, effect: string, season: string?, crossed: boolean, enabled: boolean, acting: boolean }
+type Markable = { id: number, urgent: boolean, label: string }
 type Stance = { id: string, label: string, icon: string, active: boolean }
 type Effective = { value: number, why: string }
 type Stuff = { id: string, label: string, color: string, have: number, active: boolean, hp: number, work: number }
@@ -173,6 +174,8 @@ declare act: {
     focus: (id: number) -> (),
     -- Play a save from view.saves() (the title screen).
     load: (path: string) -> (),
+    -- Mark a job urgent (a blueprint, a thing or creature marked for work, an order's site), or clear it: everyone takes it a level sooner than its work type.
+    mark_urgent: (id: number, on: boolean) -> (),
     -- Start a new colony (the title screen).
     new_colony: () -> (),
     -- Give the selected colonists the order named key at a map spot (a row from view.orders), each one it's on offer to.
@@ -274,6 +277,8 @@ declare view: {
     last_order: () -> { label: string, age: number }?,
     -- A thing's world look, tinted by what it's made of, as an index a token node's `look` takes (kind = "token"; `kit.item` builds one). Made once per thing and material.
     look: (thing: string, made_of: string?) -> number,
+    -- The job on a tile an urgent mark could go on, with whether it has one.
+    markable: (x: number, y: number) -> Markable?,
     -- How many things each designation has marked, by designation id; ones with none are left out.
     marked: () -> { [string]: number },
     -- How many messages the log holds.
@@ -344,6 +349,8 @@ declare view: {
     ui_stats: () -> UiStats,
     -- The node tree (devtools).
     ui_tree: () -> { TreeRow },
+    -- How many jobs are marked urgent.
+    urgent_count: () -> number,
     -- Pawns on screen, for anchored labels.
     visible_pawns: () -> { VisiblePawn },
     -- Load warnings.
