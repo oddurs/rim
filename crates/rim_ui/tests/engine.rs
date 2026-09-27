@@ -2112,3 +2112,56 @@ end)
     }
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// Three probes: one reads the hovered cell, one who is hovered among the
+/// pawns, one neither. Each shows how often it has been built.
+const HOVER_PROBES: &str = r#"
+local reads, pawns, still = 0, 0, 0
+ui.define("probe:reads", function(view)
+    reads += 1
+    local h = view.hover()
+    return ui.text({ string.format("reads %d at %d", reads, if h then h.x else -1), id = "probe:reads" })
+end)
+ui.mount("top", "probe:reads", { order = 95 })
+ui.define("probe:still", function(view)
+    still += 1
+    return ui.text({ string.format("still %d", still), id = "probe:still" })
+end)
+ui.mount("top", "probe:still", { order = 96 })
+ui.define("probe:pawns", function(view)
+    pawns += 1
+    local n = #view.visible_pawns()
+    return ui.text({ string.format("pawns %d built %d", n, pawns), id = "probe:pawns" })
+end)
+ui.mount("top", "probe:pawns", { order = 97 })
+"#;
+
+/// The pointer crosses a cell at nearly every step over the map: only the
+/// trees that read the hover rebuild, not the whole UI, or mousing over
+/// the map costs a full rebuild a frame.
+#[test]
+fn a_new_hover_rebuilds_only_the_trees_that_read_it() {
+    let dir = scratch_mods("hoverprobes", &[("probe", "", &[("ui/probes.luau", HOVER_PROBES)])]);
+    let sim = sim_at(&dir);
+    let mut ui = ui_for(&sim);
+    let mut cv = client(&sim);
+    let c = sim.world.colony_center().unwrap();
+    cv.hover_cell = Some(c);
+    cv.time = 10.0;
+    frame(&mut ui, &sim, &cv, Input { time: cv.time, ..Default::default() });
+    let text = |ui: &rim_ui::Ui| ui.snapshot();
+    let line = |ui: &rim_ui::Ui, probe: &str| text(ui).lines().find(|l| l.contains(probe)).map(str::to_owned);
+    let (still_before, pawns_before) = (line(&ui, "still "), line(&ui, "pawns "));
+    // Three cells in three frames, all inside one rebuild period.
+    for k in 1..=3 {
+        cv.hover_cell = Some(c.offset(k, 0));
+        cv.time = 10.0 + k as f64 / 240.0;
+        frame(&mut ui, &sim, &cv, Input { time: cv.time, ..Default::default() });
+        let at = format!("at {}", c.x + k);
+        assert!(text(&ui).contains(&at), "the hover readout follows the pointer to {at}\n{}", text(&ui));
+    }
+    assert!(still_before.is_some() && pawns_before.is_some(), "the other probes are built\n{}", text(&ui));
+    assert_eq!(line(&ui, "still "), still_before, "a tree that doesn't read the hover wasn't rebuilt for it");
+    assert_eq!(line(&ui, "pawns "), pawns_before, "nor one that reads only who is hovered, while nobody is");
+    let _ = std::fs::remove_dir_all(&dir);
+}
