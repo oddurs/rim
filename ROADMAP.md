@@ -386,7 +386,7 @@ The API grows up: stat pipeline, script components, custom jobs, needs and def k
 
 ## houses — Houses
 
-`#######···` 70% · 16 of 23 done
+`########··` 74% · 17 of 23 done
 
 A house is drawn as its plan and built as an order (DESIGN.md §6c). Walls join from their neighbours in quarters, with rounded ends and square junctions, and no sprites. Materials show as patterns and climb a ladder of tools from wattle to brick. Doors and windows orient themselves in the run and toward the room. Rooms take roles from what is in them, a roof span set by the materials replaces the 400-cell cap, and from far away the colony is a village of hipped roofs. The prototype, docs/engineering/houses-prototype.html, is the reference.
 
@@ -394,7 +394,6 @@ A house is drawn as its plan and built as an order (DESIGN.md §6c). Walls join 
 - [ ] `b6a2d3cf` Place a house plan from the build menu, turned with T <sup>feature · p2 · m · client</sup>
 - [ ] `c281689c` Save a selection as a house plan <sup>feature · p2 · m · client</sup>
 - [ ] `e7c4a3f6` Blueprints as work orders <sup>feature · p1 · m · engine</sup>
-- [ ] `fbab2877` Core's looks in the plan style <sup>content · p1 · m · core</sup>
 - [ ] `ff479390` The building ladder: dry stone, logs, bricks and a kiln <sup>content · p1 · m · plugin</sup>
 - [ ] `26a69a8e` Pipe joins: fences and palisades connect like Minecraft's <sup>feature · p2 · s · client</sup>
 - [x] `24100bb9` A roof span replaces the room size cap, and pillars hold it <sup>feature · p0 · m · engine</sup>
@@ -412,6 +411,7 @@ A house is drawn as its plan and built as an order (DESIGN.md §6c). Walls join 
 - [x] `df049dac` Roofs from far away, hipped by the span field <sup>feature · p2 · m · client</sup>
 - [x] `eb469f44` Houses concept: drawn as their plan, built as orders <sup>spike · p0 · m · tooling</sup>
 - [x] `f709cdd4` Room roles as data <sup>feature · p0 · m · engine</sup>
+- [x] `fbab2877` Core's looks in the plan style <sup>content · p1 · m · core</sup>
 - [x] `fff4fb42` A material names the tool it is built with <sup>feature · p1 · s · engine</sup>
 
 ## mood — Mood

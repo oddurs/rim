@@ -86,8 +86,16 @@ pub struct LayerDef {
     pub w: Option<f32>,
     pub h: Option<f32>,
     pub r: Option<f32>,
-    /// Line width in screen points, for `outline` and `edges`.
+    /// Line width in screen points, for `outline`, `arc`, `line` and `edges`.
     pub width: Option<f32>,
+    /// A named line weight instead (heavy, medium, light, hair), which
+    /// grows with the zoom: for `box`, and in place of `width`.
+    pub line: Option<String>,
+    /// For `box`: how far its corners round, as a fraction of the cell.
+    pub round: Option<f32>,
+    /// For `line`: its ends, `[x, y]` in cell units.
+    pub start: Option<[f32; 2]>,
+    pub end: Option<[f32; 2]>,
     /// Smallest radius (disc) or width and height (fill) in points, so a
     /// berry or a seam still shows zoomed out.
     pub min_px: Option<f32>,
@@ -137,15 +145,20 @@ pub struct LayerDef {
 pub enum Prim {
     /// A rectangle in cell units, from the cell's top-left.
     Fill { rect: [f32; 4], min_px: f32 },
-    /// A rectangle's outline, `width` points thick.
-    Outline { rect: [f32; 4], width: f32 },
+    /// A rectangle's outline.
+    Outline { rect: [f32; 4], width: Stroke },
+    /// A plan symbol's body (DESIGN.md §6c): a rectangle rounded by `round`
+    /// of the cell, filled, and outlined in ink.
+    Box { rect: [f32; 4], round: f32, line: Weight },
+    /// A straight line between two points in cell units.
+    Line { from: [f32; 2], to: [f32; 2], line: Stroke },
     /// A disc around a point in cell units.
     Disc { at: [f32; 2], r: f32, min_px: f32, pulse: f32 },
     /// The cell's border on the sides that don't face a joined neighbour.
-    Edges { width: f32 },
-    /// An arc about a point, `width` points thick, from `from` to `to`
-    /// radians clockwise from east: a door's swing.
-    Arc { at: [f32; 2], r: f32, from: f32, to: f32, width: f32 },
+    Edges { width: Stroke },
+    /// An arc about a point, from `from` to `to` radians clockwise from
+    /// east: a door's swing.
+    Arc { at: [f32; 2], r: f32, from: f32, to: f32, width: Stroke },
     /// A fence's rails toward what it joins and connects to, and posts
     /// where it needs them: ends, corners and junctions, and every
     /// `spacing` cells along a straight run (DESIGN.md §6c).
@@ -163,6 +176,62 @@ pub enum Prim {
     /// A character centred on a point, `size` of the cell high. `id`
     /// indexes `DefDb::glyphs`.
     Glyph { at: [f32; 2], size: f32, id: u16 },
+}
+
+/// The plan's four line weights (DESIGN.md §6c), heaviest first: a
+/// wall's contour, an opening, a piece of furniture, a detail. Named, so a
+/// mod draws in core's hand, and sized with the zoom here and nowhere else.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Weight {
+    Heavy,
+    Medium,
+    Light,
+    Hair,
+}
+
+impl Weight {
+    pub fn parse(s: &str) -> Result<Weight, String> {
+        Ok(match s {
+            "heavy" => Weight::Heavy,
+            "medium" => Weight::Medium,
+            "light" => Weight::Light,
+            "hair" => Weight::Hair,
+            o => return Err(format!("line = {o:?}: the weights are heavy, medium, light and hair")),
+        })
+    }
+
+    /// Points thick with the cell `z` points across. A floor keeps each
+    /// visible zoomed out, and heavier stays heavier.
+    pub fn px(self, z: f32) -> f32 {
+        let (k, least) = match self {
+            Weight::Heavy => (0.06, 1.2),
+            Weight::Medium => (0.04, 1.0),
+            Weight::Light => (0.028, 0.8),
+            Weight::Hair => (0.016, 0.5),
+        };
+        (z * k).max(least)
+    }
+}
+
+/// The plan's ink: the outline of every box, one colour so symbols read
+/// as drawn by one hand.
+pub const INK: [f32; 4] = [0.086, 0.067, 0.047, 0.9];
+
+/// How thick a line is: fixed points (`width`), or one of the weights
+/// (`line`), which grows with the zoom.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Stroke {
+    Points(f32),
+    Weight(Weight),
+}
+
+impl Stroke {
+    pub fn px(self, z: f32) -> f32 {
+        match self {
+            Stroke::Points(p) => p,
+            Stroke::Weight(w) => w.px(z),
+        }
+    }
 }
 
 /// How a material shows on the plan: a fixed vocabulary of hairline
@@ -357,19 +426,21 @@ impl LayerDef {
     fn compile(&self, art: &mut Art) -> Result<Layer, String> {
         let allowed: &[&str] = match self.draw.as_str() {
             "fill" => &["x", "y", "w", "h", "min_px", "into"],
-            "outline" => &["x", "y", "w", "h", "width", "into"],
+            "outline" => &["x", "y", "w", "h", "width", "line", "into"],
+            "box" => &["x", "y", "w", "h", "round", "line", "into"],
+            "line" => &["start", "end", "width", "line", "into"],
             "disc" => &["x", "y", "r", "min_px", "pulse", "into"],
-            "edges" => &["width"],
+            "edges" => &["width", "line"],
             "mass" => &[],
-            "arc" => &["x", "y", "r", "width", "from", "to", "into"],
+            "arc" => &["x", "y", "r", "width", "line", "from", "to", "into"],
             "pattern" => &["pattern"],
             "pipe" => &["width", "rails", "post", "spacing"],
             "sprite" => &["x", "y", "w", "h", "sprite", "tint"],
             "glyph" => &["x", "y", "glyph", "size"],
             other => {
                 return Err(format!(
-                "unknown draw '{other}' (want fill, outline, disc, arc, edges, mass, pipe, pattern, sprite or glyph)"
-            ))
+                    "unknown draw '{other}' (want fill, outline, box, line, disc, arc, edges, mass, pipe, pattern, sprite or glyph)"
+                ))
             }
         };
         let given = [
@@ -379,6 +450,10 @@ impl LayerDef {
             ("h", self.h.is_some()),
             ("r", self.r.is_some()),
             ("width", self.width.is_some()),
+            ("line", self.line.is_some()),
+            ("round", self.round.is_some()),
+            ("start", self.start.is_some()),
+            ("end", self.end.is_some()),
             ("min_px", self.min_px.is_some()),
             ("pulse", self.pulse.is_some()),
             ("sprite", self.sprite.is_some()),
@@ -398,7 +473,8 @@ impl LayerDef {
         }
         // Numbers that would draw nothing, or something inside out, are
         // refused rather than drawn wrong.
-        let checks: [(&str, Option<f32>, f32, f32); 11] = [
+        let checks: [(&str, Option<f32>, f32, f32); 12] = [
+            ("round", self.round, 0.0, 0.5),
             ("x", self.x, f32::MIN, f32::MAX),
             ("y", self.y, f32::MIN, f32::MAX),
             ("w", self.w, 0.0, f32::MAX),
@@ -425,9 +501,19 @@ impl LayerDef {
             }
         }
         let rect = [self.x.unwrap_or(0.0), self.y.unwrap_or(0.0), self.w.unwrap_or(1.0), self.h.unwrap_or(1.0)];
+        let weight = self.line.as_deref().map(Weight::parse).transpose()?;
+        if weight.is_some() && self.width.is_some() {
+            return Err("give `width` in points or `line`, a weight, not both".into());
+        }
+        let stroke = |points: f32| weight.map_or(Stroke::Points(self.width.unwrap_or(points)), Stroke::Weight);
         let prim = match self.draw.as_str() {
             "fill" => Prim::Fill { rect, min_px: self.min_px.unwrap_or(0.0) },
-            "outline" => Prim::Outline { rect, width: self.width.unwrap_or(1.0) },
+            "outline" => Prim::Outline { rect, width: stroke(1.0) },
+            "box" => Prim::Box { rect, round: self.round.unwrap_or(0.06), line: weight.unwrap_or(Weight::Light) },
+            "line" => match (self.start, self.end) {
+                (Some(from), Some(to)) => Prim::Line { from, to, line: stroke(1.0) },
+                _ => return Err("draw = \"line\" needs `start` and `end`, each [x, y]".into()),
+            },
             "disc" => Prim::Disc {
                 at: [self.x.unwrap_or(0.5), self.y.unwrap_or(0.5)],
                 r: self.r.unwrap_or(0.4),
@@ -470,9 +556,9 @@ impl LayerDef {
                 r: self.r.unwrap_or(0.4),
                 from: self.from.unwrap_or(0.0).to_radians(),
                 to: self.to.unwrap_or(90.0).to_radians(),
-                width: self.width.unwrap_or(1.0),
+                width: stroke(1.0),
             },
-            _ => Prim::Edges { width: self.width.unwrap_or(1.5) },
+            _ => Prim::Edges { width: stroke(1.5) },
         };
         if let Some([from, to]) = self.grow {
             if !(0.0..1.0).contains(&from) || to <= from || to > 1.0 {
@@ -670,10 +756,28 @@ mod tests {
     }
 
     #[test]
+    fn weights_are_named_heavier_stays_heavier_and_boxes_default_light() {
+        let b = layer("draw = \"box\"\nx = 0.1\nw = 0.8").unwrap();
+        assert_eq!(b.prim, Prim::Box { rect: [0.1, 0.0, 0.8, 1.0], round: 0.06, line: Weight::Light });
+        let e = layer("draw = \"edges\"\nline = \"heavy\"").unwrap();
+        assert_eq!(e.prim, Prim::Edges { width: Stroke::Weight(Weight::Heavy) });
+        let l = layer("draw = \"line\"\nstart = [0.2, 0.4]\nend = [0.8, 0.4]\nline = \"hair\"").unwrap();
+        assert_eq!(l.prim, Prim::Line { from: [0.2, 0.4], to: [0.8, 0.4], line: Stroke::Weight(Weight::Hair) });
+        for z in [4.0, 16.0, 40.0, 80.0] {
+            let w = [Weight::Heavy, Weight::Medium, Weight::Light, Weight::Hair].map(|w| w.px(z));
+            assert!(w.windows(2).all(|p| p[0] > p[1]), "at {z}: {w:?}");
+        }
+        assert!(layer("draw = \"box\"\nline = \"bold\"").unwrap_err().contains("heavy, medium, light and hair"));
+        assert!(layer("draw = \"outline\"\nline = \"light\"\nwidth = 2").unwrap_err().contains("not both"));
+        assert!(layer("draw = \"line\"\nstart = [0, 0]").unwrap_err().contains("needs `start` and `end`"));
+        assert!(layer("draw = \"box\"\nround = 0.7").unwrap_err().contains("out of range"));
+    }
+
+    #[test]
     fn an_arc_is_in_degrees_and_can_face_the_room() {
         let l = layer("draw = \"arc\"\nx = 0.12\nr = 0.76\nfrom = 0\nto = 90\ninto = \"room\"").unwrap();
         let Prim::Arc { at, r, from, to, width } = l.prim else { panic!("an arc") };
-        assert_eq!((at, r, from, width), ([0.12, 0.5], 0.76, 0.0, 1.0));
+        assert_eq!((at, r, from, width), ([0.12, 0.5], 0.76, 0.0, Stroke::Points(1.0)));
         assert!((to - std::f32::consts::FRAC_PI_2).abs() < 1e-6);
         assert!(l.into_room);
         assert!(layer("draw = \"fill\"\ninto = \"hall\"").unwrap_err().contains("the only side"));

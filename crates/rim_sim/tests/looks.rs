@@ -29,7 +29,9 @@ fn guide_samples_load() {
     let d = &s.world.defs;
     let fence = d.thing(d.thing_id("paling").unwrap());
     assert_eq!(d.join_groups[fence.look_r.join.unwrap() as usize], "paling");
-    assert!(matches!(fence.look_r.layers[1].prim, Prim::Edges { width } if width == 2.0));
+    assert!(
+        matches!(fence.look_r.layers[1].prim, Prim::Edges { width } if width == rim_sim::look::Stroke::Points(2.0))
+    );
 }
 
 #[test]

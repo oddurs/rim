@@ -29,6 +29,11 @@ pub enum Shape {
     Glyph { text: String, at: [f32; 2], size: f32, color: Rgba },
 }
 
+/// About how many points across a token draws a cell, for line weights.
+const TOKEN_CELL: f32 = 24.0;
+/// The plan's ink, as the world draws a box's outline.
+const INK: Rgba = rim_sim::look::INK;
+
 /// The shapes of a thing def's look, in its material's colour when it has
 /// one (as the world draws it).
 pub fn shapes(defs: &DefDb, def: DefId, made_of: Option<DefId>) -> Vec<Shape> {
@@ -46,11 +51,16 @@ pub fn shapes(defs: &DefDb, def: DefId, made_of: Option<DefId>) -> Vec<Shape> {
             (b as f32 / 255.0 * f).min(1.0),
             a as f32 / 255.0,
         ];
-        out.push(match l.prim {
+        let shape = match l.prim {
             Prim::Fill { rect, .. } | Prim::Sprite { rect, .. } => Shape::Fill { rect, round: false, color },
             Prim::Mass => Shape::Fill { rect: [0.0, 0.0, 1.0, 1.0], round: false, color },
-            Prim::Outline { rect, width } => Shape::Outline { rect, width, color },
-            Prim::Edges { width } => Shape::Outline { rect: [0.0, 0.0, 1.0, 1.0], width, color },
+            Prim::Outline { rect, width } => Shape::Outline { rect, width: width.px(TOKEN_CELL), color },
+            Prim::Edges { width } => Shape::Outline { rect: [0.0, 0.0, 1.0, 1.0], width: width.px(TOKEN_CELL), color },
+            // The body, then its ink outline.
+            Prim::Box { rect, line, .. } => {
+                out.push(Shape::Fill { rect, round: false, color });
+                Shape::Outline { rect, width: line.px(TOKEN_CELL), color: INK }
+            }
             Prim::Disc { at: [x, y], r, .. } => {
                 Shape::Fill { rect: [x - r, y - r, 2.0 * r, 2.0 * r], round: true, color }
             }
@@ -58,14 +68,15 @@ pub fn shapes(defs: &DefDb, def: DefId, made_of: Option<DefId>) -> Vec<Shape> {
                 Some(text) => Shape::Glyph { text: text.clone(), at, size, color },
                 None => continue,
             },
-            // A door's swing: detail a token's few pixels can't show, and
-            // it has no line to draw one with.
-            Prim::Arc { .. } => continue,
+            // A door's swing, a table's grain: detail a token's few pixels
+            // can't show, and it has no line to draw one with.
+            Prim::Arc { .. } | Prim::Line { .. } => continue,
             // Hairlines a token's few pixels can't show.
             Prim::Pattern { .. } => continue,
             // A fence is its neighbours: nothing to show alone.
             Prim::Pipe { .. } => continue,
-        });
+        };
+        out.push(shape);
     }
     out
 }

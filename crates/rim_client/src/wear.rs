@@ -91,7 +91,7 @@ pub fn grown(layers: &[Layer], f: f32, own: Color, alpha: f32) -> (Vec<Layer>, f
         let mut l = *l;
         let mut fade = alpha;
         match &mut l.prim {
-            Prim::Fill { rect, .. } | Prim::Outline { rect, .. } => {
+            Prim::Fill { rect, .. } | Prim::Outline { rect, .. } | Prim::Box { rect, .. } => {
                 let h = rect[3] * g;
                 rect[1] += rect[3] - h;
                 rect[3] = h;
@@ -111,6 +111,7 @@ pub fn grown(layers: &[Layer], f: f32, own: Color, alpha: f32) -> (Vec<Layer>, f
             // Clipping a picture would squash it: it fades in instead.
             Prim::Edges { .. }
             | Prim::Arc { .. }
+            | Prim::Line { .. }
             | Prim::Pattern { .. }
             | Prim::Pipe { .. }
             | Prim::Sprite { .. }
