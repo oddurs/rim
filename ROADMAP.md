@@ -49,8 +49,8 @@ Seeds, tests, CI and the merge queue, so that every change is checked the same w
 - [ ] `c2579dbc` Random streams per purpose: a new draw in one system stops reshuffling the rest <sup>feature · p0 · m · engine</sup>
 - [ ] `dabb52d6` Fuzz the save reader, the def loader and patches, and the Luau boundary <sup>feature · p2 · m · tooling</sup>
 - [ ] `dd48e551` scripts/agent: start, sync, pr and queue for the worktree workflow <sup>chore · p1 · s · tooling</sup>
-- [ ] `e2c56c9a` UI frame-budget test asserts wall-clock time on shared CI runners <sup>bug · p0 · s · tooling</sup>
 - [ ] `9b435cd8` scripts/task: one gate for the laptop and CI, and a pre-push hook <sup>chore · p0 · s · tooling</sup>
+- [ ] `e2c56c9a` UI frame-budget test asserts wall-clock time on shared CI runners <sup>bug · p0 · s · tooling</sup>
 - [x] `6b605f27` boundary_refresh_is_cheap asserts wall-clock time and fails under load <sup>bug · p0 · s · engine</sup>
 - [x] `e8673d3f` scripting test a_slow_mod_is_named_in_the_warnings flakes under load <sup>bug · p0 · s · engine</sup>
 

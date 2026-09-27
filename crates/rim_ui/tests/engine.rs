@@ -1526,6 +1526,12 @@ fn frame_budget_with(dir: &std::path::Path, pawns: i32, builds_expected: std::op
     );
     println!("  luau time by mod: {:?}", ui.vm.mod_time);
     assert!(builds_expected.contains(&built), "expected {builds_expected:?} rebuilds in 2 s, got {built}");
+    // The time budgets below are checked only in CI's isolated budget step:
+    // in the full suite, the other tests on the same cores are what they'd
+    // measure (e2c56c9a). The rebuild count above is the work, asserted always.
+    if !timing_budgets() {
+        return;
+    }
     // Shared CI runners are 2-3x slower than a laptop and noisy with it: the
     // same binary measured 0.9 ms locally and 2.0-2.4 ms on CI. The budgets
     // are for a player's machine, so CI gets slack that still catches a real
@@ -1533,9 +1539,8 @@ fn frame_budget_with(dir: &std::path::Path, pawns: i32, builds_expected: std::op
     // The Windows runner measured 6x a laptop on rebuild-heavy frames
     // (8.5 ms against 1.4 ms for the same binary), so it gets twice the
     // slack of the others.
-    // The other tests in this binary run on the same cores, so the budget
-    // is also scaled by how fast the machine is right now, against an idle
-    // laptop: a regression in the UI's own work still shows.
+    // The budget is also scaled by how fast the machine is right now,
+    // against an idle laptop, so a slow runner doesn't read as a regression.
     let factor = machine_factor();
     println!("  machine factor {factor:.2}");
     let slack = match (std::env::var_os("CI").is_some(), cfg!(windows)) {

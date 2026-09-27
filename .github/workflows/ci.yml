@@ -100,6 +100,15 @@ jobs:
             filter=(-E 'not (test(a_year_of_weather_is_deterministic) | test(the_forecast_is_what_happens))')
           fi
           cargo nextest run --release --workspace --profile ci "${filter[@]}"
+      # Wall-clock budgets, alone on the runner: in the full suite the other
+      # tests share the cores and are what the budgets would measure. Linux
+      # only: the frame budgets are for a player's machine, and one platform
+      # catches a regression in the UI's own work (DESIGN.md §8a).
+      - name: UI frame budgets (one test at a time)
+        if: runner.os == 'Linux'
+        env:
+          RIM_BUDGETS: 1
+        run: cargo nextest run --release -p rim_ui --test-threads 1 -E 'test(/frame_budget/)'
       - name: Upload the test report
         if: always()
         uses: actions/upload-artifact@v4
