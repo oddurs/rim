@@ -468,14 +468,13 @@ A house is drawn as its plan and built as an order (DESIGN.md §6c). Walls join 
 
 ## mood — Mood
 
-`###·······` 27% · 4 of 15 done · due 2027-02-20
+`####······` 33% · 5 of 15 done · due 2027-02-20
 
 rim.mood — the first first-party plugin. Proves the API: if mood cannot be a plugin, fix the API.
 
 - [ ] `006ef572` Work Board: passion on skills, shown as a flame <sup>feature · p2 · m · engine</sup>
 - [ ] `2787bdc6` Work Board: a schedule strip and time idle per colonist <sup>feature · p2 · m · engine</sup>
 - [ ] `2d44949e` Work Board: drag columns to set the colony's tie-break <sup>feature · p3 · s · engine</sup>
-- [ ] `337cb649` An urgent mark on a hunt target shows on the map <sup>feature · p3 · s · client</sup>
 - [ ] `65399b78` What did mood need that plugins could not do? <sup>spike · p0 · s · engine</sup>
 - [ ] `79e19fa0` Mood panel via UI extension points <sup>feature · p1 · s · plugin</sup>
 - [ ] `871cde5e` Thoughts: raw food, slept outside, colonist died, nice room <sup>content · p1 · m · plugin</sup>
@@ -483,6 +482,7 @@ rim.mood — the first first-party plugin. Proves the API: if mood cannot be a p
 - [ ] `c4d85d17` rim.mood plugin: mood need and thoughts <sup>feature · p0 · l · plugin</sup>
 - [ ] `d3cbbd74` Mental breaks: wander, sulk, berserk <sup>feature · p1 · m · plugin</sup>
 - [ ] `f690b16e` Mood from weather and seasons <sup>feature · p2 · s · plugin</sup>
+- [x] `337cb649` An urgent mark on a hunt target shows on the map <sup>feature · p3 · s · client</sup>
 - [x] `3ec4f76b` The why panel and who-takes-this say when a job is urgent <sup>feature · p3 · s · engine</sup>
 - [x] `8314393f` Auto's hint and a settler's role prompt: kept in the save, and seen over the Work sheet <sup>feature · p3 · s · core</sup>
 - [x] `d5ba1331` Delete a work role the player made <sup>feature · p3 · m · engine</sup>

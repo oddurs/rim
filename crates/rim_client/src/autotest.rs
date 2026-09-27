@@ -2288,6 +2288,63 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.key(KeyCode::Escape).await;
     t.check(t.app.selected.is_none() && t.app.group.is_empty(), "Escape clears the whole selection");
 
+    // ---------------------------------------------------------- 337cb649 an urgent hunt shows
+    // Pawns aren't in the chunk mesh, so a creature's urgent mark is drawn
+    // with the pawns: a marked deer wears the amber disc, and loses it when
+    // the hunt is called off.
+    println!("\n# an urgent mark on a hunt target (337cb649)");
+    // In daylight: marks are lit with the world, and the weather section
+    // leaves it night, where amber and a brown deer both read near black and
+    // firelight flickers across them from frame to frame.
+    while !(11.0..14.0).contains(&t.w().hour()) {
+        t.ticks(100);
+    }
+    t.app.paused = true;
+    let deer_def = defs.creature_id("deer").expect("core's deer");
+    let spot = (4..20)
+        .flat_map(|d| [home.offset(d, d), home.offset(-d, d), home.offset(d, -d), home.offset(-d, -d)])
+        .find(|&p| {
+            t.w().map.passable(p) && t.w().pawns.iter().filter_map(|&e| t.w().pawn_pos(e)).all(|q| q.chebyshev(p) > 3)
+        })
+        .expect("open ground for a deer");
+    let deer = t.app.sim.world.spawn_pawn(deer_def, Faction::Wild, spot, None);
+    let hunt = defs.lookup("designation", "core:hunt").expect("core's hunt");
+    t.app.sim.push(rim_sim::Command::Designate { designation: hunt, a: spot, b: spot });
+    t.ticks(1);
+    t.focus(spot);
+    let urgent_px = |t: &T, img: &Image| {
+        let (sx, sy) = t.pawn_screen(deer);
+        let r = defs.creature(deer_def).size * t.app.cam.zoom;
+        let (ux, uy) = draw::urgent_spot(sx, sy, r);
+        let dpi = screen_dpi_scale();
+        let (w, h) = (img.width() as u32, img.height() as u32);
+        let (xi, yi) = (((ux * dpi) as u32).min(w - 1), ((uy * dpi) as u32).min(h - 1));
+        let c = img.get_pixel(xi, h - 1 - yi);
+        let m = draw::URGENT_MARK;
+        (c.r - m.r).abs() + (c.g - m.g).abs() + (c.b - m.b).abs()
+    };
+    let img = t.grab().await;
+    let calm = urgent_px(&t, &img);
+    t.app.sim.push(rim_sim::Command::MarkUrgent { target: deer, on: true });
+    t.ticks(1);
+    let on = t.w().ecs.get::<&Urgent>(deer).is_ok();
+    t.check(on, "a deer marked for hunting takes an urgent mark");
+    let img = t.grab().await;
+    let marked = urgent_px(&t, &img);
+    t.shot("urgent_hunt").await;
+    t.check(
+        marked + 0.3 < calm,
+        format!("the marked deer wears the amber mark ({marked:.2} from amber, {calm:.2} before)"),
+    );
+    let _ = t.app.sim.world.ecs.remove_one::<Designated>(deer);
+    t.ticks(1);
+    let off = t.w().ecs.get::<&Urgent>(deer).is_err();
+    t.check(off, "calling the hunt off takes the mark away");
+    let img = t.grab().await;
+    let after = urgent_px(&t, &img);
+    t.check(after > marked + 0.3, format!("and the amber goes from the map ({after:.2} from amber)"));
+    t.app.paused = false;
+
     println!("\n{} passed, {} failed; screenshots in {}", t.passed, t.failed.len(), t.dir.display());
     for f in &t.failed {
         println!("  FAIL {f}");
