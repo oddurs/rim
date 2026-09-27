@@ -358,8 +358,91 @@ local function show_person(id: number)
 	ui.set_state("core:work.lens", "core:work.person")
 end
 
+-- One colonist is a plan, not a grid (DESIGN.md §4d): their levels as
+-- shelves, each work type with Auto's reason and any rule that moved it.
+-- A click pins a level; "Show the board" goes to the grid.
+local function plan_view(b)
+	local who = b.rows[1]
+	local planned = false
+	for _, role in b.roles do
+		if role.index == who.role and role.planned then
+			planned = true
+		end
+	end
+	local items = {
+		row({ gap = "s", align = "center" }, {
+			label(
+				if planned then string.format(t("core:work.plan_title", "Auto is running %s's work"), who.name) else string.format(t("core:work.plan_title_fixed", "%s's work"), who.name),
+				{ size = "heading", weight = "strong" }
+			),
+			{ kind = "spacer" },
+			button({
+				id = "core:work.show_board",
+				label = t("core:work.show_board", "Show the board"),
+				on_click = function()
+					ui.set_state("core:work.show_board", true)
+				end,
+			}),
+		}),
+		label(
+			if planned
+				then string.format(t("core:work.plan_lead", "%s does everything, so the plan follows what's waiting and what the colony needs. Click any work to set it yourself."), who.name)
+				else t("core:work.plan_lead_fixed", "Click any work to move it a level."),
+			{ size = "small", color = "muted", wrap = true }
+		),
+	}
+	for shelf = 1, b.levels + 1 do
+		local level = if shelf > b.levels then 0 else shelf
+		local lines = {}
+		for c, k in b.cols do
+			local x = who.cells[c]
+			if x.value == level then
+				local why = if x.pinned then t("core:work.plan_pinned", "you set this") else x.reason or ""
+				if x.value ~= x.base then
+					why = why .. (if why ~= "" then " · " else "") .. string.format(t("core:work.plan_moved", "moved from %s"), level_name(b.labels, x.base))
+				end
+				table.insert(
+					lines,
+					row({ gap = "s", align = "center" }, {
+						button({
+							id = "core:work.plan." .. k.id,
+							label = k.label,
+							strong = x.pinned,
+							tooltip = x.why,
+							on_click = function()
+								put(who.id, k.id, x, next_level(x.base, b.levels))
+							end,
+						}),
+						label(why, { size = "small", color = "muted" }),
+					})
+				)
+			end
+		end
+		if #lines > 0 then
+			local name = if level == 0 then t("core:work.never", "Never") else b.labels[level] or tostring(level)
+			table.insert(
+				items,
+				row({ id = "core:work.plan.shelf." .. level, gap = "s", align = "start" }, {
+					row({ w = 90 }, { label(name, { size = "small", color = "faint" }) }),
+					col({ gap = "xs" }, lines),
+				})
+			)
+		end
+	end
+	return col({ gap = "s" }, items)
+end
+
 -- The board: a row per colonist, a column per work type, painted.
 local function board_lens(view, b)
+	-- A castaway on Auto sees a plan; one the player put in a fixed role
+	-- sees the board they set it up on.
+	if #b.rows == 1 and not ui.state("core:work.show_board", false) then
+		for _, role in b.roles do
+			if role.index == b.rows[1].role and role.planned then
+				return plan_view(b)
+			end
+		end
+	end
 	local levels, labels, cols = b.levels, b.labels, b.cols
 	local rows = by_role(b)
 
@@ -413,6 +496,7 @@ local function board_lens(view, b)
 				color = if x.value == 0 then "faint" else "text",
 				weight = if x.pinned then "strong" else nil,
 				dot = if x.pinned then "text" else nil,
+				ring = if x.planned then "accent" else nil,
 				bar = x.skill_frac,
 				bar_color = "good",
 				tip = tip,
@@ -813,5 +897,129 @@ ui.extend("core:topbar.right", function(view)
 		end,
 	})
 end)
+
+-- A settler joining: which role, Auto already chosen. It asks without
+-- pausing and goes by itself after a while, so ignoring it is a choice.
+local SETTLER_TICKS = 2500
+
+ui.define("core:settler", function(view)
+	local now = view.tick()
+	local seen = ui.state("core:settler.seen", {})
+	local who = nil
+	for _, ev in view.events(math.max(1, now - SETTLER_TICKS)) do
+		if ev.kind == "joined" and ev.tick > 0 and not seen[ev.id] then
+			who = ev
+		end
+	end
+	if not who then
+		return nil
+	end
+	local p = view.pawn(who.id)
+	if not p then
+		return nil
+	end
+	local b = view.board()
+	local mine = nil
+	for _, r in b.rows do
+		if r.id == who.id then
+			mine = r
+		end
+	end
+	local done = function()
+		local s = table.clone(ui.state("core:settler.seen", {}))
+		s[who.id] = true
+		ui.set_state("core:settler.seen", s)
+	end
+	-- What they're good at: their two best skills.
+	local skills = table.clone(p.skills)
+	table.sort(skills, function(a, z)
+		return a.level > z.level
+	end)
+	local best = {}
+	for i = 1, math.min(2, #skills) do
+		table.insert(best, string.format("%s %d", skills[i].label, skills[i].level))
+	end
+	local order = table.clone(b.roles)
+	table.sort(order, function(a, z)
+		return a.order < z.order
+	end)
+	local choices = {}
+	for _, role in order do
+		if role.planned or role.id ~= "core:hand" then
+			table.insert(
+				choices,
+				button({
+					id = "core:settler.role." .. role.index,
+					label = if role.planned then string.format(t("core:settler.auto", "%s (recommended)"), role.label) else role.label,
+					active = mine ~= nil and mine.role == role.index,
+					on_click = function()
+						act.assign_role(who.id, role.index)
+						done()
+					end,
+				})
+			)
+		end
+	end
+	return kit.panel({ id = "core:settler", pad = "m", gap = "s", bg = "surface_raised", border = "line" }, {
+		label(string.format(t("core:settler.joined", "%s joined the colony"), p.name), { weight = "strong" }),
+		label(table.concat(best, " · "), { size = "small", color = "muted" }),
+		label(t("core:settler.ask", "How should they work?"), { size = "small" }),
+		col({ gap = "xs" }, {
+			row({ gap = "xs" }, table.move(choices, 1, math.min(3, #choices), 1, {})),
+			#choices > 3 and row({ gap = "xs" }, table.move(choices, 4, #choices, 1, {})) or nil,
+		}),
+	})
+end)
+ui.mount("float", "core:settler", { align = "start", order = 5 })
+
+-- The first day's hint: once, for a castaway on Auto.
+ui.define("core:auto_hint", function(view)
+	-- Behind the Work screen it would only be in the way: that is the plan.
+	-- For the first few hours only: after that the castaway is under way.
+	local early = view.day() == 1 and view.tick() < view.ticks_per_day() // 8
+	if ui.state("core:auto_hint.done", false) or not early or view.count_pawns("player") ~= 1 or ui.is_open("core:work") then
+		return nil
+	end
+	local b = view.board()
+	local who = b.rows[1]
+	if not who then
+		return nil
+	end
+	local planned = false
+	for _, role in b.roles do
+		if role.index == who.role and role.planned then
+			planned = true
+		end
+	end
+	if not planned then
+		return nil
+	end
+	return kit.panel({ id = "core:auto_hint", pad = "m", gap = "s", bg = "surface_raised", border = "accent" }, {
+		label(string.format(t("core:auto_hint.title", "%s works on Auto"), who.name), { weight = "strong" }),
+		label(
+			string.format(t("core:auto_hint.text", "Auto picks work from what's waiting and what %s is good at."), who.name),
+			{ size = "small", color = "muted", wrap = true }
+		),
+		row({ gap = "xs" }, {
+			button({
+				id = "core:auto_hint.plan",
+				label = t("core:auto_hint.see", "See the plan"),
+				hint = "P",
+				on_click = function()
+					ui.set_state("core:auto_hint.done", true)
+					ui.open("core:work")
+				end,
+			}),
+			button({
+				id = "core:auto_hint.ok",
+				label = t("core:auto_hint.ok", "Got it"),
+				on_click = function()
+					ui.set_state("core:auto_hint.done", true)
+				end,
+			}),
+		}),
+	})
+end)
+ui.mount("float", "core:auto_hint", { align = "start", order = 4 })
 
 return work
