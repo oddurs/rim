@@ -94,6 +94,7 @@ type BoardCell = { base: number, value: number, inherit: number, pinned: boolean
 type BoardRow = { id: number, name: string, job: string, role: number?, role_label: string?, cells: { BoardCell } }
 type BoardRole = { index: number, id: string?, label: string, order: number, edited: boolean, planned: boolean, levels: { [string]: number } }
 type Board = { levels: number, labels: { string }, high: number, cols: { BoardCol }, rows: { BoardRow }, roles: { BoardRole } }
+type StandingOrder = { id: string, label: string, reading: string, value: number?, band: string, effect: string, season: string?, crossed: boolean, enabled: boolean, acting: boolean }
 type Stance = { id: string, label: string, icon: string, active: boolean }
 type Effective = { value: number, why: string }
 type Stuff = { id: string, label: string, color: string, have: number, active: boolean, hp: number, work: number }
@@ -146,6 +147,7 @@ pub const UI_API: &[UiDoc] = &[
     d!("act.set_overlay", "(index: number?) -> ()", "Show a field overlay by its index in view.fields(), or none."),
     d!("act.set_priority", "(id: number, work: string, level: number) -> ()", "Set a colonist's priority for a work type: 1 first, 0 never."),
     d!("act.set_role_priority", "(role: number, work: string, level: number?) -> ()", "Set a work role's level for a work type, or nil to leave it to the default. A planned role (Auto) ignores it."),
+    d!("act.set_rule_enabled", "(id: string, on: boolean) -> ()", "Switch a priority rule (a standing order) off for this colony, or back on."),
     d!("act.set_stance", "(id: string) -> ()", "Put the colony in a stance: its priority rules hold until another."),
     d!("act.speed", "(speed: number) -> ()", "Set the game speed."),
     d!("act.store_level", "(zone: number, level: number) -> ()", "Put a stockpile at a level of the store priority scale (0 is lowest). Stacks only move to a higher one."),
@@ -281,6 +283,7 @@ pub const UI_API: &[UiDoc] = &[
     ),
     d!("view.speed", "() -> number", "The game speed."),
     d!("view.stances", "() -> { Stance }", "The colony's stances, in bar order; `active` is the one it's in."),
+    d!("view.standing", "() -> { StandingOrder }", "The standing orders: rules on colony readings, with the reading now, their marks (`band`), what they do (`effect`), a season they wait for, whether the reading has crossed the mark, whether the colony has them on, and whether they're moving priorities now (`acting`)."),
     d!("view.stats", "() -> { string }", "Client statistics lines."),
     d!("view.store_levels", "() -> { string }", "The store priority scale's level names, lowest first."),
     d!("view.stuff", "() -> { Stuff }", "Materials for the active build tool: what you have, what you'd get."),

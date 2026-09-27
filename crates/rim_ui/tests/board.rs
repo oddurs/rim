@@ -460,3 +460,56 @@ fn two_alike_are_offered_a_role() {
     frame(&mut ui, &sim, &cv, Input { time: 20.0, ..Default::default() });
     assert!(ui.find("core:work.alike").is_none(), "not again after Not now");
 }
+
+/// The orders panel lists core's standing orders with their readings, and
+/// its switch turns one off.
+#[test]
+fn the_orders_panel_lists_and_switches_orders() {
+    let (mut sim, mut ui, mut cv) = board(1);
+    sim.world.set_reading("core:food_days", 3.4);
+    frame(&mut ui, &sim, &cv, Input { time: 5.0, ..Default::default() });
+    let button = ui.find("core:work.orders").expect("an orders button beside the stances");
+    assert!(ui.snapshot().contains("Orders · 1 on"), "{}", ui.snapshot());
+    click(&mut ui, &sim, &mut cv, centre(button));
+    frame(&mut ui, &sim, &cv, Input { time: 6.0, ..Default::default() });
+    let tree = ui.snapshot();
+    for want in
+        ["Food is low", "Harvest and Hunt one level sooner", "on under 5, off at 8", "on · 3.4", "Wood before winter"]
+    {
+        assert!(tree.contains(want), "the panel says {want}:\n{tree}");
+    }
+    let switch = ui.find("core:work.order.core:food_low.switch").unwrap();
+    let actions = click(&mut ui, &sim, &mut cv, centre(switch));
+    assert_eq!(actions, vec![UiAction::SetRuleEnabled("core:food_low".into(), false)]);
+}
+
+/// Focus stays lit on the HUD: a stance that isn't Normal, or an order
+/// acting, and nothing when neither.
+#[test]
+fn focus_shows_on_the_hud_only_when_it_acts() {
+    let (mut sim, mut ui, cv) = board(1);
+    for id in ["core:food_low", "core:loose_items", "core:wood_for_winter"] {
+        let rule = sim.world.defs.lookup("priority_rule", id).unwrap();
+        sim.push(Command::SetRuleEnabled { rule, on: false });
+    }
+    sim.step();
+    frame(&mut ui, &sim, &cv, Input { time: 5.0, ..Default::default() });
+    assert!(ui.find("core:focus.hud").is_none(), "Normal, no orders: nothing to show");
+    sim.push(Command::SetStance { stance: sim.world.defs.lookup("stance", "core:siege").unwrap() });
+    sim.step();
+    frame(&mut ui, &sim, &cv, Input { time: 6.0, ..Default::default() });
+    assert!(ui.find("core:focus.hud").is_some(), "Siege is lit");
+    assert!(ui.snapshot().contains("\"Siege\""));
+}
+
+/// The board says what Focus is doing to it.
+#[test]
+fn the_board_says_what_focus_moves() {
+    let (mut sim, mut ui, cv) = board(2);
+    sim.push(Command::SetStance { stance: sim.world.defs.lookup("stance", "core:harvest").unwrap() });
+    sim.step();
+    frame(&mut ui, &sim, &cv, Input { time: 5.0, ..Default::default() });
+    let tree = ui.snapshot();
+    assert!(ui.find("core:work.focus").is_some(), "a focus line");
+    assert!(tree.contains("Focus: Harvest") && tree.contains("settings"), "{tree}");
+}

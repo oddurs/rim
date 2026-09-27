@@ -787,6 +787,7 @@ impl UiVm {
             None => return Err(rt("bad entity id")),
         });
         act!("role_from_role", (String, u16), |(label, r)| UiAction::CreateRoleFromRole(label, role(r)?));
+        act!("set_rule_enabled", (String, bool), |(id, on)| UiAction::SetRuleEnabled(id, on));
         act!("set_stance", String, |id| UiAction::SetStance(id));
         act!("zone_allow", (u32, String, bool), |(zone, item, on)| UiAction::ZoneAllow(zone, item, on));
         act!("store_level", (u32, u8), |(zone, level)| UiAction::StoreLevel(zone, level));
@@ -1252,6 +1253,29 @@ impl UiVm {
                 row.set("label", d.label.as_str())?;
                 row.set("icon", d.icon.as_str())?;
                 row.set("active", l.world.stance == Some(s as rim_sim::defs::DefId))?;
+                t.push(row)?;
+            }
+            Ok(t)
+        });
+        // Standing orders (DESIGN.md §4d): the rules on colony readings, with
+        // their reading now, their marks, what they do and whether they act.
+        view!("standing", (), |lua, l, _a| {
+            let w = l.world;
+            let defs = &w.defs;
+            let t = lua.create_table()?;
+            for (i, rd) in defs.priority_rules.iter().enumerate() {
+                let (Some(reading), Some(band)) = (&rd.when.reading, rd.when.band_r) else { continue };
+                let row = lua.create_table()?;
+                row.set("id", rd.id.as_str())?;
+                row.set("label", rim_sim::rules::label(defs, i as u16))?;
+                row.set("reading", reading.as_str())?;
+                row.set("value", w.standing.reading(reading))?;
+                row.set("band", band_text(band))?;
+                row.set("effect", rule_effect(defs, rd))?;
+                row.set("season", (!rd.when.season.is_empty()).then(|| rd.when.season.join(", ")))?;
+                row.set("crossed", w.standing.on.contains(&rd.id))?;
+                row.set("enabled", !w.standing.off.contains(&rd.id))?;
+                row.set("acting", w.rules.on.contains(&(i as u16)))?;
                 t.push(row)?;
             }
             Ok(t)
@@ -2480,4 +2504,50 @@ fn why_text(defs: &rim_sim::defs::DefDb, work: &str, value: u8, parts: &[rim_sim
         })
         .collect();
     format!("{work}: {} = {}", scale.name(value), steps.join(" · "))
+}
+
+/// A reading rule's marks as a player reads them: "on under 5, off at 8".
+fn band_text(band: rim_sim::defs::Band) -> String {
+    let n = |m: i64| {
+        let v = m as f64 / 1000.0;
+        if v.fract() == 0.0 {
+            format!("{v:.0}")
+        } else {
+            format!("{v:.1}")
+        }
+    };
+    match band {
+        rim_sim::defs::Band::Below { on, off } if on == off => format!("under {}", n(on)),
+        rim_sim::defs::Band::Below { on, off } => format!("on under {}, off at {}", n(on), n(off)),
+        rim_sim::defs::Band::Above { on, off } if on == off => format!("over {}", n(on)),
+        rim_sim::defs::Band::Above { on, off } => format!("on over {}, off at {}", n(on), n(off)),
+    }
+}
+
+/// What a rule does, in words: "Harvest and Hunt one level sooner".
+fn rule_effect(defs: &rim_sim::defs::DefDb, rd: &rim_sim::defs::PriorityRuleDef) -> String {
+    let names = |ws: Vec<&str>| match ws.as_slice() {
+        [] => String::new(),
+        [one] => one.to_string(),
+        [rest @ .., last] => format!("{} and {last}", rest.join(", ")),
+    };
+    let label = |w: rim_sim::defs::DefId| defs.work_types[w as usize].label.as_str();
+    let mut parts = Vec::new();
+    let mut deltas: Vec<i32> = rd.shift_r.iter().map(|s| s.1).collect();
+    deltas.sort_unstable();
+    deltas.dedup();
+    for d in deltas {
+        let ws: Vec<&str> = rd.shift_r.iter().filter(|s| s.1 == d).map(|s| label(s.0)).collect();
+        let how = match d {
+            -1 => "one level sooner".to_string(),
+            1 => "one level later".to_string(),
+            d if d < 0 => format!("{} levels sooner", -d),
+            d => format!("{d} levels later"),
+        };
+        parts.push(format!("{} {how}", names(ws)));
+    }
+    for &(w, l) in &rd.set_r {
+        parts.push(format!("{} at {}", label(w), defs.priority_scale.name(l)));
+    }
+    parts.join("; ")
 }
