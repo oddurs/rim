@@ -17,8 +17,14 @@
 //!
 //! Room values cost O(rooms) per update, not O(cells). Values are stored in
 //! hundredths as integers so the simulation stays deterministic.
+//!
+//! A **stock** field is different: it stores a value per cell and changes
+//! it by its `rate` terms, so it remembers (wet ground after rain). Each tick
+//! works out one slice of the map, so every cell is worked out exactly once
+//! a period, over the whole period, and the cost per tick is the map's
+//! cells over the period's ticks, whatever else happens.
 
-use crate::defs::{DefDb, DefId, FieldKind, IndoorMode};
+use crate::defs::{DefDb, DefId, FieldKind, IndoorMode, StockLevels};
 use crate::map::{Map, NEIGHBORS8};
 use crate::terms::{self, Env, Q};
 use crate::{IVec, TICKS_PER_DAY};
@@ -97,14 +103,17 @@ impl Env for AmbEnv<'_> {
     }
 }
 
-/// What a derived field's terms see at one cell: `field`, `terrain` and
-/// `near` inputs read there, everything else reads as outdoors does.
+/// What a derived or stock field's terms see at one cell: `field`,
+/// `terrain`, `near` and `sky` read there, and a stock field's own value
+/// and base; everything else reads as outdoors does.
 struct CellEnv<'a> {
     fields: &'a Fields,
     defs: &'a DefDb,
     map: &'a Map,
     p: IVec,
     clock: Clock,
+    own: i64,
+    base: i64,
 }
 
 impl Env for CellEnv<'_> {
@@ -131,6 +140,29 @@ impl Env for CellEnv<'_> {
     }
     fn near(&self, tag: usize) -> i64 {
         self.map.near(tag, self.map.idx(self.p)) as i64 * Q
+    }
+    // Only an enclosed room keeps the weather off. A cell merely within a
+    // wall's or a cliff's roof span is open ground beside it, and gets rained on.
+    fn sky(&self) -> i64 {
+        if self.map.indoors(self.p) {
+            0
+        } else {
+            Q
+        }
+    }
+    fn own(&self) -> i64 {
+        self.own
+    }
+    fn base(&self) -> i64 {
+        self.base
+    }
+}
+
+/// How many cells a stock field keeps: the surface's, or every level's.
+fn stock_cells(levels: StockLevels, map: &Map) -> usize {
+    match levels {
+        StockLevels::Surface => map.plane(),
+        StockLevels::All => map.cells(),
     }
 }
 
@@ -170,6 +202,10 @@ pub struct SavedFields {
     pub pending_carry: bool,
     /// Each cell's room id, as the room values know it.
     pub room_ids: Vec<u32>,
+    /// Per field, a stock field's value per cell in `Q` units; empty for
+    /// other fields, and for one not worked out yet.
+    #[serde(default)]
+    pub stock: Vec<Vec<i32>>,
 }
 
 pub struct Layer {
@@ -189,6 +225,10 @@ pub struct Layer {
     /// and map revision it was worked out for (`World::update_shelter`).
     pub exposure: Vec<u8>,
     pub exposure_for: Option<(u8, u64)>,
+    /// Stock fields: each cell's value in `Q` units, on the surface's plane
+    /// or on every level's. Empty until the first update works it out from
+    /// the `init` terms.
+    pub stock: Vec<i32>,
 }
 
 pub struct Fields {
@@ -208,6 +248,9 @@ pub struct Fields {
     pub restamped: u64,
     /// Bumped whenever any emitter's stamp changes, so renderers can cache.
     pub revision: u64,
+    /// Scratch for a stock slice's new values, `(field, cell, value)`, so a
+    /// tick's reads all see the values from before it.
+    stock_next: Vec<(u32, u32, i32)>,
 }
 
 impl Fields {
@@ -224,6 +267,7 @@ impl Fields {
                     pass: Vec::new(),
                     exposure: Vec::new(),
                     exposure_for: None,
+                    stock: Vec::new(),
                 })
                 .collect(),
             atmos: defs.fields.iter().map(|f| Atmos { value: terms::to_q(f.base), ..Default::default() }).collect(),
@@ -236,6 +280,7 @@ impl Fields {
             queue: VecDeque::new(),
             restamped: 0,
             revision: 0,
+            stock_next: Vec::new(),
         }
     }
 
@@ -477,6 +522,76 @@ impl Fields {
         if tick.is_multiple_of(ROOM_INTERVAL) {
             self.step_rooms(defs, map);
         }
+        self.step_stock(defs, map, clock);
+    }
+
+    /// Work out every stock field that hasn't been from its `init` terms:
+    /// on the first update after the map is made, or after a load that
+    /// didn't have it (or kept it for other levels).
+    pub fn ensure_stock(&mut self, defs: &DefDb, map: &Map) {
+        let clock = self.last_clock.unwrap_or(Clock { tick: 0, year: 0, hour: 0, seed: 0 });
+        for &f in &defs.stock_fields {
+            let fd = &defs.fields[f];
+            let n = stock_cells(fd.levels, map);
+            if self.layers[f].stock.len() == n {
+                continue;
+            }
+            let (lo, hi) = (terms::to_q(fd.range[0]), terms::to_q(fd.range[1]));
+            // The surface is the first plane, so its cells index the same.
+            let v: Vec<i32> = (0..n)
+                .map(|i| {
+                    let env = CellEnv { fields: self, defs, map, p: map.pos(i), clock, own: 0, base: 0 };
+                    fd.init_terms.eval(&env).clamp(lo, hi) as i32
+                })
+                .collect();
+            self.layers[f].stock = v;
+        }
+    }
+
+    /// This tick's slice of every stock field: each cell once a period, by
+    /// its rate (terms plus emitters) over the whole period, clamped to the
+    /// field's range. Every read in a tick sees the values from before it.
+    pub fn step_stock(&mut self, defs: &DefDb, map: &Map, clock: Clock) {
+        if defs.stock_fields.is_empty() {
+            return;
+        }
+        self.ensure_stock(defs, map);
+        let mut next = std::mem::take(&mut self.stock_next);
+        next.clear();
+        for &f in &defs.stock_fields {
+            let fd = &defs.fields[f];
+            let n = stock_cells(fd.levels, map) as u64;
+            let k = clock.tick % fd.period;
+            let (a, b) = ((k * n / fd.period) as usize, ((k + 1) * n / fd.period) as usize);
+            let (lo, hi) = (terms::to_q(fd.range[0]), terms::to_q(fd.range[1]));
+            let layer = &self.layers[f];
+            for i in a..b {
+                let own = layer.stock[i] as i64;
+                let mut env = CellEnv { fields: self, defs, map, p: map.pos(i), clock, own, base: 0 };
+                if !fd.settle_terms.is_empty() {
+                    env.base = fd.settle_terms.eval(&env);
+                }
+                // Per hour, times the period's hours.
+                let rate = fd.rate_terms.eval(&env) + layer.stamped[i] as i64 * (Q / FIXED as i64);
+                let v = own + rate * fd.period as i64 * 24 / TICKS_PER_DAY as i64;
+                next.push((f as u32, i as u32, v.clamp(lo, hi) as i32));
+            }
+        }
+        for &(f, i, v) in &next {
+            self.layers[f as usize].stock[i as usize] = v;
+        }
+        self.stock_next = next;
+    }
+
+    /// Set a stock field at a cell (`add`: add to it), clamped to its range.
+    /// The new value, in the field's units; `None` on a level it isn't kept on.
+    pub fn set_stock(&mut self, defs: &DefDb, map: &Map, field: usize, p: IVec, v: f64, add: bool) -> Option<f64> {
+        self.ensure_stock(defs, map);
+        let fd = &defs.fields[field];
+        let cell = self.layers[field].stock.get_mut(map.idx(p))?;
+        let now = if add { *cell as i64 + terms::to_q(v) } else { terms::to_q(v) };
+        *cell = now.clamp(terms::to_q(fd.range[0]), terms::to_q(fd.range[1])) as i32;
+        Some(terms::from_q(*cell as i64))
     }
 
     /// Rooms were rebuilt: each new room starts at the cell-weighted average
@@ -557,6 +672,7 @@ impl Fields {
             last_clock: self.last_clock,
             pending_carry: map.room_rebuilds != self.seen_rebuilds || map.rooms_dirty(),
             room_ids: map.carry_from(self.seen_rebuilds).to_vec(),
+            stock: self.layers.iter().map(|l| l.stock.clone()).collect(),
         }
     }
 
@@ -568,6 +684,11 @@ impl Fields {
         for (l, (ambient, rooms)) in self.layers.iter_mut().zip(s.ambient.into_iter().zip(s.rooms)) {
             l.ambient = ambient;
             l.rooms = rooms;
+        }
+        // A stock field the save lacks, or kept for other cells, is worked
+        // out afresh from its init terms (`ensure_stock`).
+        for (l, stock) in self.layers.iter_mut().zip(s.stock) {
+            l.stock = stock;
         }
         self.last_clock = s.last_clock;
         if s.pending_carry || map_changed {
@@ -585,8 +706,15 @@ impl Fields {
             return 0;
         }
         let layer = &self.layers[field];
-        if defs.fields[field].kind == FieldKind::Derived {
-            return self.derived_at(defs, map, field, p);
+        match defs.fields[field].kind {
+            FieldKind::Derived => return self.derived_at(defs, map, field, p),
+            // To the nearest hundredth: a value settling on 0.4 from below
+            // reads 0.4, not 0.39.
+            FieldKind::Stock => {
+                let step = Q / FIXED as i64;
+                return layer.stock.get(map.idx(p)).map_or(0, |&v| (v as i64 + step / 2).div_euclid(step) as i32);
+            }
+            _ => {}
         }
         let indoors = map.room_at(p).filter(|r| r.enclosed());
         if defs.fields[field].kind == FieldKind::Shelter {
@@ -619,7 +747,7 @@ impl Fields {
             Some(v) => v,
             None => {
                 let clock = self.last_clock.unwrap_or(Clock { tick: 0, year: 0, hour: 0, seed: 0 });
-                let env = CellEnv { fields: self, defs, map, p, clock };
+                let env = CellEnv { fields: self, defs, map, p, clock, own: 0, base: 0 };
                 defs.fields[field].terms.eval(&env) + a.pushes.iter().map(|p| p.value(clock.tick)).sum::<i64>()
             }
         };

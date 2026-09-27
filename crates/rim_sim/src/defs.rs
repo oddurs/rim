@@ -716,6 +716,25 @@ pub enum FieldKind {
     /// is stored. A `field` input reads the other field at the same cell,
     /// so it's the room's value indoors and the lee's in the lee.
     Derived,
+    /// Stored per cell, and changed by its `rate` terms: it remembers. Rain
+    /// yesterday is wet ground today. Each cell is worked out once a
+    /// `period_minutes`, a slice of the map each tick.
+    Stock,
+}
+
+fn d60f() -> f64 {
+    60.0
+}
+
+/// Which levels a stock field keeps a value on.
+#[derive(Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum StockLevels {
+    /// The surface only: weather on the ground. It reads 0 elsewhere.
+    #[default]
+    Surface,
+    /// Every level, for what lies underground too.
+    All,
 }
 
 fn d6() -> u32 {
@@ -803,6 +822,32 @@ pub struct FieldDef {
     /// everywhere, such as cloud cover.
     #[serde(default = "dtrue")]
     pub overlay: bool,
+    /// Stock fields: how the stored value changes, in its units per game
+    /// hour, as terms read at the cell. Emitters on the field add to it.
+    #[serde(default)]
+    pub rate: Option<TermsDef>,
+    /// Stock fields: what the value settles to, as terms read at the cell.
+    /// The rate reads it as `base`, and the gap as `above_base`.
+    #[serde(default, rename = "base")]
+    pub settle: Option<TermsDef>,
+    /// Stock fields: each cell's value when the map is made.
+    #[serde(default)]
+    pub init: Option<TermsDef>,
+    /// Stock fields: every cell is worked out once in this many game minutes.
+    #[serde(default = "d60f")]
+    pub period_minutes: f64,
+    /// Stock fields: the surface, or every level.
+    #[serde(default)]
+    pub levels: StockLevels,
+    #[serde(skip)]
+    pub rate_terms: Terms,
+    #[serde(skip)]
+    pub settle_terms: Terms,
+    #[serde(skip)]
+    pub init_terms: Terms,
+    /// `period_minutes` in ticks.
+    #[serde(skip)]
+    pub period: u64,
     /// Compiled `ambient` terms (empty for a constant).
     #[serde(skip)]
     pub terms: Terms,
@@ -1567,6 +1612,8 @@ pub struct DefDb {
     pub terrain_tags: Vec<String>,
     /// The tags some term reads with `near`: only these keep a distance grid.
     pub near_tags: Vec<usize>,
+    /// The fields with `kind = "stock"`, in load order.
+    pub stock_fields: Vec<usize>,
     /// What loading noticed but let through, for the mod loader to report.
     pub warnings: Vec<String>,
     pub calendar: CalendarDef,
@@ -1988,8 +2035,53 @@ impl DefDb {
                 }
                 d.leak_terms = Terms::compile(leak, &format!("field/{}, leak", d.id), &field_index, &mut warnings)?;
             }
+            let ctx = format!("field/{}", d.id);
+            if d.kind == FieldKind::Stock {
+                if !d.terms.is_empty() || d.base != 0.0 || d.indoor != IndoorMode::Outdoor || d.leak.is_some() {
+                    return Err(format!(
+                        "{ctx}: a stock field is its `rate`, `base` and `init` terms, with no `ambient`, `indoor` or `leak`"
+                    ));
+                }
+                let Some(rate) = &d.rate else {
+                    return Err(format!("{ctx}: a stock field needs `rate` terms, in its units per game hour"));
+                };
+                d.rate_terms = Terms::compile(rate, &format!("{ctx}, rate"), &field_index, &mut warnings)?;
+                for (key, def, out) in [("base", &d.settle, &mut d.settle_terms), ("init", &d.init, &mut d.init_terms)]
+                {
+                    let Some(def) = def else { continue };
+                    *out = Terms::compile(def, &format!("{ctx}, {key}"), &field_index, &mut warnings)?;
+                    if out.reads_own() {
+                        return Err(format!(
+                            "{ctx}, {key}: `self`, `base` and `above_base` are for the rate, which they feed"
+                        ));
+                    }
+                }
+                // Values are kept in 1/10000ths in an i32.
+                let fits = |v: f64| v.abs() <= 200_000.0;
+                if !(d.period_minutes > 0.0 && d.period_minutes.is_finite())
+                    || d.range[0] >= d.range[1]
+                    || !fits(d.range[0])
+                    || !fits(d.range[1])
+                {
+                    return Err(format!(
+                        "{ctx}: a stock field needs `period_minutes` above 0 and a `range` from low to high, within ±200000"
+                    ));
+                }
+                d.period = (d.period_minutes * crate::TICKS_PER_DAY as f64 / 1440.0).round().max(1.0) as u64;
+            } else if d.rate.is_some() || d.settle.is_some() || d.init.is_some() {
+                return Err(format!("{ctx}: `rate`, `base` and `init` are for kind = \"stock\""));
+            }
+            if d.terms.reads_own() || d.leak_terms.reads_own() {
+                return Err(format!("{ctx}: `self`, `base` and `above_base` are for a stock field's rate"));
+            }
         }
-        let mut near: Vec<usize> = self.fields.iter().flat_map(|f| f.terms.nears()).collect();
+        self.stock_fields = (0..self.fields.len()).filter(|&i| self.fields[i].kind == FieldKind::Stock).collect();
+        let mut near: Vec<usize> = self
+            .fields
+            .iter()
+            .flat_map(|f| [&f.terms, &f.rate_terms, &f.settle_terms, &f.init_terms])
+            .flat_map(|t| t.nears())
+            .collect();
         near.sort_unstable();
         near.dedup();
         self.near_tags = near;
@@ -2023,6 +2115,9 @@ impl DefDb {
             t.rgb = parse_color(&t.color).map_err(|e| format!("{ctx}: {e}"))?;
             let one: TermsDef = [(label.clone(), TermDef { scale: t.scale, of: t.of.clone() })].into_iter().collect();
             t.strength = Terms::compile(&one, &ctx, &field_index, &mut warnings)?;
+            if t.strength.reads_own() {
+                return Err(format!("{ctx}: `self`, `base` and `above_base` are for a stock field's rate"));
+            }
         }
         self.warnings.extend(warnings);
         for d in &mut self.needs {
@@ -2266,6 +2361,8 @@ impl DefDb {
         // per room: an emitter or a boundary piece on one would do nothing.
         let computed: Vec<Option<&str>> =
             self.fields.iter().map(|f| (f.kind != FieldKind::Ambient).then_some(f.id.as_str())).collect();
+        // A stock field takes emitters as a rate; nothing bounds it.
+        let stock: Vec<bool> = self.fields.iter().map(|f| f.kind == FieldKind::Stock).collect();
         for d in &mut self.things {
             let ctx = format!("thing/{}", d.id);
             d.rgb = parse_color(&d.color).map_err(|e| format!("{ctx}: {e}"))?;
@@ -2347,7 +2444,11 @@ impl DefDb {
                 em.field_r = get("field", &em.field, &ctx)?;
             }
             d.comforts = d.emit.iter().any(|em| em.amount > 0.0 && comfort_fields.contains(&(em.field_r as usize)));
-            let fed = d.boundary.iter().map(|b| b.field_r).chain(d.emit.iter().map(|e| e.field_r));
+            let fed = d
+                .boundary
+                .iter()
+                .map(|b| b.field_r)
+                .chain(d.emit.iter().map(|e| e.field_r).filter(|&f| !stock[f as usize]));
             if let Some(f) = fed.filter_map(|f| computed[f as usize]).next() {
                 return Err(format!(
                     "{ctx}: field {f} is worked out from others, so nothing can emit into it or bound it"

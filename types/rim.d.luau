@@ -68,6 +68,10 @@ declare rim: {
     explain_work: (id: number) -> { WorkWhy },
     -- A field's value at a cell (temperature, light, ...), on level z (the surface if nil).
     field: (id: string, x: number, y: number, z: number?) -> number,
+    -- Add to a stock field at a cell on level z (the surface if nil), within its range; returns the new value. Only stock fields keep what is added.
+    field_add: (id: string, x: number, y: number, amount: number, z: number?) -> number,
+    -- Set a stock field at a cell on level z (the surface if nil), within its range; returns the new value.
+    field_set: (id: string, x: number, y: number, value: number, z: number?) -> number,
     -- A copy of stored script data, or nil. A bare key is your mod's; "weather:forecast" reads another's.
     get_data: (key: string) -> any,
     -- Whether some tool in the colony, lying about or in a hand, has every one of these tool tags. False for a tag no tool has.

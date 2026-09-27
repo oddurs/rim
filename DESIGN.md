@@ -319,6 +319,23 @@ of = [{ input = "hour", curve = [[3, -1.0], [9, 0.0], [15, 1.0], [21, 0.0], [27,
   cell at load. A terrain change patches the cells within 16 of it, by a
   search of the box within 32, so a read is one array lookup and digging a
   pond costs its neighbourhood. Outdoors (no cell), both read as nowhere.
+- **Stock fields** (`kind = "stock"`) remember: rain yesterday is wet ground
+  today. A stock field stores a value per cell (an `i32` in 1/10000ths, one
+  array per field) and changes it by `rate` terms, in its units per game
+  hour, read at the cell. The rate may read `self`, the value its `base`
+  terms settle to (`base`), and the gap (`above_base`); emitters on the field
+  add to the rate; `init` terms give each cell's value when the map is made.
+  Each tick works out one slice of the map, `cells × k / P` to
+  `cells × (k+1) / P` for tick `k` of a `period_minutes` of `P` ticks, over
+  the whole period: every cell exactly once a period, a tick's cost the map
+  over the period whatever else happens, and no allocation. A tick's reads
+  see the values from before it. Two stock fields on 250×250 cost 0.003 ms a
+  tick on synthetic terms; real ones cost more, about 0.4 µs a cell for a
+  dozen inputs, which is why a stock field keeps the surface only unless
+  it says `levels = "all"` (ore does). Values are in the state hash and the save; `rim.field_add` and
+  `rim.field_set` change them. `input = "sky"` (0 in an enclosed room, 1
+  elsewhere) is for rain and snow: a cell within a wall's or a cliff's
+  roof span is still open ground.
 - **Tables keyed by label**, not arrays: a patch can change one term
   (`set = { ambient = { day = { scale = 11.0 } } }`) and conflicts are
   reported per term.

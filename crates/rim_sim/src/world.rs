@@ -2603,6 +2603,11 @@ impl World {
                 h = p.key.bytes().fold(h, |h, b| crate::rng::mix(h ^ b as u64));
             }
         }
+        // Stock fields: a cheap fold per cell, mixed once per field.
+        for &f in &self.defs.stock_fields {
+            let cells = &self.fields.layers[f].stock;
+            h = crate::rng::mix(cells.iter().fold(h ^ f as u64, |h, &v| h.rotate_left(7) ^ v as u32 as u64));
+        }
         h = self.zones.hash(h);
         h = crate::rng::mix(h ^ self.stance.map_or(0x57a2, |s| s as u64));
         let mut urgent: Vec<u64> =

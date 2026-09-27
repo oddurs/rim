@@ -167,6 +167,33 @@ fn field_id(w: &World, id: &str, from: &str) -> mlua::Result<usize> {
     def_id(w, "field", id, from).map(|f| f as usize)
 }
 
+/// `rim.field_add` and `rim.field_set`: only a stock field keeps a value.
+#[allow(clippy::too_many_arguments)]
+fn set_stock(
+    w: &mut World,
+    name: &str,
+    from: &str,
+    id: &str,
+    x: i32,
+    y: i32,
+    z: Option<i32>,
+    v: f64,
+    add: bool,
+) -> mlua::Result<f64> {
+    let f = field_id(w, id, from)?;
+    if w.defs.fields[f].kind != crate::defs::FieldKind::Stock {
+        return Err(mlua::Error::runtime(format!("{name}: '{id}' isn't a stock field; only those keep a value")));
+    }
+    let p = cell(w, x, y, z)?;
+    if !w.map.inb(p) {
+        return Err(mlua::Error::runtime(format!("{name}: ({x}, {y}) is off the map")));
+    }
+    let defs = w.defs.clone();
+    w.fields
+        .set_stock(&defs, &w.map, f, p, v, add)
+        .ok_or_else(|| mlua::Error::runtime(format!("{name}: '{id}' is kept on the surface only")))
+}
+
 /// The mod whose code is calling into the engine: the chunk name of the
 /// nearest Luau frame ("@weather/scripts/weather.luau" is weather's). Not
 /// the mod whose hook is running: when mod B calls weather's `force`, it's
@@ -1133,6 +1160,20 @@ impl ScriptHost {
                 let defs = w.defs.clone();
                 Ok(w.fields.value(&defs, &w.map, f, p))
             }
+        );
+        api!(
+            "field_add",
+            "(id: string, x: number, y: number, amount: number, z: number?) -> number",
+            "Add to a stock field at a cell on level z (the surface if nil), within its range; returns the new value. Only stock fields keep what is added.",
+            (String, i32, i32, f64, Option<i32>),
+            |w, from, (id, x, y, v, z)| set_stock(w, "field_add", &from, &id, x, y, z, v, true)
+        );
+        api!(
+            "field_set",
+            "(id: string, x: number, y: number, value: number, z: number?) -> number",
+            "Set a stock field at a cell on level z (the surface if nil), within its range; returns the new value.",
+            (String, i32, i32, f64, Option<i32>),
+            |w, from, (id, x, y, v, z)| set_stock(w, "field_set", &from, &id, x, y, z, v, false)
         );
         api!(
             "terrain_at",
