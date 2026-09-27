@@ -350,6 +350,27 @@ A plant with a `height` is a canopy: it shades the ground, and some sky
 gets through its leaves. Only blocking things and plants cast shadows; a
 `height` on anything else does nothing yet.
 
+## Firelight
+
+Anything that emits `light` glows on screen: soft-shadowed by walls, let
+out through windows, and flickering. It is baked once when a light or a
+wall changes, so a hundred torches cost a frame what one does. A def says
+how its flame moves with `glow`; a fire flickers unless it says otherwise:
+
+```toml
+# A lamp that burns steadily.
+[[patch]]
+target = "thing/core:campfire"
+
+[patch.set.glow]
+flicker = "steady"   # or "fire", the default
+```
+
+Firelight is `[[sky]]`'s `firelight` colour. Fires share three flicker
+phases, picked by where they stand, so a fire never pulses in step with one
+beside, above or below it (diagonal neighbours can); steady lights share a
+fourth. A light's shadows are traced 23 cells at most.
+
 ## What the renderer draws
 
 The renderer reads channels, never weather names, so any mod that sets the

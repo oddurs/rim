@@ -777,4 +777,14 @@ impl Fields {
     pub fn emitter_count(&self) -> usize {
         self.emitters.len()
     }
+
+    /// The emitters of `field`: whose they are, where, how strong at the
+    /// source (in the field's units) and how far they reach. For what draws
+    /// the field, such as the renderer's firelight; the sim reads stamps.
+    pub fn emitters_of(&self, field: usize) -> impl Iterator<Item = (Entity, IVec, f64, u32)> + '_ {
+        self.emitters
+            .iter()
+            .filter(move |e| e.field == field)
+            .map(|e| (e.entity, e.pos, e.amount as f64 / FIXED, e.radius))
+    }
 }

@@ -2,16 +2,16 @@
 id: 8f4f1de8-5784-4377-8cee-25bcf223275e
 title: 'Sun shadows: march the height map toward the sun, cached until it moves'
 type: feature
-status: doing
+status: done
 milestone: lighting
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 depends_on:
 - 0779def9-134c-4e87-abdf-2e3472fb2801
 - 6a6dfe88-6d54-49a5-b871-f7eb78f69176
 - e5d8b445-42ed-4e87-8390-ad54d525757b
 created: 2026-09-26
-updated: 2026-09-26
+updated: 2026-09-27
+closed_at: 2026-09-27
 priority: p0
 api: none
 effort: m
