@@ -898,21 +898,45 @@ ui.extend("core:topbar.right", function(view)
 	})
 end)
 
+-- What core's interface has shown already, kept in the save by core's
+-- seen script: { hint = true, settlers = { [id] = true } }.
+local function saved(view)
+	return view.data("core:seen") or {}
+end
+
 -- A settler joining: which role, Auto already chosen. It asks without
 -- pausing and goes by itself after a while, so ignoring it is a choice.
+-- It waits while a sheet is open, since it would sit under it, and its time
+-- starts when it's first seen. Once seen, the save remembers them as asked.
 local SETTLER_TICKS = 2500
+-- How far back a join still gets asked about, if a sheet hid it that long.
+local SETTLER_WAIT = 20000
 
 ui.define("core:settler", function(view)
 	local now = view.tick()
-	local seen = ui.state("core:settler.seen", {})
+	local answered = ui.state("core:settler.seen", {})
+	local shown = ui.state("core:settler.shown", {})
+	local asked = saved(view).settlers or {}
 	local who = nil
-	for _, ev in view.events(math.max(1, now - SETTLER_TICKS)) do
-		if ev.kind == "joined" and ev.tick > 0 and not seen[ev.id] then
-			who = ev
+	for _, ev in view.events(math.max(1, now - SETTLER_WAIT)) do
+		if ev.kind == "joined" and ev.tick > 0 and not answered[ev.id] then
+			-- Shown here: until its time runs out. Not yet: unless the save
+			-- says it was asked before a load.
+			local since = shown[ev.id]
+			local open = if since then now < since + SETTLER_TICKS else not asked[ev.id]
+			if open then
+				who = ev
+			end
 		end
 	end
-	if not who then
+	if not who or ui.sheet() then
 		return nil
+	end
+	if not shown[who.id] then
+		local s = table.clone(shown)
+		s[who.id] = now
+		ui.set_state("core:settler.shown", s)
+		act.send("core:seen", { settler = who.id })
 	end
 	local p = view.pawn(who.id)
 	if not p then
@@ -977,7 +1001,8 @@ ui.define("core:auto_hint", function(view)
 	-- Behind the Work screen it would only be in the way: that is the plan.
 	-- For the first few hours only: after that the castaway is under way.
 	local early = view.day() == 1 and view.tick() < view.ticks_per_day() // 8
-	if ui.state("core:auto_hint.done", false) or not early or view.count_pawns("player") ~= 1 or ui.is_open("core:work") then
+	local done = ui.state("core:auto_hint.done", false) or saved(view).hint
+	if done or not early or view.count_pawns("player") ~= 1 or ui.is_open("core:work") then
 		return nil
 	end
 	local b = view.board()
@@ -994,6 +1019,11 @@ ui.define("core:auto_hint", function(view)
 	if not planned then
 		return nil
 	end
+	-- At once here, and in the save once the command lands.
+	local function dismiss()
+		ui.set_state("core:auto_hint.done", true)
+		act.send("core:seen", { hint = true })
+	end
 	return kit.panel({ id = "core:auto_hint", pad = "m", gap = "s", bg = "surface_raised", border = "accent" }, {
 		label(string.format(t("core:auto_hint.title", "%s works on Auto"), who.name), { weight = "strong" }),
 		label(
@@ -1006,16 +1036,14 @@ ui.define("core:auto_hint", function(view)
 				label = t("core:auto_hint.see", "See the plan"),
 				hint = "P",
 				on_click = function()
-					ui.set_state("core:auto_hint.done", true)
+					dismiss()
 					ui.open("core:work")
 				end,
 			}),
 			button({
 				id = "core:auto_hint.ok",
 				label = t("core:auto_hint.ok", "Got it"),
-				on_click = function()
-					ui.set_state("core:auto_hint.done", true)
-				end,
+				on_click = dismiss,
 			}),
 		}),
 	})

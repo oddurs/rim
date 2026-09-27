@@ -89,3 +89,79 @@ fn the_first_day_hint_shows_once() {
     frame(&mut ui, &sim, &cv, Input { time: 5.0, ..Default::default() });
     assert!(ui.find("core:auto_hint").is_none(), "once");
 }
+
+/// Give the sim what the interface sent its mods' scripts, a tick's worth.
+fn send(sim: &mut Sim, actions: Vec<UiAction>) {
+    for a in actions {
+        if let UiAction::Send(name, data) = a {
+            sim.push(rim_sim::Command::ModEvent { name, data });
+        }
+    }
+    sim.step();
+}
+
+/// Save and load, as a player would: a new sim from the file, a new UI.
+fn reload(sim: &Sim) -> (Sim, Ui) {
+    let bytes = rim_sim::snapshot::Snapshot::capture(sim).to_bytes();
+    let back = rim_sim::snapshot::Snapshot::from_bytes(&bytes).unwrap().restore(&mods(), &|_| true).unwrap();
+    let ui = ui_for(&back);
+    (back, ui)
+}
+
+#[test]
+fn a_dismissed_hint_stays_dismissed_after_a_load() {
+    let (mut sim, mut ui, mut cv) = auto(1);
+    ui.close_window("core:work");
+    frame(&mut ui, &sim, &cv, Input { time: 1.0, ..Default::default() });
+    frame(&mut ui, &sim, &cv, Input { time: 1.5, ..Default::default() });
+    let (_, mut fresh) = reload(&sim);
+    frame(&mut fresh, &sim, &cv, Input { time: 1.0, ..Default::default() });
+    assert!(fresh.find("core:auto_hint").is_some(), "not dismissed yet, a load still shows it");
+
+    let ok = ui.find("core:auto_hint.ok").unwrap();
+    let actions = click(&mut ui, &sim, &mut cv, centre(ok));
+    send(&mut sim, actions);
+    let (loaded, mut ui) = reload(&sim);
+    frame(&mut ui, &loaded, &cv, Input { time: 1.0, ..Default::default() });
+    frame(&mut ui, &loaded, &cv, Input { time: 1.5, ..Default::default() });
+    assert!(ui.find("core:auto_hint").is_none(), "the save remembers it was dismissed: {}", ui.snapshot());
+}
+
+/// A settler who joins while the Work sheet is open waits for it to close,
+/// then gets the full time to answer; once asked, a load doesn't ask again.
+#[test]
+fn a_settler_joining_under_the_work_sheet_is_asked_once_it_closes() {
+    let (mut sim, mut ui, cv) = auto(1);
+    let human = sim.world.defs.creature_id("human").unwrap();
+    let c = sim.world.colony_center().unwrap();
+    sim.world.spawn_pawn(human, rim_sim::world::Faction::Player, c.offset(2, 2), Some("Mira".into()));
+    // Longer than the prompt's own time, with Work open throughout.
+    for i in 0..30 {
+        for _ in 0..100 {
+            sim.step();
+        }
+        let out = frame(&mut ui, &sim, &cv, Input { time: 1.0 + i as f64, ..Default::default() });
+        assert!(out.actions.is_empty(), "nothing sent while it waits: {:?}", out.actions);
+    }
+    assert!(ui.find("core:settler").is_none(), "not under the sheet");
+
+    ui.close_window("core:work");
+    let out = frame(&mut ui, &sim, &cv, Input { time: 40.0, ..Default::default() });
+    assert!(ui.find("core:settler").is_some(), "asked once Work closes: {}", ui.snapshot());
+    send(&mut sim, out.actions);
+    for _ in 0..2300 {
+        sim.step();
+    }
+    frame(&mut ui, &sim, &cv, Input { time: 41.0, ..Default::default() });
+    assert!(ui.find("core:settler").is_some(), "with its full time to answer");
+
+    let (loaded, mut fresh) = reload(&sim);
+    frame(&mut fresh, &loaded, &cv, Input { time: 1.0, ..Default::default() });
+    assert!(fresh.find("core:settler").is_none(), "asked before the save, not again after");
+
+    for _ in 0..300 {
+        sim.step();
+    }
+    frame(&mut ui, &sim, &cv, Input { time: 42.0, ..Default::default() });
+    assert!(ui.find("core:settler").is_none(), "and it goes when its time is up");
+}
