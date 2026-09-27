@@ -1,0 +1,194 @@
+#!/usr/bin/env bash
+# The one gate (DESIGN.md §8a). `scripts/task check` runs what CI's checks and
+# test jobs run, in the same order, so "green here" means "green there". CI's
+# jobs call these verbs rather than repeating the commands.
+#
+#   scripts/task check            the whole gate; stops at the first failure
+#   scripts/task test [-- ARGS]   nextest over the workspace; ARGS go to nextest
+#   scripts/task <verb>           any one step (see `scripts/task help`)
+#
+# Needs: cargo, cargo-nextest, cairn, and luau-lsp (LUAU_LSP or on PATH) at
+# the version CI pins. A passing `check` on a clean tree records the commit,
+# and the pre-push hook refuses a push of any other.
+set -Eeuo pipefail
+cd "$(dirname "$0")/.."
+
+# Name the step that failed, so a long log ends with what to fix.
+CURRENT=""
+trap '[ -n "$CURRENT" ] && printf "\n\033[1;31mscripts/task: %s failed\033[0m\n" "$CURRENT" >&2' ERR
+
+# Warnings are errors, as in CI. Passed to clippy rather than set in RUSTFLAGS,
+# which would give local builds a second, separate cache.
+DENY=(-- -D warnings)
+
+step() {
+  CURRENT="$*"
+  printf '\n\033[1m== %s\033[0m\n' "$*"
+}
+
+need() {
+  command -v "$1" >/dev/null 2>&1 && return
+  echo "scripts/task: $1 is not installed. $2" >&2
+  exit 127
+}
+
+fmt() { step fmt; cargo fmt --all; }
+fmt_check() { step fmt:check; cargo fmt --all -- --check; }
+
+# The luau-lsp CI installs: another version can pass here and fail there.
+LUAU_LSP_VERSION=1.70.0
+
+types() {
+  step types
+  LUAU_LSP="${LUAU_LSP:-luau-lsp}"
+  need "$LUAU_LSP" "Get luau-lsp $LUAU_LSP_VERSION from https://github.com/JohnnyMorganz/luau-lsp/releases, or set LUAU_LSP."
+  local have
+  have=$("$LUAU_LSP" --version)
+  if [ "$have" != "$LUAU_LSP_VERSION" ]; then
+    echo "scripts/task: luau-lsp is $have; CI uses $LUAU_LSP_VERSION." >&2
+    return 1
+  fi
+  LUAU_LSP="$LUAU_LSP" ./scripts/check-luau.sh
+}
+
+roadmap() {
+  step roadmap
+  need cairn "See https://github.com/oddurs/cairn."
+  cairn check --render --strict
+}
+
+lint() { step lint; cargo clippy --release --workspace --all-targets "${DENY[@]}"; }
+
+test_rust() {
+  step test
+  need cargo-nextest "Install it with: cargo install --locked cargo-nextest"
+  # `local` stops at the first failure; CI sets NEXTEST_PROFILE=ci.
+  NEXTEST_PROFILE="${NEXTEST_PROFILE:-local}" cargo nextest run --release --workspace "$@"
+}
+
+build() { step build; cargo build --release --workspace --bins --examples; }
+
+# Needs a release build of the Luau VM (after `build`). objdump isn't on
+# Windows, and MSVC doesn't fuse a*b+c under its default /fp:precise.
+fma() {
+  step fma
+  case "$(uname -s)" in MINGW* | MSYS* | CYGWIN*) echo "skipped on Windows"; return ;; esac
+  ./scripts/check-no-fma.sh
+}
+
+# Mods' own Luau tests and a clean load of each mod, through the player's binary.
+mods() {
+  step mods
+  target/release/rim test "$@"
+  target/release/rim check --strict
+}
+
+# The crosscheck scenario, as CI's test job runs it. Its output is compared
+# across four platforms in CI; here it must at least run to the end.
+crosscheck() {
+  step crosscheck
+  target/release/examples/crosscheck >/dev/null
+}
+
+# The long sim runs CI's sim job makes: slower than the gate, so not in `check`.
+sim() {
+  step sim
+  cargo run --release -p rim_sim --example headless -- --days 3 --seed 1
+  cargo run --release -p rim_sim --example headless -- --days 3 --seed 1 --core
+  cargo run --release -p rim_sim --example year -- --seed 1 >/dev/null
+  cargo run --release -p rim_sim --example bench -- --days 0.25 --check
+}
+
+# The client drawn: it opens a window, so it isn't in `check`.
+autotest() {
+  step autotest
+  cargo run --release -p rim_client -- --background --seed 7 --autotest target/autotest
+}
+
+bench() {
+  step bench
+  cargo run --release -p rim_client -- --background --seed 1 --bench-render --frames 100 --sprite-mods 20 --check
+}
+
+check() {
+  fmt_check
+  types
+  roadmap
+  lint
+  test_rust
+  build
+  fma
+  mods
+  crosscheck
+  stamp
+  printf '\n\033[1;32mscripts/task check passed.\033[0m CI also runs the sim runs (scripts/task sim), the client (scripts/task autotest, bench), and compares the crosscheck across four platforms.\n'
+}
+
+# Where check records the commit it passed on, for the pre-push hook: per
+# worktree, outside the tree. The hook can't run the gate itself, because git
+# opens the connection to the remote before the hook runs, and GitHub drops a
+# connection that waits ten minutes.
+STAMP="$(git rev-parse --git-dir)/rim-check-passed"
+
+stamp() {
+  if [ -n "$(git status --porcelain --untracked-files=normal)" ]; then
+    rm -f "$STAMP"
+    echo "scripts/task: the tree has uncommitted changes, so this pass vouches for no commit" >&2
+    return
+  fi
+  git rev-parse HEAD >"$STAMP"
+}
+
+# Git hooks for this worktree only. Every worktree of a clone shares one git
+# config, so a shared core.hooksPath would switch the gate on for every agent
+# at once; each worktree opts in instead.
+hooks() {
+  git config extensions.worktreeConfig true
+  git config --worktree core.hooksPath scripts/hooks
+  echo "hooks installed for $(git rev-parse --show-toplevel): $(ls scripts/hooks | tr '\n' ' ')"
+}
+
+usage() {
+  cat <<'EOF'
+usage: scripts/task <verb> [args]
+
+  check      the whole gate: fmt:check types roadmap lint test build fma mods crosscheck
+  fmt        format the workspace
+  fmt:check  fail if anything isn't formatted
+  types      mod scripts against the declared Luau APIs
+  roadmap    cairn items match the schema and ROADMAP.md is current
+  lint       clippy over every target, warnings denied
+  test       nextest over the workspace; `test -- ARGS` passes ARGS to nextest
+  build      release binaries and examples
+  fma        the Luau VM has no fused multiply-add (after build)
+  mods       rim test and rim check --strict (after build)
+  crosscheck the crosscheck scenario runs to the end (after build)
+  sim        the long sim runs: soaks, a climate year, the sim bench
+  autotest   the client autotest (opens a window, in the background)
+  bench      the render bench with its budget (opens a window)
+  hooks      install scripts/hooks for this worktree
+EOF
+}
+
+verb="${1:-help}"
+shift || true
+[ "${1:-}" = "--" ] && shift
+case "$verb" in
+  check) check ;;
+  fmt) fmt ;;
+  fmt:check) fmt_check ;;
+  types) types ;;
+  roadmap) roadmap ;;
+  lint) lint ;;
+  test) test_rust "$@" ;;
+  build) build ;;
+  fma) fma ;;
+  mods) mods "$@" ;;
+  crosscheck) crosscheck ;;
+  sim) sim ;;
+  autotest) autotest ;;
+  bench) bench ;;
+  hooks) hooks ;;
+  help | -h | --help) usage ;;
+  *) echo "scripts/task: unknown verb '$verb'" >&2; usage >&2; exit 2 ;;
+esac

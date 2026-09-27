@@ -6,7 +6,9 @@ content lives in mods (`mods/core` is the base game). If a feature needs
 content ids in engine code, it belongs in a mod instead.
 
 - `cargo run --release -p rim_client` — play
-- `cargo test -p rim_sim` — includes the determinism test; it must pass
+- `scripts/task check` — the gate: what CI's checks and test jobs run. It must
+  pass before a push; `scripts/task hooks` makes the pre-push hook run it.
+  `scripts/task test -- <filter>` while working; `scripts/task help` for the rest.
 - Sim changes must stay deterministic: world RNG only, no HashMap iteration,
   all player input through `Command`.
 - Dropping an item or moving a milestone's `due` is a person's call:

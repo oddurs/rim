@@ -43,6 +43,7 @@ wrap or remove any part of it. See [Modding the interface](docs/modding/ui.md).
 ## Run
 
 ```sh
+scripts/task check                                    # the gate CI runs: fmt, types, roadmap, clippy, tests, mods
 cargo run --release -p rim_client                     # play
 cargo run --release -p rim_client -- --seed 42        # a specific world
 cargo test --release -p rim_sim                       # includes the determinism test

@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# Refuses a push the gate hasn't passed on (DESIGN.md §8a). Installed per
+# worktree by `scripts/task hooks`.
+#
+# The hook doesn't run the gate: git opens the connection to the remote before
+# the hook runs, and GitHub drops a connection that waits ten minutes. So
+# `scripts/task check` records the commit it passed on, with a clean tree, and
+# this checks that record against what is being pushed.
+#
+# - A clean rebase of a checked commit onto a newer main is the same change:
+#   its patch (ROADMAP.md aside) matches the checked one, so it goes, and CI
+#   proves the new combination, as the merge queue expects.
+# - Deleting a remote branch or pushing a tag checks nothing.
+# - A push that touches only cairn items and top-level Markdown needs only the
+#   roadmap check, run here. Markdown elsewhere counts as code: tests read the
+#   guides in docs/modding/.
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+zero=0000000000000000000000000000000000000000
+pushing=()
+while read -r local_ref local_sha _remote_ref _remote_sha; do
+  [ "$local_sha" = "$zero" ] && continue # a delete
+  case "$local_ref" in refs/tags/*) continue ;; esac
+  pushing+=("$local_sha")
+done
+[ ${#pushing[@]} -eq 0 ] && exit 0
+
+stamp="$(git rev-parse --git-dir)/rim-check-passed"
+passed=$(cat "$stamp" 2>/dev/null || true)
+
+# The change a commit makes on top of main, as a patch id.
+patch() {
+  local base
+  base=$(git merge-base "$1" origin/main 2>/dev/null) || return 0
+  git diff "$base" "$1" -- . ':(exclude)ROADMAP.md' | git patch-id --stable | cut -d' ' -f1
+}
+
+for sha in "${pushing[@]}"; do
+  [ "$sha" = "$passed" ] && continue
+  if [ -n "$passed" ] && git cat-file -e "$passed" 2>/dev/null; then
+    was=$(patch "$passed")
+    if [ -n "$was" ] && [ "$was" = "$(patch "$sha")" ]; then
+      echo "pre-push: $sha is $passed rebased, the same change; CI proves it on the new main"
+      continue
+    fi
+  fi
+  base=$(git merge-base "$sha" origin/main 2>/dev/null || true)
+  if [ -n "$base" ]; then
+    changed=$(git diff --name-only "$base" "$sha")
+    if [ -n "$changed" ] && ! grep -qvE '^(cairn/|[^/]+\.md$)' <<<"$changed"; then
+      echo "pre-push: $sha touches only cairn items and top-level Markdown; running the roadmap check"
+      scripts/task roadmap
+      continue
+    fi
+  fi
+  echo "pre-push: scripts/task check hasn't passed on $sha (last pass: ${passed:-none})." >&2
+  echo "          Check out what you push, commit everything, and run scripts/task check." >&2
+  exit 1
+done
