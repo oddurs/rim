@@ -6,7 +6,9 @@
 //!   a step), and in the low two what kind of mass it is: a window or a
 //!   door. Kinds can't be blended, so passes that read R sample cell centres.
 //! - G: under a roof (255) or not (0). One bit, so the linear filter blends it
-//!   into a soft edge at a wall and never into a kind that isn't there.
+//!   into a soft edge at a wall and never into a kind that isn't there. A
+//!   roofed cell's height is its roof's there: hipped, rising from the eaves
+//!   to the ridge (`roof.rs`), so a house casts a hipped shadow.
 //! - B: how much of the sky it stops.
 //! - A: how much firelight it stops.
 //!
@@ -26,6 +28,8 @@ pub const MAX_HEIGHT: f64 = 4.0;
 /// How tall a blocking thing stands when its def doesn't say, and how high
 /// a roof sits: one storey, one cell.
 pub const STOREY: f64 = 1.0;
+/// How far a roof rises for each cell in from its eaves.
+pub const ROOF_PITCH: f64 = 0.5;
 /// How much of the sky a canopy stops: the rest comes through the leaves.
 const CANOPY_SKY: f64 = 0.6;
 /// How much firelight a shut door stops: a little leaks round its edges.
@@ -63,12 +67,14 @@ fn height_and(height: f64, kind: u8) -> u8 {
     ((height.clamp(0.0, MAX_HEIGHT) / MAX_HEIGHT * 63.0).round() as u8) << 2 | kind
 }
 
-/// One cell's texel.
-pub fn texel(o: Occluder, roofed: bool) -> [u8; 4] {
-    if roofed {
+/// One cell's texel. `roof` is a roofed cell's steps in from the eaves,
+/// the eaves being 1.
+pub fn texel(o: Occluder, roof: Option<u8>) -> [u8; 4] {
+    if let Some(steps) = roof {
         // The roof is what the sky meets; what stands under it is indoors,
         // lit by fires, and stops none of their light.
-        return [height_and(STOREY, 0), 255, 255, 0];
+        let height = STOREY + ROOF_PITCH * (steps.max(1) - 1) as f64;
+        return [height_and(height, 0), 255, 255, 0];
     }
     let u = |x: f64| (x.clamp(0.0, 1.0) * 255.0).round() as u8;
     match o {
@@ -115,6 +121,12 @@ pub fn occluder_at(w: &World, i: usize, light: Option<DefId>) -> Occluder {
     }
 }
 
+/// A roofed cell's steps in from its roof's eaves; `None` open to the sky.
+/// Roofed is the sim's indoors; the height is the roof's over it.
+fn roof_at(w: &World, roofs: &[u8], i: usize) -> Option<u8> {
+    w.map.indoors(w.map.pos(i)).then(|| roofs.get(i).copied().unwrap_or(1))
+}
+
 /// The occluder texture, kept in step with the map.
 #[derive(Default)]
 pub struct Occluders {
@@ -139,9 +151,10 @@ pub struct Occluders {
 const STALE: (u64, u64) = (u64::MAX, u64::MAX);
 
 impl Occluders {
-    /// Bring the texture up to date with `w`. Whether it changed.
-    pub fn update(&mut self, w: &World) -> bool {
-        let (whole, dirty) = self.pack(w);
+    /// Bring the texture up to date with `w` and its roofs' heights, per
+    /// cell (`Roofs::height`). Whether it changed.
+    pub fn update(&mut self, w: &World, roofs: &[u8]) -> bool {
+        let (whole, dirty) = self.pack(w, roofs);
         if dirty.is_empty() && self.texture.is_some() {
             return false;
         }
@@ -182,7 +195,7 @@ impl Occluders {
     /// whose roof did, or the whole map when nothing is packed yet. Whether
     /// it was whole, and the rectangles whose texels changed, as (x, y, w, h)
     /// in cells.
-    fn pack(&mut self, w: &World) -> (bool, Vec<(i32, i32, i32, i32)>) {
+    fn pack(&mut self, w: &World, roofs: &[u8]) -> (bool, Vec<(i32, i32, i32, i32)>) {
         let m = &w.map;
         let (cw, ch) = m.chunks();
         let chunks = (cw * ch) as usize;
@@ -192,8 +205,9 @@ impl Occluders {
             self.seen = vec![STALE; chunks];
             self.size = (m.w, m.h);
         } else if self.rooms != m.room_rebuilds {
-            // A room rebuild can roof or unroof any cell: repack the chunks
-            // where one did, found by the first cell that disagrees.
+            // A room rebuild can roof or unroof any cell, or raise a roof
+            // over it: repack the chunks where one did, found by the first
+            // cell that disagrees.
             for c in 0..chunks {
                 if self.seen[c] == STALE {
                     continue;
@@ -202,7 +216,10 @@ impl Occluders {
                 let roof_moved = (o.y..(o.y + CHUNK).min(m.h)).any(|y| {
                     (o.x..(o.x + CHUNK).min(m.w)).any(|x| {
                         let i = (y * m.w + x) as usize;
-                        (self.bytes[i * 4 + 1] == 255) != m.indoors(rim_sim::IVec::new(x, y))
+                        match roof_at(w, roofs, i) {
+                            Some(r) => self.bytes[i * 4..i * 4 + 4] != texel(Occluder::Open, Some(r)),
+                            None => self.bytes[i * 4 + 1] == 255,
+                        }
                     })
                 });
                 if roof_moved {
@@ -225,7 +242,7 @@ impl Occluders {
             for y in o.y..y1 {
                 for x in o.x..x1 {
                     let i = (y * m.w + x) as usize;
-                    let t = texel(occluder_at(w, i, light), m.indoors(rim_sim::IVec::new(x, y)));
+                    let t = texel(occluder_at(w, i, light), roof_at(w, roofs, i));
                     if self.bytes[i * 4..i * 4 + 4] != t {
                         self.bytes[i * 4..i * 4 + 4].copy_from_slice(&t);
                         changed = true;
@@ -253,17 +270,18 @@ mod tests {
 
     #[test]
     fn each_kind_of_cell_packs_as_the_passes_expect() {
-        let wall = texel(Occluder::Solid { height: 1.0 }, false);
+        let wall = texel(Occluder::Solid { height: 1.0 }, None);
         assert_eq!(wall, [16 << 2, 0, 255, 255], "a storey high, stops sky and fire");
-        let window = texel(Occluder::Window { height: 1.0, pass: 0.35 }, false);
+        let window = texel(Occluder::Window { height: 1.0, pass: 0.35 }, None);
         assert_eq!(window, [16 << 2 | WINDOW, 0, 255, 166], "a window; firelight gets through the pane");
-        let door = texel(Occluder::Door { height: 1.0 }, false);
+        let door = texel(Occluder::Door { height: 1.0 }, None);
         assert_eq!(door, [16 << 2 | DOOR, 0, 255, 179]);
-        let tree = texel(Occluder::Canopy { height: 2.0 }, false);
+        let tree = texel(Occluder::Canopy { height: 2.0 }, None);
         assert_eq!(tree, [32 << 2, 0, 153, 0], "the sky partly gets through; fire isn't stopped");
-        assert_eq!(texel(Occluder::Open, false), [0; 4]);
-        assert_eq!(texel(Occluder::Canopy { height: 2.0 }, true), [16 << 2, 255, 255, 0], "a roof wins");
-        assert_eq!(texel(Occluder::Solid { height: 9.0 }, false)[0], 63 << 2, "clamped to what a texel holds");
+        assert_eq!(texel(Occluder::Open, None), [0; 4]);
+        assert_eq!(texel(Occluder::Canopy { height: 2.0 }, Some(1)), [16 << 2, 255, 255, 0], "a roof wins");
+        assert_eq!(texel(Occluder::Open, Some(3))[0], 32 << 2, "two cells in from the eaves, a storey higher");
+        assert_eq!(texel(Occluder::Solid { height: 9.0 }, None)[0], 63 << 2, "clamped to what a texel holds");
     }
 
     fn sim() -> rim_sim::Sim {
@@ -308,13 +326,13 @@ mod tests {
         }
         place(w, "wall", p.offset(4, 0), true);
         let mut o = Occluders::default();
-        o.pack(w);
+        o.pack(w, &[]);
         let at = |k: i32| o.at(w.map.idx(p.offset(k, 0)));
-        assert_eq!(at(0), texel(Occluder::Solid { height: STOREY }, false), "a wall");
+        assert_eq!(at(0), texel(Occluder::Solid { height: STOREY }, None), "a wall");
         let pass = w.defs.things[w.defs.lookup("thing", "window").unwrap() as usize].boundary[0].pass;
-        assert_eq!(at(1), texel(Occluder::Window { height: STOREY, pass }, false), "a window lets its pass through");
-        assert_eq!(at(2), texel(Occluder::Door { height: STOREY }, false), "a door");
-        assert_eq!(at(3), texel(Occluder::Canopy { height: 2.0 }, false), "an oak, as tall as core says");
+        assert_eq!(at(1), texel(Occluder::Window { height: STOREY, pass }, None), "a window lets its pass through");
+        assert_eq!(at(2), texel(Occluder::Door { height: STOREY }, None), "a door");
+        assert_eq!(at(3), texel(Occluder::Canopy { height: 2.0 }, None), "an oak, as tall as core says");
         assert_eq!(at(4), [0; 4], "a planned wall casts nothing yet");
     }
 
@@ -322,22 +340,22 @@ mod tests {
     fn only_what_stands_in_a_cell_wakes_it_not_hauling() {
         let mut s = sim();
         let mut o = Occluders::default();
-        let (whole, first) = o.pack(&s.world);
+        let (whole, first) = o.pack(&s.world, &[]);
         assert!(whole && !first.is_empty());
-        let (_, again) = o.pack(&s.world);
+        let (_, again) = o.pack(&s.world, &[]);
         assert!(again.is_empty(), "nothing changed, nothing repacked: {again:?}");
         let p = open_block(&s.world, 1, 1);
         place(&mut s.world, "tree_oak", p, false);
-        let (whole, dirty) = o.pack(&s.world);
+        let (whole, dirty) = o.pack(&s.world, &[]);
         assert!(!whole, "a tree doesn't rebuild rooms");
         assert_eq!(dirty.len(), 1, "only the tree's chunk changed");
-        assert_eq!(o.at(s.world.map.idx(p)), texel(Occluder::Canopy { height: 2.0 }, false));
+        assert_eq!(o.at(s.world.map.idx(p)), texel(Occluder::Canopy { height: 2.0 }, None));
         // An item set down stops no light, and doesn't even wake its chunk.
         let before = o.seen.clone();
         let q = open_block(&s.world, 1, 1);
         let stone = s.world.defs.things.iter().position(|d| d.category == Category::Item).unwrap();
         s.world.place_item(stone as DefId, q, 1);
-        let (_, dirty) = o.pack(&s.world);
+        let (_, dirty) = o.pack(&s.world, &[]);
         assert!(dirty.is_empty() && o.seen == before, "hauling repacks nothing");
     }
 
@@ -346,7 +364,7 @@ mod tests {
         let mut s = sim();
         let mut o = Occluders::default();
         s.world.map.ensure_rooms();
-        o.pack(&s.world);
+        o.pack(&s.world, &[]);
         // A 3×3 hut: a ring of walls round one cell.
         let p = open_block(&s.world, 3, 3);
         for (dx, dy) in [(0, 0), (1, 0), (2, 0), (0, 1), (2, 1), (0, 2), (1, 2), (2, 2)] {
@@ -354,9 +372,32 @@ mod tests {
         }
         s.world.map.ensure_rooms();
         assert!(s.world.map.indoors(p.offset(1, 1)), "the hut is a room");
-        let (whole, dirty) = o.pack(&s.world);
+        let (whole, dirty) = o.pack(&s.world, &[]);
         let (cw, ch) = s.world.map.chunks();
         assert!(!whole && (1..=4).contains(&dirty.len()) && dirty.len() < (cw * ch) as usize, "{} chunks", dirty.len());
         assert_eq!(o.at(s.world.map.idx(p.offset(1, 1)))[1], 255, "the floor is under a roof");
+    }
+
+    #[test]
+    fn a_roof_rises_from_its_eaves_to_its_ridge() {
+        let mut s = sim();
+        let p = open_block(&s.world, 5, 5);
+        for y in 0..5 {
+            for x in 0..5 {
+                if x == 0 || y == 0 || x == 4 || y == 4 {
+                    place(&mut s.world, "wall", p.offset(x, y), false);
+                }
+            }
+        }
+        s.world.map.ensure_rooms();
+        let mut roofs = crate::roof::Roofs::default();
+        roofs.update(&s.world);
+        let mut o = Occluders::default();
+        o.pack(&s.world, &roofs.height);
+        let at = |x: i32, y: i32| o.at(s.world.map.idx(p.offset(x, y)));
+        assert_eq!(at(1, 1), texel(Occluder::Open, Some(2)), "a cell in from the wall is half a storey up");
+        assert_eq!(at(2, 2), texel(Occluder::Open, Some(3)), "the ridge a storey up");
+        assert!(at(2, 2)[0] > at(1, 2)[0] && at(1, 2)[0] > at(0, 2)[0], "rising all the way in");
+        assert_eq!(at(0, 2), texel(Occluder::Solid { height: STOREY }, None), "the walls stay walls");
     }
 }

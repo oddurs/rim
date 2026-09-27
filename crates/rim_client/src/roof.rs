@@ -292,7 +292,9 @@ impl Roofs {
     }
 
     /// Draw every roof on screen but `lifted`'s, at `alpha`, tinted by the
-    /// outdoor light `tint`, from one light in the north-west.
+    /// outdoor light `tint`, each slope by how it faces the light: `faces`,
+    /// north, west, east, south and flat (`light::roof_faces`). The roof's
+    /// shadow on the ground is the sun pass's, cast by `height`.
     #[allow(clippy::too_many_arguments)]
     pub fn draw(
         &self,
@@ -302,6 +304,7 @@ impl Roofs {
         alpha: f32,
         lifted: u32,
         tint: Vec3,
+        faces: [f32; 5],
     ) {
         if alpha <= 0.0 || self.house.is_empty() {
             return;
@@ -311,8 +314,6 @@ impl Roofs {
         let lit = |c: Color, f: f32| {
             Color::new((c.r * f * tint.x).min(1.0), (c.g * f * tint.y).min(1.0), (c.b * f * tint.z).min(1.0), alpha)
         };
-        // Brightness by which way a slope faces: N W E S, and flat.
-        const FACE: [f32; 5] = [1.14, 1.02, 0.86, 0.74, 1.0];
         let rows = (y0.max(0) as usize, (y1 + 1).clamp(0, m.h) as usize);
         let visible = || {
             self.runs[self.row_start[rows.0]..self.row_start[rows.1]]
@@ -323,16 +324,6 @@ impl Roofs {
         // Many roofs on screen: a rectangle a run, each sloping one way, and
         // merged eaves. Few, close in: every cell's hips and courses.
         if cells > DETAIL_CELLS {
-            for &(y, a, b, _, _) in visible() {
-                let (sx, sy) = cam.to_screen(a as f32 + 0.3, y as f32 + 0.42);
-                draw_rectangle(
-                    sx,
-                    sy,
-                    (b - a + 1) as f32 * z + 0.5,
-                    z + 0.5,
-                    Color::new(0.03, 0.04, 0.02, 0.3 * alpha),
-                );
-            }
             for &(y, a, b, h, face) in visible() {
                 let (sx, sy) = cam.to_screen(a as f32, y as f32);
                 draw_rectangle(
@@ -340,7 +331,7 @@ impl Roofs {
                     sy,
                     (b - a + 1) as f32 * z + 0.5,
                     z + 0.5,
-                    lit(self.color[h as usize - 1], FACE[face as usize]),
+                    lit(self.color[h as usize - 1], faces[face as usize]),
                 );
             }
             let ink = Color::new(0.09, 0.07, 0.05, 0.8 * alpha);
@@ -362,17 +353,6 @@ impl Roofs {
             let i = m.idx(p);
             (self.house[i], self.height[i])
         };
-        // The roof's shadow on the ground, down and away from the light.
-        for y in y0..=y1 {
-            for x in x0..=x1 {
-                let (h, _) = hat(x, y);
-                if h == 0 || h == lifted {
-                    continue;
-                }
-                let (sx, sy) = cam.to_screen(x as f32 + 0.3, y as f32 + 0.42);
-                draw_rectangle(sx, sy, z + 0.5, z + 0.5, Color::new(0.03, 0.04, 0.02, 0.3 * alpha));
-            }
-        }
         for y in y0..=y1 {
             for x in x0..=x1 {
                 let (h, hc) = hat(x, y);
@@ -427,7 +407,7 @@ impl Roofs {
                         vec2(mx, my),
                         vec2(a.0, a.1),
                         vec2(b.0, b.1),
-                        lit(c, FACE[face] * (0.97 + 0.05 * hash(x, y))),
+                        lit(c, faces[face] * (0.97 + 0.05 * hash(x, y))),
                     );
                 }
                 // The covering's courses, parallel to the eaves.

@@ -2111,7 +2111,16 @@ baked into the chunk mesh. Sky shadows point wherever the sun is.
     compose has. It costs one occluder read. The top-and-left highlight
     stays in the mesh (ae5c3807).
   - Roofs (df049dac) shade their facets by the real sun direction instead
-    of a fixed one.
+    of a fixed one: the sun's share lands on a slope by how squarely it
+    faces the sun, against flat ground's, at most 1.6 times. With no sun
+    they keep the fixed light from the north-west, and they blend between
+    the two by the sun's share, so there's no jump at sunset and cloud
+    doesn't flatten them. A roof's shadow is the
+    sun pass's: a roofed cell's occluder height is one storey at the eaves,
+    rising half a cell for each cell in (153dda59), so a house throws a
+    hipped shadow with a notch at an L's valley, and the roof's drawn drop
+    shadow is gone. A wall top on the side away from the sun is shaded by
+    the roof rising beside it, as the eave above it would.
 
 ### Depth
 

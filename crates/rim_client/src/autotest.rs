@@ -2122,6 +2122,120 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.app.sim.world.fields.set_ambient(light, None);
     t.app.paused = false;
 
+    // ---------------------------------------------------------- 153dda59 roofs take the sun
+    println!("\n# roofs take the sun: a hipped shadow, and the slope facing the sun is bright (153dda59)");
+    t.app.paused = true;
+    t.app.sim.world.fields.set_ambient(cloud, Some(0.0));
+    t.app.sim.world.fields.set_ambient(light, Some(100.0));
+    // An L of walls: an arm 8 across and 5 deep, and one 5 across running
+    // 9 down from its west end, with clear ground 9 cells east of it.
+    let in_l =
+        |x: i32, y: i32| (0..8).contains(&x) && (0..5).contains(&y) || (0..5).contains(&x) && (0..9).contains(&y);
+    // Open ground, or ground with only plants on it, which are cleared: a
+    // block that size with nothing growing is rare on a wooded map.
+    let plant =
+        |w: &World, p: IVec| w.map.fixture_at(p).and_then(|e| w.thing(e)).is_some_and(|t| w.defs.thing(t.def).natural);
+    let clear = |w: &World, o: IVec| {
+        let free = |p: IVec| {
+            w.map.inb(p)
+                && w.map.passable(p)
+                && w.solid_at(p).is_none()
+                && w.map.item_at(p).is_none()
+                && (w.map.fixture_at(p).is_none() || plant(w, p))
+        };
+        (-1..=10).all(|y| (-1..=17).all(|x| free(o.offset(x, y))))
+    };
+    t.app.light.adapt_now();
+    let near = site.offset(30, -30);
+    let l_at = (0..80i32)
+        .flat_map(|r| (-r..=r).flat_map(move |dy| (-r..=r).map(move |dx| near.offset(dx, dy))))
+        .find(|&o| clear(t.w(), o));
+    let mut walls = Vec::new();
+    if let Some(o) = l_at {
+        for y in -1..=10 {
+            for x in -1..=17 {
+                if plant(t.w(), o.offset(x, y)) {
+                    let e = t.w().map.fixture_at(o.offset(x, y)).unwrap();
+                    t.app.sim.world.despawn_thing(e);
+                }
+            }
+        }
+        for y in 0..9 {
+            for x in 0..8 {
+                let edge = [(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, 1), (1, -1), (-1, -1)]
+                    .iter()
+                    .any(|&(dx, dy)| !in_l(x + dx, y + dy));
+                if in_l(x, y) && edge {
+                    walls.extend(t.app.sim.world.spawn_fixture(wall, o.offset(x, y), false));
+                }
+            }
+        }
+        t.ticks(2);
+        let (arm, leg) = (o.offset(3, 2), o.offset(2, 6));
+        t.frame().await;
+        let one_house = t.w().map.indoors(arm)
+            && t.app.roofs.house_at(t.w(), arm) != 0
+            && t.app.roofs.house_at(t.w(), arm) == t.app.roofs.house_at(t.w(), leg);
+        t.check(one_house, "an L of walls is one house under one roof");
+        // Low in the west, the arm's roof throws a shadow east longer than
+        // its walls alone would: 4 cells past its east wall is shaded,
+        // though a storey-high box would leave it lit at this elevation.
+        t.app.light.pin_sun = Some((180.0, 15.0));
+        t.focus(o.offset(8, 4));
+        t.app.cam.zoom = 20.0;
+        t.frame().await;
+        let (roofed, beyond) = t.app.light.sun_image().map_or((1.0, 0.0), |img| {
+            let at = |dx: f32| t.app.light.sun_in(&img, o.x as f32 + 8.0 + dx, o.y as f32 + 2.5).unwrap_or(1.0);
+            (at(4.0), at(7.5))
+        });
+        let wall_only = 1.0 / 15f32.to_radians().tan();
+        t.check(
+            roofed < 0.3 && beyond > 0.7,
+            format!(
+                "the roof's shadow runs past a wall's {wall_only:.1} cells: 4 cells out {roofed:.2}, 7.5 out {beyond:.2}"
+            ),
+        );
+        t.shot("roof_shadow_dusk").await;
+        // Zoomed out, where roofs are drawn: in the morning the east slope
+        // is the bright one, in the evening the west.
+        t.app.cam.zoom = 9.0;
+        t.focus(o.offset(4, 4));
+        // The pointer off the house, or its roof lifts.
+        t.mouse = (4.0, 200.0);
+        let lum = |c: [f32; 3]| 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+        let mut slopes = Vec::new();
+        for (name, az) in [("morning", 10.0), ("evening", 170.0)] {
+            t.app.light.pin_sun = Some((az, 25.0));
+            let img = t.grab().await;
+            let slope = |t: &T, x: i32| {
+                let (sx, sy) = t.app.cam.to_screen(o.x as f32 + x as f32 + 0.5, o.y as f32 + 2.5);
+                lum(px(&img, (sx, sy)))
+            };
+            // On the arm's ridge row, the cells one in from its east wall
+            // and its west wall: all one slope each.
+            slopes.push((name, slope(&t, 6), slope(&t, 1)));
+            t.shot(&format!("roof_{name}")).await;
+        }
+        let (m, e) = (slopes[0], slopes[1]);
+        t.check(
+            m.1 > m.2 * 1.2 && e.2 > e.1 * 1.2,
+            format!(
+                "the slope facing the sun is the bright one: morning east {:.2} west {:.2}, evening east {:.2} west {:.2}",
+                m.1, m.2, e.1, e.2
+            ),
+        );
+        t.app.light.pin_sun = None;
+        t.app.cam.zoom = 40.0;
+    } else {
+        t.check(false, "clear ground for an L-shaped house");
+    }
+    for e in walls {
+        t.app.sim.world.despawn_thing(e);
+    }
+    t.app.sim.world.fields.set_ambient(cloud, None);
+    t.app.sim.world.fields.set_ambient(light, None);
+    t.app.paused = false;
+
     // ---------------------------------------------------------- fda56c8e camera by device
     println!("\n# the camera answers a mouse and a trackpad (fda56c8e)");
     t.clear_dock().await;

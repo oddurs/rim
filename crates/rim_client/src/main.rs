@@ -1434,7 +1434,10 @@ pub fn render(app: &mut App) {
     // The world's pixels a cell: the zoom, at the screen's density and the
     // render scale it's drawn at.
     let px_per_cell = app.cam.zoom * screen_dpi_scale() * app.render_scale.unwrap_or(1.0);
-    app.light.prepare(&app.sim.world, &air, px_per_cell);
+    // Roofs first: the light reads their heights. Only a room rebuild
+    // works them out again.
+    app.roofs.update(&app.sim.world);
+    app.light.prepare(&app.sim.world, &air, px_per_cell, &app.roofs.height);
     t.light = lap();
     update_world_target(app);
     let (sw, sh) = (screen_width(), screen_height());
@@ -1468,13 +1471,13 @@ pub fn render(app: &mut App) {
         app.light.multiply(&app.sim.world, &app.cam, &air, app.sky.flash());
     }
     // Roofs are outdoors whatever is under them: after the light, lit by
-    // the sky. The house under the pointer lifts its roof.
-    app.roofs.update(&app.sim.world);
+    // the sky and the sun. The house under the pointer lifts its roof.
     let alpha = roof::Roofs::alpha(app.cam.zoom);
     if alpha > 0.0 && app.cam.z == 0 {
         let lifted = app.hover_cell.map_or(0, |p| app.roofs.house_at(&app.sim.world, p));
-        let tint = light::Light::outdoor(&app.sim.world, &air, app.sky.flash());
-        app.roofs.draw(&app.sim.world, &app.cam, draw::visible(app), alpha, lifted, tint);
+        let tint = app.light.outdoor(&app.sim.world, &air, app.sky.flash());
+        let faces = app.light.roof_faces(&app.sim.world, &air);
+        app.roofs.draw(&app.sim.world, &app.cam, draw::visible(app), alpha, lifted, tint, faces);
     }
     t.light += lap();
     if let Some(rt) = &app.world_target {

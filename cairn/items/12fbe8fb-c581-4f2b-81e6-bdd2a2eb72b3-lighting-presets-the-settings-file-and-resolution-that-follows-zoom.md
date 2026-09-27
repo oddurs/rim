@@ -2,15 +2,15 @@
 id: 12fbe8fb-c581-4f2b-81e6-bdd2a2eb72b3
 title: Lighting presets, the settings file, and resolution that follows zoom
 type: feature
-status: doing
+status: done
 milestone: lighting
 assignee: Oddur Sigurdsson
-claimed: 2026-09-27
 depends_on:
 - 6fd6b13b-1186-46f4-876e-743d173e03d7
 - 8f4f1de8-5784-4377-8cee-25bcf223275e
 created: 2026-09-26
 updated: 2026-09-27
+closed_at: 2026-09-27
 priority: p1
 api: none
 effort: s
