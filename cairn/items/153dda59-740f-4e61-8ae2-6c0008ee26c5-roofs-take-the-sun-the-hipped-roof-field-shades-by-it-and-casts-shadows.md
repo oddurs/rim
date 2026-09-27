@@ -2,15 +2,15 @@
 id: 153dda59-740f-4e61-8ae2-6c0008ee26c5
 title: 'Roofs take the sun: the hipped roof field shades by it and casts shadows'
 type: feature
-status: doing
+status: done
 milestone: lighting
 assignee: Oddur Sigurdsson
-claimed: 2026-09-27
 depends_on:
 - 8f4f1de8-5784-4377-8cee-25bcf223275e
 - df049dac-deae-4491-99d1-0954a74cd190
 created: 2026-09-26
 updated: 2026-09-27
+closed_at: 2026-09-27
 priority: p2
 api: none
 effort: s

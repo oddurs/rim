@@ -31,6 +31,8 @@ pub struct Sky {
     rng: u64,
     last: f64,
     flash: f32,
+    /// Where the bolt is, as an azimuth in degrees: a new one each flash.
+    flash_from: f32,
     next_flash: f64,
     /// Particles skipped last frame because they were over an enclosed room.
     pub hidden: usize,
@@ -38,8 +40,16 @@ pub struct Sky {
 
 impl Default for Sky {
     fn default() -> Self {
-        Sky { parts: Vec::new(), rng: 0x5EED, last: 0.0, flash: 0.0, next_flash: 0.0, hidden: 0 }
+        Sky { parts: Vec::new(), rng: 0x5EED, last: 0.0, flash: 0.0, flash_from: 0.0, next_flash: 0.0, hidden: 0 }
     }
+}
+
+/// A lightning flash: how bright, 0 to about 1, and where the bolt is, as
+/// an azimuth in degrees.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Flash {
+    pub strength: f32,
+    pub azimuth: f32,
 }
 
 /// What the renderer needs from the world's outdoor values.
@@ -75,9 +85,9 @@ impl Air {
 }
 
 impl Sky {
-    /// How bright a lightning flash is right now, 0 to about 1.
-    pub fn flash(&self) -> f32 {
-        self.flash
+    /// The lightning flash now, if any: `strength` 0 when there's none.
+    pub fn flash(&self) -> Flash {
+        Flash { strength: self.flash, azimuth: self.flash_from }
     }
 
     fn rand(&mut self) -> f32 {
@@ -171,6 +181,7 @@ impl Sky {
             if now >= self.next_flash {
                 if self.next_flash > 0.0 {
                     self.flash = 0.9;
+                    self.flash_from = self.rand() * 360.0;
                 }
                 self.next_flash = now + 3.0 + self.rand() as f64 * 9.0;
             }
@@ -191,6 +202,7 @@ impl Sky {
     /// A lightning flash now (tools and the autotest; storms flash on their own).
     pub fn strike(&mut self) {
         self.flash = 0.9;
+        self.flash_from = self.rand() * 360.0;
         self.next_flash = get_time() + 3.0;
     }
 

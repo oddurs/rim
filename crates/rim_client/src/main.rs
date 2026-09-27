@@ -1441,7 +1441,7 @@ pub fn render(app: &mut App) {
     // Roofs first: the light reads their heights. Only a room rebuild
     // works them out again.
     app.roofs.update(&app.sim.world);
-    app.light.prepare(&app.sim.world, &air, px_per_cell, &app.roofs.height);
+    app.light.prepare(&app.sim.world, &air, px_per_cell, &app.roofs.height, app.sky.flash());
     t.light = lap();
     update_world_target(app);
     let (sw, sh) = (screen_width(), screen_height());

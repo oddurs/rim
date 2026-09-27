@@ -423,7 +423,7 @@ channels gets the visuals:
 | `precipitation` | Rain or snow, denser as it rises. Below 0°C it's snow, around freezing a mix. Never inside an enclosed room |
 | `wind`, `wind_dir` | Rain slants and snow drifts; `wind_dir` is the direction it blows toward, 0 = east, 90 = south |
 | `fog` | A drifting veil |
-| heavy `precipitation` with `wind` above 10 m/s | Lightning |
+| heavy `precipitation` with `wind` above 10 m/s | Lightning: each flash throws hard shadows from a random direction |
 
 ## Tools
 

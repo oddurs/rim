@@ -1795,8 +1795,34 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         t.app.sky.particles(),
         t.app.render_us.light
     );
+    // A flash casts shadows from where the bolt is, worked out as it
+    // strikes and again as it fades: twice at most, however long it lasts.
+    let runs = t.app.light.sun_runs;
     t.app.sky.strike();
+    t.frame().await;
+    t.frame().await;
+    let lit = t.app.light.lit_by_flash()
+        && t.app.light.sun_image().is_some_and(|img| {
+            let px = |k: usize| img.bytes[k * 4];
+            let n = img.bytes.len() / 4;
+            (0..n).any(|k| px(k) > 230) && (0..n).any(|k| px(k) < 25)
+        });
+    t.check(lit, "at night a flash lights the ground from where the bolt is, and walls shade it");
     t.shot("storm").await;
+    // The rain stops, so no second flash strikes while this one fades,
+    // however slowly the frames come.
+    t.app.sim.world.fields.set_ambient(field(&t, "precipitation"), Some(0.0));
+    for _ in 0..120 {
+        if t.app.sky.flash().strength == 0.0 && !t.app.light.lit_by_flash() {
+            break;
+        }
+        t.frame().await;
+    }
+    let runs = t.app.light.sun_runs - runs;
+    t.check(
+        !t.app.light.lit_by_flash() && (1..=2).contains(&runs),
+        format!("a flash works out its shadows at most twice, on and off ({runs} sun passes)"),
+    );
     for id in pins {
         let f = field(&t, id);
         t.app.sim.world.fields.set_ambient(f, None);
@@ -1804,6 +1830,18 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
 
     // ---------------------------------------------------------- 8f4f1de8 sun shadows
     println!("\n# the sun casts shadows, and a still sun costs nothing (8f4f1de8)");
+    // Calm, through every lighting check to come: the storm above would go
+    // on flashing, and a flash lights the ground from where its bolt is.
+    let calm = [field(&t, "precipitation"), field(&t, "wind")];
+    for f in calm {
+        t.app.sim.world.fields.set_ambient(f, Some(0.0));
+    }
+    for _ in 0..60 {
+        if t.app.sky.flash().strength == 0.0 && !t.app.light.lit_by_flash() {
+            break;
+        }
+        t.frame().await;
+    }
     // One wall, the sun pinned due south and low, so its shadow falls north:
     // 1 / tan 12° = 4.7 cells. The column it falls along is clear, and so is
     // the ground south of the wall a ray could meet something tall on.
@@ -2235,6 +2273,9 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.app.sim.world.fields.set_ambient(cloud, None);
     t.app.sim.world.fields.set_ambient(light, None);
     t.app.paused = false;
+    for f in calm {
+        t.app.sim.world.fields.set_ambient(f, None);
+    }
 
     // ---------------------------------------------------------- fda56c8e camera by device
     println!("\n# the camera answers a mouse and a trackpad (fda56c8e)");

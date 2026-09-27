@@ -2072,7 +2072,10 @@ where they were built, and the sun moves a fraction of a degree a second.
     height map, rising `tan(elevation)` per cell, and stops at the first thing
     taller than the ray. Rebuilt when a body moves past a threshold (0.25° by
     default), otherwise free. The penumbra widens with distance from the
-    occluder, and cloud widens it further.
+    occluder, and cloud widens it further. A lightning flash takes the pass
+    for its few frames (ff818bb3): hard shadows from 40° up, from a random
+    azimuth, worked out once as it strikes and once as it fades. It lights
+    the cloud a little everywhere and the rest from where the bolt is.
   - **Static lights** (anything that emits `light` and doesn't move): soft
     shadows baked once, with 8 rays, into one of four **flicker channels**.
     Flicker is then four colours a frame, for one torch or a thousand.
