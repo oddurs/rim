@@ -2,14 +2,14 @@
 id: e5d8b445-42ed-4e87-8390-ad54d525757b
 title: 'Occluders: one texel per cell of height, roof and opening'
 type: feature
-status: doing
+status: done
 milestone: lighting
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 depends_on:
 - 6a6dfe88-6d54-49a5-b871-f7eb78f69176
 created: 2026-09-26
-updated: 2026-09-26
+updated: 2026-09-27
+closed_at: 2026-09-27
 priority: p0
 api: additive
 effort: m

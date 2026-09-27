@@ -1633,6 +1633,103 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         t.app.sim.world.fields.set_ambient(f, None);
     }
 
+    // ---------------------------------------------------------- 8f4f1de8 sun shadows
+    println!("\n# the sun casts shadows, and a still sun costs nothing (8f4f1de8)");
+    // One wall, the sun pinned due south and low, so its shadow falls north:
+    // 1 / tan 12° = 4.7 cells. The column it falls along is clear, and so is
+    // the ground south of the wall a ray could meet something tall on.
+    t.app.paused = true;
+    let clear = |w: &World, p: IVec| {
+        (-8..=11).all(|dy| {
+            let c = p.offset(0, dy);
+            w.map.inb(c) && w.map.passable(c) && w.map.fixture_at(c).is_none() && w.solid_at(c).is_none()
+        })
+    };
+    let column = (0..60i32)
+        .flat_map(|r| (-r..=r).flat_map(move |dy| (-r..=r).map(move |dx| site.offset(dx, dy))))
+        .find(|&p| clear(t.w(), p));
+    if let Some(p) = column {
+        let standing = t.app.sim.world.spawn_fixture(wall, p, false);
+        t.check(standing.is_some(), "the test wall stands");
+        // Full daylight under a clear sky, whatever the hour the test has
+        // reached: cloud softens a shadow's edge, and this is its length.
+        let field = |t: &T, id: &str| t.w().defs.lookup("field", id).unwrap() as usize;
+        let (cloud, light) = (field(&t, "cloud"), field(&t, "light"));
+        t.app.sim.world.fields.set_ambient(cloud, Some(0.0));
+        t.app.sim.world.fields.set_ambient(light, Some(100.0));
+        t.ticks(20);
+        t.app.light.pin_sun = Some((90.0, 12.0));
+        t.focus(p.offset(0, -3));
+        t.frame().await;
+        // Walk north from the wall's north face a texel (half a cell) at a
+        // time, down the middle of its column, to where the sun comes back.
+        let (x, face) = (p.x as f32 + 0.5, p.y as f32);
+        let length = (0..20)
+            .map(|k| 0.25 + k as f32 * 0.5)
+            .find(|d| t.app.light.sun_visibility(x, face - d).is_some_and(|v| v >= 0.5))
+            .map_or(99.0, |d| d - 0.25);
+        t.check((4.5..=5.5).contains(&length), format!("a wall's shadow at 12° is {length} cells long (4.7 by tan)"));
+        let lit = t.app.light.sun_visibility(x, face - 7.0).unwrap_or(0.0);
+        t.check(lit > 0.9, format!("and the sun reaches beyond it ({lit:.2})"));
+        let runs = t.app.light.sun_runs;
+        for _ in 0..5 {
+            t.frame().await;
+        }
+        t.check(t.app.light.sun_runs == runs, "a still sun is worked out once, not every frame");
+        let dpi = screen_dpi_scale();
+        // A grabbed frame is GL's, bottom row first.
+        let lum = |img: &Image, (x, y): (f32, f32)| {
+            let (w, h) = (img.width() as u32, img.height() as u32);
+            let (xi, yi) = (((x * dpi) as u32).min(w - 1), ((y * dpi) as u32).min(h - 1));
+            let c = img.get_pixel(xi, h - 1 - yi);
+            c.r + c.g + c.b
+        };
+        // Three spots across a cell, at `fy` down it; a pair of cells is
+        // compared spot by spot and the middle ratio taken, so a colonist
+        // standing on one spot doesn't decide a check.
+        let spots = |t: &T, q: IVec, fy: f32| {
+            [0.3f32, 0.5, 0.7].map(|fx| t.app.cam.to_screen(q.x as f32 + fx, q.y as f32 + fy))
+        };
+        let ratio = |img: &Image, a: [(f32, f32); 3], b: [(f32, f32); 3]| {
+            let mut r = [0, 1, 2].map(|k| lum(img, a[k]) / lum(img, b[k]).max(1e-3));
+            r.sort_by(f32::total_cmp);
+            r[1]
+        };
+        // On screen, the shadow is north of the wall, not south of it: the
+        // multiply reads the sun where the world is drawn.
+        let shaded = |t: &T, img: &Image| ratio(img, spots(t, p.offset(0, -2), 0.5), spots(t, p.offset(0, 2), 0.5));
+        let low = t.grab().await;
+        t.app.light.pin_sun = Some((90.0, 60.0));
+        let high = t.grab().await;
+        let dark = shaded(&t, &low) / shaded(&t, &high).max(1e-3);
+        t.check(dark < 0.8, format!("on screen the shadow falls north of the wall, away from the sun ({dark:.2})"));
+        t.app.light.pin_sun = Some((90.0, 12.0));
+        t.shot("sun_shadows").await;
+        // The plan's contact shadow (0779def9): just under the wall at night,
+        // gone where the sun reaches. The same spot is compared with ground
+        // further south in each light, so the ground's own colour cancels out.
+        t.focus(p.offset(0, 2));
+        let (under, far) = (spots(&t, p.offset(0, 1), 0.1), spots(&t, p.offset(0, 4), 0.1));
+        t.app.light.pin_sun = Some((90.0, 60.0));
+        let day = t.grab().await;
+        t.app.light.pin_sun = Some((90.0, -10.0));
+        let night = t.grab().await;
+        let contact = ratio(&night, under, far) / ratio(&day, under, far).max(1e-3);
+        t.check(
+            (0.6..0.9).contains(&contact),
+            format!("the plan's contact shadow darkens under a wall at night and goes in the sun ({contact:.2})"),
+        );
+        t.app.light.pin_sun = None;
+        t.app.sim.world.fields.set_ambient(cloud, None);
+        t.app.sim.world.fields.set_ambient(light, None);
+        if let Some(e) = standing {
+            t.app.sim.world.despawn_thing(e);
+        }
+    } else {
+        t.check(false, "a clear column of ground for the sun test");
+    }
+    t.app.paused = false;
+
     // ---------------------------------------------------------- fda56c8e camera by device
     println!("\n# the camera answers a mouse and a trackpad (fda56c8e)");
     t.clear_dock().await;

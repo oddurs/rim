@@ -126,6 +126,8 @@ pub struct Occluders {
     size: (i32, i32),
     /// Linear, so a pass sampling between cells gets a soft edge.
     pub texture: Option<Texture2D>,
+    /// Bumped whenever the texture changes, so passes that read it can cache.
+    pub version: u64,
 }
 
 /// A chunk that must be packed again whatever its revisions say.
@@ -138,6 +140,7 @@ impl Occluders {
         if dirty.is_empty() && self.texture.is_some() {
             return false;
         }
+        self.version += 1;
         let m = &w.map;
         match &self.texture {
             Some(t) if !whole => {
