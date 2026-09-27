@@ -420,7 +420,8 @@ namespace (`weather:changed`).
   cached that). With weather, a tick costs the same as core alone: mean
   0.004-0.005 ms over 5 days (seed 4).
 - On screen: 50 µs of CPU for 1,500 raindrops, 3 µs for the lighting pass
-  (the lightmap only rebuilds when emitters or rooms change).
+  (the firelight texture only rebuilds when emitters change, and the
+  occluders only when fixtures, terrain or roofs do).
 - Fixed-point terms, the world RNG only for picking weather, and pushes and
   script data in the state hash: a year of weather hashes the same on every run.
 

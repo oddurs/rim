@@ -2,12 +2,12 @@
 id: 6a6dfe88-6d54-49a5-b871-f7eb78f69176
 title: 'Lighting in the render bench: every pass, CPU and GPU time'
 type: perf
-status: doing
+status: done
 milestone: lighting
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 created: 2026-09-26
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p0
 api: none
 effort: s

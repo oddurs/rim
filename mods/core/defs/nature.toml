@@ -2,6 +2,7 @@
 
 [[thing]]
 id = "tree_oak"
+height = 2.0
 blocks_wind = 0.5
 label = "oak tree"
 color = "#2c5a26"
@@ -18,6 +19,7 @@ spawn = { terrain = ["grass", "rich_soil"], density = 0.06, spread = true }
 
 [[thing]]
 id = "berry_bush"
+height = 0.4
 blocks_wind = 0.2
 label = "berry bush"
 color = "#3f7a35"

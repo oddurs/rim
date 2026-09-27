@@ -30,7 +30,7 @@ The headless engine: defs, mod loading and patching, map, pathing, AI skeleton, 
 
 ## lighting — Lighting
 
-`#·········` 8% · 1 of 12 done
+`##········` 17% · 2 of 12 done
 
 Shadows from the sun, the moons and every wall; torches that flicker and fill their rooms; sunbeams through windows. The sim's `light` field is unchanged: all of it is the renderer's, computed at the rate each kind of light changes. Design: DESIGN.md §6e. Concept and live demo: https://claude.ai/artifact/SC5Coj3UKKjxVCSxLKEq1t
 
@@ -41,11 +41,11 @@ Shadows from the sun, the moons and every wall; torches that flicker and fill th
 - [ ] `3124bd7b` Light on every level: buffers keyed by z, sky only down open shafts <sup>feature · p1 · m · client</sup>
 - [ ] `6fd6b13b` Firelight baked with soft shadows into four flicker channels <sup>feature · p0 · m · client</sup>
 - [ ] `8f4f1de8` Sun shadows: march the height map toward the sun, cached until it moves <sup>feature · p0 · m · client</sup>
-- [ ] `e5d8b445` Occluders: one texel per cell of height, roof and opening <sup>feature · p0 · m · client</sup>
 - [ ] `ff818bb3` Lightning casts shadows <sup>feature · p3 · s · client</sup>
-- [ ] `6a6dfe88` Lighting in the render bench: every pass, CPU and GPU time <sup>perf · p0 · s · client</sup>
+- [ ] `e5d8b445` Occluders: one texel per cell of height, roof and opening <sup>feature · p0 · m · client</sup>
 - [ ] `5a69f9c9` Moving lights: carried and burning, capped, shadowless past the cap <sup>feature · p1 · m · client</sup>
 - [x] `0779def9` Decide: the plan's one light, or the sun's shadows <sup>spike · p0 · s · client</sup>
+- [x] `6a6dfe88` Lighting in the render bench: every pass, CPU and GPU time <sup>perf · p0 · s · client</sup>
 
 ## chalkline — Chalkline
 
