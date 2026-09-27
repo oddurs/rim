@@ -49,9 +49,19 @@ pub struct JoinTable {
     /// `mass` and its `edges` round alike, so the outline follows the fill.
     #[serde(default)]
     pub round: Option<f32>,
+    /// Other groups it reaches toward without joining them: a fence meets
+    /// a wall, and the wall doesn't reach back.
+    #[serde(default)]
+    pub connects: Vec<String>,
 }
 
 impl JoinDef {
+    fn connects(&self) -> &[String] {
+        match self {
+            JoinDef::Label(_) => &[],
+            JoinDef::Table(t) => &t.connects,
+        }
+    }
     fn group(&self) -> &str {
         match self {
             JoinDef::Label(g) | JoinDef::Table(JoinTable { group: g, .. }) => g,
@@ -107,6 +117,12 @@ pub struct LayerDef {
     /// `"room"`: mirrored toward the enclosed side of the run, so a door
     /// swings into the room and not out of it.
     pub into: Option<String>,
+    /// For `pipe`: rails between posts, 1 or 2 (2).
+    pub rails: Option<u8>,
+    /// For `pipe`: a post's size, a fraction of the cell (0.26); 0 for none.
+    pub post: Option<f32>,
+    /// For `pipe`: along a straight run, a post every this many cells (3).
+    pub spacing: Option<u8>,
     /// For `pattern`: `"material"` (the default) is the wall pattern of
     /// what the thing is made of, `"floor"` its floor pattern, and any name
     /// in the vocabulary is that pattern whatever it's made of.
@@ -130,6 +146,10 @@ pub enum Prim {
     /// An arc about a point, `width` points thick, from `from` to `to`
     /// radians clockwise from east: a door's swing.
     Arc { at: [f32; 2], r: f32, from: f32, to: f32, width: f32 },
+    /// A fence's rails toward what it joins and connects to, and posts
+    /// where it needs them: ends, corners and junctions, and every
+    /// `spacing` cells along a straight run (DESIGN.md §6c).
+    Pipe { width: f32, rails: u8, post: f32, spacing: u8 },
     /// Hairlines in a material's pattern, laid out in world space so they
     /// run on from cell to cell (DESIGN.md §6c).
     Pattern { src: PatternSrc },
@@ -237,6 +257,8 @@ pub struct Look {
     pub along_run: bool,
     /// Turned to face a neighbour with this tag (`face = "beside:<tag>"`).
     pub face_beside: Option<String>,
+    /// Join groups it reaches toward without joining (`look.join.connects`).
+    pub connects: Vec<u16>,
 }
 
 impl Look {
@@ -341,12 +363,13 @@ impl LayerDef {
             "mass" => &[],
             "arc" => &["x", "y", "r", "width", "from", "to", "into"],
             "pattern" => &["pattern"],
+            "pipe" => &["width", "rails", "post", "spacing"],
             "sprite" => &["x", "y", "w", "h", "sprite", "tint"],
             "glyph" => &["x", "y", "glyph", "size"],
             other => {
                 return Err(format!(
-                    "unknown draw '{other}' (want fill, outline, disc, arc, edges, mass, pattern, sprite or glyph)"
-                ))
+                "unknown draw '{other}' (want fill, outline, disc, arc, edges, mass, pipe, pattern, sprite or glyph)"
+            ))
             }
         };
         let given = [
@@ -366,6 +389,9 @@ impl LayerDef {
             ("to", self.to.is_some()),
             ("into", self.into.is_some()),
             ("pattern", self.pattern.is_some()),
+            ("rails", self.rails.is_some()),
+            ("post", self.post.is_some()),
+            ("spacing", self.spacing.is_some()),
         ];
         if let Some((name, _)) = given.iter().find(|(n, set)| *set && !allowed.contains(n)) {
             return Err(format!("`{name}` does not apply to draw = \"{}\"", self.draw));
@@ -421,6 +447,17 @@ impl LayerDef {
                 Prim::Glyph { at, size: self.size.unwrap_or(0.8), id: intern(art.glyphs, g.to_string()) }
             }
             "mass" => Prim::Mass,
+            "pipe" => {
+                let rails = self.rails.unwrap_or(2);
+                let post = self.post.unwrap_or(0.26);
+                let spacing = self.spacing.unwrap_or(3);
+                if !(1..=2).contains(&rails) || !(0.0..=1.0).contains(&post) || spacing == 0 {
+                    return Err(format!(
+                        "pipe: rails is 1 or 2, post 0 to 1, spacing at least 1 (got {rails}, {post}, {spacing})"
+                    ));
+                }
+                Prim::Pipe { width: self.width.unwrap_or(1.5), rails, post, spacing }
+            }
             "pattern" => Prim::Pattern {
                 src: match self.pattern.as_deref() {
                     None | Some("material") => PatternSrc::Material,
@@ -478,6 +515,19 @@ impl LookDef {
             }
         });
         let round = self.join.as_ref().map_or(0.0, JoinDef::round);
+        let connects = self
+            .join
+            .as_ref()
+            .map_or(&[][..], JoinDef::connects)
+            .iter()
+            .map(|c| match groups.iter().position(|g| g == c) {
+                Some(i) => i as u16,
+                None => {
+                    groups.push(c.clone());
+                    (groups.len() - 1) as u16
+                }
+            })
+            .collect();
         if !(0.0..=0.5).contains(&round) {
             return Err(format!("look.join: `round` = {round} is out of range (want from 0 to 0.5)"));
         }
@@ -503,6 +553,7 @@ impl LookDef {
             round,
             along_run,
             face_beside,
+            connects,
         };
         if look.layers.is_empty() {
             look.layers = plain();

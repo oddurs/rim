@@ -21,6 +21,7 @@ is the middle. Line widths are in screen points.
 | `outline` | `x`, `y`, `w`, `h`, `width` (1) | a rectangle's outline |
 | `disc` | `x`, `y` (0.5, 0.5), `r` (0.4), `min_px`, `pulse` | a disc |
 | `edges` | `width` (1.5) | the cell's border, left open toward joined neighbours |
+| `pipe` | `width` (1.5), `rails` (2), `post` (0.26), `spacing` (3) | a fence: rails toward what it joins, posts where it needs them (see [Fences](#fences)) |
 | `mass` | | the whole cell, rounded at its outer corners (see [Joining](#joining)) |
 | `pattern` | `pattern` (`"material"`) | hairlines in a material's pattern (see [Materials](#materials)) |
 | `arc` | `x`, `y` (0.5, 0.5), `r` (0.4), `from`, `to` (0, 90), `width` (1) | an arc, in degrees clockwise from east |
@@ -131,16 +132,16 @@ fonts, so prefer characters every font has.
 Things with the same `look.join` label join up once they are built. An
 `edges` layer leaves out the sides that face a joined neighbour, so a run of
 wall reads as one wall with openings in it. Core's walls, windows and doors
-all join as `"wall"`. A fence joins with fences:
+all join as `"wall"`. A paling joins with palings:
 
 ```toml
 [[thing]]
-id = "fence"
-label = "fence"
+id = "paling"
+label = "paling"
 color = "#8a6a45"
 category = "building"
 blocks = true
-look.join = "fence"
+look.join = "paling"
 look.layers = [
     { draw = "fill", x = 0.4, y = 0.4, w = 0.2, h = 0.2 },
     { draw = "edges", width = 2.0, shade = 0.7 },
@@ -254,6 +255,31 @@ facing south, and they all turn with it: a `[1, 2]` bed turned once lies
 east to west, and a bench's spot below it moves to its west side. A look
 can work out its own facing instead: `look.face = "beside:table"` turns it
 toward the first neighbour carrying the tag, as core's chair does.
+
+## Fences
+
+A `pipe` layer is a fence: rails from the middle of the cell toward each
+neighbour it joins, and a post where the fence needs one. That means its
+ends, corners and junctions, beside a gate, and every `spacing` cells along
+a straight run, anchored to the world grid so extending a fence never
+moves its posts. `look.join.connects` names groups it reaches toward
+without joining them. A fence meets a wall, but only where it runs into
+one: a fence alongside a house doesn't reach into every wall it passes,
+and where it meets one the wall is its post. Core's fence and gate:
+
+```toml
+[[thing]]
+id = "hurdle"
+label = "hurdle"
+color = "#7a5a36"
+category = "building"
+blocks = true
+look.join = { group = "fence", connects = ["wall"] }
+look.layers = [{ draw = "pipe", spacing = 2 }]
+```
+
+A gate is a door with `rails = 1`, a wide `width` and `post = 0`: the
+fences either side put a post against it.
 
 ## States
 
