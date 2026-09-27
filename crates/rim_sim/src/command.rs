@@ -186,66 +186,310 @@ fn in_rect(p: IVec, a: IVec, b: IVec) -> bool {
     (a.x.min(b.x)..=a.x.max(b.x)).contains(&p.x) && (a.y.min(b.y)..=a.y.max(b.y)).contains(&p.y)
 }
 
+/// Something an order would act on: a thing, rock still asleep in its cell
+/// (stood up when the order lands), or a creature.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Target {
+    Thing(Entity),
+    Rock(IVec),
+    Creature(Entity),
+}
+
+/// What a Build order would do in one cell.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Place {
+    /// The blueprint goes up now, anchored here. Anything natural that
+    /// makes way at once (grass) is replaced.
+    Open,
+    /// The target is marked to be cleared, and the blueprint goes up once
+    /// it's gone.
+    Clears(Target),
+    /// Nothing is planned here.
+    Blocked(Blocker),
+}
+
+/// Why a cell can't take a plan.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Blocker {
+    /// Terrain nothing stands on: the cell, or a cell of the footprint.
+    Terrain(IVec),
+    /// Solid rock that nothing clears.
+    Solid(IVec),
+    /// A thing already there, in the cell or the footprint.
+    Occupied(Entity),
+    /// The footprint runs off the map.
+    OutOfBounds,
+    /// An earlier cell of the same order already put a plan over it.
+    Overlap,
+    /// The order has no material, or one of the wrong kind.
+    NoMaterial,
+    /// The thing isn't a buildable at all.
+    NotBuildable,
+}
+
+/// Everything `Command::Designate` would newly mark, in the order it would
+/// mark them. Nothing is changed: `apply` acts on exactly this list.
+pub fn designate_preview(w: &World, designation: DefId, a: IVec, b: IVec) -> Vec<Target> {
+    let defs = &w.defs;
+    let marked = |e: Entity| w.ecs.get::<&Designated>(e).is_ok_and(|d| d.0 == designation);
+    // A thing bigger than a cell is in the rectangle once per cell.
+    let mut seen = std::collections::BTreeSet::new();
+    let mut out: Vec<Target> = Vec::new();
+    let mut push = |t: Target| {
+        if seen.insert(t) {
+            out.push(t);
+        }
+    };
+    match defs.designations[designation as usize].targets {
+        Targets::Thing => {
+            for p in cells(w, a, b) {
+                let Some(f) = w.map.fixture_at(p) else {
+                    let rock = w.solid_at(p).and_then(|s| s.thing_r);
+                    if rock.is_some_and(|t| defs.thing(t).harvest_for(designation).is_some()) {
+                        push(Target::Rock(p));
+                    }
+                    continue;
+                };
+                let Some(t) = w.thing(f) else { continue };
+                let td = defs.thing(t.def);
+                // A thing cleared for a building keeps the mark that
+                // clears it: gathering an oak planned over would leave
+                // the oak, and the wall waiting on it, forever.
+                let clears = td.harvest_for(designation).is_some_and(|h| h.destroy);
+                if w.ecs.get::<&Planned>(f).is_ok() && !clears {
+                    continue;
+                }
+                if td.harvest_for(designation).is_some() && !marked(f) {
+                    push(Target::Thing(f));
+                }
+            }
+        }
+        Targets::Built => {
+            for p in cells(w, a, b) {
+                for f in [w.map.fixture_at(p), w.map.floor_at(p)].into_iter().flatten() {
+                    let ours = w.ecs.get::<&Owner>(f).is_ok_and(|o| o.0 == Faction::Player);
+                    let built = w.thing(f).is_some_and(|t| defs.thing(t.def).build.is_some());
+                    // A blueprint is cancelled, not deconstructed.
+                    if ours && built && w.ecs.get::<&Blueprint>(f).is_err() && !marked(f) {
+                        push(Target::Thing(f));
+                    }
+                }
+            }
+        }
+        Targets::Creature => {
+            for &e in &w.pawns {
+                let ok = w.ecs.get::<&Pawn>(e).is_ok_and(|p| {
+                    p.faction == Faction::Wild && !defs.creature(p.def).butcher_r.is_empty() && in_rect(p.pos, a, b)
+                });
+                if ok && !marked(e) {
+                    push(Target::Creature(e));
+                }
+            }
+        }
+    }
+    out
+}
+
+fn is_floor(w: &World, thing: DefId) -> bool {
+    w.defs.thing(thing).category == crate::defs::Category::Floor
+}
+
+/// What `Command::Build` would do in each cell of the rectangle, row by
+/// row. Nothing is changed: `apply` acts on exactly this list. A plan
+/// placed earlier in the order covers its footprint for the cells after.
+pub fn build_preview(
+    w: &World,
+    thing: DefId,
+    stuff: Option<DefId>,
+    a: IVec,
+    b: IVec,
+    facing: u8,
+) -> Vec<(IVec, Place)> {
+    let defs = &w.defs;
+    let td = defs.thing(thing);
+    let all = |why: Blocker| cells(w, a, b).map(|p| (p, Place::Blocked(why))).collect();
+    let Some(bd) = td.build.as_ref() else { return all(Blocker::NotBuildable) };
+    // A buildable that takes a material needs one, of the right kind.
+    if let Some(sc) = &bd.stuff {
+        if !stuff.is_some_and(|m| defs.is_material_for(m, &sc.category)) {
+            return all(Blocker::NoMaterial);
+        }
+    }
+    let floor = is_floor(w, thing);
+    let facing = facing & 3;
+    // Cells this order has already put a plan on, fixture layer or floor.
+    let mut taken = std::collections::BTreeSet::new();
+    // Whether a new plan fits with its footprint's top-left at `p`, `over`
+    // being a natural thing at `p` that makes way for it.
+    let fits = |p: IVec, over: Option<Entity>, taken: &std::collections::BTreeSet<usize>| -> Result<(), Blocker> {
+        if floor {
+            if taken.contains(&w.map.idx(p)) {
+                return Err(Blocker::Overlap);
+            }
+            return w.map.floor_at(p).map_or(Ok(()), |f| Err(Blocker::Occupied(f)));
+        }
+        for c in td.footprint(p, facing) {
+            if !w.map.inb(c) {
+                return Err(Blocker::OutOfBounds);
+            }
+            if taken.contains(&w.map.idx(c)) {
+                return Err(Blocker::Overlap);
+            }
+            match w.map.fixture_at(c) {
+                Some(f) if Some(f) != over => return Err(Blocker::Occupied(f)),
+                _ => {}
+            }
+            // The anchor is passable or holds what makes way; the rest of a
+            // bigger thing's footprint must be open ground.
+            if c != p && !w.map.passable(c) {
+                return Err(Blocker::Terrain(c));
+            }
+        }
+        Ok(())
+    };
+    // A building bigger than one cell (`World::plan_footprint`): every cell
+    // of its footprint must be on the map and open, or hold a natural thing
+    // it can clear that no other plan has claimed. What must be cut or
+    // mined first makes it `Clears`; the cells it claims come back too.
+    let big = !floor && td.size != [1, 1];
+    let footprint = |p: IVec, taken: &std::collections::BTreeSet<usize>| -> (Place, Vec<usize>) {
+        let clearable = |f: Entity| {
+            w.ecs.get::<&Planned>(f).is_err()
+                && w.ecs.get::<&Blueprint>(f).is_err()
+                && w.thing(f).is_some_and(|t| {
+                    let nd = defs.thing(t.def);
+                    nd.natural && (!nd.blocks || nd.harvest.iter().any(|h| h.destroy))
+                })
+        };
+        let (mut clears, mut marked, mut all) = (None, Vec::new(), Vec::new());
+        for c in td.footprint(p, facing) {
+            if !w.map.inb(c) {
+                return (Place::Blocked(Blocker::OutOfBounds), Vec::new());
+            }
+            let i = w.map.idx(c);
+            if taken.contains(&i) {
+                return (Place::Blocked(Blocker::Overlap), Vec::new());
+            }
+            all.push(i);
+            let ground = w.map.terrain_cost[i] > 0;
+            match (w.map.fixture_at(c), w.solid_at(c).is_some()) {
+                (Some(f), rock) => {
+                    if !((ground || rock) && clearable(f)) {
+                        return (Place::Blocked(Blocker::Occupied(f)), Vec::new());
+                    }
+                    // Grass makes way at once; a tree or rock is marked.
+                    if w.thing(f).is_some_and(|t| defs.thing(t.def).harvest.iter().any(|h| h.destroy)) {
+                        clears.get_or_insert(Target::Thing(f));
+                        marked.push(i);
+                    }
+                }
+                (None, true) => {
+                    if w.solid_at(c).and_then(|s| s.thing_r).is_some() {
+                        clears.get_or_insert(Target::Rock(c));
+                        marked.push(i);
+                    }
+                }
+                (None, false) if !w.map.passable(c) => return (Place::Blocked(Blocker::Terrain(c)), Vec::new()),
+                (None, false) => {}
+            }
+        }
+        // Open: the blueprint stands on the whole footprint now. Clears:
+        // only the marked cells are claimed until they're cleared.
+        match clears {
+            None => (Place::Open, all),
+            Some(t) => (Place::Clears(t), marked),
+        }
+    };
+    let mut out = Vec::new();
+    for p in cells(w, a, b) {
+        if big {
+            let (place, claimed) = footprint(p, &taken);
+            taken.extend(claimed);
+            out.push((p, place));
+            continue;
+        }
+        // Grass, a tree or rock in the way is cleared first, not silently
+        // left out: a wall with a gap is no wall. (On ground that can be
+        // built on: nothing is planned over water.)
+        let ground = w.map.terrain_cost[w.map.idx(p)] > 0;
+        let natural: Option<Target> = if !floor && w.solid_at(p).is_some() {
+            // Rock is cleared by mining it, so it stands up to be marked.
+            // Rock with no thing to stand up is terrain like any other.
+            match w.map.fixture_at(p) {
+                Some(f) => Some(Target::Thing(f)),
+                None => w.solid_at(p).and_then(|s| s.thing_r).map(|_| Target::Rock(p)),
+            }
+        } else if !floor {
+            w.map
+                .fixture_at(p)
+                .filter(|&f| ground && w.thing(f).is_some_and(|t| defs.thing(t.def).natural))
+                .map(Target::Thing)
+        } else {
+            None
+        };
+        let place = match natural {
+            Some(target) => {
+                // What stands there: a fixture, or rock still asleep.
+                let (over, def) = match target {
+                    Target::Rock(q) => (None, w.solid_at(q).and_then(|s| s.thing_r)),
+                    Target::Thing(f) | Target::Creature(f) => (Some(f), w.thing(f).map(|t| t.def)),
+                };
+                match def.map(|d| defs.thing(d)) {
+                    None => Place::Blocked(Blocker::Solid(p)),
+                    Some(nd) if nd.harvest.iter().any(|h| h.destroy) => Place::Clears(target),
+                    Some(nd) if !nd.blocks => match fits(p, over, &taken) {
+                        Ok(()) => Place::Open,
+                        Err(why) => Place::Blocked(why),
+                    },
+                    Some(_) => Place::Blocked(over.map_or(Blocker::Solid(p), Blocker::Occupied)),
+                }
+            }
+            None if w.map.passable(p) => match fits(p, None, &taken) {
+                Ok(()) => Place::Open,
+                Err(why) => Place::Blocked(why),
+            },
+            None => Place::Blocked(match w.map.fixture_at(p) {
+                Some(f) if ground => Blocker::Occupied(f),
+                _ => Blocker::Terrain(p),
+            }),
+        };
+        if place == Place::Open {
+            if floor {
+                taken.insert(w.map.idx(p));
+            } else {
+                taken.extend(td.footprint(p, facing).map(|c| w.map.idx(c)));
+            }
+        }
+        out.push((p, place));
+    }
+    out
+}
+
 pub fn apply(w: &mut World, c: Command) {
     let defs = w.defs.clone();
     match c {
-        Command::Designate { designation, a, b } => match defs.designations[designation as usize].targets {
-            Targets::Thing => {
-                for p in cells(w, a, b).collect::<Vec<_>>() {
+        Command::Designate { designation, a, b } => {
+            for target in designate_preview(w, designation, a, b) {
+                let e = match target {
                     // Rock that can be marked this way is stood up to take
                     // the mark; any other rock stays terrain.
-                    let wake = w.map.fixture_at(p).is_none()
-                        && w.solid_at(p)
-                            .and_then(|s| s.thing_r)
-                            .is_some_and(|t| defs.thing(t).harvest_for(designation).is_some());
-                    if wake {
-                        w.wake_rock(p);
-                    }
-                    let Some(f) = w.map.fixture_at(p) else { continue };
-                    let Some(t) = w.thing(f) else { continue };
-                    // A thing cleared for a building keeps the mark that
-                    // clears it: gathering an oak planned over would leave
-                    // the oak, and the wall waiting on it, forever.
-                    let clears = defs.thing(t.def).harvest_for(designation).is_some_and(|h| h.destroy);
-                    if w.ecs.get::<&Planned>(f).is_ok() && !clears {
-                        continue;
-                    }
-                    if defs.thing(t.def).harvest_for(designation).is_some() {
-                        let _ = w.ecs.insert_one(f, Designated(designation));
+                    Target::Rock(p) => match w.wake_rock(p) {
+                        Some(e) => e,
+                        None => continue,
+                    },
+                    Target::Thing(e) | Target::Creature(e) => e,
+                };
+                let _ = w.ecs.insert_one(e, Designated(designation));
+                if let Some(t) = w.thing(e) {
+                    for p in defs.thing(t.def).footprint(t.pos, t.facing) {
                         w.map.touch(p);
                     }
                 }
             }
-            Targets::Built => {
-                for p in cells(w, a, b).collect::<Vec<_>>() {
-                    for f in [w.map.fixture_at(p), w.map.floor_at(p)].into_iter().flatten() {
-                        let ours = w.ecs.get::<&Owner>(f).is_ok_and(|o| o.0 == Faction::Player);
-                        let built = w.thing(f).is_some_and(|t| defs.thing(t.def).build.is_some());
-                        // A blueprint is cancelled, not deconstructed.
-                        if ours && built && w.ecs.get::<&Blueprint>(f).is_err() {
-                            let _ = w.ecs.insert_one(f, Designated(designation));
-                            w.map.touch(p);
-                        }
-                    }
-                }
-            }
-            Targets::Creature => {
-                for e in w.pawns.clone() {
-                    let ok = w.ecs.get::<&Pawn>(e).is_ok_and(|p| {
-                        p.faction == Faction::Wild && !defs.creature(p.def).butcher_r.is_empty() && in_rect(p.pos, a, b)
-                    });
-                    if ok {
-                        let _ = w.ecs.insert_one(e, Designated(designation));
-                    }
-                }
-            }
-        },
+        }
         Command::Build { thing, stuff, a, b, facing } => {
-            if !stuff_fits(&defs, thing, stuff) {
-                return;
-            }
-            for p in cells(w, a, b).collect::<Vec<_>>() {
-                build_at(w, thing, stuff, p, facing);
+            for (p, place) in build_preview(w, thing, stuff, a, b, facing) {
+                realize(w, thing, stuff, p, facing, place);
             }
         }
         Command::PlacePlan { plan, at, facing, stuff } => {
@@ -253,7 +497,10 @@ pub fn apply(w: &mut World, c: Command) {
             for piece in pd.placed(&defs, at, facing) {
                 let stuff =
                     stuff.filter(|_| piece.stuff.is_some()).filter(|&m| stuff_fits(&defs, piece.thing, Some(m)));
-                build_at(w, piece.thing, stuff.or(piece.stuff), IVec::new(piece.at.0, piece.at.1), piece.facing);
+                let (p, stuff) = (IVec::new(piece.at.0, piece.at.1), stuff.or(piece.stuff));
+                for (q, place) in build_preview(w, piece.thing, stuff, p, p, piece.facing) {
+                    realize(w, piece.thing, stuff, q, piece.facing, place);
+                }
             }
         }
         Command::Cancel { a, b } => {
@@ -473,28 +720,40 @@ fn stuff_fits(defs: &crate::defs::DefDb, thing: DefId, stuff: Option<DefId>) -> 
     }
 }
 
-/// Plan `thing` at `p`, clearing what's natural in its way.
-fn build_at(w: &mut World, thing: DefId, stuff: Option<DefId>, p: IVec, facing: u8) {
-    let defs = w.defs.clone();
-    let floor = defs.thing(thing).category == crate::defs::Category::Floor;
-    if defs.thing(thing).size != [1, 1] && !floor {
-        w.plan_footprint(thing, stuff, p, facing);
+/// Carry out what `build_preview` said about `thing` at `p`: put the plan
+/// up, or mark what's in its way to be cleared first. Every build goes
+/// through here, so a preview and the order can't disagree.
+fn realize(w: &mut World, thing: DefId, stuff: Option<DefId>, p: IVec, facing: u8, place: Place) {
+    let floor = is_floor(w, thing);
+    // A building bigger than a cell marks its whole footprint.
+    if !floor && w.defs.thing(thing).size != [1, 1] {
+        if matches!(place, Place::Open | Place::Clears(_)) {
+            w.plan_footprint(thing, stuff, p, facing);
+        }
         return;
     }
-    // Grass, a tree or rock in the way is cleared first, not silently left
-    // out: a wall with a gap is no wall. (On ground that can be built on:
-    // nothing is planned over water.)
-    let ground = w.map.inb(p) && w.map.terrain_cost[w.map.idx(p)] > 0;
-    // Rock is cleared by mining it, so it stands up to be marked.
-    let natural = match w.solid_at(p).is_some() && !floor {
-        true => w.wake_rock(p),
-        false => w.map.fixture_at(p).filter(|&f| ground && w.thing(f).is_some_and(|t| defs.thing(t.def).natural)),
-    };
-    match natural {
-        Some(f) if !floor => w.plan_over_facing(f, thing, stuff, facing),
-        _ if w.map.passable(p) => {
-            w.spawn_fixture_facing(thing, p, true, stuff, facing);
+    match place {
+        Place::Open => {
+            // Grass and the like make way at once; so does rock nothing has
+            // to dig, stood up to be replaced.
+            let over = match (floor, w.solid_at(p).is_some()) {
+                (true, _) => None,
+                (false, true) => w.wake_rock(p),
+                (false, false) => w.map.fixture_at(p),
+            };
+            match over {
+                Some(f) => w.plan_over_facing(f, thing, stuff, facing),
+                None => {
+                    w.spawn_fixture_facing(thing, p, true, stuff, facing);
+                }
+            }
         }
-        _ => {}
+        Place::Clears(Target::Rock(q)) => {
+            if let Some(f) = w.wake_rock(q) {
+                w.plan_over_facing(f, thing, stuff, facing);
+            }
+        }
+        Place::Clears(Target::Thing(f) | Target::Creature(f)) => w.plan_over_facing(f, thing, stuff, facing),
+        Place::Blocked(_) => {}
     }
 }
