@@ -193,6 +193,9 @@ struct Registry {
     /// Planners by qualified name ("core:auto"), with the mod that
     /// registered them (DESIGN.md §4d).
     planners: BTreeMap<String, (String, Function)>,
+    /// `rim.on_generate_level`: the mod and function that make each level
+    /// below the surface, in level order.
+    generators: BTreeMap<i32, (String, Function)>,
 }
 
 /// Most memory the sim VM may hold. Hitting it fails the allocating script
@@ -897,6 +900,35 @@ impl ScriptHost {
         );
         let reg = self.reg.clone();
         rim.set(
+            "on_generate_level",
+            lua.create_function(move |_, (z, func): (i32, Function)| {
+                let mut r = reg.borrow_mut();
+                let mod_id = r.current_mod.clone();
+                if r.loaded {
+                    return Err(mlua::Error::runtime(format!(
+                        "mod '{mod_id}': register on_generate_level at load time"
+                    )));
+                }
+                if z >= 0 {
+                    return Err(mlua::Error::runtime(format!(
+                        "mod '{mod_id}': on_generate_level is for levels below 0"
+                    )));
+                }
+                if let Some((other, _)) = r.generators.get(&z) {
+                    return Err(mlua::Error::runtime(format!("mods '{other}' and '{mod_id}' both generate level {z}")));
+                }
+                r.generators.insert(z, (mod_id, func));
+                Ok(())
+            })?,
+        )?;
+        self.declare(
+            "on_generate_level",
+            "(z: number, fn: (z: number) -> ()) -> ()",
+            "Make level z (below 0) yourself: fn runs once when a new map is made, after the level's [[stratum]] \
+             has filled it, and changes it with rim.set_terrain. One mod per level. Register at load time.",
+        );
+        let reg = self.reg.clone();
+        rim.set(
             "log",
             lua.create_function(move |_, msg: String| {
                 eprintln!("[{}] {msg}", reg.borrow().current_mod);
@@ -935,6 +967,13 @@ impl ScriptHost {
         api!("map_size", "() -> (number, number)", "Map width and height in cells.", (), |w, _a| Ok((
             w.map.w, w.map.h
         )));
+        api!(
+            "levels",
+            "() -> (number, number)",
+            "The lowest level and the highest: 0 is the surface, below is negative (DESIGN.md §6d).",
+            (),
+            |w, _a| Ok((*w.map.levels().start(), *w.map.levels().end()))
+        );
         api!(
             "random",
             "() -> number",
@@ -1069,6 +1108,49 @@ impl ScriptHost {
                 w.map.ensure_rooms();
                 let defs = w.defs.clone();
                 Ok(w.fields.value(&defs, &w.map, f, p))
+            }
+        );
+        api!(
+            "terrain_at",
+            "(x: number, y: number, z: number?) -> string",
+            "The terrain at a cell on level z (the surface if nil), by id.",
+            (i32, i32, Option<i32>),
+            |w, (x, y, z)| {
+                let p = cell(w, x, y, z)?;
+                if !w.map.inb(p) {
+                    return Err(mlua::Error::runtime(format!("terrain_at: ({x}, {y}) is off the map")));
+                }
+                Ok(w.defs.terrain[w.map.terrain[w.map.idx(p)] as usize].id.clone())
+            }
+        );
+        api!(
+            "set_terrain",
+            "(x: number, y: number, terrain: string, z: number?) -> ()",
+            "Change the terrain at a cell on level z (the surface if nil): what a level generator uses.",
+            (i32, i32, String, Option<i32>),
+            |w, from, (x, y, terrain, z)| {
+                let t = def_id(w, "terrain", &terrain, &from)?;
+                let p = cell(w, x, y, z)?;
+                if !w.map.inb(p) {
+                    return Err(mlua::Error::runtime(format!("set_terrain: ({x}, {y}) is off the map")));
+                }
+                let cost = w.defs.terrain[t as usize].path_cost;
+                w.map.set_terrain(p, t, cost);
+                Ok(())
+            }
+        );
+        api!(
+            "noise",
+            "(x: number, y: number, scale: number, salt: number?) -> number",
+            "Smooth noise in [0, 1] from the world's seed: patches about `scale` cells across. The same on every \
+             machine, so a generated level is too. `salt` gives another pattern.",
+            (f64, f64, f64, Option<u32>),
+            |w, (x, y, scale, salt)| {
+                if scale <= 0.0 || !scale.is_finite() {
+                    return Err(mlua::Error::runtime("noise: scale must be above 0"));
+                }
+                let seed = w.seed ^ crate::rng::mix(0x4E01_5E00 + salt.unwrap_or(0) as u64);
+                Ok(crate::mapgen::noise(x / scale, y / scale, seed))
             }
         );
         api!("ambient", "(id: string) -> number", "A field's outdoor value.", String, |w, from, id| {
@@ -1909,6 +1991,27 @@ impl ScriptHost {
                 None
             }
         }
+    }
+
+    /// Run the scripts that take over a level's generation, in level
+    /// order, on a new map. A script error fails the new game: a level half
+    /// made is a broken world.
+    pub fn generate_levels(&self, w: &mut World) -> Result<(), String> {
+        let gens: Vec<(i32, String, Function)> =
+            self.reg.borrow().generators.iter().map(|(z, (m, f))| (*z, m.clone(), f.clone())).collect();
+        for (z, mod_id, f) in gens {
+            if !w.map.levels().contains(&z) {
+                continue;
+            }
+            self.world.0.set(w as *mut World);
+            self.steps.set(STEP_BUDGET);
+            self.reg.borrow_mut().current_mod = mod_id.clone();
+            let r = f.call::<()>(z);
+            self.world.0.set(std::ptr::null_mut());
+            self.reg.borrow_mut().current_mod.clear();
+            r.map_err(|e| format!("[{mod_id}] generating level {z}: {e}"))?;
+        }
+        Ok(())
     }
 
     /// Run `mod_id`'s migrator, if it has one, over its script data in `w`:

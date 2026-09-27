@@ -260,6 +260,7 @@ pub fn load_only(mods_dir: &Path, enabled: &dyn Fn(&str) -> bool) -> Result<Load
             "work_role" => defs.work_roles.push(de!(v)?),
             "item_category" => defs.item_categories.push(de!(v)?),
             "room_role" => defs.room_roles.push(de!(v)?),
+            "stratum" => defs.strata.push(de!(v)?),
             "priority_rule" => defs.priority_rules.push(de!(v)?),
             "priority_scale" => {
                 if scales > 0 {

@@ -304,9 +304,9 @@ impl Meshes {
                     let i = w.map.idx(cell);
                     let Some(e) = w.map.layers_at(i)[layer] else {
                         // Rock with nobody on it is terrain, drawn as its thing.
-                        if let Some(solid) = (layer == 2).then(|| w.solid_at(cell)).flatten() {
+                        if let Some(thing) = (layer == 2).then(|| w.solid_at(cell).and_then(|s| s.thing_r)).flatten() {
                             let at = ((x - x0) as f32 * z, (y - y0) as f32 * z);
-                            draw::rock(&mut b, w, solid.thing_r, cell, at, z, t);
+                            draw::rock(&mut b, w, thing, cell, at, z, t);
                         }
                         continue;
                     };

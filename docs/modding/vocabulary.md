@@ -38,8 +38,9 @@ requires none, so with no plugins every job is bare-handed.
 |---|---|---|
 | `cutting` | A sharp edge | a flint flake, a knife |
 | `chopping` | Fells and splits wood | a hand axe, an axe |
-| `pounding` | Strikes stone | a hammerstone, a maul, a pick |
+| `pounding` | Strikes stone | a hammerstone, a maul |
 | `digging` | Breaks and lifts earth | a digging stick, a spade |
+| `mining` | Cuts hard rock, the deep levels' granite (DESIGN.md §6d) | an iron pick |
 | `piercing` | A point that pierces | a spear, an awl |
 
 A tool is an item with a `tool` block, and a harvest names what it needs:

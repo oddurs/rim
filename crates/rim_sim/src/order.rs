@@ -79,8 +79,8 @@ pub fn options(w: &World, pawn: Entity, cell: IVec, on: Option<Entity>) -> Vec<C
             fixture(w, pawn, from, f, &mut out);
         }
         if w.map.fixture_at(cell).is_none() {
-            if let Some(s) = w.solid_at(cell) {
-                let td = w.defs.thing(s.thing_r);
+            if let Some(thing) = w.solid_at(cell).and_then(|s| s.thing_r) {
+                let td = w.defs.thing(thing);
                 if w.map.can_reach(from, Goal::Touch(cell)) {
                     harvests(w, pawn, td, Entity::DANGLING, None, "rock".into(), &mut out);
                 }

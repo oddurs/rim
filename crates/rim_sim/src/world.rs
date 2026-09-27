@@ -849,7 +849,7 @@ impl World {
             let mut m = Map::with_levels(w, h, below, above);
             // Solid rock holds a roof as the thing it stands up as.
             let span = |t: &crate::defs::TerrainDef| {
-                let sp = t.solid.as_ref().and_then(|s| defs.thing(s.thing_r).support.as_ref());
+                let sp = t.solid.as_ref().and_then(|s| s.thing_r).and_then(|d| defs.thing(d).support.as_ref());
                 sp.map_or(0, |sp| sp.span.round().clamp(0.0, crate::defs::MAX_SPAN as f64) as u8)
             };
             m.set_terrain_spans(defs.terrain.iter().map(span).collect());
@@ -1481,7 +1481,7 @@ impl World {
     pub fn fixture_def_at(&self, p: IVec) -> Option<DefId> {
         match self.map.fixture_at(p) {
             Some(f) => self.thing(f).map(|t| t.def),
-            None => self.solid_at(p).map(|s| s.thing_r),
+            None => self.solid_at(p).and_then(|s| s.thing_r),
         }
     }
 
@@ -1493,14 +1493,14 @@ impl World {
         if let Some(f) = self.map.fixture_at(p) {
             return Some(f);
         }
-        let thing = self.solid_at(p)?.thing_r;
+        let thing = self.solid_at(p)?.thing_r?;
         self.spawn_fixture(thing, p, false)
     }
 
     /// Whether `e` is rock stood up out of its cell's terrain.
     pub fn is_rock(&self, e: Entity) -> bool {
         self.thing(e).is_some_and(|t| {
-            self.map.fixture_at(t.pos) == Some(e) && self.solid_at(t.pos).is_some_and(|s| s.thing_r == t.def)
+            self.map.fixture_at(t.pos) == Some(e) && self.solid_at(t.pos).is_some_and(|s| s.thing_r == Some(t.def))
         })
     }
 
@@ -1573,8 +1573,7 @@ impl World {
         }
         let _ = self.ecs.despawn(e);
         if rock {
-            if let Some(s) = self.solid_at(t.pos) {
-                let leaves = s.leaves_r;
+            if let Some(leaves) = self.solid_at(t.pos).and_then(|s| s.leaves_r) {
                 self.map.set_terrain(t.pos, leaves, self.defs.terrain[leaves as usize].path_cost);
             }
         }

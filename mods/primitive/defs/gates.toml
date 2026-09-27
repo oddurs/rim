@@ -16,3 +16,26 @@ set = { requires = ["chopping"] }
 [[patch]]
 target = "thing/core:granite"
 set = { harvest = { requires = ["pounding"] } }
+
+# The levels below (DESIGN.md §6d): soft ground takes a digging stick, and
+# stone a maul. Nothing gates granite deeper down beyond what gates it on
+# the surface, until metal picks exist.
+[[patch]]
+target = "thing/core:packed_earth"
+set = { harvest = { requires = ["digging"] } }
+
+[[patch]]
+target = "thing/core:clay_bed"
+set = { harvest = { requires = ["digging"], yields = [{ thing = "primitive:clay", count = 4 }] } }
+
+[[patch]]
+target = "thing/core:chalk"
+set = { harvest = { requires = ["digging"], yields = [{ thing = "core:stone", count = 4 }, { thing = "primitive:flint", count = 1 }] } }
+
+[[patch]]
+target = "thing/core:limestone"
+set = { harvest = { requires = ["pounding"] } }
+
+[[patch]]
+target = "thing/core:wet_limestone"
+set = { harvest = { requires = ["pounding"] } }

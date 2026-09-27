@@ -38,4 +38,5 @@ Levels meet only at portals (DESIGN.md §6d). This item is how a colonist gets d
 - [ ] `can_reach` across levels is O(1); rebuilding reach costs under 0.05 ms with 60 portals, recorded here
 - [ ] Bench with a three-level colony: mean and p99 per tick and nodes expanded per search, recorded here and in §6d
 - [ ] A raider can't use a colony's owned stairs
+- [ ] Core alone digs down to −3 (moved here from the strata item, where nothing could dig yet)
 - [ ] Determinism test passes

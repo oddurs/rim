@@ -79,6 +79,8 @@ declare rim: {
     item_categories: {ItemCategoryInfo},
     -- Make a pawn give up and walk off the map after `ticks`.
     leave_after: (id: number, ticks: number) -> (),
+    -- The lowest level and the highest: 0 is the surface, below is negative (DESIGN.md §6d).
+    levels: () -> (number, number),
     -- Print a line to the console, tagged with your mod.
     log: (message: string) -> (),
     -- Map width and height in cells.
@@ -89,8 +91,12 @@ declare rim: {
     near_cell: (x: number, y: number, r: number, z: number?) -> (number?, number?),
     -- Every need def: what satisfies it ("food", "rest", "field") and how many days a full one lasts.
     need_defs: {NeedInfo},
+    -- Smooth noise in [0, 1] from the world's seed: patches about `scale` cells across. The same on every machine, so a generated level is too. `salt` gives another pattern.
+    noise: (x: number, y: number, scale: number, salt: number?) -> number,
     -- Handle an engine event (`pawn_died`, `season_changed`, ...) or a mod event (`weather:changed`).
     on: (event: string, fn: (event: {[string]: any}) -> ()) -> (),
+    -- Make level z (below 0) yourself: fn runs once when a new map is made, after the level's [[stratum]] has filled it, and changes it with rim.set_terrain. One mod per level. Register at load time.
+    on_generate_level: (z: number, fn: (z: number) -> ()) -> (),
     -- Upgrade your script data from a save made with a different version of your mod: fn gets that version and your data (bare keys) and returns the data to keep. It sees no world: only your data. Runs on load, before any hook. Register at load time.
     on_migrate: (fn: (from_version: string, data: {[string]: any}) -> {[string]: any}) -> (),
     -- The work order on a thing and how far it's got, or nil.
@@ -127,6 +133,8 @@ declare rim: {
     set_reading: (id: string, value: number) -> (),
     -- Put the colony in a stance: its priority rules hold until another. For incidents; the player's comes as a command.
     set_stance: (stance: string) -> (),
+    -- Change the terrain at a cell on level z (the surface if nil): what a level generator uses.
+    set_terrain: (x: number, y: number, terrain: string, z: number?) -> (),
     -- Drop items near a cell, merging into stacks; returns how many didn't fit. stuff is what they're made of (a flint axe): it sets their hp and quality, and they stack only with the same. z is the level (the surface if nil).
     spawn_item: (thing: string, x: number, y: number, count: number, stuff: string?, z: number?) -> number,
     -- Spawn a creature on level z (the surface if nil); returns its id and name, or nil if the cell is blocked.
@@ -143,6 +151,8 @@ declare rim: {
     store_put: (id: number, what: { thing: string, count: number, made_of: string? }) -> number,
     -- Take up to `count` from a container's slot (from 1); they're gone, for the script to account for. Returns how many were taken.
     store_take: (id: number, slot: number, count: number) -> number,
+    -- The terrain at a cell on level z (the surface if nil), by id.
+    terrain_at: (x: number, y: number, z: number?) -> string,
     -- A thing by id: what it is and where, or nil if it's gone.
     thing: (id: number) -> ThingAt?,
     -- Every thing def. A food's nutrition is the fraction of a full stomach one unit restores.

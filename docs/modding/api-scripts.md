@@ -33,12 +33,15 @@ are in [Scripting rules](scripting.md).
 | `rim.indoors` | `(x: number, y: number, z: number?) -> boolean` | Whether a cell is inside an enclosed room, on level z (the surface if nil). |
 | `rim.item_categories` | `{ItemCategoryInfo}` | The item category tree stores and bills filter by, in load order. Each lists its children and the items directly in it, by id. |
 | `rim.leave_after` | `(id: number, ticks: number) -> ()` | Make a pawn give up and walk off the map after `ticks`. |
+| `rim.levels` | `() -> (number, number)` | The lowest level and the highest: 0 is the surface, below is negative (DESIGN.md §6d). |
 | `rim.log` | `(message: string) -> ()` | Print a line to the console, tagged with your mod. |
 | `rim.map_size` | `() -> (number, number)` | Map width and height in cells. |
 | `rim.message` | `(text: string, kind: MessageKind?) -> ()` | Post a message to the feed (default kind "info"). |
 | `rim.near_cell` | `(x: number, y: number, r: number, z: number?) -> (number?, number?)` | A random open cell within r of (x, y), on level z (the surface if nil). |
 | `rim.need_defs` | `{NeedInfo}` | Every need def: what satisfies it ("food", "rest", "field") and how many days a full one lasts. |
+| `rim.noise` | `(x: number, y: number, scale: number, salt: number?) -> number` | Smooth noise in [0, 1] from the world's seed: patches about `scale` cells across. The same on every machine, so a generated level is too. `salt` gives another pattern. |
 | `rim.on` | `(event: string, fn: (event: {[string]: any}) -> ()) -> ()` | Handle an engine event (`pawn_died`, `season_changed`, ...) or a mod event (`weather:changed`). |
+| `rim.on_generate_level` | `(z: number, fn: (z: number) -> ()) -> ()` | Make level z (below 0) yourself: fn runs once when a new map is made, after the level's [[stratum]] has filled it, and changes it with rim.set_terrain. One mod per level. Register at load time. |
 | `rim.on_migrate` | `(fn: (from_version: string, data: {[string]: any}) -> {[string]: any}) -> ()` | Upgrade your script data from a save made with a different version of your mod: fn gets that version and your data (bare keys) and returns the data to keep. It sees no world: only your data. Runs on load, before any hook. Register at load time. |
 | `rim.order` | `(site: number) -> OrderInfo?` | The work order on a thing and how far it's got, or nil. |
 | `rim.planner` | `(name: string, fn: (board: WorkBoard) -> { [number]: { [string]: PlanCell \| number } }) -> ()` | Register a planner under your mod's name, for a planned work role (`planner = "mod:name"`). Once an in-game hour the engine calls it with the board (rim.work_board, its members marked) and takes back levels for its members: `{ [colonist id] = { [work] = { level = 2, reason = "..." } } }`. A level changes when two plans in a row agree. Never (0) and pinned cells are refused. Register at load time. |
@@ -57,6 +60,7 @@ are in [Scripting rules](scripting.md).
 | `rim.set_data` | `(key: string, value: any) -> ()` | Keep plain data in the world (hashed, saved, readable by the UI as view.data). A bare key is your mod's ("state" is "your_mod:state"); you can't write another mod's. |
 | `rim.set_reading` | `(id: string, value: number) -> ()` | Publish a colony reading, like "food_days", under your mod's name (kept to thousandths). Rules with `when = { reading = "mod:id", below = ..., until = ... }` switch on and off as it crosses their marks, firing `rule_started` and `rule_stopped`. Publish on your own cadence: hourly is plenty. |
 | `rim.set_stance` | `(stance: string) -> ()` | Put the colony in a stance: its priority rules hold until another. For incidents; the player's comes as a command. |
+| `rim.set_terrain` | `(x: number, y: number, terrain: string, z: number?) -> ()` | Change the terrain at a cell on level z (the surface if nil): what a level generator uses. |
 | `rim.spawn_item` | `(thing: string, x: number, y: number, count: number, stuff: string?, z: number?) -> number` | Drop items near a cell, merging into stacks; returns how many didn't fit. stuff is what they're made of (a flint axe): it sets their hp and quality, and they stack only with the same. z is the level (the surface if nil). |
 | `rim.spawn_pawn` | `(creature: string, faction: Faction, x: number, y: number, name: string?, z: number?) -> (number?, string?)` | Spawn a creature on level z (the surface if nil); returns its id and name, or nil if the cell is blocked. |
 | `rim.stance` | `() -> string?` | The colony's stance, or nil if no mod defines any. |
@@ -65,6 +69,7 @@ are in [Scripting rules](scripting.md).
 | `rim.store` | `(id: number) -> StoreInfo?` | A container's level (0 is lowest), how many slots it has, and what is in them (slots from 1). Nil for anything that isn't a built container. |
 | `rim.store_put` | `(id: number, what: { thing: string, count: number, made_of: string? }) -> number` | Put things into a container, onto its stacks of the same kind first: a caravan unloading, a chest that fills itself. Only what the container can ever take goes in. Returns how many didn't fit. |
 | `rim.store_take` | `(id: number, slot: number, count: number) -> number` | Take up to `count` from a container's slot (from 1); they're gone, for the script to account for. Returns how many were taken. |
+| `rim.terrain_at` | `(x: number, y: number, z: number?) -> string` | The terrain at a cell on level z (the surface if nil), by id. |
 | `rim.thing` | `(id: number) -> ThingAt?` | A thing by id: what it is and where, or nil if it's gone. |
 | `rim.thing_defs` | `{ThingInfo}` | Every thing def. A food's nutrition is the fraction of a full stomach one unit restores. |
 | `rim.tick` | `() -> number` | The current tick. A day is `rim.ticks_per_day` ticks. |
