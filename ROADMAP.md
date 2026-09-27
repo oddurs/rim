@@ -539,7 +539,7 @@ Dig down. The map becomes a stack of 2D levels joined only at stairs, ladders an
 
 ## crafting — Crafting
 
-`###·······` 30% · 8 of 27 done · due 2027-05-01
+`###·······` 29% · 8 of 28 done · due 2027-05-01
 
 Production chains: workbenches and bills, cooking, farming, tailoring, research as a plugin.
 
@@ -560,6 +560,7 @@ Production chains: workbenches and bills, cooking, farming, tailoring, research 
 - [ ] `e1be8ebd` Plants grow in the weather <sup>feature · p0 · m · engine</sup>
 - [ ] `4f3e5d8d` mods/timber: planks, plank walls, crates, shelves, racks and a granary <sup>content · p2 · m · plugin</sup>
 - [ ] `5e323021` Store inspector: Contents and Accepts tabs <sup>feature · p1 · m · core</sup>
+- [ ] `ede06f37` The storage overlay budget test flakes under load <sup>bug · p2 · s · client</sup>
 - [ ] `f22f1a62` Stores sheet, storage overlay and hover card <sup>feature · p2 · m · core</sup>
 - [ ] `9bd9e8ab` Fire: burning, spread by wind, put out by rain <sup>feature · p1 · l · engine</sup>
 - [x] `01691032` Item categories and one filter: things, materials and condition <sup>feature · p1 · m · engine</sup>
