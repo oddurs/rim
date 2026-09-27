@@ -45,24 +45,28 @@ id = "packed_earth"
 label = "packed earth"
 color = "#6f5a44"
 solid = { thing = "packed_earth", leaves = "dirt" }
+props = { fertility = 0.0, drainage = 0.2, water_table = 0.0 }
 
 [[terrain]]
 id = "clay"
 label = "clay"
 color = "#9c6b4e"
 solid = { thing = "clay_bed", leaves = "dirt" }
+props = { fertility = 0.0, drainage = 0.05, water_table = 0.0 }
 
 [[terrain]]
 id = "chalk"
 label = "chalk"
 color = "#cfc8b4"
 solid = { thing = "chalk", leaves = "rock_floor" }
+props = { fertility = 0.0, drainage = 0.6, water_table = 0.0 }
 
 [[terrain]]
 id = "limestone"
 label = "limestone"
 color = "#a59d86"
 solid = { thing = "limestone", leaves = "rock_floor" }
+props = { fertility = 0.0, drainage = 0.3, water_table = 0.0 }
 
 # Limestone that holds water where the ground above is wet: an aquifer.
 [[terrain]]
@@ -70,6 +74,7 @@ id = "wet_limestone"
 label = "wet limestone"
 color = "#7f8a86"
 solid = { thing = "wet_limestone", leaves = "rock_floor" }
+props = { fertility = 0.0, drainage = 0.3, water_table = 0.8 }
 
 # Nothing works it: the edge of every level below the surface.
 [[terrain]]
@@ -77,6 +82,7 @@ id = "bedrock"
 label = "bedrock"
 color = "#2b2a2e"
 solid = {}
+props = { fertility = 0.0, drainage = 0.0, water_table = 0.0 }
 
 # ------------------------------------------------------------ things
 

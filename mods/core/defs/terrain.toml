@@ -1,12 +1,21 @@
 # Terrain. `path_cost` is movement cost in percent; 0 is impassable.
 # Map generation picks the highest-priority band containing the cell's
 # elevation and moisture (both 0..1).
+#
+# `props` are numbers terms read with `{ terrain = "fertility" }`; one a
+# terrain doesn't give reads 0. Core's:
+#   fertility    how well plants grow, 1 on grass
+#   drainage     how fast standing water leaves, 0 to 1
+#   water_table  how near the ground water is, 0 (dry) to 1 (at the surface)
+# `tags` are what `{ near = "water" }` measures the distance to.
 
 [[terrain]]
 id = "deep_water"
 label = "deep water"
 color = "#1f4e79"
 path_cost = 0
+props = { fertility = 0.0, drainage = 0.0, water_table = 1.0 }
+tags = ["water"]
 gen = { elevation = [0.0, 0.22], priority = 10 }
 
 [[terrain]]
@@ -14,6 +23,8 @@ id = "shallow_water"
 label = "shallow water"
 color = "#3d7ab8"
 path_cost = 300
+props = { fertility = 0.0, drainage = 0.0, water_table = 1.0 }
+tags = ["water"]
 gen = { elevation = [0.22, 0.28], priority = 9 }
 
 [[terrain]]
@@ -21,6 +32,7 @@ id = "sand"
 label = "sand"
 color = "#cdbb85"
 path_cost = 130
+props = { fertility = 0.2, drainage = 0.9, water_table = 0.2 }
 gen = { elevation = [0.28, 0.32], priority = 8 }
 
 # Rock fills its cell (DESIGN.md §6d). It is terrain until someone works
@@ -30,30 +42,35 @@ id = "granite"
 label = "granite"
 color = "#7d776f"
 solid = { thing = "granite", leaves = "rock_floor" }
+props = { fertility = 0.0, drainage = 0.0, water_table = 0.0 }
 gen = { elevation = [0.74, 1.0], priority = 10 }
 
 [[terrain]]
 id = "rock_floor"
 label = "rough stone"
 color = "#5e5a55"
+props = { fertility = 0.0, drainage = 0.3, water_table = 0.0 }
 
 [[terrain]]
 id = "marsh"
 label = "marsh"
 color = "#4d6645"
 path_cost = 180
+props = { fertility = 0.8, drainage = 0.1, water_table = 0.9 }
 gen = { moisture = [0.8, 1.0], priority = 5 }
 
 [[terrain]]
 id = "rich_soil"
 label = "rich soil"
 color = "#4f7a33"
+props = { fertility = 1.4, drainage = 0.5, water_table = 0.6 }
 gen = { moisture = [0.58, 0.8], priority = 4 }
 
 [[terrain]]
 id = "dirt"
 label = "dirt"
 color = "#8a7355"
+props = { fertility = 0.7, drainage = 0.6, water_table = 0.3 }
 gen = { moisture = [0.0, 0.28], priority = 4 }
 
 [[terrain]]
@@ -61,3 +78,4 @@ id = "grass"
 label = "grass"
 color = "#5d8a3c"
 gen = { priority = 0 }
+props = { fertility = 1.0, drainage = 0.5, water_table = 0.4 }

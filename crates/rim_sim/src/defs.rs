@@ -76,8 +76,18 @@ pub struct TerrainDef {
     /// rooms like a wall, and costs nothing until someone works it.
     #[serde(default)]
     pub solid: Option<SolidDef>,
+    /// Named numbers terms read with `{ terrain = "fertility" }`. Any names;
+    /// one this terrain doesn't give reads 0.
+    #[serde(default)]
+    pub props: BTreeMap<String, f64>,
+    /// What `{ near = "water" }` measures the distance to.
+    #[serde(default)]
+    pub tags: Vec<String>,
     #[serde(skip)]
     pub rgb: [u8; 3],
+    /// `props` in fixed point, indexed like `DefDb::terrain_props`.
+    #[serde(skip)]
+    pub props_q: Vec<i64>,
 }
 
 /// What a solid terrain is when someone works it, and what it leaves.
@@ -1371,6 +1381,26 @@ const CATEGORY_WITH: &[&str] = &["food", "tool", "stuff"];
 
 // ---------------------------------------------------------------- database
 
+/// What terms in a field's def can name: fields as its mod sees them, and
+/// every terrain property and tag.
+struct TermNames<'a> {
+    field: &'a dyn Fn(&str) -> Option<usize>,
+    props: &'a [String],
+    tags: &'a [String],
+}
+
+impl crate::terms::Names for TermNames<'_> {
+    fn field(&self, id: &str) -> Option<usize> {
+        (self.field)(id)
+    }
+    fn prop(&self, name: &str) -> Option<usize> {
+        self.props.binary_search_by(|p| p.as_str().cmp(name)).ok()
+    }
+    fn tag(&self, name: &str) -> Option<usize> {
+        self.tags.binary_search_by(|t| t.as_str().cmp(name)).ok()
+    }
+}
+
 #[derive(Default, Debug)]
 pub struct DefDb {
     pub terrain: Vec<TerrainDef>,
@@ -1412,6 +1442,15 @@ pub struct DefDb {
     pub fields: Vec<FieldDef>,
     /// Fields in the order their ambient terms must be evaluated.
     pub ambient_order: Vec<usize>,
+    /// Every terrain property any terrain gives, sorted: terms read them by
+    /// index.
+    pub terrain_props: Vec<String>,
+    /// Every terrain tag, sorted.
+    pub terrain_tags: Vec<String>,
+    /// The tags some term reads with `near`: only these keep a distance grid.
+    pub near_tags: Vec<usize>,
+    /// What loading noticed but let through, for the mod loader to report.
+    pub warnings: Vec<String>,
     pub calendar: CalendarDef,
     pub sky: SkyDef,
     pub start: Option<StartDef>,
@@ -1703,6 +1742,17 @@ impl DefDb {
                 d.path_cost = 0;
             }
         }
+        let mut props: Vec<String> = self.terrain.iter().flat_map(|t| t.props.keys().cloned()).collect();
+        props.sort_unstable();
+        props.dedup();
+        let mut tags: Vec<String> = self.terrain.iter().flat_map(|t| t.tags.iter().cloned()).collect();
+        tags.sort_unstable();
+        tags.dedup();
+        for d in &mut self.terrain {
+            d.props_q = props.iter().map(|p| d.props.get(p).map_or(0, |v| crate::terms::to_q(*v))).collect();
+        }
+        self.terrain_props = props;
+        self.terrain_tags = tags;
         for (i, d) in self.terrain.iter().enumerate() {
             let Some(s) = &d.solid else { continue };
             let ctx = format!("terrain/{}", d.id);
@@ -1757,20 +1807,25 @@ impl DefDb {
             }
         }
         let field_in = |home: &str, id: &str| get("field", id, &format!("field/{home}:")).ok().map(|i| i as usize);
+        let (terrain_props, terrain_tags) = (&self.terrain_props, &self.terrain_tags);
+        let mut warnings = Vec::new();
         for d in &mut self.fields {
             let home = home_of(&d.id).to_string();
-            let field_index = |id: &str| field_in(&home, id);
+            let field_index =
+                TermNames { field: &|id: &str| field_in(&home, id), props: terrain_props, tags: terrain_tags };
             d.rgb_low = parse_color(&d.color_low).map_err(|e| format!("field/{}: {e}", d.id))?;
             d.rgb_high = parse_color(&d.color_high).map_err(|e| format!("field/{}: {e}", d.id))?;
             match &d.ambient {
                 AmbientDef::Const(v) => d.base = *v,
-                AmbientDef::Terms(t) => d.terms = Terms::compile(t, &format!("field/{}", d.id), &field_index)?,
+                AmbientDef::Terms(t) => {
+                    d.terms = Terms::compile(t, &format!("field/{}", d.id), &field_index, &mut warnings)?
+                }
             }
             // A derived field's value is its outdoor value's terms too, so
             // the outdoor reading, pushes and ordering all come for free.
             match (&d.value, d.kind == FieldKind::Derived) {
                 (Some(v), true) if d.terms.is_empty() && d.base == 0.0 && d.indoor == IndoorMode::Outdoor => {
-                    d.terms = Terms::compile(v, &format!("field/{}, value", d.id), &field_index)?;
+                    d.terms = Terms::compile(v, &format!("field/{}, value", d.id), &field_index, &mut warnings)?;
                 }
                 (None, false) => {}
                 (Some(_), false) => return Err(format!("field/{}: `value` is for kind = \"derived\"", d.id)),
@@ -1782,7 +1837,7 @@ impl DefDb {
                 }
             }
             if d.kind == FieldKind::Shelter {
-                d.from_r = field_index(&d.from)
+                d.from_r = field_in(&home, &d.from)
                     .ok_or_else(|| format!("field/{}: a shelter field needs `from`, the wind direction field", d.id))?;
                 if !d.terms.is_empty() || !(1..=MAX_LEE).contains(&d.lee) {
                     return Err(format!(
@@ -1801,9 +1856,13 @@ impl DefDb {
                         d.id
                     ));
                 }
-                d.leak_terms = Terms::compile(leak, &format!("field/{}, leak", d.id), &field_index)?;
+                d.leak_terms = Terms::compile(leak, &format!("field/{}, leak", d.id), &field_index, &mut warnings)?;
             }
         }
+        let mut near: Vec<usize> = self.fields.iter().flat_map(|f| f.terms.nears()).collect();
+        near.sort_unstable();
+        near.dedup();
+        self.near_tags = near;
         let reads: Vec<Vec<usize>> = self.fields.iter().map(|f| f.terms.reads()).collect();
         let names: Vec<&str> = self.fields.iter().map(|f| f.id.as_str()).collect();
         self.ambient_order = crate::terms::order(&reads, &names)?;
@@ -1822,8 +1881,9 @@ impl DefDb {
             let ctx = format!("sky/{}, tint '{label}'", sky.id);
             t.rgb = parse_color(&t.color).map_err(|e| format!("{ctx}: {e}"))?;
             let one: TermsDef = [(label.clone(), TermDef { scale: t.scale, of: t.of.clone() })].into_iter().collect();
-            t.strength = Terms::compile(&one, &ctx, &field_index)?;
+            t.strength = Terms::compile(&one, &ctx, &field_index, &mut warnings)?;
         }
+        self.warnings.extend(warnings);
         for d in &mut self.needs {
             d.rgb = parse_color(&d.color).map_err(|e| format!("need/{}: {e}", d.id))?;
             if let Some(say) = &d.say {

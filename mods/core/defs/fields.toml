@@ -146,6 +146,21 @@ range = [0.0, 100.0]
 color_low = "#3a6e4a"
 color_high = "#d8e8f0"
 
+# How well plants grow here, as the ground has it: the terrain's
+# fertility, 100% on grass. Derived, so it stores nothing.
+[[field]]
+id = "fertility"
+label = "fertility"
+unit = "%"
+kind = "derived"
+range = [0.0, 140.0]
+color_low = "#8a7355"
+color_high = "#4f7a33"
+
+[field.value.soil]
+scale = 100.0
+of = [{ terrain = "fertility" }]
+
 # What the cold feels like where you stand (DESIGN.md §4c): the air, less
 # wind chill and cold rain. Derived, so it's worked out when read and
 # stores nothing; indoors it's the room's temperature, since no wind or

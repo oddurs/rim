@@ -153,6 +153,8 @@ declare rim: {
     store_take: (id: number, slot: number, count: number) -> number,
     -- The terrain at a cell on level z (the surface if nil), by id.
     terrain_at: (x: number, y: number, z: number?) -> string,
+    -- A property of the terrain at a cell on level z (the surface if nil), as its [[terrain]] props give it: 0 if they don't.
+    terrain_prop: (x: number, y: number, name: string, z: number?) -> number,
     -- A thing by id: what it is and where, or nil if it's gone.
     thing: (id: number) -> ThingAt?,
     -- Every thing def. A food's nutrition is the fraction of a full stomach one unit restores.

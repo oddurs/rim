@@ -15,8 +15,10 @@
 //! transcendental maths, so lockstep holds on every platform.
 //!
 //! Inputs are global (time of day and year, other fields' outdoor values,
-//! noise, constants), plus `field`: another field's value at the cell a
-//! derived field is read at, or its outdoor value where there is no cell.
+//! noise, constants), plus three read at the cell a derived field is read
+//! at: `field`, another field's value there (its outdoor value where there
+//! is no cell); `terrain`, a property of the ground there; and `near`, how
+//! many cells it is to the nearest terrain with a tag.
 
 use crate::rng::mix;
 use serde::Deserialize;
@@ -27,6 +29,9 @@ pub const Q: i64 = 10_000;
 
 /// Most points a curve may have.
 pub const MAX_POINTS: usize = 16;
+
+/// How far `near` looks, in cells: anything farther reads as this.
+pub const NEAR_CAP: u8 = 16;
 
 pub fn to_q(v: f64) -> i64 {
     (v * Q as f64).round() as i64
@@ -72,6 +77,12 @@ pub struct SourceDef {
     pub field: Option<String>,
     /// Smooth noise in -1..1, keyed so different uses don't move together.
     pub noise: Option<String>,
+    /// A property of the terrain at the cell being read (`[[terrain]]
+    /// props`); 0 where the terrain doesn't give it, or there is no cell.
+    pub terrain: Option<String>,
+    /// Cells to the nearest terrain with this tag, up to `NEAR_CAP`; the
+    /// cap where none is that close, or there is no cell.
+    pub near: Option<String>,
     /// Noise period in game hours.
     #[serde(default)]
     pub hours: f64,
@@ -91,6 +102,8 @@ enum Src {
     Ambient(usize),
     Field(usize),
     Noise { key: u64, period: u64 },
+    Terrain(usize),
+    Near(usize),
     Const(i64),
 }
 
@@ -165,11 +178,42 @@ pub trait Env {
     }
     fn tick(&self) -> u64;
     fn seed(&self) -> u64;
+    /// A terrain property where the terrain is read; nothing by default.
+    fn terrain(&self, _prop: usize) -> i64 {
+        0
+    }
+    /// Cells to the nearest terrain with a tag, times `Q`; beyond reach by
+    /// default.
+    fn near(&self, _tag: usize) -> i64 {
+        NEAR_CAP as i64 * Q
+    }
+}
+
+/// What the names in terms resolve to, as indices.
+pub trait Names {
+    fn field(&self, id: &str) -> Option<usize>;
+    /// A terrain property, by name.
+    fn prop(&self, _name: &str) -> Option<usize> {
+        None
+    }
+    /// A terrain tag, by name.
+    fn tag(&self, _name: &str) -> Option<usize> {
+        None
+    }
+}
+
+/// Where only fields have names.
+impl<F: Fn(&str) -> Option<usize>> Names for F {
+    fn field(&self, id: &str) -> Option<usize> {
+        self(id)
+    }
 }
 
 impl Terms {
-    /// `resolve` maps a field id to its index. `ctx` names the def in errors.
-    pub fn compile(def: &TermsDef, ctx: &str, resolve: &dyn Fn(&str) -> Option<usize>) -> Result<Terms, String> {
+    /// `names` resolves what the terms name. `ctx` names the def in errors
+    /// and warnings. A terrain property or tag no terrain has is a warning,
+    /// not an error: a mod may read one another mod adds.
+    pub fn compile(def: &TermsDef, ctx: &str, names: &dyn Names, warnings: &mut Vec<String>) -> Result<Terms, String> {
         let mut terms = Vec::new();
         for (label, t) in def {
             let here = format!("{ctx}, term '{label}'");
@@ -177,7 +221,7 @@ impl Terms {
             for i in &t.of {
                 inputs.push(match i {
                     InputDef::Const(v) => Input { src: Src::Const(to_q(*v)), curve: None },
-                    InputDef::Source(s) => compile_source(s, &here, resolve)?,
+                    InputDef::Source(s) => compile_source(s, &here, names, warnings)?,
                 });
             }
             terms.push(Term { label: label.clone(), scale: to_q(t.scale), inputs });
@@ -205,6 +249,14 @@ impl Terms {
         v
     }
 
+    /// Terrain tags this list reads with `near`.
+    pub fn nears(&self) -> impl Iterator<Item = usize> + '_ {
+        self.terms.iter().flat_map(|t| t.inputs.iter()).filter_map(|i| match i.src {
+            Src::Near(t) => Some(t),
+            _ => None,
+        })
+    }
+
     fn term(t: &Term, env: &dyn Env) -> i64 {
         let mut acc = t.scale;
         for i in &t.inputs {
@@ -214,6 +266,8 @@ impl Terms {
                 Src::Ambient(f) => env.ambient(f),
                 Src::Field(f) => env.field(f),
                 Src::Noise { key, period } => noise(env.seed() ^ key, env.tick(), period),
+                Src::Terrain(p) => env.terrain(p),
+                Src::Near(t) => env.near(t),
                 Src::Const(c) => c,
             };
             if let Some(c) = &i.curve {
@@ -234,11 +288,16 @@ impl Terms {
     }
 }
 
-fn compile_source(s: &SourceDef, ctx: &str, resolve: &dyn Fn(&str) -> Option<usize>) -> Result<Input, String> {
-    let named =
-        [s.input.is_some(), s.ambient.is_some(), s.field.is_some(), s.noise.is_some()].iter().filter(|b| **b).count();
+fn compile_source(s: &SourceDef, ctx: &str, names: &dyn Names, warnings: &mut Vec<String>) -> Result<Input, String> {
+    let named = [s.input.is_some(), s.ambient.is_some(), s.field.is_some(), s.noise.is_some()]
+        .iter()
+        .chain(&[s.terrain.is_some(), s.near.is_some()])
+        .filter(|b| **b)
+        .count();
     if named != 1 {
-        return Err(format!("{ctx}: an input needs exactly one of `input`, `ambient`, `field` or `noise`"));
+        return Err(format!(
+            "{ctx}: an input needs exactly one of `input`, `ambient`, `field`, `noise`, `terrain` or `near`"
+        ));
     }
     let src = if let Some(i) = &s.input {
         match i.as_str() {
@@ -247,9 +306,19 @@ fn compile_source(s: &SourceDef, ctx: &str, resolve: &dyn Fn(&str) -> Option<usi
             other => return Err(format!("{ctx}: unknown input '{other}' (have: year, hour)")),
         }
     } else if let Some(a) = &s.ambient {
-        Src::Ambient(resolve(a).ok_or_else(|| format!("{ctx}: unknown field '{a}'"))?)
+        Src::Ambient(names.field(a).ok_or_else(|| format!("{ctx}: unknown field '{a}'"))?)
     } else if let Some(f) = &s.field {
-        Src::Field(resolve(f).ok_or_else(|| format!("{ctx}: unknown field '{f}'"))?)
+        Src::Field(names.field(f).ok_or_else(|| format!("{ctx}: unknown field '{f}'"))?)
+    } else if let Some(p) = &s.terrain {
+        names.prop(p).map(Src::Terrain).unwrap_or_else(|| {
+            warnings.push(format!("{ctx}: no terrain has the property '{p}', so it reads 0"));
+            Src::Const(0)
+        })
+    } else if let Some(t) = &s.near {
+        names.tag(t).map(Src::Near).unwrap_or_else(|| {
+            warnings.push(format!("{ctx}: no terrain has the tag '{t}', so nothing is near"));
+            Src::Const(NEAR_CAP as i64 * Q)
+        })
     } else {
         let key = s.noise.as_deref().unwrap_or_default();
         if s.hours <= 0.0 {
@@ -369,7 +438,7 @@ mod tests {
             day = { scale = 9.0, of = [{ input = "hour", curve = [[3, -1.0], [15, 1.0], [27, -1.0]] }, { ambient = "cloud", curve = [[0, 1.0], [100, 0.5]] }] }
             "#,
         );
-        let t = Terms::compile(&def, "field/temperature", &resolve).unwrap();
+        let t = Terms::compile(&def, "field/temperature", &resolve, &mut vec![]).unwrap();
         let e = E { year: 0, hour: to_q(15.0), amb: vec![to_q(50.0), 0], tick: 0 };
         // 10 + 9 × 1 × 0.75
         assert_eq!(t.eval(&e), to_q(16.75));
@@ -382,12 +451,81 @@ mod tests {
     #[test]
     fn errors_name_the_term() {
         let bad = parse(r#"day = { of = [{ input = "moon" }] }"#);
-        let e = Terms::compile(&bad, "field/temperature", &resolve).unwrap_err();
+        let e = Terms::compile(&bad, "field/temperature", &resolve, &mut vec![]).unwrap_err();
         assert!(e.contains("field/temperature, term 'day'") && e.contains("moon"), "{e}");
         let bad = parse(r#"x = { of = [{ ambient = "nope" }] }"#);
-        assert!(Terms::compile(&bad, "f", &resolve).unwrap_err().contains("unknown field 'nope'"));
+        assert!(Terms::compile(&bad, "f", &resolve, &mut vec![]).unwrap_err().contains("unknown field 'nope'"));
         let bad = parse(r#"x = { of = [{ ambient = "cloud", input = "hour" }] }"#);
-        assert!(Terms::compile(&bad, "f", &resolve).unwrap_err().contains("exactly one"));
+        assert!(Terms::compile(&bad, "f", &resolve, &mut vec![]).unwrap_err().contains("exactly one"));
+    }
+
+    struct Ground;
+    impl Names for Ground {
+        fn field(&self, _: &str) -> Option<usize> {
+            None
+        }
+        fn prop(&self, name: &str) -> Option<usize> {
+            (name == "fertility").then_some(0)
+        }
+        fn tag(&self, name: &str) -> Option<usize> {
+            (name == "water").then_some(0)
+        }
+    }
+
+    /// Reads fertility 0.8 and water three cells away.
+    struct Cell;
+    impl Env for Cell {
+        fn year(&self) -> i64 {
+            0
+        }
+        fn hour(&self) -> i64 {
+            0
+        }
+        fn ambient(&self, _: usize) -> i64 {
+            0
+        }
+        fn tick(&self) -> u64 {
+            0
+        }
+        fn seed(&self) -> u64 {
+            0
+        }
+        fn terrain(&self, _: usize) -> i64 {
+            to_q(0.8)
+        }
+        fn near(&self, _: usize) -> i64 {
+            3 * Q
+        }
+    }
+
+    #[test]
+    fn terrain_and_near_read_the_cell_and_unknown_names_warn() {
+        let def = parse(
+            r#"
+            soil = { scale = 2.0, of = [{ terrain = "fertility" }] }
+            damp = { of = [{ near = "water", curve = [[0, 1.0], [4, 0.0]] }] }
+            "#,
+        );
+        let mut warnings = vec![];
+        let t = Terms::compile(&def, "field/growth", &Ground, &mut warnings).unwrap();
+        assert!(warnings.is_empty(), "{warnings:?}");
+        // 2 × 0.8 + (1 - 3/4)
+        assert_eq!(t.eval(&Cell), to_q(1.85));
+        assert_eq!(t.nears().collect::<Vec<_>>(), vec![0]);
+        // Outdoors there is no cell: no terrain, and nothing near.
+        let e = E { year: 0, hour: 0, amb: vec![], tick: 0 };
+        assert_eq!(t.eval(&e), 0);
+
+        let def = parse(
+            r#"x = { of = [{ terrain = "salinity" }] }
+            y = { of = [{ near = "lava" }] }"#,
+        );
+        let t = Terms::compile(&def, "field/growth", &Ground, &mut warnings).unwrap();
+        assert_eq!(t.eval(&Cell), NEAR_CAP as i64 * Q);
+        assert!(
+            warnings.len() == 2 && warnings[0].contains("'salinity'") && warnings[1].contains("'lava'"),
+            "{warnings:?}"
+        );
     }
 
     /// Integer evaluation tracks an f64 reference closely over random curves.

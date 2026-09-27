@@ -70,6 +70,7 @@ are in [Scripting rules](scripting.md).
 | `rim.store_put` | `(id: number, what: { thing: string, count: number, made_of: string? }) -> number` | Put things into a container, onto its stacks of the same kind first: a caravan unloading, a chest that fills itself. Only what the container can ever take goes in. Returns how many didn't fit. |
 | `rim.store_take` | `(id: number, slot: number, count: number) -> number` | Take up to `count` from a container's slot (from 1); they're gone, for the script to account for. Returns how many were taken. |
 | `rim.terrain_at` | `(x: number, y: number, z: number?) -> string` | The terrain at a cell on level z (the surface if nil), by id. |
+| `rim.terrain_prop` | `(x: number, y: number, name: string, z: number?) -> number` | A property of the terrain at a cell on level z (the surface if nil), as its [[terrain]] props give it: 0 if they don't. |
 | `rim.thing` | `(id: number) -> ThingAt?` | A thing by id: what it is and where, or nil if it's gone. |
 | `rim.thing_defs` | `{ThingInfo}` | Every thing def. A food's nutrition is the fraction of a full stomach one unit restores. |
 | `rim.tick` | `() -> number` | The current tick. A day is `rim.ticks_per_day` ticks. |
