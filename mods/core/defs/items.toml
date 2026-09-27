@@ -27,6 +27,37 @@ stack_limit = 75
 tags = ["bulky", "mineral"]
 stuff = { categories = ["structural"], factors = { hp = 1.6, work = 1.8, insulation = 1.5, flammability = 0.0, beauty = 1.1, span = 1.25 }, look = { pattern = "courses", floor = "flags", roof = "slate" } }
 
+# Each rock gives its own blocks, and they build differently (DESIGN.md
+# §6d): granite (stone blocks, above) is hard and slow; limestone dresses
+# well and holds a wider roof than chalk; chalk is soft, quick and warm.
+[[thing]]
+id = "limestone_blocks"
+label = "limestone blocks"
+color = "#cfc6ae"
+category = "item"
+look.layers = [
+    { draw = "fill", x = 0.2, y = 0.2, w = 0.6, h = 0.6 },
+    { draw = "outline", x = 0.2, y = 0.2, w = 0.6, h = 0.6, width = 1.0, shade = 0.6 },
+]
+market_value = 1.1
+stack_limit = 75
+tags = ["bulky", "mineral"]
+stuff = { categories = ["structural"], factors = { hp = 1.25, work = 1.4, insulation = 1.4, flammability = 0.0, beauty = 1.3, span = 1.1 }, look = { pattern = "courses", floor = "flags", roof = "slate" } }
+
+[[thing]]
+id = "chalk_blocks"
+label = "chalk blocks"
+color = "#e8e4d6"
+category = "item"
+look.layers = [
+    { draw = "fill", x = 0.22, y = 0.22, w = 0.56, h = 0.56 },
+    { draw = "outline", x = 0.22, y = 0.22, w = 0.56, h = 0.56, width = 1.0, shade = 0.7 },
+]
+market_value = 0.6
+stack_limit = 75
+tags = ["bulky", "mineral"]
+stuff = { categories = ["structural"], factors = { hp = 0.75, work = 0.9, insulation = 1.6, flammability = 0.0, beauty = 1.15, span = 0.9 }, look = { pattern = "courses", floor = "flags", roof = "slate" } }
+
 [[thing]]
 id = "berries"
 label = "berries"

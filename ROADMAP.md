@@ -676,11 +676,10 @@ Dig down. The map becomes a stack of 2D levels joined only at stairs, ladders an
 
 ## crafting — Crafting
 
-`##########` 97% · 31 of 32 done · due 2027-05-01
+`##########` 100% · 32 of 32 done · due 2027-05-01
 
 Production chains: workbenches and bills, cooking, farming, tailoring, research as a plugin.
 
-- [ ] `db7f1e06` Mining that rewards looking: rock kinds, veins and prospecting <sup>content · p1 · m · core</sup>
 - [x] `01691032` Item categories and one filter: things, materials and condition <sup>feature · p1 · m · engine</sup>
 - [x] `0927f0af` Tailoring: make apparel <sup>content · p2 · s · core</sup>
 - [x] `259b6390` The client autotest's weather day kills colonists on some machines, and later sections need the founder <sup>bug · p0</sup>
@@ -707,6 +706,7 @@ Production chains: workbenches and bills, cooking, farming, tailoring, research 
 - [x] `ca22f222` Bills pick their ingredients: one material per order, and a filter <sup>feature · p2 · m · plugin</sup>
 - [x] `d0362b0c` Apparel: colonists wear what tailors make <sup>feature · p2 · l · engine</sup>
 - [x] `d77d9e1f` Stock fields: per-cell state with staggered updates <sup>feature · p0 · l · engine</sup>
+- [x] `db7f1e06` Mining that rewards looking: rock kinds, veins and prospecting <sup>content · p1 · m · core</sup>
 - [x] `dce75339` A build takes a material and parts, and may require a tool <sup>feature · p1 · m · engine</sup>
 - [x] `e1be8ebd` Plants grow in the weather <sup>feature · p0 · m · engine</sup>
 - [x] `e953d711` Store levels: sorting that only climbs, and room reserved by count <sup>feature · p1 · l · engine</sup>

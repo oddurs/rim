@@ -30,7 +30,7 @@ set = { harvest = { requires = ["digging"], yields = [{ thing = "primitive:clay"
 
 [[patch]]
 target = "thing/core:chalk"
-set = { harvest = { requires = ["digging"], yields = [{ thing = "core:stone", count = 4 }, { thing = "primitive:flint", count = 1 }] } }
+set = { harvest = { requires = ["digging"], yields = [{ thing = "core:chalk_blocks", count = 6 }, { thing = "primitive:flint", count = 1 }] } }
 
 [[patch]]
 target = "thing/core:limestone"

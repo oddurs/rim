@@ -118,6 +118,31 @@ enclosed room and 1 elsewhere. Emitters on a stock field add to its rate, so
 Scripts change it with `rim.field_add(id, x, y, amount)` and
 `rim.field_set(id, x, y, value)`. The values are saved and in the state hash.
 
+### Veins: what the rock holds
+
+A stock field with `levels = "all"` and no rate terms holds what map
+generation lays into it, and costs nothing a tick. A `[[vein]]` lays blobs
+of whole units into it through the terrains it names; a harvest with
+`draw` takes its yield from the field where it's worked, and isn't offered
+once the cell has less than `per` left. Primitive's flint lies in chalk:
+
+<!-- not a sample -->
+```toml
+[[vein]]
+id = "flint"
+field = "flint_vein"          # a stock field, levels = "all"
+in = ["core:chalk"]
+chance = 0.04                 # of the chalk cells, where a vein starts
+size = [3, 7]                 # cells in one vein
+amount = [4.0, 10.0]          # flint in each of them
+
+# The chalk's second harvest: up to three flint a time, the rock left standing.
+draw = { field = "primitive:flint_vein", per = 1.0, most = 3 }
+```
+
+Veins are placed by hashing the seed, the vein's id and the cell, after
+every level's scripts have run: the same seed lays the same veins.
+
 ### Plants that grow with the weather
 
 A plant grows from a seedling to grown by terms read where it stands:

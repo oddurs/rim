@@ -369,6 +369,11 @@ pub struct HarvestDef {
     /// Tool tags the worker must hold ("chopping"): core's shared names.
     #[serde(default)]
     pub requires: Vec<String>,
+    /// Its yield comes out of a stock field at the cell: a vein. Each of
+    /// `yields`' one thing takes `per` of the field there, at most `most` a
+    /// harvest; with less than `per` left it isn't offered.
+    #[serde(default)]
+    pub draw: Option<DrawDef>,
     #[serde(skip)]
     pub requires_r: ToolMask,
     #[serde(skip)]
@@ -378,6 +383,40 @@ pub struct HarvestDef {
     /// Its place in the thing's list.
     #[serde(skip)]
     pub index: usize,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct DrawDef {
+    pub field: String,
+    /// Field units each item takes.
+    pub per: f64,
+    /// Most items one harvest takes.
+    pub most: u32,
+    #[serde(skip)]
+    pub field_r: usize,
+}
+
+/// Where map generation lays a vein into a stock field (DESIGN.md §6d):
+/// blobs of `size` cells of the named terrains, `amount` each, one started
+/// at about `chance` of such cells. Placed by hashing the seed, so the same
+/// seed lays the same veins and nothing is drawn from the world's RNG.
+#[derive(Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct VeinDef {
+    pub id: String,
+    /// A stock field kept on every level (`levels = "all"`).
+    pub field: String,
+    /// The terrains it runs through.
+    #[serde(rename = "in")]
+    pub within: Vec<String>,
+    pub chance: f64,
+    pub size: [u32; 2],
+    pub amount: [f64; 2],
+    #[serde(skip)]
+    pub field_r: usize,
+    #[serde(skip)]
+    pub within_r: Vec<DefId>,
 }
 
 /// How regrowth and jobs name one of a thing's harvests: by its
@@ -1003,6 +1042,11 @@ pub struct FieldDef {
     pub move_curve: Option<Curve>,
     #[serde(skip)]
     pub move_by_r: Option<usize>,
+    /// Shown only where a colonist has seen (`Map::seen`): what lies in
+    /// rock is found by looking (DESIGN.md §6d). The overlay and the hover
+    /// card leave the rest blank; the sim reads every cell.
+    #[serde(default)]
+    pub until_seen: bool,
     #[serde(skip)]
     pub rate_terms: Terms,
     #[serde(skip)]
@@ -1870,6 +1914,8 @@ pub struct DefDb {
     /// The levels below the surface, in no particular order.
     pub strata: Vec<StratumDef>,
     pub fluids: Vec<FluidDef>,
+    /// Veins map generation lays into stock fields, in load order.
+    pub veins: Vec<VeinDef>,
     pub category_roots: Vec<DefId>,
     /// Entries of the kinds mods declare (`[[kind]]`), by qualified kind
     /// ("weather:type"), in load order: plain data for scripts.
@@ -1995,6 +2041,7 @@ pub const KINDS: &[&str] = &[
     "stratum",
     "fluid",
     "modifier",
+    "vein",
 ];
 
 impl DefDb {
@@ -2038,6 +2085,7 @@ impl DefDb {
             "stratum" => self.strata[i].id.clone(),
             "fluid" => self.fluids[i].id.clone(),
             "modifier" => self.modifiers[i].id.clone(),
+            "vein" => self.veins[i].id.clone(),
             _ => String::new(),
         }
     }
@@ -2130,6 +2178,9 @@ impl DefDb {
         }
         for (i, d) in self.fluids.iter().enumerate() {
             index.insert(("fluid", d.id.clone()), i as DefId);
+        }
+        for (i, d) in self.veins.iter().enumerate() {
+            index.insert(("vein", d.id.clone()), i as DefId);
         }
         for (i, d) in self.plans.iter().enumerate() {
             index.insert(("plan", d.id.clone()), i as DefId);
@@ -2379,6 +2430,21 @@ impl DefDb {
         }
         self.stock_fields = (0..self.fields.len()).filter(|&i| self.fields[i].kind == FieldKind::Stock).collect();
         self.move_fields = (0..self.fields.len()).filter(|&i| self.fields[i].move_curve.is_some()).collect();
+        // Veins go into a stock field every level keeps.
+        let every_level =
+            |f: usize| self.fields[f].kind == FieldKind::Stock && self.fields[f].levels == StockLevels::All;
+        for v in &mut self.veins {
+            let ctx = format!("vein/{}", v.id);
+            v.field_r = get("field", &v.field, &ctx)? as usize;
+            if !every_level(v.field_r) {
+                return Err(format!("{ctx}: `{}` must be a stock field with levels = \"all\"", v.field));
+            }
+            v.within_r = v.within.iter().map(|t| get("terrain", t, &ctx)).collect::<Result<_, _>>()?;
+            if !(0.0..=1.0).contains(&v.chance) || v.size[0] == 0 || v.size[0] > v.size[1] || v.amount[0] > v.amount[1]
+            {
+                return Err(format!("{ctx}: chance from 0 to 1, size and amount as [least, most]"));
+            }
+        }
         let mut near: Vec<usize> = self
             .fields
             .iter()
@@ -2713,6 +2779,14 @@ impl DefDb {
             for (i, h) in d.harvest.iter_mut().enumerate() {
                 h.desig_r = get("designation", &h.designation, &ctx)?;
                 h.yields_r = counts(&h.yields, &ctx)?;
+                if let Some(dr) = &mut h.draw {
+                    dr.field_r = get("field", &dr.field, &ctx)? as usize;
+                    if !stock[dr.field_r] || h.yields_r.len() != 1 || dr.per <= 0.0 || dr.most == 0 {
+                        return Err(format!(
+                            "{ctx}: a harvest that draws needs a stock field, one thing in `yields`, `per` above 0 and `most` of 1 or more"
+                        ));
+                    }
+                }
                 h.index = i;
             }
             for (i, h) in d.harvest.iter().enumerate() {

@@ -2131,6 +2131,21 @@ becomes its explicit roof. A floor that loses its span falls.
 
 ---
 
+### What the rock holds
+
+Each rock gives its own blocks: granite core's hard stone, limestone
+blocks that dress well and hold a wider roof, soft chalk blocks that are
+quick and warm. Where you landed decides what you build with. Ore is a
+stock field kept on every level with no rate terms, so it costs nothing a
+tick: a `[[vein]]` lays blobs of whole units into it through the terrains
+it names, by hashing the seed, the vein and the cell, after every level's
+scripts have run. A harvest with `draw` takes its yield from that field
+where it's worked, up to `most` a time, and isn't offered once the cell
+runs dry, so a vein is worked down and the rock stays until someone mines
+it. Primitive's flint lies in chalk this way: the wall is where tools come
+from. Veins show in the field's overlay; showing them only once a pawn has
+seen the cell waits on the view's seen bit (5689930d).
+
 ## 6e. Light: at the rate it changes
 
 Today the renderer multiplies the world by one lightmap: firelight stamps,

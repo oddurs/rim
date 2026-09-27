@@ -238,6 +238,15 @@ color = "#b0a89e"
 work_type = "mine"
 style = "mining"
 
+# Take from a vein without taking the rock: a harvest that draws its
+# yield from a stock field (`draw`), offered while the cell holds some.
+[[designation]]
+id = "extract"
+label = "Extract"
+color = "#8fa3b8"
+work_type = "mine"
+style = "mining"
+
 [[designation]]
 id = "harvest"
 label = "Harvest"

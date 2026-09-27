@@ -2591,7 +2591,9 @@ fn hover_table(lua: &Lua, w: &World, client: &ClientView) -> mlua::Result<Value>
     let readings = lua.create_table()?;
     let values = lua.create_table()?;
     // Only fields that vary over the map; the weather readout covers the rest.
-    for (fi, fd) in w.defs.fields.iter().enumerate().filter(|(_, fd)| fd.overlay) {
+    // What lies in rock shows only where it has been seen.
+    let seen = w.map.seen(i);
+    for (fi, fd) in w.defs.fields.iter().enumerate().filter(|(_, fd)| fd.overlay && (seen || !fd.until_seen)) {
         let value = format!("{:.0}{}", w.fields.value(&w.defs, &w.map, fi, tp), fd.unit);
         readings.push(format!("{} {value}", fd.label))?;
         let row = lua.create_table()?;

@@ -1,0 +1,33 @@
+# Flint lies in chalk as veins (DESIGN.md §6d): map generation lays them
+# into this field, and a pawn extracts flint from a veined cell, up to
+# three a time, until the vein is spent; the chalk stays standing until
+# someone mines it. Surface flint is scarce; the wall has more.
+
+[[field]]
+id = "flint_vein"
+label = "flint"
+unit = ""
+kind = "stock"
+levels = "all"
+# Found by looking: the overlay shows a vein once a colonist has seen it.
+until_seen = true
+range = [0.0, 12.0]
+color_low = "#cfc8b4"
+color_high = "#44505e"
+
+# No rate: it holds what map generation laid, less what's taken.
+[field.rate]
+
+[[vein]]
+id = "flint"
+field = "flint_vein"
+in = ["core:chalk"]
+chance = 0.04
+size = [3, 7]
+amount = [4.0, 10.0]
+
+[[patch]]
+target = "thing/core:chalk"
+append = { harvest = [{ designation = "core:extract", work = 140, destroy = false, requires = ["digging"],
+                        yields = [{ thing = "primitive:flint", count = 1 }],
+                        draw = { field = "primitive:flint_vein", per = 1.0, most = 3 } }] }

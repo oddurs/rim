@@ -1652,7 +1652,21 @@ impl World {
     /// Whether a harvest of thing `e`, by key, can be worked: it isn't
     /// growing back.
     pub fn harvest_ready(&self, e: Entity, harvest: HarvestKey) -> bool {
-        self.ecs.get::<&Regrow>(e).map_or(true, |r| !r.growing(harvest))
+        if self.ecs.get::<&Regrow>(e).is_ok_and(|r| r.growing(harvest)) {
+            return false;
+        }
+        // A vein with too little left isn't worth the walk.
+        let Some(t) = self.thing(e) else { return true };
+        match self.defs.thing(t.def).harvest_by_key(harvest).and_then(|h| h.draw.as_ref()) {
+            Some(d) => self.drawable(t.pos, d) > 0,
+            None => true,
+        }
+    }
+
+    /// How many items a harvest that draws would take from the field at `p`.
+    pub fn drawable(&self, p: IVec, d: &crate::defs::DrawDef) -> u32 {
+        let v = self.fields.value(&self.defs, &self.map, d.field_r, p);
+        ((v / d.per + 1e-9).floor().max(0.0) as u32).min(d.most)
     }
 
     /// A harvest of thing `e`, by key, grows back until `ready_at`.

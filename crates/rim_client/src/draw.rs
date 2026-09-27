@@ -757,7 +757,12 @@ pub fn pawns(app: &App) {
         let (lo, hi) = (rgb(fd.rgb_low), rgb(fd.rgb_high));
         for ty in ty0..=ty1 {
             for tx in tx0..=tx1 {
-                let v = w.fields.value(defs, &w.map, fi, IVec::at(tx, ty, app.cam.z)) as f32;
+                let p = IVec::at(tx, ty, app.cam.z);
+                // What rock holds shows only once someone has seen it.
+                if fd.until_seen && w.map.inb(p) && !w.map.seen(w.map.idx(p)) {
+                    continue;
+                }
+                let v = w.fields.value(defs, &w.map, fi, p) as f32;
                 let f = ((v - fd.range[0] as f32) / (fd.range[1] - fd.range[0]) as f32).clamp(0.0, 1.0);
                 let c = Color::new(lo.r + (hi.r - lo.r) * f, lo.g + (hi.g - lo.g) * f, lo.b + (hi.b - lo.b) * f, 0.55);
                 let (sx, sy) = cam.to_screen(tx as f32, ty as f32);

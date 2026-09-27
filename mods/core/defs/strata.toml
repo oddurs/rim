@@ -124,7 +124,7 @@ look.layers = [{ draw = "mass", vary = 0.1 }, { draw = "edges", width = 1.5, sha
 natural = true
 blocks = true
 hp = 250
-harvest = { designation = "mine", work = 250, yields = [{ thing = "stone", count = 4 }] }
+harvest = { designation = "mine", work = 250, yields = [{ thing = "chalk_blocks", count = 6 }] }
 
 [[thing]]
 id = "limestone"
@@ -137,7 +137,7 @@ look.layers = [{ draw = "mass", vary = 0.12 }, { draw = "edges", width = 1.5, sh
 natural = true
 blocks = true
 hp = 450
-harvest = { designation = "mine", work = 450, yields = [{ thing = "stone", count = 10 }] }
+harvest = { designation = "mine", work = 450, yields = [{ thing = "limestone_blocks", count = 10 }] }
 
 [[thing]]
 id = "wet_limestone"
@@ -150,7 +150,7 @@ look.layers = [{ draw = "mass", vary = 0.12 }, { draw = "edges", width = 1.5, sh
 natural = true
 blocks = true
 hp = 450
-harvest = { designation = "mine", work = 450, yields = [{ thing = "stone", count = 10 }] }
+harvest = { designation = "mine", work = 450, yields = [{ thing = "limestone_blocks", count = 10 }] }
 
 # ------------------------------------------------------------ digging down
 
