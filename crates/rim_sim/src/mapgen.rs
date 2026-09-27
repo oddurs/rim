@@ -3,7 +3,7 @@
 //! wildlife from `[creature.spawn]`.
 
 use crate::defs::{DefDb, DefId};
-use crate::rng::{hash2_f, mix};
+use crate::rng::{hash2_f, hash_str, mix};
 use crate::world::{Faction, World};
 use crate::IVec;
 
@@ -32,14 +32,16 @@ pub fn generate(w: &mut World) -> IVec {
     }
     strata(w, &defs, seed);
 
+    // Each spawning def's pattern is keyed by its id, not its place in the
+    // list: a mod adding a def elsewhere must not move every tree.
+    let salts: Vec<u64> = defs.things.iter().map(|d| mix(hash_str(&d.id))).collect();
     for y in 0..mh {
         for x in 0..mw {
             let p = IVec::new(x, y);
             let terrain = w.map.terrain[w.map.idx(p)];
             for (di, td) in defs.things.iter().enumerate() {
                 let Some(s) = &td.spawn else { continue };
-                if s.terrain_r.contains(&terrain) && hash2_f(x as i64, y as i64, seed ^ mix(di as u64 + 77)) < s.density
-                {
+                if s.terrain_r.contains(&terrain) && hash2_f(x as i64, y as i64, seed ^ salts[di]) < s.density {
                     w.spawn_fixture(di as DefId, p, false);
                     break;
                 }

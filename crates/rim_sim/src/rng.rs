@@ -64,6 +64,12 @@ pub fn mix(mut z: u64) -> u64 {
     z ^ (z >> 31)
 }
 
+/// A stable hash of a name (FNV-1a, 64-bit): the same on every machine and
+/// in every build, so it can key anything a save or a seed depends on.
+pub fn hash_str(s: &str) -> u64 {
+    s.bytes().fold(0xCBF2_9CE4_8422_2325, |h, b| (h ^ b as u64).wrapping_mul(0x0000_0100_0000_01B3))
+}
+
 /// Stateless hash of a coordinate — for map generation and cosmetic noise.
 pub fn hash2(x: i64, y: i64, seed: u64) -> u64 {
     mix(seed ^ mix((x as u64).wrapping_mul(0x9E37_79B9) ^ mix(y as u64 ^ 0x5bd1_e995)))
