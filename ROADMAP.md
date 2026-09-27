@@ -84,15 +84,15 @@ Hands first. The colonist wakes with nothing (pillar 93f291d5), and today nothin
 
 ## work — Work priorities
 
-`########··` 80% · 12 of 15 done
+`#########·` 87% · 13 of 15 done
 
 Who does what, without a spreadsheet. New colonists start on Auto and the colony plans its own work. The player takes control one rung at a time: Focus for the colony, Urgent for one job, a pin for one cell, work roles for a group. Design: DESIGN.md §4d.
 
-- [ ] `2e145c65` Modding docs: work types, roles, Auto, readings, orders and lenses <sup>docs · p2 · s · core</sup>
 - [ ] `5dc8f858` Auto on the board: rings, reasons, and the one-colonist plan <sup>feature · p0 · m · core</sup>
 - [ ] `c59d67ed` Does Auto play well? Auto against flat defaults and a tuned grid <sup>spike · p1 · m · tooling</sup>
 - [x] `102b4525` A standing order is announced when its reading crosses, even while its season holds it back <sup>bug · p1 · s · engine</sup>
 - [x] `166a4cc9` Named levels and pins: First, Soon, Later, Spare time <sup>feature · p0 · s · core</sup>
+- [x] `2e145c65` Modding docs: work types, roles, Auto, readings, orders and lenses <sup>docs · p2 · s · core</sup>
 - [x] `4c9fc19b` Work lenses: the board's views register like screens <sup>feature · p1 · s · core</sup>
 - [x] `97a12814` Colony readings and standing orders: rules that switch themselves <sup>feature · p0 · m · engine</sup>
 - [x] `98b8ec4a` The orders panel, and Focus on the HUD <sup>feature · p1 · s · core</sup>

@@ -172,3 +172,33 @@ Scripts: `rim.store(id)` reads a container's level, slots and contents;
 unloading) and returns what didn't fit; `rim.store_take(id, slot, count)`
 takes from a slot; `rim.stock(...)` counts what the colony has, stored or
 loose.
+
+## Work
+
+Who does what (DESIGN.md §4d; the whole surface is in [work.md](work.md)).
+Core names its levels, ships four work roles, one of them planned, and
+three standing orders on readings its script publishes.
+
+```toml
+[[priority_scale]]          # core's; patch levels and labels together
+id = "core"
+levels = 4
+labels = ["First", "Soon", "Later", "Spare time"]
+
+[[work_role]]               # a partial set of levels colonists belong to
+id = "builder"
+label = "Builder"
+order = 10
+priorities = { build = 1, mine = 2, haul = 2, hunt = 0 }
+
+[[priority_rule]]           # a standing order on a reading, with a band
+id = "food_low"
+label = "Food is low"
+when = { reading = "core:food_days", below = 5, until = 8 }
+shift = { harvest = -1, hunt = -1 }
+```
+
+Core's readings, published hourly: `core:food_days` (days the colony's food
+lasts its colonists), `core:loose_items` (items outside a store that takes
+them) and `core:wood`. A work type's `auto = { per_person, weight }` is what
+Auto's planner reads.
