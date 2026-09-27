@@ -11,6 +11,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `act.assign_role` | `(id: number, role: number) -> ()` | Put a colonist in a work role, by its index in view.board().roles. Their pins stay. |
 | `act.clear_priority` | `(id: number, work: string) -> ()` | Hand a colonist's work type back: forget their own setting, so they follow what they'd inherit. |
 | `act.cycle_overlay` | `() -> ()` | Show the next field overlay. |
+| `act.delete_role` | `(role: number) -> ()` | Delete one of the player's own work roles (a role from a mod can't be deleted), by its index in view.board().roles. Its members go to the default role and keep their pins; the roles after it move down one. |
 | `act.draft` | `(id: number, on: boolean) -> ()` | Draft or undraft a colonist. |
 | `act.focus` | `(id: number) -> ()` | Move the camera to a pawn or thing. |
 | `act.load` | `(path: string) -> ()` | Play a save from view.saves() (the title screen). |

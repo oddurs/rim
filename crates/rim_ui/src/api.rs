@@ -112,7 +112,7 @@ type WorkType = { id: string, label: string, icon: string, order: number, defaul
 type BoardCol = { id: string, label: string, icon: string, skill: string?, waiting: number, default: number, on: number, high: number }
 type BoardCell = { base: number, value: number, inherit: number, pinned: boolean, planned: boolean, reason: string?, why: string, skill: number?, skill_frac: number? }
 type BoardRow = { id: number, name: string, job: string, role: number?, role_label: string?, cells: { BoardCell } }
-type BoardRole = { index: number, id: string?, label: string, order: number, edited: boolean, planned: boolean, levels: { [string]: number } }
+type BoardRole = { index: number, id: string?, label: string, order: number, edited: boolean, planned: boolean, default: boolean, levels: { [string]: number } }
 type Board = { levels: number, labels: { string }, high: number, cols: { BoardCol }, rows: { BoardRow }, roles: { BoardRole } }
 type StandingOrder = { id: string, label: string, reading: string, value: number?, band: string, effect: string, season: string?, crossed: boolean, enabled: boolean, acting: boolean }
 type Markable = { id: number, urgent: boolean, label: string }
@@ -146,6 +146,7 @@ pub const UI_API: &[UiDoc] = &[
     d!("act.assign_role", "(id: number, role: number) -> ()", "Put a colonist in a work role, by its index in view.board().roles. Their pins stay."),
     d!("act.clear_priority", "(id: number, work: string) -> ()", "Hand a colonist's work type back: forget their own setting, so they follow what they'd inherit."),
     d!("act.cycle_overlay", "() -> ()", "Show the next field overlay."),
+    d!("act.delete_role", "(role: number) -> ()", "Delete one of the player's own work roles (a role from a mod can't be deleted), by its index in view.board().roles. Its members go to the default role and keep their pins; the roles after it move down one."),
     d!("act.draft", "(id: number, on: boolean) -> ()", "Draft or undraft a colonist."),
     d!("act.focus", "(id: number) -> ()", "Move the camera to a pawn or thing."),
     d!("act.load", "(path: string) -> ()", "Play a save from view.saves() (the title screen)."),

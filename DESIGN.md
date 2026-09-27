@@ -528,7 +528,10 @@ with winter or a siege, and it doesn't show how much work is waiting.
   Roles are seeded from defs into the save and edited there; one the player
   never touched follows its mod's updates. A mod ships roles or patches
   core's (`work_role/core:builder`). Named work roles so they never read as
-  room roles (§6c).
+  room roles (§6c). The player deletes only their own roles; a mod's would
+  be seeded back on the next load. The roles after a deleted one move down,
+  so a role is always its place in the list, and its members go to the
+  default role with their pins.
 - **Pins:** a colonist's own level for one work type beats their role. It
   exists only while it differs: set it back to the inherited value and it
   is gone.

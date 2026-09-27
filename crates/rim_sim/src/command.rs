@@ -159,6 +159,12 @@ pub enum Command {
         name: String,
         data: Option<crate::data::Data>,
     },
+    /// Delete one of the player's own work roles: its members go to the
+    /// default role with their pins, and the roles after it move down one.
+    /// Last, so saved command logs keep their variant numbers.
+    DeleteWorkRole {
+        role: u16,
+    },
 }
 
 /// Where a new work role's levels come from.
@@ -638,6 +644,9 @@ pub fn apply(w: &mut World, c: Command) {
                 edited: true,
                 planner: None,
             });
+        }
+        Command::DeleteWorkRole { role } => {
+            w.delete_work_role(role);
         }
         Command::MarkUrgent { target, on } => {
             let changed = if on && w.is_markable(target) {

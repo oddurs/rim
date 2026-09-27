@@ -170,6 +170,8 @@ pub enum UiAction {
     CreateRoleFromPawn(String, Entity),
     /// A new work role named `label`, copying another role.
     CreateRoleFromRole(String, u16),
+    /// Delete one of the player's own work roles.
+    DeleteRole(u16),
     /// Put the colony in a stance, by its qualified id.
     SetStance(String),
     /// Switch a priority rule off for the colony, or back on, by its id.

@@ -515,3 +515,64 @@ fn the_board_says_what_focus_moves() {
     assert!(ui.find("core:work.focus").is_some(), "a focus line");
     assert!(tree.contains("Focus: Harvest") && tree.contains("settings"), "{tree}");
 }
+
+/// The menu's row labels, top to bottom.
+fn menu_rows(ui: &Ui) -> Vec<String> {
+    let snap = ui.snapshot();
+    let mut out = Vec::new();
+    let mut lines = snap.lines();
+    while let Some(l) = lines.next() {
+        if l.contains("#core:menu.row.") {
+            if let Some(q) = lines.by_ref().find_map(|n| n.split('"').nth(1).map(str::to_string)) {
+                out.push(q);
+            }
+        }
+    }
+    out
+}
+
+/// A role of the player's can be deleted from its card, after a question;
+/// a mod's role can't. The colonist menu asks the same question.
+#[test]
+fn a_players_role_is_deleted_after_asking() {
+    let (mut sim, mut ui, mut cv) = board(2);
+    let pawn = sim.world.colonists().next().unwrap();
+    sim.push(Command::CreateWorkRole { label: "Crew".into(), from: rim_sim::command::RoleSource::Pawn(pawn) });
+    sim.step();
+    let crew = sim.world.work_roles.iter().position(|r| r.label == "Crew").unwrap() as u16;
+    sim.push(Command::AssignWorkRole { pawn, role: crew });
+    sim.step();
+    let tab = ui.find("core:work.lens.core:work.roles").expect("a Roles tab");
+    click(&mut ui, &sim, &mut cv, centre(tab));
+    frame(&mut ui, &sim, &cv, Input { time: 5.0, ..Default::default() });
+    let builder = sim.world.work_roles.iter().position(|r| r.label == "Builder").unwrap() as u16;
+    assert!(ui.find(&format!("core:work.role.delete.{}", builder + 1)).is_none(), "a mod's role stays");
+
+    let delete = ui.find(&format!("core:work.role.delete.{}", crew + 1)).expect("Delete on the player's role");
+    let actions = click(&mut ui, &sim, &mut cv, centre(delete));
+    assert!(actions.is_empty(), "it asks first: {actions:?}");
+    frame(&mut ui, &sim, &cv, Input { time: 6.0, ..Default::default() });
+    assert!(ui.snapshot().contains("Delete Crew? Its members go to Auto and keep their pins."), "{}", ui.snapshot());
+    let yes = ui.find(&format!("core:work.role.delete_yes.{}", crew + 1)).expect("the question's Delete");
+    let actions = click(&mut ui, &sim, &mut cv, centre(yes));
+    assert_eq!(actions, vec![UiAction::DeleteRole(crew)]);
+
+    // From the colonist's menu: the Work screen opens on the question.
+    ui.close_window("core:work");
+    frame(&mut ui, &sim, &cv, Input { time: 7.0, ..Default::default() });
+    let id = pawn.to_bits().get().to_string();
+    assert!(ui.context(&sim.world, &cv, "colonist", &id, (400.0, 300.0)));
+    frame(&mut ui, &sim, &cv, Input { time: 7.1, ..Default::default() });
+    let rows = menu_rows(&ui);
+    let i = rows.iter().position(|l| l == "Delete role: Crew…").unwrap_or_else(|| panic!("a delete row: {rows:?}"));
+    let row = ui.find(&format!("core:menu.row.{}", i + 1)).unwrap();
+    click(&mut ui, &sim, &mut cv, centre(row));
+    frame(&mut ui, &sim, &cv, Input { time: 8.0, ..Default::default() });
+    frame(&mut ui, &sim, &cv, Input { time: 8.1, ..Default::default() });
+    assert!(ui.is_open("core:work"), "the Work screen opens");
+    assert!(
+        ui.find(&format!("core:work.role.delete_yes.{}", crew + 1)).is_some(),
+        "on the question: {}",
+        ui.snapshot()
+    );
+}
