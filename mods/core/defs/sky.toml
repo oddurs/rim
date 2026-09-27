@@ -11,8 +11,9 @@ id = "core"
 night = "#4a5478"
 # Firelight.
 firelight = "#ffb060"
-# Daylight through the windows of an enclosed room.
-indoor_share = 0.45
+# Daylight a roofed room gets through its walls and door; each window adds
+# its boundary pass (the light field's), so a room with windows is brighter.
+indoor_share = 0.2
 # Where the sun is, for shadows: up with the daylight field at 05:00, down at
 # 21:00, 60° at its highest, rising in the east (0°) and setting a little
 # north of west (190°, the map's y grows south).

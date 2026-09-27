@@ -1978,8 +1978,10 @@ where they were built, and the sun moves a fraction of a degree a second.
   `fill = 0.3 · Σ(I·r²) / area`, flat over the room, in each light's channel.
   That is §6c's "warm wash that stops at the walls". Outdoors there is nothing
   to bounce off, so a campfire falls off into the dark.
-- A room's diffuse sky share comes from its boundary `daylight`, which room
-  rebuild already sums (§4, 0211).
+- A room's diffuse sky share is `[[sky]]`'s `indoor_share` (what gets in
+  through walls and a door; core 0.2) plus the light `pass` of its windows,
+  which room rebuild already sums (§4, 0211). A windowless hut is dim by
+  day; every window shows.
 
 ### Tension: the plan's one light, or the sun?
 
