@@ -29,6 +29,34 @@ fn flag(name: &str) -> bool {
     std::env::args().any(|a| a == name)
 }
 
+/// Two levels dug out under the colony (DESIGN.md §6d): a room on each,
+/// stairs down to each, and the rock around both marked for mining, so the
+/// work and the hauling cross levels.
+fn dig_levels(s: &mut Sim, c: IVec) {
+    let defs = s.world.defs.clone();
+    let stairs = defs.thing_id("stairs").expect("stairs");
+    let mine = defs.lookup("designation", "core:mine").expect("mine");
+    let mut top = (0..20)
+        .flat_map(|r| (-r..=r).map(move |d| c.offset(r, d)))
+        .find(|&p| s.world.map.passable(p) && s.world.map.fixture_at(p).is_none())
+        .expect("open ground for stairs");
+    for z in [-1, -2] {
+        let centre = IVec::at(top.x, top.y, z);
+        for y in -7..=7 {
+            for x in -7..=7 {
+                let p = centre.offset(x, y);
+                if let Some(leaves) = s.world.solid_at(p).and_then(|r| r.leaves_r) {
+                    s.world.map.set_terrain(p, leaves, defs.terrain[leaves as usize].path_cost);
+                }
+            }
+        }
+        let e = s.world.spawn_fixture_of(stairs, top, false, None).expect("stairs");
+        s.world.open_portal(e);
+        s.push(rim_sim::Command::Designate { designation: mine, a: centre.offset(-12, -12), b: centre.offset(12, 12) });
+        top = centre.offset(5, 5);
+    }
+}
+
 /// Budget per tick at 6x speed and 60 fps (DESIGN.md §8), in ms.
 const BUDGET_MS: f64 = 2.0;
 
@@ -98,6 +126,9 @@ fn main() {
         }
     } else {
         plan_work(&mut s, &defs, c, size);
+    }
+    if flag("--levels") {
+        dig_levels(&mut s, c);
     }
 
     // Warm up (paths, rooms, first jobs), then measure.

@@ -142,7 +142,12 @@ fn advance_movement(w: &mut World, p: &mut Pawn) {
         p.path.pop();
         let diag = n.x != p.pos.x && n.y != p.pos.y;
         let speed = w.defs.creature(p.def).speed;
-        p.step_ticks = (speed * w.map.cost(n) / 100 * if diag { 14 } else { 10 } / 10).max(1);
+        // A step between levels is the portal's to price, not the floor's.
+        let cost = match n.z != p.pos.z {
+            true => w.map.through(w.map.idx(p.pos), p.faction).map_or(w.map.cost(n), |(_, c)| c as u32),
+            false => w.map.cost(n),
+        };
+        p.step_ticks = (speed * cost / 100 * if diag { 14 } else { 10 } / 10).max(1);
         p.next = Some(n);
         p.progress = 0;
     }
@@ -1788,6 +1793,15 @@ pub fn complete_building(w: &mut World, bp: Entity) {
     // The colony built it, so the colony owns it. A door only opens for
     // its owner; everyone else has to come through it the hard way.
     let _ = w.ecs.insert_one(bp, Owner(Faction::Player));
+    // A dig takes out the cell below; a pit is then just a hole.
+    if td.build.as_ref().is_some_and(|b| b.dig.is_some()) {
+        let hole = td.build.as_ref().and_then(|b| b.dig.as_ref()).is_some_and(|g| g.hole_r.is_some());
+        w.dig(bp);
+        if hole {
+            w.events.push(GameEvent::BuildingComplete { id: bp, def: t.def, pos: t.pos });
+            return;
+        }
+    }
     if td.category == crate::defs::Category::Floor {
         w.map.set_floor(t.pos, Some(bp), td.path_cost);
         let defs = w.defs.clone();

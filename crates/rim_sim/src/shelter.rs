@@ -54,11 +54,12 @@ impl World {
             if fd.kind != FieldKind::Shelter {
                 continue;
             }
-            let key = (octant(self.fields.ambient(fd.from_r)), self.map.revision);
+            // Wind is the surface's: a dig underground changes nothing here.
+            let key = (octant(self.fields.ambient(fd.from_r)), self.map.level_revision(0));
             if self.fields.layers[f].exposure_for == Some(key) {
                 continue;
             }
-            let mut blocks = vec![0u8; self.map.fixture.len()];
+            let mut blocks = vec![0u8; self.map.plane()];
             for (i, b) in blocks.iter_mut().enumerate() {
                 if self.map.fixture[i].is_some_and(|e| self.ecs.get::<&Blueprint>(e).is_ok()) {
                     continue;

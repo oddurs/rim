@@ -742,6 +742,10 @@ pub enum GameEvent {
         def: DefId,
         pos: IVec,
     },
+    /// A dig opened level `z` for the first time (DESIGN.md §6d).
+    LevelOpened {
+        z: i32,
+    },
     NewDay {
         day: u64,
     },
@@ -890,6 +894,7 @@ impl World {
                     })
                     .collect(),
             );
+            m.set_terrain_air(defs.terrain.iter().map(|t| t.air).collect());
             m
         };
         let fields = Fields::new(&defs, map.cells());
@@ -1363,9 +1368,15 @@ impl World {
     /// The tool tags building this plan takes: its own and its material's.
     pub fn build_requires(&self, e: Entity) -> ToolMask {
         let Some(t) = self.thing(e) else { return 0 };
-        let own = self.defs.thing(t.def).build.as_ref().map_or(0, |b| b.requires_r);
+        let build = self.defs.thing(t.def).build.as_ref();
+        let own = build.map_or(0, |b| b.requires_r);
         let stuff = self.made_of(e).and_then(|m| self.defs.thing(m).stuff.as_ref()).map_or(0, |s| s.requires_r);
-        own | stuff
+        // A dig takes whatever the rock below takes to break.
+        let rock = match build.and_then(|b| b.dig.as_ref()) {
+            Some(_) => self.rock_below(t.pos).map_or(0, |h| h.requires_r),
+            None => 0,
+        };
+        own | stuff | rock
     }
 
     /// Put as much of a lot as fits on exactly this cell, as a new stack or
@@ -1579,6 +1590,96 @@ impl World {
         self.remove_thing(e, true);
     }
 
+    // ------------------------------------------------------------ levels
+
+    /// Stand portal `e` in the cell below its own too, and join the two
+    /// levels there (DESIGN.md §6d).
+    pub fn open_portal(&mut self, e: Entity) {
+        let Some(t) = self.thing(e) else { return };
+        let Some(pd) = self.defs.thing(t.def).portal.as_ref() else { return };
+        let below = IVec::at(t.pos.x, t.pos.y, t.pos.z - 1);
+        if !self.map.inb(below) {
+            return;
+        }
+        let cost = pd.cost.min(u16::MAX as u32) as u16;
+        let (path_cost, owner) = (self.defs.thing(t.def).path_cost, self.ecs.get::<&Owner>(e).ok().map(|o| o.0));
+        self.map.set_fixture(below, Some(e), false, path_cost, false);
+        self.map.set_owner(below, owner);
+        self.map.add_portal(t.pos, cost, owner);
+    }
+
+    /// The cell below `p`, if the map goes that deep.
+    fn below(&self, p: IVec) -> Option<IVec> {
+        let q = IVec::at(p.x, p.y, p.z - 1);
+        self.map.inb(q).then_some(q)
+    }
+
+    /// Whether a dig can start at `p`: open ground, with a level under it
+    /// that is rock someone can work or open floor. Bedrock and air can't.
+    pub fn can_dig(&self, p: IVec) -> bool {
+        let Some(q) = self.below(p) else { return false };
+        let open = |c: IVec| self.map.passable(c) && !self.map.is_air(self.map.idx(c));
+        let workable = self.solid_at(q).is_some_and(|s| s.thing_r.is_some());
+        open(p) && (workable || open(q))
+    }
+
+    /// The harvest that takes out the rock under `p`, if it is rock.
+    fn rock_below(&self, p: IVec) -> Option<&HarvestDef> {
+        let thing = self.below(p).and_then(|q| self.fixture_def_at(q))?;
+        self.defs.thing(thing).harvest.iter().find(|h| h.destroy)
+    }
+
+    /// Dig out the cell under dig site `e`: its rock's yields come up
+    /// beside the site, and it leaves its floor. Then the site is a hole
+    /// (air, and the thing goes) or a portal. Says so the first time a
+    /// level is opened.
+    pub fn dig(&mut self, e: Entity) {
+        let Some(t) = self.thing(e) else { return };
+        let defs = self.defs.clone();
+        let Some(dig) = defs.thing(t.def).build.as_ref().and_then(|b| b.dig.clone()) else { return };
+        let Some(q) = self.below(t.pos) else { return };
+        let fresh = self.level_untouched(q.z);
+        let yields = self.rock_below(t.pos).map(|h| h.yields_r.clone()).unwrap_or_default();
+        for (yd, n) in yields {
+            self.place_item(yd, t.pos, n);
+        }
+        match self.map.fixture_at(q) {
+            Some(r) if self.is_rock(r) => self.despawn_thing(r),
+            _ => {
+                if let Some(leaves) = self.solid_at(q).and_then(|s| s.leaves_r) {
+                    self.map.set_terrain(q, leaves, defs.terrain[leaves as usize].path_cost);
+                }
+            }
+        }
+        match dig.hole_r {
+            Some(air) => {
+                self.remove_thing(e, false);
+                // What lay on the ground falls in.
+                if let Some(i) = self.map.item_at(t.pos) {
+                    if let Ok(mut th) = self.ecs.get::<&mut Thing>(i) {
+                        th.pos = q;
+                    }
+                    self.map.set_item(t.pos, None);
+                    if self.map.item_at(q).is_none() {
+                        self.map.set_item(q, Some(i));
+                    }
+                }
+                self.map.set_terrain(t.pos, air, defs.terrain[air as usize].path_cost);
+            }
+            None => self.open_portal(e),
+        }
+        if fresh {
+            self.events.push(GameEvent::LevelOpened { z: q.z });
+        }
+    }
+
+    /// No open cell on level `z` yet: nothing has dug into it.
+    fn level_untouched(&self, z: i32) -> bool {
+        let plane = self.map.plane();
+        let start = self.map.idx(IVec::at(0, 0, z));
+        (start..start + plane).all(|i| !self.map.passable_i(i))
+    }
+
     /// The rock a cell is made of, if its terrain is solid (DESIGN.md §6d).
     pub fn solid_at(&self, p: IVec) -> Option<&SolidDef> {
         if !self.map.inb(p) {
@@ -1664,6 +1765,15 @@ impl World {
             }
             if self.map.fixture[i] == Some(e) {
                 let defs = self.defs.clone();
+                // A portal stands in the cell below as well.
+                if defs.thing(t.def).portal.is_some() {
+                    let below = IVec::at(t.pos.x, t.pos.y, t.pos.z - 1);
+                    if self.map.fixture_at(below) == Some(e) {
+                        self.map.set_fixture(below, None, false, 0, false);
+                        self.map.set_owner(below, None);
+                    }
+                    self.map.remove_portal(t.pos);
+                }
                 for c in defs.thing(t.def).footprint(t.pos, t.facing) {
                     if self.map.inb(c) && self.map.fixture_at(c) == Some(e) {
                         self.map.set_fixture(c, None, false, 0, false);
@@ -2421,7 +2531,11 @@ impl World {
         let made_of = self.ecs.get::<&MadeOf>(e).ok().map(|m| m.0);
         let base = match name {
             "hp" => Some(td.hp as f64),
-            "work" => td.build.as_ref().map(|b| b.work as f64),
+            // A dig is the rock below's work, then its own.
+            "work" => td.build.as_ref().map(|b| {
+                let rock = b.dig.as_ref().and_then(|_| self.rock_below(t.pos)).map_or(0, |h| h.work);
+                (b.work + rock) as f64
+            }),
             "value" => Some(td.market_value),
             _ => None,
         };

@@ -787,6 +787,8 @@ impl Snapshot {
                         if span > 0 {
                             w.set_support(*e, span);
                         }
+                        // Portals aren't saved: the stairs are, and say where.
+                        w.open_portal(*e);
                     }
                 }
             }

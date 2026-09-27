@@ -83,6 +83,10 @@ pub struct TerrainDef {
     /// What `{ near = "water" }` measures the distance to.
     #[serde(default)]
     pub tags: Vec<String>,
+    /// No floor: a pit or a shaft. Nothing walks it; light and water cross
+    /// it to the level below (DESIGN.md §6d).
+    #[serde(default)]
+    pub air: bool,
     #[serde(skip)]
     pub rgb: [u8; 3],
     /// `props` in fixed point, indexed like `DefDb::terrain_props`.
@@ -219,6 +223,10 @@ pub struct ThingDef {
     /// Passable, but bounds rooms like a wall does.
     #[serde(default)]
     pub door: bool,
+    /// A way down: the thing stands in its cell and the one below it, and
+    /// pawns step between them (DESIGN.md §6d).
+    #[serde(default)]
+    pub portal: Option<PortalDef>,
     #[serde(default = "d100")]
     pub hp: u32,
     #[serde(default = "d1")]
@@ -421,10 +429,35 @@ pub struct BuildDef {
     /// Tool tags the builder holds a tool with, as a harvest's `requires`.
     #[serde(default)]
     pub requires: Vec<String>,
+    /// Building it digs the cell below out first, with the work and tool
+    /// that cell's rock asks (DESIGN.md §6d).
+    #[serde(default)]
+    pub dig: Option<DigDef>,
     #[serde(skip)]
     pub cost_r: Vec<(DefId, u32)>,
     #[serde(skip)]
     pub requires_r: ToolMask,
+}
+
+/// A way between levels.
+#[derive(Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct PortalDef {
+    /// Move cost in percent, as a terrain's. At least 200: a level is 20 in
+    /// A*'s estimate, and the estimate must never be more than a real step.
+    pub cost: u32,
+}
+
+/// What a dig leaves.
+#[derive(Deserialize, Clone, Debug, Default)]
+#[serde(deny_unknown_fields)]
+pub struct DigDef {
+    /// The air terrain the cell dug from becomes: a pit, and the thing is
+    /// gone. Without it, the thing stays: stairs, a ladder.
+    #[serde(default)]
+    pub hole: Option<String>,
+    #[serde(skip)]
+    pub hole_r: Option<DefId>,
 }
 
 /// How much material a buildable takes, and what kind will do.
@@ -1831,6 +1864,13 @@ impl DefDb {
                 // Nothing walks into rock, whatever the def says.
                 d.path_cost = 0;
             }
+            if d.air {
+                if d.solid.is_some() {
+                    return Err(format!("{ctx}: a terrain is solid or air, not both"));
+                }
+                // Nor into air.
+                d.path_cost = 0;
+            }
         }
         let mut props: Vec<String> = self.terrain.iter().flat_map(|t| t.props.keys().cloned()).collect();
         props.sort_unstable();
@@ -2270,7 +2310,22 @@ impl DefDb {
                     ));
                 }
             }
+            if let Some(pd) = &d.portal {
+                if pd.cost < 200 {
+                    return Err(format!("{ctx}: portal.cost must be at least 200 (it's {})", pd.cost));
+                }
+                if d.size != [1, 1] || d.blocks {
+                    return Err(format!("{ctx}: a portal covers one cell and doesn't block"));
+                }
+            }
             if let Some(b) = &mut d.build {
+                // A dig leaves a hole, and nothing; or the thing, as a portal.
+                if let Some(g) = &mut b.dig {
+                    if g.hole.is_some() == d.portal.is_some() {
+                        return Err(format!("{ctx}: build.dig leaves a hole or a portal: one, not both or neither"));
+                    }
+                    g.hole_r = g.hole.as_deref().map(|h| get("terrain", h, &ctx)).transpose()?;
+                }
                 b.cost_r = counts(&b.cost, &ctx)?;
                 match (b.cost.is_empty(), b.stuff.is_some()) {
                     (true, false) if !b.free => {
@@ -2531,6 +2586,15 @@ impl DefDb {
                 .collect();
             if let Some(st) = &mut self.things[i].store {
                 st.accepts_r = accepts;
+            }
+        }
+        for d in &self.things {
+            let hole = d.build.as_ref().and_then(|b| b.dig.as_ref()).and_then(|g| g.hole_r);
+            if let Some(h) = hole.filter(|&h| !self.terrain[h as usize].air) {
+                return Err(format!(
+                    "thing/{}: build.dig.hole '{}' must be an air terrain",
+                    d.id, self.terrain[h as usize].id
+                ));
             }
         }
         if self.terrain.is_empty() {

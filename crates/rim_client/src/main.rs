@@ -90,6 +90,8 @@ pub struct App {
     pub ui: Ui,
     pub atlas: Texture2D,
     pub cam: Cam,
+    /// The level on screen (DESIGN.md §6d): 0 is the surface.
+    pub view_z: i32,
     pub tool: Tool,
     pub tools: Vec<ToolDef>,
     /// The material last picked for each buildable, so nobody picks wood
@@ -616,6 +618,7 @@ async fn game() {
         ui,
         atlas,
         cam: Cam { x: center.x as f32 + 0.5, y: center.y as f32 + 0.5, zoom: 28.0 },
+        view_z: 0,
         tool: Tool::Select,
         selected: None,
         selected_zone: None,
@@ -1080,6 +1083,7 @@ pub fn client_view(app: &mut App, mouse: (f32, f32), time: f64) -> ClientView {
         screen: (screen_width() * dpi, screen_height() * dpi),
         scale: app.ui.theme.scale,
         cam: (app.cam.x, app.cam.y, app.cam.zoom * dpi),
+        level: app.view_z,
         mouse: (mouse.0 * dpi, mouse.1 * dpi),
         frac: app.tick_frac(),
         selected: app.selected,
@@ -1902,6 +1906,9 @@ pub fn pawn_under(app: &App, sx: f32, sy: f32) -> Option<Entity> {
     let mut best: Option<(f32, Entity)> = None;
     for &e in &w.pawns {
         let Ok(p) = w.ecs.get::<&Pawn>(e) else { continue };
+        if p.pos.z != app.view_z {
+            continue;
+        }
         let (px, py) = draw::pawn_pos(&p, app.tick_frac());
         let d = ((px - wx).powi(2) + (py - wy).powi(2)).sqrt();
         let bias = if p.faction == Faction::Player { -0.2 } else { 0.0 };

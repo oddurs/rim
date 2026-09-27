@@ -1018,7 +1018,7 @@ impl UiVm {
             let (sw, sh) = l.client.screen;
             for &e in &l.world.pawns {
                 let Ok(p) = l.world.ecs.get::<&Pawn>(e) else { continue };
-                if !p.active || p.dead {
+                if !p.active || p.dead || p.pos.z != l.client.level {
                     continue;
                 }
                 let (x, y) = crate::view::pawn_screen(&p, l.client);

@@ -225,6 +225,9 @@ pub enum Blocker {
     NoMaterial,
     /// The thing isn't a buildable at all.
     NotBuildable,
+    /// It digs down, and there is nothing here to dig into: the lowest
+    /// level, or rock nobody can work below (DESIGN.md §6d).
+    NoDig,
 }
 
 /// Everything `Command::Designate` would newly mark, in the order it would
@@ -402,6 +405,10 @@ pub fn build_preview(
     };
     let mut out = Vec::new();
     for p in cells(w, a, b) {
+        if bd.dig.is_some() && !w.can_dig(p) {
+            out.push((p, Place::Blocked(Blocker::NoDig)));
+            continue;
+        }
         if big {
             let (place, claimed) = footprint(p, &taken);
             taken.extend(claimed);

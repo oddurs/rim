@@ -589,7 +589,8 @@ pub fn pawns(app: &App) {
     let (x1, y1) = cam.to_world(screen_width(), screen_height());
     for &e in &w.pawns {
         let Ok(p) = w.ecs.get::<&Pawn>(e) else { continue };
-        if !p.active {
+        // Only the level on screen (DESIGN.md §6d).
+        if !p.active || p.pos.z != app.view_z {
             continue;
         }
         let cd = defs.creature(p.def);
