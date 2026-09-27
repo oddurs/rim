@@ -2,12 +2,12 @@
 id: c3d18fe7-f13e-4b1d-a104-cbd3db4481dd
 title: Map generation hashes spawns by def index, so a new def reshapes every map
 type: bug
-status: review
+status: done
 milestone: scale
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 created: 2026-09-26
 updated: 2026-09-27
+closed_at: 2026-09-27
 priority: p2
 api: none
 effort: s
@@ -38,3 +38,7 @@ Changing the hash reshapes every seed once, so re-run the balance and stone-age 
 ## 2026-09-27
 
 Spawn hashes are salted by mix(hash_str(qualified id)), precomputed once per def: FNV-1a, the same in every build. tests/spawn_keys.rs puts a non-spawning def ahead of a spawning one and checks the spawn cells don't move; it fails without the fix. It reshapes every map once. Seeds 1-20, main then branch: stone age 95/95/95/85% then 100/95/95/95%; balance, 5 days: lost 1 then 0, runs with a death 0 then 1, near-misses 6 then 15, first threat day 2.94 then 3.02. Two client autotest scenes that leaned on the old map around the founder were made map-robust.
+
+## 2026-09-27
+
+Merged in #214; closed in the Proving ground planning PR's cairn cleanup (2026-09-27), since the item was left at doing/review after its merge.

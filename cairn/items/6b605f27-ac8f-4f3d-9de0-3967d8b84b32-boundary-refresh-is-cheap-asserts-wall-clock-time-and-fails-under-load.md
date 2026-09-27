@@ -3,10 +3,10 @@ id: 6b605f27-ac8f-4f3d-9de0-3967d8b84b32
 title: boundary_refresh_is_cheap asserts wall-clock time and fails under load
 type: bug
 status: backlog
-milestone: scale
+milestone: proving-ground
 created: 2026-09-26
-updated: 2026-09-26
-priority: p3
+updated: 2026-09-27
+priority: p0
 api: none
 effort: s
 layer: engine

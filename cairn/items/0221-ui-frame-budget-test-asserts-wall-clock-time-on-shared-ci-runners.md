@@ -3,10 +3,10 @@ id: e2c56c9a-f105-4081-a5d9-b11635616338
 title: UI frame-budget test asserts wall-clock time on shared CI runners
 type: bug
 status: backlog
-milestone: shelter
+milestone: proving-ground
 created: 2026-09-24
-updated: 2026-09-24
-priority: p2
+updated: 2026-09-27
+priority: p0
 api: none
 effort: s
 layer: tooling

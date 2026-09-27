@@ -2,14 +2,14 @@
 id: 26a69a8e-a7e1-44ab-a05c-96dda82d4074
 title: 'Pipe joins: fences and palisades connect like Minecraft''s'
 type: feature
-status: doing
+status: done
 milestone: houses
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 depends_on:
 - 3fe8c3cb-dcba-4882-b623-0468ea9fe697
 created: 2026-09-26
-updated: 2026-09-26
+updated: 2026-09-27
+closed_at: 2026-09-27
 priority: p2
 api: additive
 effort: s
@@ -35,3 +35,7 @@ A fence is a thin barrier, and it should look it: a post, with rails toward each
 ## 2026-09-26
 
 Posts are anchored to the world grid (every third cell along a straight run, never beside a node) rather than spread evenly between a run's ends: even spacing makes a post depend on cells far down the run, which a cached chunk can't see change, and moves every post when a fence is extended. The prototype page follows the same rule. A fence built of branches is the hurdle, so primitive needs no def of its own. Fence and gate live in supports.toml: map generation hashes spawns by def index (c3d18fe7, Depth is fixing it next).
+
+## 2026-09-27
+
+Merged in #208; closed in the Proving ground planning PR's cairn cleanup (2026-09-27), since the item was left at doing/review after its merge.

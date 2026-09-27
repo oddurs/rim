@@ -52,3 +52,7 @@ Review fixes: G is now only the roof bit (0/255), so the linear filter blends a 
 ## 2026-09-26
 
 Whole repack (first frame, or invalidated), release, Apple M4 Pro under other sessions' builds: 192x192 0.71-0.78 ms (one run 3.0 ms, load), 250x250 0.75-1.28 ms. Reading each fixture's def in place, not through World::fixture_def_at (which clones the Thing), took it from 7.2 ms. After that only changed chunks repack: a fixture placed repacks its one 32x32 chunk.
+
+## 2026-09-27
+
+Merged in #201; closed in the Proving ground planning PR's cairn cleanup (2026-09-27), since the item was left at doing/review after its merge.

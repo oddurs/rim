@@ -28,6 +28,32 @@ The headless engine: defs, mod loading and patching, map, pathing, AI skeleton, 
 - [x] `ecaf561f` Command queue applied at tick boundaries <sup>feature · p0 · s · engine</sup>
 - [x] `f2ea0bd1` Tile map with fixture and item layers, and reachability regions <sup>feature · p0 · m · engine</sup>
 
+## proving-ground — Proving ground
+
+`··········` 0% · 0 of 19 done
+
+Seeds, tests, CI and the merge queue, so that every change is checked the same way on a laptop and in CI, every failure can be brought back with one line, and a PR lands without anyone rebasing it by hand. Design: DESIGN.md §7b, §8a. Plan: https://claude.ai/artifact/KUQcdtWkNG4u63T4S8uPpt
+
+- [ ] `10e53a78` The merge queue on Mergify: a docs lane and a code lane, configured in the repo <sup>chore · p0 · m · tooling</sup>
+- [ ] `18e3e69f` Balance across seeds: distributions over 200 seeds, and a check a balance PR must pass <sup>feature · p2 · s · tooling</sup>
+- [ ] `3163979c` No wall-clock assertions in the suite: count work, and a guard <sup>chore · p0 · m · tooling</sup>
+- [ ] `3d4b8c40` Protect main: a ruleset that requires the queue's checks, kept in the repo <sup>chore · p1 · s · tooling</sup>
+- [ ] `3f381240` CI lanes for a public repo: a Linux PR lane, a four-platform queue proof, nightly <sup>chore · p0 · m · tooling</sup>
+- [ ] `4afaeedb` The seed corpus, rim seeds find and show, and a nightly 200-seed sweep that files what it finds <sup>feature · p1 · m · tooling</sup>
+- [ ] `5234544e` Visual regression for the autotest: reference shots, a perceptual diff, before and after on the PR <sup>feature · p1 · m · client</sup>
+- [ ] `55952481` Property tests for save round trips, region and room rebuilds, and paths <sup>feature · p1 · m · engine</sup>
+- [ ] `6b605f27` boundary_refresh_is_cheap asserts wall-clock time and fails under load <sup>bug · p0 · s · engine</sup>
+- [ ] `7dcb8a90` A seed per test, the nightly shift, and a one-line repro on every failure <sup>feature · p1 · s · engine</sup>
+- [ ] `7fb64c0e` ROADMAP.md stops conflicting: render it on main, not in every PR <sup>chore · p0 · s · tooling</sup>
+- [ ] `845db9fb` rim replay --bisect and a hash per tick when platforms disagree <sup>feature · p1 · s · tooling</sup>
+- [ ] `932f2bfd` Bench baselines: store main's numbers and judge a PR against them <sup>feature · p1 · m · tooling</sup>
+- [ ] `c2579dbc` Random streams per purpose: a new draw in one system stops reshuffling the rest <sup>feature · p0 · m · engine</sup>
+- [ ] `dabb52d6` Fuzz the save reader, the def loader and patches, and the Luau boundary <sup>feature · p2 · m · tooling</sup>
+- [ ] `dd48e551` scripts/agent: start, sync, pr and queue for the worktree workflow <sup>chore · p1 · s · tooling</sup>
+- [ ] `e2c56c9a` UI frame-budget test asserts wall-clock time on shared CI runners <sup>bug · p0 · s · tooling</sup>
+- [ ] `e8673d3f` scripting test a_slow_mod_is_named_in_the_warnings flakes under load <sup>bug · p0 · s · engine</sup>
+- [ ] `9b435cd8` scripts/task: one gate for the laptop and CI, and a pre-push hook <sup>chore · p0 · s · tooling</sup>
+
 ## lighting — Lighting
 
 `###·······` 25% · 3 of 12 done
@@ -66,6 +92,25 @@ The grid, hover, selection, drag previews, placement ghosts and marks, drawn in 
 - [ ] `e8f313d6` Build ghosts: fits, clears first, or blocked <sup>feature · p0 · m · client</sup>
 - [ ] `f5bc43e3` Measure: G holds a counting grid with rulers <sup>feature · p2 · s · client</sup>
 - [x] `cd59b515` Ask the sim what an order would do: designate and build previews <sup>feature · p0 · m · engine</sup>
+
+## workbench — Workbench
+
+`··········` 0% · 0 of 12 done
+
+Developer tools inside the game: a console, single-tick stepping and a session timeline, an entity inspector with watches, a profiler that catches slow ticks, structured logs, bug capture, and the same tools over a local port and MCP for agents. Every change they make is a logged command. The tools are a first-party plugin, `mods/devtools`, loaded only with `--dev`, on a dev API the engine provides. Design: DESIGN.md §11a. Plan and mockup: https://claude.ai/artifact/KUQcdtWkNG4u63T4S8uPpt
+
+- [ ] `3fb6c173` mods/devtools: debug overlays for regions, rooms, reachability, reservations and chunk rebuilds <sup>feature · p2 · s · plugin</sup>
+- [ ] `46b7d000` Profiler history, p99 and a spike trap <sup>feature · p1 · m · client</sup>
+- [ ] `47ec1fa0` Seed codes for players: a new game takes text or a code, and the code travels with the save <sup>feature · p2 · s · client</sup>
+- [ ] `537ef322` Structured logging: tracing with per-mod targets, a session log file and a log panel <sup>feature · p1 · s · client</sup>
+- [ ] `6202120c` mods/devtools: the console, a Luau REPL over the dev API <sup>feature · p0 · m · plugin</sup>
+- [ ] `6ae1513a` The dev API for plugins: raw entity views, stepping and snapshots, behind a dev capability <sup>feature · p0 · m · engine</sup>
+- [ ] `8c9d81d1` The dev port and rim mcp: the console's API for agents <sup>feature · p1 · m · client</sup>
+- [ ] `c2e8ec82` CLI hygiene: rim --help, unknown flags are errors, and the harnesses become rim sim subcommands <sup>chore · p2 · s · client</sup>
+- [ ] `cec3efdf` Dev commands: Command::Dev, a dev-touched epoch, and the commit as engine version <sup>feature · p0 · m · engine</sup>
+- [ ] `d0115f9b` mods/devtools: stepping and the session timeline <sup>feature · p0 · m · plugin</sup>
+- [ ] `ea920745` mods/devtools: entity inspector and watch expressions <sup>feature · p1 · m · plugin</sup>
+- [ ] `fe1c23b7` Bug capture and rim repro <sup>feature · p2 · m · client</sup>
 
 ## rock-face — Rock face
 
@@ -241,11 +286,10 @@ A one-week sprint inside Shelter. The world gets seasons and weather you can see
 
 ## shelter — Shelter
 
-`##########` 93% · 13 of 14 done · due 2026-11-01
+`##########` 100% · 13 of 13 done · due 2026-11-01
 
 Exposure makes shelter matter: warmth, enclosed rooms, day/night, weather. Get four walls up before night two.
 
-- [ ] `e2c56c9a` UI frame-budget test asserts wall-clock time on shared CI runners <sup>bug · p2 · s · tooling</sup>
 - [x] `05dbb688` CI: determinism must hold across machines, not just within one run <sup>chore · p1 · s · tooling</sup>
 - [x] `2a2f2f48` Founder trait: combat bonus and recruitment pull <sup>feature · p2 · s · core</sup>
 - [x] `3974fb0f` Prioritize: right-click to force a job <sup>feature · p1 · l · engine</sup>
@@ -386,7 +430,7 @@ The API grows up: stat pipeline, script components, custom jobs, needs and def k
 
 ## houses — Houses
 
-`########··` 74% · 17 of 23 done
+`########··` 78% · 18 of 23 done
 
 A house is drawn as its plan and built as an order (DESIGN.md §6c). Walls join from their neighbours in quarters, with rounded ends and square junctions, and no sprites. Materials show as patterns and climb a ladder of tools from wattle to brick. Doors and windows orient themselves in the run and toward the room. Rooms take roles from what is in them, a roof span set by the materials replaces the 400-cell cap, and from far away the colony is a village of hipped roofs. The prototype, docs/engineering/houses-prototype.html, is the reference.
 
@@ -395,8 +439,8 @@ A house is drawn as its plan and built as an order (DESIGN.md §6c). Walls join 
 - [ ] `c281689c` Save a selection as a house plan <sup>feature · p2 · m · client</sup>
 - [ ] `e7c4a3f6` Blueprints as work orders <sup>feature · p1 · m · engine</sup>
 - [ ] `ff479390` The building ladder: dry stone, logs, bricks and a kiln <sup>content · p1 · m · plugin</sup>
-- [ ] `26a69a8e` Pipe joins: fences and palisades connect like Minecraft's <sup>feature · p2 · s · client</sup>
 - [x] `24100bb9` A roof span replaces the room size cap, and pillars hold it <sup>feature · p0 · m · engine</sup>
+- [x] `26a69a8e` Pipe joins: fences and palisades connect like Minecraft's <sup>feature · p2 · s · client</sup>
 - [x] `26ba97aa` Plan a multi-cell building over grass, trees and rock <sup>feature · p2 · m · engine</sup>
 - [x] `3fe8c3cb` Joins in quarters: a wall run draws as one mass <sup>feature · p0 · m · client</sup>
 - [x] `454f4bde` Draw a room: drag a rectangle into a ring of walls <sup>feature · p2 · s · client</sup>
@@ -453,24 +497,22 @@ Making a mod feels like publishing a small open-source library: rim new, typed L
 
 ## scale — Scale
 
-`####······` 31% · 5 of 16 done · due 2027-03-15
+`#####·····` 43% · 6 of 14 done · due 2027-03-15
 
 Hit the performance budget: benchmark harness, hierarchical pathing, flow fields, spatial indices, incremental regions, render caching.
 
 - [ ] `1415721a` Water flow: runoff, puddles and floods <sup>feature · p3 · l · engine</sup>
 - [ ] `277ff6f2` Hierarchical pathfinding <sup>perf · p1 · l · engine</sup>
 - [ ] `66906291` Incremental region updates <sup>perf · p2 · m · engine</sup>
-- [ ] `6b605f27` boundary_refresh_is_cheap asserts wall-clock time and fails under load <sup>bug · p3 · s · engine</sup>
 - [ ] `91de1172` Parallel systems where read and write sets allow <sup>spike · p2 · m · engine</sup>
 - [ ] `a353667b` Flow fields for raid groups <sup>perf · p2 · m · engine</sup>
 - [ ] `c1089360` Pathfinding on a map full of work: long A* searches in forest and rock <sup>perf · p1 · m · engine</sup>
 - [ ] `da558444` Ground renderer: terrain, wetness and snow in one shader pass <sup>perf · p2 · m · client</sup>
 - [ ] `dab55ea2` Meet the budget: 6x speed at 60 fps <sup>perf · p0 · l · engine</sup>
-- [ ] `e8673d3f` scripting test a_slow_mod_is_named_in_the_warnings flakes under load <sup>bug · p2 · s · engine</sup>
-- [ ] `c3d18fe7` Map generation hashes spawns by def index, so a new def reshapes every map <sup>bug · p2 · s · engine</sup>
 - [x] `4819db9c` Pathfinding and movement: measure the spikes, then cut them <sup>perf · p1 · m · engine</sup>
 - [x] `8baaf318` Pawns jitter as they walk: draw them at the fraction of a tick <sup>bug · p0 · s · client</sup>
 - [x] `8ee7a610` Anchored labels capped by priority inside the viewport <sup>perf · p2 · s · engine</sup>
+- [x] `c3d18fe7` Map generation hashes spawns by def index, so a new def reshapes every map <sup>bug · p2 · s · engine</sup>
 - [x] `ee7fe7fd` Benchmark harness: target map, 30 colonists, 200 pawns <sup>perf · p0 · m · tooling</sup>
 - [x] `fbf3ee1c` Spatial index for things by def <sup>perf · p1 · m · engine</sup>
 
@@ -586,7 +628,7 @@ Dig down. The map becomes a stack of 2D levels joined only at stairs, ladders an
 
 ## crafting — Crafting
 
-`#####·····` 50% · 14 of 28 done · due 2027-05-01
+`######····` 54% · 15 of 28 done · due 2027-05-01
 
 Production chains: workbenches and bills, cooking, farming, tailoring, research as a plugin.
 
@@ -602,9 +644,9 @@ Production chains: workbenches and bills, cooking, farming, tailoring, research 
 - [ ] `d77d9e1f` Stock fields: per-cell state with staggered updates <sup>feature · p0 · l · engine</sup>
 - [ ] `db7f1e06` Mining that rewards looking: rock kinds, veins and prospecting <sup>content · p1 · m · core</sup>
 - [ ] `e1be8ebd` Plants grow in the weather <sup>feature · p0 · m · engine</sup>
-- [ ] `27d51e02` mods/iron: bog iron, charcoal, bloomery and forge, nails, fittings, saw and pick <sup>content · p2 · l · plugin</sup>
 - [ ] `9bd9e8ab` Fire: burning, spread by wind, put out by rain <sup>feature · p1 · l · engine</sup>
 - [x] `01691032` Item categories and one filter: things, materials and condition <sup>feature · p1 · m · engine</sup>
+- [x] `27d51e02` mods/iron: bog iron, charcoal, bloomery and forge, nails, fittings, saw and pick <sup>content · p2 · l · plugin</sup>
 - [x] `282efef8` Containers: a store block with slots <sup>feature · p1 · l · engine</sup>
 - [x] `4f3e5d8d` mods/timber: planks, plank walls, crates, shelves, racks and a granary <sup>content · p2 · m · plugin</sup>
 - [x] `5e323021` Store inspector: Contents and Accepts tabs <sup>feature · p1 · m · core</sup>
@@ -651,8 +693,9 @@ The world beyond the map: factions, traders drawn by wealth, quests, taming.
 
 ## Unscheduled
 
-`##########` 100% · 3 of 3 done
+`########··` 75% · 3 of 4 done
 
+- [ ] `34bc0d93` A Mac mini as a self-hosted runner for the nightly lane <sup>chore · p3 · s · tooling</sup>
 - [x] `1cfccb62` Storytelling: scenarios, feelings, mourning, relationships and dialogue <sup>spike · p3 · l · plugin</sup>
 - [x] `27307380` A panel that shows nothing while nothing's hovered misses the hover when it comes <sup>bug · p1 · s · client</sup>
 - [x] `cc6ac1c3` Autotest: the wall-seam check picks a row a pawn is standing on <sup>bug · p1 · s · client</sup>
