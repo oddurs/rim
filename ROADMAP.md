@@ -461,7 +461,7 @@ A house is drawn as its plan and built as an order (DESIGN.md §6c). Walls join 
 
 ## mood — Mood
 
-`##········` 13% · 2 of 15 done · due 2027-02-20
+`##········` 20% · 3 of 15 done · due 2027-02-20
 
 rim.mood — the first first-party plugin. Proves the API: if mood cannot be a plugin, fix the API.
 
@@ -475,11 +475,11 @@ rim.mood — the first first-party plugin. Proves the API: if mood cannot be a p
 - [ ] `9ebfa104` Work Board: hovering a column lights its waiting jobs on the map <sup>feature · p3 · s · client</sup>
 - [ ] `c4d85d17` rim.mood plugin: mood need and thoughts <sup>feature · p0 · l · plugin</sup>
 - [ ] `d3cbbd74` Mental breaks: wander, sulk, berserk <sup>feature · p1 · m · plugin</sup>
-- [ ] `d5ba1331` Delete a work role the player made <sup>feature · p3 · m · engine</sup>
 - [ ] `d860ad76` Rows that wrap in the UI engine <sup>feature · p2 · m · engine</sup>
 - [ ] `f690b16e` Mood from weather and seasons <sup>feature · p2 · s · plugin</sup>
 - [x] `3ec4f76b` The why panel and who-takes-this say when a job is urgent <sup>feature · p3 · s · engine</sup>
 - [x] `8314393f` Auto's hint and a settler's role prompt: kept in the save, and seen over the Work sheet <sup>feature · p3 · s · core</sup>
+- [x] `d5ba1331` Delete a work role the player made <sup>feature · p3 · m · engine</sup>
 
 ## sdk — Modder SDK
 

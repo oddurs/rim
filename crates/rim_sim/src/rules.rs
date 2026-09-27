@@ -266,6 +266,31 @@ impl World {
         }
     }
 
+    /// Delete one of the player's own work roles (a def's can't go: the
+    /// next load would seed it back). The roles after it move down one, so
+    /// the list stays what the UI and scripts index, with no gaps to skip;
+    /// every colonist's index follows. Its members go to the default role
+    /// and keep their pins. False if there was nothing to delete.
+    pub fn delete_work_role(&mut self, role: u16) -> bool {
+        if self.work_roles.get(role as usize).is_none_or(|r| r.def.is_some()) {
+            return false;
+        }
+        self.work_roles.remove(role as usize);
+        let default = self.default_work_role();
+        for p in self.ecs.query_mut::<&mut Pawn>() {
+            match p.work_role {
+                Some(r) if r == role => {
+                    p.work_role = default;
+                    p.plan.clear();
+                    p.proposal.clear();
+                }
+                Some(r) if r > role => p.work_role = Some(r - 1),
+                _ => {}
+            }
+        }
+        true
+    }
+
     /// The role colonists start in: the colony's copy of the first role by
     /// order, or its first role; none when no mod defines any.
     pub fn default_work_role(&self) -> Option<u16> {

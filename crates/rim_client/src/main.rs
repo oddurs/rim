@@ -1558,6 +1558,7 @@ fn apply_ui(app: &mut App, a: UiAction) {
         UiAction::CreateRoleFromRole(label, r) => {
             app.sim.push(Command::CreateWorkRole { label, from: rim_sim::command::RoleSource::Role(r) })
         }
+        UiAction::DeleteRole(role) => app.sim.push(Command::DeleteWorkRole { role }),
         UiAction::ClearPriority(e, work) => {
             if let Some(w) = app.sim.world.defs.lookup("work_type", &work) {
                 app.sim.push(Command::ClearPriority { pawn: e, work: w });

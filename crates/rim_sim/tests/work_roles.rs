@@ -185,6 +185,10 @@ fn roles_survive_a_load_and_replay_the_same() {
                 200 => s.push(Command::AssignWorkRole { pawn: b, role: forager }),
                 300 => s.push(Command::SetRolePriority { role: forager, work: haul, level: Some(1) }),
                 400 => s.push(Command::CreateWorkRole { label: "Crew".into(), from: RoleSource::Pawn(a) }),
+                450 => s.push(Command::CreateWorkRole { label: "Gone".into(), from: RoleSource::Role(builder) }),
+                500 => s.push(Command::AssignWorkRole { pawn: a, role: 5 }),
+                // Deleting "Crew" moves "Gone", and a with it, down one.
+                550 => s.push(Command::DeleteWorkRole { role: 4 }),
                 _ => {}
             }
             if Some(t) == save_at {
@@ -197,4 +201,48 @@ fn roles_survive_a_load_and_replay_the_same() {
     let h = run(None);
     assert_eq!(h, run(None), "two runs agree");
     assert_eq!(h, run(Some(600)), "a load carries on the same");
+}
+
+#[test]
+fn deleting_a_role_sends_its_members_to_the_default_with_their_pins() {
+    let (mut s, a, b) = pair();
+    let build = work(&s, "core:build");
+    s.push(Command::CreateWorkRole { label: "Crew".into(), from: RoleSource::Role(role(&s, "Builder")) });
+    s.push(Command::CreateWorkRole { label: "Night".into(), from: RoleSource::Role(role(&s, "Forager")) });
+    s.step();
+    let (crew, night) = (role(&s, "Crew"), role(&s, "Night"));
+    s.push(Command::AssignWorkRole { pawn: a, role: crew });
+    s.push(Command::AssignWorkRole { pawn: b, role: night });
+    s.push(Command::SetPriority { pawn: a, work: build, level: 3 });
+    s.step();
+    let roles = s.world.work_roles.len();
+
+    s.push(Command::DeleteWorkRole { role: crew });
+    s.step();
+    assert_eq!(s.world.work_roles.len(), roles - 1);
+    assert!(s.world.work_roles.iter().all(|r| r.label != "Crew"), "it's gone");
+    let role_of = |s: &Sim, e| s.world.work_role_of(&s.world.ecs.get::<&Pawn>(e).unwrap()).unwrap();
+    assert_eq!(role_of(&s, a), s.world.default_work_role().unwrap(), "its member is in the default role");
+    assert_eq!(level(&s, a, "core:build"), 3, "and keeps their pin");
+    assert_eq!(role_of(&s, b), role(&s, "Night"), "a later role's members follow it down");
+    assert_eq!(role(&s, "Night"), night - 1);
+
+    let back = Snapshot::capture(&s).restore(&common::mods(), &|m| m == "core").unwrap();
+    assert_eq!(back.world.state_hash(), s.world.state_hash(), "a load holds the same");
+    assert_eq!(role_of(&back, b), role(&back, "Night"));
+    assert_eq!(level(&back, a, "core:build"), 3);
+}
+
+#[test]
+fn a_mods_role_cant_be_deleted() {
+    let (mut s, a, _) = pair();
+    let builder = role(&s, "Builder");
+    s.push(Command::AssignWorkRole { pawn: a, role: builder });
+    s.step();
+    let before = s.world.work_roles.len();
+    s.push(Command::DeleteWorkRole { role: builder });
+    s.push(Command::DeleteWorkRole { role: 99 });
+    s.step();
+    assert_eq!(s.world.work_roles.len(), before, "a def's role would only be seeded back");
+    assert_eq!(s.world.ecs.get::<&Pawn>(a).unwrap().work_role, Some(builder));
 }

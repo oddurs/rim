@@ -804,6 +804,7 @@ impl UiVm {
             None => return Err(rt("bad entity id")),
         });
         act!("role_from_role", (String, u16), |(label, r)| UiAction::CreateRoleFromRole(label, role(r)?));
+        act!("delete_role", u16, |r| UiAction::DeleteRole(role(r)?));
         act!("set_rule_enabled", (String, bool), |(id, on)| UiAction::SetRuleEnabled(id, on));
         act!("mark_urgent", (u64, bool), |(id, on)| match Entity::from_bits(id) {
             Some(e) => UiAction::MarkUrgent(e, on),
@@ -1506,6 +1507,7 @@ impl UiVm {
             t.set("cols", cols)?;
             t.set("rows", rows)?;
             let roles = lua.create_table()?;
+            let default = w.default_work_role().map(|r| r as usize);
             for (i, r) in w.work_roles.iter().enumerate() {
                 let role = lua.create_table()?;
                 role.set("index", i + 1)?;
@@ -1514,6 +1516,7 @@ impl UiVm {
                 role.set("order", r.order)?;
                 role.set("edited", r.edited)?;
                 role.set("planned", r.planner.is_some())?;
+                role.set("default", default == Some(i))?;
                 let set = lua.create_table()?;
                 for &(wt, l) in &r.priorities {
                     set.set(defs.work_types[wt as usize].id.as_str(), l)?;

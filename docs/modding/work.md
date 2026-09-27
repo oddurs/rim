@@ -92,7 +92,11 @@ target = "work_role/core:builder"
 "crafting:craft" = 4
 ```
 
-Scripts read roles with `rim.work_roles()` and `rim.work_role(id)`.
+Scripts read roles with `rim.work_roles()` and `rim.work_role(id)`. A role
+is its place in the colony's list, and the list can shrink: the player may
+delete a role of their own (`act.delete_role`), and the roles after it move
+down one. Don't keep a role's index across ticks; find it again by id or
+label.
 
 ## Auto, and replacing its planner
 

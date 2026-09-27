@@ -91,7 +91,7 @@ type WorkType = { id: string, label: string, icon: string, order: number, defaul
 type BoardCol = { id: string, label: string, icon: string, skill: string?, waiting: number, default: number, on: number, high: number }
 type BoardCell = { base: number, value: number, inherit: number, pinned: boolean, planned: boolean, reason: string?, why: string, skill: number?, skill_frac: number? }
 type BoardRow = { id: number, name: string, job: string, role: number?, role_label: string?, cells: { BoardCell } }
-type BoardRole = { index: number, id: string?, label: string, order: number, edited: boolean, planned: boolean, levels: { [string]: number } }
+type BoardRole = { index: number, id: string?, label: string, order: number, edited: boolean, planned: boolean, default: boolean, levels: { [string]: number } }
 type Board = { levels: number, labels: { string }, high: number, cols: { BoardCol }, rows: { BoardRow }, roles: { BoardRole } }
 type StandingOrder = { id: string, label: string, reading: string, value: number?, band: string, effect: string, season: string?, crossed: boolean, enabled: boolean, acting: boolean }
 type Markable = { id: number, urgent: boolean, label: string }
@@ -189,6 +189,8 @@ declare act: {
     clear_priority: (id: number, work: string) -> (),
     -- Show the next field overlay.
     cycle_overlay: () -> (),
+    -- Delete one of the player's own work roles (a role from a mod can't be deleted), by its index in view.board().roles. Its members go to the default role and keep their pins; the roles after it move down one.
+    delete_role: (role: number) -> (),
     -- Draft or undraft a colonist.
     draft: (id: number, on: boolean) -> (),
     -- Move the camera to a pawn or thing.
