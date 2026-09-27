@@ -174,6 +174,8 @@ The player marks one job urgent: a blueprint, a thing or creature marked
 for work, or an order's site. Everyone takes it a level sooner than its
 work type, never from 0, and it wins ties in its level. A mod's own work,
 posted as an order or a designation, can be marked with no code of its own.
+`rim.explain_work` and `rim.who_takes` rows carry `urgent`, so a script
+can tell a marked job from one its level earned.
 
 ## Lenses on the Work screen
 

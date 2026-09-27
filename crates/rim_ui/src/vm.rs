@@ -1532,9 +1532,10 @@ impl UiVm {
                 let row = lua.create_table()?;
                 row.set("work", l.world.defs.work_types[x.work as usize].id.as_str())?;
                 row.set("level", x.level)?;
-                row.set("why", rim_sim::order::why_text(l.world, &x.why))?;
+                row.set("why", rim_sim::order::work_why_text(l.world, &x))?;
                 row.set("picked", matches!(x.why, rim_sim::ai::Why::Picked(_)))?;
                 row.set("dist", x.dist)?;
+                row.set("urgent", x.urgent)?;
                 t.push(row)?;
             }
             Ok(Some(t))
@@ -2457,8 +2458,14 @@ fn pawn_table(lua: &Lua, w: &World, client: &ClientView, e: Entity) -> mlua::Res
 }
 
 /// Who's on the work at `target`, or who'd take it: "Being done by Bo",
-/// "Next: Bo in ~20 s, then Cyd". At 1x the sim runs 60 ticks a second.
+/// "Next: Bo in ~20 s, then Cyd", led by "Urgent · " when the player
+/// marked it. At 1x the sim runs 60 ticks a second.
 fn takes_text(w: &World, target: Entity) -> String {
+    let lead = if w.ecs.get::<&rim_sim::world::Urgent>(target).is_ok() { "Urgent · " } else { "" };
+    format!("{lead}{}", taker_text(w, target))
+}
+
+fn taker_text(w: &World, target: Entity) -> String {
     let name = |e: Entity| w.ecs.get::<&Pawn>(e).map(|p| p.name.clone()).unwrap_or_default();
     if let Some(&holder) = w.reservations.get(&target) {
         return format!("Being done by {}", name(holder));

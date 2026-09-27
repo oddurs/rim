@@ -241,8 +241,8 @@ type BoardWork = { id: string, label: string, skill: string?, waiting: number, p
 type BoardColonist = { id: number, name: string, role: number?, member: boolean, skills: { [string]: number }, pins: { [string]: number }, base: { [string]: number } }
 type WorkBoard = { levels: number, role: number?, work: { BoardWork }, colonists: { BoardColonist } }
 type PlanCell = { level: number, reason: string? }
-type WorkWhy = { work: string, level: number, why: string, dist: number? }
-type Taker = { id: number, ticks: number }
+type WorkWhy = { work: string, level: number, why: string, dist: number?, urgent: boolean }
+type Taker = { id: number, ticks: number, urgent: boolean }
 type Part = { label: string, value: number }
 type OrderNeed = { thing: string?, tag: string?, count: number }
 type OrderSpec = { label: string, needs: { OrderNeed }, work: number, work_type: string, requires: { string }? }
@@ -1417,18 +1417,19 @@ impl ScriptHost {
                     Ok(crate::ai::explain_work(w, e)
                         .into_iter()
                         .map(|x| {
-                            let why = crate::order::why_text(w, &x.why);
-                            (w.defs.work_types[x.work as usize].id.clone(), x.level, why, x.dist)
+                            let why = crate::order::work_why_text(w, &x);
+                            (w.defs.work_types[x.work as usize].id.clone(), x.level, why, x.dist, x.urgent)
                         })
                         .collect::<Vec<_>>())
                 })?;
                 let t = lua.create_table()?;
-                for (work, level, why, dist) in rows {
+                for (work, level, why, dist, urgent) in rows {
                     let row = lua.create_table()?;
                     row.set("work", work)?;
                     row.set("level", level)?;
                     row.set("why", why)?;
                     row.set("dist", dist)?;
+                    row.set("urgent", urgent)?;
                     t.push(row)?;
                 }
                 Ok(t)
@@ -1437,16 +1438,21 @@ impl ScriptHost {
             self.declare(
                 "explain_work",
                 "(id: number) -> { WorkWhy }",
-                "Why a colonist would do what it would, and passes over the rest, work type by work type in tie-break order. Empty if it isn't a pawn.",
+                "Why a colonist would do what it would, and passes over the rest, work type by work type in tie-break order. `urgent` if the pick is a job the player marked. Empty if it isn't a pawn.",
             );
             let ptr = self.world.clone();
             let f = lua.create_function(move |lua, id: u64| {
-                let line = with_world(&ptr, |w| Ok(crate::ai::who_takes(w, rim_sim_entity(id)?)))?;
+                let (line, urgent) = with_world(&ptr, |w| {
+                    let target = rim_sim_entity(id)?;
+                    Ok((crate::ai::who_takes(w, target), w.ecs.get::<&crate::world::Urgent>(target).is_ok()))
+                })?;
                 let t = lua.create_table()?;
                 for (e, ticks) in line {
                     let row = lua.create_table()?;
                     row.set("id", e.to_bits().get())?;
                     row.set("ticks", ticks)?;
+                    // The job's mark, on each row: a script can't ask it otherwise.
+                    row.set("urgent", urgent)?;
                     t.push(row)?;
                 }
                 Ok(t)
@@ -1455,7 +1461,7 @@ impl ScriptHost {
             self.declare(
                 "who_takes",
                 "(id: number) -> { Taker }",
-                "Who would take the job on a thing next, soonest first, with about how many ticks until they're there: colonists free to choose. Empty if someone already holds it.",
+                "Who would take the job on a thing next, soonest first, with about how many ticks until they're there: colonists free to choose. `urgent` if the player marked the job. Empty if someone already holds it.",
             );
             self.declare(
                 "priority_parts",

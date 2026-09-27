@@ -676,6 +676,9 @@ pub struct WorkWhy {
     pub level: u8,
     pub why: Why,
     pub dist: Option<u32>,
+    /// The pick is a job the player marked urgent: that's why it came
+    /// sooner than its level alone would say.
+    pub urgent: bool,
 }
 
 /// The nearest refusal of each work type while choosing: (distance, why).
@@ -702,6 +705,8 @@ pub fn explain_work(w: &World, e: Entity) -> Vec<WorkWhy> {
         .iter()
         .map(|&t| {
             let level = crate::rules::effective(w, &p, t);
+            let urgent =
+                chosen.as_ref().is_some_and(|(c, _, res)| *c == t && w.ecs.get::<&crate::world::Urgent>(*res).is_ok());
             let (why, dist) = match (&chosen, refused.0[t as usize].take()) {
                 _ if level == 0 => (Why::Never, None),
                 (Some((c, job, _)), _) if *c == t => (Why::Picked(job.clone()), None),
@@ -711,7 +716,7 @@ pub fn explain_work(w: &World, e: Entity) -> Vec<WorkWhy> {
                 (_, Some((d, why))) => (why, Some(d)),
                 _ => (Why::Nothing, None),
             };
-            WorkWhy { work: t, level, why, dist }
+            WorkWhy { work: t, level, why, dist, urgent }
         })
         .collect()
 }

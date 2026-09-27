@@ -25,7 +25,7 @@ are in [Scripting rules](scripting.md).
 | `rim.emit` | `(name: string, data: {[string]: any}?) -> ()` | Send an event to rim.on handlers in any mod. Only under your own name: "your_mod:event". |
 | `rim.every` | `(interval: number, fn: () -> ()) -> ()` | Run fn every `interval` ticks (hooks are staggered). Register at load time. |
 | `rim.explain` | `(field: string) -> {Part}` | Each part of a field's outdoor value: its terms, then pushes. |
-| `rim.explain_work` | `(id: number) -> { WorkWhy }` | Why a colonist would do what it would, and passes over the rest, work type by work type in tie-break order. Empty if it isn't a pawn. |
+| `rim.explain_work` | `(id: number) -> { WorkWhy }` | Why a colonist would do what it would, and passes over the rest, work type by work type in tie-break order. `urgent` if the pick is a job the player marked. Empty if it isn't a pawn. |
 | `rim.field` | `(id: string, x: number, y: number, z: number?) -> number` | A field's value at a cell (temperature, light, ...), on level z (the surface if nil). |
 | `rim.get_data` | `(key: string) -> any` | A copy of stored script data, or nil. A bare key is your mod's; "weather:forecast" reads another's. |
 | `rim.has_tool` | `(tags: { string }) -> boolean` | Whether some tool in the colony, lying about or in a hand, has every one of these tool tags. False for a tag no tool has. |
@@ -75,7 +75,7 @@ are in [Scripting rules](scripting.md).
 | `rim.tick` | `() -> number` | The current tick. A day is `rim.ticks_per_day` ticks. |
 | `rim.ticks_per_day` | `number` | Ticks in a game day. |
 | `rim.wealth` | `() -> number` | The colony's wealth (recomputed every few hundred ticks). |
-| `rim.who_takes` | `(id: number) -> { Taker }` | Who would take the job on a thing next, soonest first, with about how many ticks until they're there: colonists free to choose. Empty if someone already holds it. |
+| `rim.who_takes` | `(id: number) -> { Taker }` | Who would take the job on a thing next, soonest first, with about how many ticks until they're there: colonists free to choose. `urgent` if the player marked the job. Empty if someone already holds it. |
 | `rim.work_board` | `() -> WorkBoard` | What a planner reads: the scale, each work type (in tie-break order) with what's waiting and its `auto` numbers, and each colonist with their role, skills, pins and level before the rules. |
 | `rim.work_role` | `(id: number) -> number?` | A colonist's work role, as an index into rim.work_roles(). Nil if it isn't a colonist or the colony has no roles. |
 | `rim.work_roles` | `() -> { WorkRoleInfo }` | The colony's work roles in its own order, each with its index (what a colonist's role names), the def it came from (nil for the player's own) and whether the player edited it. |
@@ -101,8 +101,8 @@ type BoardWork = { id: string, label: string, skill: string?, waiting: number, p
 type BoardColonist = { id: number, name: string, role: number?, member: boolean, skills: { [string]: number }, pins: { [string]: number }, base: { [string]: number } }
 type WorkBoard = { levels: number, role: number?, work: { BoardWork }, colonists: { BoardColonist } }
 type PlanCell = { level: number, reason: string? }
-type WorkWhy = { work: string, level: number, why: string, dist: number? }
-type Taker = { id: number, ticks: number }
+type WorkWhy = { work: string, level: number, why: string, dist: number?, urgent: boolean }
+type Taker = { id: number, ticks: number, urgent: boolean }
 type Part = { label: string, value: number }
 type OrderNeed = { thing: string?, tag: string?, count: number }
 type OrderSpec = { label: string, needs: { OrderNeed }, work: number, work_type: string, requires: { string }? }
