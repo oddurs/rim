@@ -402,7 +402,7 @@ pub fn work_blocked(w: &World, e: Entity) -> Option<String> {
     }
     let need = match d {
         Some(d) => w.defs.thing(t.def).harvest_for(d).map_or(0, |h| h.requires_r),
-        None => w.defs.thing(t.def).build.as_ref().map_or(0, |b| b.requires_r),
+        None => w.build_requires(e),
     };
     if d.is_none() && need == 0 {
         return None;
@@ -818,15 +818,15 @@ fn choose_work(w: &World, e: Entity, p: &Pawn, mut why: Option<&mut Refusals>) -
                 None => {
                     // A build that needs a tool fetches it first; the walk
                     // there counts, as a material's does.
-                    let need = w.thing(be).and_then(|t| defs.thing(t.def).build.as_ref().map(|b| b.requires_r));
-                    match tool_for(w, e, p, need.unwrap_or(0), w.colony_tools()) {
+                    let need = w.build_requires(be);
+                    match tool_for(w, e, p, need, w.colony_tools()) {
                         Some((extra, tool)) => {
                             best[bw as usize] = Some((k + extra, Job::Construct { bp: be, tool }, be));
                             break;
                         }
                         None => {
                             if let Some(r) = why.as_deref_mut() {
-                                r.note(bw, d, Why::NeedsTool(need.unwrap_or(0)));
+                                r.note(bw, d, Why::NeedsTool(need));
                             }
                         }
                     }
@@ -1701,7 +1701,7 @@ fn run_construct(w: &mut World, e: Entity, p: &mut Pawn, bp: Entity, tool: Optio
         let taken = fetch(w, e, p, tl)?;
         return Some(Job::Construct { bp, tool: tool.filter(|_| !taken) });
     }
-    let need = w.defs.thing(b.def).build.as_ref().map_or(0, |bd| bd.requires_r);
+    let need = w.build_requires(bp);
     if !w.hand_covers(p, need) {
         return None;
     }

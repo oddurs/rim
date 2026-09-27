@@ -121,6 +121,17 @@ tool; a plank wall is planks and nails the same way. A plan whose materials
 are in but whose tool nobody has says so when selected: "Needs a chopping
 tool."
 
+A material can name a tool too, for anything built of it: `stuff.requires`
+joins the building's own. Primitive dresses stone with a pounding tool,
+while wattle and cob go up by hand, so the walls climb the same tool
+ladder as the gathering:
+
+```toml
+[[patch]]
+target = "thing/core:stone"
+set = { stuff = { requires = ["pounding"] } }
+```
+
 ## Bills
 
 Selecting a station shows its bills in the inspector. A bill is a recipe and

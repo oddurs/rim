@@ -32,3 +32,7 @@ Work orders (74b6fa7e) and blueprints are the same job: bring these things to a 
 ## 2026-09-26
 
 Moved to houses and raised to p1: material tool gates (fff4fb42) and replace-in-place (b3ffbae1) build on builds being orders (DESIGN.md §6c).
+
+## Proposed status: backlog -> dropped (Oddur Sigurdsson, 2026-09-26)
+
+Its purpose was giving building what orders have (inputs by tag, a tool requirement). #165 (dce75339) since gave blueprints build.requires with tool fetching and 'Needs a ... tool' reasons, and the material tool gate (fff4fb42) builds on that by reading the blueprint's MadeOf. What's left is an internal refactor of Deliver/Construct into Supply/Craft that no Houses item needs and that touches ai.rs, which three agents are editing. Suggest dropping it, or parking it in the backlog without a milestone, until a mod needs a build input by tag.

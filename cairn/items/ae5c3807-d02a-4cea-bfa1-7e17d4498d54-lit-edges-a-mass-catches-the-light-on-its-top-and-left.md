@@ -2,14 +2,14 @@
 id: ae5c3807-d02a-4cea-bfa1-7e17d4498d54
 title: 'Lit edges: a mass catches the light on its top and left'
 type: feature
-status: doing
+status: done
 milestone: houses
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 depends_on:
 - 3fe8c3cb-dcba-4882-b623-0468ea9fe697
 created: 2026-09-26
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p2
 api: none
 effort: s

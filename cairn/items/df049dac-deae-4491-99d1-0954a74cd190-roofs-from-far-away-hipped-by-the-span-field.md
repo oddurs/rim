@@ -2,14 +2,14 @@
 id: df049dac-deae-4491-99d1-0954a74cd190
 title: Roofs from far away, hipped by the span field
 type: feature
-status: doing
+status: done
 milestone: houses
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 depends_on:
 - 24100bb9-a9f8-430b-9c0a-4b8b7ed4dfb9
 created: 2026-09-26
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p2
 api: none
 effort: m

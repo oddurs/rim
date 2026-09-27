@@ -367,7 +367,7 @@ The API grows up: stat pipeline, script components, custom jobs, needs and def k
 
 ## houses — Houses
 
-`##········` 20% · 4 of 20 done
+`#####·····` 50% · 10 of 20 done
 
 A house is drawn as its plan and built as an order (DESIGN.md §6c). Walls join from their neighbours in quarters, with rounded ends and square junctions, and no sprites. Materials show as patterns and climb a ladder of tools from wattle to brick. Doors and windows orient themselves in the run and toward the room. Rooms take roles from what is in them, a roof span set by the materials replaces the 400-cell cap, and from far away the colony is a village of hipped roofs. The prototype, docs/engineering/houses-prototype.html, is the reference.
 
@@ -379,18 +379,18 @@ A house is drawn as its plan and built as an order (DESIGN.md §6c). Walls join 
 - [ ] `e7c4a3f6` Blueprints as work orders <sup>feature · p1 · m · engine</sup>
 - [ ] `fbab2877` Core's looks in the plan style <sup>content · p1 · m · core</sup>
 - [ ] `ff479390` The building ladder: dry stone, logs, bricks and a kiln <sup>content · p1 · m · plugin</sup>
-- [ ] `fff4fb42` A material names the tool it is built with <sup>feature · p1 · s · engine</sup>
-- [ ] `24100bb9` A roof span replaces the room size cap, and pillars hold it <sup>feature · p0 · m · engine</sup>
 - [ ] `4791e24b` Room state on the plan: daylight, firelight, gaps and open sky <sup>feature · p2 · m · client</sup>
-- [ ] `5643976c` Room labels on the plan <sup>feature · p2 · s · client</sup>
-- [ ] `7c53ec62` Material patterns: a fixed vocabulary, laid along the run <sup>feature · p1 · m · client</sup>
-- [ ] `ae5c3807` Lit edges: a mass catches the light on its top and left <sup>feature · p2 · s · client</sup>
 - [ ] `ba18a8e4` Facing: things turn in four directions <sup>feature · p1 · m · engine</sup>
-- [ ] `df049dac` Roofs from far away, hipped by the span field <sup>feature · p2 · m · client</sup>
+- [x] `24100bb9` A roof span replaces the room size cap, and pillars hold it <sup>feature · p0 · m · engine</sup>
 - [x] `3fe8c3cb` Joins in quarters: a wall run draws as one mass <sup>feature · p0 · m · client</sup>
+- [x] `5643976c` Room labels on the plan <sup>feature · p2 · s · client</sup>
 - [x] `7129a537` Openings turn to their wall and face the room <sup>feature · p0 · m · client</sup>
+- [x] `7c53ec62` Material patterns: a fixed vocabulary, laid along the run <sup>feature · p1 · m · client</sup>
+- [x] `ae5c3807` Lit edges: a mass catches the light on its top and left <sup>feature · p2 · s · client</sup>
+- [x] `df049dac` Roofs from far away, hipped by the span field <sup>feature · p2 · m · client</sup>
 - [x] `eb469f44` Houses concept: drawn as their plan, built as orders <sup>spike · p0 · m · tooling</sup>
 - [x] `f709cdd4` Room roles as data <sup>feature · p0 · m · engine</sup>
+- [x] `fff4fb42` A material names the tool it is built with <sup>feature · p1 · s · engine</sup>
 
 ## mood — Mood
 

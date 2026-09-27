@@ -30,8 +30,9 @@ be gathered for branches and chopped for wood. Core's own things have no
 
 ## Tool tags
 
-What a tool does. A harvest or a recipe that `requires` a tag can be worked
-only by a pawn holding a tool that has it. Core defines no tools and
+What a tool does. A harvest, a recipe, a build or a building material
+that `requires` a tag can be worked only by a pawn holding a tool that has
+it. Core defines no tools and
 requires none, so with no plugins every job is bare-handed.
 
 | Tag | Means | For example |

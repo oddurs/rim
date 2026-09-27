@@ -2,12 +2,12 @@
 id: 24100bb9-a9f8-430b-9c0a-4b8b7ed4dfb9
 title: A roof span replaces the room size cap, and pillars hold it
 type: feature
-status: doing
+status: done
 milestone: houses
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 created: 2026-09-26
 updated: 2026-09-26
+closed_at: 2026-09-26
 priority: p0
 api: breaking
 effort: m

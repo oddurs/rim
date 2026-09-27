@@ -185,6 +185,37 @@ fn felling_and_quarrying_wait_for_tools_and_say_so() {
     assert_eq!(rim_sim::ai::work_blocked(&s.world, oak).as_deref(), Some("Needs a chopping tool."));
 }
 
+/// Walls climb the tool ladder: a stone wall waits for something to dress
+/// the stone with, while a wattle one beside it goes up by hand.
+#[test]
+fn a_stone_wall_waits_for_a_pounding_tool() {
+    let (mut s, founder) = alone(3);
+    let d = &s.world.defs;
+    let (wall, stone, branches) =
+        (d.thing_id("wall").unwrap(), d.thing_id("stone").unwrap(), d.thing_id("primitive:branches").unwrap());
+    let home = s.world.pawn_pos(founder).unwrap();
+    let free: Vec<IVec> = (-6..=6)
+        .flat_map(|dy| (-6..=6).map(move |dx| home.offset(dx, dy)))
+        .filter(|&p| p != home && s.world.map.passable(p) && s.world.map.fixture_at(p).is_none())
+        .take(2)
+        .collect();
+    let (hewn, woven) = (free[0], free[1]);
+    s.push(Command::Build { thing: wall, stuff: Some(stone), a: hewn, b: hewn, facing: 0 });
+    s.push(Command::Build { thing: wall, stuff: Some(branches), a: woven, b: woven, facing: 0 });
+    s.world.place_item(stone, home, 10);
+    s.world.place_item(branches, home, 10);
+    s.step();
+    let bp = s.world.map.fixture_at(hewn).expect("a plan");
+    let standing =
+        |s: &Sim, p: IVec| s.world.map.fixture_at(p).is_some_and(|f| s.world.ecs.get::<&Blueprint>(f).is_err());
+    assert!(run_until(&mut s, 6_000, |s| standing(s, woven)), "wattle goes up by hand");
+    assert!(!standing(&s, hewn), "nobody can dress the stone");
+    assert_eq!(rim_sim::ai::work_blocked(&s.world, bp).as_deref(), Some("Needs a pounding tool."));
+    let hammer = s.world.defs.thing_id("primitive:hammerstone").unwrap();
+    s.world.place_item(hammer, home, 1);
+    assert!(run_until(&mut s, 12_000, |s| standing(s, hewn)), "built once a hammerstone lay about");
+}
+
 /// A tool is made of what it was knapped from: one def, its quality from
 /// the material.
 #[test]
@@ -363,6 +394,10 @@ fn core_alone_is_untouched() {
     assert_eq!(d.thing(d.thing_id("tree_oak").unwrap()).harvest.len(), 1);
     assert!(d.thing(d.thing_id("tree_oak").unwrap()).harvest[0].requires.is_empty(), "chopped bare-handed");
     assert!(d.thing(d.thing_id("granite").unwrap()).harvest[0].requires.is_empty(), "mined bare-handed");
+    assert!(
+        d.thing(d.thing_id("stone").unwrap()).stuff.as_ref().unwrap().requires.is_empty(),
+        "stone laid bare-handed"
+    );
     let deer = d.creature(d.creature_id("deer").unwrap());
     assert_eq!(deer.butcher_r, vec![(d.thing_id("raw_meat").unwrap(), 35)], "a deer is only meat");
     let wood = d.thing_id("wood").unwrap();

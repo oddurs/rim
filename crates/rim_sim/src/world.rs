@@ -1323,6 +1323,14 @@ impl World {
         self.ecs.get::<&MadeOf>(e).ok().map(|m| m.0)
     }
 
+    /// The tool tags building this plan takes: its own and its material's.
+    pub fn build_requires(&self, e: Entity) -> ToolMask {
+        let Some(t) = self.thing(e) else { return 0 };
+        let own = self.defs.thing(t.def).build.as_ref().map_or(0, |b| b.requires_r);
+        let stuff = self.made_of(e).and_then(|m| self.defs.thing(m).stuff.as_ref()).map_or(0, |s| s.requires_r);
+        own | stuff
+    }
+
     /// Put as much of a lot as fits on exactly this cell, as a new stack or
     /// on the same one there. Returns how many didn't fit.
     pub fn put_lot(&mut self, lot: Lot, p: IVec) -> u32 {
