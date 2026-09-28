@@ -31,6 +31,14 @@ It exits 1 if any test fails. A failure reads like this:
 ```text
 my_mod/tests/flood.luau: a flood soaks the colony
 my_mod/tests/flood.luau:5: expected true, got nil (world seed 7, tick 1667)
+rerun: rim test mods/my_mod --filter "a flood soaks the colony"
+```
+
+When the world's seed came from the test's name, the last line says so and
+pins it, so the rerun gets the same map even on a night with a shift:
+
+```text
+seed 1234 (from "my_mod/tests/flood.luau/a flood soaks the colony", shift 20260928); rerun: RIM_SEED=1234 rim test mods/my_mod --filter "a flood soaks the colony"
 ```
 
 ## Checking a mod
@@ -104,7 +112,10 @@ weather:data: forecast[0].ends: 21362 ≠ 21400
 `t.world({ seed, mods, size })` builds a fresh world, exactly as a new game
 would. Every option is optional:
 
-- `seed` defaults to 1.
+- `seed` defaults to one made from the test's own name, so each test gets
+  its own map rather than all sharing one. At night CI shifts it by the date:
+  a test that quietly depends on what its map holds fails some night, not
+  never. Name a seed when the map matters, and say why.
 - `mods` defaults to your mod and everything it depends on.
 - `size` defaults to the normal map size. A smaller map builds faster.
 

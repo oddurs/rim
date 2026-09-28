@@ -98,6 +98,54 @@ fn the_two_suns_example_loads_and_passes_its_tests() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// A world with no seed named gets one from the test's name, not seed 1, and
+/// a failure says how the seed was made and how to run the test again with
+/// it (DESIGN.md §7b).
+#[test]
+fn a_world_with_no_seed_gets_one_from_the_test_name() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let dir = std::env::temp_dir().join(format!("rim-seeded-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    copy(&root.join("mods/core"), &dir.join("core"));
+    let m = dir.join("seeded");
+    std::fs::create_dir_all(m.join("tests")).unwrap();
+    std::fs::write(
+        m.join("mod.toml"),
+        "id = \"seeded\"\nname = \"seeded\"\nversion = \"0.1.0\"\napi = \"0.6\"\ndepends = [\"core\"]\n",
+    )
+    .unwrap();
+    std::fs::write(
+        m.join("tests/seed.luau"),
+        r#"
+test("which map", function(t)
+    local w = t.world({ size = 64 })
+    local again = t.world({ size = 64, seed = w:seed() })
+    t.expect(again:hash()).to_be(w:hash())
+    error("seed " .. string.format("%d", w:seed()))
+end)
+test("a named map", function(t)
+    local w = t.world({ size = 64, seed = 5 })
+    error("seed " .. string.format("%d", w:seed()))
+end)
+"#,
+    )
+    .unwrap();
+    let results = modtest::run_mod(&m, None).unwrap();
+    let failure = |name: &str| results.iter().find(|r| r.name == name).and_then(|r| r.failure.clone()).unwrap();
+    let want = rim_sim::testseed::seed("seeded/tests/seed.luau/which map");
+    assert_ne!(want.seed, 1);
+    let derived = failure("which map");
+    assert!(
+        derived.contains(&format!("seed {}\n", want.seed)) || derived.contains(&format!("seed {} ", want.seed)),
+        "{derived}"
+    );
+    assert!(derived.contains(&format!("{}; rerun: RIM_SEED={} rim test ", want.describe(), want.seed)), "{derived}");
+    assert!(derived.ends_with("--filter \"which map\""), "{derived}");
+    let named = failure("a named map");
+    assert!(named.contains("seed 5") && named.contains("\nrerun: rim test ") && !named.contains("RIM_SEED"), "{named}");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 fn copy(from: &Path, to: &Path) {
     std::fs::create_dir_all(to).unwrap();
     for e in std::fs::read_dir(from).unwrap().flatten() {
