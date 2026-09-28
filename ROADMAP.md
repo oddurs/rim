@@ -675,11 +675,10 @@ Dig down. The map becomes a stack of 2D levels joined only at stairs, ladders an
 
 ## crafting — Crafting
 
-`##########` 94% · 30 of 32 done · due 2027-05-01
+`##########` 97% · 31 of 32 done · due 2027-05-01
 
 Production chains: workbenches and bills, cooking, farming, tailoring, research as a plugin.
 
-- [ ] `308074c6` Getting wet: pawn wetness and clothing insulation <sup>feature · p2 · m · engine</sup>
 - [ ] `db7f1e06` Mining that rewards looking: rock kinds, veins and prospecting <sup>content · p1 · m · core</sup>
 - [x] `01691032` Item categories and one filter: things, materials and condition <sup>feature · p1 · m · engine</sup>
 - [x] `0927f0af` Tailoring: make apparel <sup>content · p2 · s · core</sup>
@@ -687,6 +686,7 @@ Production chains: workbenches and bills, cooking, farming, tailoring, research 
 - [x] `27d51e02` mods/iron: bog iron, charcoal, bloomery and forge, nails, fittings, saw and pick <sup>content · p2 · l · plugin</sup>
 - [x] `282efef8` Containers: a store block with slots <sup>feature · p1 · l · engine</sup>
 - [x] `2c03427e` Cooking: raw food into meals <sup>content · p1 · s · core</sup>
+- [x] `308074c6` Getting wet: pawn wetness and clothing insulation <sup>feature · p2 · m · engine</sup>
 - [x] `4f3e5d8d` mods/timber: planks, plank walls, crates, shelves, racks and a granary <sup>content · p2 · m · plugin</sup>
 - [x] `5e323021` Store inspector: Contents and Accepts tabs <sup>feature · p1 · m · core</sup>
 - [x] `5e6024f3` Apparel names a material property in engine code, and main is red <sup>bug · p0</sup>

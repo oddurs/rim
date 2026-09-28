@@ -458,6 +458,26 @@ pub struct ToolDef {
 
 #[derive(Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
+pub struct WetDef {
+    /// The field that soaks: rain, in its units per hour.
+    pub field: String,
+    /// Wetness (0 to 1) an hour per unit of the field, outside an enclosed room.
+    pub soak: f64,
+    /// Hours to dry from soaked in the comfortable range; indoors or
+    /// out of the rain alike.
+    pub dry_hours: f64,
+    /// Drying is this much faster per degree of the need's field above the
+    /// comfort's cold end: a fire dries you.
+    #[serde(default)]
+    pub heat: f64,
+    /// Degrees the cold end of comfort rises when soaked.
+    pub chill: f64,
+    #[serde(skip)]
+    pub field_r: usize,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct ApparelDef {
     /// Where it's worn: one garment a layer ("body", "outer"). Any names.
     pub layer: String,
@@ -793,6 +813,10 @@ pub struct NeedDef {
     /// what the pawn wears (`apparel.warmth`).
     #[serde(default)]
     pub insulated: bool,
+    /// Getting wet: rain soaks a pawn outdoors and it stays wet until dried,
+    /// which raises the cold end of this need's comfort.
+    #[serde(default)]
+    pub wet: Option<WetDef>,
     /// What a pawn who can talk says as the need drops below a level.
     #[serde(default)]
     pub say: Option<NeedSay>,
@@ -2411,6 +2435,12 @@ impl DefDb {
             }
             if d.satisfier == Satisfier::Field {
                 d.field_r = get("field", &d.field, &format!("need/{}", d.id))?;
+                if let Some(wd) = &mut d.wet {
+                    wd.field_r = get("field", &wd.field, &format!("need/{}", d.id))? as usize;
+                    if wd.soak < 0.0 || wd.dry_hours <= 0.0 {
+                        return Err(format!("need/{}: wet needs `soak` of 0 or more and `dry_hours` above 0", d.id));
+                    }
+                }
             }
         }
         for d in &mut self.designations {

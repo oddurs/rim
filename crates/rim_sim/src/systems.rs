@@ -71,6 +71,9 @@ pub fn spoil(w: &mut World) -> usize {
     worked
 }
 
+/// `Pawn::wet` when soaked through.
+const WET_FULL: f64 = 10_000.0;
+
 /// Every `NEEDS_INTERVAL` ticks: decay needs, apply sleep, starvation, healing.
 pub const NEEDS_INTERVAL: u64 = 60;
 
@@ -93,6 +96,18 @@ pub fn needs(w: &mut World) {
         let mut dmg = 0.0;
         // What it wears keeps the cold off an insulated need.
         let warmth = if p.worn.is_empty() { 0.0 } else { w.warmth_worn(&p) };
+        // Rain soaks it outdoors; it dries by the hour, faster in warmth.
+        let hours = frac * 24.0;
+        let mut chill = 0.0;
+        if let Some((nd, wd)) = p.needs.iter().map(|n| defs.need(n.0)).find_map(|nd| Some((nd, nd.wet.as_ref()?))) {
+            let wet = p.wet as f64 / WET_FULL;
+            let rain = if w.map.indoors(pos) { 0.0 } else { w.fields.value(&defs, &w.map, wd.field_r, pos).max(0.0) };
+            let here = w.fields.value(&defs, &w.map, nd.field_r as usize, pos);
+            let dry = hours / wd.dry_hours * (1.0 + wd.heat * (here - nd.comfort[0]).max(0.0));
+            let now = (wet + wd.soak * rain * hours - if rain > 0.0 { 0.0 } else { dry }).clamp(0.0, 1.0);
+            p.wet = (now * WET_FULL).round() as u16;
+            chill = wd.chill * now;
+        }
         for (k, n) in p.needs.iter_mut().enumerate() {
             let nd = defs.need(n.0);
             let was = n.1;
@@ -104,7 +119,8 @@ pub fn needs(w: &mut World) {
                     // cell is (days_to_empty is the rate at 10 units out);
                     // refills while comfortable.
                     let v = w.fields.value(&defs, &w.map, nd.field_r as usize, pos);
-                    let low = nd.comfort[0] - if nd.insulated { warmth } else { 0.0 };
+                    let low = nd.comfort[0] - if nd.insulated { warmth } else { 0.0 }
+                        + if nd.wet.is_some() { chill } else { 0.0 };
                     let off = (low - v).max(v - nd.comfort[1]).max(0.0);
                     if off > 0.0 {
                         -(NEED_MAX as f64) * frac / nd.days_to_empty * off / 10.0

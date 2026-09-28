@@ -29,6 +29,11 @@ field = "feels_like"
 comfort = [10.0, 32.0]
 # Clothes ease it: the cold end drops by what the colonist wears.
 insulated = true
+# Rain soaks a colonist outdoors, a tenth an hour per mm/h, and a soaked
+# one feels the cold 6° sooner until dried (on top of the cold rain in
+# feels-like while it falls): about four hours in comfort,
+# a good deal faster by a fire.
+wet = { field = "precipitation", soak = 0.1, dry_hours = 4.0, heat = 0.1, chill = 6.0 }
 days_to_empty = 0.2
 recover_days = 0.1
 say = { below = 0.3, lines = ["I'm freezing.", "Can't feel my fingers.", "It's so cold."] }
