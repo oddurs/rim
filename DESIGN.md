@@ -2135,6 +2135,10 @@ footprint. Selection is 3 points outside it: brackets on a thing, a ring on
 a pawn. Hover is on the footprint's edge. Marks are inside it, each at a
 fixed corner: a designation top-right, urgent top-left, unreachable
 bottom-left. Nothing covers the thing itself, and no state hides another.
+Which jobs are unreachable is the sim's answer, read-only:
+`ai::unreachable_jobs` asks the map's regions, one colonist per region,
+for each job in view. The work choice can't say, since it stops at the
+nearest job it can reach.
 
 ### Tension: who decides what a preview shows?
 

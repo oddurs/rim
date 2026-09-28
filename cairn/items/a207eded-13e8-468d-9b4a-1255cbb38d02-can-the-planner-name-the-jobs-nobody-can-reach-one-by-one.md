@@ -2,10 +2,12 @@
 id: a207eded-13e8-468d-9b4a-1255cbb38d02
 title: Can the planner name the jobs nobody can reach, one by one?
 type: spike
-status: planned
+status: done
 milestone: chalkline
+assignee: Oddur Sigurdsson
 created: 2026-09-27
 updated: 2026-09-27
+closed_at: 2026-09-27
 priority: p3
 api: none
 effort: s
@@ -27,4 +29,12 @@ Half a day. Measure the soak benchmark before and after.
 
 ## Answer
 
-(Write the answer here before closing. If it's cheap, the notch item goes ahead; if not, record why and move the notch out of the milestone.)
+**Yes, and cheaply, but not from the planner.** The hypothesis was half wrong: `choose_work` checks a job's reachability only when it is nearer than the best found so far, and it stops at the nearest reachable one. So it never visits most of the jobs nobody can reach, and recording its refusals would name a few of them at random.
+
+The per-job answer comes straight from the map's regions instead: `ai::unreachable_jobs(w, a, b)`. It sorts the colonists into the regions they stand in, then asks each job in the cells from `a` to `b` (blueprints, things marked for work, order sites, creatures marked for work) whether one colonist per region can reach it, with `Map::can_reach`, a few cell lookups each. It is read-only, saved nowhere, and fed back into nothing. The regions are refreshed every tick (`sim.rs`), so an answer read between ticks is current.
+
+Measured in release, seed 2, core only, 8 colonists, the whole 192×192 map marked to chop (1,157 jobs), load average around 65: **21 µs** for a 60×36 view and **1.05 ms** for the whole map. The notch can ask for the visible cells every frame, or once a tick.
+
+The soak benchmark wasn't run: no code the sim runs changed. `unreachable_jobs` is new and only the notch and the tests call it.
+
+The notch item (7ffd8d09) goes ahead on this.
