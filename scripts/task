@@ -133,6 +133,7 @@ scripts_test() {
   step scripts
   scripts/test-pre-push
   scripts/test-task
+  scripts/test-ci-plan
 }
 
 check() {
@@ -183,7 +184,7 @@ usage: scripts/task <verb> [args]
   fmt:check  fail if anything isn't formatted
   types      mod scripts against the declared Luau APIs
   roadmap    cairn items match the schema and render
-  scripts    the tooling's own tests: the pre-push hook and this script
+  scripts    the tooling's own tests: the pre-push hook, this script, ci-plan
   lint       clippy over every target, warnings denied
   test       nextest over the workspace; `test -- ARGS` passes ARGS to nextest
   build      release binaries and examples

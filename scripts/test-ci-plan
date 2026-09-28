@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# Tests for scripts/ci-plan, in a throwaway repo: each case commits some files
+# and reads the plan for that commit as a PR, the way CI's merge commit does.
+# `scripts/task scripts` runs it.
+set -euo pipefail
+plan="$(cd "$(dirname "$0")" && pwd)/ci-plan"
+tmp=$(mktemp -d)
+trap 'command rm -rf "$tmp"' EXIT
+fails=0
+
+git() { command git -c user.name=t -c user.email=t@t -c init.defaultBranch=main "$@"; }
+git init -q "$tmp/repo"
+cd "$tmp/repo"
+mkdir -p scripts
+command cp -f "$plan" scripts/ci-plan
+printf '[toolchain]\nchannel = "1.0.0"\n' >rust-toolchain.toml
+git add -A && git commit -qm base
+
+# The plan for a PR whose change is these files; extra KEY=VALUE set the event.
+case_of() { # name, expected lines (space-separated), files..., [-- env...]
+  local name=$1 want=$2 f out
+  shift 2
+  local envs=(EVENT=pull_request)
+  while [ $# -gt 0 ]; do
+    if [ "$1" = -- ]; then shift; envs+=("$@"); break; fi
+    mkdir -p "$(dirname "$1")" && echo "$RANDOM" >>"$1"
+    shift
+  done
+  git add -A && git commit -qm "$name"
+  out=$(env "${envs[@]}" scripts/ci-plan | tr '\n' ' ')
+  for f in $want; do
+    if [[ " $out" != *" $f "* ]]; then
+      echo "FAIL  $name: wanted $f, got: $out"
+      fails=$((fails + 1))
+      return
+    fi
+  done
+  echo "ok    $name"
+}
+
+case_of "a sim change runs code but no render bench" "lane=pr code=true render=false" crates/rim_sim/src/lib.rs
+case_of "a client change runs the render bench" "lane=pr code=true render=true" crates/rim_client/src/draw.rs
+case_of "a lockfile change runs the render bench" "lane=pr code=true render=true" Cargo.lock
+case_of "a cairn-only change is docs" "lane=pr code=false render=false" cairn/items/x.md
+case_of "a guide in docs/modding is code" "code=true" docs/modding/guide.md
+case_of "a draft runs nothing" "lane=none" crates/rim_sim/src/lib.rs -- DRAFT=true
+case_of "full-ci makes a PR the queue lane, with the bench" "lane=queue render=true" crates/rim_sim/src/lib.rs -- LABELS="full-ci other"
+case_of "the merge queue's branch is the queue lane" "lane=queue render=true" crates/rim_sim/src/lib.rs -- HEAD_REF=mergify/merge-queue/abc
+case_of "a push to main checks only" "lane=main" crates/rim_sim/src/lib.rs -- EVENT=push
+case_of "the schedule is the nightly" "lane=nightly render=true" crates/rim_sim/src/lib.rs -- EVENT=schedule
+
+if [ "$fails" -gt 0 ]; then
+  echo "ci-plan: $fails failed"
+  exit 1
+fi
+echo "ci-plan: all cases pass"

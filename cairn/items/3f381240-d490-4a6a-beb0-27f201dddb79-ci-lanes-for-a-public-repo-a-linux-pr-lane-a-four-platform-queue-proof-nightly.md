@@ -2,14 +2,14 @@
 id: 3f381240-d490-4a6a-beb0-27f201dddb79
 title: 'CI lanes for a public repo: a Linux PR lane, a four-platform queue proof, nightly'
 type: chore
-status: review
+status: done
 milestone: proving-ground
 assignee: Oddur Sigurdsson
-claimed: 2026-09-27
 depends_on:
 - 9b435cd8-40ed-4c0f-8a41-ef3b892811c2
 created: 2026-09-27
 updated: 2026-09-28
+closed_at: 2026-09-28
 priority: p0
 api: none
 effort: m
@@ -32,7 +32,7 @@ Every PR push runs seven jobs on Linux, macOS, Windows and ARM and cancels its p
 
 ## Acceptance criteria
 
-- [ ] A PR run starts only Linux jobs and finishes in under 7 minutes (run linked, timings recorded)
+- [x] A PR run starts only Linux jobs and finishes in under 7 minutes (run linked, timings recorded)
 - [x] A queue-lane run (by `workflow_dispatch` on a branch) runs all four platforms and `agree` (run linked)
 - [x] A docs-only PR runs the checks job alone, and a draft runs nothing (runs linked)
 - [x] A nightly run by `workflow_dispatch` runs the full macOS and Windows suites (run linked)
@@ -58,3 +58,7 @@ Merged as #287 (c35cb3cb). main's push run https://github.com/oddurs/rim/actions
 ## 2026-09-28
 
 Criterion 3: the draft run https://github.com/oddurs/rim/actions/runs/36455454309 ran Plan only (6 s) and skipped every other job; the same PR marked ready, docs only, ran Plan and checks alone: https://github.com/oddurs/rim/actions/runs/36455520184 (attempt 2; attempt 1 was cancelled from outside), 32 s. Criterion 1 is not met: on warm caches a PR run took 17m19s (https://github.com/oddurs/rim/actions/runs/36458855344), with Client's autotest under xvfb about 14 minutes and Test 8m13s. Filed as 2ede9239-d2f9-49a9-b7fa-c862a82fb846; this item closes when that lands.
+
+## 2026-09-28
+
+Criterion 1: with 2ede9239 a PR run on warm caches starts only Linux jobs and takes 6m24s: https://github.com/oddurs/rim/actions/runs/36461782487 (Test 6m14s, Build/mods/crosscheck/sim 4m57s, Client 4m39s, Lint 1m45s, checks 19s).
