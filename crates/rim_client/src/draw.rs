@@ -1,6 +1,7 @@
 //! Rendering. Read-only access to the simulation.
 
 use crate::atlas::{Slot, WorldAtlas};
+use crate::figures;
 use crate::overlay;
 use crate::wear;
 use crate::worksite::{Kind, Tone, DETAIL_ZOOM};
@@ -755,43 +756,83 @@ pub fn urgent_spot(sx: f32, sy: f32, r: f32) -> (f32, f32) {
 /// The urgent mark's amber, for tests that look for it on screen.
 pub const URGENT_MARK: Color = URGENT;
 
-/// Pawns, hit flashes and the field overlay.
-pub fn pawns(app: &App) {
+/// The colours a pawn fills its body's channels with: its creature's
+/// colour, and over the torso the garment on the outermost of the body's
+/// `layers` it wears (the castaway starts with none, DESIGN.md §3). A body
+/// with no layers shows the last garment put on.
+fn paints(w: &World, p: &Pawn, body: Option<&rim_ui::body::Body>) -> figures::Paints {
+    let skin = rgb(w.defs.creature(p.def).rgb);
+    let rank = |g: Entity| {
+        let layers = body.map_or(&[][..], |b| b.layers.as_slice());
+        w.layer_of(g).and_then(|l| layers.iter().position(|x| x == l))
+    };
+    let outer = match body.is_some_and(|b| !b.layers.is_empty()) {
+        true => p.worn.iter().copied().filter(|&g| rank(g).is_some()).max_by_key(|&g| rank(g)),
+        false => p.worn.last().copied(),
+    };
+    let torso = outer
+        .and_then(|g| w.thing(g).map(|t| rgb(w.defs.thing(w.ecs.get::<&MadeOf>(g).map(|m| m.0).unwrap_or(t.def)).rgb)))
+        .unwrap_or(skin);
+    figures::Paints { skin, feet: shade(skin, 0.72), torso, hair: shade(skin, 0.5) }
+}
+
+/// Pawns, hit flashes and the field overlay. Every pawn's figure goes into
+/// one batch, drawn in one call (DESIGN.md §6h); its marks go over it.
+pub fn pawns(app: &mut App) {
+    let mut batch = std::mem::take(&mut app.figures);
+    let mut shown = std::mem::take(&mut app.figures_shown);
+    batch.clear();
+    batch.calls = 0;
+    batch.gl_us = 0.0;
+    shown.clear();
+    let z = app.cam.zoom;
+    {
+        let w = &app.sim.world;
+        // Once a frame: the view, widened by the most a part reaches (a
+        // cell) and a cell of lunge, and each creature's body.
+        let (x0, y0) = app.cam.to_world(0.0, 0.0);
+        let (x1, y1) = app.cam.to_world(screen_width(), screen_height());
+        let bodies: Vec<Option<&rim_ui::body::Body>> =
+            w.defs.creatures.iter().map(|c| app.ui.bodies.for_creature(&c.id)).collect();
+        for &e in &w.pawns {
+            let Ok(p) = w.ecs.get::<&Pawn>(e) else { continue };
+            // Only the level on screen (DESIGN.md §6d).
+            if !p.active || p.pos.z != app.cam.z {
+                continue;
+            }
+            let (px, py) = drawn_at(app, e, &p);
+            if px < x0 - 2.0 || px > x1 + 2.0 || py < y0 - 2.0 || py > y1 + 2.0 {
+                continue;
+            }
+            let at = app.cam.to_screen(px, py);
+            shown.push((e, at));
+            let cd = w.defs.creature(p.def);
+            let ring = match p.faction {
+                Faction::Player => Some(PLAYER),
+                Faction::Hostile => Some(HOSTILE),
+                Faction::Wild => None,
+            }
+            .map(|c| (c, cd.size * z));
+            let face = app.motion.facing(e).unwrap_or(0.0);
+            let body = bodies.get(p.def as usize).copied().flatten();
+            match body {
+                Some(b) => figures::figure(&mut batch, b, at, z, face, &paints(w, &p, body), ring),
+                // A creature no body draws is a disc, as every creature was.
+                None => figures::disc(&mut batch, at, cd.size * z, z, rgb(cd.rgb), ring),
+            }
+        }
+    }
+    let px = screen_dpi_scale() * if app.world_target.is_some() { app.render_scale.unwrap_or(1.0) } else { 1.0 };
+    batch.draw(app.world_target.as_ref().map(|t| t.render_pass.raw_miniquad_id()), px);
+    app.figures = batch;
+
     let w = &app.sim.world;
     let defs = &w.defs;
     let cam = &app.cam;
-    let z = cam.zoom;
-    let (x0, y0) = cam.to_world(0.0, 0.0);
-    let (x1, y1) = cam.to_world(screen_width(), screen_height());
-    for &e in &w.pawns {
+    for &(e, (sx, sy)) in &shown {
         let Ok(p) = w.ecs.get::<&Pawn>(e) else { continue };
-        // Only the level on screen (DESIGN.md §6d).
-        if !p.active || p.pos.z != app.cam.z {
-            continue;
-        }
         let cd = defs.creature(p.def);
-        let (px, py) = drawn_at(app, e, &p);
-        if px < x0 - 1.0 || px > x1 + 1.0 || py < y0 - 1.0 || py > y1 + 1.0 {
-            continue;
-        }
-        let (sx, sy) = cam.to_screen(px, py);
         let r = cd.size * z;
-        disc(&mut Immediate(&app.world_atlas), sx + 1.5, sy + 2.0, r, Color::new(0.0, 0.0, 0.0, 0.3));
-        disc(&mut Immediate(&app.world_atlas), sx, sy, r, rgb(cd.rgb));
-        // What it wears: a band of each garment's colour, outer layers out.
-        for (k, &g) in p.worn.iter().enumerate() {
-            let Some(t) = w.thing(g) else { continue };
-            let c = rgb(defs.thing(w.ecs.get::<&MadeOf>(g).map(|m| m.0).unwrap_or(t.def)).rgb);
-            draw_circle_lines(sx, sy, r * (0.72 - 0.22 * k as f32).max(0.2), (r * 0.22).max(1.0), c);
-        }
-        let ring = match p.faction {
-            Faction::Player => Some(PLAYER),
-            Faction::Hostile => Some(HOSTILE),
-            Faction::Wild => None,
-        };
-        if let Some(rc) = ring {
-            draw_circle_lines(sx, sy, r, 2.0, rc);
-        }
         if p.drafted {
             draw_rectangle(sx - r, sy - r - 6.0, 6.0, 6.0, PLAYER);
         }
@@ -814,6 +855,7 @@ pub fn pawns(app: &App) {
         }
         // Names, the sleep marker and bubbles are anchored UI (core:labels).
     }
+    app.figures_shown = shown;
 
     // Hit flashes.
     for (pos, tick) in &w.hits {

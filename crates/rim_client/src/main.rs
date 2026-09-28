@@ -10,6 +10,7 @@ mod autotest;
 mod bench;
 mod cli;
 mod draw;
+mod figures;
 mod grid;
 mod light;
 mod mesh;
@@ -185,6 +186,10 @@ pub struct App {
     pub worksites: worksite::Worksites,
     /// How pawns are drawn moving: the cell each came from, and facing.
     pub motion: motion::Motion,
+    /// Every pawn's figure, drawn in one call (DESIGN.md §6h).
+    pub figures: figures::Batch,
+    /// The pawns drawn this frame and where, for their marks.
+    pub figures_shown: Vec<(Entity, (f32, f32))>,
     /// Every mod's sprites, packed at load.
     pub world_atlas: atlas::WorldAtlas,
     /// The world's resolution as a fraction of the screen's pixels, if
@@ -708,6 +713,7 @@ async fn game() {
         // Closing the window takes a last snapshot first.
         prevent_quit();
     }
+    sim.warnings.extend(figures::unbodied(&ui.bodies, &sim.world.defs));
     for w in sim.warnings.iter().chain(&ui.warnings()) {
         eprintln!("  warning: {w}");
     }
@@ -766,6 +772,8 @@ async fn game() {
         meshes: mesh::Meshes::default(),
         worksites: worksite::Worksites::default(),
         motion: motion::Motion::default(),
+        figures: figures::Batch::default(),
+        figures_shown: Vec::new(),
         world_atlas,
         render_scale,
         world_target: None,
@@ -1253,6 +1261,7 @@ pub fn client_view(app: &mut App, mouse: (f32, f32), time: f64) -> ClientView {
                     app.meshes.indices / 1000,
                     app.meshes.rebuilt
                 ),
+                format!("figures: {} calls · {} parts", app.figures.calls, app.figures.len()),
             ],
             time,
         );
@@ -1438,7 +1447,8 @@ pub struct RenderTimes {
     /// Painting, excluding `gl`.
     pub things: f64,
     /// Handing work to GL mid-frame: the chunk meshes, the batch before
-    /// each layer, and a scaled world's target to the screen. Submission,
+    /// each layer, the pawns' figures, and a scaled world's target to the
+    /// screen. Submission,
     /// like macroquad's end of frame: a software rasteriser does its
     /// drawing here, a GPU driver only queues.
     pub gl: f64,
@@ -1715,7 +1725,8 @@ pub fn render(app: &mut App) {
     t.gl = app.meshes.submit_us;
     t.things = lap() - t.gl;
     draw::pawns(app);
-    t.pawns = lap();
+    t.gl += app.figures.gl_us;
+    t.pawns = lap() - app.figures.gl_us;
     // Underground no weather falls, and no roof shows (DESIGN.md §6d).
     if app.cam.z >= 0 {
         app.sky.weather(&app.sim.world, &app.cam, &air);

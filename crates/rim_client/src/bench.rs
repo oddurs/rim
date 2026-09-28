@@ -669,11 +669,11 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
         draw_one(&mut app, &mut time, None).await;
         let shot = shots.as_ref().map(|d| d.join(format!("{}.png", v.name.replace(' ', "_").replace('%', ""))));
         draw_one(&mut app, &mut time, shot.as_deref()).await;
-        // Macroquad's capture sees its own batches; the chunk meshes are
-        // drawn past it and count themselves.
+        // Macroquad's capture sees its own batches; the chunk meshes and the
+        // pawns' figures are drawn past it and count themselves.
         let calls = telemetry::drawcalls();
-        r.calls = calls.len() + app.meshes.calls;
-        r.indices = calls.iter().map(|c| c.indices_count).sum::<usize>() + app.meshes.indices;
+        r.calls = calls.len() + app.meshes.calls + app.figures.calls;
+        r.indices = calls.iter().map(|c| c.indices_count).sum::<usize>() + app.meshes.indices + app.figures.indices();
         r.particles = app.sky.particles();
         r.live = app.meshes.live_count();
         // The lighting passes' GPU time, on frames of their own after
