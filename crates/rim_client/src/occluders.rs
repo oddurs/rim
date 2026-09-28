@@ -140,7 +140,9 @@ pub struct Occluders {
     pub texture: Option<Texture2D>,
     /// Bumped whenever the texture changes, so passes that read it can cache.
     pub version: u64,
-    /// What the last change repacked, as (x, y, w, h) in cells; empty with
+    /// What the last change changed: per repacked chunk, the box round the
+    /// texels that changed in it and a cell beyond, as (x, y, w, h) in cells;
+    /// empty with
     /// `whole`. Lets a pass redo only what lies near it.
     pub changed: Vec<(i32, i32, i32, i32)>,
     /// The last change repacked everything.
@@ -193,8 +195,8 @@ impl Occluders {
 
     /// Repack what changed: every chunk whose fixtures or terrain changed or
     /// whose roof did, or the whole map when nothing is packed yet. Whether
-    /// it was whole, and the rectangles whose texels changed, as (x, y, w, h)
-    /// in cells.
+    /// it was whole, and per repacked chunk the box round the texels that
+    /// changed in it, as (x, y, w, h) in cells.
     fn pack(&mut self, w: &World, roofs: &[u8]) -> (bool, Vec<(i32, i32, i32, i32)>) {
         let m = &w.map;
         let (cw, ch) = m.chunks();
@@ -238,19 +240,28 @@ impl Occluders {
             self.seen[c] = rev;
             let o = m.chunk_origin(c);
             let (x1, y1) = ((o.x + CHUNK).min(m.w), (o.y + CHUNK).min(m.h));
-            let mut changed = whole;
+            // The cells whose texels changed, as a box: a pass redoes what
+            // lies near them, not near their whole chunk.
+            let mut bounds: Option<(i32, i32, i32, i32)> = None;
             for y in o.y..y1 {
                 for x in o.x..x1 {
                     let i = (y * m.w + x) as usize;
                     let t = texel(occluder_at(w, i, light), roof_at(w, roofs, i));
                     if self.bytes[i * 4..i * 4 + 4] != t {
                         self.bytes[i * 4..i * 4 + 4].copy_from_slice(&t);
-                        changed = true;
+                        bounds =
+                            Some(bounds.map_or((x, y, x, y), |(a, b, c, d)| (a.min(x), b.min(y), c.max(x), d.max(y))));
                     }
                 }
             }
-            if changed {
+            if whole {
                 dirty.push((o.x, o.y, x1 - o.x, y1 - o.y));
+            } else if let Some((ax, ay, bx, by)) = bounds {
+                // A cell further: passes sample the texture filtered, so a
+                // changed texel reaches half a cell past its own.
+                let (ax, ay) = ((ax - 1).max(0), (ay - 1).max(0));
+                let (bx, by) = ((bx + 1).min(m.w - 1), (by + 1).min(m.h - 1));
+                dirty.push((ax, ay, bx - ax + 1, by - ay + 1));
             }
         }
         (whole, dirty)
@@ -348,7 +359,11 @@ mod tests {
         place(&mut s.world, "tree_oak", p, false);
         let (whole, dirty) = o.pack(&s.world, &[]);
         assert!(!whole, "a tree doesn't rebuild rooms");
-        assert_eq!(dirty.len(), 1, "only the tree's chunk changed");
+        assert_eq!(
+            dirty,
+            vec![(p.x - 1, p.y - 1, 3, 3)],
+            "the tree's own cell, and the cells its filtered edge reaches"
+        );
         assert_eq!(o.at(s.world.map.idx(p)), texel(Occluder::Canopy { height: 2.0 }, None));
         // An item set down stops no light, and doesn't even wake its chunk.
         let before = o.seen.clone();
@@ -376,6 +391,9 @@ mod tests {
         let (cw, ch) = s.world.map.chunks();
         assert!(!whole && (1..=4).contains(&dirty.len()) && dirty.len() < (cw * ch) as usize, "{} chunks", dirty.len());
         assert_eq!(o.at(s.world.map.idx(p.offset(1, 1)))[1], 255, "the floor is under a roof");
+        let hut =
+            |&(x, y, w, h): &(i32, i32, i32, i32)| x >= p.x - 1 && y >= p.y - 1 && x + w <= p.x + 4 && y + h <= p.y + 4;
+        assert!(dirty.iter().all(hut), "only the hut's own cells: {dirty:?}");
     }
 
     #[test]

@@ -2,14 +2,14 @@
 id: ff818bb3-7175-48f0-a3c3-c346c9bc2469
 title: Lightning casts shadows
 type: feature
-status: doing
+status: done
 milestone: lighting
 assignee: Oddur Sigurdsson
-claimed: 2026-09-27
 depends_on:
 - 8f4f1de8-5784-4377-8cee-25bcf223275e
 created: 2026-09-26
 updated: 2026-09-27
+closed_at: 2026-09-27
 priority: p3
 api: none
 effort: s
