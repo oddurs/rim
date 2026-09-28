@@ -2991,6 +2991,11 @@ needed a person-shaped queue that asked each PR to rebase and wait again.
   with a docs lane and a code lane. An agent adds the `queue` label; the
   queue tests the PR on top of main and the PRs ahead of it and merges in
   order. Nobody rebases by hand to chase main.
+- **Generated files aren't tracked.** ROADMAP.md was rendered in every PR,
+  so every merge made every other open PR conflict on it. It is gitignored
+  now: `cairn render` writes it for a local look, and CI uploads main's as
+  the `roadmap` artifact. PRs carry items only, so two PRs that each add an
+  item never conflict, and nothing but a merged PR moves main.
 
 ---
 

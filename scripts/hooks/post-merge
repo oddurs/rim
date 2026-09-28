@@ -1,14 +1,14 @@
 #!/bin/sh
 # From `cairn init --git`, kept when a worktree points core.hooksPath here:
-# after a merge, re-derive the roadmap from the items that are actually there.
+# after a merge, re-derive identifiers from the items that are actually there.
+# ROADMAP.md isn't tracked: `cairn render` writes it when you want a look.
 # Anything it changes is left unstaged for a person to review and commit.
 set -e
 command -v cairn >/dev/null 2>&1 || exit 0
 
 cairn renumber --quiet
-cairn render --quiet
 
 if ! git diff --quiet || ! git diff --cached --quiet; then
-  echo "cairn: the merge changed identifiers or the roadmap; review and commit:"
+  echo "cairn: the merge changed identifiers; review and commit:"
   git status --short -- "$(git rev-parse --show-toplevel)" | sed "s/^/  /"
 fi

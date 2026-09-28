@@ -262,10 +262,9 @@ columns = ["id", "type", "title", "created"]
 
 # ─── Hooks ───────────────────────────────────────────────────────────────────
 
-[hooks]
-after-create = "cairn render -q"
-after-change = "cairn render -q"
-after-remove = "cairn render -q"
+# No render hooks: ROADMAP.md isn't tracked (DESIGN.md §8a), so rendering it
+# after every change only costs time. `cairn render` writes it for a look;
+# CI uploads main's as the `roadmap` artifact.
 
 # ─── Rendered roadmap ────────────────────────────────────────────────────────
 

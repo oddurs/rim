@@ -51,10 +51,13 @@ types() {
   LUAU_LSP="$LUAU_LSP" ./scripts/check-luau.sh
 }
 
+# ROADMAP.md isn't tracked: `cairn render` writes it for a local look, and
+# CI uploads it from main. Here the items are checked, and that they render.
 roadmap() {
   step roadmap
   need cairn "See https://github.com/oddurs/cairn."
-  cairn check --render --strict
+  cairn check --strict
+  cairn render -q --no-hooks -o - >/dev/null
 }
 
 lint() { step lint; cargo clippy --release --workspace --all-targets "${DENY[@]}"; }
@@ -171,7 +174,7 @@ usage: scripts/task <verb> [args]
   fmt        format the workspace
   fmt:check  fail if anything isn't formatted
   types      mod scripts against the declared Luau APIs
-  roadmap    cairn items match the schema and ROADMAP.md is current
+  roadmap    cairn items match the schema and render
   scripts    the tooling's own tests: the pre-push hook
   lint       clippy over every target, warnings denied
   test       nextest over the workspace; `test -- ARGS` passes ARGS to nextest

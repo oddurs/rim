@@ -41,7 +41,6 @@ Seeds, tests, CI and the merge queue, so that every change is checked the same w
 - [ ] `5234544e` Visual regression for the autotest: reference shots, a perceptual diff, before and after on the PR <sup>feature · p1 · m · client</sup>
 - [ ] `55952481` Property tests for save round trips, region and room rebuilds, and paths <sup>feature · p1 · m · engine</sup>
 - [ ] `7dcb8a90` A seed per test, the nightly shift, and a one-line repro on every failure <sup>feature · p1 · s · engine</sup>
-- [ ] `7fb64c0e` ROADMAP.md stops conflicting: render it on main, not in every PR <sup>chore · p0 · s · tooling</sup>
 - [ ] `845db9fb` rim replay --bisect and a hash per tick when platforms disagree <sup>feature · p1 · s · tooling</sup>
 - [ ] `932f2bfd` Bench baselines: store main's numbers and judge a PR against them <sup>feature · p1 · m · tooling</sup>
 - [ ] `9a743404` Migrate rim to cairn format 5, bumping CI's pin in the same commit <sup>chore · p1 · s · tooling</sup>
@@ -50,6 +49,7 @@ Seeds, tests, CI and the merge queue, so that every change is checked the same w
 - [ ] `dd48e551` scripts/agent: start, sync, pr and queue for the worktree workflow <sup>chore · p1 · s · tooling</sup>
 - [ ] `f32fa785` A set with no core loads, ticks a day and round-trips a save, in CI <sup>feature · p3 · s · engine</sup>
 - [ ] `3f381240` CI lanes for a public repo: a Linux PR lane, a four-platform queue proof, nightly <sup>chore · p0 · m · tooling</sup>
+- [ ] `7fb64c0e` ROADMAP.md stops conflicting: untracked, and rendered by CI <sup>chore · p0 · s · tooling</sup>
 - [ ] `e2c56c9a` UI frame-budget test asserts wall-clock time on shared CI runners <sup>bug · p0 · s · tooling</sup>
 - [x] `3163979c` No wall-clock assertions in the suite: count work, and a guard <sup>chore · p0 · m · tooling</sup>
 - [x] `6b605f27` boundary_refresh_is_cheap asserts wall-clock time and fails under load <sup>bug · p0 · s · engine</sup>
