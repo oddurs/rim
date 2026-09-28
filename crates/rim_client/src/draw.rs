@@ -779,6 +779,9 @@ fn paints(w: &World, p: &Pawn, body: Option<&rim_ui::body::Body>) -> figures::Pa
 /// Pawns, hit flashes and the field overlay. Every pawn's figure goes into
 /// one batch, drawn in one call (DESIGN.md §6h); its marks go over it.
 pub fn pawns(app: &mut App) {
+    // Throwaway: a pawns pass 1 ms slower, which the bench's --check must fail.
+    let spin = std::time::Instant::now();
+    while spin.elapsed() < std::time::Duration::from_millis(1) {}
     let mut batch = std::mem::take(&mut app.figures);
     let mut shown = std::mem::take(&mut app.figures_shown);
     batch.clear();
