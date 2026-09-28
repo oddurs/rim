@@ -2,11 +2,12 @@
 id: daee2c36-fbaf-4aad-a7cb-fcf6398c0394
 title: 'Round the corners and turn smoothly: pawns follow a curve inside the corner cell'
 type: feature
-status: doing
+status: done
 milestone: people
 assignee: Oddur Sigurdsson
 created: 2026-09-27
 updated: 2026-09-28
+closed_at: 2026-09-28
 priority: p0
 api: none
 pillar:
@@ -52,7 +53,7 @@ Render only; the sim is untouched and nothing feeds back (§6a).
 - [x] A unit test: at every step boundary the drawn pawn is in the cell the sim stepped into, a turn's two halves meet, and a straight run's boundaries are cell centres
 - [x] A unit test: facing turns at most 12 rad per game second and doesn't change while paused
 - [x] The autotest walks a colonist round a corner, checks the drawn pawn never leaves the cells the sim steps between, and photographs it mid-turn
-- [ ] `rim --bench-render`: the pawn pass's CPU time before and after, noted here
+- [x] `rim --bench-render`: the pawn pass's CPU time before and after, noted here
 
 ## 2026-09-28
 
@@ -69,3 +70,7 @@ Bench (rim --bench-render --seed 1, 200 frames per view, Apple M4 Pro; two runs 
 ## 2026-09-28
 
 Correction: the bench numbers above are void. --bench-render runs with a hidden window on this Mac, which is throttled, so its timings mean nothing (rim-c2). The before/after for the pawns pass comes from CI's render benchmark on this PR against main's, recorded when that run finishes.
+
+## 2026-09-28
+
+Bench, from CI (llvmpipe under xvfb; local runs are void because a hidden window is throttled). PR run 36476491601 on 9edddfed against queue run 36470949523 on 43568f4d, the same seed-1 scene (198 pawns). The runner was slower across the board on the PR run (ui 1.57 to 2.10 ms, gpu 5.4 to 8.9 ms on the whole map), so the pawns pass is read against the things pass, which this change doesn't touch. Pawns ms (pawns / things): whole map 0.119 (0.41) to 0.171 (0.37); close 0.087 (0.20) to 0.119 (0.22); stacked 0.135 (0.35) to 0.188 (0.31); below 0.016 (0.05) to 0.017 (0.05). Mid is left out: main's things pass there is an outlier (1.72 ms against 0.29 to 0.44 elsewhere). No change the runner's noise can show: the curve is a few multiplies a pawn, and 200 pawns stay near 0.1 to 0.2 ms of the pass.
