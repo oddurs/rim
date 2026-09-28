@@ -136,7 +136,8 @@ fn build_matches(s: &mut Sim, thing: u16, stuff: Option<u16>, a: IVec, b: IVec, 
     for (_, p) in &preview {
         n[match p {
             Place::Open => 0,
-            Place::Clears(_) => 1,
+            // A replacement, like a clearing, waits on what stands there.
+            Place::Clears(_) | Place::Replaces(_) => 1,
             Place::Blocked(_) => 2,
         }] += 1;
     }

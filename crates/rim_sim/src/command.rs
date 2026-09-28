@@ -211,6 +211,9 @@ pub enum Place {
     /// The target is marked to be cleared, and the blueprint goes up once
     /// it's gone.
     Clears(Target),
+    /// A standing piece of the same kind stays up until the new one is
+    /// built, and then they swap (DESIGN.md §6c).
+    Replaces(Entity),
     /// Nothing is planned here.
     Blocked(Blocker),
 }
@@ -420,6 +423,9 @@ pub fn build_preview(
             Some(t) => (Place::Clears(t), marked),
         }
     };
+    // Drawn over a room, a drag upgrades its walls' material but keeps its
+    // door; one cell at a time (or a house plan), a door can go into a wall.
+    let other_kind = a == b;
     let mut out = Vec::new();
     for p in cells(w, a, b) {
         if bd.dig.is_some() && !w.can_dig(p) {
@@ -436,6 +442,12 @@ pub fn build_preview(
                 && taken.insert(i);
             out.push((p, if open { Place::Open } else { Place::Blocked(Blocker::NotOverAir) }));
             continue;
+        }
+        if !floor && !big {
+            if let Some(old) = w.map.fixture_at(p).filter(|&f| w.can_replace(f, thing, stuff, other_kind)) {
+                out.push((p, Place::Replaces(old)));
+                continue;
+            }
         }
         if big {
             let (place, claimed) = footprint(p, &taken);
@@ -539,8 +551,18 @@ pub fn apply(w: &mut World, c: Command) {
             }
         }
         Command::Cancel { a, b } => {
-            let targets: Vec<Entity> =
+            let mut targets: Vec<Entity> =
                 cells(w, a, b).flat_map(|p| [w.map.fixture_at(p), w.map.floor_at(p)]).flatten().collect();
+            // Replacements are on no layer: the piece they replace is.
+            let mut replacing: Vec<Entity> = w
+                .ecs
+                .query::<(Entity, &Thing, &Replaces)>()
+                .iter()
+                .filter(|(_, t, _)| in_rect(t.pos, a, b))
+                .map(|(e, _, _)| e)
+                .collect();
+            replacing.sort_unstable_by_key(|e| e.id());
+            targets.extend(replacing);
             for f in targets {
                 // Cancelling a plan over grass or a tree leaves it be.
                 if !w.unplan(f) && w.ecs.remove_one::<Designated>(f).is_ok() {
@@ -792,6 +814,9 @@ fn realize(w: &mut World, thing: DefId, stuff: Option<DefId>, p: IVec, facing: u
             }
         }
         Place::Clears(Target::Thing(f) | Target::Creature(f)) => w.plan_over_facing(f, thing, stuff, facing),
+        Place::Replaces(old) => {
+            w.plan_replacement(old, thing, stuff, facing);
+        }
         Place::Blocked(_) => {}
     }
 }

@@ -127,6 +127,7 @@ fn codec_of(section: &str) -> Result<Codec, String> {
         "engine:held" => codec::<Vec<(Entity, Held)>>(),
         "engine:store" => codec::<Vec<(Entity, Store)>>(),
         "engine:contained" => codec::<Vec<(Entity, Contained)>>(),
+        "engine:replaces" => codec::<Vec<(Entity, crate::world::Replaces)>>(),
         "engine:order" => codec::<Vec<(Entity, Order)>>(),
         "engine:work" => codec::<Vec<(Entity, Work)>>(),
         "log" => codec::<Vec<Log>>(),

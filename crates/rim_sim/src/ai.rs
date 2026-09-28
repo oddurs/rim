@@ -1858,6 +1858,21 @@ fn step_off(w: &mut World, p: &mut Pawn, cell: IVec) -> bool {
 pub fn complete_building(w: &mut World, bp: Entity) {
     let Some(t) = w.thing(bp) else { return };
     let _ = w.ecs.remove_one::<Blueprint>(bp);
+    // A replacement swaps with the piece it replaces in this one step, so
+    // the room is never open. What the old one gives back comes out once
+    // the new one holds the cell, or it would be buried under it.
+    let mut refund = Vec::new();
+    if let Ok(Replaces(old)) = w.ecs.remove_one::<Replaces>(bp) {
+        let _ = w.ecs.remove_one::<ReplacedBy>(old);
+        let back = w.thing(old).and_then(|o| w.defs.thing(o.def).build.as_ref()).map_or(0.0, |b| b.refund);
+        refund = w
+            .cost_of(old)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(d, n)| (d, (n as f64 * back).round() as u32))
+            .collect();
+        w.despawn_thing(old);
+    }
     w.touch_roles(t.def);
     // Taking it down later is work of its own, counted from zero.
     let _ = w.ecs.remove_one::<Work>(bp);
@@ -1893,6 +1908,9 @@ pub fn complete_building(w: &mut World, bp: Entity) {
     }
     if td.build.as_ref().is_some_and(|b| b.spans) {
         w.map.set_span(t.pos, true);
+    }
+    for (d, n) in refund.into_iter().filter(|&(_, n)| n > 0) {
+        w.place_item(d, t.pos, n);
     }
     let span = w.support_span(bp);
     if span > 0 {

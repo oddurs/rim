@@ -300,6 +300,7 @@ impl Snapshot {
             ("engine:order".to_string(), component::<Order>(w)),
             ("engine:store".to_string(), component::<Store>(w)),
             ("engine:contained".to_string(), component::<Contained>(w)),
+            ("engine:replaces".to_string(), component::<crate::world::Replaces>(w)),
         ]);
         // Script data, one section per mod: every key is "mod:key" (0062).
         let mut by_mod: BTreeMap<&str, BTreeMap<&str, &Data>> = BTreeMap::new();
@@ -678,6 +679,14 @@ impl Snapshot {
                 });
             }
         }
+        // Optional: saves from before replacements lack them.
+        if self.sections.contains_key("engine:replaces") {
+            for (e, r) in dec::<Vec<(Entity, crate::world::Replaces)>>(self, "engine:replaces")? {
+                add(e, &|b| {
+                    b.add(r);
+                });
+            }
+        }
         // Optional: saves from before urgent marks lack them.
         if self.sections.contains_key("engine:urgent") {
             for (e, u) in dec::<Vec<(Entity, crate::world::Urgent)>>(self, "engine:urgent")? {
@@ -789,12 +798,30 @@ impl Snapshot {
             let _ = w.ecs.insert_one(target, k);
         }
 
+        // A replacement whose piece didn't survive the load is an ordinary
+        // plan; one whose piece did stays off the map, as in play.
+        let orphans: Vec<Entity> = w
+            .ecs
+            .query::<(Entity, &crate::world::Replaces)>()
+            .iter()
+            .filter(|(_, r)| !w.ecs.contains(r.0))
+            .map(|(e, _)| e)
+            .collect();
+        for e in orphans {
+            let _ = w.ecs.remove_one::<crate::world::Replaces>(e);
+        }
+        let waiting: Vec<(Entity, Entity)> =
+            w.ecs.query::<(Entity, &crate::world::Replaces)>().iter().map(|(e, r)| (e, r.0)).collect();
+        for (e, old) in waiting {
+            let _ = w.ecs.insert_one(old, crate::world::ReplacedBy(e));
+        }
         // The map's entity layers, then field stamps once every wall is up.
         let mut things: Vec<(Entity, Thing, bool, Option<Faction>)> = w
             .ecs
             .query::<(Entity, &Thing, Option<&Blueprint>, Option<&Owner>)>()
             .without::<&Held>()
             .without::<&Contained>()
+            .without::<&crate::world::Replaces>()
             .iter()
             .map(|(e, t, bp, o)| (e, t.clone(), bp.is_some(), o.map(|o| o.0)))
             .collect();

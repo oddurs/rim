@@ -844,6 +844,7 @@ pub fn world_ui(app: &App) {
 
     zones(app);
     app.marks.draw(cam, visible(app));
+    replacements(app);
     // Selection is the overlay's (overlay::scene).
     // Drag rectangle preview; a select drag shows once it leaves its cell.
     let (mx, my) = app.pointer;
@@ -898,6 +899,33 @@ pub fn world_ui(app: &App) {
         draw_rectangle_lines(sx, sy, z * fw as f32, z * fh as f32, 2.0, tool_color(app));
     }
     order_flash(app);
+}
+
+/// Plans that replace a standing piece (DESIGN.md §6c): the old piece as
+/// the chunk draws it, with the plan's hatch over it, a swatch of what it
+/// becomes, and how far along it is.
+fn replacements(app: &App) {
+    const BLUEPRINT: Color = Color::new(0.55, 0.8, 1.0, 0.8);
+    let (w, cam) = (&app.sim.world, &app.cam);
+    let z = cam.zoom;
+    let (x0, y0, x1, y1) = visible(app);
+    let s = &mut Immediate(&app.world_atlas);
+    for (e, t, bp, _) in w.ecs.query::<(Entity, &Thing, &Blueprint, &Replaces)>().iter() {
+        // Only the level being viewed.
+        if t.pos.z != cam.z || t.pos.x < x0 || t.pos.x > x1 || t.pos.y < y0 || t.pos.y > y1 {
+            continue;
+        }
+        let (sx, sy) = cam.to_screen(t.pos.x as f32, t.pos.y as f32);
+        wear::hatch(s, (sx, sy, z, z), (z / 7.0).max(4.0), Color::new(0.55, 0.8, 1.0, 0.55));
+        let becomes = w.ecs.get::<&MadeOf>(e).ok().map_or(w.defs.thing(t.def).rgb, |m| w.defs.thing(m.0).rgb);
+        s.rect(sx + 0.1 * z, sy + 0.1 * z, 0.26 * z, 0.26 * z, rgb(becomes));
+        outline(s, sx + 1.0, sy + 1.0, z - 2.0, z - 2.0, 1.5, BLUEPRINT);
+        let need: u32 = bp.cost.iter().map(|c| c.1).sum();
+        let have: u32 = bp.delivered.iter().sum();
+        let f = wear::progress(w, e);
+        let frac = if have < need { have as f32 / need.max(1) as f32 * 0.5 } else { 0.5 + 0.5 * f };
+        s.rect(sx + 2.0, sy + z - 4.0, (z - 4.0) * frac, 2.5, Color::new(0.6, 0.9, 1.0, 0.9));
+    }
 }
 
 /// Stockpiles: a light wash over each cell, and a line where a zone ends.
