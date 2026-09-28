@@ -2,8 +2,69 @@
 
 use crate::defs::*;
 use crate::world::*;
-use crate::{IVec, TICKS_PER_DAY};
+use crate::{terms, IVec, TICKS_PER_DAY};
 use hecs::Entity;
+
+/// Ticks between spoil passes; each pass works out a quarter of the
+/// spoiling stacks, by entity id, so each once every `SPOIL_EVERY` passes.
+pub const SPOIL_PASS: u64 = 250;
+pub const SPOIL_EVERY: u64 = 4;
+
+/// Stacks that spoil lose condition: by their def's rate terms where they
+/// lie, slower in a store that keeps (its `keeps` terms), and out of the
+/// weather in one that shelters. At no condition left a stack rots away.
+pub fn spoil(w: &mut World) {
+    let defs = w.defs.clone();
+    let slot = (w.tick / SPOIL_PASS) % SPOIL_EVERY;
+    let ticks = (SPOIL_PASS * SPOIL_EVERY) as i128;
+    let mut changed: Vec<(Entity, i32, u16)> = Vec::new();
+    for (e, t, lost, held) in w.ecs.query::<(Entity, &Thing, Option<&Spoiling>, Option<&Contained>)>().iter() {
+        if e.id() as u64 % SPOIL_EVERY != slot {
+            continue;
+        }
+        let Some(sp) = &defs.thing(t.def).spoil else { continue };
+        // Only stacks the colony could have: loose, or in a store.
+        if held.is_none() && w.map.item_at(t.pos) != Some(e) {
+            continue;
+        }
+        let store = held
+            .and_then(|c| w.ecs.get::<&Thing>(c.store).ok().map(|s| s.def))
+            .and_then(|d| defs.thing(d).store.as_ref());
+        let rate = match (sp.rate_terms.is_empty(), store.is_some_and(|s| s.shelter)) {
+            (true, _) => terms::Q,
+            (false, true) => w.fields.eval_sheltered(&defs, &w.map, &sp.rate_terms, t.pos),
+            (false, false) => w.fields.eval_at(&defs, &w.map, &sp.rate_terms, t.pos),
+        };
+        let keeps = match store.filter(|s| !s.keeps_terms.is_empty()) {
+            Some(s) => w.fields.eval_at(&defs, &w.map, &s.keeps_terms, t.pos).max(terms::Q / 10),
+            None => terms::Q,
+        };
+        if rate <= 0 {
+            continue;
+        }
+        // Condition lost this pass, in 1/Q of a hit point: the share of its
+        // life the rate eats in these ticks, times its whole condition.
+        let whole = defs.thing(t.def).hp as i128;
+        let days = terms::to_q(sp.days) as i128;
+        let loss = whole * terms::Q as i128 * rate as i128 * ticks * terms::Q as i128
+            / (keeps as i128 * TICKS_PER_DAY as i128 * days);
+        let was = lost.map(|l| l.lost);
+        let lost = was.unwrap_or(0) as i128 + loss;
+        let (points, rest) = (lost / terms::Q as i128, (lost % terms::Q as i128) as u16);
+        if points > 0 || was != Some(rest) {
+            changed.push((e, t.hp - points.min(i32::MAX as i128) as i32, rest));
+        }
+    }
+    // In id order: a stack that rots away changes the ledger and the map,
+    // and a load doesn't reproduce the ECS's iteration order.
+    changed.sort_unstable_by_key(|c| c.0.id());
+    for (e, hp, rest) in changed {
+        let _ = w.ecs.insert_one(e, Spoiling { lost: rest });
+        if w.ecs.get::<&Thing>(e).is_ok_and(|t| t.hp != hp) {
+            w.set_stack_hp(e, hp);
+        }
+    }
+}
 
 /// Every `NEEDS_INTERVAL` ticks: decay needs, apply sleep, starvation, healing.
 pub const NEEDS_INTERVAL: u64 = 60;

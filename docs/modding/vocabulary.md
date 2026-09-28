@@ -159,9 +159,14 @@ build = { stuff = { category = "structural", count = 6 }, work = 400 }
 slots = 4                   # stacks it holds
 stack_scale = 1             # each slot holds this many times a stack
 accepts = { not_tags = ["bulky"] }   # what it can ever take (below)
-shelter = false             # contents out of the weather
+shelter = false             # contents out of the weather: `sky` reads 0 in it
 display = "fill"            # "fill", "items" or "none"
 look_stages = 4             # for "fill": steps from empty to full
+
+# How much longer what spoils keeps in it, as terms at its cell: 2 is half
+# as fast. None is 1. Cold storage reads the temperature.
+[thing.store.keeps.cold]
+of = [{ field = "core:temperature", curve = [[-5, 4.0], [4, 2.0], [12, 1.0]] }]
 ```
 
 `accepts` takes `tags`, `things` and `categories` (any of them lets an item
@@ -170,6 +175,23 @@ filter narrows it and can never widen it. Colonists haul into a container,
 take from it for building, crafting and meals, and fetch tools from it,
 standing beside it. Torn down or destroyed, it sets everything it held on
 the ground nearby.
+
+An item that spoils says how, and loses condition (hp) as it lies, until
+it rots away at none; a store's condition filter lets a spoiling stack go
+when it drops below the range. The rate is terms read where the stack is,
+so heat and rain can speed it; rain should read `{ input = "sky" }`, so a
+roof or a sheltering store keeps it dry.
+
+```toml
+[thing.spoil]
+days = 6                    # whole to rotten at a rate of 1
+
+[thing.spoil.rate.base]
+of = [1.0]
+
+[thing.spoil.rate.rain]
+of = [{ field = "core:precipitation", curve = [[0, 0.0], [1, 1.0]] }, { input = "sky" }]
+```
 
 Scripts: `rim.store(id)` reads a container's level, slots and contents;
 `rim.store_put(id, { thing, count, made_of })` puts things in (a caravan

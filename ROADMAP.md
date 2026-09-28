@@ -648,12 +648,11 @@ Dig down. The map becomes a stack of 2D levels joined only at stairs, ladders an
 
 ## crafting — Crafting
 
-`########··` 73% · 22 of 30 done · due 2027-05-01
+`########··` 77% · 23 of 30 done · due 2027-05-01
 
 Production chains: workbenches and bills, cooking, farming, tailoring, research as a plugin.
 
 - [ ] `308074c6` Getting wet: pawn wetness and clothing insulation <sup>feature · p2 · m · engine</sup>
-- [ ] `63811969` Spoilage, and keeping things by where they're stored <sup>feature · p3 · m · engine</sup>
 - [ ] `6f1e7410` Snow and mud slow movement <sup>feature · p3 · s · engine</sup>
 - [ ] `b1444a26` Farming: growing zones and crops <sup>feature · p0 · l · engine</sup>
 - [ ] `d0362b0c` Apparel: colonists wear what tailors make <sup>feature · p2 · l · engine</sup>
@@ -668,6 +667,7 @@ Production chains: workbenches and bills, cooking, farming, tailoring, research 
 - [x] `4f3e5d8d` mods/timber: planks, plank walls, crates, shelves, racks and a granary <sup>content · p2 · m · plugin</sup>
 - [x] `5e323021` Store inspector: Contents and Accepts tabs <sup>feature · p1 · m · core</sup>
 - [x] `629e1fa7` Nothing is lost when a carried stack doesn't fit where it's set down <sup>bug · p1 · s · engine</sup>
+- [x] `63811969` Spoilage, and keeping things by where they're stored <sup>feature · p3 · m · engine</sup>
 - [x] `6ce26632` The UI draws a thing's look: the item token <sup>feature · p1 · m · client</sup>
 - [x] `6dd4891c` Ground wetness and snow in core <sup>content · p0 · m · core</sup>
 - [x] `6ec6da26` primitive: baskets, pots as stores, a woodpile and a stone bin <sup>content · p2 · s · plugin</sup>

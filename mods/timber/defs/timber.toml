@@ -113,7 +113,8 @@ blocks = true
 build = { menu = "storage", work = 300, stuff = { category = "timber", count = 4 } }
 store = { slots = 4, accepts = { categories = ["core:tools"] }, display = "none" }
 
-# Raised and clay-sealed: where the harvest goes when farming comes.
+# Raised and clay-sealed: where the harvest goes when farming comes. Food
+# keeps three times as long in it.
 [[thing]]
 id = "granary"
 label = "granary"
@@ -129,4 +130,4 @@ hp = 300
 market_value = 25
 blocks = true
 build = { menu = "storage", work = 1200, stuff = { category = "timber", count = 20 }, cost = [{ thing = "primitive:clay", count = 10 }] }
-store = { slots = 8, stack_scale = 2, accepts = { categories = ["core:food"] }, shelter = true }
+store = { slots = 8, stack_scale = 2, accepts = { categories = ["core:food"] }, shelter = true, keeps = { sealed = { of = [3.0] } } }

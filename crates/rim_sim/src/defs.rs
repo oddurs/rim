@@ -247,6 +247,10 @@ pub struct ThingDef {
     #[serde(default)]
     pub tool: Option<ToolDef>,
     pub food: Option<FoodDef>,
+    /// An item that spoils: it loses condition as it lies, and rots away
+    /// at none (DESIGN.md §4f).
+    #[serde(default)]
+    pub spoil: Option<SpoilDef>,
     pub bed: Option<BedDef>,
     /// Present on items that things can be built out of.
     #[serde(default)]
@@ -1522,9 +1526,17 @@ pub struct StoreDef {
     /// What it can ever take; the player's filter narrows it further.
     #[serde(default)]
     pub accepts: StoreAccepts,
-    /// Its contents are out of the weather.
+    /// Its contents are out of the weather: what spoils reads `input =
+    /// "sky"` as 0 in it, as under a roof.
     #[serde(default)]
     pub shelter: bool,
+    /// How much longer what spoils keeps in it, as terms read at its cell:
+    /// 2 spoils half as fast. A mod makes cold storage from temperature.
+    /// No terms is 1.
+    #[serde(default)]
+    pub keeps: TermsDef,
+    #[serde(skip)]
+    pub keeps_terms: Terms,
     /// How the map shows what it holds: "fill" (its look by how full it
     /// is), "items" (the looks of what it holds), or "none".
     #[serde(default)]
@@ -1535,6 +1547,22 @@ pub struct StoreDef {
     /// Items it can ever take, sorted.
     #[serde(skip)]
     pub accepts_r: Vec<DefId>,
+}
+
+/// How an item spoils: from whole to rotten in `days` at a rate of 1, at a
+/// rate its terms give where it lies.
+#[derive(Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct SpoilDef {
+    /// Game days from whole to rotten at a rate of 1.
+    pub days: f64,
+    /// How fast it spoils, as terms read at its cell: warmth, rain on it
+    /// (read `input = "sky"`, so a sheltering store keeps it dry). No
+    /// terms is 1.
+    #[serde(default)]
+    pub rate: TermsDef,
+    #[serde(skip)]
+    pub rate_terms: Terms,
 }
 
 /// What a container can ever take. Empty means any item.
@@ -2428,6 +2456,8 @@ impl DefDb {
             self.fields.iter().map(|f| (f.kind != FieldKind::Ambient).then_some(f.id.as_str())).collect();
         // A stock field takes emitters as a rate; nothing bounds it.
         let stock: Vec<bool> = self.fields.iter().map(|f| f.kind == FieldKind::Stock).collect();
+        let (terrain_props, terrain_tags) = (&self.terrain_props, &self.terrain_tags);
+        let mut spoil_warnings = Vec::new();
         for d in &mut self.things {
             let ctx = format!("thing/{}", d.id);
             d.rgb = parse_color(&d.color).map_err(|e| format!("{ctx}: {e}"))?;
@@ -2507,6 +2537,23 @@ impl DefDb {
             if let Some(s) = &mut d.spawn {
                 s.terrain_r = s.terrain.iter().map(|t| get("terrain", t, &ctx)).collect::<Result<_, _>>()?;
             }
+            // Spoiling and keeping are terms read at a cell, like a derived
+            // field's.
+            let home = home_of(&d.id).to_string();
+            let names = TermNames { field: &|id: &str| field_in(&home, id), props: terrain_props, tags: terrain_tags };
+            if let Some(sp) = &mut d.spoil {
+                sp.rate_terms = Terms::compile(&sp.rate, &format!("{ctx}, spoil.rate"), &names, &mut spoil_warnings)?;
+                if !(sp.days > 0.0 && sp.days.is_finite()) || sp.rate_terms.reads_own() {
+                    return Err(format!("{ctx}: spoil needs `days` above 0, and rate terms read no `self` or `base`"));
+                }
+            }
+            if let Some(st) = &mut d.store {
+                st.keeps_terms =
+                    Terms::compile(&st.keeps, &format!("{ctx}, store.keeps"), &names, &mut spoil_warnings)?;
+                if st.keeps_terms.reads_own() {
+                    return Err(format!("{ctx}: store.keeps reads no `self` or `base`"));
+                }
+            }
             for b in &mut d.boundary {
                 b.field_r = get("field", &b.field, &ctx)?;
             }
@@ -2557,6 +2604,16 @@ impl DefDb {
             }
         }
         self.thing_modifiers = by_thing;
+        self.warnings.append(&mut spoil_warnings);
+        // What spoils or keeps by how near water is keeps that tag's grid.
+        let spoil_nears = self.things.iter().flat_map(|t| {
+            let spoil = t.spoil.iter().flat_map(|s| s.rate_terms.nears());
+            spoil.chain(t.store.iter().flat_map(|s| s.keeps_terms.nears()))
+        });
+        let mut near: Vec<usize> = spoil_nears.chain(self.near_tags.iter().copied()).collect();
+        near.sort_unstable();
+        near.dedup();
+        self.near_tags = near;
         for d in &mut self.creatures {
             let ctx = format!("creature/{}", d.id);
             d.rgb = parse_color(&d.color).map_err(|e| format!("{ctx}: {e}"))?;

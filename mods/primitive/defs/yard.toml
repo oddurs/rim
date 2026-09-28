@@ -21,8 +21,8 @@ path_cost = 40
 build = { menu = "storage", work = 150, cost = [{ thing = "fibre", count = 6 }] }
 store = { slots = 2, accepts = { not_tags = ["bulky"] } }
 
-# A fired pot set down to keep food in: one stack, out of the weather. Pots
-# were wealth and nothing more until now.
+# A fired pot set down to keep food in: one stack, out of the weather, and
+# sealed, so what spoils keeps two and a half times as long.
 [[thing]]
 id = "storage_pot"
 label = "storage pot"
@@ -37,7 +37,7 @@ hp = 40
 market_value = 5
 path_cost = 40
 build = { menu = "storage", work = 60, cost = [{ thing = "pot", count = 1 }] }
-store = { slots = 1, accepts = { categories = ["core:food"] }, shelter = true }
+store = { slots = 1, accepts = { categories = ["core:food"] }, shelter = true, keeps = { sealed = { of = [2.5] } } }
 
 # Wood and branches stacked three deep: the first bulky thing gets its own
 # store, and it's fine outdoors.

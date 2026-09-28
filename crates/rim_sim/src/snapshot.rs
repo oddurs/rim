@@ -292,6 +292,7 @@ impl Snapshot {
             ("engine:urgent".to_string(), component::<crate::world::Urgent>(w)),
             ("engine:planned".to_string(), component::<Planned>(w)),
             ("engine:regrow".to_string(), component::<Regrow>(w)),
+            ("engine:spoiling".to_string(), component::<Spoiling>(w)),
             ("engine:work".to_string(), component::<Work>(w)),
             ("engine:held".to_string(), component::<Held>(w)),
             ("engine:order".to_string(), component::<Order>(w)),
@@ -654,6 +655,15 @@ impl Snapshot {
             for (e, c) in dec::<Vec<(Entity, Contained)>>(self, "engine:contained")? {
                 add(e, &|b| {
                     b.add(c);
+                });
+            }
+        }
+        // Optional: saves from before things spoiled lack it; their stacks
+        // start their next point of condition afresh.
+        if self.sections.contains_key("engine:spoiling") {
+            for (e, s) in dec::<Vec<(Entity, Spoiling)>>(self, "engine:spoiling")? {
+                add(e, &|b| {
+                    b.add(s);
                 });
             }
         }

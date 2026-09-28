@@ -158,6 +158,39 @@ impl Env for CellEnv<'_> {
     }
 }
 
+/// A cell's terms with the weather kept off: `sky` is 0.
+struct Sheltered<'a>(CellEnv<'a>);
+
+impl Env for Sheltered<'_> {
+    fn year(&self) -> i64 {
+        self.0.year()
+    }
+    fn hour(&self) -> i64 {
+        self.0.hour()
+    }
+    fn ambient(&self, f: usize) -> i64 {
+        self.0.ambient(f)
+    }
+    fn field(&self, f: usize) -> i64 {
+        self.0.field(f)
+    }
+    fn tick(&self) -> u64 {
+        self.0.tick()
+    }
+    fn seed(&self) -> u64 {
+        self.0.seed()
+    }
+    fn terrain(&self, prop: usize) -> i64 {
+        self.0.terrain(prop)
+    }
+    fn near(&self, tag: usize) -> i64 {
+        self.0.near(tag)
+    }
+    fn sky(&self) -> i64 {
+        0
+    }
+}
+
 /// How many cells a stock field keeps: the surface's, or every level's.
 fn stock_cells(levels: StockLevels, map: &Map) -> usize {
     match levels {
@@ -581,6 +614,20 @@ impl Fields {
             self.layers[f as usize].stock[i as usize] = v;
         }
         self.stock_next = next;
+    }
+
+    /// Terms read at a cell as a derived field's are: `field`, `terrain`,
+    /// `near` and `sky` there, in `Q` units. Plants grow by them.
+    pub fn eval_at(&self, defs: &DefDb, map: &Map, terms: &terms::Terms, p: IVec) -> i64 {
+        let clock = self.last_clock.unwrap_or(Clock { tick: 0, year: 0, hour: 0, seed: 0 });
+        terms.eval(&CellEnv { fields: self, defs, map, p, clock, own: 0, base: 0 })
+    }
+
+    /// `eval_at`, out of the weather: `sky` reads 0, as under a roof. What
+    /// lies in a sheltering store is read this way.
+    pub fn eval_sheltered(&self, defs: &DefDb, map: &Map, terms: &terms::Terms, p: IVec) -> i64 {
+        let clock = self.last_clock.unwrap_or(Clock { tick: 0, year: 0, hour: 0, seed: 0 });
+        terms.eval(&Sheltered(CellEnv { fields: self, defs, map, p, clock, own: 0, base: 0 }))
     }
 
     /// Set a stock field at a cell (`add`: add to it), clamped to its range.
