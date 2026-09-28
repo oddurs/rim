@@ -237,6 +237,8 @@ pub enum Blocker {
     /// A modifier holds it back (`World::build_lock` says why): research
     /// not done, say.
     Locked,
+    /// It spans air, and this isn't an open pit.
+    NotOverAir,
 }
 
 /// Everything `Command::Designate` would newly mark, in the order it would
@@ -279,7 +281,9 @@ pub fn designate_preview(w: &World, designation: DefId, a: IVec, b: IVec) -> Vec
         Targets::Built => {
             for p in cells(w, a, b) {
                 for f in [w.map.fixture_at(p), w.map.floor_at(p)].into_iter().flatten() {
-                    let ours = w.ecs.get::<&Owner>(f).is_ok_and(|o| o.0 == Faction::Player);
+                    // Anyone's bridge can be knocked down, a raider's most of all.
+                    let spans = w.thing(f).and_then(|t| defs.thing(t.def).build.as_ref()).is_some_and(|b| b.spans);
+                    let ours = spans || w.ecs.get::<&Owner>(f).is_ok_and(|o| o.0 == Faction::Player);
                     let built = w.thing(f).is_some_and(|t| defs.thing(t.def).build.is_some());
                     // A blueprint is cancelled, not deconstructed.
                     if ours && built && w.ecs.get::<&Blueprint>(f).is_err() && !marked(f) {
@@ -419,6 +423,17 @@ pub fn build_preview(
     for p in cells(w, a, b) {
         if bd.dig.is_some() && !w.can_dig(p) {
             out.push((p, Place::Blocked(Blocker::NoDig)));
+            continue;
+        }
+        // A bridge goes over a pit and nowhere else.
+        if bd.spans {
+            let i = w.map.idx(p);
+            let open = w.map.is_air(i)
+                && !w.map.passable_i(i)
+                && w.map.floor_at(p).is_none()
+                && w.map.fixture_at(p).is_none()
+                && taken.insert(i);
+            out.push((p, if open { Place::Open } else { Place::Blocked(Blocker::NotOverAir) }));
             continue;
         }
         if big {

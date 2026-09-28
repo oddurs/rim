@@ -1874,6 +1874,25 @@ cell. Four levels of that would be 147,456 entities that never act.
   flat. Trenches count as defence in the raid budget. Climbing is a mod: a
   movement class whose region layer treats a one-level drop as passable.
 
+What was built (ba8253df):
+
+- Footing is one flag per cell: walkable terrain, a floor, or a fixture
+  that spans air. Passability reads it and nothing else, so a floor over a
+  pit is ground to the pathfinder and the regions with no special case.
+- `build.spans` marks what stands over air: `core:bridge` (a floor) and
+  `core:drawbridge` (a door). They are planned over open pits only, and
+  anyone's bridge can be deconstructed.
+- A raider shut out with no door to break looks at the open air beside its
+  side and bridges the cell nearest its target, with the quickest spanning
+  floor any mod has; each cell joins its side, so the next is one further
+  across. With no spanning floor loaded, a trench holds.
+- What stands on a bridge that goes falls to the level below, hurt a tenth
+  of its health a level; an item dropped over a pit lands below.
+- The drawbridge is the owned-door rule on a spanning door rather than a
+  floor with an owner, since doors already carry one.
+- Trenches don't count in the raid budget yet, because walls don't either:
+  `colony_strength` is melee alone. Defences in the budget is its own item.
+
 ### Tension: water per cell or per basin?
 
 "Dig into water and it floods" needs moving water. Two prototypes, 192 × 192

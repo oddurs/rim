@@ -787,6 +787,9 @@ impl Snapshot {
                             w.map.set_owner(c, *owner);
                         }
                     }
+                    if !*blueprint && td.build.as_ref().is_some_and(|b| b.spans) {
+                        w.map.set_span(t.pos, true);
+                    }
                     if !*blueprint {
                         let span = w.support_span(*e);
                         if span > 0 {

@@ -132,6 +132,12 @@ pub enum Job {
     Breach {
         target: Entity,
     },
+    /// Lay a bridge over the air cell `at`, `left` ticks of work to go: a
+    /// trench is in the way (DESIGN.md §6d).
+    Bridge {
+        at: IVec,
+        left: u32,
+    },
     Flee {
         to: IVec,
         until: u64,
@@ -170,6 +176,7 @@ impl Job {
             Job::Comfort { .. } => "warming up",
             Job::Attack { .. } => "fighting",
             Job::Breach { .. } => "breaking in",
+            Job::Bridge { .. } => "bridging",
             Job::Flee { .. } => "fleeing",
             Job::Leave { .. } => "leaving",
             Job::Haul { .. } => "hauling",
@@ -1333,6 +1340,9 @@ impl World {
             for c in td.footprint(pos, facing) {
                 self.map.set_fixture(c, Some(e), blocks, cost, door);
             }
+            if !blueprint && td.build.as_ref().is_some_and(|b| b.spans) {
+                self.map.set_span(pos, true);
+            }
         }
         if !blueprint {
             self.fields.add_emitters(&defs, &self.map, e, def, pos);
@@ -1434,6 +1444,8 @@ impl World {
     /// it keeps looking further out until it has put everything down, so it
     /// returns anything only when the whole map is full.
     pub fn place_lot(&mut self, lot: Lot, near: IVec) -> u32 {
+        // Dropped over a pit, it lands on the level below.
+        let near = self.landing(near).unwrap_or(near);
         let limit = self.defs.thing(lot.def).stack_limit;
         let mut count = lot.count;
         let reach = self.map.w.max(self.map.h);
@@ -1684,6 +1696,51 @@ impl World {
         (start..start + plane).all(|i| !self.map.passable_i(i))
     }
 
+    /// Where something at `p` comes to rest (DESIGN.md §6d): `p` itself
+    /// unless it is air with nothing over it, else the first cell below
+    /// that isn't. None if it would fall off the bottom.
+    pub fn landing(&self, p: IVec) -> Option<IVec> {
+        let mut q = p;
+        while self.map.inb(q) {
+            let i = self.map.idx(q);
+            if !self.map.is_air(i) || self.map.passable_i(i) {
+                return Some(q);
+            }
+            q = IVec::at(q.x, q.y, q.z - 1);
+        }
+        None
+    }
+
+    /// Cell `p` lost its footing: pawns on it fall to where they land,
+    /// hurt a tenth of their health a level, and what lay there drops too.
+    pub fn fall(&mut self, p: IVec) {
+        let Some(to) = self.landing(p).filter(|&q| q != p) else { return };
+        let levels = p.z - to.z;
+        let defs = self.defs.clone();
+        for &e in &self.pawns {
+            let Ok(mut pw) = self.ecs.get::<&mut Pawn>(e) else { continue };
+            if !pw.active || pw.dead || pw.pos != p {
+                continue;
+            }
+            pw.pos = to;
+            pw.path.clear();
+            pw.path_goal = None;
+            pw.next = None;
+            pw.progress = 0;
+            pw.hp -= defs.creature(pw.def).max_hp * levels / 10;
+            if pw.hp <= 0 {
+                pw.dead = true;
+            }
+        }
+        if let Some(item) = self.map.item_at(p) {
+            let lot = self.thing(item).map(|t| Lot { made_of: self.made_of(item), ..Lot::new(t.def, t.count) });
+            self.despawn_thing(item);
+            if let Some(lot) = lot {
+                self.place_lot(lot, to);
+            }
+        }
+    }
+
     /// The rock a cell is made of, if its terrain is solid (DESIGN.md §6d).
     pub fn solid_at(&self, p: IVec) -> Option<&SolidDef> {
         if !self.map.inb(p) {
@@ -1790,6 +1847,7 @@ impl World {
                 self.map.set_floor(t.pos, None, 0);
             }
         }
+        let footing = self.map.inb(t.pos) && self.map.passable(t.pos);
         self.reservations.remove(&e);
         self.worksites.remove(&e);
         self.tools.remove(&e);
@@ -1805,6 +1863,10 @@ impl World {
         }
         if was_store {
             self.stores_changed();
+        }
+        // A bridge gone: what stood on it goes down.
+        if !footing && self.map.inb(t.pos) && self.map.is_air(self.map.idx(t.pos)) {
+            self.fall(t.pos);
         }
         // Cleared for a building: it goes up in its place.
         if let Some(p) = planned {

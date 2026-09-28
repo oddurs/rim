@@ -32,6 +32,12 @@ pub struct Map {
     /// The floor's move cost, standing in for the terrain's; 0 = no floor.
     floor_cost: Vec<u16>,
     fix_block: Vec<bool>,
+    /// A fixture here spans air: a drawbridge (DESIGN.md §6d).
+    fix_span: Vec<bool>,
+    /// Something to stand on: walkable terrain, a floor, or a fixture that
+    /// spans air. What `passable_i` reads, kept so a floor over a pit is
+    /// ground without the hot path asking three arrays.
+    footing: Vec<bool>,
     fix_cost: Vec<u16>,
     fix_door: Vec<bool>,
     /// How far the fixture here holds the roof up, in cells; 0 for none.
@@ -186,6 +192,8 @@ impl Map {
             floor: vec![None; n],
             floor_cost: vec![0; n],
             fix_block: vec![false; n],
+            fix_span: vec![false; n],
+            footing: (0..n).map(|i| i < plane).collect(),
             fix_cost: vec![0; n],
             fix_door: vec![false; n],
             support: vec![0; n],
@@ -345,7 +353,7 @@ impl Map {
     }
     #[inline]
     pub fn passable_i(&self, i: usize) -> bool {
-        self.terrain_cost[i] > 0 && !self.fix_block[i]
+        self.footing[i] && !self.fix_block[i]
     }
     #[inline]
     pub fn passable(&self, p: IVec) -> bool {
@@ -355,7 +363,11 @@ impl Map {
     #[inline]
     pub fn cost(&self, p: IVec) -> u32 {
         let i = self.idx(p);
-        let ground = if self.floor_cost[i] > 0 { self.floor_cost[i] } else { self.terrain_cost[i] };
+        let ground = match (self.floor_cost[i], self.terrain_cost[i]) {
+            (0, 0) => 100,
+            (0, t) => t,
+            (f, _) => f,
+        };
         ground as u32 + self.fix_cost[i] as u32
     }
 
@@ -381,6 +393,7 @@ impl Map {
             }
         }
         self.terrain_cost[i] = cost.min(u16::MAX as u32) as u16;
+        self.footing[i] = self.has_footing(i);
         self.dirty_regions(i);
         self.rooms_dirty = true;
         self.changed.push(i as u32);
@@ -399,6 +412,10 @@ impl Map {
         let was = (self.passable_i(i), self.fix_door[i]);
         self.fix_block[i] = blocks;
         self.fix_door[i] = door;
+        if e.is_none() {
+            self.fix_span[i] = false;
+            self.footing[i] = self.has_footing(i);
+        }
         if (self.passable_i(i), self.fix_door[i]) != was {
             self.dirty_regions(i);
             self.rooms_dirty = true;
@@ -434,13 +451,40 @@ impl Map {
     }
 
     /// Lay or lift a floor. `cost` 0 is a floor that changes nothing yet
-    /// (a blueprint). Passability never changes, so no region rebuild.
+    /// (a blueprint). Over air a floor is the only footing, so laying or
+    /// lifting one there changes who can reach what.
     pub fn set_floor(&mut self, p: IVec, e: Option<Entity>, cost: u32) {
         let i = self.idx(p);
         self.floor[i] = e;
         self.floor_cost[i] = if e.is_some() { cost.min(u16::MAX as u32) as u16 } else { 0 };
+        self.refoot(i);
         self.bump(i);
         self.touch(p);
+    }
+
+    /// The fixture at `p` spans air (a drawbridge), or no longer does.
+    /// Removing the fixture clears it.
+    pub fn set_span(&mut self, p: IVec, spans: bool) {
+        let i = self.idx(p);
+        self.fix_span[i] = spans;
+        self.refoot(i);
+        self.bump(i);
+    }
+
+    fn has_footing(&self, i: usize) -> bool {
+        self.terrain_cost[i] > 0 || self.floor_cost[i] > 0 || self.fix_span[i]
+    }
+
+    /// Work out cell `i`'s footing again, rebuilding what reads it when it
+    /// changed.
+    fn refoot(&mut self, i: usize) {
+        let now = self.has_footing(i);
+        if now != self.footing[i] {
+            self.footing[i] = now;
+            self.dirty_regions(i);
+            self.rooms_dirty = true;
+            self.changed.push(i as u32);
+        }
     }
 
     /// Cell `i`'s level needs its regions rebuilt.
