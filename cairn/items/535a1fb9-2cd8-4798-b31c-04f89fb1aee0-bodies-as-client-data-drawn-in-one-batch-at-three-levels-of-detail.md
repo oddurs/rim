@@ -7,7 +7,7 @@ milestone: people
 depends_on:
 - cc289956-8b67-429b-8f9a-5a98e651398e
 created: 2026-09-27
-updated: 2026-09-27
+updated: 2026-09-28
 priority: p0
 api: additive
 pillar:
@@ -84,3 +84,7 @@ sockets = { hair = "head", worn = "torso", hold = [0, -0.22], shoulder = [0.16, 
 - [ ] `rim --bench-render`: 200 pawns at full detail inside 0.4 ms of CPU on the reference machine, or the measured number and why, noted here
 - [ ] Editing `ui/bodies.toml` in a running game redraws every pawn with no sim reload
 - [ ] docs/modding/bodies.md documents `[[body]]`, parts, sockets and channels
+
+## 2026-09-28
+
+The spike (cc289956) chose distance-field quads: the batch to start from is Batch in crates/rim_client/src/figures.rs on the local branch spike/cc289956-figure-batch-code (one stream buffer, one draw call, a GLSL 100 shader with ellipse and rounded-box edges and an antialiased ink outline). Its numbers were macOS only; the Linux and GPU numbers for this item come from CI's render bench.

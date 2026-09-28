@@ -7,7 +7,7 @@ milestone: people
 depends_on:
 - 535a1fb9-2cd8-4798-b31c-04f89fb1aee0
 created: 2026-09-27
-updated: 2026-09-27
+updated: 2026-09-28
 priority: p0
 api: none
 pillar:
@@ -38,3 +38,7 @@ own yet, so a figure that got slower would only show up in the total.
 - [ ] `rim --bench-render` prints the pawns pass with CPU, instances and draw calls at 7, 15 and 40 px a cell
 - [ ] CI fails a deliberately slowed pawn pass (shown once on a throwaway PR, linked here)
 - [ ] The before and after numbers for 535a1fb9 are recorded here
+
+## 2026-09-28
+
+The spike (cc289956) measured macOS only, 200 eight-part figures at 0.087 ms of CPU and one draw call with the distance-field batch. This pass is where Linux and GPU time get measured, in CI, on the real batch.

@@ -2711,9 +2711,15 @@ primitives, all pawns in one draw call.
 | Full figure | from 20 (the detail zoom, §6b) | every part |
 
 Budget: 200 pawns at full detail within 0.4 ms of the renderer's 4 ms (§8),
-held by a pawns pass in `rim --bench-render`. How the primitives reach the
-GPU (distance-field quads, tessellation or pre-rendered frames) is a spike's
-to answer on macOS's GL before the body is built.
+held by a pawns pass in `rim --bench-render`.
+
+**The primitives reach the GPU as distance-field quads** (spike cc289956).
+Each part is one quad carrying its shape, size, fill, ink and outline, and a
+fragment shader draws its edge per pixel, crisp at any zoom and turn; every
+pawn is in one buffer and one draw call. Against macroquad's tessellated
+ellipses, today's path, 200 eight-part figures took 0.087 ms of CPU and one
+call against 1.11 ms and twelve. Pre-rendered frames were ruled out: looks
+as data would multiply the atlas, and a scaled outline blurs.
 
 ---
 
