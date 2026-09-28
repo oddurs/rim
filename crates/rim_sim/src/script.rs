@@ -276,7 +276,7 @@ pub struct ApiDoc {
 pub const RIM_TYPES: &str = r#"type Faction = "player" | "hostile" | "wild"
 type MessageKind = "info" | "good" | "threat" | "bad"
 type CreatureInfo = { id: string, label: string, intelligent: boolean, aggressive: boolean, flees: boolean, plural: string, market_value: number, max_hp: number, wild: boolean }
-type ThingInfo = { id: string, label: string, market_value: number, food: boolean, nutrition: number?, item: boolean, tags: { string } }
+type ThingInfo = { id: string, label: string, market_value: number, food: boolean, nutrition: number?, item: boolean, category: string, tags: { string } }
 type NeedInfo = { id: string, label: string, satisfier: string, days_to_empty: number }
 type ModifierInfo = { id: string, stat: string, thing: string, value: number, reason: string, group: string, on: boolean }
 type StoreSlot = { slot: number, thing: string, count: number, made_of: string?, hp: number }
@@ -300,7 +300,7 @@ type OrderSpec = { label: string, needs: { OrderNeed }, work: number, work_type:
 type OrderInput = { thing: string?, tag: string?, count: number, have: number, match: string?, coming: boolean }
 type OrderInfo = { owner: string, label: string, needs: { OrderInput }, work: number, done: number, total: number, requires: { string } }
 type ItemQuery = { thing: string?, tag: string? }
-type ThingAt = { id: number, thing: string, x: number, y: number, z: number, count: number, blueprint: boolean }
+type ThingAt = { id: number, thing: string, x: number, y: number, z: number, count: number, blueprint: boolean, hp: number }
 "#;
 
 /// A work order's needs, at most: a recipe, not a shopping list.
@@ -806,6 +806,7 @@ impl ScriptHost {
             t.set("food", td.food.is_some())?;
             t.set("nutrition", td.food.as_ref().map(|f| f.nutrition))?;
             t.set("item", td.category == crate::defs::Category::Item)?;
+            t.set("category", format!("{:?}", td.category).to_lowercase())?;
             t.set("tags", lua.create_sequence_from(td.tags.iter().map(String::as_str))?)?;
             things.push(t)?;
         }
@@ -1706,6 +1707,98 @@ impl ScriptHost {
                 Ok(w.place_item_of(def, at, count, stuff))
             }
         );
+        // Things on the map, for a mod that acts on cells (fire, floods).
+        api!(
+            "fixture_at",
+            "(x: number, y: number, z: number?) -> number?",
+            "The thing standing in a cell on level z (the surface if nil): a plant, rock someone works, a building. Nil if none.",
+            (i32, i32, Option<i32>),
+            |w, (x, y, z)| {
+                let p = cell(w, x, y, z)?;
+                Ok(w.map.inb(p).then(|| w.map.fixture_at(p)).flatten().map(|e| e.to_bits().get()))
+            }
+        );
+        api!(
+            "floor_at",
+            "(x: number, y: number, z: number?) -> number?",
+            "The thing on a cell's floor layer, under what stands there. Nil if none.",
+            (i32, i32, Option<i32>),
+            |w, (x, y, z)| {
+                let p = cell(w, x, y, z)?;
+                Ok(w.map.inb(p).then(|| w.map.floor_at(p)).flatten().map(|e| e.to_bits().get()))
+            }
+        );
+        api!(
+            "place",
+            "(thing: string, x: number, y: number, z: number?) -> number?",
+            "Put a whole thing that isn't an item (items are rim.spawn_item's) in a cell: on the floor layer for a floor, else standing. Nil if the cell's layer is taken. Returns its id.",
+            (String, i32, i32, Option<i32>),
+            |w, from, (thing, x, y, z)| {
+                let def = def_id(w, "thing", &thing, &from)?;
+                if w.defs.thing(def).category == crate::defs::Category::Item {
+                    return Err(mlua::Error::runtime(format!("place: {thing} is an item; use rim.spawn_item")));
+                }
+                let p = cell(w, x, y, z)?;
+                if !w.map.inb(p) {
+                    return Ok(None);
+                }
+                Ok(w.spawn_fixture(def, p, false).map(|e| e.to_bits().get()))
+            }
+        );
+        api!(
+            "remove",
+            "(id: number) -> boolean",
+            "Take a thing off the map for good, as if it were never there: false if it's already gone.",
+            u64,
+            |w, id| {
+                let e = rim_sim_entity(id)?;
+                if w.thing(e).is_none() {
+                    return Ok(false);
+                }
+                w.despawn_thing(e);
+                Ok(true)
+            }
+        );
+        api!(
+            "damage",
+            "(id: number, hp: number) -> boolean",
+            "Take hit points off a thing; at none left it's destroyed (true).",
+            (u64, i32),
+            |w, (id, hp)| {
+                let e = rim_sim_entity(id)?;
+                let Some(t) = w.thing(e) else { return Ok(false) };
+                if t.hp - hp.max(0) > 0 {
+                    if let Ok(mut t) = w.ecs.get::<&mut crate::world::Thing>(e) {
+                        t.hp -= hp.max(0);
+                    }
+                    w.map.touch(t.pos);
+                    return Ok(false);
+                }
+                w.despawn_thing(e);
+                Ok(true)
+            }
+        );
+        api!(
+            "designate",
+            "(id: number, designation: string?) -> ()",
+            "Mark a thing for work with a designation, as the player's drag would, or clear its mark with nil.",
+            (u64, Option<String>),
+            |w, from, (id, designation)| {
+                let e = rim_sim_entity(id)?;
+                let Some(t) = w.thing(e) else { return Ok(()) };
+                match designation {
+                    Some(d) => {
+                        let d = def_id(w, "designation", &d, &from)?;
+                        let _ = w.ecs.insert_one(e, crate::world::Designated(d));
+                    }
+                    None => {
+                        let _ = w.ecs.remove_one::<crate::world::Designated>(e);
+                    }
+                }
+                w.map.touch(t.pos);
+                Ok(())
+            }
+        );
         // A container's level, slots and contents, or nil.
         {
             let ptr = self.world.clone();
@@ -1964,6 +2057,7 @@ impl ScriptHost {
                     r.set("z", t.pos.z)?;
                     r.set("count", t.count)?;
                     r.set("blueprint", w.ecs.get::<&Blueprint>(e).is_ok())?;
+                    r.set("hp", t.hp)?;
                     Ok(Value::Table(r))
                 })
             })?;

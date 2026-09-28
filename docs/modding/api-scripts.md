@@ -18,9 +18,11 @@ are in [Scripting rules](scripting.md).
 | `rim.count_items` | `(what: ItemQuery) -> number` | Items lying on the map, by thing ({ thing = "core:wood" }) or by tag ({ tag = "knappable" }). |
 | `rim.count_pawns` | `(faction: Faction) -> number` | Living pawns of a faction. |
 | `rim.creature_defs` | `{CreatureInfo}` | Every creature def. |
+| `rim.damage` | `(id: number, hp: number) -> boolean` | Take hit points off a thing; at none left it's destroyed (true). |
 | `rim.date` | `() -> Date` | The calendar date. |
 | `rim.day` | `() -> number` | Days since the game began, from 0. |
 | `rim.defs` | `(kind: string) -> { {[string]: any} }` | Entries of a def kind a mod declared with [[kind]], in load order: "type" for your own kind, "weather:type" for another mod's. |
+| `rim.designate` | `(id: number, designation: string?) -> ()` | Mark a thing for work with a designation, as the player's drag would, or clear its mark with nil. |
 | `rim.edge_cell` | `() -> (number?, number?)` | A random open cell on the map edge that can reach the colony. |
 | `rim.emit` | `(name: string, data: {[string]: any}?) -> ()` | Send an event to rim.on handlers in any mod. Only under your own name: "your_mod:event". |
 | `rim.every` | `(interval: number, fn: () -> ()) -> ()` | Run fn every `interval` ticks (hooks are staggered). Register at load time. |
@@ -29,6 +31,8 @@ are in [Scripting rules](scripting.md).
 | `rim.field` | `(id: string, x: number, y: number, z: number?) -> number` | A field's value at a cell (temperature, light, ...), on level z (the surface if nil). |
 | `rim.field_add` | `(id: string, x: number, y: number, amount: number, z: number?) -> number` | Add to a stock field at a cell on level z (the surface if nil), within its range; returns the new value. Only stock fields keep what is added. |
 | `rim.field_set` | `(id: string, x: number, y: number, value: number, z: number?) -> number` | Set a stock field at a cell on level z (the surface if nil), within its range; returns the new value. |
+| `rim.fixture_at` | `(x: number, y: number, z: number?) -> number?` | The thing standing in a cell on level z (the surface if nil): a plant, rock someone works, a building. Nil if none. |
+| `rim.floor_at` | `(x: number, y: number, z: number?) -> number?` | The thing on a cell's floor layer, under what stands there. Nil if none. |
 | `rim.get_data` | `(key: string) -> any` | A copy of stored script data, or nil. A bare key is your mod's; "weather:forecast" reads another's. |
 | `rim.has_tool` | `(tags: { string }) -> boolean` | Whether some tool in the colony, lying about or in a hand, has every one of these tool tags. False for a tag no tool has. |
 | `rim.hour` | `() -> number` | Hour of the day, 0 to 24 (tick 0 is 06:00). |
@@ -47,6 +51,7 @@ are in [Scripting rules](scripting.md).
 | `rim.on_generate_level` | `(z: number, fn: (z: number) -> ()) -> ()` | Make level z (below 0) yourself: fn runs once when a new map is made, after the level's [[stratum]] has filled it, and changes it with rim.set_terrain. One mod per level. Register at load time. |
 | `rim.on_migrate` | `(fn: (from_version: string, data: {[string]: any}) -> {[string]: any}) -> ()` | Upgrade your script data from a save made with a different version of your mod: fn gets that version and your data (bare keys) and returns the data to keep. It sees no world: only your data. Runs on load, before any hook. Register at load time. |
 | `rim.order` | `(site: number) -> OrderInfo?` | The work order on a thing and how far it's got, or nil. |
+| `rim.place` | `(thing: string, x: number, y: number, z: number?) -> number?` | Put a whole thing that isn't an item (items are rim.spawn_item's) in a cell: on the floor layer for a floor, else standing. Nil if the cell's layer is taken. Returns its id. |
 | `rim.planner` | `(name: string, fn: (board: WorkBoard) -> { [number]: { [string]: PlanCell \| number } }) -> ()` | Register a planner under your mod's name, for a planned work role (`planner = "mod:name"`). Once an in-game hour the engine calls it with the board (rim.work_board, its members marked) and takes back levels for its members: `{ [colonist id] = { [work] = { level = 2, reason = "..." } } }`. A level changes when two plans in a row agree. Never (0) and pinned cells are refused. Register at load time. |
 | `rim.post_order` | `(site: number, order: OrderSpec) -> ()` | Post a work order on a thing (a station): bring what `needs` lists, by thing or by tag, then work `work` ticks there, holding a tool with every tag in `requires`. Colonists take it as `work_type` work. When it's done, `order_done` names what went in; make what it makes then. One order a site at a time. |
 | `rim.priority` | `(id: number, work: string) -> number?` | A colonist's priority for a work type, rules and stance included: 1 first, 0 never. Nil if it isn't a pawn. |
@@ -55,6 +60,7 @@ are in [Scripting rules](scripting.md).
 | `rim.random` | `() -> number` | A number in [0, 1) from the world's random numbers: the same on every machine. |
 | `rim.random_int` | `(lo: number, hi: number) -> number` | A whole number from lo to hi inclusive, from the world's random numbers. |
 | `rim.reading` | `(id: string) -> number?` | A colony reading, by qualified id ("core:food_days"); a bare name is your own mod's. Nil until published. |
+| `rim.remove` | `(id: number) -> boolean` | Take a thing off the map for good, as if it were never there: false if it's already gone. |
 | `rim.room_at` | `(x: number, y: number, z: number?) -> Room?` | The room at a cell on level z (the surface if nil), or nil on a wall or door. `uncovered` counts cells beyond every roof support's span; `role` is the first [[room_role]] it meets, if any. |
 | `rim.say` | `(id: number, text: string, ticks: number?, priority: number?) -> ()` | A pawn says something: a speech bubble over it for `ticks` ticks (600 unless given). Higher `priority` wins when it has several lines or the screen is crowded; needs speak at 1, and 2 is the default. Only presentation: nothing in the sim reads it back. |
 | `rim.season` | `() -> string` | The current season's name. |
@@ -93,7 +99,7 @@ Types used above:
 type Faction = "player" | "hostile" | "wild"
 type MessageKind = "info" | "good" | "threat" | "bad"
 type CreatureInfo = { id: string, label: string, intelligent: boolean, aggressive: boolean, flees: boolean, plural: string, market_value: number, max_hp: number, wild: boolean }
-type ThingInfo = { id: string, label: string, market_value: number, food: boolean, nutrition: number?, item: boolean, tags: { string } }
+type ThingInfo = { id: string, label: string, market_value: number, food: boolean, nutrition: number?, item: boolean, category: string, tags: { string } }
 type NeedInfo = { id: string, label: string, satisfier: string, days_to_empty: number }
 type ModifierInfo = { id: string, stat: string, thing: string, value: number, reason: string, group: string, on: boolean }
 type StoreSlot = { slot: number, thing: string, count: number, made_of: string?, hp: number }
@@ -117,5 +123,5 @@ type OrderSpec = { label: string, needs: { OrderNeed }, work: number, work_type:
 type OrderInput = { thing: string?, tag: string?, count: number, have: number, match: string?, coming: boolean }
 type OrderInfo = { owner: string, label: string, needs: { OrderInput }, work: number, done: number, total: number, requires: { string } }
 type ItemQuery = { thing: string?, tag: string? }
-type ThingAt = { id: number, thing: string, x: number, y: number, z: number, count: number, blueprint: boolean }
+type ThingAt = { id: number, thing: string, x: number, y: number, z: number, count: number, blueprint: boolean, hp: number }
 ```

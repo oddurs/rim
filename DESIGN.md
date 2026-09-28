@@ -351,6 +351,22 @@ of = [{ input = "hour", curve = [[3, -1.0], [9, 0.0], [15, 1.0], [21, 0.0], [27,
   client draws a plant at its stage's size, faded while dormant and browned
   when hurt. Core's plants read warmth, light and fertility; the weather
   plugin patches in the ground's wetness.
+- **Fire is a plugin** (`mods/fire`, after the weather plugin), on the
+  public API plus a few generic calls any cell-acting mod wants
+  (`rim.fixture_at`, `rim.floor_at`, `rim.place`, `rim.remove`,
+  `rim.damage`, `rim.designate`). Where it burns is the fire script's data,
+  a list of cells in the order they caught, so a step costs the fire and
+  not the map; everything random is the world RNG. A burning cell loses
+  heat each step (slower while something stands in it to burn, faster in
+  rain and on wet ground), chews at what stands there, and may catch each
+  neighbour: by its heat, the neighbour's flammability (a terrain's
+  `flammability` prop, a plant wholly, a building by its material's
+  factor), dryness (`weather:wetness` below 60%), and a wind factor from
+  `wind_dir` by octant, so no trigonometry. Burnt ground doesn't catch for
+  two days. Each burning cell carries flames on its floor layer, which give
+  heat and light as emitters and which colonists beat out near home (a
+  designation and a Firefight work type). Lightning strikes in storms by
+  weather type; in rain it fizzles, in the plugin's dry storm it catches.
 - **Tables keyed by label**, not arrays: a patch can change one term
   (`set = { ambient = { day = { scale = 11.0 } } }`) and conflicts are
   reported per term.

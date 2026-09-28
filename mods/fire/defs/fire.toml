@@ -1,0 +1,90 @@
+# Fire (DESIGN.md §4c): a plugin on the public API. What burns is data: a
+# terrain's `flammability` prop (patched onto core's below), a plant, and a
+# building by its material's `flammability` factor. Where it's burning is
+# the fire script's own data; each burning cell carries flames on its floor
+# layer, which give off heat and light like any emitter, and which a
+# colonist beats out.
+
+[[thing]]
+id = "flames"
+label = "fire"
+color = "#ff7a1a"
+category = "floor"
+natural = true
+look.layers = [
+    { draw = "disc", r = 0.42, color = "#ff7a1a90", pulse = 0.12 },
+    { draw = "disc", r = 0.26, color = "#ffc04a", pulse = 0.15 },
+]
+# Nobody walks through fire who can walk round it.
+path_cost = 600
+emit = [
+    { field = "core:temperature", amount = 25.0, radius = 2 },
+    { field = "core:light", amount = 40.0, radius = 3 },
+]
+harvest = { designation = "beat_out", work = 60, yields = [] }
+
+[[designation]]
+id = "beat_out"
+label = "Beat out"
+color = "#e8541e"
+work_type = "firefight"
+style = "core:picking"
+
+# Near home, fighting a fire comes before nearly everything.
+[[work_type]]
+id = "firefight"
+label = "Firefight"
+icon = "F"
+priority = 1
+order = 5
+auto = { per_person = 2, weight = 6 }
+
+# Dry lightning: a summer storm that brings wind and no rain.
+[[weather.type]]
+id = "dry_storm"
+label = "dry storm"
+hours = [2, 5]
+blend = 1
+first_day = false
+season = { summer = 0.35, autumn = 0.1, default = 0 }
+follows = { "weather:clear" = 1.2, "weather:cloudy" = 1.0, "weather:rain" = 0.2 }
+set = { cloud = [70, 90], precipitation = 0, wind = [9, 16], fog = 0, temperature = [1, 3] }
+message = "Dry lightning. Watch for fire."
+message_kind = "threat"
+
+# Lightning strikes a weather brings, per hour. In a wet storm a strike
+# rarely catches; in a dry one it does.
+[[kind]]
+id = "lightning"
+
+[kind.fields]
+weather = "string"
+per_hour = "float"
+
+[[lightning]]
+id = "storm"
+weather = "weather:storm"
+per_hour = 0.6
+
+[[lightning]]
+id = "dry_storm"
+weather = "dry_storm"
+per_hour = 0.8
+
+# How readily the ground burns: grass and rich soil carry a fire, bare dirt
+# barely, sand, water and rock not at all.
+[[patch]]
+target = "terrain/core:grass"
+set = { props = { flammability = 0.8 } }
+
+[[patch]]
+target = "terrain/core:rich_soil"
+set = { props = { flammability = 0.6 } }
+
+[[patch]]
+target = "terrain/core:dirt"
+set = { props = { flammability = 0.15 } }
+
+[[patch]]
+target = "terrain/core:marsh"
+set = { props = { flammability = 0.2 } }
