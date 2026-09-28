@@ -248,23 +248,39 @@ of = [{ input = "self" }]
     assert_ne!(a, run(4));
 }
 
-/// 250×250 with two stock fields: the mean cost of a tick's slices.
+/// 250×250 with two stock fields: a tick works out one slice of each, so
+/// its cost is the map over the period whatever else happens. Counted, not
+/// timed: a loaded machine can't time 0.003 ms. The time is printed.
 #[test]
 fn two_stock_fields_on_a_big_map_are_cheap() {
     let (s, _) = sim("stock-cost");
     let defs = s.world.defs.clone();
+    let count = field(&s, "damp:count");
     let mut w = World::new(Arc::clone(&defs), 250, 250, 1);
-    let ticks = 4 * period(&s);
+    let p = period(&s);
+    let cells = w.map.cells() as u64;
+    let slice = cells.div_ceil(p) as usize;
+    // A period, counted: the counter climbs in exactly the cells worked.
+    let mut before = w.fields.layers[count].stock.clone();
+    for t in 0..p {
+        w.fields.step_stock(&defs, &w.map, Clock { tick: t, year: 0, hour: 0, seed: 1 });
+        let now = &w.fields.layers[count].stock;
+        if before.len() == now.len() {
+            let worked = now.iter().zip(&before).filter(|(a, b)| a != b).count();
+            assert!(worked <= slice, "tick {t}: {worked} cells worked, a slice is {slice}");
+        }
+        before.clone_from(now);
+    }
+    assert!(before.iter().all(|&v| v > 0), "every cell worked once in the period");
     let mut fastest = f64::MAX;
     for round in 0..3 {
         let t0 = std::time::Instant::now();
-        for t in 0..ticks {
-            let clock = Clock { tick: round * ticks + t, year: 0, hour: 0, seed: 1 };
+        for t in 0..4 * p {
+            let clock = Clock { tick: p + round * 4 * p + t, year: 0, hour: 0, seed: 1 };
             w.fields.step_stock(&defs, &w.map, clock);
         }
-        fastest = fastest.min(t0.elapsed().as_secs_f64() * 1e3 / ticks as f64);
+        fastest = fastest.min(t0.elapsed().as_secs_f64() * 1e3 / (4 * p) as f64);
     }
+    // A report, not a check: 0.003 ms alone against a 0.02 budget.
     println!("two stock fields, 250×250: {fastest:.4} ms a tick");
-    let slack = if std::env::var_os("CI").is_some() { 6.0 } else { 1.0 };
-    assert!(fastest <= 0.02 * slack, "{fastest:.4} ms a tick");
 }
