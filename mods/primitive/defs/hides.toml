@@ -1,0 +1,52 @@
+# Hides: a hunted animal's skin, scraped with an edge and dried into
+# leather at a crafting spot. Leather is what tailoring will cut clothes
+# from, once colonists can wear them.
+
+[[thing]]
+id = "hide"
+label = "hide"
+color = "#9a6b45"
+category = "item"
+look.layers = [
+    { draw = "fill", x = 0.18, y = 0.26, w = 0.64, h = 0.48, shade = 0.85 },
+    { draw = "fill", x = 0.26, y = 0.32, w = 0.48, h = 0.36 },
+]
+market_value = 1.5
+stack_limit = 20
+tags = ["hide"]
+
+[[thing]]
+id = "leather"
+label = "leather"
+color = "#7a4f2e"
+category = "item"
+look.layers = [
+    { draw = "fill", x = 0.2, y = 0.3, w = 0.6, h = 0.4 },
+    { draw = "outline", x = 0.2, y = 0.3, w = 0.6, h = 0.4, width = 1.0, shade = 0.6 },
+]
+market_value = 3.5
+stack_limit = 50
+tags = ["leather"]
+
+[[crafting.recipe]]
+id = "leather"
+label = "leather"
+station = "crafting:hand"
+inputs = [{ tag = "hide", count = 1 }]
+outputs = [{ thing = "leather" }]
+requires = ["cutting"]
+work = 400
+stuff = false
+
+# A deer's skin makes three, a wolf's two, a hare's one.
+[[patch]]
+target = "creature/core:deer"
+append = { butcher = [{ thing = "primitive:hide", count = 3 }] }
+
+[[patch]]
+target = "creature/core:wolf"
+append = { butcher = [{ thing = "primitive:hide", count = 2 }] }
+
+[[patch]]
+target = "creature/core:hare"
+append = { butcher = [{ thing = "primitive:hide", count = 1 }] }
