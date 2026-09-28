@@ -135,7 +135,9 @@ fn advance_movement(w: &mut World, p: &mut Pawn) {
         w.map.see_around(n);
     }
     if let Some(&n) = p.path.last() {
-        if !w.map.passable(n) {
+        // Someone getting out of the water may go through it, however deep.
+        let scrambling = matches!(p.job, Job::Flee { .. }) && w.map.inb(n) && w.map.passable_wet(w.map.idx(n));
+        if !w.map.passable(n) && !scrambling {
             p.path.clear();
             p.path_goal = None;
             return;

@@ -2,10 +2,12 @@
 id: 78d59e24-0b8e-45fc-899c-af1e14ea3308
 title: A pawn caught in deep water can't get out
 type: bug
-status: backlog
+status: done
 milestone: depth
+assignee: Oddur Sigurdsson
 created: 2026-09-28
 updated: 2026-09-28
+closed_at: 2026-09-28
 priority: p2
 api: none
 effort: s
@@ -24,4 +26,8 @@ Deep water is no footing (695ef115), and escaping rising water searches from the
 
 ## Acceptance criteria
 
-- [ ] A miner who breaches a lake at the end of a tunnel gets out alive (scene test)
+- [x] A miner who breaches a lake at the end of a tunnel gets out alive (scene test)
+
+## 2026-09-28
+
+Water's check on pawns runs every tick now (the map still gets its cost every 60): a pawn in rising water past wading gets a route out found by a breadth-first walk through water of any depth and up stairs, to the nearest cell with footing under wading depth, and walks it as Flee, which may step through deep water. Drowning still costs health while they're under. The scene test's miner at the end of a 12-cell tunnel, with the lake over them and the tunnel full in a few ticks, gets out; without the scramble step they drown.

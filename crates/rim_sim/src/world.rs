@@ -1954,11 +1954,12 @@ impl World {
         if self.tick.is_multiple_of(WATER_EVERY) {
             self.apply_water();
         }
+        self.escape_water();
     }
 
     /// What the water now does (DESIGN.md §6d): its cost on the map, so
-    /// regions rebuild at most this often while it rises; who stands in
-    /// rising water past wading makes for dry ground; who has no air drowns.
+    /// regions rebuild at most this often while it rises, and who has no
+    /// air drowns.
     fn apply_water(&mut self) {
         let Some(f) = self.defs.fluids.first().cloned() else { return };
         let wading = f.wade_cost.min(crate::map::DEEP as u32 - 1) as u16;
@@ -1978,14 +1979,9 @@ impl World {
         let per = WATER_EVERY as f64 / (crate::TICKS_PER_DAY as f64 / 24.0);
         for k in 0..self.pawns.len() {
             let e = self.pawns[k];
-            let Ok(p) = self
-                .ecs
-                .get::<&Pawn>(e)
-                .map(|p| (p.pos, p.def, p.faction, p.active && !p.dead, matches!(p.job, Job::Flee { .. })))
-            else {
+            let Ok((pos, def, alive)) = self.ecs.get::<&Pawn>(e).map(|p| (p.pos, p.def, p.active && !p.dead)) else {
                 continue;
             };
-            let (pos, def, faction, alive, fleeing) = p;
             if !alive {
                 continue;
             }
@@ -2000,31 +1996,76 @@ impl World {
                     }
                 }
             }
-            if depth >= f.wade && !fleeing && self.water.rising(&self.map, pos) {
-                if let Some(to) = self.dry_spot(pos, faction, f.wade) {
-                    crate::ai::set_job(self, e, Job::Flee { to, until: self.tick + 1200 });
-                }
-            }
         }
     }
 
-    /// The nearest ground `who` can reach from `from` where the water is
-    /// under `wade`: on this level, or the one above, which water never
-    /// climbs to. Call `ensure_regions` first.
-    fn dry_spot(&self, from: IVec, who: Faction, wade: u32) -> Option<IVec> {
-        (0..=24).find_map(|r| {
-            [from.z, from.z + 1].into_iter().find_map(|z| {
-                (-r..=r)
-                    .flat_map(|dy| (-r..=r).map(move |dx| (dx, dy)))
-                    .filter(|&(dx, dy): &(i32, i32)| dx.abs().max(dy.abs()) == r)
-                    .map(|(dx, dy)| IVec::at(from.x + dx, from.y + dy, z))
-                    .find(|&q| {
-                        self.map.passable(q)
-                            && self.water_depth(q) < wade
-                            && self.map.can_reach_for(from, Goal::Cell(q), who)
-                    })
-            })
-        })
+    /// A way out of the water for `who` at `from`: the nearest ground under
+    /// `wade` deep, and the cells to it, walked through water of any depth
+    /// and up or down stairs (water never climbs, so up is dry). A pawn in
+    /// deep water has no region, so this doesn't ask the regions. As a
+    /// path: the destination first, the next step last.
+    fn escape_route(&self, from: IVec, who: Faction, wade: u32) -> Option<Vec<IVec>> {
+        const REACH: usize = 2_000;
+        let start = self.map.idx(from);
+        let mut came: std::collections::BTreeMap<usize, usize> = std::collections::BTreeMap::new();
+        let mut queue = std::collections::VecDeque::from([start]);
+        came.insert(start, start);
+        while let Some(i) = queue.pop_front() {
+            let p = self.map.pos(i);
+            if i != start && self.map.passable(p) && self.water_depth(p) < wade {
+                let mut path = vec![p];
+                let mut c = i;
+                while came[&c] != start {
+                    c = came[&c];
+                    path.push(self.map.pos(c));
+                }
+                return Some(path);
+            }
+            if came.len() > REACH {
+                return None;
+            }
+            let next = [(1, 0), (-1, 0), (0, 1), (0, -1)]
+                .into_iter()
+                .map(|(dx, dy)| p.offset(dx, dy))
+                .filter(|q| self.map.inb(*q))
+                .map(|q| self.map.idx(q))
+                .chain(self.map.through(i, who).map(|(j, _)| j));
+            for j in next {
+                if self.map.passable_wet(j) && !came.contains_key(&j) {
+                    came.insert(j, i);
+                    queue.push_back(j);
+                }
+            }
+        }
+        None
+    }
+
+    /// Whoever stands in rising water past wading makes for dry ground,
+    /// every tick: water can close over a pawn faster than it goes on the
+    /// map.
+    fn escape_water(&mut self) {
+        let Some(f) = self.defs.fluids.first() else { return };
+        let wade = f.wade;
+        for k in 0..self.pawns.len() {
+            let e = self.pawns[k];
+            let Ok((pos, faction, ok)) = self
+                .ecs
+                .get::<&Pawn>(e)
+                .map(|p| (p.pos, p.faction, p.active && !p.dead && !matches!(p.job, Job::Flee { .. })))
+            else {
+                continue;
+            };
+            if !ok || self.water_depth(pos) < wade || !self.water.rising(&self.map, pos) {
+                continue;
+            }
+            let Some(path) = self.escape_route(pos, faction, wade) else { continue };
+            let to = path[0];
+            crate::ai::set_job(self, e, Job::Flee { to, until: self.tick + 1200 });
+            if let Ok(mut p) = self.ecs.get::<&mut Pawn>(e) {
+                p.path = path;
+                p.path_goal = Some(Goal::Cell(to));
+            }
+        }
     }
 
     /// Water at `p`, in sevenths of a cell (DESIGN.md §6d).
