@@ -599,6 +599,14 @@ pub fn pawn_disc(app: &App, e: Entity) -> Option<((f32, f32), f32)> {
     Some((app.cam.to_screen(px, py), w.defs.creature(p.def).size * app.cam.zoom))
 }
 
+/// Where a creature's urgent mark sits, on screen: its disc's top-left.
+pub fn urgent_spot(sx: f32, sy: f32, r: f32) -> (f32, f32) {
+    (sx - r * 0.7, sy - r * 0.7)
+}
+
+/// The urgent mark's amber, for tests that look for it on screen.
+pub const URGENT_MARK: Color = URGENT;
+
 /// Pawns, hit flashes and the field overlay.
 pub fn pawns(app: &App) {
     let w = &app.sim.world;
@@ -636,6 +644,14 @@ pub fn pawns(app: &App) {
         if w.ecs.get::<&Designated>(e).is_ok() {
             draw_line(sx - r - 3.0, sy, sx + r + 3.0, sy, 1.5, HOSTILE);
             draw_line(sx, sy - r - 3.0, sx, sy + r + 3.0, 1.5, HOSTILE);
+        }
+        // Marked urgent: the same amber disc a thing wears, at the
+        // creature's top-left, so it moves with it. Pawns aren't in the
+        // chunk mesh, where a thing's mark is drawn.
+        if w.ecs.get::<&Urgent>(e).is_ok() {
+            let (ux, uy) = urgent_spot(sx, sy, r);
+            disc(&mut Immediate(&app.world_atlas), ux, uy, z * 0.17 + 1.0, BLACK);
+            disc(&mut Immediate(&app.world_atlas), ux, uy, z * 0.17, URGENT);
         }
         if p.hp < cd.max_hp {
             let f = (p.hp.max(0) as f32 / cd.max_hp as f32).clamp(0.0, 1.0);
