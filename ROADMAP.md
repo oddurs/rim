@@ -753,11 +753,12 @@ The world beyond the map: factions, traders drawn by wealth, quests, taming.
 
 ## Unscheduled
 
-`######····` 60% · 3 of 5 done
+`#######···` 67% · 4 of 6 done
 
 - [ ] `34bc0d93` A Mac mini as a self-hosted runner for the nightly lane <sup>chore · p3 · s · tooling</sup>
 - [ ] `e88e8ce5` One open_cells for the tests: a ring walk that doesn't repeat cells <sup>chore · p3 · s · tooling</sup>
 - [x] `1cfccb62` Storytelling: scenarios, feelings, mourning, relationships and dialogue <sup>spike · p3 · l · plugin</sup>
+- [x] `24edebdb` The autotest clicks a tray row the list has scrolled out of view <sup>bug · p0 · s · client</sup>
 - [x] `27307380` A panel that shows nothing while nothing's hovered misses the hover when it comes <sup>bug · p1 · s · client</sup>
 - [x] `cc6ac1c3` Autotest: the wall-seam check picks a row a pawn is standing on <sup>bug · p1 · s · client</sup>
 
