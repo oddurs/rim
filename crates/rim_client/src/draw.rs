@@ -1903,7 +1903,10 @@ mod tests {
             (true, false) => 3.0,
             (true, true) => 6.0,
         };
-        assert!(ms < 4.0 * slack, "{ms:.3} ms (budget {:.1} ms)", 4.0 * slack);
+        // Timed only alone, in CI's budget step (DESIGN.md §8a).
+        if std::env::var_os("RIM_BUDGETS").is_some() {
+            assert!(ms < 4.0 * slack, "{ms:.3} ms (budget {:.1} ms)", 4.0 * slack);
+        }
         let _ = std::fs::remove_dir_all(dir);
     }
 

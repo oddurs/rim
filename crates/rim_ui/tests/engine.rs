@@ -250,9 +250,9 @@ ui.mount("top", "spin:forever", { order = 5 })
     let sim = sim_at(&dir);
     let mut ui = ui_for(&sim);
     let cv = client(&sim);
-    let t = std::time::Instant::now();
+    // The step budget stops the loop; a frame that never came back would hang
+    // here, and nextest's per-test timeout reports it.
     frame(&mut ui, &sim, &cv, Default::default());
-    assert!(t.elapsed() < std::time::Duration::from_secs(5), "the frame came back");
     let snap = ui.snapshot();
     assert!(snap.contains("endless loop"), "the component shows why it stopped:\n{snap}");
     assert!(ui.find("core:dock").is_some(), "the rest of the UI still builds");

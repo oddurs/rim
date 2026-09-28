@@ -2,10 +2,11 @@
 # Locally: `cargo nextest run --release --workspace`. CI uses the `ci`
 # profile below.
 
-# `scripts/task test`: stop at the first failure, and kill a hung test as CI
-# does rather than wait on it.
+# `scripts/task test`: stop at the first failure, and kill a hung test rather
+# than wait on it. Later than CI: a laptop running several gates at once takes
+# the slowest sim tests (two minutes alone) past three.
 [profile.local]
-slow-timeout = { period = "60s", terminate-after = 3 }
+slow-timeout = { period = "60s", terminate-after = 10 }
 
 [profile.ci]
 # Run everything and report every failure, not the first.

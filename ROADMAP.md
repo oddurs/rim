@@ -30,13 +30,12 @@ The headless engine: defs, mod loading and patching, map, pathing, AI skeleton, 
 
 ## proving-ground — Proving ground
 
-`##········` 15% · 3 of 20 done
+`##········` 20% · 4 of 20 done
 
 Seeds, tests, CI and the merge queue, so that every change is checked the same way on a laptop and in CI, every failure can be brought back with one line, and a PR lands without anyone rebasing it by hand. Design: DESIGN.md §7b, §8a. Plan: https://claude.ai/artifact/KUQcdtWkNG4u63T4S8uPpt
 
 - [ ] `10e53a78` The merge queue on Mergify: a docs lane and a code lane, configured in the repo <sup>chore · p0 · m · tooling</sup>
 - [ ] `18e3e69f` Balance across seeds: distributions over 200 seeds, and a check a balance PR must pass <sup>feature · p2 · s · tooling</sup>
-- [ ] `3163979c` No wall-clock assertions in the suite: count work, and a guard <sup>chore · p0 · m · tooling</sup>
 - [ ] `3d4b8c40` Protect main: a ruleset that requires the queue's checks, kept in the repo <sup>chore · p1 · s · tooling</sup>
 - [ ] `3f381240` CI lanes for a public repo: a Linux PR lane, a four-platform queue proof, nightly <sup>chore · p0 · m · tooling</sup>
 - [ ] `4afaeedb` The seed corpus, rim seeds find and show, and a nightly 200-seed sweep that files what it finds <sup>feature · p1 · m · tooling</sup>
@@ -51,6 +50,7 @@ Seeds, tests, CI and the merge queue, so that every change is checked the same w
 - [ ] `dd48e551` scripts/agent: start, sync, pr and queue for the worktree workflow <sup>chore · p1 · s · tooling</sup>
 - [ ] `f32fa785` A set with no core loads, ticks a day and round-trips a save, in CI <sup>feature · p3 · s · engine</sup>
 - [ ] `e2c56c9a` UI frame-budget test asserts wall-clock time on shared CI runners <sup>bug · p0 · s · tooling</sup>
+- [x] `3163979c` No wall-clock assertions in the suite: count work, and a guard <sup>chore · p0 · m · tooling</sup>
 - [x] `6b605f27` boundary_refresh_is_cheap asserts wall-clock time and fails under load <sup>bug · p0 · s · engine</sup>
 - [x] `9b435cd8` scripts/task: one gate for the laptop and CI, and a pre-push hook <sup>chore · p0 · s · tooling</sup>
 - [x] `e8673d3f` scripting test a_slow_mod_is_named_in_the_warnings flakes under load <sup>bug · p0 · s · engine</sup>

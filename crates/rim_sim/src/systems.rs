@@ -13,11 +13,14 @@ pub const SPOIL_EVERY: u64 = 4;
 /// Stacks that spoil lose condition: by their def's rate terms where they
 /// lie, slower in a store that keeps (its `keeps` terms), and out of the
 /// weather in one that shelters. At no condition left a stack rots away.
-pub fn spoil(w: &mut World) {
+/// Returns the stacks it worked out, so a test counts the staggering rather
+/// than timing it.
+pub fn spoil(w: &mut World) -> usize {
     let defs = w.defs.clone();
     let slot = (w.tick / SPOIL_PASS) % SPOIL_EVERY;
     let ticks = (SPOIL_PASS * SPOIL_EVERY) as i128;
     let mut changed: Vec<(Entity, i32, u16)> = Vec::new();
+    let mut worked = 0;
     for (e, t, lost, held) in w.ecs.query::<(Entity, &Thing, Option<&Spoiling>, Option<&Contained>)>().iter() {
         if e.id() as u64 % SPOIL_EVERY != slot {
             continue;
@@ -27,6 +30,7 @@ pub fn spoil(w: &mut World) {
         if held.is_none() && w.map.item_at(t.pos) != Some(e) {
             continue;
         }
+        worked += 1;
         let store = held
             .and_then(|c| w.ecs.get::<&Thing>(c.store).ok().map(|s| s.def))
             .and_then(|d| defs.thing(d).store.as_ref());
@@ -64,6 +68,7 @@ pub fn spoil(w: &mut World) {
             w.set_stack_hp(e, hp);
         }
     }
+    worked
 }
 
 /// Every `NEEDS_INTERVAL` ticks: decay needs, apply sleep, starvation, healing.
