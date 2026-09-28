@@ -67,12 +67,13 @@ the output is made of comes first, or set `stuff = false`.
 ## Stations
 
 A station is anything built that carries a station tag. The plugin ships
-two, with two tags:
+two, and tags core's campfire as a third:
 
 | Thing | Tags | |
 |---|---|---|
 | `crafting:spot` | `crafting:hand` | A patch of ground marked for handwork. Free: 20 work, nothing brought |
 | `crafting:workbench` | `crafting:hand`, `crafting:bench` | Structural stuff. Works at 1.5× |
+| `core:campfire` | `crafting:fire` | Cooking, and whatever else wants a fire: the stone age fires clay pots in it |
 
 So `station = "crafting:hand"` is handwork, which can be done at either one,
 and `crafting:bench` needs the bench. Your own station is a thing with your
@@ -162,6 +163,39 @@ at its anchor and may be repeated over the rest of its footprint (`bb` for
 a bench two wide), which the loader reads as the one piece. A character
 the legend lacks, or a piece that runs off the grid, fails the load.
 Primitive ships a branch hut and a cob house.
+
+## Cooking
+
+Cooking is recipes at `crafting:fire` with `work_type = "crafting:cook"`,
+so the Work Board has a Cook column and Auto weighs it as food work. A meal
+is an item with a `food` block; the colony's food reading counts it with no
+more said. The plugin roasts meat (two raw cuts make one that feeds 0.3), and
+the stone age boils a stew:
+
+```toml
+[[thing]]
+id = "stew"
+label = "stew"
+color = "#7a5a3a"
+category = "item"
+look.layers = [{ draw = "disc", r = 0.3 }]
+stack_limit = 30
+food = { nutrition = 0.3 }
+
+[[crafting.recipe]]
+id = "stew"
+label = "stew"
+station = "crafting:fire"
+inputs = [{ thing = "core:raw_meat", count = 1 }, { thing = "core:berries", count = 2 }]
+outputs = [{ thing = "stew", count = 2 }]
+requires = ["boiling"]      # the cook holds a pot: a tool, not an input
+work = 300
+work_type = "crafting:cook"
+stuff = false
+```
+
+A vessel is a tool, so it isn't used up: the pot has `tool = { tags =
+["boiling"], wear = 1 }`, and a pot lasts forty stews.
 
 ## Bills
 

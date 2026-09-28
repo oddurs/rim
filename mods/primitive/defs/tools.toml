@@ -179,7 +179,8 @@ stuff = false
 
 # ─── Fired in the campfire ──────────────────────────────────────────────────
 
-# The vessel cooking will ask for. Until then it's wealth, and a start.
+# The vessel a stew boils in (kitchen.toml): the cook holds it like a
+# tool, and a pot lasts forty stews.
 [[thing]]
 id = "pot"
 label = "pot"
@@ -193,6 +194,7 @@ hp = 40
 market_value = 4
 stack_limit = 10
 tags = ["vessel"]
+tool = { tags = ["boiling"], wear = 1 }
 
 [[crafting.recipe]]
 id = "pot"

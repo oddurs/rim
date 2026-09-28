@@ -243,7 +243,9 @@ inspector.tab({
 				}))
 			end
 		end
-		return col({ id = "core:inspector.work", gap = "xxs" }, rows)
+		-- A row per work type, and plugins add work types: past about ten the
+		-- list scrolls, so the tab stays inside the inspector's slot.
+		return { kind = "scroll", id = "core:inspector.work", maxh = 140, gap = "xxs", table.unpack(rows) }
 	end,
 })
 
@@ -468,8 +470,9 @@ ui.define("core:inspector", function(view)
 	end
 	return thing_panel(view, sel)
 end)
--- The slot holds the tallest tab (Work) with room to spare, so switching
--- tabs or subjects changes what's under the header, never where it is.
-ui.mount("left", "core:inspector", { align = "end", slot = 280 })
+-- The slot holds the tallest tab (Work, whose list scrolls past about ten
+-- work types) with room to spare, so switching tabs or subjects changes
+-- what's under the header, never where it is.
+ui.mount("left", "core:inspector", { align = "end", slot = 300 })
 
 return inspector
