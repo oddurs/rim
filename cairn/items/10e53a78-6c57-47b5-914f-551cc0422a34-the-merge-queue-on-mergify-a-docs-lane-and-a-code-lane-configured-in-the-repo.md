@@ -38,3 +38,7 @@ The queue is a Claude session (rim-c2) and a script, run by messages: "ready #N 
 ## 2026-09-27
 
 From rim-c2, who ran the scripted queue: the script merged only when (1) the PR's head was the sha readied, (2) origin/main was an ancestor of it, (3) every check on the sha was complete and green, at least 5 of them, (4) the whole workflow run for the sha concluded success, since 'Every platform reaches the same state' appears only after the test jobs and the rollup can read green too early, and (5) GitHub reported it mergeable. It halted if main's latest run failed. Keep that: merge_conditions list every required job by name, agree included, and a ruleset requires them, so testing on the exact merged result is enforced, not advisory. Two mergers would race: rim-c2 stops its script only after the dry run works.
+
+## 2026-09-27
+
+Evidence for a queue that tests the merged result: #262 and #270 each passed CI alone, then merged in one burst with #273's no_clocks guard, and main went red on the combination (2026-09-27). A queue that runs the suite on main+PR, one at a time or speculatively, catches that before merge.

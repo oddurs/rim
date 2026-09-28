@@ -207,5 +207,9 @@ fn a_burning_map_is_cheap() {
         .fold(f64::MAX, f64::min);
     println!("one step with {n} cells burning: {ms:.3} ms, {:.4} ms a tick", ms / 250.0);
     let slack = if std::env::var_os("CI").is_some() { 6.0 } else { 3.0 };
-    assert!(ms < 10.0 * slack, "{ms:.3} ms a step");
+    // A Luau step has no work to count from outside, so this is a budget,
+    // timed only alone, in CI's budget step (DESIGN.md §8a).
+    if std::env::var_os("RIM_BUDGETS").is_some() {
+        assert!(ms < 10.0 * slack, "{ms:.3} ms a step");
+    }
 }

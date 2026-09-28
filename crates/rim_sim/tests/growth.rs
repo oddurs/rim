@@ -216,21 +216,18 @@ fn the_plant_pass_with_five_thousand_plants() {
         s.world.plant_seedling(e);
     }
     let plants = s.world.ecs.query::<&Growth>().iter().count();
-    let passes = 40;
-    let mut fastest = f64::MAX;
-    for _ in 0..3 {
-        let t0 = std::time::Instant::now();
-        for _ in 0..passes {
+    assert!(plants >= 5000, "{plants} plants");
+    // Counted, not timed (DESIGN.md §8a): a pass that stopped staggering
+    // works out every plant at once.
+    let worked: Vec<usize> = (0..GROW_EVERY)
+        .map(|_| {
             s.world.tick += PLANT_PASS;
-            systems::grow(&mut s.world);
-        }
-        fastest = fastest.min(t0.elapsed().as_secs_f64() * 1e3 / passes as f64);
-    }
-    println!("plant pass, {plants} plants: {fastest:.3} ms a pass, {:.4} ms a tick", fastest / PLANT_PASS as f64);
-    // Alone it is about 0.2 ms; the bound catches a pass that stopped
-    // staggering, with room for a loaded machine running every test at once.
-    let slack = if std::env::var_os("CI").is_some() { 6.0 } else { 1.0 };
-    assert!(fastest <= 3.0 * slack, "{fastest:.3} ms a pass");
+            systems::grow(&mut s.world)
+        })
+        .collect();
+    let most = worked.iter().max().unwrap();
+    assert!(*most <= plants / GROW_EVERY as usize * 3 / 2, "a pass works out a share, not all {plants}: {worked:?}");
+    assert!(worked.iter().sum::<usize>() >= plants, "every plant once in {GROW_EVERY} passes: {worked:?}");
 }
 
 /// A mod's harvest that gives `regrow_days` keeps to them on a plant that
