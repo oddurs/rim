@@ -1,6 +1,7 @@
 //! Interval systems. Each declares how often it runs in `sim.rs`.
 
 use crate::defs::*;
+use crate::rng::{SIM, SPAWNS};
 use crate::world::*;
 use crate::{terms, IVec, TICKS_PER_DAY};
 use hecs::Entity;
@@ -108,6 +109,9 @@ pub fn needs(w: &mut World) {
             p.wet = (now * WET_FULL).round() as u16;
             chill = wd.chill * now;
         }
+        // Rounding draws by pawn, need and tick, not in pawn order (DESIGN.md
+        // §7b): a pawn joining or leaving doesn't change anyone else's.
+        let who = e.to_bits().get();
         for (k, n) in p.needs.iter_mut().enumerate() {
             let nd = defs.need(n.0);
             let was = n.1;
@@ -130,7 +134,7 @@ pub fn needs(w: &mut World) {
                 }
                 _ => -(NEED_MAX as f64) * frac / nd.days_to_empty,
             };
-            n.1 = (n.1 + w.rng.round(delta)).clamp(0, NEED_MAX);
+            n.1 = (n.1 + w.streams.draw(SIM, who, w.tick, k as u64).round(delta)).clamp(0, NEED_MAX);
             if let Some(say) = nd.say.as_ref().filter(|_| talks) {
                 let level = (say.below * NEED_MAX as f64) as i32;
                 if was >= level && n.1 < level {
@@ -144,14 +148,14 @@ pub fn needs(w: &mut World) {
         }
         let max = defs.creature(p.def).max_hp;
         if starving {
-            p.hp -= w.rng.round(dmg);
+            p.hp -= w.streams.draw(SIM, who, w.tick, u64::MAX).round(dmg);
             if p.hp <= 0 {
                 p.dead = true;
             }
         } else if p.hp < max {
             // Heal ~25% of max hp per day, double while asleep.
             let rate = max as f64 * 0.25 * frac * if asleep { 2.0 } else { 1.0 };
-            p.hp = (p.hp + w.rng.round(rate)).min(max);
+            p.hp = (p.hp + w.streams.draw(SIM, who, w.tick, u64::MAX - 1).round(rate)).min(max);
         }
     }
     wear_apparel(w, frac);
@@ -276,7 +280,8 @@ fn wear_apparel(w: &mut World, frac: f64) {
             if per_day <= 0.0 {
                 continue;
             }
-            let hp = t.hp - w.rng.round(per_day * frac);
+            // Keyed by the garment: another pawn dressing doesn't change its wear.
+            let hp = t.hp - w.streams.draw(SIM, g.to_bits().get(), w.tick, 0).round(per_day * frac);
             if hp > 0 {
                 if let Ok(mut t) = w.ecs.get::<&mut Thing>(g) {
                     t.hp = hp;
@@ -329,7 +334,10 @@ pub fn wealth(w: &mut World) {
 pub fn spread_plants(w: &mut World) {
     let defs = w.defs.clone();
     for _ in 0..4 {
-        let p = IVec::new(w.rng.below(w.map.w as u32) as i32, w.rng.below(w.map.h as u32) as i32);
+        let p = IVec::new(
+            w.streams.stream(SPAWNS).below(w.map.w as u32) as i32,
+            w.streams.stream(SPAWNS).below(w.map.h as u32) as i32,
+        );
         let i = w.map.idx(p);
         if w.map.fixture[i].is_some() || w.map.item[i].is_some() {
             continue;
@@ -345,7 +353,7 @@ pub fn spread_plants(w: &mut World) {
                 true => 1.0,
                 false => terms::from_q(w.fields.eval_at(&defs, &w.map, &g.rate_terms, p)).clamp(0.0, 2.0),
             });
-            if w.rng.chance(s.density * 4.0 * weight) {
+            if w.streams.stream(SPAWNS).chance(s.density * 4.0 * weight) {
                 if let Some(e) = w.spawn_fixture(di as DefId, p, false) {
                     if td.grow.is_some() {
                         w.plant_seedling(e);

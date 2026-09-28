@@ -164,6 +164,11 @@ fn the_stance_bar_switches() {
 #[test]
 fn cells_show_the_rules_and_say_why() {
     let (mut sim, mut ui, cv) = board(1);
+    // A founder's skills are drawn from the seed; give this one construction
+    // outright, so the bar below doesn't depend on the draw (DESIGN.md §7b).
+    let skill = sim.world.defs.lookup("skill", "core:construction").unwrap();
+    let founder = sim.world.colonists().next().unwrap();
+    sim.world.ecs.get::<&mut rim_sim::world::Pawn>(founder).unwrap().learn(skill, rim_sim::world::skill_xp(5));
     let siege = sim.world.defs.lookup("stance", "core:siege").unwrap();
     sim.push(Command::SetStance { stance: siege });
     sim.step();

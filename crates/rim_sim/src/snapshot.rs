@@ -25,7 +25,9 @@ use std::path::Path;
 /// 4: what a pawn carries, an order's deliveries and `OrderDone` inputs are
 /// lots, keeping material and hp. Older `(def, count)` pairs still read.
 /// 5: `engine:store` and `engine:contained`, containers and what's in them.
-pub const FORMAT: u32 = 5;
+/// 6: `engine:world` keeps a random stream per purpose instead of one `rng`
+/// (DESIGN.md §7b); an older save's `rng` seeds its spawns and mods' streams.
+pub const FORMAT: u32 = 6;
 
 /// Where a format-1 plan kept its progress.
 #[derive(Deserialize)]
@@ -84,7 +86,14 @@ pub(crate) struct WorldSection {
     below: i32,
     #[serde(default, skip_serializing_if = "is_zero")]
     above: i32,
-    rng: u64,
+    /// Each open random stream's state (DESIGN.md §7b).
+    #[serde(default)]
+    streams: BTreeMap<String, u64>,
+    /// Format 5 and older kept one RNG. Read, never written: a save from
+    /// before streams opens its spawns and mods' streams from it, rather than
+    /// replaying the game's opening rolls.
+    #[serde(default, skip_serializing)]
+    rng: Option<u64>,
     next_entity: u32,
     wealth: f64,
     colony_lost: bool,
@@ -247,7 +256,7 @@ impl Snapshot {
         let w = &sim.world;
         let header = Header {
             format: FORMAT,
-            engine: env!("CARGO_PKG_VERSION").to_string(),
+            engine: crate::savefile::engine_id(),
             api: format!("{}.{}", crate::API_VERSION.0, crate::API_VERSION.1),
             seed: w.seed,
             tick: w.tick,
@@ -260,7 +269,8 @@ impl Snapshot {
             height: w.map.h,
             below: -*w.map.levels().start(),
             above: *w.map.levels().end(),
-            rng: w.rng.state(),
+            streams: w.streams.states(),
+            rng: None,
             next_entity: w.next_entity,
             wealth: w.wealth,
             colony_lost: w.colony_lost,
@@ -408,7 +418,13 @@ impl Snapshot {
         let ws: WorldSection = dec(self, "engine:world")?;
         let mut w = World::with_levels(defs.clone(), ws.width, ws.height, ws.below, ws.above, self.header.seed);
         w.tick = self.header.tick;
-        w.rng = crate::rng::Rng::from_state(ws.rng);
+        w.streams = crate::rng::Streams::restore(w.seed, &ws.streams);
+        if let (true, Some(old)) = (ws.streams.is_empty(), ws.rng) {
+            w.streams.open_at(crate::rng::SPAWNS, old);
+            for m in &mods.manifests {
+                w.streams.open_at(&crate::rng::mod_stream(&m.id), old);
+            }
+        }
         w.wealth = ws.wealth;
         w.colony_lost = ws.colony_lost;
         w.messages = ws.messages;

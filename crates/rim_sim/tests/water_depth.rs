@@ -122,6 +122,17 @@ fn colonists_leave_rising_water_and_nobody_drowns() {
     let mut deepest = 0;
     let mut fled = false;
     for _ in 0..20_000u32 {
+        // Water, not wolves or raiders: whatever the seed sends, as
+        // animals.rs's `isolated` does.
+        let others: Vec<_> = (s.world.pawns.iter().copied())
+            .filter(|&e| {
+                s.world.ecs.get::<&Pawn>(e).is_ok_and(|p| matches!(p.faction, Faction::Wild | Faction::Hostile))
+            })
+            .collect();
+        for e in others {
+            let _ = s.world.ecs.despawn(e);
+            s.world.pawns.retain(|&p| p != e);
+        }
         s.step();
         let p = s.world.ecs.get::<&Pawn>(down).unwrap().clone();
         deepest = deepest.max(s.world.water_depth(p.pos));

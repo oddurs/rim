@@ -38,7 +38,7 @@ co-op. The UI's is client-only (DESIGN.md §11).
   - `loadstring` is removed: it compiles code at run time.
   - `getfenv`/`setfenv` are removed: they reach other mods' environments and switch off Luau's fast paths.
   - `newproxy` and `os` are removed.
-  - `math.random` is removed; scripts use `rim.random` (the world RNG).
+  - `math.random` is removed; scripts use `rim.random` (the mod's own random stream).
 - **Read-only.** The standard libraries and the global table are read-only.
   Mods see `rim` through a proxy whose every write is an error naming the
   mod and pointing at `require`, and `__metatable` hides its workings. Mods

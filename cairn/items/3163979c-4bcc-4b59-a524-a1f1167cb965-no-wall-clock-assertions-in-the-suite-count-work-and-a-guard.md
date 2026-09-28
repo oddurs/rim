@@ -59,3 +59,7 @@ Regressions shown: a planted 10 ms sleep in Ui::frame, 500 ms in the font cache'
 ## 2026-09-27
 
 Rebased onto c5d2161e, the guard caught spoilage.rs (#250, merged today) asserting a spoil pass under 3 ms. spoil() now returns the stacks it worked out; the test asserts each pass works out at most 1.5x its share and a cycle of SPOIL_EVERY passes covers every stack. With the stagger removed it fails: [4000, 4000, 4000, 4000].
+
+## 2026-09-27
+
+A new wall-clock assert landed with stock fields (#231): rim_sim/tests/stock_fields.rs two_stock_fields_on_a_big_map_are_cheap asserts under 0.02 ms a tick (6x slack on CI, none locally). It failed at 0.041 ms in a loaded local run on 2026-09-27. Count it with the others.

@@ -5,7 +5,7 @@ use crate::defs::*;
 use crate::field::{Clock, Fields};
 use crate::map::Map;
 use crate::path::{Goal, Pathfinder};
-use crate::rng::Rng;
+use crate::rng::{Streams, SPAWNS};
 use crate::terms::Q;
 use crate::{IVec, TICKS_PER_DAY};
 use hecs::Entity;
@@ -905,7 +905,8 @@ pub struct World {
     /// Water in what has been dug (DESIGN.md §6d). Derived from the map
     /// but for its volumes.
     pub water: crate::water::Water,
-    pub rng: Rng,
+    /// A random stream per purpose (DESIGN.md §7b).
+    pub streams: Streams,
     pub tick: u64,
     /// Pawns in spawn order; iteration order is part of determinism.
     pub pawns: Vec<Entity>,
@@ -1020,7 +1021,7 @@ impl World {
             fields,
             water,
             map,
-            rng: Rng::new(seed),
+            streams: Streams::new(seed),
             tick: 0,
             pawns: Vec::new(),
             reservations: HashMap::new(),
@@ -1170,6 +1171,11 @@ impl World {
     pub fn spawn_pawn(&mut self, def: DefId, faction: Faction, pos: IVec, name: Option<String>) -> Entity {
         let defs = self.defs.clone();
         let cd = defs.creature(def);
+        // Draws keyed by the id this pawn is about to get, so a mod that
+        // spawns people doesn't move the spawns stream mapgen and plants use
+        // (DESIGN.md §7b).
+        let key = self.next_entity as u64;
+        let roll = |w: &World, k: u64| w.streams.draw(SPAWNS, key, w.tick, k);
         let name = match name {
             Some(n) => n,
             None if cd.intelligent && !defs.names.is_empty() => {
@@ -1177,8 +1183,8 @@ impl World {
                 let taken: Vec<String> =
                     self.pawns.iter().filter_map(|&e| self.ecs.get::<&Pawn>(e).ok().map(|p| p.name.clone())).collect();
                 let mut pick = String::new();
-                for _ in 0..16 {
-                    pick = defs.names[self.rng.below(defs.names.len() as u32) as usize].clone();
+                for i in 0..16 {
+                    pick = defs.names[roll(self, i).below(defs.names.len() as u32) as usize].clone();
                     if !taken.contains(&pick) {
                         break;
                     }
@@ -1189,7 +1195,9 @@ impl World {
         };
         // People arrive knowing a little of everything, some more than others.
         let skills = match cd.intelligent {
-            true => (0..defs.skills.len() as DefId).map(|s| (s, skill_xp(self.rng.below(7)))).collect(),
+            true => {
+                (0..defs.skills.len() as DefId).map(|s| (s, skill_xp(roll(self, 100 + s as u64).below(7)))).collect()
+            }
             false => Vec::new(),
         };
         let p = Pawn {
@@ -1200,7 +1208,7 @@ impl World {
             pos,
             hp: cd.max_hp,
             needs: cd.needs_r.iter().map(|&n| (n, NEED_MAX * 8 / 10)).collect(),
-            next_think: self.tick + self.rng.below(30) as u64,
+            next_think: self.tick + roll(self, 1000).below(30) as u64,
             skills,
             work_role: if faction == Faction::Player { self.default_work_role() } else { None },
             ..Default::default()
@@ -3134,7 +3142,7 @@ impl World {
     /// A fingerprint of simulation state, for determinism tests and
     /// (later) multiplayer desync detection.
     pub fn state_hash(&self) -> u64 {
-        let mut h = crate::rng::mix(self.tick ^ self.rng.state());
+        let mut h = crate::rng::mix(self.tick ^ self.streams.fingerprint());
         for &e in &self.pawns {
             if let Ok(p) = self.ecs.get::<&Pawn>(e) {
                 h = crate::rng::mix(h ^ ((p.pos.x as u64) << 32 | p.pos.y as u32 as u64) ^ (p.hp as u64) << 48);

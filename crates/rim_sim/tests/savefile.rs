@@ -161,7 +161,7 @@ fn a_log_that_stops_replaying_resumes_before_the_divergence() {
     let mut hashes = BTreeMap::new();
     play(&mut sim, &mut save, 1_800, &mut hashes);
     // Something the log doesn't know about changes the game: a bug.
-    sim.world.rng = rim_sim::rng::Rng::from_state(12345);
+    sim.world.streams.stream(rim_sim::rng::AI).next_u64();
     play(&mut sim, &mut save, 1_200, &mut hashes);
     drop(save);
 
@@ -413,14 +413,14 @@ fn a_replay_that_diverges_names_the_tick_and_the_sections() {
     let (mut sim, mut save) = new_game(&mods, &path);
     let mut hashes = BTreeMap::new();
     play(&mut sim, &mut save, 1_800, &mut hashes);
-    // A bug the log can't know about: the RNG jumps.
-    sim.world.rng = rim_sim::rng::Rng::from_state(99);
+    // A bug the log can't know about: a random stream skips a draw.
+    sim.world.streams.stream(rim_sim::rng::AI).next_u64();
     play(&mut sim, &mut save, 600, &mut hashes);
     drop(save);
     let r = savefile::replay(&path, &mods, Some(0)).unwrap();
     let (tick, sections) = r.diverged.expect("diverges");
     assert_eq!(tick, 2_400);
-    assert!(sections.contains(&"engine:world".to_string()), "the RNG lives in engine:world: {sections:?}");
+    assert!(sections.contains(&"engine:world".to_string()), "the random streams live in engine:world: {sections:?}");
     assert_eq!(r.checked.last(), Some(&1_800));
     let _ = std::fs::remove_file(path);
 }

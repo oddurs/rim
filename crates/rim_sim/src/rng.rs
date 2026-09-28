@@ -1,4 +1,8 @@
-//! Deterministic RNG. The world owns exactly one; scripts draw from it too.
+//! Deterministic randomness (DESIGN.md §7b). The world owns one `Rng` per
+//! purpose, each derived from the world seed, so a new draw in one system
+//! never moves another's rolls; each mod draws from a stream of its own.
+
+use std::collections::BTreeMap;
 
 #[derive(Clone, Debug)]
 pub struct Rng {
@@ -54,6 +58,73 @@ impl Rng {
 
     pub fn state(&self) -> u64 {
         self.state
+    }
+}
+
+/// Mapgen's spawns, plant spread and new pawns.
+pub const SPAWNS: &str = "spawns";
+/// Systems' stochastic rounding: needs and health.
+pub const SIM: &str = "sim";
+/// Pawns' choices: wandering, fleeing, idling, melee damage.
+pub const AI: &str = "ai";
+
+/// The stream behind a mod's `rim.random`.
+pub fn mod_stream(id: &str) -> String {
+    format!("mod:{id}")
+}
+
+/// The world's random streams. A stream is opened, from the world seed and
+/// its name, the first time something draws from it, and its state is saved
+/// with the snapshot. Kept in a sorted map, so saving walks it in one order.
+#[derive(Clone, Debug)]
+pub struct Streams {
+    seed: u64,
+    open: BTreeMap<String, Rng>,
+}
+
+impl Streams {
+    pub fn new(seed: u64) -> Self {
+        Streams { seed, open: BTreeMap::new() }
+    }
+
+    /// The stream called `name`, opened on first use.
+    pub fn stream(&mut self, name: &str) -> &mut Rng {
+        if !self.open.contains_key(name) {
+            let first = Rng::new(mix(self.seed ^ hash_str(name)));
+            self.open.insert(name.to_string(), first);
+        }
+        self.open.get_mut(name).expect("opened above")
+    }
+
+    /// A draw that depends on who draws and when, not on the order anything
+    /// draws in: a hash of the stream, an entity, the tick and a draw index.
+    /// For a system that iterates entities (DESIGN.md §7b).
+    pub fn draw(&self, name: &str, entity: u64, tick: u64, k: u64) -> Rng {
+        let who = mix(entity ^ mix(tick ^ mix(k.wrapping_add(0x9E37_79B9_7F4A_7C15))));
+        Rng::from_state(mix(self.seed ^ hash_str(name)) ^ who)
+    }
+
+    /// Each open stream's state, for a save.
+    pub fn states(&self) -> BTreeMap<String, u64> {
+        self.open.iter().map(|(n, r)| (n.clone(), r.state())).collect()
+    }
+
+    /// Every open stream's state, folded into one number, for a state hash.
+    pub fn fingerprint(&self) -> u64 {
+        self.open.iter().fold(0, |h, (n, r)| mix(h ^ hash_str(n) ^ r.state()))
+    }
+
+    /// Open `name` at `state`, as a save from before streams does: its one
+    /// RNG's state, mixed per stream, rather than the game's opening rolls.
+    pub fn open_at(&mut self, name: &str, state: u64) {
+        self.open.insert(name.to_string(), Rng::from_state(mix(state ^ hash_str(name))));
+    }
+
+    /// Streams as a save left them. A stream the save never opened opens
+    /// from the seed on first use, as it would have.
+    pub fn restore(seed: u64, states: &BTreeMap<String, u64>) -> Self {
+        let open = states.iter().map(|(n, &s)| (n.clone(), Rng::from_state(s))).collect();
+        Streams { seed, open }
     }
 }
 

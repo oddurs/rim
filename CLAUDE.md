@@ -9,7 +9,7 @@ content ids in engine code, it belongs in a mod instead.
 - `scripts/task check` — the gate: what CI's checks and test jobs run. It must
   pass before a push; `scripts/task hooks` makes the pre-push hook run it.
   `scripts/task test -- <filter>` while working; `scripts/task help` for the rest.
-- Sim changes must stay deterministic: world RNG only, no HashMap iteration,
+- Sim changes must stay deterministic: the world's random streams only (§7b), no HashMap iteration,
   all player input through `Command`.
 - Dropping an item or moving a milestone's `due` is a person's call:
   `cairn propose <ID> status=dropped --why "..."`, then `cairn proposals`.
