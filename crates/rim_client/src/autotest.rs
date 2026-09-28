@@ -7,6 +7,7 @@
 //! each step, saves screenshots to `dir` (default `target/autotest`), and
 //! exits non-zero if any check failed.
 
+use crate::overlay::Mark;
 use crate::{apply, draw, frame, render, Action, App, RawInput, Tool};
 use macroquad::prelude::*;
 use rim_sim::data::Data;
@@ -426,6 +427,16 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.frame().await;
     t.check(t.app.ui.find("core:inspector.thing").is_some(), "the inspector shows the tree");
     t.shot("thing").await;
+    // Selection is chalk brackets just outside the footprint (d83192ed).
+    let marks = crate::overlay::scene(&t.app).marks;
+    let (cx, cy) = t.screen(tree.2);
+    let z = t.app.cam.zoom;
+    let around = marks.iter().filter(|m| {
+        matches!(m, Mark::Brackets { rect, alpha, .. }
+        if (rect[0] + z / 2.0 - cx).abs() < 0.5 && (rect[1] + z / 2.0 - cy).abs() < 0.5 && (rect[2] - z).abs() < 0.5 && *alpha == 1.0)
+    });
+    t.check(around.count() == 1 && marks.len() == 1, format!("a selected tree gets one set of brackets ({marks:?})"));
+    t.shot("chalk-select-thing").await;
     let at = t.pawn_screen(founder);
     t.click(at).await;
     t.check(t.app.selected == Some(founder), "and a click on the colonist selects them again");
@@ -2020,6 +2031,19 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.frame().await;
     t.check(t.app.ui.find("core:inspector.group").is_some(), "the inspector sums the group up");
     t.shot("several_selected").await;
+    // Each member gets a chalk ring; the inspector's at full strength (d83192ed).
+    let marks = crate::overlay::scene(&t.app).marks;
+    let rings: Vec<f32> =
+        marks.iter().filter_map(|m| if let Mark::Ring { alpha, .. } = m { Some(*alpha) } else { None }).collect();
+    let full = rings.iter().filter(|&&a| a == 1.0).count();
+    t.check(
+        rings.len() == boxed.len() && full == 1 && rings.iter().all(|&a| a == 1.0 || a == 0.7),
+        format!("a group gets a ring each, one at full strength ({rings:?})"),
+    );
+    let chip = format!("{} selected", boxed.len());
+    let chipped = marks.iter().any(|m| matches!(m, Mark::Chip(c) if c.text == chip));
+    t.check(chipped, format!("and a chip reads '{chip}'"));
+    t.shot("chalk-select-group").await;
     // Shift-click takes one out again: whoever is under the pointer.
     let at_screen = t.pawn_screen(squad[2]);
     let taken = crate::pawn_under(&t.app, at_screen.0, at_screen.1).expect("a colonist there");

@@ -32,3 +32,7 @@ area: ui
 - [ ] Autotest: selecting a stockpile gives a chalk perimeter mark; screenshot `chalk-zone`
 - [ ] Autotest: a stockpile drag of 2×4 next to a zone reports "+8" and after release the zone has 8 more cells
 - [ ] Autotest: a clear-zone drag's hatched cells are the cells removed
+
+## 2026-09-27
+
+This item adds the theme token zone and zone_fill (and their doc rows) to mods/core/ui/theme.toml and docs/modding/ui.md: tokens land with the item that first reads them (d83192ed review).

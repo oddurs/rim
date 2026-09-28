@@ -40,3 +40,7 @@ A wall drag fills the perimeter at 35% in the tool's colour. The cursor is a 2 p
 - [ ] Autotest: turning with `T` swaps the bed ghost's footprint between 1×2 and 2×1
 - [ ] After release, the cells planned match the open and clears ghosts (autotest)
 - [ ] Screenshots `chalk-build-run` and `chalk-build-blocked`
+
+## 2026-09-27
+
+This item adds the theme token intent_fill (and its doc row) to mods/core/ui/theme.toml and docs/modding/ui.md: tokens land with the item that first reads them (d83192ed review).

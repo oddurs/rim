@@ -46,6 +46,11 @@ strong = 600
 [shape]
 radius = 4
 border = 1
+# World overlays (DESIGN.md §6f), in points on the map.
+firm = 2             # selection
+bracket_gap = 3      # selection sits this far outside a footprint
+bracket_arm_min = 4
+bracket_arm_max = 12
 
 [color]
 surface = "#121417d9"
@@ -66,3 +71,7 @@ player = "#5ab4ff"
 hostile = "#ff6b5a"
 track = "#ffffff14"
 backdrop = "#00000073"
+# World overlays (DESIGN.md §6f). Chalk is attention, hue is kind, blue is
+# yours.
+chalk = "#f2eee3"        # selection
+keyline = "#080a0c8c"    # under every overlay stroke, so it reads on any ground

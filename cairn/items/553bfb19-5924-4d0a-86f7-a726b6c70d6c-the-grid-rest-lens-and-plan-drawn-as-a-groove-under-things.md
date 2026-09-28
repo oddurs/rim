@@ -38,3 +38,7 @@ Every order is a promise about cells, and there is no grid (DESIGN.md §6a). Sho
 - [ ] Autotest: a tree cell's pixels are the same with the grid on and off
 - [ ] Autotest at midnight: the Plan grid still differs from Rest near the pointer
 - [ ] `rim --bench-render --check` passes, and the whole-map views add no draw calls
+
+## 2026-09-27
+
+This item adds the theme token seam (and its doc row) to mods/core/ui/theme.toml and docs/modding/ui.md: tokens land with the item that first reads them (d83192ed review).

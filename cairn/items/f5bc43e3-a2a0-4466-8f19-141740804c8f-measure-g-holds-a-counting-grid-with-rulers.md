@@ -32,3 +32,7 @@ Counting the cells in a room, or the gap to the river, means hovering cell by ce
 - [ ] Autotest: at zoom 6 Measure still draws the heavier lines, and Plan draws none
 - [ ] Screenshot `chalk-measure`
 - [ ] `docs/modding/api-ui.md` lists `act.toggle_measure`
+
+## 2026-09-27
+
+This item adds the theme token seam_major (and its doc row) to mods/core/ui/theme.toml and docs/modding/ui.md: tokens land with the item that first reads them (d83192ed review).

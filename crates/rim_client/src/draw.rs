@@ -579,6 +579,26 @@ pub fn readouts(app: &App) -> Vec<(f32, f32, String)> {
     out
 }
 
+/// Where a pawn is drawn, in tiles: between steps, and lunging at its work
+/// when close enough to see it.
+fn drawn_at(app: &App, p: &Pawn) -> (f32, f32) {
+    let (px, py) = pawn_pos(p, app.tick_frac());
+    if app.cam.zoom < DETAIL_ZOOM {
+        return (px, py);
+    }
+    let (lx, ly) = app.worksites.lunge(&app.sim.world, p);
+    (px + lx, py + ly)
+}
+
+/// A pawn's body on screen: its centre and radius, if it's a pawn that's
+/// drawn.
+pub fn pawn_disc(app: &App, e: Entity) -> Option<((f32, f32), f32)> {
+    let w = &app.sim.world;
+    let p = w.ecs.get::<&Pawn>(e).ok().filter(|p| p.active)?;
+    let (px, py) = drawn_at(app, &p);
+    Some((app.cam.to_screen(px, py), w.defs.creature(p.def).size * app.cam.zoom))
+}
+
 /// Pawns, hit flashes and the field overlay.
 pub fn pawns(app: &App) {
     let w = &app.sim.world;
@@ -594,11 +614,7 @@ pub fn pawns(app: &App) {
             continue;
         }
         let cd = defs.creature(p.def);
-        let (mut px, mut py) = pawn_pos(&p, app.tick_frac());
-        if z >= DETAIL_ZOOM {
-            let (lx, ly) = app.worksites.lunge(w, &p);
-            (px, py) = (px + lx, py + ly);
-        }
+        let (px, py) = drawn_at(app, &p);
         if px < x0 - 1.0 || px > x1 + 1.0 || py < y0 - 1.0 || py > y1 + 1.0 {
             continue;
         }
@@ -613,16 +629,6 @@ pub fn pawns(app: &App) {
         };
         if let Some(rc) = ring {
             draw_circle_lines(sx, sy, r, 2.0, rc);
-        }
-        if app.selected == Some(e) || app.group.contains(&e) {
-            draw_circle_lines(sx, sy, r + 4.0, 2.0, YELLOW);
-            // Remaining path.
-            let mut prev = (sx, sy);
-            for step in p.path.iter().rev() {
-                let s = cam.to_screen(step.x as f32 + 0.5, step.y as f32 + 0.5);
-                draw_line(prev.0, prev.1, s.0, s.1, 1.5, Color::new(1.0, 1.0, 0.6, 0.35));
-                prev = s;
-            }
         }
         if p.drafted {
             draw_rectangle(sx - r, sy - r - 6.0, 6.0, 6.0, PLAYER);
@@ -727,9 +733,9 @@ pub fn storage_view(w: &World, (x0, y0, x1, y1): (i32, i32, i32, i32)) -> Storag
     v
 }
 
-/// The storage overlay: stores washed brighter the higher their level, and
-/// a selected loose stack's way to where it will go. Fills are labelled
-/// with the readouts.
+/// The storage overlay: stores washed brighter the higher their level.
+/// Fills are labelled with the readouts; a selected loose stack's way to
+/// its store is the overlay's (`overlay::scene`).
 fn storage_overlay(app: &App) {
     let (w, cam) = (&app.sim.world, &app.cam);
     let z = cam.zoom;
@@ -742,21 +748,6 @@ fn storage_overlay(app: &App) {
             draw_rectangle_lines(sx, sy, z * *sw as f32, z * *sh as f32, 1.5, alpha(crate::ZONE, 0.9));
         }
     }
-    // A selected stack: a dashed line to where it will go.
-    let Some(e) = app.selected else { return };
-    let Some(rim_sim::ai::HaulPlan::Moves { to, .. }) = rim_sim::ai::haul_plan(w, e) else { return };
-    let Some(from) = w.thing(e).map(|t| t.pos) else { return };
-    let (ax, ay) = cam.to_screen(from.x as f32 + 0.5, from.y as f32 + 0.5);
-    let (bx, by) = cam.to_screen(to.x as f32 + 0.5, to.y as f32 + 0.5);
-    let len = ((bx - ax).powi(2) + (by - ay).powi(2)).sqrt().max(1.0);
-    let dash = (z * 0.3).max(4.0);
-    let mut d = 0.0;
-    while d < len {
-        let e = (d + dash).min(len);
-        let (p, q) = (d / len, e / len);
-        draw_line(ax + (bx - ax) * p, ay + (by - ay) * p, ax + (bx - ax) * q, ay + (by - ay) * q, 2.0, YELLOW);
-        d += dash * 2.0;
-    }
 }
 
 /// Tool previews and markers, drawn after lighting so they stay readable.
@@ -767,11 +758,7 @@ pub fn world_ui(app: &App) {
 
     zones(app);
     app.marks.draw(cam, visible(app));
-    // The selected thing: pawns draw their own ring.
-    if let Some(t) = app.selected.and_then(|e| w.thing(e)) {
-        let (sx, sy) = cam.to_screen(t.pos.x as f32, t.pos.y as f32);
-        draw_rectangle_lines(sx - 1.0, sy - 1.0, z + 2.0, z + 2.0, 2.0, YELLOW);
-    }
+    // Selection is the overlay's (overlay::scene).
     // Drag rectangle preview; a select drag shows once it leaves its cell.
     let (mx, my) = mouse_position();
     let dragging = app.drag_start.filter(|&a| app.tool != Tool::Select || a != cam.tile_at(mx, my));

@@ -13,6 +13,7 @@ mod draw;
 mod light;
 mod mesh;
 mod occluders;
+mod overlay;
 mod pattern;
 mod pinch;
 mod quiet;
@@ -182,6 +183,9 @@ pub struct App {
     wheel_sub: usize,
     /// The save this game appends to, if it's being saved.
     pub saver: Option<rim_sim::savefile::Writer>,
+    /// Overlay colours and sizes, from the theme each frame (DESIGN.md §6f).
+    pub palette: overlay::Palette,
+    pub chalk: overlay::State,
 }
 
 /// Seconds since the last frame, clamped: macroquad's value is raw, so the
@@ -612,6 +616,7 @@ async fn game() {
         Err(e) => return fail(e).await,
     };
     let center = sim.world.colony_center().unwrap_or(IVec::new(100, 100));
+    let palette = overlay::Palette::from_theme(&ui.theme);
     let mut app = App {
         tools: toolbar(&sim),
         sim,
@@ -664,6 +669,8 @@ async fn game() {
         settings_file,
         wheel_sub,
         saver,
+        palette,
+        chalk: overlay::State::default(),
     };
     app.selected = app.sim.world.colonists().next();
 
@@ -1176,7 +1183,9 @@ pub fn frame(app: &mut App, raw: &RawInput) {
     let dpi = screen_dpi_scale();
     app.shift = raw.shift;
     app.ui.set_dpi(dpi);
-    app.ui.check_reload(raw.time);
+    if app.ui.check_reload(raw.time) {
+        app.palette = overlay::Palette::from_theme(&app.ui.theme);
+    }
     let cv = client_view(app, raw.mouse, raw.time);
     app.hover_cell = cv.hover_cell;
     let input = ui_input(raw, dpi);
@@ -1230,6 +1239,8 @@ pub fn frame(app: &mut App, raw: &RawInput) {
         step(app);
     }
     hint(app, raw.mouse);
+    let picked = selection(app);
+    app.chalk.update(&picked, raw.time);
 }
 
 /// CPU time of each render pass last frame, in µs. This is building the
@@ -1433,6 +1444,8 @@ pub fn render(app: &mut App) {
     }
     app.marks.update(&app.sim.world);
     draw::world_ui(app);
+    let scene = overlay::scene(app);
+    overlay::draw(&scene, &app.palette, app.cam.zoom);
     let readouts = draw::readouts(app);
     // Stack counts, in the UI's text: shaped into the same atlas, drawn in
     // the same batch as the UI. After lighting, so they read at night.
@@ -1451,6 +1464,7 @@ pub fn render(app: &mut App) {
             labels.push(rim_ui::paint::Draw::Glyphs { quads, color });
         }
     }
+    labels.extend(overlay::chips(&scene, &app.palette, &mut app.ui.text, dpi));
     upload_atlas(&mut app.ui, &app.atlas);
     let white = app.ui.text.atlas.white_texel();
     draw::ui(&labels, &app.atlas, white, dpi);
