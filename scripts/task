@@ -79,18 +79,21 @@ fma() {
   ./scripts/check-no-fma.sh
 }
 
+# Where cargo put the binaries: CARGO_TARGET_DIR when it's set.
+BIN="${CARGO_TARGET_DIR:-target}/release"
+
 # Mods' own Luau tests and a clean load of each mod, through the player's binary.
 mods() {
   step mods
-  target/release/rim test "$@"
-  target/release/rim check --strict
+  "$BIN/rim" test "$@"
+  "$BIN/rim" check --strict
 }
 
 # The crosscheck scenario, as CI's test job runs it. Its output is compared
 # across four platforms in CI; here it must at least run to the end.
 crosscheck() {
   step crosscheck
-  target/release/examples/crosscheck >/dev/null
+  "$BIN/examples/crosscheck" >/dev/null
 }
 
 # Wall-clock budgets, one test at a time so nothing else shares the cores:
@@ -102,8 +105,11 @@ budgets() {
 }
 
 # The long sim runs CI's sim job makes: slower than the gate, so not in `check`.
+# Reports go under the repo's target/, where CI uploads them from, even when
+# cargo builds elsewhere.
 sim() {
   step sim
+  mkdir -p target
   cargo run --release -p rim_sim --example headless -- --days 3 --seed 1
   cargo run --release -p rim_sim --example headless -- --days 3 --seed 1 --core
   cargo run --release -p rim_sim --example year -- --seed 1 >target/climate-report.txt
@@ -113,6 +119,7 @@ sim() {
 # The client drawn: it opens a window, so it isn't in `check`.
 autotest() {
   step autotest
+  mkdir -p target
   cargo run --release -p rim_client -- --background --seed 7 --autotest target/autotest
 }
 
@@ -125,6 +132,7 @@ bench() {
 scripts_test() {
   step scripts
   scripts/test-pre-push
+  scripts/test-task
 }
 
 check() {
@@ -175,7 +183,7 @@ usage: scripts/task <verb> [args]
   fmt:check  fail if anything isn't formatted
   types      mod scripts against the declared Luau APIs
   roadmap    cairn items match the schema and render
-  scripts    the tooling's own tests: the pre-push hook
+  scripts    the tooling's own tests: the pre-push hook and this script
   lint       clippy over every target, warnings denied
   test       nextest over the workspace; `test -- ARGS` passes ARGS to nextest
   build      release binaries and examples
