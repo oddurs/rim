@@ -47,7 +47,8 @@ strong = 600
 radius = 4
 border = 1
 # World overlays (DESIGN.md §6f), in points on the map.
-stroke = 1.5         # hover
+hair = 1             # a drag's box, a zone's edge
+stroke = 1.5         # hover, a hovered or selected zone's edge
 firm = 2             # selection
 bracket_gap = 3      # selection sits this far outside a footprint
 bracket_arm_min = 4
@@ -77,3 +78,5 @@ backdrop = "#00000073"
 chalk = "#f2eee3"        # selection, the grid's lit edge
 keyline = "#080a0c8c"    # under every overlay stroke, so it reads on any ground
 seam = "#0000001f"       # a grid line, darkening the ground it crosses
+zone = "#a48fe0"         # stockpiles: violet, so a plan's blue never reads as one
+zone_fill = "#a48fe01f"

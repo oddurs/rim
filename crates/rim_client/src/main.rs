@@ -197,6 +197,8 @@ pub struct App {
     pub grid: grid::Grid,
     /// A drag has left the cell it started in: it's a drag, not a click.
     pub dragged: bool,
+    /// What a stockpile or clear-zone drag will change, made once a frame.
+    pub zone_preview: Option<draw::ZonePreview>,
     /// The pointer as this frame's input had it, in screen points. Previews
     /// follow it rather than the OS cursor, so replayed input (the
     /// autotest) draws what it did.
@@ -733,6 +735,7 @@ async fn game() {
         grid: grid::Grid::default(),
         pointer: (0.0, 0.0),
         dragged: false,
+        zone_preview: None,
     };
     app.selected = app.sim.world.colonists().next();
 
@@ -800,6 +803,8 @@ pub fn markable(defs: &rim_sim::defs::DefDb, d: DefId) -> bool {
 
 /// The toolbar is generated from defs: a mod that adds a designation or a
 /// buildable thing gets a button without touching the client.
+/// Every tool: the orders, the buildables and the zone tools. The zone
+/// tools take the theme's `zone` colour when drawn (`tool_colour`).
 fn toolbar(sim: &Sim) -> Vec<ToolDef> {
     let defs = &sim.world.defs;
     let tool = |key: String, label: &str, tool, color, category, group: &str| ToolDef {
@@ -851,14 +856,18 @@ fn toolbar(sim: &Sim) -> Vec<ToolDef> {
     }
     let plan = Color::from_rgba(160, 200, 240, 255);
     items.push(tool("plan:save".into(), "Save as plan", Tool::SavePlan, plan, "build", "plans"));
-    items.push(tool("stockpile".into(), "Stockpile", Tool::Stockpile, ZONE, "zones", ""));
-    let clear = Color::from_rgba(150, 150, 170, 255);
-    items.push(tool("clear_zone".into(), "Clear zone", Tool::ClearZone, clear, "zones", ""));
+    items.push(tool("stockpile".into(), "Stockpile", Tool::Stockpile, WHITE, "zones", ""));
+    items.push(tool("clear_zone".into(), "Clear zone", Tool::ClearZone, WHITE, "zones", ""));
     items
 }
 
-/// Stockpiles, on the map and in the toolbar.
-pub const ZONE: Color = Color::new(0.45, 0.65, 0.95, 1.0);
+/// A tool's colour: its own, or for the zone tools the theme's `zone`.
+pub fn tool_colour(app: &App, t: &ToolDef) -> Color {
+    match t.tool {
+        Tool::Stockpile | Tool::ClearZone => app.palette.zone,
+        _ => t.color,
+    }
+}
 
 pub fn rgb(c: [u8; 3]) -> Color {
     Color::from_rgba(c[0], c[1], c[2], 255)
@@ -1152,10 +1161,7 @@ pub fn client_view(app: &mut App, mouse: (f32, f32), time: f64) -> ClientView {
     }
     let hover_cell = (!app.mouse_over_ui).then(|| app.cam.tile_at(mouse.0, mouse.1));
     let hover_pawn = if app.mouse_over_ui { None } else { pawn_under(app, mouse.0, mouse.1) };
-    let drag = app.drag_start.filter(|_| app.tool != Tool::Select).map(|a| {
-        let b = app.cam.tile_at(mouse.0, mouse.1);
-        format!("{} × {}", (a.x - b.x).abs() + 1, (a.y - b.y).abs() + 1)
-    });
+    let drag = overlay::drag_hint(app);
     ClientView {
         screen: (screen_width() * dpi, screen_height() * dpi),
         scale: app.ui.theme.scale,
@@ -1179,7 +1185,7 @@ pub fn client_view(app: &mut App, mouse: (f32, f32), time: f64) -> ClientView {
             .map(|t| ToolView {
                 key: t.key.clone(),
                 label: t.label.clone(),
-                color: to_u8(t.color),
+                color: to_u8(tool_colour(app, t)),
                 active: t.tool == app.tool,
                 category: t.category.into(),
                 group: t.group.clone(),
@@ -1314,6 +1320,7 @@ pub fn frame(app: &mut App, raw: &RawInput) {
     app.dragged = app.drag_start.is_some_and(|a| a != app.cam.tile_at(mx, my));
     let dragging = app.dragged;
     app.pointer = (mx, my);
+    app.zone_preview = draw::ZonePreview::of(app);
     let pointer = (!app.mouse_over_ui).then(|| app.cam.to_world(mx, my));
     app.grid.update(grid::level(app.tool, dragging), pointer, raw.time);
     let hovered = if app.tool == Tool::Select && !dragging && pointer.is_some() { hovered(app, mx, my) } else { None };

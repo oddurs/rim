@@ -2,12 +2,14 @@
 id: 11080b20-768a-4930-badb-0474c94c86b9
 title: Zones in violet; a selected zone turns chalk; paint and erase preview
 type: feature
-status: planned
+status: done
 milestone: chalkline
+assignee: Oddur Sigurdsson
 depends_on:
 - d83192ed-0a3e-4a6f-a39a-04ce94a68935
 created: 2026-09-27
-updated: 2026-09-27
+updated: 2026-09-28
+closed_at: 2026-09-28
 priority: p1
 api: none
 effort: s
@@ -28,11 +30,19 @@ area: ui
 
 ## Acceptance criteria
 
-- [ ] `grep -rn "ZONE" crates/rim_client/src` finds no colour constant
-- [ ] Autotest: selecting a stockpile gives a chalk perimeter mark; screenshot `chalk-zone`
-- [ ] Autotest: a stockpile drag of 2×4 next to a zone reports "+8" and after release the zone has 8 more cells
-- [ ] Autotest: a clear-zone drag's hatched cells are the cells removed
+- [x] `grep -rn "ZONE" crates/rim_client/src` finds no colour constant
+- [x] Autotest: selecting a stockpile gives a chalk perimeter mark; screenshot `chalk-zone`
+- [x] Autotest: a stockpile drag of 2×4 next to a zone reports "+8" and after release the zone has 8 more cells
+- [x] Autotest: a clear-zone drag's hatched cells are the cells removed
 
 ## 2026-09-27
 
 This item adds the theme token zone and zone_fill (and their doc rows) to mods/core/ui/theme.toml and docs/modding/ui.md: tokens land with the item that first reads them (d83192ed review).
+
+## 2026-09-27
+
+Stacked on hover (bd7a158e), which lifts a hovered zone's edge; rebases as the stack merges.
+
+## 2026-09-27
+
+The sim answers the preview: Zones::painted (read-only) lists the cells a paint or clear changes, and paint itself uses it, with a test that the two agree. crate::ZONE is gone; the stockpile tool's dock colour follows the theme's zone token. The stores overlay (#196) washes with the zone token too.

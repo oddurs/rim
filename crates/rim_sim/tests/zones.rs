@@ -114,3 +114,24 @@ fn a_loaded_set_of_zones_is_made_consistent() {
     assert_eq!(z.cells, [7, 0, 0, 7], "cells of a missing zone are freed");
     assert_eq!(z.next_id, 10, "past every id the save named");
 }
+
+/// What `painted` says a paint or a clear will change is what it changes.
+#[test]
+fn the_paint_preview_is_what_painting_does() {
+    let mut s = sim();
+    let c = s.world.colony_center().unwrap();
+    s.push(Command::Stockpile { a: c, b: c.offset(1, 1), zone: None });
+    s.step();
+    let cells = |s: &Sim| s.world.zones.cells.clone();
+    for (a, b, clear) in [(c.offset(-1, 0), c.offset(3, 0), false), (c.offset(0, 1), c.offset(2, 2), true)] {
+        let id = if clear { None } else { s.world.zones.touched(&s.world.map, a, b) };
+        let preview = s.world.zones.painted(&s.world.map, a, b, if clear { None } else { Some(id.unwrap_or(0)) });
+        let before = cells(&s);
+        s.push(if clear { Command::ClearZone { a, b } } else { Command::Stockpile { a, b, zone: id } });
+        s.step();
+        let after = cells(&s);
+        let changed: Vec<usize> = (0..before.len()).filter(|&i| before[i] != after[i]).collect();
+        assert_eq!(changed, preview, "clear: {clear}");
+        assert!(!changed.is_empty());
+    }
+}

@@ -35,8 +35,15 @@ const DOT_STEP: f32 = 5.0;
 pub struct Palette {
     pub chalk: Color,
     pub keyline: Color,
-    /// Hover's line weight.
+    /// Line weights: hover's, a selected or hovered stockpile's and a
+    /// store's outline (`stroke`); a stockpile's edge and a drag box's
+    /// (`hair`).
     pub stroke: f32,
+    pub hair: f32,
+    /// Stockpiles: their edge, and their wash at rest (deeper when
+    /// selected or being added).
+    pub zone: Color,
+    pub zone_fill: Color,
     /// A grid line (`grid`).
     pub seam: Color,
     /// Can't: the theme's `threat`.
@@ -70,6 +77,9 @@ impl Palette {
             seam: c("seam", "#0000001f"),
             threat: c("threat", "#ff6b5a"),
             stroke: shape("stroke", 1.5),
+            hair: shape("hair", 1.0),
+            zone: c("zone", "#a48fe0"),
+            zone_fill: c("zone_fill", "#a48fe01f"),
             firm: shape("firm", 2.0),
             bracket_gap: shape("bracket_gap", 3.0),
             bracket_arm_min: shape("bracket_arm_min", 4.0),
@@ -225,6 +235,22 @@ fn footprint(app: &App, t: &rim_sim::world::Thing) -> [f32; 4] {
     let (sx, sy) = app.cam.to_screen(t.pos.x as f32, t.pos.y as f32);
     let z = app.cam.zoom;
     [sx, sy, z * fw as f32, z * fh as f32]
+}
+
+/// What the pointer's hint says during a drag: what the drag will do,
+/// counted, else its size. The UI draws it, so there's one chip by the
+/// pointer and a theme styles it.
+pub fn drag_hint(app: &App) -> Option<String> {
+    if let Some(zp) = &app.zone_preview {
+        let n = zp.cells.len();
+        return Some(match zp.joins {
+            Some(_) => format!("Stockpile · +{n}"),
+            None => format!("Clear · {n} {}", if n == 1 { "cell" } else { "cells" }),
+        });
+    }
+    let a = app.drag_start.filter(|_| app.tool != crate::Tool::Select)?;
+    let b = app.cam.tile_at(app.pointer.0, app.pointer.1);
+    Some(format!("{} × {}", (a.x - b.x).abs() + 1, (a.y - b.y).abs() + 1))
 }
 
 /// Does a screen rectangle touch the screen?

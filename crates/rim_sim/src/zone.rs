@@ -65,6 +65,15 @@ pub struct Zones {
     members: Vec<(u32, Vec<u32>)>,
 }
 
+/// The map indices from `a` to `b` on `a`'s level, clamped to the map,
+/// row by row. Nothing on a level the map doesn't have.
+fn rect(map: &Map, a: IVec, b: IVec) -> impl Iterator<Item = usize> + '_ {
+    let (x0, x1) = (a.x.min(b.x).max(0), a.x.max(b.x).min(map.w - 1));
+    let (y0, y1) = (a.y.min(b.y).max(0), a.y.max(b.y).min(map.h - 1));
+    let y1 = if map.levels().contains(&a.z) { y1 } else { y0 - 1 };
+    (y0..=y1).flat_map(move |y| (x0..=x1).map(move |x| map.idx(IVec::at(x, y, a.z))))
+}
+
 impl Zones {
     pub fn new(cells: usize) -> Zones {
         Zones { list: Vec::new(), next_id: 1, cells: vec![0; cells], members: Vec::new() }
@@ -97,6 +106,13 @@ impl Zones {
         id
     }
 
+    /// The cells `paint` would change, as map indices: with a zone, the
+    /// cells from `a` to `b` in no zone; with none, the cells in any. A
+    /// preview reads this, so it shows what painting does.
+    pub fn painted(&self, map: &Map, a: IVec, b: IVec, id: Option<u32>) -> Vec<usize> {
+        rect(map, a, b).filter(|&i| (self.cells[i] == 0) == id.is_some()).collect()
+    }
+
     /// Put the cells from `a` to `b` in zone `id`, or in none. Painting
     /// never takes a cell from another zone: clear it first. A zone left
     /// with no cells is gone.
@@ -104,19 +120,8 @@ impl Zones {
         if id.is_some_and(|id| self.get(id).is_none()) {
             return;
         }
-        let (x0, x1) = (a.x.min(b.x).max(0), a.x.max(b.x).min(map.w - 1));
-        let (y0, y1) = (a.y.min(b.y).max(0), a.y.max(b.y).min(map.h - 1));
-        // Nothing on a level the map doesn't have.
-        let y1 = if map.levels().contains(&a.z) { y1 } else { y0 - 1 };
-        for y in y0..=y1 {
-            for x in x0..=x1 {
-                let i = map.idx(IVec::at(x, y, a.z));
-                match id {
-                    Some(id) if self.cells[i] == 0 => self.cells[i] = id,
-                    Some(_) => {}
-                    None => self.cells[i] = 0,
-                }
-            }
+        for i in self.painted(map, a, b, id) {
+            self.cells[i] = id.unwrap_or(0);
         }
         let cells = &self.cells;
         self.list.retain(|z| cells.contains(&z.id));
@@ -158,19 +163,13 @@ impl Zones {
 
     /// The single zone the cells from `a` to `b` touch, if exactly one.
     pub fn touched(&self, map: &Map, a: IVec, b: IVec) -> Option<u32> {
-        let (x0, x1) = (a.x.min(b.x).max(0), a.x.max(b.x).min(map.w - 1));
-        let (y0, y1) = (a.y.min(b.y).max(0), a.y.max(b.y).min(map.h - 1));
-        // Nothing on a level the map doesn't have.
-        let y1 = if map.levels().contains(&a.z) { y1 } else { y0 - 1 };
         let mut found = None;
-        for y in y0..=y1 {
-            for x in x0..=x1 {
-                match (self.cells[map.idx(IVec::at(x, y, a.z))], found) {
-                    (0, _) => {}
-                    (id, None) => found = Some(id),
-                    (id, Some(f)) if id != f => return None,
-                    _ => {}
-                }
+        for i in rect(map, a, b) {
+            match (self.cells[i], found) {
+                (0, _) => {}
+                (id, None) => found = Some(id),
+                (id, Some(f)) if id != f => return None,
+                _ => {}
             }
         }
         found
