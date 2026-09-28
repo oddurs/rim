@@ -30,7 +30,7 @@ The headless engine: defs, mod loading and patching, map, pathing, AI skeleton, 
 
 ## proving-ground — Proving ground
 
-`##········` 20% · 4 of 20 done
+`###·······` 24% · 5 of 21 done
 
 Seeds, tests, CI and the merge queue, so that every change is checked the same way on a laptop and in CI, every failure can be brought back with one line, and a PR lands without anyone rebasing it by hand. Design: DESIGN.md §7b, §8a. Plan: https://claude.ai/artifact/KUQcdtWkNG4u63T4S8uPpt
 
@@ -53,6 +53,7 @@ Seeds, tests, CI and the merge queue, so that every change is checked the same w
 - [x] `3163979c` No wall-clock assertions in the suite: count work, and a guard <sup>chore · p0 · m · tooling</sup>
 - [x] `6b605f27` boundary_refresh_is_cheap asserts wall-clock time and fails under load <sup>bug · p0 · s · engine</sup>
 - [x] `9b435cd8` scripts/task: one gate for the laptop and CI, and a pre-push hook <sup>chore · p0 · s · tooling</sup>
+- [x] `b276d529` no_clocks fails on main: the growth and fire tests time their passes <sup>bug · p0 · s · tooling</sup>
 - [x] `e8673d3f` scripting test a_slow_mod_is_named_in_the_warnings flakes under load <sup>bug · p0 · s · engine</sup>
 
 ## lighting — Lighting

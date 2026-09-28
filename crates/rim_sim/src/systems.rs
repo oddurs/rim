@@ -350,17 +350,20 @@ pub const PLANT_PASS: u64 = 250;
 
 /// Grow a quarter of the plants: by their rate terms over the time since
 /// they were last worked out, less what their harm terms take. A plant
-/// with no health left dies; one grown again bears its crop.
-pub fn grow(w: &mut World) {
+/// with no health left dies; one grown again bears its crop. Returns the
+/// plants it worked out, so a test counts the staggering rather than timing it.
+pub fn grow(w: &mut World) -> usize {
     let defs = w.defs.clone();
     let slot = (w.tick / PLANT_PASS) % GROW_EVERY;
     let days = (PLANT_PASS * GROW_EVERY) as i64 * terms::Q / TICKS_PER_DAY as i64;
     let mut changed: Vec<(Entity, Growth, bool)> = Vec::new();
+    let mut worked = 0;
     for (e, t, g) in w.ecs.query::<(Entity, &Thing, &Growth)>().iter() {
         if e.id() as u64 % GROW_EVERY != slot {
             continue;
         }
         let Some(gd) = &defs.thing(t.def).grow else { continue };
+        worked += 1;
         let rate = match gd.rate_terms.is_empty() {
             true => terms::Q,
             false => w.fields.eval_at(&defs, &w.map, &gd.rate_terms, t.pos),
@@ -404,4 +407,5 @@ pub fn grow(w: &mut World) {
             w.touch(e);
         }
     }
+    worked
 }
