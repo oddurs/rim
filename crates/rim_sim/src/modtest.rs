@@ -2,7 +2,9 @@
 //! worlds (DESIGN.md §7). A test builds a world from a seed and a mod set,
 //! drives it with the player's commands or the mods' own exports, advances
 //! it, and checks what happened. The engine is deterministic, so a failure
-//! reproduces exactly from the seed and tick it prints.
+//! reproduces exactly from the seed and tick it prints, and the command it
+//! prints runs the one test again. A world with no seed named gets one from
+//! the test's name (`crate::testseed`).
 //!
 //! ```luau
 //! test("a raid brings raiders", function(t)
@@ -434,14 +436,26 @@ pub fn run_mod(mod_dir: &Path, filter: Option<&str>) -> Result<Vec<TestResult>, 
                 continue;
             }
             *last.borrow_mut() = None;
+            let test_id = format!("{}/{rel}/{name}", me.id);
+            let derived: Rc<RefCell<Option<crate::testseed::Seed>>> = Rc::default();
             let t = Instant::now();
             let r = (|| -> mlua::Result<()> {
                 let tt: Table = lua.create_table()?;
                 let (mods_dir, default_mods, last) = (mods_dir.clone(), default_mods.clone(), last.clone());
+                let (test_id, derived) = (test_id.clone(), derived.clone());
                 tt.set(
                     "world",
                     lua.create_function(move |_, opts: Option<Table>| {
-                        let seed: u64 = opts.as_ref().and_then(|o| o.get("seed").ok()).unwrap_or(1);
+                        // No seed named: one from the test's name (DESIGN.md §7b),
+                        // not a map every test shares.
+                        let seed: u64 = match opts.as_ref().and_then(|o| o.get::<u64>("seed").ok()) {
+                            Some(s) => s,
+                            None => {
+                                let s = crate::testseed::seed(&test_id);
+                                *derived.borrow_mut() = Some(s.clone());
+                                s.seed
+                            }
+                        };
                         let size: i32 = opts.as_ref().and_then(|o| o.get("size").ok()).unwrap_or(crate::sim::MAP_SIZE);
                         let mods: BTreeSet<String> = match opts.as_ref().and_then(|o| o.get::<Vec<String>>("mods").ok())
                         {
@@ -457,11 +471,19 @@ pub fn run_mod(mod_dir: &Path, filter: Option<&str>) -> Result<Vec<TestResult>, 
                 tt.set("expect", lua.globals().get::<Function>("expect")?)?;
                 f.call::<()>(tt)
             })();
+            // The line that brings a failure back: the derived seed, pinned.
+            let rerun = |msg: String| {
+                let filter = format!("rim test {} --filter {:?}", mod_dir.display(), name);
+                match &*derived.borrow() {
+                    Some(s) => format!("{msg}\n{}; rerun: RIM_SEED={} {filter}", s.describe(), s.seed),
+                    None => format!("{msg}\nrerun: {filter}"),
+                }
+            };
             results.push(TestResult {
                 mod_id: me.id.clone(),
                 file: rel.clone(),
-                name,
-                failure: r.err().map(|e| tidy(&e.to_string())),
+                name: name.clone(),
+                failure: r.err().map(|e| rerun(tidy(&e.to_string()))),
                 seconds: t.elapsed().as_secs_f64(),
             });
         }

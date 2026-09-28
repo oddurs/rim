@@ -153,6 +153,12 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
+      # At night a test that names no seed gets another map (DESIGN.md §7b),
+      # so one that quietly depends on its map fails some night, not never.
+      - name: The night's seed shift
+        if: needs.plan.outputs.lane == 'nightly'
+        shell: bash
+        run: echo "RIM_SEED_SHIFT=$(date -u +%Y%m%d)" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ needs.plan.outputs.toolchain }}
@@ -294,6 +300,12 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
+      # At night a test that names no seed gets another map (DESIGN.md §7b),
+      # so one that quietly depends on its map fails some night, not never.
+      - name: The night's seed shift
+        if: needs.plan.outputs.lane == 'nightly'
+        shell: bash
+        run: echo "RIM_SEED_SHIFT=$(date -u +%Y%m%d)" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ needs.plan.outputs.toolchain }}
@@ -398,6 +410,12 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v5
+      # At night a test that names no seed gets another map (DESIGN.md §7b),
+      # so one that quietly depends on its map fails some night, not never.
+      - name: The night's seed shift
+        if: needs.plan.outputs.lane == 'nightly'
+        shell: bash
+        run: echo "RIM_SEED_SHIFT=$(date -u +%Y%m%d)" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ needs.plan.outputs.toolchain }}
