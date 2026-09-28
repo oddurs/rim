@@ -17,6 +17,10 @@
 //!
 //! A twin of the game is saved and loaded every few days (DESIGN.md §7a),
 //! and must match the one that never saved, section for section, every day.
+//!
+//! `--trace-day D` also prints every section's hash after each tick of day D
+//! (`tick T section=hash ...`): when platforms disagree on a day, CI runs it
+//! for that day on each and names the first tick and sections that differ.
 
 use rim_sim::data::{Data, Key};
 use rim_sim::snapshot::Snapshot;
@@ -47,6 +51,7 @@ fn main() {
     // year. The seed follows the map, and a change to worldgen can move it:
     // the checks below say so rather than hash less than they claim.
     let seed = arg("--seed", 4);
+    let trace_day = arg("--trace-day", 0);
     let mods = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mods");
     let mut s = Sim::new(&mods, seed).expect("mods load");
     let days = arg("--days", s.world.defs.calendar.year_days as u64);
@@ -158,6 +163,9 @@ fn main() {
         for _ in 0..ticks {
             s.step();
             twin.step();
+            if day == trace_day {
+                println!("{}", rim_sim::bisect::trace_line(&s));
+            }
         }
         let snap = Snapshot::capture(&s);
         if snap != Snapshot::capture(&twin) {

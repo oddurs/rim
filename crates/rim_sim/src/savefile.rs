@@ -67,12 +67,14 @@ impl Log {
     }
 }
 
-fn section_hashes(sim: &Sim) -> BTreeMap<String, u64> {
+/// The hash of each snapshot section: what a log keeps, and what two runs
+/// are compared by to name what differs.
+pub fn section_hashes(sim: &Sim) -> BTreeMap<String, u64> {
     Snapshot::capture(sim).sections.iter().map(|(n, b)| (n.clone(), hash_bytes(b))).collect()
 }
 
 /// The sections whose hashes differ between two logs' worth of hashes.
-fn differing(a: &BTreeMap<String, u64>, b: &BTreeMap<String, u64>) -> Vec<String> {
+pub fn differing(a: &BTreeMap<String, u64>, b: &BTreeMap<String, u64>) -> Vec<String> {
     let names: std::collections::BTreeSet<&String> = a.keys().chain(b.keys()).collect();
     names.into_iter().filter(|n| a.get(*n) != b.get(*n)).cloned().collect()
 }

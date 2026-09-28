@@ -261,12 +261,15 @@ jobs:
     if: contains(fromJSON('["queue","nightly"]'), needs.plan.outputs.lane)
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    outputs:
+      day: ${{ steps.compare.outputs.day }}
     steps:
       - uses: actions/download-artifact@v4
         with:
           pattern: crosscheck-*
           merge-multiple: true
       - name: Compare
+        id: compare
         shell: bash
         run: |
           ls crosscheck-*.txt
@@ -278,7 +281,15 @@ jobs:
             if ! cmp -s "$first" "$f"; then status=1; fi
           done
           if [ $status -ne 0 ]; then
-            echo "Platforms disagree. First differing day per platform against $first:"
+            # The first day any platform's line differs: the trace jobs
+            # below replay it tick by tick on every platform.
+            # awk, not diff: diff exits 1 on a difference, which pipefail
+            # would take for an error here.
+            day=$(for f in crosscheck-*.txt; do
+              awk 'NR == FNR { a[FNR] = $0; next } a[FNR] != $0 { print $2; exit }' <(grep '^day' "$first") <(grep '^day' "$f")
+            done | sort -n | head -n 1)
+            echo "day=$day" >> "$GITHUB_OUTPUT"
+            echo "Platforms disagree, first on day $day. First differing day per platform against $first:"
             for f in crosscheck-*.txt; do
               echo "== $f"
               diff "$first" "$f" | head -n 4 || true
@@ -288,6 +299,68 @@ jobs:
           fi
           echo "All $n platforms agree:"
           tail -n 1 "$first"
+
+  # When the platforms disagree: the first day they do, replayed on each with
+  # every section's hash after every tick, then compared to name the first
+  # tick and the sections that part (DESIGN.md §7).
+  trace:
+    name: Trace the day (${{ matrix.os }})
+    needs: [plan, agree]
+    if: failure() && needs.agree.outputs.day != ''
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ needs.plan.outputs.toolchain }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: false
+      - name: Trace day ${{ needs.agree.outputs.day }}
+        shell: bash
+        run: |
+          day=${{ needs.agree.outputs.day }}
+          cargo run --release -p rim_sim --example crosscheck -- --days "$day" --trace-day "$day" | grep '^tick' > trace-${{ matrix.os }}.txt
+          wc -l trace-${{ matrix.os }}.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: trace-${{ matrix.os }}
+          path: trace-${{ matrix.os }}.txt
+
+  trace-compare:
+    name: The first tick the platforms part
+    needs: [plan, trace]
+    if: always() && needs.trace.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ needs.plan.outputs.toolchain }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release
+          save-if: false
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: trace-*
+          merge-multiple: true
+      - name: Compare the traces
+        shell: bash
+        run: |
+          cargo build -q --release -p rim_sim --example traces
+          # Its verdict is the step's, after the summary is written.
+          status=0
+          target/release/examples/traces trace-*.txt > parts.txt || status=$?
+          cat parts.txt
+          { echo '## Where the platforms part'; echo; echo '```text'; cat parts.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
 
   # The binaries, the mods through them, the Linux crosscheck and the long
   # sim runs, beside the tests rather than after them.
