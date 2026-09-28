@@ -41,6 +41,9 @@ Every layer also takes:
   highlight).
 - `vary`: brightness varies per cell by up to this much, so a field of rock
   isn't one flat colour.
+- `on`: `"top"` or `"bottom"`. On a portal (stairs, a ladder), the layer is
+  drawn on that end only, so core's stairs say DN where they go down and UP
+  where they come up. Unset, a layer shows on both ends.
 
 `min_px` keeps a small disc or a thin fill visible when zoomed out: a
 radius, or a width and height, in points. `pulse` makes a disc's radius

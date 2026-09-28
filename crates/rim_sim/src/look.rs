@@ -135,6 +135,9 @@ pub struct LayerDef {
     /// what the thing is made of, `"floor"` its floor pattern, and any name
     /// in the vocabulary is that pattern whatever it's made of.
     pub pattern: Option<String>,
+    /// On a portal (stairs, a ladder): `"top"` or `"bottom"` draws this
+    /// layer on that end only.
+    pub on: Option<String>,
     /// While it is built, the stretch of the work this layer appears over:
     /// absent before `from`, rising from the bottom (a disc from its middle)
     /// until `to`, whole after (DESIGN.md §6b).
@@ -312,6 +315,16 @@ pub struct Layer {
     pub grow: Option<[f32; 2]>,
     /// Mirrored toward the room (`into = "room"`).
     pub into_room: bool,
+    /// Drawn on one end of a portal only (`on = "top"` or `"bottom"`): a
+    /// stair's arrow says DN where it goes down and UP where it comes up.
+    pub end: Option<End>,
+}
+
+/// An end of a portal, a thing that joins two levels (DESIGN.md §6d).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum End {
+    Top,
+    Bottom,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -353,6 +366,7 @@ pub fn plain() -> Vec<Layer> {
         vary: 0.0,
         grow: None,
         into_room: false,
+        end: None,
     }]
 }
 
@@ -565,6 +579,13 @@ impl LayerDef {
                 return Err(format!("`grow` = [{from}, {to}] is not a window of the work (want 0 ≤ from < to ≤ 1)"));
             }
         }
+        // Any layer can belong to one end of a portal.
+        let end = match self.on.as_deref() {
+            None => None,
+            Some("top") => Some(End::Top),
+            Some("bottom") => Some(End::Bottom),
+            Some(o) => return Err(format!("`on` = {o:?}: a portal's ends are \"top\" and \"bottom\"")),
+        };
         let into_room = match self.into.as_deref() {
             None => false,
             Some("room") => true,
@@ -579,6 +600,7 @@ impl LayerDef {
             vary: self.vary.unwrap_or(0.0),
             grow: self.grow,
             into_room,
+            end,
         })
     }
 }
@@ -771,6 +793,17 @@ mod tests {
         assert!(layer("draw = \"outline\"\nline = \"light\"\nwidth = 2").unwrap_err().contains("not both"));
         assert!(layer("draw = \"line\"\nstart = [0, 0]").unwrap_err().contains("needs `start` and `end`"));
         assert!(layer("draw = \"box\"\nround = 0.7").unwrap_err().contains("out of range"));
+    }
+
+    #[test]
+    fn a_layer_can_belong_to_one_end_of_a_portal() {
+        assert_eq!(layer("draw = \"fill\"").unwrap().end, None);
+        assert_eq!(layer("draw = \"fill\"\non = \"top\"").unwrap().end, Some(End::Top));
+        assert_eq!(
+            layer("draw = \"line\"\nstart = [0, 0]\nend = [1, 1]\non = \"bottom\"").unwrap().end,
+            Some(End::Bottom)
+        );
+        assert!(layer("draw = \"fill\"\non = \"middle\"").unwrap_err().contains("\"top\" and \"bottom\""));
     }
 
     #[test]

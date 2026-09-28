@@ -456,12 +456,11 @@ The API grows up: stat pipeline, script components, custom jobs, needs and def k
 
 ## houses — Houses
 
-`##########` 92% · 22 of 24 done
+`##########` 96% · 23 of 24 done
 
 A house is drawn as its plan and built as an order (DESIGN.md §6c). Walls join from their neighbours in quarters, with rounded ends and square junctions, and no sprites. Materials show as patterns and climb a ladder of tools from wattle to brick. Doors and windows orient themselves in the run and toward the room. Rooms take roles from what is in them, a roof span set by the materials replaces the 400-cell cap, and from far away the colony is a village of hipped roofs. The prototype, docs/engineering/houses-prototype.html, is the reference.
 
 - [ ] `b3ffbae1` Replace in place: upgrade a wall without opening the room <sup>feature · p1 · m · engine</sup>
-- [ ] `c358e725` Stairs and ladders drawn in the plan style <sup>feature · p2 · s · core</sup>
 - [x] `24100bb9` A roof span replaces the room size cap, and pillars hold it <sup>feature · p0 · m · engine</sup>
 - [x] `26a69a8e` Pipe joins: fences and palisades connect like Minecraft's <sup>feature · p2 · s · client</sup>
 - [x] `26ba97aa` Plan a multi-cell building over grass, trees and rock <sup>feature · p2 · m · engine</sup>
@@ -477,6 +476,7 @@ A house is drawn as its plan and built as an order (DESIGN.md §6c). Walls join 
 - [x] `ba18a8e4` Facing: things turn in four directions <sup>feature · p1 · m · engine</sup>
 - [x] `c281689c` Save a selection as a house plan <sup>feature · p2 · m · client</sup>
 - [x] `c2d73146` The seam where a wall's material changes is covered by the pattern <sup>bug · p1 · s · client</sup>
+- [x] `c358e725` Stairs and ladders drawn in the plan style <sup>feature · p2 · s · core</sup>
 - [x] `c80a071d` A house plan placed below the surface lands on the surface <sup>bug · p1 · s · engine</sup>
 - [x] `df049dac` Roofs from far away, hipped by the span field <sup>feature · p2 · m · client</sup>
 - [x] `eb469f44` Houses concept: drawn as their plan, built as orders <sup>spike · p0 · m · tooling</sup>
