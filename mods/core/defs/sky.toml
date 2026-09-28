@@ -51,18 +51,13 @@ angular_size = 0.5
 tilt = 23.0
 
 # Across the night from the east as the sun does, lower, cold, and wider
-# for its halo. Its light is the picture's alone: the sim's stays dark at
-# night, so nothing grows by it. Full every 15 days, four times a year, and
-# on the first night; faint beside the sun, in the light field's units, and
-# dimmed by cloud as the sun is.
+# for its halo. Its light is daylight's `moon` term, the sim's as well as
+# the picture's, so plants grow a little by a full moon; cloud dims it as it
+# dims the sun.
 [[sky_body]]
 id = "moon"
-scale = 1.5
-of = [
-  { input = "hour", curve = [[0, 1.0], [4, 1.0], [5.5, 0.0], [19.5, 0.0], [21, 1.0], [24, 1.0]] },
-  { input = "cycle", days = 15, offset = 6.75, curve = [[0, 0.0], [0.5, 1.0], [1, 0.0]] },
-  { ambient = "cloud", curve = [[0, 1.0], [100, 0.55]] },
-]
+field = "daylight"
+term = "moon"
 rise = 19.5
 set = 5.5
 peak = 45.0

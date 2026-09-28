@@ -2,12 +2,12 @@
 id: 0a27bfbb-276b-4b28-a7cc-1e02a3f8dc91
 title: 'Sky bodies move in the sim: orbits, seasons and phases, worked out deterministically'
 type: feature
-status: doing
+status: done
 milestone: lighting
 assignee: Oddur Sigurdsson
-claimed: 2026-09-28
 created: 2026-09-28
 updated: 2026-09-28
+closed_at: 2026-09-28
 priority: p1
 api: additive
 effort: l
@@ -40,7 +40,7 @@ The user wants the sun and moon simulated in full (2026-09-28). That reverses th
 - [x] At latitude 45 the sun's day is longer at midsummer than at midwinter, and equal at the equinoxes; noon altitude follows the season (test)
 - [x] The moon's phase cycles with `phase_days`, and it rises later each day by its `day_period` (test)
 - [x] A guard test finds no std trig or transcendental calls in rim_sim/src, and the in-crate functions match std within 1e-6 (test)
-- [ ] A year of body states hashes the same run to run (test), and agree passes on all four platforms in the queue lane
+- [x] A year of body states hashes the same run to run (test), and agree passes on all four platforms in the queue lane
 - [x] DESIGN.md describes the model; docs/modding and types list the new `sky_body` fields and the `body` input
 
 ## 2026-09-28
@@ -50,3 +50,7 @@ Built as rim_sim::sky. Body states are worked out in Fields::update_ambient, on 
 ## 2026-09-28
 
 Criterion 5: docs/modding/weather.md lists the orbit keys and the body input. types/rim.d.luau gains the SkyBody type and rim.sky_body; the defs have no schema file of their own. Criterion 4's hash test is pinned; agree is for the queue lane.
+
+## 2026-09-28
+
+Criterion 4: agree passed on all four platforms in queue run 36470949523 (https://github.com/oddurs/rim/actions/runs/36470949523), and its crosscheck matched main's run 36465180225 through day 60. Merged as #328.
