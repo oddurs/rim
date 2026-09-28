@@ -1,0 +1,6 @@
+id = "two_suns"
+name = "Two Suns"
+version = "0.1.0"
+api = "0.6"
+description = "Example sky mod: core's sun replaced by two, and a green moon with phases. Weather's clouds still dim them, because they're daylight and cloud dims light."
+depends = ["core"]
