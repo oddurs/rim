@@ -29,3 +29,7 @@ Almost every PR runs `cairn render`, and CI's `cairn check --render --strict` fa
 - [ ] Two PRs that each add a cairn item merge one after the other with no conflict and no rebase (linked)
 - [ ] After the second merge, main's ROADMAP.md lists both items (commit linked)
 - [ ] A PR that edits ROADMAP.md by hand is told to stop by CI
+
+## 2026-09-27
+
+Decision: keep ROADMAP.md tracked on main, rendered by a workflow on push to main as github-actions[bot]. It stays readable on GitHub, which is where people look. Pieces: drop the after-* render hooks from cairn.toml and the render in post-merge (else every cairn command dirties ROADMAP.md and agents commit it); CI 'checks' runs cairn check --strict plus 'cairn render -o /dev/null' and fails a PR whose three-dot diff touches ROADMAP.md; scripts/task roadmap does the same. Main has no ruleset today (checked 2026-09-27), so the bot push works now; the ruleset item must list GitHub Actions as a bypass actor. A GITHUB_TOKEN push starts no workflow, so the render commit costs no CI. Built after the lanes PR lands, because both rewrite ci.yml.

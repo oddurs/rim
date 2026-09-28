@@ -188,7 +188,10 @@ fn two_hundred_tokens_fit_the_frame_budget() {
     } else {
         1.5
     };
-    assert!(m < 1.0 * slack, "median frame {m:.3} ms");
-    assert!(fastest < 2.0 * slack, "fastest rebuild {fastest:.3} ms");
+    // Timed only alone, in CI's budget step (DESIGN.md §8a).
+    if timing_budgets() {
+        assert!(m < 1.0 * slack, "median frame {m:.3} ms");
+        assert!(fastest < 2.0 * slack, "fastest rebuild {fastest:.3} ms");
+    }
     let _ = std::fs::remove_dir_all(&dir);
 }

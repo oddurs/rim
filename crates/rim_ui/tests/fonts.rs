@@ -49,7 +49,9 @@ fn the_font_cache_gives_the_same_fonts_faster() {
     let cached = cached.expect("loaded five times");
     assert_eq!(faces(&scanned), faces(&cached), "the same faces, families and weights");
     println!("system fonts: scan {scan_ms:.1} ms, cache {cache_ms:.1} ms, {} faces", scanned.len());
-    if scanned.len() > 50 {
+    // That the cache is used is the `FontsFrom::Cache` above. That it's faster
+    // is timed only alone, in CI's budget step (DESIGN.md §8a).
+    if scanned.len() > 50 && std::env::var_os("RIM_BUDGETS").is_some() {
         assert!(cache_ms * 2.0 < scan_ms, "the cache is much faster ({cache_ms:.1} vs {scan_ms:.1} ms)");
     }
 

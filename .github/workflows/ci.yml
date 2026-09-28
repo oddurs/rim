@@ -108,7 +108,7 @@ jobs:
         if: runner.os == 'Linux'
         env:
           RIM_BUDGETS: 1
-        run: cargo nextest run --release -p rim_ui --test-threads 1 -E 'test(/frame_budget/)'
+        run: cargo nextest run --release -p rim_ui -p rim_client --test-threads 1 -E 'test(/frame_budget/) | test(two_hundred_tokens_fit_the_frame_budget) | test(the_card_costs_little_over_two_hundred_stores) | test(/fonts/) | test(the_storage_overlay_over_200_stores_is_cheap)'
       - name: Upload the test report
         if: always()
         uses: actions/upload-artifact@v4

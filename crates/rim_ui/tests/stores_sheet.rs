@@ -167,6 +167,9 @@ fn the_card_costs_little_over_two_hundred_stores() {
         (true, false) => 3.0,
         (true, true) => 6.0,
     };
-    assert!(with < 2.0 * slack, "rebuild with the card up: {with:.3} ms (budget {:.1} ms)", 2.0 * slack);
+    // Timed only alone, in CI's budget step (DESIGN.md §8a).
+    if timing_budgets() {
+        assert!(with < 2.0 * slack, "rebuild with the card up: {with:.3} ms (budget {:.1} ms)", 2.0 * slack);
+    }
     let _ = std::fs::remove_dir_all(dir);
 }

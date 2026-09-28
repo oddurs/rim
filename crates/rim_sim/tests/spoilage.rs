@@ -5,7 +5,7 @@ mod common;
 
 use rim_sim::hecs::Entity;
 use rim_sim::snapshot::Snapshot;
-use rim_sim::systems::{self, SPOIL_PASS};
+use rim_sim::systems::{self, SPOIL_EVERY, SPOIL_PASS};
 use rim_sim::world::{Lot, Spoiling};
 use rim_sim::{IVec, Sim, TICKS_PER_DAY};
 
@@ -160,20 +160,17 @@ fn a_spoil_pass_over_thousands_of_stacks() {
     for p in open {
         s.world.place_item(berry, p, 5);
     }
-    let stacks = s.world.stock.on_map(berry) / 5;
-    let passes = 40;
-    let mut fastest = f64::MAX;
-    for _ in 0..3 {
-        let t0 = std::time::Instant::now();
-        for _ in 0..passes {
+    let stacks = s.world.stock.on_map(berry) as usize / 5;
+    assert!(stacks >= 4000, "{stacks} stacks placed");
+    // Counted, not timed (DESIGN.md §8a): a pass that stopped staggering
+    // works out every stack at once.
+    let worked: Vec<usize> = (0..SPOIL_EVERY)
+        .map(|_| {
             s.world.tick += SPOIL_PASS;
-            systems::spoil(&mut s.world);
-        }
-        fastest = fastest.min(t0.elapsed().as_secs_f64() * 1e3 / passes as f64);
-    }
-    println!("spoil pass, about {stacks} stacks: {fastest:.3} ms a pass, {:.4} ms a tick", fastest / SPOIL_PASS as f64);
-    // The bound catches a pass that stopped staggering, with room for a
-    // machine running every test at once.
-    let slack = if std::env::var_os("CI").is_some() { 6.0 } else { 1.0 };
-    assert!(fastest <= 3.0 * slack, "{fastest:.3} ms a pass");
+            systems::spoil(&mut s.world)
+        })
+        .collect();
+    let most = worked.iter().max().unwrap();
+    assert!(*most <= stacks / SPOIL_EVERY as usize * 3 / 2, "a pass works out a share, not all {stacks}: {worked:?}");
+    assert!(worked.iter().sum::<usize>() >= stacks, "every stack once in {SPOIL_EVERY} passes: {worked:?}");
 }
