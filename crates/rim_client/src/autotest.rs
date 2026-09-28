@@ -3252,6 +3252,33 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         left.iter().all(|&e| matches!(t.pawn(e).job, Job::MoveTo { .. })),
         "a right-click orders every selected colonist",
     );
+    // A selection off screen leaves a chevron at the edge, clear of the
+    // panels; a group that went together is one chevron; a click on it
+    // brings the inspector's colonist back (b6d0a4cc).
+    let picked = crate::selection(&t.app);
+    crate::apply(&mut t.app, Action::Pan(40.0, 0.0));
+    for _ in 0..4 {
+        t.frame().await;
+    }
+    let chevrons = crate::overlay::offscreen(&t.app);
+    let dpi = screen_dpi_scale();
+    let clear = chevrons.iter().all(|o| !t.app.ui.covers(o.at.0 * dpi, o.at.1 * dpi));
+    let pointed: usize = chevrons.iter().map(|o| o.of.len()).sum();
+    let named =
+        crate::overlay::scene(&t.app).marks.iter().any(|m| matches!(m, Mark::Chip(c) if c.text.ends_with(" cells")));
+    t.check(
+        pointed == picked.len() && chevrons.len() < picked.len() && clear && named,
+        format!("a group off screen leaves one chevron, clear of the panels ({} for {})", chevrons.len(), picked.len()),
+    );
+    t.shot("chalk-offscreen").await;
+    if let Some(o) = chevrons.first() {
+        let lead = o.of[0];
+        t.click(o.at).await;
+        t.frame().await;
+        let back = crate::draw::pawn_disc(&t.app, lead)
+            .is_some_and(|((x, y), _)| (0.0..screen_width()).contains(&x) && (0.0..screen_height()).contains(&y));
+        t.check(back, "clicking the chevron brings its colonist on screen");
+    }
     t.key(KeyCode::Escape).await;
     t.check(t.app.selected.is_none() && t.app.group.is_empty(), "Escape clears the whole selection");
 
