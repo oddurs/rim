@@ -219,6 +219,8 @@ pub struct App {
     pub zone_preview: Option<draw::ZonePreview>,
     /// What a designate or cancel tool would do, made once a frame.
     pub order_preview: Option<overlay::OrderPreview>,
+    /// What a build tool would put up, made once a frame.
+    pub build_preview: Option<overlay::BuildPreview>,
     /// A click that did nothing: why, where, and when.
     pub refused: Option<(String, IVec, f64)>,
     /// The pointer as this frame's input had it, in screen points. Previews
@@ -777,6 +779,7 @@ async fn game() {
         reduce_motion,
         zone_preview: None,
         order_preview: None,
+        build_preview: None,
         refused: None,
     };
     app.selected = app.sim.world.colonists().next();
@@ -1412,6 +1415,8 @@ pub fn frame(app: &mut App, raw: &RawInput) {
     app.pointer = (mx, my);
     app.zone_preview = draw::ZonePreview::of(app);
     app.order_preview = overlay::OrderPreview::of(app);
+    let last = app.build_preview.take();
+    app.build_preview = overlay::BuildPreview::of(app, last);
     let pointer = (!app.mouse_over_ui).then(|| app.cam.to_world(mx, my));
     app.grid.update(grid::level(app.tool, dragging), app.measure, pointer, raw.time, app.reduce_motion);
     let hovered = if app.tool == Tool::Select && !dragging && pointer.is_some() { hovered(app, mx, my) } else { None };
@@ -2468,6 +2473,14 @@ pub fn apply(app: &mut App, action: Action) {
                     app.sim.push(Command::Designate { designation: d, a, b });
                 }
                 Tool::Build(t) => {
+                    // A click where nothing can go up is refused, with why:
+                    // asked of the cell released on, not last frame's.
+                    if a == b {
+                        let bp = overlay::BuildPreview::between(app, t, a, b, false);
+                        if bp.counts().0 == 0 {
+                            app.refused = Some((bp.refusal(), a, app.chalk.now()));
+                        }
+                    }
                     let stuff = chosen_material(app, t);
                     for (a, b) in build_rects(defs.thing(t).blocks, a, b) {
                         app.sim.push(Command::Build { stuff, thing: t, a, b, facing: app.build_facing });
@@ -2570,23 +2583,29 @@ fn chosen_material(app: &App, thing: DefId) -> Option<DefId> {
     options.iter().copied().max_by_key(|&d| stock(w, d)).or_else(|| options.first().copied())
 }
 
-/// The material row for the active build tool: every material its def
-/// accepts, with stock and what the result would be, or nothing at all.
-/// A buildable's cost in words, in the material it would use now.
-fn build_cost(app: &App, t: DefId) -> String {
+/// What `n` of a buildable cost, in its chosen material and parts:
+/// "90 logs", "48 planks · 16 nails"; "free" for none.
+fn build_cost_for(app: &App, t: DefId, n: u32) -> String {
     let defs = &app.sim.world.defs;
     let Some(b) = defs.thing(t).build.as_ref() else { return String::new() };
     if b.free {
         return "free".into();
     }
-    let mut parts: Vec<String> = b.cost_r.iter().map(|&(d, n)| format!("{n} {}", defs.thing(d).label)).collect();
+    let mut parts: Vec<String> = b.cost_r.iter().map(|&(d, k)| format!("{} {}", k * n, defs.thing(d).label)).collect();
     if let Some(sc) = &b.stuff {
         let label = chosen_material(app, t).map_or_else(|| sc.category.clone(), |m| defs.thing(m).label.clone());
-        parts.insert(0, format!("{} {label}", sc.count));
+        parts.insert(0, format!("{} {label}", sc.count * n));
     }
     parts.join(" · ")
 }
 
+/// A buildable's cost in words, in the material it would use now.
+fn build_cost(app: &App, t: DefId) -> String {
+    build_cost_for(app, t, 1)
+}
+
+/// The material row for the active build tool: every material its def
+/// accepts, with stock and what the result would be, or nothing at all.
 fn stuff_view(app: &App) -> Vec<rim_ui::view::StuffView> {
     let t = match (app.preview, app.tool) {
         (Some(p), _) => p,

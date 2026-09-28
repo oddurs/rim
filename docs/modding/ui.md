@@ -825,8 +825,9 @@ same file:
 | `color.chalk` | `#f2eee3` | Selection, the way a selected stack will be carried, the grid's lit edge |
 | `color.keyline` | `#080a0c8c` | The dark line under every overlay stroke |
 | `color.seam` | `#0000001f` | A grid line, darkening the ground it crosses |
-| `color.threat` | `#ff6b5a` | Can't: the notch on a job no one can reach |
+| `color.threat` | `#ff6b5a` | Can't: the notch on a job no one can reach, and a blocked build ghost |
 | `color.seam_major` | `#00000052` | Every fifth grid line while measuring (G) |
+| `color.intent_fill` | `#5ab4ff4d` | A build's ghost; its edge is `accent`, a cell to clear first gets a `bad` triangle, a blocked one a `threat` cross |
 | `color.zone`, `color.zone_fill` | `#a48fe0`, `#a48fe01f` | Stockpiles: their edge, and their wash at rest (deeper when selected or being added) |
 | `shape.hair` | 1 | A zone's edge, and a zone drag's box |
 | `shape.stroke` | 1.5 | Hover's line weight, a hovered or selected stockpile's edge, a store's outline |
