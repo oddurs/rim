@@ -3189,14 +3189,22 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.frame().await;
     t.check(t.app.ui.find("core:inspector.group").is_some(), "the inspector sums the group up");
     // Alt takes the boxed out; Shift puts them back, dropping nobody.
-    let one = squad[2];
-    let p = t.pawn(one).pos;
-    // A cell beside them, so the two-cell box holds them and no one else.
-    let alone = [(1, 0), (-1, 0), (0, 1), (0, -1)]
+    // A boxed colonist and a cell beside them, so the two-cell box holds
+    // them and no one else. A box goes by where a colonist is drawn, which
+    // is a cell on from the sim's mid-step, and others may stand close.
+    let drawn = |t: &T, e: Entity| {
+        let pawn = t.pawn(e);
+        let (x, y) = draw::pawn_pos(&pawn, t.app.tick_frac());
+        IVec::at(x.floor() as i32, y.floor() as i32, pawn.pos.z)
+    };
+    let (one, p, alone) = boxed
         .iter()
-        .map(|&(dx, dy)| p.offset(dx, dy))
-        .find(|&q| crate::boxed_colonists(&t.app, p, q) == [one])
-        .expect("a cell beside one colonist and no other");
+        .flat_map(|&e| {
+            let p = drawn(&t, e);
+            [(1, 0), (-1, 0), (0, 1), (0, -1)].map(|(dx, dy)| (e, p, p.offset(dx, dy)))
+        })
+        .find(|&(e, p, q)| crate::boxed_colonists(&t.app, p, q) == [e])
+        .expect("a boxed colonist with a cell beside them and no one else");
     let (sa, sb) = (t.screen(p), t.screen(alone));
     for (pressed, released, at) in [(true, false, sa), (false, false, sb), (false, true, sb)] {
         t.input(RawInput {
