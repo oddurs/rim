@@ -627,7 +627,7 @@ async fn game() {
     // `--lighting <preset>` for the bench and tests; else the settings file.
     let lighting = match args.windows(2).find(|w| w[0] == "--lighting") {
         Some(w) => quality::Setting::named(&w[1]).unwrap_or_else(|| {
-            eprintln!("  warning: --lighting wants low, medium, high or ultra, not {}", w[1]);
+            eprintln!("  warning: --lighting wants low, medium, high, ultra or auto, not {}", w[1]);
             quality::Setting::default()
         }),
         None => settings
@@ -1945,7 +1945,7 @@ fn apply_ui(app: &mut App, a: UiAction) {
                 None => None,
             };
             if let Some(s) = setting.or_else(|| quality::Setting::named(&name)) {
-                app.light.setting = s;
+                app.light.set(s);
             }
         }
         UiAction::ScrollMode(m) => {

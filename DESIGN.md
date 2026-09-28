@@ -2310,7 +2310,7 @@ next begins, and no pop when the view changes level.
 
 ### Presets
 
-`low`, `medium` (the default), `high` and `ultra`, from `[lighting]` in the
+`low`, `medium` (the default), `high`, `ultra` and `auto`, from `[lighting]` in the
 player's settings file:
 
 | | low | medium | high | ultra |
@@ -2322,10 +2322,18 @@ player's settings file:
 | Moving lights with shadows | 4 | 8 | 16 | 32 |
 
 Any setting overrides its preset (`texels_per_cell`, `sun_steps`,
-`soft_shadows`, `sun_rebuild_degrees`, `moving_shadows`). There is no `auto` yet (24bad102):
-the frame's time mixes the sim and the UI with the light, and a GPU timer
-works only off Apple, so it would have turned the lights down for the wrong
-reason. Light is upsampled bilinearly in every preset; bicubic was tried and
+`soft_shadows`, `sun_rebuild_degrees`, `moving_shadows`), and `auto` keeps them as it steps.
+
+`auto` (24bad102) starts at `medium`. It steps down a preset after each 3 s
+window in which the lighting's own GPU time averaged over 2 ms a frame, an
+eighth of a 60 Hz frame. It stops at `low`, never steps back up mid-game,
+and logs each step. It reads that time from timer queries around the
+lighting passes, read back four frames later, so no frame waits for the GPU.
+It never reads the frame's time, which mixes the sim and the UI with the
+light. Where GL can't time a pass (Apple's tile-based GPU, GL ES), `auto`
+stays at `medium` and says so in the log: on a Mac, `auto` is `medium`.
+
+Light is upsampled bilinearly in every preset; bicubic was tried and
 changed nothing visible at 2 texels a cell. Static lights bake at 8 rays in every preset, because the bake runs only on
 edits. A light texel never gets smaller than 4 screen pixels: at the minimum
 zoom (4 points a cell on a 1x screen) the buffer drops to 1 texel per cell,

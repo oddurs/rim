@@ -566,6 +566,10 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
     }
     let centre = app.sim.world.colony_center().unwrap_or(IVec::new(SIZE / 2, SIZE / 2));
     app.selected = None;
+    // Every view at one preset, the one its numbers are labelled with.
+    let mut fixed = app.light.setting().clone();
+    fixed.auto = false;
+    app.light.set(fixed);
     telemetry::enable();
     // The reference screen, in points: the whole map fits at the lowest
     // zoom. The request is in pixels on a high-DPI screen.
@@ -775,7 +779,7 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
     println!("light rebuild on {last}, ms: {}", costs.join("; "));
     let soft = if crate::light::software_gl(&renderer) { " (software: gpu times are the CPU rasterising)" } else { "" };
     println!("gl: {renderer}{soft}");
-    println!("lighting: {}", app.light.setting.name());
+    println!("lighting: {}", app.light.setting().name());
 
     if let Some(path) = opt("--json") {
         let views: Vec<String> = results
@@ -832,7 +836,7 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
             screen_width(),
             screen_height(),
             renderer.replace('"', "'"),
-            app.light.setting.name(),
+            app.light.setting().name(),
             rebuild.join(", "),
             views.join(",\n")
         );

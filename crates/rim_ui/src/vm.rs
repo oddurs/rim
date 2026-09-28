@@ -844,8 +844,8 @@ impl UiVm {
             false => return Err(rt("act.ui_scale: wants a number from 0.75 to 2")),
         });
         act!("lighting", String, |name| match name.as_str() {
-            "low" | "medium" | "high" | "ultra" => UiAction::Lighting(name),
-            _ => return Err(rt("act.lighting: low, medium, high or ultra")),
+            "low" | "medium" | "high" | "ultra" | "auto" => UiAction::Lighting(name),
+            _ => return Err(rt("act.lighting: low, medium, high, ultra or auto")),
         });
         act!("render_scale", f32, |s| match s.is_finite() {
             true => UiAction::RenderScale(s.clamp(0.25, 1.0)),
