@@ -51,22 +51,22 @@ impl T {
     }
 
     /// Frames until the firelight bake has caught up: it bakes at most once
-    /// a second, and draws what it hasn't baked yet as moving lights.
+    /// a second of the frame clock, and draws what it hasn't baked yet as
+    /// moving lights. Owing one, the clock skips the second rather than
+    /// drawing sixty frames of it.
     async fn light_settles(&mut self) {
-        let since = get_time();
-        loop {
+        for _ in 0..600 {
+            if self.app.light.owes_a_bake() {
+                self.clock += 1.0;
+            }
             self.frame().await;
             // Changing level fades for a moment too; what's on screen is
             // only one level's once it has.
             if !self.app.light.owes_a_bake() && self.app.fade.is_none() {
                 return;
             }
-            // A second's bake and the fade, with room for a slow machine.
-            if get_time() - since > 10.0 {
-                self.check(false, "the firelight bake caught up within 10 s");
-                return;
-            }
         }
+        self.check(false, "the firelight bake caught up within 600 frames");
     }
 
     async fn frame(&mut self) {

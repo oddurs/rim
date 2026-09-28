@@ -102,3 +102,31 @@ fn no_test_reads_the_clock_unless_timed_alone() {
         found.join("\n")
     );
 }
+
+/// Where the client may read macroquad's clock: gathering a frame's input,
+/// and pacing the live game's sim steps. Everything drawn over time reads
+/// the frame's clock (`App::now`, `App::dt`) instead, and the autotest waits
+/// on its own, so replayed input draws the same frames on any machine.
+const FRAME_CLOCK_SOURCES: &[&str] = &["get_frame_time().min(0.1)", "time: get_time(),"];
+
+#[test]
+fn the_client_draws_by_the_frame_clock() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../crates/rim_client/src");
+    let mut files = Vec::new();
+    rust_files(&root, &mut files);
+    let mut found = Vec::new();
+    for f in files {
+        let rel = f.strip_prefix(&root).unwrap().to_string_lossy().replace('\\', "/");
+        let text = fs::read_to_string(&f).unwrap();
+        for line in text.lines().filter(|l| l.contains("get_time()") || l.contains("get_frame_time()")) {
+            if !FRAME_CLOCK_SOURCES.contains(&line.trim()) {
+                found.push(format!("rim_client/src/{rel}: {}", line.trim()));
+            }
+        }
+    }
+    assert!(
+        found.is_empty(),
+        "the client reads macroquad's clock outside its input: read App::now or App::dt:\n{}",
+        found.join("\n")
+    );
+}
