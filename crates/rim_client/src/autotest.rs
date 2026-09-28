@@ -679,10 +679,89 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         Some(p) => (p.offset(-4, -4), p.offset(4, 4)),
         None => (home.offset(-8, -8), home.offset(8, 8)),
     };
-    t.drag(a, b).await;
+    // Hover and drag preview what the order will mark (bb769d00): bare
+    // grass gets a faint frame and no hint; one tree marked beforehand
+    // keeps its dot; each tree the drag will newly mark gets a ring.
+    let bare = (2..10)
+        .flat_map(|r| (-r..=r).map(move |d| home.offset(d, r)))
+        .find(|&p| t.w().map.passable(p) && t.w().map.fixture_at(p).is_none() && t.w().map.item_at(p).is_none());
+    if let Some(p) = bare {
+        t.mouse = t.screen(p);
+        t.frame().await;
+        t.frame().await;
+        let faint =
+            crate::overlay::scene(&t.app).marks.iter().any(|m| matches!(m, Mark::Frame { alpha, .. } if *alpha < 1.0));
+        let hint = crate::overlay::drag_hint(&t.app);
+        t.check(faint && hint.is_none(), format!("chop over bare ground: a faint frame and no hint ({hint:?})"));
+    }
+    if let Some(p) = near_tree {
+        t.app.sim.push(Command::Designate { designation: chop, a: p, b: p });
+        t.ticks(1);
+    }
+    t.input(RawInput { mouse: t.screen(a), left_pressed: true, ..Default::default() }).await;
+    t.input(RawInput { mouse: t.screen(b), ..Default::default() }).await;
+    let fresh: Vec<Entity> = t
+        .app
+        .order_preview
+        .as_ref()
+        .map(|op| {
+            op.targets
+                .iter()
+                .filter_map(|t| if let rim_sim::command::Target::Thing(e) = t { Some(*e) } else { None })
+                .collect()
+        })
+        .unwrap_or_default();
+    let rings =
+        crate::overlay::scene(&t.app).marks.iter().filter(|m| matches!(m, Mark::Target { cancel: false, .. })).count();
+    let hint = crate::overlay::drag_hint(&t.app);
+    let before: Vec<Entity> = t.w().ecs.query::<(Entity, &Designated)>().iter().map(|(e, _)| e).collect();
+    // The count, whatever this map's trees are called.
+    let expect = format!("Chop · {} ", fresh.len());
+    t.check(!fresh.is_empty(), "a drag over trees not yet marked, for the rings");
+    t.check(
+        rings == fresh.len()
+            && hint.as_deref().is_some_and(|h| h.starts_with(&expect))
+            && fresh.iter().all(|e| !before.contains(e)),
+        format!("a chop drag rings only the trees it will newly mark ({rings} rings, {hint:?})"),
+    );
+    t.shot("chalk-designate").await;
+    t.input(RawInput { mouse: t.screen(b), left_released: true, ..Default::default() }).await;
     t.ticks(1);
+    let now_marked: Vec<Entity> = t.w().ecs.query::<(Entity, &Designated)>().iter().map(|(e, _)| e).collect();
+    let gained: Vec<Entity> = now_marked.iter().copied().filter(|e| !before.contains(e)).collect();
+    let (mut g, mut f) = (gained.clone(), fresh.clone());
+    g.sort();
+    f.sort();
+    t.check(g == f, format!("and the drag marks exactly the ringed trees ({} of {})", gained.len(), fresh.len()));
     let designated = t.count::<(&Thing, &Designated)>();
     t.check(designated > 0 || near_tree.is_none(), format!("dragging designates trees ({designated})"));
+    // A click on a tree already marked is refused, and says why.
+    if let Some(p) = near_tree {
+        t.click(t.screen(p)).await;
+        t.frame().await;
+        let why = crate::overlay::drag_hint(&t.app);
+        t.check(why.as_deref() == Some("Already marked"), format!("a click on a marked tree says so ({why:?})"));
+        // Moved and clicked in one frame: the refusal is for the cell
+        // clicked, not the one the last frame's preview was made for.
+        if let Some(q) = bare {
+            t.input(RawInput { mouse: t.screen(q), ..Default::default() }).await;
+            t.input(RawInput { mouse: t.screen(p), left_pressed: true, left_released: true, ..Default::default() })
+                .await;
+            let why = t.app.refused.as_ref().map(|r| r.0.clone());
+            t.check(
+                why.as_deref() == Some("Already marked"),
+                format!("a click that moved says why for its cell ({why:?})"),
+            );
+        }
+        // Dropping the tool takes its refusal with it.
+        t.right_click(t.screen(p)).await;
+        let why = crate::overlay::drag_hint(&t.app);
+        t.check(
+            t.app.tool == Tool::Select && t.app.refused.is_none(),
+            format!("a right click drops the tool and its refusal ({why:?})"),
+        );
+        t.app.tool = Tool::Designate(chop);
+    }
     let wrong = t.w().ecs.query::<(&Thing, &Designated)>().iter().filter(|(_, d)| d.0 != chop).count();
     t.check(wrong == 0, "only chop designations were made");
 

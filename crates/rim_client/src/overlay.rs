@@ -8,6 +8,8 @@
 
 use crate::{draw, App};
 use macroquad::prelude::*;
+use rim_sim::command::Target;
+use rim_sim::defs::DefId;
 use rim_sim::hecs::Entity;
 use rim_sim::world::Pawn;
 use rim_sim::IVec;
@@ -28,6 +30,13 @@ const HOVER_ALPHA: f32 = 0.72;
 const ACK_SECS: f64 = 0.24;
 /// An urgent mark's ring breathes out once in this long.
 const BREATHE_SECS: f64 = 1.8;
+/// A refused click shakes for this long, and says why for this long.
+const SHAKE_SECS: f64 = 0.18;
+const REFUSED_SECS: f64 = 1.4;
+/// A cell with nothing for the tool in hand: a faint frame.
+const FAINT_FRAME: f32 = 0.38;
+/// A new target's dot, before the order makes it real.
+const PREVIEW_DOT: f32 = 0.6;
 /// Everything in a group but the one the inspector shows.
 const GROUP_ALPHA: f32 = 0.7;
 /// A colonist an Alt-drag will take out of the selection.
@@ -174,11 +183,31 @@ pub enum Mark {
         text: String,
         alpha: f32,
     },
+    /// A designate tool on a target: an edge in the designation's hue.
+    Aimed {
+        aim: Aim,
+        color: Color,
+    },
+    /// What an order drag will newly mark (a ring in its hue and the dot
+    /// to come) or, for Cancel, take back (dimmed).
+    Target {
+        aim: Aim,
+        color: Color,
+        cancel: bool,
+    },
+    /// A cell's frame: faint where the tool in hand has nothing to do, or
+    /// shaking where a click was refused.
+    Frame {
+        rect: [f32; 4],
+        alpha: f32,
+    },
     /// A select drag's box, snapped to cells: dashed when it takes
     /// colonists out.
     Marquee {
         rect: [f32; 4],
         dashed: bool,
+        /// Chalk when none; an order's drag takes its hue.
+        color: Option<Color>,
     },
     /// A selected stack's way to where it will be stored, dashed.
     Haul {
@@ -308,6 +337,14 @@ fn footprint(app: &App, t: &rim_sim::world::Thing) -> [f32; 4] {
 /// counted, else its size. The UI draws it, so there's one chip by the
 /// pointer and a theme styles it.
 pub fn drag_hint(app: &App) -> Option<String> {
+    if let Some((text, _, t0)) = &app.refused {
+        if app.chalk.now() - t0 < REFUSED_SECS {
+            return Some(text.clone());
+        }
+    }
+    if let Some(op) = &app.order_preview {
+        return op.hint(app);
+    }
     if let Some(a) = app.drag_start.filter(|_| crate::is_box(app, app.pointer)) {
         let b = app.cam.tile_at(app.pointer.0, app.pointer.1);
         let boxed = crate::boxed_colonists(app, a, b);
@@ -330,6 +367,159 @@ pub fn drag_hint(app: &App) -> Option<String> {
     }
     let a = app.drag_start.filter(|_| app.tool != crate::Tool::Select)?;
     Some(size(a, app.cam.tile_at(app.pointer.0, app.pointer.1)))
+}
+
+/// Where an order's target is on screen.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Aim {
+    Rect([f32; 4]),
+    Disc((f32, f32), f32),
+}
+
+fn aim_of(app: &App, t: &Target) -> Option<Aim> {
+    let z = app.cam.zoom;
+    match *t {
+        Target::Thing(e) => Some(Aim::Rect(footprint(app, &app.sim.world.thing(e)?))),
+        Target::Rock(p) => {
+            let (x, y) = app.cam.to_screen(p.x as f32, p.y as f32);
+            Some(Aim::Rect([x, y, z, z]))
+        }
+        Target::Creature(e) => draw::pawn_disc(app, e).map(|(c, r)| Aim::Disc(c, r)),
+    }
+}
+
+/// What a designate or cancel tool would do at the pointer, or across its
+/// drag, from the sim's own previews (DESIGN.md §6f). Made once a frame.
+pub struct OrderPreview {
+    /// The designation, or none for Cancel.
+    pub designation: Option<DefId>,
+    pub dragging: bool,
+    /// The drag's first and last cells (the pointer's cell twice when not
+    /// dragging).
+    pub a: IVec,
+    pub b: IVec,
+    /// What it would newly mark, or for Cancel take back.
+    pub targets: Vec<Target>,
+    /// Hovering one cell: what's there is marked this way already.
+    pub marked: bool,
+}
+
+/// The rectangle a designation's order covers: a click for a creature
+/// takes a generous box, so moving targets are caught.
+pub fn designate_box(app: &App, d: DefId, a: IVec, b: IVec) -> (IVec, IVec) {
+    if app.sim.world.defs.designations[d as usize].targets == rim_sim::defs::Targets::Creature && a == b {
+        (a.offset(-1, -1), b.offset(1, 1))
+    } else {
+        (a, b)
+    }
+}
+
+impl OrderPreview {
+    /// The tool in hand's preview at the pointer, or across its drag.
+    pub fn of(app: &App) -> Option<OrderPreview> {
+        let designation = match app.tool {
+            crate::Tool::Designate(d) => Some(d),
+            crate::Tool::Cancel => None,
+            _ => return None,
+        };
+        if app.drag_start.is_none() && app.hover_cell.is_none() {
+            return None;
+        }
+        let cell = app.cam.tile_at(app.pointer.0, app.pointer.1);
+        let a = app.drag_start.unwrap_or(cell);
+        Some(OrderPreview::between(app, designation, a, cell, app.drag_start.is_some()))
+    }
+
+    /// What `designation`, or Cancel for none, would do from `a` to `b`.
+    pub fn between(app: &App, designation: Option<DefId>, a: IVec, b: IVec, dragging: bool) -> OrderPreview {
+        let w = &app.sim.world;
+        let targets = match designation {
+            Some(d) => {
+                let (a, b) = designate_box(app, d, a, b);
+                rim_sim::command::designate_preview(w, d, a, b)
+            }
+            None => rim_sim::command::cancel_preview(w, a, b)
+                .into_iter()
+                .map(|e| if w.ecs.get::<&Pawn>(e).is_ok() { Target::Creature(e) } else { Target::Thing(e) })
+                .collect(),
+        };
+        let marked = designation.is_some_and(|d| {
+            let has = |e: Entity| w.ecs.get::<&rim_sim::world::Designated>(e).is_ok_and(|m| m.0 == d);
+            if !targets.is_empty() {
+                return false;
+            }
+            if w.defs.designations[d as usize].targets == rim_sim::defs::Targets::Creature {
+                // A creature's click takes a box: anything marked in it.
+                let (lo, hi) = designate_box(app, d, a, b);
+                let inside = |p: IVec| {
+                    p.x >= lo.x.min(hi.x) && p.x <= lo.x.max(hi.x) && p.y >= lo.y.min(hi.y) && p.y <= lo.y.max(hi.y)
+                };
+                return w.pawns.iter().any(|&e| w.pawn_pos(e).is_some_and(inside) && has(e));
+            }
+            [w.map.fixture_at(b), w.map.floor_at(b)].into_iter().flatten().any(has)
+        });
+        OrderPreview { designation, dragging, a, b, targets, marked }
+    }
+
+    /// What its targets are called: "oak tree", "oak trees", "things".
+    fn noun(&self, app: &App) -> String {
+        let w = &app.sim.world;
+        let name = |t: &Target| match *t {
+            Target::Thing(e) => w.thing(e).map(|th| w.defs.thing(th.def).label.clone()),
+            Target::Rock(_) => Some("rock".to_string()),
+            Target::Creature(e) => w.ecs.get::<&Pawn>(e).ok().map(|p| w.defs.creature(p.def).label.clone()),
+        };
+        let names: Vec<String> = self.targets.iter().filter_map(name).collect();
+        match (names.first(), names.iter().all(|n| Some(n) == names.first())) {
+            (Some(n), true) => plural(n, names.len()),
+            _ => plural("thing", names.len()),
+        }
+    }
+
+    /// The pointer's hint: "Chop · oak tree", "Chop · 4 oak trees",
+    /// "Cancel · 3 walls", "Already marked"; nothing over a cell with
+    /// nothing to do.
+    pub fn hint(&self, app: &App) -> Option<String> {
+        let verb = match self.designation {
+            Some(d) => app.sim.world.defs.designations[d as usize].label.clone(),
+            None => "Cancel".to_string(),
+        };
+        let n = self.targets.len();
+        if self.marked && !self.dragging {
+            return Some("Already marked".into());
+        }
+        Some(match (n, self.dragging) {
+            (0, false) => return None,
+            (0, true) if self.designation.is_some() => format!("{verb} · nothing new"),
+            (0, true) => format!("{verb} · nothing"),
+            (1, false) => format!("{verb} · {}", self.noun(app)),
+            _ => format!("{verb} · {n} {}", self.noun(app)),
+        })
+    }
+
+    /// Why a click here did nothing.
+    pub fn refusal(&self, app: &App) -> String {
+        match self.designation {
+            _ if self.marked => "Already marked".into(),
+            Some(d) => format!("Nothing to {} here", app.sim.world.defs.designations[d as usize].label.to_lowercase()),
+            None => "Nothing to cancel here".into(),
+        }
+    }
+}
+
+/// `label`, counted: "wall", "walls", "workbenches", "berry bushes".
+fn plural(label: &str, n: usize) -> String {
+    if n == 1 {
+        return label.to_string();
+    }
+    let consonant_y = label.ends_with('y') && !["ay", "ey", "oy", "uy"].iter().any(|e| label.ends_with(e));
+    if consonant_y {
+        format!("{}ies", &label[..label.len() - 1])
+    } else if ["s", "x", "ch", "sh"].iter().any(|e| label.ends_with(e)) {
+        format!("{label}es")
+    } else {
+        format!("{label}s")
+    }
 }
 
 /// A drag's size in cells: "5 × 4".
@@ -518,7 +708,7 @@ pub fn scene(app: &App) -> Scene {
         let (lo, hi) = ((a.x.min(b.x), a.y.min(b.y)), (a.x.max(b.x) + 1, a.y.max(b.y) + 1));
         let (x0, y0) = cam.to_screen(lo.0 as f32, lo.1 as f32);
         let (x1, y1) = cam.to_screen(hi.0 as f32, hi.1 as f32);
-        marks.push(Mark::Marquee { rect: [x0, y0, x1 - x0, y1 - y0], dashed: app.subtract });
+        marks.push(Mark::Marquee { rect: [x0, y0, x1 - x0, y1 - y0], dashed: app.subtract, color: None });
         // Who the box will pick: with Shift, only the newcomers.
         if !app.subtract {
             for &e in boxed.iter().filter(|e| !(app.shift && picked.contains(e))) {
@@ -615,6 +805,40 @@ pub fn scene(app: &App) -> Scene {
         for gy in (y0..=y1 + 1).filter(|g| g % apart == 0) {
             let (_, y) = cam.to_screen(0.0, gy as f32);
             marks.push(Mark::Label { at: (col_right + 3.0, y + 2.0), text: gy.to_string(), alpha: majors });
+        }
+    }
+    // An order tool: what it would mark, or take back, in its hue.
+    if let Some(op) = &app.order_preview {
+        let hue = match op.designation {
+            Some(d) => crate::rgb(w.defs.designations[d as usize].rgb),
+            None => p.chalk,
+        };
+        // Only what's on screen: a big drag is mostly off it.
+        let aims = op.targets.iter().filter_map(|t| aim_of(app, t)).filter(|aim| match *aim {
+            Aim::Rect(r) => on_screen(r),
+            Aim::Disc((x, y), r) => on_screen([x - r, y - r, 2.0 * r, 2.0 * r]),
+        });
+        if op.dragging {
+            let (lo, hi) = ((op.a.x.min(op.b.x), op.a.y.min(op.b.y)), (op.a.x.max(op.b.x) + 1, op.a.y.max(op.b.y) + 1));
+            let (x0, y0) = cam.to_screen(lo.0 as f32, lo.1 as f32);
+            let (x1, y1) = cam.to_screen(hi.0 as f32, hi.1 as f32);
+            let cancel = op.designation.is_none();
+            marks.push(Mark::Marquee { rect: [x0, y0, x1 - x0, y1 - y0], dashed: cancel, color: Some(hue) });
+            marks.extend(aims.map(|aim| Mark::Target { aim, color: hue, cancel }));
+        } else if op.targets.is_empty() {
+            let (x, y) = cam.to_screen(op.b.x as f32, op.b.y as f32);
+            marks.push(Mark::Frame { rect: [x, y, cam.zoom, cam.zoom], alpha: FAINT_FRAME });
+        } else {
+            marks.extend(aims.map(|aim| Mark::Aimed { aim, color: hue }));
+        }
+    }
+    // A refused click: its cell's frame shakes, and the hint says why.
+    if let Some((_, cell, t0)) = &app.refused {
+        let k = ((now - t0) / SHAKE_SECS) as f32;
+        if k < 1.0 {
+            let shake = if app.chalk.instant { 0.0 } else { (k * std::f32::consts::TAU * 2.0).sin() * 3.0 * (1.0 - k) };
+            let (x, y) = cam.to_screen(cell.x as f32, cell.y as f32);
+            marks.push(Mark::Frame { rect: [x + shake, y, cam.zoom, cam.zoom], alpha: 1.0 });
         }
     }
     // With the storage overlay on, a selected loose stack shows where it
@@ -758,8 +982,8 @@ pub fn ring_radius(p: &Palette, m: &Mark) -> Option<f32> {
 
 /// A select drag's box: a faint chalk fill and a hairline on a keyline,
 /// broken into dashes when it takes colonists out.
-fn marquee(p: &Palette, [x, y, w, h]: [f32; 4], broken: bool) {
-    draw_rectangle(x, y, w, h, fade(p.chalk, MARQUEE_FILL));
+fn marquee(p: &Palette, [x, y, w, h]: [f32; 4], broken: bool, c: Color) {
+    draw_rectangle(x, y, w, h, fade(c, MARQUEE_FILL));
     let t = p.hair;
     // Top and bottom run the full width; the sides fit between them, so
     // no two pieces share a pixel and the keyline is even at the corners.
@@ -787,7 +1011,7 @@ fn marquee(p: &Palette, [x, y, w, h]: [f32; 4], broken: bool) {
                 (rx - 1.0, ky0, rw + 2.0, (ky1 - ky0).max(0.0))
             };
             draw_rectangle(key.0, key.1, key.2, key.3, p.keyline);
-            draw_rectangle(rx, ry, rw, rh, p.chalk);
+            draw_rectangle(rx, ry, rw, rh, c);
             d += dash + gap;
         }
     }
@@ -805,6 +1029,23 @@ fn chevron(p: &Palette, (x, y): (f32, f32), angle: f32) {
     draw_triangle(tip, notch, fore, p.chalk);
 }
 
+/// A target an order drag will mark: a ring in its hue and its dot to
+/// come, or for Cancel a dimming over what it takes back.
+fn target(p: &Palette, aim: Aim, c: Color, cancel: bool) {
+    match (aim, cancel) {
+        (Aim::Rect([x, y, w, h]), true) => draw_rectangle(x, y, w, h, fade(p.keyline, 0.8)),
+        (Aim::Disc((x, y), r), true) => draw_circle(x, y, r, fade(p.keyline, 0.8)),
+        (Aim::Rect([x, y, w, h]), false) => {
+            ring(p, (x + w / 2.0, y + h / 2.0), w.min(h) / 2.0 + 0.5, p.stroke, c, 1.0);
+            // The designation's dot, as it will be: top-right, on a keyline.
+            let (dx, dy, r) = (x + w - w.min(h) * 0.18, y + w.min(h) * 0.18, (w.min(h) * 0.13).max(2.0));
+            draw_circle(dx, dy, r + 1.0, fade(p.keyline, PREVIEW_DOT));
+            draw_circle(dx, dy, r, fade(c, PREVIEW_DOT));
+        }
+        (Aim::Disc(center, r), false) => ring(p, center, r + 2.0, p.stroke, c, 1.0),
+    }
+}
+
 /// Paint the scene's world marks. Chips are text: `chips` turns them into
 /// the UI's draw list.
 pub fn draw(scene: &Scene, p: &Palette, zoom: f32) {
@@ -812,7 +1053,22 @@ pub fn draw(scene: &Scene, p: &Palette, zoom: f32) {
         match m {
             Mark::Path { points, alpha } => dotted(p, points, p.chalk, 0.6 * alpha),
             Mark::Haul { from, to } => dashed(p, *from, *to, zoom),
-            Mark::Marquee { rect, dashed: broken } => marquee(p, *rect, *broken),
+            Mark::Marquee { rect, dashed: broken, color } => marquee(p, *rect, *broken, color.unwrap_or(p.chalk)),
+            Mark::Aimed { aim, color } => match *aim {
+                Aim::Rect(r) => {
+                    let inner = [r[0] + p.stroke / 2.0, r[1] + p.stroke / 2.0, r[2] - p.stroke, r[3] - p.stroke];
+                    let radius = (r[2].min(r[3]) * 0.16).min(5.0);
+                    rounded_edge(inner, radius, p.stroke + 2.0, p.keyline);
+                    rounded_edge(inner, radius, p.stroke, *color);
+                }
+                Aim::Disc(c, r) => ring(p, c, r - p.stroke / 2.0, p.stroke, *color, 1.0),
+            },
+            Mark::Target { aim, color, cancel } => target(p, *aim, *color, *cancel),
+            Mark::Frame { rect, alpha } => {
+                let [x, y, w, h] = *rect;
+                draw_rectangle_lines(x - 1.0, y - 1.0, w + 2.0, h + 2.0, p.hair + 2.0, fade(p.keyline, *alpha));
+                draw_rectangle_lines(x, y, w, h, p.hair, fade(p.chalk, *alpha));
+            }
             Mark::Hover { rect, alpha } => {
                 let a = HOVER_ALPHA * alpha;
                 // On the footprint's edge: the line sits just inside it.
@@ -903,6 +1159,17 @@ pub fn chips(scene: &Scene, p: &Palette, text: &mut rim_ui::text::Text, dpi: f32
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn counted_labels_read_as_english() {
+        assert_eq!(plural("wall", 1), "wall");
+        assert_eq!(plural("wall", 2), "walls");
+        assert_eq!(plural("workbench", 3), "workbenches");
+        assert_eq!(plural("berry bush", 2), "berry bushes");
+        assert_eq!(plural("quarry", 2), "quarries");
+        assert_eq!(plural("tray", 2), "trays");
+        assert_eq!(plural("thing", 0), "things");
+    }
 
     #[test]
     fn a_theme_that_sets_chalk_changes_the_selection_colour() {

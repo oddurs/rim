@@ -4,9 +4,9 @@
 
 mod common;
 
-use rim_sim::command::{apply, build_preview, designate_preview, Blocker, Place, Target};
+use rim_sim::command::{apply, build_preview, cancel_preview, designate_preview, Blocker, Place, Target};
 use rim_sim::hecs::Entity;
-use rim_sim::world::{Blueprint, Designated, Planned, Thing, World};
+use rim_sim::world::{Blueprint, Designated, Planned, Replaces, Thing, World};
 use rim_sim::{Command, IVec, Sim};
 use std::collections::BTreeSet;
 
@@ -343,6 +343,57 @@ fn apply_does_what_it_did_before_the_previews() {
                 old_apply(&mut old.world, o.clone());
                 assert!(summary(&new.world) == summary(&old.world), "seed {seed} rect {i}: {o:?} differs");
             }
+        }
+    }
+}
+
+/// A Cancel takes back exactly what `cancel_preview` names: every mark,
+/// plan and blueprint there goes, and nothing else changes.
+#[test]
+fn cancelling_takes_back_what_the_preview_names() {
+    for seed in 1..=10 {
+        let mut s = Sim::new(&common::mods(), seed).unwrap();
+        let c = s.world.colony_center().unwrap();
+        let defs = s.world.defs.clone();
+        let chop = defs.lookup("designation", "chop").unwrap();
+        let wall = defs.thing_id("wall").unwrap();
+        let stuff = defs.thing_id("wood");
+        s.push(Command::Designate { designation: chop, a: c.offset(-15, -15), b: c.offset(15, 15) });
+        s.push(Command::Build { thing: wall, stuff, a: c.offset(-4, 3), b: c.offset(4, 3), facing: 0 });
+        // Woodpiles over the trees: a plan bigger than a cell marks its
+        // whole footprint, and cancelling one cell takes back the rest.
+        let pile = defs.thing_id("primitive:woodpile").unwrap();
+        s.push(Command::Build { thing: pile, stuff: None, a: c.offset(-15, -15), b: c.offset(15, 15), facing: 0 });
+        // Standing wood walls planned over in stone: replacements, which
+        // sit on no layer of the map.
+        let (wood, stone) = (defs.thing_id("wood").unwrap(), defs.thing_id("stone").unwrap());
+        for x in -4..=4 {
+            s.world.spawn_fixture_of(wall, c.offset(x, -3), false, Some(wood));
+        }
+        s.push(Command::Build { thing: wall, stuff: Some(stone), a: c.offset(-4, -3), b: c.offset(4, -3), facing: 0 });
+        s.step();
+        assert!(s.world.ecs.query::<&Replaces>().iter().count() > 0, "seed {seed}: a wall planned over in stone");
+        for (a, b) in rects(seed, 6, c) {
+            let taken: BTreeSet<Entity> = cancel_preview(&s.world, a, b).into_iter().collect();
+            let held = |w: &World| -> BTreeSet<Entity> {
+                w.ecs
+                    .query::<(Entity, &Thing)>()
+                    .iter()
+                    .map(|(e, _)| e)
+                    .chain(w.pawns.iter().copied())
+                    .filter(|&e| {
+                        w.ecs.get::<&Designated>(e).is_ok()
+                            || w.ecs.get::<&Planned>(e).is_ok()
+                            || w.ecs.get::<&Blueprint>(e).is_ok()
+                    })
+                    .collect()
+            };
+            let before = held(&s.world);
+            apply(&mut s.world, Command::Cancel { a, b });
+            let after = held(&s.world);
+            let gone: BTreeSet<Entity> = before.difference(&after).copied().collect();
+            assert_eq!(gone, taken, "seed {seed}: {a:?}..{b:?}");
+            assert!(after.is_subset(&before), "a cancel adds nothing");
         }
     }
 }
