@@ -621,7 +621,7 @@ pub fn comfortable_spot(w: &mut World, p: &mut Pawn) -> Option<IVec> {
         return None;
     }
     let mut best = (here, p.pos);
-    let comfortable = w.pf.flood(&w.map, p.pos, COMFORT_SEARCH, |c| {
+    let comfortable = w.pf.flood(&w.map, p.pos, COMFORT_SEARCH, p.faction, |c| {
         let o = off(c);
         if o < best.0 {
             best = (o, c);

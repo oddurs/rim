@@ -13,6 +13,21 @@ of = [{ input = "year", curve = [
   [0.625, 9.0], [0.875, -6.0], [1.0, 6.0],
 ] }]
 
+# Below the surface: the year's mean of the curve above (8.2°C), with a
+# fifth of the season's swing reaching -1 an eighth of a year late, as the
+# ground warms and cools slowly. Deeper levels keep the mean.
+[patch.set.below.mean]
+of = [8.2]
+
+[patch.set.below.season]
+of = [
+  { input = "year", curve = [
+    [0.0, -2.84], [0.125, -0.44], [0.2583, 0.36], [0.325, 0.46],
+    [0.5, 2.16], [0.75, 0.16], [1.0, -2.84],
+  ] },
+  { input = "depth", curve = [[1, 1.0], [2, 0.0]] },
+]
+
 # The daily swing: a little wider in summer, narrower in winter, and damped
 # under cloud (cloudy nights stay warmer, cloudy days cooler).
 [patch.set.ambient.day]

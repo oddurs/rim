@@ -181,11 +181,14 @@ impl Pathfinder {
     /// (in steps) first, doors open whoever owns them. `visit` sees each
     /// cell in turn and ends the fill by returning `Some`; the fill also
     /// ends once more than `limit` cells have been reached.
+    /// Visit cells `who` can walk to from `start`, nearest first, up and
+    /// down stairs too, until `visit` finds something or `limit` cells.
     pub fn flood<T>(
         &mut self,
         map: &Map,
         start: IVec,
         limit: usize,
+        who: Faction,
         mut visit: impl FnMut(IVec) -> Option<T>,
     ) -> Option<T> {
         let gen = self.next_gen(map);
@@ -211,6 +214,14 @@ impl Pathfinder {
                     continue;
                 }
                 let qi = map.idx(c.offset(dx, dy));
+                if self.closed_gen[qi] != gen {
+                    self.closed_gen[qi] = gen;
+                    reached += 1;
+                    queue.push_back(qi as u32);
+                }
+            }
+            // A cellar is somewhere to go (DESIGN.md §6d).
+            if let Some((qi, _)) = map.through(ci as usize, who) {
                 if self.closed_gen[qi] != gen {
                     self.closed_gen[qi] = gen;
                     reached += 1;

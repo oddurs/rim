@@ -46,6 +46,15 @@ of = [{ input = "hour", curve = [
   [15, 1.0], [18, 0.6875], [21, 0.0], [24, -0.6875],
 ] }]
 
+# Below the surface (DESIGN.md §6d) the ground keeps the year's mean, with
+# no day in it and no weather: 10°C in core's unchanging year. Each level
+# down is a degree warmer. The weather plugin bends `mean` to its seasons.
+[field.below.mean]
+of = [10.0]
+
+[field.below.deep]
+of = [{ input = "depth", curve = [[1, 0.0], [4, 3.0]] }]
+
 # The sky: how bright the sky bodies are, before weather. Core has one sun,
 # as a term a sky mod can patch or join (a second sun, a moon). Weather never
 # touches this field, so a modded sky keeps the cloud dimming in `light`.

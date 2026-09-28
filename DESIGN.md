@@ -2070,6 +2070,17 @@ Temperature below comes from terms: −1 follows the year's mean with a
 damped swing, and deeper is steady and warmer. Light is zero until
 something emits it.
 
+- A field's `below` terms give its outdoor value under the surface and may
+  read `depth`, the levels down; a field without them is 0 there, so no
+  daylight, wind or rain reaches down with no special case. Pushes (a cold
+  snap) stay on the surface. An underground room leaks toward its own
+  level's value.
+- Core keeps 10°C at −1 and a degree more a level down. The weather plugin
+  gives −1 its year's mean (8.2°C) with a fifth of the season's swing an
+  eighth of a year late: 5.4°C in midwinter against −6°C up top.
+- A colonist looking for warmth searches through stairs as well as across
+  the level, so the cellar is somewhere to go.
+
 ### Building up comes second
 
 Digging removes material from a solid world; building up adds floors to an

@@ -72,8 +72,8 @@ pub enum InputDef {
 #[serde(deny_unknown_fields)]
 pub struct SourceDef {
     /// `"year"` (0..1), `"hour"` (0..24), `"sky"` (0 in an enclosed room, 1
-    /// elsewhere), or for a stock field's rate `"self"`, `"base"` or
-    /// `"above_base"`.
+    /// elsewhere), `"depth"` (levels below the surface, 0 on it), or for a
+    /// stock field's rate `"self"`, `"base"` or `"above_base"`.
     pub input: Option<String>,
     /// Another field's outdoor value.
     pub ambient: Option<String>,
@@ -104,6 +104,7 @@ pub type TermsDef = BTreeMap<String, TermDef>;
 enum Src {
     Year,
     Hour,
+    Depth,
     Sky,
     Own,
     Base,
@@ -200,6 +201,10 @@ pub trait Env {
     fn sky(&self) -> i64 {
         Q
     }
+    /// Levels below the surface, times `Q`: 0 on it, and by default.
+    fn depth(&self) -> i64 {
+        0
+    }
     /// A stock field's own value where it is being worked out.
     fn own(&self) -> i64 {
         0
@@ -290,6 +295,7 @@ impl Terms {
             let mut v = match i.src {
                 Src::Year => env.year(),
                 Src::Hour => env.hour(),
+                Src::Depth => env.depth(),
                 Src::Sky => env.sky(),
                 Src::Own => env.own(),
                 Src::Base => env.base(),
@@ -334,12 +340,15 @@ fn compile_source(s: &SourceDef, ctx: &str, names: &dyn Names, warnings: &mut Ve
         match i.as_str() {
             "year" => Src::Year,
             "hour" => Src::Hour,
+            "depth" => Src::Depth,
             "sky" => Src::Sky,
             "self" => Src::Own,
             "base" => Src::Base,
             "above_base" => Src::AboveBase,
             other => {
-                return Err(format!("{ctx}: unknown input '{other}' (have: year, hour, sky, self, base, above_base)"))
+                return Err(format!(
+                    "{ctx}: unknown input '{other}' (have: year, hour, depth, sky, self, base, above_base)"
+                ))
             }
         }
     } else if let Some(a) = &s.ambient {
