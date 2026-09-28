@@ -440,6 +440,10 @@ impl Side {
 /// cooldown is 90 ticks) doesn't flicker it in and out of the cache.
 pub const WORKSITE_GRACE: u64 = 120;
 
+/// Ticks between putting water's depth on the map (DESIGN.md §6d): regions
+/// rebuild at most this often while a basin rises.
+pub const WATER_EVERY: u64 = 60;
+
 /// What a built thing is made of. Survives construction, so a finished
 /// wall still knows it is stone.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -1427,6 +1431,9 @@ impl World {
             if !blueprint && td.build.as_ref().is_some_and(|b| b.spans) {
                 self.map.set_span(pos, true);
             }
+            if !blueprint && td.holds_water {
+                self.map.set_holds_water(pos, true);
+            }
         }
         if !blueprint {
             self.fields.add_emitters(&defs, &self.map, e, def, pos);
@@ -1922,6 +1929,80 @@ impl World {
             self.events.push(GameEvent::Breach { at: b.at, source: b.source });
         }
         self.water.step(crate::TICKS_PER_DAY);
+        if self.tick.is_multiple_of(WATER_EVERY) {
+            self.apply_water();
+        }
+    }
+
+    /// What the water now does (DESIGN.md §6d): its cost on the map, so
+    /// regions rebuild at most this often while it rises; who stands in
+    /// rising water past wading makes for dry ground; who has no air drowns.
+    fn apply_water(&mut self) {
+        let Some(f) = self.defs.fluids.first().cloned() else { return };
+        let wading = f.wade_cost.min(crate::map::DEEP as u32 - 1) as u16;
+        let cost_of = |d: u32| match d {
+            d if d >= f.swim => crate::map::DEEP,
+            d if d >= f.wade => wading,
+            _ => 0,
+        };
+        let mut changed = Vec::new();
+        self.water.costs(cost_of, &mut changed);
+        for (c, cost) in changed {
+            self.map.set_water(c as usize, cost);
+        }
+        self.map.ensure_regions();
+        let defs = self.defs.clone();
+        // A share of health an hour, taken this many ticks at a time.
+        let per = WATER_EVERY as f64 / (crate::TICKS_PER_DAY as f64 / 24.0);
+        for k in 0..self.pawns.len() {
+            let e = self.pawns[k];
+            let Ok(p) = self
+                .ecs
+                .get::<&Pawn>(e)
+                .map(|p| (p.pos, p.def, p.faction, p.active && !p.dead, matches!(p.job, Job::Flee { .. })))
+            else {
+                continue;
+            };
+            let (pos, def, faction, alive, fleeing) = p;
+            if !alive {
+                continue;
+            }
+            let depth = self.water_depth(pos);
+            if depth >= f.no_air {
+                let max = defs.creature(def).max_hp;
+                let loss = (max as f64 * f.drown * per).round().max(1.0) as i32;
+                if let Ok(mut p) = self.ecs.get::<&mut Pawn>(e) {
+                    p.hp -= loss;
+                    if p.hp <= 0 {
+                        p.dead = true;
+                    }
+                }
+            }
+            if depth >= f.wade && !fleeing && self.water.rising(&self.map, pos) {
+                if let Some(to) = self.dry_spot(pos, faction, f.wade) {
+                    crate::ai::set_job(self, e, Job::Flee { to, until: self.tick + 1200 });
+                }
+            }
+        }
+    }
+
+    /// The nearest ground `who` can reach from `from` where the water is
+    /// under `wade`: on this level, or the one above, which water never
+    /// climbs to. Call `ensure_regions` first.
+    fn dry_spot(&self, from: IVec, who: Faction, wade: u32) -> Option<IVec> {
+        (0..=24).find_map(|r| {
+            [from.z, from.z + 1].into_iter().find_map(|z| {
+                (-r..=r)
+                    .flat_map(|dy| (-r..=r).map(move |dx| (dx, dy)))
+                    .filter(|&(dx, dy): &(i32, i32)| dx.abs().max(dy.abs()) == r)
+                    .map(|(dx, dy)| IVec::at(from.x + dx, from.y + dy, z))
+                    .find(|&q| {
+                        self.map.passable(q)
+                            && self.water_depth(q) < wade
+                            && self.map.can_reach_for(from, Goal::Cell(q), who)
+                    })
+            })
+        })
     }
 
     /// Water at `p`, in sevenths of a cell (DESIGN.md §6d).

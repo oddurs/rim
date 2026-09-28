@@ -1916,6 +1916,9 @@ pub fn complete_building(w: &mut World, bp: Entity) {
     for (d, n) in refund.into_iter().filter(|&(_, n)| n > 0) {
         w.place_item(d, t.pos, n);
     }
+    if td.holds_water {
+        w.map.set_holds_water(t.pos, true);
+    }
     let span = w.support_span(bp);
     if span > 0 {
         w.set_support(bp, span);

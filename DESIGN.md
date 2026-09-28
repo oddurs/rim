@@ -2016,6 +2016,16 @@ What was built (3979868c):
   flooded hall rebuilds its level in 0.6 ms (median 1.6 ms of 30), measured
   at a load average above 100, so these are upper bounds. Incremental
   rebuilds are the next step if mining makes that show.
+- Depth's effect (695ef115): `[[fluid]]` gives wade, swim and no-air
+  depths; basins hold the first fluid loaded. Every 60 ticks the water's
+  cost goes on the map: wading adds `wade_cost` to a step, and from `swim`
+  a cell has no footing unless a floor or span stands over it, so a moat
+  can still be bridged. Regions rebuild then and only then. Whoever
+  stands in rising water past wading makes for the nearest dry ground on
+  their level or the one above, drafted or not; with no air they lose
+  `drown` of their health an hour. A door with `holds_water` stops water.
+  Swimming waits on movement classes (3fea3b3d): until then nobody swims,
+  and a trench is air, which nobody walks anyway.
 
 ### Seeing it
 

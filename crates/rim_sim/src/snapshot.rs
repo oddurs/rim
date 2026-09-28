@@ -852,6 +852,9 @@ impl Snapshot {
                     if !*blueprint && td.build.as_ref().is_some_and(|b| b.spans) {
                         w.map.set_span(t.pos, true);
                     }
+                    if !*blueprint && td.holds_water {
+                        w.map.set_holds_water(t.pos, true);
+                    }
                     if !*blueprint {
                         let span = w.support_span(*e);
                         if span > 0 {
