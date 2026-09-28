@@ -2031,7 +2031,7 @@ fn dress(w: &mut World, e: Entity, p: &mut Pawn) -> Option<Job> {
     let defs = w.defs.clone();
     let nd = p.needs.iter().map(|n| defs.need(n.0)).find(|nd| nd.satisfier == Satisfier::Field && nd.insulated)?;
     let out = w.fields.ambient(nd.field_r as usize);
-    let worn = w.insulation(p);
+    let worn = w.warmth_worn(p);
     if out > nd.comfort[0] + UNDRESS_ABOVE {
         let warmest =
             p.worn.iter().copied().max_by(|&a, &b| warmth(w, a).total_cmp(&warmth(w, b)).then(a.id().cmp(&b.id())))?;
@@ -2046,7 +2046,7 @@ fn dress(w: &mut World, e: Entity, p: &mut Pawn) -> Option<Job> {
     let on_layer = |w: &World, layer: &str| {
         p.worn.iter().filter(|&&g| w.layer_of(g) == Some(layer)).map(|&g| warmth(w, g)).fold(0.0, f64::max)
     };
-    let takes = |d: DefId| defs.thing(d).apparel.as_ref().is_some_and(|a| a.insulation > 0.0);
+    let takes = |d: DefId| defs.thing(d).apparel.as_ref().is_some_and(|a| a.warmth > 0.0);
     let seen: &World = w;
     let (_, item) = nearest_stack_where(seen, e, p.pos, takes, |g, _| {
         seen.layer_of(g).is_some_and(|l| warmth(seen, g) > on_layer(seen, l))
@@ -2055,11 +2055,9 @@ fn dress(w: &mut World, e: Entity, p: &mut Pawn) -> Option<Job> {
     Some(Job::Dress { item })
 }
 
-/// A garment's insulation, times its material's factor.
+/// A garment's warmth, times the material factor its def names.
 fn warmth(w: &World, g: Entity) -> f64 {
-    let Some(t) = w.thing(g) else { return 0.0 };
-    let made_of = w.ecs.get::<&MadeOf>(g).ok().map(|m| m.0);
-    w.defs.thing(t.def).apparel.as_ref().map_or(0.0, |a| a.insulation * w.defs.factor(made_of, "insulation"))
+    w.garment_warmth(g)
 }
 
 fn run_dress(w: &mut World, e: Entity, p: &mut Pawn, item: Entity) -> Option<Job> {

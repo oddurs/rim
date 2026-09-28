@@ -375,11 +375,12 @@ of = [{ input = "hour", curve = [[3, -1.0], [9, 0.0], [15, 1.0], [21, 0.0], [27,
   heat and light as emitters and which colonists beat out near home (a
   designation and a Firefight work type). Lightning strikes in storms by
   weather type; in rain it fizzles, in the plugin's dry storm it catches.
-- **Apparel.** A thing with `apparel = { layer, insulation, wear_per_day }`
+- **Apparel.** A thing with `apparel = { layer, warmth, factor, wear_per_day }`
   is worn, one garment a layer, off the map like a held tool (`Pawn::worn`,
   a `Worn` component). A field need marked `insulated` (core's warmth) has
-  its comfort's cold end lowered by what's worn, each garment's insulation
-  times its material's `insulation` factor. A colonist dresses when it's
+  its comfort's cold end lowered by what's worn: each garment's warmth,
+  times the material factor its def names (`factor`; the engine knows no
+  material property by name). A colonist dresses when it's
   colder outdoors than they can stand, fetching the warmest garment for a
   layer not worn warmer, and takes the warmest off once it's 6° above
   comfort; garments wear out by the day. Primitive's hide wrap and leather

@@ -2151,18 +2151,17 @@ impl World {
         }
     }
 
-    /// Degrees of warmth what `p` wears adds: each garment's insulation
-    /// times its material's `insulation` factor.
-    pub fn insulation(&self, p: &Pawn) -> f64 {
-        p.worn
-            .iter()
-            .filter_map(|&g| {
-                let t = self.thing(g)?;
-                let a = self.defs.thing(t.def).apparel.as_ref()?;
-                let made_of = self.ecs.get::<&MadeOf>(g).ok().map(|m| m.0);
-                Some(a.insulation * self.defs.factor(made_of, "insulation"))
-            })
-            .sum()
+    /// Degrees of warmth what `p` wears adds.
+    pub fn warmth_worn(&self, p: &Pawn) -> f64 {
+        p.worn.iter().map(|&g| self.garment_warmth(g)).sum()
+    }
+
+    /// A garment's warmth, times the material factor its def names.
+    pub fn garment_warmth(&self, g: Entity) -> f64 {
+        let Some(t) = self.thing(g) else { return 0.0 };
+        let Some(a) = self.defs.thing(t.def).apparel.as_ref() else { return 0.0 };
+        let made_of = self.ecs.get::<&MadeOf>(g).ok().map(|m| m.0);
+        a.warmth * a.factor.as_deref().map_or(1.0, |f| self.defs.factor(made_of, f))
     }
 
     /// The layer a garment is worn on.

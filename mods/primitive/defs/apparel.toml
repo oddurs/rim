@@ -1,5 +1,6 @@
 # Clothes: what makes a winter survivable. Worn, a garment lowers the cold
-# end of the warmth need's comfort by its insulation; a colonist dresses
+# end of the warmth need's comfort by its warmth, scaled by what it's made
+# of (the material's insulation factor); a colonist dresses
 # when it's colder out than they can stand, and undresses once it's mild.
 # One garment a layer.
 
@@ -15,7 +16,7 @@ look.layers = [
 hp = 60
 market_value = 6.0
 stack_limit = 1
-apparel = { layer = "body", insulation = 6.0, wear_per_day = 1.0 }
+apparel = { layer = "body", warmth = 6.0, factor = "insulation", wear_per_day = 1.0 }
 
 [[thing]]
 id = "leather_cloak"
@@ -29,7 +30,7 @@ look.layers = [
 hp = 100
 market_value = 14.0
 stack_limit = 1
-apparel = { layer = "outer", insulation = 10.0, wear_per_day = 0.5 }
+apparel = { layer = "outer", warmth = 10.0, factor = "insulation", wear_per_day = 0.5 }
 
 [[crafting.recipe]]
 id = "hide_wrap"

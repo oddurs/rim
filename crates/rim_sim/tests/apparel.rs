@@ -19,7 +19,7 @@ category = "item"
 look.layers = [{ draw = "fill", x = 0.3, y = 0.3, w = 0.4, h = 0.4 }]
 hp = 40
 stack_limit = 1
-apparel = { layer = "neck", insulation = 5.0, wear_per_day = 2.0 }
+apparel = { layer = "neck", warmth = 5.0, wear_per_day = 2.0 }
 "##;
 
 /// One colonist, fed and rested, in Hand, and where it stands.
@@ -68,7 +68,7 @@ fn a_colonist_dresses_for_the_cold_and_undresses_in_the_warmth() {
     assert!(on, "a scarf in the cold");
     let g = worn(&s, me)[0];
     assert!(s.world.map.item_at(s.world.thing(g).unwrap().pos) != Some(g), "off the map");
-    assert!((s.world.insulation(&s.world.ecs.get::<&Pawn>(me).unwrap()) - 5.0).abs() < 1e-9);
+    assert!((s.world.warmth_worn(&s.world.ecs.get::<&Pawn>(me).unwrap()) - 5.0).abs() < 1e-9);
     // Warm again: taken off, and back on the map.
     feels(&mut s, 22.0);
     let off = (0..600).any(|_| {
@@ -98,7 +98,7 @@ fn what_is_worn_keeps_the_cold_off_and_is_saved_and_hashed() {
     assert_eq!(back.world.state_hash(), s.world.state_hash());
 
     // At 7°, three below comfort: bare, the warmth need drains; in a scarf
-    // (5° of insulation), it doesn't.
+    // (5° of warmth), it doesn't.
     let mut bare = Sim::new(&dir, 5).expect("mods load");
     let (bme, _) = alone(&mut bare);
     let (dressed, stripped) = (chill(&mut s, me), chill(&mut bare, bme));
@@ -145,5 +145,5 @@ fn primitive_leather_makes_a_cloak() {
     });
     assert!(made, "three leather make a cloak");
     let cloak = s.world.defs.thing(s.world.defs.thing_id("primitive:leather_cloak").unwrap());
-    assert!(cloak.apparel.as_ref().is_some_and(|a| a.insulation > 0.0), "and it's worn");
+    assert!(cloak.apparel.as_ref().is_some_and(|a| a.warmth > 0.0), "and it's worn");
 }
