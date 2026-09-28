@@ -1496,15 +1496,31 @@ fn run_harvest(
                 if marked {
                     let _ = w.ecs.remove_one::<Designated>(target);
                 }
-                if hd.destroy {
-                    w.despawn_thing(target);
-                } else {
-                    let ready_at = w.tick + (hd.regrow_days * crate::TICKS_PER_DAY as f64) as u64;
-                    w.regrow(target, harvest, ready_at);
-                    w.finish_work(target);
-                    w.map.touch(t.pos);
+                // A plant yields by how grown it is: a sapling felled is a
+                // few sticks, not a trunk.
+                let grown = w.ecs.get::<&Growth>(target).ok().map(|g| *g);
+                let share = grown.map_or(1.0, |g| g.fraction());
+                match (hd.destroy, grown, &defs.thing(t.def).grow) {
+                    (true, _, _) => w.despawn_thing(target),
+                    // Its crop grows back with the plant, cut back to where
+                    // its def says; a winter doesn't regrow it. A harvest
+                    // that gives `regrow_days` keeps to them instead.
+                    (false, Some(mut g), Some(gd)) if hd.regrow_days <= 0.0 => {
+                        g.progress = (gd.after_harvest * GROWN as f64).round() as u16;
+                        let _ = w.ecs.insert_one(target, g);
+                        w.regrow(target, harvest, WHEN_GROWN);
+                        w.finish_work(target);
+                        w.map.touch(t.pos);
+                    }
+                    (false, _, _) => {
+                        let ready_at = w.tick + (hd.regrow_days * crate::TICKS_PER_DAY as f64) as u64;
+                        w.regrow(target, harvest, ready_at);
+                        w.finish_work(target);
+                        w.map.touch(t.pos);
+                    }
                 }
                 for &(yd, n) in &hd.yields_r {
+                    let n = if hd.destroy { ((n as f64 * share).round() as u32).max(1) } else { n };
                     w.place_item(yd, t.pos, n);
                 }
                 if hd.requires_r != 0 {
@@ -1858,6 +1874,10 @@ pub fn complete_building(w: &mut World, bp: Entity) {
             w.events.push(GameEvent::BuildingComplete { id: bp, def: t.def, pos: t.pos });
             return;
         }
+    }
+    // A plant set out by hand starts as a seedling, and grows.
+    if td.grow.is_some() {
+        w.plant_seedling(bp);
     }
     if td.category == crate::defs::Category::Floor {
         w.map.set_floor(t.pos, Some(bp), td.path_cost);

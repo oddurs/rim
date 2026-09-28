@@ -116,6 +116,46 @@ enclosed room and 1 elsewhere. Emitters on a stock field add to its rate, so
 Scripts change it with `rim.field_add(id, x, y, amount)` and
 `rim.field_set(id, x, y, value)`. The values are saved and in the state hash.
 
+### Plants that grow with the weather
+
+A plant grows from a seedling to grown by terms read where it stands:
+
+```toml
+[[thing]]
+id = "reed"
+label = "reed"
+color = "#7a9a50"
+category = "plant"
+natural = true
+spawn = { terrain = ["core:marsh"], density = 0.05, spread = true }
+
+[thing.grow]
+days = 3            # seedling to grown at a rate of 1
+after_harvest = 0.5 # a harvest it survives cuts it back this far
+
+# How fast: 1 is `days`, 0 or less holds it (dormant, drawn faded).
+[thing.grow.rate.growth]
+of = [
+  { field = "core:temperature", curve = [[4, 0.0], [18, 1.0]] },
+  { terrain = "fertility" },
+]
+
+# Health lost a day; at none it dies. A tender plant fears frost.
+[thing.grow.harm.frost]
+of = [{ field = "core:temperature", curve = [[-6, 2.0], [-1, 0.0]] }]
+```
+
+- Every term reads at the plant's cell, like a derived field's: `field`,
+  `terrain`, `near` and `{ input = "sky" }` too. Terms add, so a factor that
+  should multiply goes into the same term's `of`.
+- A harvest with `destroy = false` regrows with the plant: it's ready when
+  the plant is grown again, so nothing regrows in a winter. Give the
+  harvest `regrow_days` to keep to days instead.
+- A plant felled young yields by how grown it is. Wild spread prefers cells
+  where the plant grows fast, and a spread plant starts as a seedling.
+- The weather plugin adds `weather:wetness` to core's oak and berry bush by
+  patching their `growth` term (`mods/weather/defs/plants.toml`).
+
 ### Changing a term
 
 Terms are keyed by label, so a patch changes one term and leaves the rest.

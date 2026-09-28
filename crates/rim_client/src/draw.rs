@@ -26,6 +26,15 @@ pub fn pawn_pos(p: &Pawn, frac: f32) -> (f32, f32) {
     p.drawn_at(frac)
 }
 
+/// What a plant fades toward while dormant, and browns toward when hurt.
+const DORMANT: Color = Color::new(0.55, 0.52, 0.42, 1.0);
+const WITHERED: Color = Color::new(0.45, 0.33, 0.18, 1.0);
+
+/// `c` moved a fraction `k` of the way to `to`, keeping its alpha.
+fn toward(c: Color, to: Color, k: f32) -> Color {
+    Color::new(c.r + (to.r - c.r) * k, c.g + (to.g - c.g) * k, c.b + (to.b - c.b) * k, c.a)
+}
+
 fn shade(c: Color, f: f32) -> Color {
     Color::new((c.r * f).min(1.0), (c.g * f).min(1.0), (c.b * f).min(1.0), c.a)
 }
@@ -224,8 +233,21 @@ pub fn thing(
         None => rgb(td.rgb),
     };
     let c = shade(c, tone.bright);
+    // A growing plant is drawn at its stage's size, from half up to whole,
+    // browned below half health and faded while it's dormant.
+    let (c, size) = match (w.ecs.get::<&Growth>(e).ok().map(|g| *g), &td.grow) {
+        (Some(g), Some(gd)) => {
+            let c = match (g.health < GROWN / 2, g.dormant) {
+                (true, _) => toward(c, WITHERED, 0.45),
+                (false, true) => toward(c, DORMANT, 0.35),
+                _ => c,
+            };
+            (c, 0.5 + 0.5 * g.stage(gd.stages) as f32 / gd.stages as f32)
+        }
+        _ => (c, 1.0),
+    };
     // Scaled about the middle of the bottom edge, where it stands.
-    let zt = z * tone.scale;
+    let zt = z * tone.scale * size;
     let (fw, fh) = (span[0] as f32, span[1] as f32);
     let at = (at.0 + tone.shift.0 * z - (zt - z) * fw / 2.0, at.1 + tone.shift.1 * z - (zt - z) * fh);
     let z = zt;

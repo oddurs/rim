@@ -634,6 +634,42 @@ pub struct Held {
 pub struct Spoiling {
     pub lost: u16,
 }
+/// A plant growing with the weather (`grow` on its def): how far from a
+/// seedling (0) to grown (`GROWN`), and its health, in 1/10000ths.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Growth {
+    pub progress: u16,
+    pub health: u16,
+    /// Its rate was 0 or less when last worked out: winter, drought.
+    #[serde(default)]
+    pub dormant: bool,
+}
+
+/// `Growth::progress` when grown, and full health.
+pub const GROWN: u16 = 10_000;
+
+impl Growth {
+    pub fn grown() -> Growth {
+        Growth { progress: GROWN, health: GROWN, dormant: false }
+    }
+
+    pub fn seedling() -> Growth {
+        Growth { progress: 0, health: GROWN, dormant: false }
+    }
+
+    pub fn fraction(&self) -> f64 {
+        self.progress as f64 / GROWN as f64
+    }
+
+    /// Which of `stages` sizes it is drawn at, from 1 up to `stages` once grown.
+    pub fn stage(&self, stages: u32) -> u32 {
+        (self.progress as u32 * stages / GROWN as u32 + 1).min(stages)
+    }
+}
+
+/// A harvest waiting on the plant's growth, not on a day: `Regrow`'s
+/// `ready_at` for it. The growth pass clears it once the plant is grown.
+pub const WHEN_GROWN: u64 = u64::MAX;
 
 /// Harvests growing back, each named by its key:
 /// `harvest` is ready again at `ready_at`, and any others are in `also`.
@@ -661,6 +697,11 @@ impl Regrow {
     /// Whether this harvest is still growing back.
     pub fn growing(&self, harvest: HarvestKey) -> bool {
         self.entries().any(|(h, _)| h == harvest)
+    }
+
+    /// Whether any harvest waits on the plant's growth (`WHEN_GROWN`).
+    pub fn growing_with_plant(&self) -> bool {
+        self.entries().any(|(_, at)| at == WHEN_GROWN)
     }
 
     /// Keep the entries `keep` accepts, renamed as it says. False when
@@ -1342,6 +1383,11 @@ impl World {
         if let Some(m) = made_of {
             let _ = self.ecs.insert_one(e, MadeOf(m));
         }
+        // A plant placed whole (map generation, a script) is grown; one that
+        // seeds itself starts over (`spread_plants`).
+        if !blueprint && td.grow.is_some() {
+            let _ = self.ecs.insert_one(e, Growth::grown());
+        }
         if is_floor {
             self.map.set_floor(pos, Some(e), if blueprint { 0 } else { td.path_cost });
         } else {
@@ -1516,6 +1562,39 @@ impl World {
             return;
         }
         let _ = self.ecs.insert_one(e, Regrow::new(harvest, ready_at));
+    }
+
+    /// A plant starts over as a seedling: every harvest it would survive
+    /// waits for it to grow.
+    pub fn plant_seedling(&mut self, e: Entity) {
+        let _ = self.ecs.insert_one(e, Growth::seedling());
+        self.wait_to_grow(e);
+    }
+
+    /// Every harvest the plant survives (`destroy = false`) and that gives
+    /// no `regrow_days` waits on its growth.
+    pub(crate) fn wait_to_grow(&mut self, e: Entity) {
+        let Some(t) = self.thing(e) else { return };
+        let defs = self.defs.clone();
+        for h in defs.thing(t.def).harvest.iter().filter(|h| !h.destroy && h.regrow_days <= 0.0) {
+            if self.harvest_ready(e, h.key()) {
+                self.regrow(e, h.key(), WHEN_GROWN);
+            }
+        }
+    }
+
+    /// Grown: the harvests waiting on its growth are ready.
+    pub fn bear(&mut self, e: Entity) {
+        let Ok(mut r) = self.ecs.get::<&mut Regrow>(e) else { return };
+        if !r.growing_with_plant() {
+            return;
+        }
+        let left = r.retain(|h, at| (at != WHEN_GROWN).then_some(h));
+        drop(r);
+        if !left {
+            let _ = self.ecs.remove_one::<Regrow>(e);
+        }
+        self.touch(e);
     }
 
     /// Plan a building over a natural thing: mark it to be cleared with the
@@ -2766,6 +2845,11 @@ impl World {
         for (t, s) in self.ecs.query::<(&Thing, &Spoiling)>().iter() {
             h = h.wrapping_add(crate::rng::mix(
                 (t.hp as u64) << 32 ^ (s.lost as u64) << 16 ^ (t.pos.x as u64) << 8 ^ t.pos.y as u64 ^ 0x5b0,
+            ));
+        }
+        for (t, g) in self.ecs.query::<(&Thing, &Growth)>().iter() {
+            h = h.wrapping_add(crate::rng::mix(
+                (g.progress as u64) << 32 ^ (g.health as u64) << 16 ^ (t.pos.x as u64) << 8 ^ t.pos.y as u64 ^ 0x6e0,
             ));
         }
         for a in &self.fields.atmos {

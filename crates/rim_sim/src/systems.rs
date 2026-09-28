@@ -252,7 +252,8 @@ pub fn wealth(w: &mut World) {
     w.wealth = total;
 }
 
-/// Plants with `spread = true` slowly reseed empty ground.
+/// Plants with `spread = true` slowly reseed empty ground. One that grows
+/// takes more readily where it would grow well, and starts as a seedling.
 pub fn spread_plants(w: &mut World) {
     let defs = w.defs.clone();
     for _ in 0..4 {
@@ -264,10 +265,87 @@ pub fn spread_plants(w: &mut World) {
         let terrain = w.map.terrain[i];
         for (di, td) in defs.things.iter().enumerate() {
             let Some(s) = &td.spawn else { continue };
-            if s.spread && s.terrain_r.contains(&terrain) && w.rng.chance(s.density * 4.0) {
-                w.spawn_fixture(di as DefId, p, false);
+            if !s.spread || !s.terrain_r.contains(&terrain) {
+                continue;
+            }
+            // Twice as likely where it grows twice as fast; never where it can't.
+            let weight = td.grow.as_ref().map_or(1.0, |g| match g.rate_terms.is_empty() {
+                true => 1.0,
+                false => terms::from_q(w.fields.eval_at(&defs, &w.map, &g.rate_terms, p)).clamp(0.0, 2.0),
+            });
+            if w.rng.chance(s.density * 4.0 * weight) {
+                if let Some(e) = w.spawn_fixture(di as DefId, p, false) {
+                    if td.grow.is_some() {
+                        w.plant_seedling(e);
+                    }
+                }
                 break;
             }
+        }
+    }
+}
+
+/// Plants are worked out once in this many plant passes, a quarter of
+/// them each pass, by entity id.
+pub const GROW_EVERY: u64 = 4;
+
+/// Ticks between plant passes.
+pub const PLANT_PASS: u64 = 250;
+
+/// Grow a quarter of the plants: by their rate terms over the time since
+/// they were last worked out, less what their harm terms take. A plant
+/// with no health left dies; one grown again bears its crop.
+pub fn grow(w: &mut World) {
+    let defs = w.defs.clone();
+    let slot = (w.tick / PLANT_PASS) % GROW_EVERY;
+    let days = (PLANT_PASS * GROW_EVERY) as i64 * terms::Q / TICKS_PER_DAY as i64;
+    let mut changed: Vec<(Entity, Growth, bool)> = Vec::new();
+    for (e, t, g) in w.ecs.query::<(Entity, &Thing, &Growth)>().iter() {
+        if e.id() as u64 % GROW_EVERY != slot {
+            continue;
+        }
+        let Some(gd) = &defs.thing(t.def).grow else { continue };
+        let rate = match gd.rate_terms.is_empty() {
+            true => terms::Q,
+            false => w.fields.eval_at(&defs, &w.map, &gd.rate_terms, t.pos),
+        };
+        let harm = match gd.harm_terms.is_empty() {
+            true => 0,
+            false => w.fields.eval_at(&defs, &w.map, &gd.harm_terms, t.pos).max(0),
+        };
+        let mut n = *g;
+        n.dormant = rate <= 0;
+        if rate > 0 {
+            let step = rate * days / terms::to_q(gd.days) * GROWN as i64 / terms::Q;
+            n.progress = (n.progress as i64 + step).min(GROWN as i64) as u16;
+        }
+        let health = match harm > 0 {
+            true => n.health as i64 - harm * days / terms::Q * GROWN as i64 / terms::Q,
+            false => n.health as i64 + terms::to_q(gd.heal) * days / terms::Q * GROWN as i64 / terms::Q,
+        };
+        n.health = health.clamp(0, GROWN as i64) as u16;
+        // Redrawn only when it looks different: a size, dormancy, or
+        // falling below half health.
+        let hurt = |g: &Growth| g.health < GROWN / 2;
+        let redraw = n.stage(gd.stages) != g.stage(gd.stages) || n.dormant != g.dormant || hurt(&n) != hurt(g);
+        if n != *g {
+            changed.push((e, n, redraw));
+        }
+    }
+    // In id order: deaths and redraws touch the map, and a load doesn't
+    // reproduce the ECS's iteration order.
+    changed.sort_unstable_by_key(|c| c.0.id());
+    for (e, n, redraw) in changed {
+        if n.health == 0 {
+            w.despawn_thing(e);
+            continue;
+        }
+        let _ = w.ecs.insert_one(e, n);
+        if n.progress == GROWN {
+            w.bear(e);
+        }
+        if redraw {
+            w.touch(e);
         }
     }
 }
