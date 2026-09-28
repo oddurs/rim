@@ -2425,6 +2425,22 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         t.app.sim.world.fields.set_ambient(f, None);
     }
 
+    // ---------------------------------------------------------- 508ad373 lighting from the palette
+    println!("\n# a lighting preset from the palette takes at once (508ad373)");
+    // The binding has no key of its own; lend it one, as a player could.
+    t.app.ui.rebind("core:lighting_low", Some("f9"));
+    t.key(KeyCode::F9).await;
+    t.frame().await;
+    let q = t.app.light.setting.quality;
+    t.check(
+        t.app.light.setting.name() == "low" && q.sun_steps == 16 && !q.soft,
+        format!("Lighting: low takes at once ({}, {} sun steps)", t.app.light.setting.name(), q.sun_steps),
+    );
+    t.app.ui.rebind("core:lighting_low", None);
+    crate::apply_ui(&mut t.app, rim_ui::view::UiAction::Lighting("medium".into()));
+    t.frame().await;
+    t.check(t.app.light.setting.name() == "medium", "and back to medium");
+
     // ---------------------------------------------------------- fda56c8e camera by device
     println!("\n# the camera answers a mouse and a trackpad (fda56c8e)");
     t.clear_dock().await;

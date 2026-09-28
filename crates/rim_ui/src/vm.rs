@@ -841,6 +841,10 @@ impl UiVm {
             true => UiAction::UiScale(s.clamp(UI_SCALE.0, UI_SCALE.1)),
             false => return Err(rt("act.ui_scale: wants a number from 0.75 to 2")),
         });
+        act!("lighting", String, |name| match name.as_str() {
+            "low" | "medium" | "high" | "ultra" => UiAction::Lighting(name),
+            _ => return Err(rt("act.lighting: low, medium, high or ultra")),
+        });
         act!("render_scale", f32, |s| match s.is_finite() {
             true => UiAction::RenderScale(s.clamp(0.25, 1.0)),
             false => return Err(rt("act.render_scale: wants a number from 0.25 to 1")),

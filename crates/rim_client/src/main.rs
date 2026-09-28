@@ -300,8 +300,8 @@ fn typed_char(c: char) -> Option<char> {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_rects, classify, markable, save_setting, saved_render_scale, saved_scroll_mode, saved_ui_scale, Scroll,
-        ScrollMode,
+        build_rects, classify, markable, save_lighting, save_setting, saved_render_scale, saved_scroll_mode,
+        saved_ui_scale, Scroll, ScrollMode,
     };
     use rim_sim::IVec;
 
@@ -391,6 +391,22 @@ mod tests {
         let text = std::fs::read_to_string(&p).unwrap();
         assert!(text.contains("vsync = true") && text.contains("render_scale = 0.5"), "{text}");
         assert_eq!(saved_render_scale(&text), Ok(Some(0.5)));
+        let _ = std::fs::remove_file(&p);
+    }
+
+    #[test]
+    fn a_lighting_preset_is_saved_and_the_players_own_settings_stay() {
+        let p = std::env::temp_dir().join(format!("rim-lighting-{}.toml", std::process::id()));
+        std::fs::write(&p, "vsync = true\n\n[lighting]\nquality = \"low\"\nsun_steps = 40\n").unwrap();
+        let text = save_lighting(&p, "ultra").unwrap();
+        assert_eq!(text, std::fs::read_to_string(&p).unwrap(), "what it returns is what it wrote");
+        let s = crate::quality::Setting::from_settings(&text).unwrap().unwrap();
+        assert_eq!((s.name(), s.quality.sun_steps, s.quality.texels), ("ultra", 40, 4), "the override stays");
+        assert!(text.contains("vsync = true"), "{text}");
+        let _ = std::fs::remove_file(&p);
+        // No file yet, or no [lighting] in it: made.
+        let text = save_lighting(&p, "high").unwrap();
+        assert_eq!(crate::quality::Setting::from_settings(&text).unwrap().map(|s| s.name()), Some("high"));
         let _ = std::fs::remove_file(&p);
     }
 
@@ -1374,19 +1390,46 @@ fn saved_scale(text: &str, key: &str, valid: impl Fn(f64) -> Option<f32>, range:
 /// Set one key in the settings file, keeping the rest, through a
 /// temporary file so a crash mid-write can't leave half a file.
 fn save_setting(path: &std::path::Path, key: &str, value: toml::Value) -> Result<(), String> {
+    edit_settings(path, |t| {
+        t.insert(key.to_string(), value);
+    })
+    .map(|_| ())
+}
+
+/// Save the lighting preset as `[lighting] quality`, keeping whatever else
+/// the player set by hand there. The file's new text.
+fn save_lighting(path: &std::path::Path, preset: &str) -> Result<String, String> {
+    edit_settings(path, |t| {
+        let quality = toml::Value::String(preset.to_string());
+        match t.get_mut("lighting").and_then(|l| l.as_table_mut()) {
+            Some(l) => {
+                l.insert("quality".to_string(), quality);
+            }
+            None => {
+                t.insert("lighting".to_string(), toml::Table::from_iter([("quality".to_string(), quality)]).into());
+            }
+        }
+    })
+}
+
+/// Change the player's settings file with `edit`, keeping everything else
+/// in it, and write it whole or not at all. The file's new text.
+fn edit_settings(path: &std::path::Path, edit: impl FnOnce(&mut toml::Table)) -> Result<String, String> {
     let mut t: toml::Table = match std::fs::read_to_string(path) {
         Ok(text) => toml::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => toml::Table::new(),
         Err(e) => return Err(format!("{}: {e}", path.display())),
     };
-    t.insert(key.to_string(), value);
+    edit(&mut t);
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     }
+    let text = toml::to_string(&t).map_err(|e| e.to_string())?;
     let tmp = path.with_extension("toml.tmp");
-    std::fs::write(&tmp, toml::to_string(&t).map_err(|e| e.to_string())?)
+    std::fs::write(&tmp, &text)
         .and_then(|_| std::fs::rename(&tmp, path))
-        .map_err(|e| format!("{}: {e}", path.display()))
+        .map_err(|e| format!("{}: {e}", path.display()))?;
+    Ok(text)
 }
 
 /// Make `world_target` match the screen at the render scale. The world
@@ -1704,6 +1747,25 @@ fn apply_ui(app: &mut App, a: UiAction) {
         UiAction::Zoom(f) => {
             let (w, h) = (screen_width(), screen_height());
             apply(app, Action::Zoom(f, w / 2.0, h / 2.0));
+        }
+        UiAction::Lighting(name) => {
+            // The preset alone changes: what the player set by hand under
+            // [lighting] stays, so the game runs as it will after a restart.
+            let saved = app.settings_file.as_ref().map(|p| save_lighting(p, &name));
+            let setting = match saved {
+                Some(Ok(text)) => quality::Setting::from_settings(&text).unwrap_or_else(|e| {
+                    eprintln!("rim: settings file: {e}");
+                    None
+                }),
+                Some(Err(e)) => {
+                    eprintln!("rim: could not save settings: {e}");
+                    None
+                }
+                None => None,
+            };
+            if let Some(s) = setting.or_else(|| quality::Setting::named(&name)) {
+                app.light.setting = s;
+            }
         }
         UiAction::ScrollMode(m) => {
             let Some(mode) = ScrollMode::parse(&m) else { return };
