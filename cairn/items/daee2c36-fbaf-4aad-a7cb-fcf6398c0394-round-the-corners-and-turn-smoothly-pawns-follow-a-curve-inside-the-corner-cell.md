@@ -2,10 +2,11 @@
 id: daee2c36-fbaf-4aad-a7cb-fcf6398c0394
 title: 'Round the corners and turn smoothly: pawns follow a curve inside the corner cell'
 type: feature
-status: backlog
+status: doing
 milestone: people
+assignee: Oddur Sigurdsson
 created: 2026-09-27
-updated: 2026-09-27
+updated: 2026-09-28
 priority: p0
 api: none
 pillar:
@@ -47,8 +48,24 @@ Render only; the sim is untouched and nothing feeds back (§6a).
 
 ## Acceptance criteria
 
-- [ ] A unit test: a path with a right-angle turn yields drawn positions inside the corner cell for the whole blend, and equal to the linear position outside it
-- [ ] A unit test: arrival times at each cell centre match the sim's `progress` exactly
-- [ ] A unit test: facing turns at most 12 rad per game second and doesn't change while paused
-- [ ] The autotest walks a colonist round a corner, with a screenshot showing the curved trail
+- [x] A unit test: a path with a right-angle turn yields drawn positions inside the corner cell for the whole blend, and equal to the linear position outside it
+- [x] A unit test: at every step boundary the drawn pawn is in the cell the sim stepped into, a turn's two halves meet, and a straight run's boundaries are cell centres
+- [x] A unit test: facing turns at most 12 rad per game second and doesn't change while paused
+- [x] The autotest walks a colonist round a corner, checks the drawn pawn never leaves the cells the sim steps between, and photographs it mid-turn
 - [ ] `rim --bench-render`: the pawn pass's CPU time before and after, noted here
+
+## 2026-09-28
+
+Two criteria reworded while building, because as first written they couldn't be met: a rounded turn deliberately never passes through the corner cell's centre, so 'arrival times at each cell centre match' is false by design. What holds, and is tested (rim_sim world tests), is that at each step boundary the pawn is in the cell the sim stepped into, the turn's two halves meet with no jump, and straight runs are unchanged. And nothing draws a selected pawn's trail any more, so the autotest photographs the founder mid-turn (shot round-turn) instead of a trail.
+
+## 2026-09-28
+
+Review (code-review, medium) found a real bug, fixed: the came-from cell was never cleared when a pawn stopped, so a pawn resuming at a right angle jumped about 0.12 of a cell on its first frame. Motion::stepped now forgets it when the pawn has no next step; the sim takes the next step in the tick it arrives at a corner, so real turns keep rounding. Test: motion::tests::a_pawn_that_stops_forgets_where_it_came_from. Declined: when the sim clears a path mid-step (replan, blocked cell, a fall), a pawn inside the last 35% into a corner snaps back to the straight line, up to about 0.12 of a cell. Rare, small, and easing it would need a second client cache; noted in the PR.
+
+## 2026-09-28
+
+Bench (rim --bench-render --seed 1, 200 frames per view, Apple M4 Pro; two runs each of main 0ff863bf and this branch, other sessions building on the machine): the pawns pass is noise-bound here, the same binary moving 0.08 to 0.63 ms on one view between runs. Taking each view's better run, the median over views is 0.086 ms on main and 0.075 ms on this branch: no measurable change, as expected of a few multiplies and a lookup per pawn.
+
+## 2026-09-28
+
+Correction: the bench numbers above are void. --bench-render runs with a hidden window on this Mac, which is throttled, so its timings mean nothing (rim-c2). The before/after for the pawns pass comes from CI's render benchmark on this PR against main's, recorded when that run finishes.

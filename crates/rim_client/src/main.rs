@@ -13,6 +13,7 @@ mod draw;
 mod grid;
 mod light;
 mod mesh;
+mod motion;
 mod occluders;
 mod overlay;
 mod pattern;
@@ -181,6 +182,8 @@ pub struct App {
     pub meshes: mesh::Meshes,
     /// Blows and finishes on the sites being worked, followed frame to frame.
     pub worksites: worksite::Worksites,
+    /// How pawns are drawn moving: the cell each came from, and facing.
+    pub motion: motion::Motion,
     /// Every mod's sprites, packed at load.
     pub world_atlas: atlas::WorldAtlas,
     /// The world's resolution as a fraction of the screen's pixels, if
@@ -760,6 +763,7 @@ async fn game() {
         render_us: RenderTimes::default(),
         meshes: mesh::Meshes::default(),
         worksites: worksite::Worksites::default(),
+        motion: motion::Motion::default(),
         world_atlas,
         render_scale,
         world_target: None,
@@ -1261,6 +1265,7 @@ pub fn client_view(app: &mut App, mouse: (f32, f32), time: f64) -> ClientView {
         level: app.cam.z,
         mouse: (mouse.0 * dpi, mouse.1 * dpi),
         frac: app.tick_frac(),
+        came_from: app.motion.came_from(),
         selected: app.selected,
         selected_zone: app.selected_zone,
         group: app.group.clone(),
@@ -1784,7 +1789,8 @@ pub fn render(app: &mut App) {
     let cam = (app.cam.x, app.cam.y, app.cam.zoom * dpi);
     let screen = (screen_width() * dpi, screen_height() * dpi);
     let frac = app.tick_frac();
-    rim_ui::reanchor(&mut app.last_draw, &mut app.last_anchored, &app.sim.world, cam, screen, frac);
+    let came = app.motion.came_from();
+    rim_ui::reanchor(&mut app.last_draw, &mut app.last_anchored, &app.sim.world, cam, screen, frac, &came);
     draw::ui(&app.last_draw, &app.atlas, white, dpi);
     t.ui = lap();
     app.render_us = t;
@@ -2001,6 +2007,7 @@ fn apply_ui(app: &mut App, a: UiAction) {
             let ticks = (hours * rim_sim::TICKS_PER_DAY as f64 / 24.0) as u64;
             for _ in 0..ticks {
                 app.sim.step();
+                app.motion.stepped(&app.sim.world);
                 if let Some(w) = &app.saver {
                     save::after_step(w, &mut app.sim);
                 }
@@ -2014,12 +2021,17 @@ fn step(app: &mut App) {
         // Keep the part-tick: pawns are drawn that far along their step,
         // and dropping it would pull them back a little on pause.
         app.acc = app.acc.fract();
+        // No game time passes, so nothing turns; a pawn seen for the first
+        // time still gets a facing.
+        let frac = app.tick_frac();
+        app.motion.face(&app.sim.world, &app.worksites, frac);
         return;
     }
     app.acc += frame_time() as f64 * 60.0 * app.speed as f64;
     let budget = std::time::Instant::now();
     while app.acc >= 1.0 {
         app.sim.step();
+        app.motion.stepped(&app.sim.world);
         if let Some(w) = &app.saver {
             save::after_step(w, &mut app.sim);
         }
@@ -2029,6 +2041,8 @@ fn step(app: &mut App) {
             break;
         }
     }
+    let frac = app.tick_frac();
+    app.motion.face(&app.sim.world, &app.worksites, frac);
     let w = &app.sim.world;
     // A thing someone picked up is in their hand, not on the map.
     let gone = |e| !w.pawn_alive(e) && (w.thing(e).is_none() || w.ecs.get::<&rim_sim::world::Held>(e).is_ok());
@@ -2071,7 +2085,7 @@ pub fn boxed_colonists(app: &App, a: IVec, b: IVec) -> Vec<Entity> {
                 if p.pos.z != app.cam.z {
                     return false;
                 }
-                let (px, py) = draw::pawn_pos(&p, app.tick_frac());
+                let (px, py) = draw::pawn_pos(app, e, &p);
                 let c = IVec::new(px.floor() as i32, py.floor() as i32);
                 (lo.x..=hi.x).contains(&c.x) && (lo.y..=hi.y).contains(&c.y)
             })
@@ -2337,7 +2351,7 @@ pub fn pawn_under(app: &App, sx: f32, sy: f32) -> Option<Entity> {
         if p.pos.z != app.cam.z {
             continue;
         }
-        let (px, py) = draw::pawn_pos(&p, app.tick_frac());
+        let (px, py) = draw::pawn_pos(app, e, &p);
         let d = ((px - wx).powi(2) + (py - wy).powi(2)).sqrt();
         let bias = if p.faction == Faction::Player { -0.2 } else { 0.0 };
         if d < 0.7 && best.is_none_or(|b| d + bias < b.0) {

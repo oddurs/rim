@@ -1070,7 +1070,7 @@ impl UiVm {
                 if !p.active || p.dead || p.pos.z != l.client.level {
                     continue;
                 }
-                let (x, y) = crate::view::pawn_screen(&p, l.client);
+                let (x, y) = crate::view::pawn_screen(e, &p, l.client);
                 let m = l.client.cam.2 * 2.0;
                 if x < -m || y < -m || x > sw + m || y > sh + m {
                     continue;

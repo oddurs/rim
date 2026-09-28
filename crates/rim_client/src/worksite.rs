@@ -509,12 +509,7 @@ impl Worksites {
     /// back. The next blow is the next multiple of `every`, or the end of a
     /// swing's cooldown.
     pub fn lunge(&self, w: &World, p: &Pawn) -> (f32, f32) {
-        let target = match p.job {
-            Job::Harvest { target, .. } | Job::Deconstruct { target } | Job::Breach { target } => target,
-            Job::Construct { bp, .. } => bp,
-            _ => return (0.0, 0.0),
-        };
-        let Some(site) = self.sites.get(&target) else { return (0.0, 0.0) };
+        let Some((target, site)) = self.site_of(p) else { return (0.0, 0.0) };
         let every = style(w, site.style).map_or(0, |s| s.every);
         let a = site.struck.map_or(u64::MAX, |t| self.tick.saturating_sub(t));
         let reach = if a < 8 {
@@ -532,6 +527,23 @@ impl Worksites {
             }
         };
         (-site.toward.0 * reach, -site.toward.1 * reach)
+    }
+
+    /// The site a pawn is working, if it's working one.
+    fn site_of(&self, p: &Pawn) -> Option<(Entity, &Site)> {
+        let target = match p.job {
+            Job::Harvest { target, .. } | Job::Deconstruct { target } | Job::Breach { target } => target,
+            Job::Construct { bp, .. } => bp,
+            _ => return None,
+        };
+        self.sites.get(&target).map(|s| (target, s))
+    }
+
+    /// Which way a pawn at work faces: toward its site, in radians
+    /// clockwise from north. `toward` points from the site at the worker.
+    pub fn work_heading(&self, p: &Pawn) -> Option<f32> {
+        let (_, site) = self.site_of(p)?;
+        Some((-site.toward.0).atan2(site.toward.1))
     }
 
     /// Age of a leaving thing, 0 to 1 through its exit.
