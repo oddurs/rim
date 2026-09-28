@@ -761,7 +761,10 @@ pub fn world_ui(app: &App) {
     // Selection is the overlay's (overlay::scene).
     // Drag rectangle preview; a select drag shows once it leaves its cell.
     let (mx, my) = mouse_position();
-    let dragging = app.drag_start.filter(|&a| app.tool != Tool::Select || a != cam.tile_at(mx, my));
+    // A plan is placed with a click, not dragged out.
+    let dragging = app
+        .drag_start
+        .filter(|&a| !matches!(app.tool, Tool::Plan(_)) && (app.tool != Tool::Select || a != cam.tile_at(mx, my)));
     if let Some(a) = dragging {
         let b = cam.tile_at(mx, my);
         let (ax, ay) = (a.x.min(b.x) as f32, a.y.min(b.y) as f32);
@@ -784,6 +787,19 @@ pub fn world_ui(app: &App) {
             draw_rectangle(s0x, s0y, s1x - s0x, s1y - s0y, alpha(c, 0.18));
         }
         draw_rectangle_lines(s0x, s0y, s1x - s0x, s1y - s0y, 2.0, c);
+    } else if let Tool::Plan(plan) = app.tool {
+        // The plan's pieces where they'd go, turned as they'd be placed.
+        let tp = cam.tile_at(mx, my);
+        let defs = &w.defs;
+        for piece in defs.plans[plan as usize].placed(defs, tp, app.build_facing) {
+            let td = defs.thing(piece.thing);
+            let c = rgb(defs.thing(piece.stuff.unwrap_or(piece.thing)).rgb);
+            for cell in td.footprint(IVec::at(piece.at.0, piece.at.1, tp.z), piece.facing) {
+                let (sx, sy) = cam.to_screen(cell.x as f32, cell.y as f32);
+                draw_rectangle(sx, sy, z, z, alpha(c, 0.4));
+                draw_rectangle_lines(sx, sy, z, z, 1.5, alpha(c, 0.9));
+            }
+        }
     } else if app.tool != Tool::Select {
         let (mx, my) = mouse_position();
         let tp = cam.tile_at(mx, my);

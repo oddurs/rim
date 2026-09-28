@@ -301,8 +301,9 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     println!("\n# toolbar (0046)");
     let keys: Vec<String> = t.app.tools.iter().map(|b| b.key.clone()).collect();
     let markable = (0..defs.designations.len()).filter(|&d| crate::markable(&defs, d as rim_sim::defs::DefId)).count();
-    // Select, cancel, stockpile and clear zone, besides one per def.
-    let n_expected = 4 + markable + defs.things.iter().filter(|d| d.build.is_some()).count();
+    // Select, cancel, stockpile and clear zone, besides one per def and
+    // one per house plan.
+    let n_expected = 4 + markable + defs.things.iter().filter(|d| d.build.is_some()).count() + defs.plans.len();
     t.check(keys.len() == n_expected, format!("one tool per markable designation and buildable def ({})", keys.len()));
     for k in &keys {
         t.click_tool(k).await;
@@ -985,6 +986,39 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     }
     let want = gallery.iter().flatten().filter(|id| !id.is_empty()).count();
     t.check(placed == want, format!("the gallery holds every core building ({placed} of {want})"));
+    // ---------------------------------------------------------- house plans
+    println!("\n# a house plan is placed from the build menu, turned with T (DESIGN.md §6c)");
+    if let Some(plan) = t.w().defs.lookup("plan", "primitive:branch_hut") {
+        t.clear_dock().await;
+        t.click_tool("plan:primitive:branch_hut").await;
+        t.check(t.app.tool == Tool::Plan(plan), "the build menu offers the branch hut");
+        let facing = t.app.build_facing;
+        t.key(KeyCode::T).await;
+        t.check(t.app.build_facing == (facing + 1) & 3, "T turns the plan");
+        let site = open_square(t.w(), home, 5).expect("open ground for a hut").offset(1, 1);
+        t.focus(site);
+        t.frame().await;
+        t.drag(site, site).await;
+        t.ticks(1);
+        let defs = t.w().defs.clone();
+        let pieces = defs.plans[plan as usize].placed(&defs, site, t.app.build_facing);
+        let placed = pieces
+            .iter()
+            .filter(|pc| {
+                let at = IVec::new(pc.at.0, pc.at.1);
+                t.w().map.fixture_at(at).and_then(|e| t.w().thing(e)).is_some_and(|th| th.def == pc.thing)
+            })
+            .count();
+        t.check(
+            placed == pieces.len(),
+            format!("every piece planned where the turned plan puts it ({placed} of {})", pieces.len()),
+        );
+        t.shot("house_plan").await;
+        t.app.sim.push(Command::Cancel { a: site, b: site.offset(2, 2) });
+        t.ticks(1);
+        t.app.build_facing = facing;
+        t.right_click((600.0, 500.0)).await;
+    }
 
     // ---------------------------------------------------------- 0215 materials
     println!("\n# pick the material before you place it (0215)");

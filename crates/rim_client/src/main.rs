@@ -40,6 +40,9 @@ pub enum Tool {
     Select,
     Designate(DefId),
     Build(DefId),
+    /// Place a house plan whole (DESIGN.md §6c), its corner under the
+    /// pointer, turned with T as a build is.
+    Plan(DefId),
     /// Paint a stockpile: extends the one zone a drag touches, else a new one.
     Stockpile,
     /// Take cells out of their zone.
@@ -780,6 +783,12 @@ fn toolbar(sim: &Sim) -> Vec<ToolDef> {
             hp: t.hp,
             ..tool(format!("build:{}", t.id), &t.label, Tool::Build(i as DefId), rgb(t.rgb), "build", menu)
         });
+    }
+    // House plans, after the things they're built of, coloured like their
+    // first piece.
+    for (i, p) in defs.plans.iter().enumerate() {
+        let first = p.pieces.first().map_or([128; 3], |pc| defs.thing(pc.stuff.unwrap_or(pc.thing)).rgb);
+        items.push(tool(format!("plan:{}", p.id), &p.label, Tool::Plan(i as DefId), rgb(first), "build", "plans"));
     }
     items.push(tool("stockpile".into(), "Stockpile", Tool::Stockpile, ZONE, "zones", ""));
     let clear = Color::from_rgba(150, 150, 170, 255);
@@ -2051,6 +2060,9 @@ pub fn apply(app: &mut App, action: Action) {
                     for (a, b) in build_rects(defs.thing(t).blocks, a, b) {
                         app.sim.push(Command::Build { stuff, thing: t, a, b, facing: app.build_facing });
                     }
+                }
+                Tool::Plan(plan) => {
+                    app.sim.push(Command::PlacePlan { plan, at: b, facing: app.build_facing, stuff: None })
                 }
                 Tool::Stockpile => {
                     let zone = app.sim.world.zones.touched(&app.sim.world.map, a, b);
