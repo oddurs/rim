@@ -24,6 +24,7 @@ pub mod rules;
 pub mod savefile;
 pub mod savetext;
 pub mod script;
+pub mod seeds;
 pub mod shelter;
 pub mod sim;
 pub mod sky;

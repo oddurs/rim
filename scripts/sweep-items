@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Files each failure of a nightly seed sweep as a cairn item (DESIGN.md §7b).
+#
+#   scripts/sweep-items REPORT DATE RUN_URL
+#
+# REPORT is `rim seeds sweep --report`'s file: seed, tick, reason and the
+# command that plays the seed again, tab-separated, a line each. The items
+# land in cairn/items/ for a person or an agent to open as a PR: GitHub
+# Actions may not open one in this repo. Their names go to stdout.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+report=$1 date=$2 run=$3
+
+while IFS=$'\t' read -r seed tick reason repro; do
+  [ -n "$seed" ] || continue
+  body=$(cat <<BODY
+## Problem
+
+The nightly seed sweep of $date ($run) failed on seed $seed at tick $tick:
+
+> $reason
+
+## Repro
+
+\`\`\`sh
+cargo build --release -p rim_client
+target/release/$repro
+\`\`\`
+
+## Acceptance criteria
+
+- [ ] The repro passes, and the fix has a test that would have caught it
+- [ ] Seed $seed joins crates/rim_sim/tests/seeds.toml with \`item\` set to this item's id
+BODY
+)
+  CAIRN_NO_HOOKS=1 scripts/task cairn -- new -q "The night's sweep broke seed $seed: ${reason:0:60}" \
+    --type bug --set priority=p1 --set effort=s --set layer=engine --set area=sim --set api=none --body "$body"
+done <"$report"

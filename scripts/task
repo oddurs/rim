@@ -200,6 +200,7 @@ usage: scripts/task <verb> [args]
   fmt:check  fail if anything isn't formatted
   types      mod scripts against the declared Luau APIs
   roadmap    cairn items match the schema and render
+  cairn      run the pinned cairn: scripts/task cairn -- ARGS
   scripts    the tooling's own tests: the pre-push hook, this script, ci-plan
   lint       clippy over every target, warnings denied
   test       nextest over the workspace; `test -- ARGS` passes ARGS to nextest
@@ -224,6 +225,7 @@ case "$verb" in
   fmt:check) fmt_check ;;
   types) types ;;
   roadmap) roadmap ;;
+  cairn) pinned_cairn && exec "$CAIRN" "$@" ;;
   scripts) scripts_test ;;
   lint) lint ;;
   test) test_rust "$@" ;;

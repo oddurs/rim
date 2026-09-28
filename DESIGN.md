@@ -2959,10 +2959,11 @@ reproducible, never to rely on what that seed's map contains.
   scene. Luau's `t.world()` does the same instead of defaulting to seed 1.
 - Every failure prints the line that brings it back: the seed, how it was
   made, the tick, and the command to rerun it.
-- `tests/seeds.toml` keeps maps worth keeping, each with a `why`, chosen with
-  `rim seeds find`, which runs mapgen alone. A nightly sweep runs 200 seeds
-  derived from the date; a failure files a cairn item with its repro line,
-  and once fixed its seed joins the corpus, which every PR runs.
+- `crates/rim_sim/tests/seeds.toml` keeps maps worth keeping, each with a
+  `why`, chosen with `rim seeds find` and seen with `rim seeds show`. A
+  nightly sweep plays 200 seeds derived from the date for two days each and
+  round-trips their saves; a failure becomes a cairn item with its repro
+  line, and once fixed its seed joins the corpus, which every PR plays.
 - Balance changes report distributions over 200 seeds, not one map.
 
 ---
