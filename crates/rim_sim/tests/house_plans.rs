@@ -116,3 +116,58 @@ fn a_plan_placed_below_the_surface_stays_there() {
         (0..4).flat_map(|y| (0..4).map(move |x| o.offset(x, y))).map(|p| s.world.map.fixture_at(p)).collect();
     assert_eq!(after, surface, "nothing new on the surface");
 }
+
+/// What stands can be written out as a plan and placed again: the shed
+/// saved as text loads as a mod's plan and puts up the same pieces.
+#[test]
+fn a_saved_selection_loads_back_and_places_the_same_pieces() {
+    let mut s = shed("plans-save", DEFS).unwrap_or_else(|e| panic!("loads: {e}"));
+    let plan = s.world.defs.lookup("plan", "house:shed").unwrap();
+    let o = open_square(&s, 5);
+    s.push(Command::PlacePlan { plan, at: o, facing: 1, stuff: None });
+    s.step();
+    let text = rim_sim::plan::plan_text(&s.world, o, o.offset(3, 3), "saved", "saved shed");
+    let kind = |s: &Sim, p: IVec| {
+        s.world.map.fixture_at(p).and_then(|e| {
+            let t = s.world.thing(e)?;
+            Some((
+                s.world.defs.thing(t.def).id.clone(),
+                s.world.made_of(e).map(|m| s.world.defs.thing(m).id.clone()),
+                t.facing,
+            ))
+        })
+    };
+    let before: Vec<_> =
+        (0..4).flat_map(|y| (0..4).map(move |x| (x, y))).map(|(x, y)| kind(&s, o.offset(x, y))).collect();
+
+    let mut back = shed("plans-save-back", &format!("{DEFS}\n{text}"))
+        .unwrap_or_else(|e| panic!("the saved plan loads: {e}\n{text}"));
+    let saved = back.world.defs.lookup("plan", "house:saved").expect("the saved plan");
+    let q = open_square(&back, 5);
+    back.push(Command::PlacePlan { plan: saved, at: q, facing: 0, stuff: None });
+    back.step();
+    let after: Vec<_> =
+        (0..4).flat_map(|y| (0..4).map(move |x| (x, y))).map(|(x, y)| kind(&back, q.offset(x, y))).collect();
+    assert_eq!(after, before, "the same pieces, materials and facings\n{text}");
+}
+
+/// A plan is one storey: it's read from the level its corner is on.
+#[test]
+fn a_plan_is_saved_from_its_own_level() {
+    let mut s = shed("plans-save-level", DEFS).unwrap_or_else(|e| panic!("loads: {e}"));
+    let d = &s.world.defs;
+    let (wall, wood) = (d.thing_id("wall").unwrap(), d.thing_id("wood").unwrap());
+    let o = open_square(&s, 5);
+    let below = IVec::at(o.x, o.y, -1);
+    for x in 0..3 {
+        let p = IVec::at(o.x + x, o.y, -1);
+        if let Some(e) = s.world.map.fixture_at(p) {
+            s.world.despawn_thing(e);
+        }
+        s.world.spawn_fixture_of(wall, p, false, Some(wood)).expect("a wall below");
+    }
+    let deep = rim_sim::plan::plan_text(&s.world, below, below.offset(2, 0), "deep", "deep");
+    let top = rim_sim::plan::plan_text(&s.world, o, o.offset(2, 0), "top", "top");
+    assert!(deep.contains("core:wall") && deep.contains("\nwww\n"), "the walls below are saved:\n{deep}");
+    assert!(!top.contains("core:wall"), "and not read from the surface:\n{top}");
+}

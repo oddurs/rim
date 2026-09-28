@@ -301,9 +301,9 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     println!("\n# toolbar (0046)");
     let keys: Vec<String> = t.app.tools.iter().map(|b| b.key.clone()).collect();
     let markable = (0..defs.designations.len()).filter(|&d| crate::markable(&defs, d as rim_sim::defs::DefId)).count();
-    // Select, cancel, stockpile and clear zone, besides one per def and
-    // one per house plan.
-    let n_expected = 4 + markable + defs.things.iter().filter(|d| d.build.is_some()).count() + defs.plans.len();
+    // Select, cancel, stockpile, clear zone and save as plan, besides one
+    // per def and one per house plan.
+    let n_expected = 5 + markable + defs.things.iter().filter(|d| d.build.is_some()).count() + defs.plans.len();
     t.check(keys.len() == n_expected, format!("one tool per markable designation and buildable def ({})", keys.len()));
     for k in &keys {
         t.click_tool(k).await;

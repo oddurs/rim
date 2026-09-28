@@ -306,8 +306,8 @@ declare view: {
     item_categories: () -> ItemCategories,
     -- Every item def, which a stockpile can take or refuse.
     items: () -> { Item },
-    -- The last order given ("Gunnar will deconstruct wall") and how many seconds ago, or nil once it's been undone.
-    last_order: () -> { label: string, age: number }?,
+    -- The last order given ("Gunnar will deconstruct wall"), how many seconds ago, and whether an undo takes it back; nil once it's been undone.
+    last_order: () -> { label: string, age: number, undoable: boolean }?,
     -- The level on screen: 0 is the surface, below it is negative.
     level: () -> number,
     -- The level a pawn or thing is on.

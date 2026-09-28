@@ -168,10 +168,11 @@ A sprint: fast on a little old laptop with mods loaded. The reference machine is
 
 ## stone-age — Stone age
 
-`##########` 100% · 13 of 13 done
+`##########` 93% · 13 of 14 done
 
 Hands first. The colonist wakes with nothing (pillar 93f291d5), and today nothing asks what they hold: a naked warrior fells an oak and quarries granite bare-handed. This milestone makes the first days a climb. You gather branches, fibre, stones and berries with your hands. You find flint and knap it into a flake and a hand axe on the ground. Branch walls and a campfire see you through the first night. A digging stick opens the clay banks, for warm cob walls and fired pots. Then the axe fells trees and a stone maul quarries rock.
 
+- [ ] `06ab0f96` The stone-age opening slowed: cob walls by day 4 fell from 92% to 70% <sup>bug · p2 · m · plugin</sup>
 - [x] `049e2f73` Crafting as a plugin: recipes, stations and bills <sup>feature · p0 · l · plugin</sup>
 - [x] `3ccab46f` Carried things keep what they're made of <sup>bug · p1 · m · engine</sup>
 - [x] `4675019b` Stone tools: knapping, hafting, and the gates they open <sup>content · p0 · l · plugin</sup>
@@ -455,15 +456,12 @@ The API grows up: stat pipeline, script components, custom jobs, needs and def k
 
 ## houses — Houses
 
-`########··` 80% · 20 of 25 done
+`##########` 92% · 22 of 24 done
 
 A house is drawn as its plan and built as an order (DESIGN.md §6c). Walls join from their neighbours in quarters, with rounded ends and square junctions, and no sprites. Materials show as patterns and climb a ladder of tools from wattle to brick. Doors and windows orient themselves in the run and toward the room. Rooms take roles from what is in them, a roof span set by the materials replaces the 400-cell cap, and from far away the colony is a village of hipped roofs. The prototype, docs/engineering/houses-prototype.html, is the reference.
 
 - [ ] `b3ffbae1` Replace in place: upgrade a wall without opening the room <sup>feature · p1 · m · engine</sup>
-- [ ] `c281689c` Save a selection as a house plan <sup>feature · p2 · m · client</sup>
 - [ ] `c358e725` Stairs and ladders drawn in the plan style <sup>feature · p2 · s · core</sup>
-- [ ] `e7c4a3f6` Blueprints as work orders <sup>feature · p1 · m · engine</sup>
-- [ ] `ff479390` The building ladder: dry stone, logs, bricks and a kiln <sup>content · p1 · m · plugin</sup>
 - [x] `24100bb9` A roof span replaces the room size cap, and pillars hold it <sup>feature · p0 · m · engine</sup>
 - [x] `26a69a8e` Pipe joins: fences and palisades connect like Minecraft's <sup>feature · p2 · s · client</sup>
 - [x] `26ba97aa` Plan a multi-cell building over grass, trees and rock <sup>feature · p2 · m · engine</sup>
@@ -477,12 +475,14 @@ A house is drawn as its plan and built as an order (DESIGN.md §6c). Walls join 
 - [x] `ae5c3807` Lit edges: a mass catches the light on its top and left <sup>feature · p2 · s · client</sup>
 - [x] `b6a2d3cf` Place a house plan from the build menu, turned with T <sup>feature · p2 · m · client</sup>
 - [x] `ba18a8e4` Facing: things turn in four directions <sup>feature · p1 · m · engine</sup>
+- [x] `c281689c` Save a selection as a house plan <sup>feature · p2 · m · client</sup>
 - [x] `c2d73146` The seam where a wall's material changes is covered by the pattern <sup>bug · p1 · s · client</sup>
 - [x] `c80a071d` A house plan placed below the surface lands on the surface <sup>bug · p1 · s · engine</sup>
 - [x] `df049dac` Roofs from far away, hipped by the span field <sup>feature · p2 · m · client</sup>
 - [x] `eb469f44` Houses concept: drawn as their plan, built as orders <sup>spike · p0 · m · tooling</sup>
 - [x] `f709cdd4` Room roles as data <sup>feature · p0 · m · engine</sup>
 - [x] `fbab2877` Core's looks in the plan style <sup>content · p1 · m · core</sup>
+- [x] `ff479390` The building ladder: dry stone, logs, bricks and a kiln <sup>content · p1 · m · plugin</sup>
 - [x] `fff4fb42` A material names the tool it is built with <sup>feature · p1 · s · engine</sup>
 
 ## mood — Mood
