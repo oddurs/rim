@@ -6,6 +6,7 @@ type MessageKind = "info" | "good" | "threat" | "bad"
 type CreatureInfo = { id: string, label: string, intelligent: boolean, aggressive: boolean, flees: boolean, plural: string, market_value: number, max_hp: number, wild: boolean }
 type ThingInfo = { id: string, label: string, market_value: number, food: boolean, nutrition: number?, item: boolean, tags: { string } }
 type NeedInfo = { id: string, label: string, satisfier: string, days_to_empty: number }
+type ModifierInfo = { id: string, stat: string, thing: string, value: number, reason: string, group: string, on: boolean }
 type StoreSlot = { slot: number, thing: string, count: number, made_of: string?, hp: number }
 type StoreInfo = { level: number, slots: number, contents: { StoreSlot } }
 type StockQuery = { thing: string?, tag: string?, category: string? }
@@ -92,6 +93,8 @@ declare rim: {
     map_size: () -> (number, number),
     -- Post a message to the feed (default kind "info").
     message: (text: string, kind: MessageKind?) -> (),
+    -- Every modifier def on a loaded thing (the stat pipeline): what it adds to which stat of which thing, whether it's on from the start, and its group. rim.set_modifiers switches a group.
+    modifier_defs: {ModifierInfo},
     -- A random open cell within r of (x, y), on level z (the surface if nil).
     near_cell: (x: number, y: number, r: number, z: number?) -> (number?, number?),
     -- Every need def: what satisfies it ("food", "rest", "field") and how many days a full one lasts.
@@ -134,6 +137,8 @@ declare rim: {
     set_ambient: (id: string, value: number?) -> (),
     -- Keep plain data in the world (hashed, saved, readable by the UI as view.data). A bare key is your mod's ("state" is "your_mod:state"); you can't write another mod's.
     set_data: (key: string, value: any) -> (),
+    -- Switch every modifier your mod declares in `group` on or off: the stat pipeline. Saved with the world. Returns how many there are.
+    set_modifiers: (group: string, on: boolean) -> number,
     -- Publish a colony reading, like "food_days", under your mod's name (kept to thousandths). Rules with `when = { reading = "mod:id", below = ..., until = ... }` switch on and off as it crosses their marks, firing `rule_started` and `rule_stopped`. Publish on your own cadence: hourly is plenty.
     set_reading: (id: string, value: number) -> (),
     -- Put the colony in a stance: its priority rules hold until another. For incidents; the player's comes as a command.
@@ -148,6 +153,8 @@ declare rim: {
     stance: () -> string?,
     -- A thing's stat by name: its def's base times its material's factor.
     stat: (id: number, name: string) -> number?,
+    -- A thing def's stat through the pipeline: what the def says plus every modifier on it that is on. `buildable` is 1 for a buildable, and 0 or less locks it. nil when neither says anything.
+    stat_of: (thing: string, stat: string) -> number?,
     -- How many the colony has on the map, read from the stock ledger (never counted): a thing by id, or { thing = }, { tag = } or { category = } (an item category and those under it). `place` narrows it to what lies where a stockpile keeps it, or to what doesn't.
     stock: (what: string | StockQuery, place: ("stored" | "loose")?) -> number,
     -- A container's level (0 is lowest), how many slots it has, and what is in them (slots from 1). Nil for anything that isn't a built container.

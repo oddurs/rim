@@ -1,0 +1,102 @@
+# Research (DESIGN.md §4e: tools gate the stone age, research gates later
+# tiers). The engine knows nothing of research. A project is plain data
+# ([[research.project]]); what it unlocks is a group of [[modifier]]s on
+# the stat pipeline, named by the project's id, that take each gated
+# buildable's `buildable` stat to 0 until the research script switches
+# them off. See scripts/research.luau.
+
+[[kind]]
+id = "project"
+
+[kind.fields]
+label = "string"
+# What finishing it means, for the research screen.
+note = { type = "string", default = "" }
+# Ticks of study at bare hands' pace.
+work = "float"
+# Projects to finish first.
+requires = { type = "list", default = [] }
+
+# Study, at a desk. No skill of its own yet: every colonist studies alike.
+[[work_type]]
+id = "research"
+label = "Research"
+icon = "Q"
+priority = 3
+order = 75
+auto = { per_person = 2, weight = 1 }
+
+# A desk to study at: the colony researches wherever one stands.
+[[thing]]
+id = "desk"
+label = "research desk"
+color = "#8a6a4a"
+category = "building"
+look.layers = [
+    { draw = "box", x = 0.08, y = 0.16, w = 0.84, h = 0.62, round = 0.05, shade = 1.05 },
+    { draw = "box", x = 0.18, y = 0.26, w = 0.3, h = 0.22, round = 0.02, color = "#e8dcc0" },
+    { draw = "line", start = [0.58, 0.3], end = [0.8, 0.3], line = "hair", shade = 0.6 },
+    { draw = "line", start = [0.58, 0.42], end = [0.78, 0.42], line = "hair", shade = 0.6 },
+]
+blocks = true
+hp = 120
+market_value = 25
+tags = ["research:desk"]
+spots = [{ dx = 0, dy = 1 }]
+build = { menu = "production", work = 300, stuff = { category = "structural", count = 15 } }
+
+# ─── Projects ──────────────────────────────────────────────────────────────
+
+[[project]]
+id = "joinery"
+label = "Joinery"
+note = "Shelves and tool racks: storage off the floor."
+work = 2400
+
+[[project]]
+id = "granaries"
+label = "Granaries"
+note = "A dry, raised store for the harvest."
+work = 2400
+requires = ["joinery"]
+
+[[project]]
+id = "smithing"
+label = "Smithing"
+note = "The forge: nails, fittings and iron tools."
+work = 3600
+
+# ─── What they unlock ──────────────────────────────────────────────────────
+# Each takes a buildable's `buildable` stat from 1 to 0 while it's on.
+
+[[modifier]]
+id = "joinery_shelf"
+group = "joinery"
+stat = "buildable"
+thing = "timber:shelf"
+value = -1
+reason = "Needs research: Joinery"
+
+[[modifier]]
+id = "joinery_rack"
+group = "joinery"
+stat = "buildable"
+thing = "timber:tool_rack"
+value = -1
+reason = "Needs research: Joinery"
+
+[[modifier]]
+id = "granaries_granary"
+group = "granaries"
+stat = "buildable"
+thing = "timber:granary"
+value = -1
+reason = "Needs research: Granaries"
+
+[[modifier]]
+id = "smithing_forge"
+group = "smithing"
+stat = "buildable"
+thing = "iron:forge"
+value = -1
+reason = "Needs research: Smithing"

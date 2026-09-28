@@ -5,6 +5,7 @@
     "crafting": "./mods/crafting",
     "iron": "./mods/iron",
     "primitive": "./mods/primitive",
+    "research": "./mods/research",
     "timber": "./mods/timber",
     "weather": "./mods/weather",
     "wildlife_plus": "./mods/wildlife_plus"

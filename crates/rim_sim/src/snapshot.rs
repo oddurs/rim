@@ -107,6 +107,10 @@ pub(crate) struct WorldSection {
     /// colonists join the default role.
     #[serde(default)]
     work_roles: Vec<crate::rules::WorkRole>,
+    /// Modifiers scripts switched, by id; unwritten when none were, so a
+    /// save without them reads as before.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    modifiers_switched: BTreeMap<String, bool>,
 }
 
 /// Each def kind's qualified ids, in `DefId` order: the table the raw ids in
@@ -268,6 +272,7 @@ impl Snapshot {
             stance: w.stance,
             standing: w.standing.clone(),
             work_roles: w.work_roles.clone(),
+            modifiers_switched: w.modifiers_switched.clone(),
         };
         let (disabled_hooks, disabled_handlers) = sim.scripts.disabled();
         let mut sections = BTreeMap::from([
@@ -890,6 +895,9 @@ impl Snapshot {
             }),
             None => defs.default_stance,
         };
+        // Switched modifiers are named by id; one a removed mod declared is gone.
+        w.modifiers_switched = ws.modifiers_switched;
+        w.modifiers_switched.retain(|id, _| defs.lookup("modifier", id).is_some());
         // Rules are named by id; one a removed mod added holds nothing.
         w.standing = ws.standing;
         let known: std::collections::BTreeSet<&str> = defs.priority_rules.iter().map(|r| r.id.as_str()).collect();

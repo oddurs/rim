@@ -67,7 +67,7 @@ type UiDate = { year: number, season: string, season_index: number, day: number,
 type Part = { label: string, value: number }
 type Tool = {
     key: string, label: string, color: string, active: boolean, category: string, group: string,
-    cost: string, work: number, hp: number,
+    cost: string, work: number, hp: number, locked: string,
 }
 type StoreRef = { zone: number?, thing: number? }
 type FilterEdit = { thing: string?, category: string?, material: string?, on: boolean?, min: number?, max: number?, all: boolean? }
@@ -378,7 +378,7 @@ declare view: {
     ticks_per_day: () -> number,
     -- Wall-clock seconds, for animation.
     time: () -> number,
-    -- Every tool, with the dock category and group it is filed under.
+    -- Every tool, with the dock category and group it is filed under. A buildable a modifier locks says why in `locked` (empty when it can be placed).
     tools: () -> { Tool },
     -- The player's UI scale, on top of the display's (1 is normal).
     ui_scale: () -> number,

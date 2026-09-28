@@ -1561,6 +1561,35 @@ pub enum StoreDisplay {
 /// The blocks a category's `with` can name.
 const CATEGORY_WITH: &[&str] = &["food", "tool", "stuff"];
 
+// ---------------------------------------------------------------- modifiers
+
+/// A mod's contribution to a thing's stat: the stat pipeline (DESIGN.md
+/// §6). While it is on, `value` is added to `stat` of `thing`. Scripts
+/// switch a mod's own modifiers off and on by `group`
+/// (`rim.set_modifiers`), and the switch is world state, saved by id.
+/// `buildable` is such a stat: a buildable whose total is 0 or less can't
+/// be placed, and `reason` says why. A modifier on a thing whose mod isn't
+/// installed does nothing, so a mod can gate an optional mod's content.
+#[derive(Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct ModifierDef {
+    pub id: String,
+    pub stat: String,
+    pub thing: String,
+    pub value: f64,
+    /// What the player is told while it holds a thing back.
+    #[serde(default)]
+    pub reason: String,
+    /// What a script switches it with, among its mod's modifiers.
+    #[serde(default)]
+    pub group: String,
+    /// Whether it counts from the start, until a script switches it.
+    #[serde(default = "dtrue")]
+    pub on: bool,
+    #[serde(skip)]
+    pub thing_r: Option<DefId>,
+}
+
 // ---------------------------------------------------------------- database
 
 /// What terms in a field's def can name: fields as its mod sees them, and
@@ -1644,6 +1673,10 @@ pub struct DefDb {
     /// The item category tree, in load order; `category_roots` has the top
     /// level in `order` order.
     pub item_categories: Vec<ItemCategoryDef>,
+    /// The stat pipeline's modifiers, in load order.
+    pub modifiers: Vec<ModifierDef>,
+    /// By thing: the modifiers on it, as indices into `modifiers`.
+    pub thing_modifiers: Vec<Vec<u16>>,
     /// The levels below the surface, in no particular order.
     pub strata: Vec<StratumDef>,
     pub category_roots: Vec<DefId>,
@@ -1769,6 +1802,7 @@ pub const KINDS: &[&str] = &[
     "item_category",
     "store_priority",
     "stratum",
+    "modifier",
 ];
 
 impl DefDb {
@@ -1810,6 +1844,7 @@ impl DefDb {
             "field" => self.fields[i].id.clone(),
             "item_category" => self.item_categories[i].id.clone(),
             "stratum" => self.strata[i].id.clone(),
+            "modifier" => self.modifiers[i].id.clone(),
             _ => String::new(),
         }
     }
@@ -1898,6 +1933,9 @@ impl DefDb {
         }
         for (i, d) in self.item_categories.iter().enumerate() {
             index.insert(("item_category", d.id.clone()), i as DefId);
+        }
+        for (i, d) in self.modifiers.iter().enumerate() {
+            index.insert(("modifier", d.id.clone()), i as DefId);
         }
         let mut bare: HashMap<(&'static str, String), Vec<DefId>> = HashMap::new();
         for ((kind, id), &d) in &index {
@@ -2484,6 +2522,30 @@ impl DefDb {
                 }
             }
         }
+        let mut by_thing: Vec<Vec<u16>> = vec![Vec::new(); self.things.len()];
+        for (i, d) in self.modifiers.iter_mut().enumerate() {
+            let ctx = format!("modifier/{}", d.id);
+            if d.stat.is_empty() || !d.value.is_finite() {
+                return Err(format!("{ctx}: a modifier names a stat and adds a finite value to it"));
+            }
+            match get("thing", &d.thing, &ctx) {
+                Ok(t) => {
+                    d.thing_r = Some(t);
+                    by_thing[t as usize].push(i as u16);
+                }
+                // An optional mod's thing, with that mod not installed: nothing
+                // to modify, and normal, as patching it would be. A thing its
+                // mod doesn't have is a mistake worth saying.
+                Err(_) => {
+                    let owner = d.thing.split_once(':').map(|(m, _)| format!("{m}:"));
+                    let loaded = owner.is_none_or(|m| self.index.keys().any(|(_, id)| id.starts_with(&m)));
+                    if loaded {
+                        self.warnings.push(format!("{ctx}: no thing '{}' is loaded, so it does nothing", d.thing));
+                    }
+                }
+            }
+        }
+        self.thing_modifiers = by_thing;
         for d in &mut self.creatures {
             let ctx = format!("creature/{}", d.id);
             d.rgb = parse_color(&d.color).map_err(|e| format!("{ctx}: {e}"))?;

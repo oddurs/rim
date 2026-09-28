@@ -1112,6 +1112,10 @@ pub fn client_view(app: &mut App, mouse: (f32, f32), time: f64) -> ClientView {
                 },
                 work: t.work,
                 hp: t.hp,
+                locked: match t.tool {
+                    Tool::Build(d) => app.sim.world.build_lock(d).unwrap_or_default(),
+                    _ => String::new(),
+                },
             })
             .collect(),
         stuff: stuff_view(app),

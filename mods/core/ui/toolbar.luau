@@ -365,8 +365,9 @@ local function tile(tool, n: number?)
 	}, {
 		swatch(tool.color, 18),
 		col({ gap = "xxs", grow = 1 }, {
-			label(tool.label, { weight = if tool.active then "strong" else nil }),
-			tool.cost ~= "" and label(tool.cost, { size = "small", color = "faint" }),
+			label(tool.label, { weight = if tool.active then "strong" else nil, color = if tool.locked ~= "" then "muted" else nil }),
+			-- A locked buildable says why in place of its cost.
+			if tool.locked ~= "" then label(tool.locked, { size = "small", color = "faint" }) else tool.cost ~= "" and label(tool.cost, { size = "small", color = "faint" }),
 		}),
 		n and n <= NUMBERED and keycap(tostring(n)),
 	})
@@ -456,6 +457,7 @@ local function blueprint(view, tool, group_label: string)
 	return col({ id = "core:dock.card", w = 236, padx = "l", pady = "m", gap = "m", clip = true }, {
 		head(caption(t("core:dock.blueprint", "Blueprint")), caption(group_label)),
 		label(tool.label, { size = "heading", weight = "strong" }),
+		tool.locked ~= "" and label(tool.locked, { color = "bad", wrap = true }),
 		stats,
 		mats and head(caption(t("core:dock.material", "Material")), nil),
 		mats,
@@ -629,7 +631,8 @@ local function pill(view, tool)
 		end
 	end
 	local what = if chosen then string.format(t("core:dock.placing_in", "%s in %s"), tool.label, chosen.label) else tool.label
-	local sub = if tool.category == "build"
+	local sub = if tool.locked ~= "" then tool.locked
+		elseif tool.category == "build"
 		then (if tool.cost ~= "" then tool.cost .. " · " else "") .. string.format(t("core:dock.work_n", "%d work"), tool.work)
 		else t("core:dock.drag", "drag on the map")
 	-- One line, so it fits the bar without changing its height.

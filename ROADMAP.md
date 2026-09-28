@@ -629,7 +629,7 @@ Dig down. The map becomes a stack of 2D levels joined only at stairs, ladders an
 
 ## crafting — Crafting
 
-`#######···` 64% · 18 of 28 done · due 2027-05-01
+`#######···` 68% · 19 of 28 done · due 2027-05-01
 
 Production chains: workbenches and bills, cooking, farming, tailoring, research as a plugin.
 
@@ -638,7 +638,6 @@ Production chains: workbenches and bills, cooking, farming, tailoring, research 
 - [ ] `63811969` Spoilage, and keeping things by where they're stored <sup>feature · p3 · m · engine</sup>
 - [ ] `6dd4891c` Ground wetness and snow in core <sup>content · p0 · m · core</sup>
 - [ ] `6f1e7410` Snow and mud slow movement <sup>feature · p3 · s · engine</sup>
-- [ ] `704889c9` Research as a plugin <sup>feature · p1 · l · plugin</sup>
 - [ ] `b1444a26` Farming: growing zones and crops <sup>feature · p0 · l · engine</sup>
 - [ ] `db7f1e06` Mining that rewards looking: rock kinds, veins and prospecting <sup>content · p1 · m · core</sup>
 - [ ] `e1be8ebd` Plants grow in the weather <sup>feature · p0 · m · engine</sup>
@@ -652,6 +651,7 @@ Production chains: workbenches and bills, cooking, farming, tailoring, research 
 - [x] `629e1fa7` Nothing is lost when a carried stack doesn't fit where it's set down <sup>bug · p1 · s · engine</sup>
 - [x] `6ce26632` The UI draws a thing's look: the item token <sup>feature · p1 · m · client</sup>
 - [x] `6ec6da26` primitive: baskets, pots as stores, a woodpile and a stone bin <sup>content · p2 · s · plugin</sup>
+- [x] `704889c9` Research as a plugin <sup>feature · p1 · l · plugin</sup>
 - [x] `9b569a33` Terrain properties, tags and distance-to inputs <sup>feature · p0 · s · engine</sup>
 - [x] `ac643c1f` Stock ledger and holdings: counts by thing, material and chunk <sup>perf · p1 · m · engine</sup>
 - [x] `c2b1b623` Map generation seeds spawns by def index, so adding a def reshuffles maps <sup>bug · p2 · s · engine</sup>
