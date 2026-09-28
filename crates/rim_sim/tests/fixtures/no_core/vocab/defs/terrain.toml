@@ -1,0 +1,6 @@
+[[terrain]]
+id = "ground"
+label = "ground"
+color = "#6b8f4e"
+path_cost = 100
+gen = { elevation = [0.0, 1.0], priority = 1 }

@@ -3329,10 +3329,10 @@ impl DefDb {
             }
         }
         if self.terrain.is_empty() {
-            return Err("no terrain defined — is the core mod installed?".into());
+            return Err("no [[terrain]] defined: a game needs at least one (the core mod has them; a replacement declares its own, see docs/modding/replacing-core.md)".into());
         }
         if self.start.is_none() {
-            return Err("no [[start]] defined — is the core mod installed?".into());
+            return Err("no [[start]] defined: a game needs one (the core mod has it; a replacement declares its own, see docs/modding/replacing-core.md)".into());
         }
         Ok(())
     }
