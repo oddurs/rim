@@ -19,6 +19,14 @@ pub fn check_mod_ui(mod_dir: &Path) -> Vec<String> {
             return out;
         }
     }
+    // Bodies (DESIGN.md §6h) read as they would in the game.
+    if let Ok(text) = std::fs::read_to_string(mod_dir.join("ui").join("bodies.toml")) {
+        let (bodies, errors) = crate::body::parse(&manifest.id, &text);
+        if bodies.is_empty() && errors.is_empty() {
+            out.push(format!("{}/ui/bodies.toml: declares no [[body]]", manifest.id));
+        }
+        out.extend(errors.into_iter().map(|e| format!("{}/ui/bodies.toml: {e}", manifest.id)));
+    }
     let files = crate::vm::ui_files(mod_dir);
     for f in files.iter().filter(|f| f.extension().is_some_and(|e| e == "luau")) {
         let Ok(src) = std::fs::read_to_string(f) else { continue };
@@ -240,6 +248,26 @@ mod tests {
         .unwrap();
         let problems = check_mod_ui(&dir);
         assert_eq!(problems, vec!["mod 'probe' targets ui_api 0.9 but the engine provides 0.6".to_string()]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_body_that_would_not_draw_fails_the_check() {
+        let dir = std::env::temp_dir().join(format!("rim-bodycheck-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("ui")).unwrap();
+        std::fs::write(dir.join("mod.toml"), "id = \"probe\"\nname = \"p\"\nversion = \"0\"\napi = \"0.6\"\n").unwrap();
+        let body = "[[body]]\nid = \"crab\"\ncreatures = [\"crab\"]\nparts = [{ id = \"shell\", sqash = 2 }]\n";
+        std::fs::write(dir.join("ui/bodies.toml"), body).unwrap();
+        let problems = check_mod_ui(&dir);
+        assert_eq!(problems.len(), 1, "{problems:?}");
+        assert!(
+            problems[0].starts_with("probe/ui/bodies.toml: body crab: part shell: unknown field `sqash`"),
+            "{}",
+            problems[0]
+        );
+        std::fs::write(dir.join("ui/bodies.toml"), body.replace("sqash", "squash")).unwrap();
+        assert_eq!(check_mod_ui(&dir), Vec::<String>::new());
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

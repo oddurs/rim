@@ -985,6 +985,27 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.check(saw_round, "a turn is drawn round, off the straight steps");
     t.check(strayed.is_none(), format!("the drawn pawn stays in the cells it steps between ({strayed:?})"));
     t.check(t.app.motion.facing(founder).is_some(), "a pawn that has walked faces a way");
+
+    // --------------------------------------------------- 535a1fb9 bodies
+    println!("\n# pawns are plan figures, in one batch at three levels of detail (DESIGN.md §6h)");
+    let (cam, paused) = ((t.app.cam.x, t.app.cam.y, t.app.cam.zoom), t.app.paused);
+    t.app.paused = true;
+    let at = t.pawn(founder).pos;
+    t.focus(at);
+    for (z, name) in [(7.0, "figures-dot"), (15.0, "figures-silhouette"), (40.0, "figures-full")] {
+        t.app.cam.zoom = z;
+        t.shot(name).await;
+        let calls = t.app.figures.calls;
+        t.check(calls == 1, format!("every pawn's figure is one draw call at {z} points a cell ({calls})"));
+        // Handing the batch to GL is submission, as the chunk meshes' is:
+        // on a software rasteriser it is drawing, not building the pass.
+        let (gl, sent) = (t.app.render_us.gl, t.app.figures.gl_us);
+        t.check(
+            sent > 0.0 && gl >= sent,
+            format!("the figures' GL time is counted as submission ({sent:.0} of {gl:.0} µs)"),
+        );
+    }
+    (t.app.cam.x, t.app.cam.y, t.app.cam.zoom, t.app.paused) = (cam.0, cam.1, cam.2, paused);
     let built = t.w().ecs.query::<&Thing>().without::<&Blueprint>().iter().filter(|th| th.def == wall).count();
     t.check(built > 0, format!("the warrior chopped and built walls ({built})"));
     t.focus(site.offset(3, 3));

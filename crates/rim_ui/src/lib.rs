@@ -13,6 +13,7 @@
 //! 4. lays out (cached by tree hash) and paints.
 
 pub mod api;
+pub mod body;
 pub mod check;
 pub mod edit;
 pub mod fontcache;
@@ -303,6 +304,9 @@ fn client_hash(c: &ClientView) -> u64 {
 pub struct Ui {
     pub text: Text,
     pub theme: Theme,
+    /// What creatures look like from above (DESIGN.md §6h), from every
+    /// mod's `ui/bodies.toml`; reloaded with the theme.
+    pub bodies: body::Bodies,
     pub vm: UiVm,
     mods: Vec<ModDir>,
     user_scale: f32,
@@ -405,6 +409,8 @@ impl Ui {
         theme.warnings.extend(text.info.load_errors.iter().map(|e| format!("font file ignored: {e}")));
         let mut images = image::Images::load(&dirs);
         theme.warnings.append(&mut images.warnings);
+        let mut bodies = body::Bodies::load(&dirs);
+        theme.warnings.append(&mut bodies.warnings);
         if let Some(want) = &text.info.missing {
             let by = theme.set_by.get("font.family").cloned().unwrap_or_default();
             theme.warnings.push(format!(
@@ -419,6 +425,7 @@ impl Ui {
         Ok(Ui {
             text,
             theme,
+            bodies,
             vm,
             mods,
             user_scale,
@@ -750,12 +757,16 @@ impl Ui {
         let mut theme = Theme::load(&dirs, self.theme.scale);
         let mut images = image::Images::load(&dirs);
         theme.warnings.append(&mut images.warnings);
+        let mut bodies = body::Bodies::load(&dirs);
+        theme.warnings.append(&mut bodies.warnings);
         let vm = UiVm::load(&self.mods);
         let broken: Vec<String> = vm
             .warnings
             .iter()
             .chain(&theme.warnings)
-            .filter(|w| !w.starts_with("UI conflict") && !w.starts_with("theme conflict"))
+            .filter(|w| {
+                !w.starts_with("UI conflict") && !w.starts_with("theme conflict") && !w.starts_with("body conflict")
+            })
             .cloned()
             .collect();
         if !broken.is_empty() {
@@ -769,6 +780,7 @@ impl Ui {
         self.last_trees.clear();
         self.text.set_leading(theme.leading(false), theme.leading(true));
         self.theme = theme;
+        self.bodies = bodies;
         vm.ui_scale.set(self.user_scale);
         self.vm = vm;
         self.images = images;

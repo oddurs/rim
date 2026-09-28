@@ -1336,6 +1336,40 @@ fn hot_reload_swaps_the_ui_and_keeps_the_last_good_one_on_error() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// Bodies are client data (DESIGN.md §6h): saving `ui/bodies.toml` redraws
+/// every creature on the next frame, with no sim reload, and a broken one
+/// keeps the last good bodies and names the file and part.
+#[test]
+fn a_changed_body_reloads_without_touching_the_sim() {
+    let dir = scratch_mods("bodyreload", &[]);
+    let mut sim = sim_at(&dir);
+    let mut ui = ui_for(&sim);
+    let r = |ui: &rim_ui::Ui| {
+        ui.bodies.for_creature("core:human").and_then(|b| b.parts.iter().find(|p| p.id == "head")).map(|p| p.shape)
+    };
+    assert_eq!(r(&ui), Some(rim_ui::body::Shape::Disc { r: 0.115, squash: 1.0 }));
+
+    let bodies = dir.join("core/ui/bodies.toml");
+    let src = std::fs::read_to_string(&bodies).unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    std::fs::write(&bodies, src.replace("y = -0.03, r = 0.115,", "y = -0.03, r = 0.14,")).unwrap();
+    assert!(ui.check_reload(10.0), "a changed body should reload");
+    assert_eq!(r(&ui), Some(rim_ui::body::Shape::Disc { r: 0.14, squash: 1.0 }), "the new head is drawn");
+
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    std::fs::write(&bodies, src.replace("r = 0.115,", "r = 0.115, sqash = 1,")).unwrap();
+    assert!(!ui.check_reload(20.0), "a broken body must not replace the running ones");
+    let why = ui.reload_error.clone().unwrap_or_default();
+    assert!(why.contains("core/ui/bodies.toml: body human: part head: unknown field `sqash`"), "{why}");
+    assert_eq!(r(&ui), Some(rim_ui::body::Shape::Disc { r: 0.14, squash: 1.0 }), "the last good bodies stay");
+
+    sim.step();
+    let mut fresh = sim_at(&dir);
+    fresh.step();
+    assert_eq!(sim.world.state_hash(), fresh.world.state_hash(), "reloading bodies touched the simulation");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn whole_ui_fits_the_frame_budget_with_30_colonists() {
     frame_budget(&mods(), 20..=45);
