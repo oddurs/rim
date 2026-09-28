@@ -671,7 +671,7 @@ Dig down. The map becomes a stack of 2D levels joined only at stairs, ladders an
 
 ## crafting — Crafting
 
-`#########·` 90% · 27 of 30 done · due 2027-05-01
+`##########` 90% · 28 of 31 done · due 2027-05-01
 
 Production chains: workbenches and bills, cooking, farming, tailoring, research as a plugin.
 
@@ -685,6 +685,7 @@ Production chains: workbenches and bills, cooking, farming, tailoring, research 
 - [x] `2c03427e` Cooking: raw food into meals <sup>content · p1 · s · core</sup>
 - [x] `4f3e5d8d` mods/timber: planks, plank walls, crates, shelves, racks and a granary <sup>content · p2 · m · plugin</sup>
 - [x] `5e323021` Store inspector: Contents and Accepts tabs <sup>feature · p1 · m · core</sup>
+- [x] `5e6024f3` Apparel names a material property in engine code, and main is red <sup>bug · p0</sup>
 - [x] `629e1fa7` Nothing is lost when a carried stack doesn't fit where it's set down <sup>bug · p1 · s · engine</sup>
 - [x] `63811969` Spoilage, and keeping things by where they're stored <sup>feature · p3 · m · engine</sup>
 - [x] `6ce26632` The UI draws a thing's look: the item token <sup>feature · p1 · m · client</sup>

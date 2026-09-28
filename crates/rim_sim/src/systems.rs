@@ -92,7 +92,7 @@ pub fn needs(w: &mut World) {
         let talks = defs.creature(p.def).intelligent;
         let mut dmg = 0.0;
         // What it wears keeps the cold off an insulated need.
-        let warmth = if p.worn.is_empty() { 0.0 } else { w.insulation(&p) };
+        let warmth = if p.worn.is_empty() { 0.0 } else { w.warmth_worn(&p) };
         for (k, n) in p.needs.iter_mut().enumerate() {
             let nd = defs.need(n.0);
             let was = n.1;

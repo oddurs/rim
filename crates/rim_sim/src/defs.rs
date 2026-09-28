@@ -433,9 +433,14 @@ pub struct ApparelDef {
     /// Where it's worn: one garment a layer ("body", "outer"). Any names.
     pub layer: String,
     /// Degrees the cold end of an `insulated` need's comfort goes down
-    /// while it's worn, times its material's `insulation` factor.
+    /// while it's worn.
     #[serde(default)]
-    pub insulation: f64,
+    pub warmth: f64,
+    /// The material factor that scales `warmth` (by name, so the engine
+    /// knows no material property): a wool coat is warmer than a linen
+    /// one. None means the material doesn't matter.
+    #[serde(default)]
+    pub factor: Option<String>,
     /// Hit points a day of wearing costs; at none it's worn out.
     #[serde(default)]
     pub wear_per_day: f64,
@@ -749,7 +754,7 @@ pub struct NeedDef {
     #[serde(default = "d01")]
     pub recover_days: f64,
     /// A field need that clothing eases: its comfort's cold end goes down by
-    /// what the pawn wears (`apparel.insulation`).
+    /// what the pawn wears (`apparel.warmth`).
     #[serde(default)]
     pub insulated: bool,
     /// What a pawn who can talk says as the need drops below a level.
