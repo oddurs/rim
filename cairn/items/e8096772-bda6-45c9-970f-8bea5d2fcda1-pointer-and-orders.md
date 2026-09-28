@@ -3,9 +3,10 @@ id: e8096772-bda6-45c9-970f-8bea5d2fcda1
 key: pointer
 title: Pointer and Orders
 type: milestone
-status: backlog
+status: done
 created: 2026-09-26
-updated: 2026-09-26
+updated: 2026-09-27
+closed_at: 2026-09-27
 priority: p1
 api: additive
 ---
