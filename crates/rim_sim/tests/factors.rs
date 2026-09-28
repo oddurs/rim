@@ -1,6 +1,9 @@
 //! Material factors: the def says the base, the material scales it, and the
 //! engine never learns what any of the names mean.
 
+mod common;
+
+use common::open_cells;
 use rim_sim::defs::DefId;
 use rim_sim::hecs::Entity;
 use rim_sim::world::{Blueprint, Thing, Work};
@@ -17,15 +20,6 @@ fn sim() -> Sim {
 
 fn thing(s: &Sim, id: &str) -> DefId {
     s.world.defs.thing_id(id).unwrap_or_else(|| panic!("defs have {id}"))
-}
-
-fn open_cells(s: &Sim, n: usize) -> Vec<IVec> {
-    let c = s.world.colony_center().expect("a colony");
-    (1..30)
-        .flat_map(|r| (-r..=r).flat_map(move |dy| (-r..=r).map(move |dx| c.offset(dx, dy))))
-        .filter(|&p| s.world.map.passable(p) && s.world.map.fixture_at(p).is_none() && s.world.map.item_at(p).is_none())
-        .take(n)
-        .collect()
 }
 
 fn blueprint(s: &mut Sim, def: DefId, stuff: DefId, at: IVec) -> Entity {

@@ -1,6 +1,9 @@
 //! Deconstruct: take a built thing down and get some of it back, in what
 //! it was made of.
 
+mod common;
+
+use common::open_cells;
 use rim_sim::defs::{DefId, Targets};
 use rim_sim::hecs::Entity;
 use rim_sim::order;
@@ -31,15 +34,6 @@ fn thing(s: &Sim, id: &str) -> DefId {
 fn deconstruct_id(s: &Sim) -> DefId {
     s.world.defs.designations.iter().position(|d| d.targets == Targets::Built).expect("core offers deconstruct")
         as DefId
-}
-
-fn open_cells(s: &Sim, n: usize) -> Vec<IVec> {
-    let c = s.world.colony_center().expect("a colony");
-    (1..30)
-        .flat_map(|r| (-r..=r).flat_map(move |dy| (-r..=r).map(move |dx| c.offset(dx, dy))))
-        .filter(|&p| s.world.map.passable(p) && s.world.map.fixture_at(p).is_none() && s.world.map.item_at(p).is_none())
-        .take(n)
-        .collect()
 }
 
 /// Build it the way the colony would: owned, made of `stuff`.

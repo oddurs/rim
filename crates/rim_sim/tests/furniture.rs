@@ -1,6 +1,9 @@
 //! Core's furniture: a table, a chair that is a seat beside it, and a
 //! stove that warms a room to its cap. All content on 0212-0218.
 
+mod common;
+
+use common::open_cells;
 use rim_sim::defs::DefId;
 use rim_sim::hecs::Entity;
 use rim_sim::world::{Blueprint, Job, MadeOf, Pawn, NEED_MAX};
@@ -34,15 +37,6 @@ fn set_need(s: &mut Sim, e: Entity, id: &str, v: i32) {
             x.1 = v;
         }
     });
-}
-
-fn open_cells(s: &Sim, n: usize) -> Vec<IVec> {
-    let c = s.world.colony_center().expect("a colony");
-    (1..30)
-        .flat_map(|r| (-r..=r).flat_map(move |dy| (-r..=r).map(move |dx| c.offset(dx, dy))))
-        .filter(|&p| s.world.map.passable(p) && s.world.map.fixture_at(p).is_none() && s.world.map.item_at(p).is_none())
-        .take(n)
-        .collect()
 }
 
 fn put(s: &mut Sim, id: &str, p: IVec) -> Entity {

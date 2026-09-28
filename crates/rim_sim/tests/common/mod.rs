@@ -138,6 +138,20 @@ pub fn loose_cells(sim: &Sim, from: IVec, n: usize) -> Vec<IVec> {
         .collect()
 }
 
+/// The `n` open cells nearest the colony: passable, with no fixture or
+/// item. Ring by ring, each ring's own cells, so no cell comes twice and
+/// two builds never share one.
+pub fn open_cells(s: &Sim, n: usize) -> Vec<IVec> {
+    let c = s.world.colony_center().expect("a colony");
+    (1..30)
+        .flat_map(|r| {
+            (-r..=r).flat_map(move |dy| (-r..=r).map(move |dx| c.offset(dx, dy))).filter(move |p| p.chebyshev(c) == r)
+        })
+        .filter(|&p| s.world.map.passable(p) && s.world.map.fixture_at(p).is_none() && s.world.map.item_at(p).is_none())
+        .take(n)
+        .collect()
+}
+
 /// Put every colonist in core's Hand role, which sets nothing: for tests of
 /// stances, rules and work choice that shouldn't depend on Auto's plan.
 pub fn hands(s: &mut Sim) {

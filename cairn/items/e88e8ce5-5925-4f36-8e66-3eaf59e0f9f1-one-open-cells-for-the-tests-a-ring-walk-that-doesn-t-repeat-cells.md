@@ -2,9 +2,11 @@
 id: e88e8ce5-5925-4f36-8e66-3eaf59e0f9f1
 title: 'One open_cells for the tests: a ring walk that doesn''t repeat cells'
 type: chore
-status: backlog
+status: done
+assignee: Oddur Sigurdsson
 created: 2026-09-27
-updated: 2026-09-27
+updated: 2026-09-28
+closed_at: 2026-09-28
 priority: p3
 api: none
 effort: s
@@ -23,4 +25,8 @@ Eight test files copy a helper that finds open cells ring by ring, but each ring
 
 ## Acceptance criteria
 
-- [ ] No test file keeps its own copy, and the suite passes
+- [x] No test file keeps its own copy, and the suite passes
+
+## 2026-09-28
+
+Six copies were left, not eight: feels_like, boundary and snapshot had dropped theirs. stuff.rs's fixed ring walk is now common::open_cells. The client's draw.rs has its own ring walk with a different signature, which already walks only each ring's edge, so it stays.

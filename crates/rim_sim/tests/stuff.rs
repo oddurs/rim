@@ -1,6 +1,9 @@
 //! Stuff: a buildable says how much material it takes, the player says of
 //! what. One wall, built out of anything structural.
 
+mod common;
+
+use common::open_cells;
 use rim_sim::defs::DefId;
 use rim_sim::hecs::Entity;
 use rim_sim::world::{Blueprint, MadeOf, Thing};
@@ -27,20 +30,6 @@ fn site(s: &Sim) -> IVec {
         .flat_map(|r| [c.offset(r, 0), c.offset(-r, 0), c.offset(0, r), c.offset(0, -r)])
         .find(|&p| s.world.map.passable(p) && s.world.map.fixture_at(p).is_none() && s.world.map.item_at(p).is_none())
         .expect("open ground")
-}
-
-/// `n` distinct open cells near the colony.
-fn open_cells(s: &Sim, n: usize) -> Vec<IVec> {
-    let c = s.world.colony_center().expect("a colony");
-    (1..30)
-        // Each ring's own cells: a whole square per ring would repeat the
-        // inner ones, and two builds would share a cell.
-        .flat_map(|r| {
-            (-r..=r).flat_map(move |dy| (-r..=r).map(move |dx| c.offset(dx, dy))).filter(move |p| p.chebyshev(c) == r)
-        })
-        .filter(|&p| s.world.map.passable(p) && s.world.map.fixture_at(p).is_none() && s.world.map.item_at(p).is_none())
-        .take(n)
-        .collect()
 }
 
 fn blueprint_at(s: &Sim, p: IVec) -> Option<(Entity, Blueprint, Option<MadeOf>)> {
