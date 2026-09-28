@@ -109,6 +109,19 @@ impl T {
         &self.app.sim.world
     }
 
+    /// Fed, rested, warm and whole: a section that lets weather pass keeps
+    /// the colony alive, because later sections select, draft and follow
+    /// the founder. Dying in a storm is fair in play, not in the harness.
+    fn keep_well(&mut self) {
+        let w = &mut self.app.sim.world;
+        let colony: Vec<Entity> = w.colonists().collect();
+        for e in colony {
+            let Ok(mut p) = w.ecs.get::<&mut Pawn>(e) else { continue };
+            p.needs.iter_mut().for_each(|n| n.1 = NEED_MAX);
+            p.hp = w.defs.creature(p.def).max_hp;
+        }
+    }
+
     fn pawn(&self, e: Entity) -> Pawn {
         (*self.w().ecs.get::<&Pawn>(e).expect("pawn exists")).clone()
     }
@@ -1920,9 +1933,20 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         _ => None,
     };
     t.check(head == Some(Data::Str("weather:storm".into())), format!("forcing a storm from devtools works ({head:?})"));
+    // A day of the forced storm with nobody told to shelter would kill
+    // colonists on some machines and not others: the day passes mild.
+    let (temp, rain) = (
+        defs.lookup("field", "temperature").unwrap() as usize,
+        defs.lookup("field", "precipitation").unwrap() as usize,
+    );
+    t.app.sim.world.fields.set_ambient(temp, Some(16.0));
+    t.app.sim.world.fields.set_ambient(rain, Some(0.0));
     let before = t.w().tick;
     t.click_ui("weather:devtools.advance.24").await;
     let skipped = t.w().tick - before;
+    t.app.sim.world.fields.set_ambient(temp, None);
+    t.app.sim.world.fields.set_ambient(rain, None);
+    t.keep_well();
     t.check(skipped >= rim_sim::TICKS_PER_DAY, format!("+1 day runs the sim a day forward ({skipped} ticks)"));
     t.frame().await;
     t.shot("weather_devtools").await;
@@ -1989,6 +2013,7 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     }
     while !(22.0..23.0).contains(&t.w().hour()) {
         t.ticks(100);
+        t.keep_well();
     }
     t.focus(site.offset(3, 3));
     t.shot("night").await;
@@ -2054,6 +2079,9 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         let f = field(&t, id);
         t.app.sim.world.fields.set_ambient(f, None);
     }
+
+    // The weather section leaves the colony as it found it.
+    t.keep_well();
 
     // ---------------------------------------------------------- 8f4f1de8 sun shadows
     println!("\n# the sun casts shadows, and a still sun costs nothing (8f4f1de8)");
