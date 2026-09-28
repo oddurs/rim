@@ -110,10 +110,17 @@ bench() {
   cargo run --release -p rim_client -- --background --seed 1 --bench-render --frames 100 --sprite-mods 20 --check
 }
 
+# The tooling's own tests.
+scripts_test() {
+  step scripts
+  scripts/test-pre-push
+}
+
 check() {
   fmt_check
   types
   roadmap
+  scripts_test
   lint
   test_rust
   build
@@ -152,11 +159,12 @@ usage() {
   cat <<'EOF'
 usage: scripts/task <verb> [args]
 
-  check      the whole gate: fmt:check types roadmap lint test build fma mods crosscheck
+  check      the whole gate: fmt:check types roadmap scripts lint test build fma mods crosscheck
   fmt        format the workspace
   fmt:check  fail if anything isn't formatted
   types      mod scripts against the declared Luau APIs
   roadmap    cairn items match the schema and ROADMAP.md is current
+  scripts    the tooling's own tests: the pre-push hook
   lint       clippy over every target, warnings denied
   test       nextest over the workspace; `test -- ARGS` passes ARGS to nextest
   build      release binaries and examples
@@ -179,6 +187,7 @@ case "$verb" in
   fmt:check) fmt_check ;;
   types) types ;;
   roadmap) roadmap ;;
+  scripts) scripts_test ;;
   lint) lint ;;
   test) test_rust "$@" ;;
   build) build ;;
