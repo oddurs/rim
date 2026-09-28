@@ -444,6 +444,31 @@ fn penumbra(cloud: f32) -> f32 {
     0.03 + 0.15 * (cloud / 100.0).clamp(0.0, 1.0)
 }
 
+/// How brightly a roof slope is lit, north, west, east, south and flat, as
+/// a factor on the outdoor light. The sun's `share` of it falls on a slope
+/// by how squarely the slope faces the sun, against flat ground's, so a
+/// flat roof is lit as the ground is; a slope turned from a low sun gets the
+/// sky alone. Without a sun, a fixed light from the north-west, as roofs had
+/// before there was one, and in between the two by how much of the light
+/// is the sun's: no jump at sunset, and relief under cloud.
+pub fn roof_faces(sun: Option<(f64, f64)>, share: f32) -> [f32; 5] {
+    const UNLIT: [f32; 5] = [1.14, 1.02, 0.86, 0.74, 1.0];
+    /// The most a slope facing a low sun gets, against flat ground.
+    const FACING: f32 = 1.6;
+    let Some((az, elev)) = sun.filter(|s| s.1 > 0.0) else { return UNLIT };
+    let k = (share / DIRECT).clamp(0.0, 1.0);
+    let (az, elev) = (az.to_radians() as f32, elev.to_radians() as f32);
+    let s = vec3(elev.cos() * az.cos(), elev.cos() * az.sin(), elev.sin());
+    let p = crate::occluders::ROOF_PITCH as f32;
+    // Each slope descends toward its side: its normal leans that way.
+    let lit = |face: usize, dx: f32, dy: f32| {
+        let n = vec3(p * dx, p * dy, 1.0).normalize();
+        let sunlit = (1.0 - share) + share * (n.dot(s) / s.z).clamp(0.0, FACING);
+        UNLIT[face] + (sunlit - UNLIT[face]) * k
+    };
+    [lit(0, 0.0, -1.0), lit(1, -1.0, 0.0), lit(2, 1.0, 0.0), lit(3, 0.0, 1.0), 1.0]
+}
+
 fn rgb3(c: [u8; 3]) -> Vec3 {
     vec3(c[0] as f32 / 255.0, c[1] as f32 / 255.0, c[2] as f32 / 255.0)
 }
@@ -780,13 +805,15 @@ impl Light {
 
     /// Bring every cached result up to date. Call before the world is drawn,
     /// with the default camera: it draws into targets of its own.
-    pub fn prepare(&mut self, w: &World, air: &Air, px_per_cell: f32) {
+    /// `roofs` is each cell's roof, in steps in from its eaves
+    /// (`Roofs::height`), so a house shades by its roof's shape.
+    pub fn prepare(&mut self, w: &World, air: &Air, px_per_cell: f32, roofs: &[u8]) {
         self.passes.clear();
         // Zooming out drops texels, so the light never costs more than the
         // pixels it covers; a new size rebuilds every target.
         self.texels = texels_for(self.setting.quality.texels, px_per_cell, self.texels.max(1));
         let t = self.pass_begin();
-        let changed = self.occluders.update(w);
+        let changed = self.occluders.update(w, roofs);
         let rooms = self.update_rooms(w);
         // Uploads, not draws.
         self.pass_end("occluders", t, changed || rooms, 0);
@@ -1125,10 +1152,18 @@ impl Light {
         true
     }
 
-    /// The light on something outdoors, above every shadow: the sky, never
-    /// darker than night. Roofs are drawn in it.
-    pub fn outdoor(w: &World, air: &Air, flash: f32) -> Vec3 {
-        Self::sky_color(w, air, flash).max(rgb3(w.defs.sky.rgb_night))
+    /// The light on something outdoors, above every shadow: the sky as the
+    /// eye has adapted to it, never darker than night, as the multiply
+    /// lights open ground. Roofs are drawn in it.
+    pub fn outdoor(&self, w: &World, air: &Air, flash: f32) -> Vec3 {
+        (Self::sky_color(w, air, flash) * self.exposure.max(1.0)).max(rgb3(w.defs.sky.rgb_night))
+    }
+
+    /// How each way a roof slopes is lit, as `roof_faces` says, for the sun
+    /// now.
+    pub fn roof_faces(&self, w: &World, air: &Air) -> [f32; 5] {
+        let sun = self.sun(w);
+        roof_faces(sun, direct_share(sun.map_or(-1.0, |s| s.1), air.cloud))
     }
 
     /// The sky's colour and brightness now: white, tinted by `[[sky]]`
@@ -1361,6 +1396,29 @@ mod tests {
         let night = exposure_for(vec3(0.05, 0.06, 0.1));
         assert!((2.0..=2.6).contains(&night), "{night}");
         assert!(exposure_for(vec3(0.3, 0.3, 0.3)) < night, "dusk is between");
+    }
+
+    #[test]
+    fn a_roof_slope_facing_the_sun_is_the_bright_one() {
+        let share = direct_share(20.0, 0.0);
+        // Morning: the sun in the east (+x), so the east slope is lit.
+        let morning = roof_faces(Some((10.0, 20.0)), share);
+        assert!(morning[2] > morning[4] && morning[4] > morning[1], "east over flat over west: {morning:?}");
+        // Evening, the other way round.
+        let evening = roof_faces(Some((170.0, 20.0)), share);
+        assert!(evening[1] > evening[4] && evening[4] > evening[2], "west over flat over east: {evening:?}");
+        // Noon from the south (+y): the south slope.
+        let noon = roof_faces(Some((90.0, 60.0)), direct_share(60.0, 0.0));
+        assert!(noon[3] > noon[0], "{noon:?}");
+        assert_eq!(noon[4], 1.0, "a flat roof is lit as the ground is");
+        let night = roof_faces(Some((200.0, -5.0)), 0.0);
+        assert_eq!(night, roof_faces(None, 0.0), "no sun, the old light from the north-west");
+        // Sunset comes on gradually, and cloud keeps the fixed light's relief.
+        let dusk = roof_faces(Some((180.0, 0.5)), direct_share(0.5, 0.0));
+        assert!(dusk.iter().zip(night).all(|(a, b)| (a - b).abs() < 0.05), "{dusk:?} against {night:?}");
+        let overcast = roof_faces(Some((90.0, 60.0)), direct_share(60.0, 100.0));
+        assert!(overcast[0] - overcast[3] > 0.25, "slopes still differ under cloud: {overcast:?}");
+        assert!(morning.iter().all(|&f| (0.0..=1.6).contains(&f)), "{morning:?}");
     }
 
     #[test]
