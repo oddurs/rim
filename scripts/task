@@ -130,6 +130,7 @@ sim() {
   cargo run --release -p rim_sim --example headless -- --days 3 --seed 1 --core
   cargo run --release -p rim_sim --example year -- --seed 1 >target/climate-report.txt
   cargo run --release -p rim_sim --example bench -- --days 0.25 --check
+  cargo run --release -p rim_sim --example bench -- --days 0.25 --winter --check
 }
 
 # The client drawn: it opens a window, so it isn't in `check`.
