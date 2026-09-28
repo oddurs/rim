@@ -256,7 +256,10 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("rim-bodycheck-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join("ui")).unwrap();
-        std::fs::write(dir.join("mod.toml"), "id = \"probe\"\nname = \"p\"\nversion = \"0\"\napi = \"0.6\"\n").unwrap();
+        // The engine's own version, so a bump doesn't fail a test of bodies.
+        let (maj, min) = rim_sim::API_VERSION;
+        let manifest = format!("id = \"probe\"\nname = \"p\"\nversion = \"0\"\napi = \"{maj}.{min}\"\n");
+        std::fs::write(dir.join("mod.toml"), manifest).unwrap();
         let body = "[[body]]\nid = \"crab\"\ncreatures = [\"crab\"]\nparts = [{ id = \"shell\", sqash = 2 }]\n";
         std::fs::write(dir.join("ui/bodies.toml"), body).unwrap();
         let problems = check_mod_ui(&dir);
