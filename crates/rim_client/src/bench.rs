@@ -21,8 +21,14 @@
 //! GPU numbers from an immediate-mode GPU. Last, what a change costs: every
 //! cached lighting result rebuilt, frame after frame.
 //!
+//! Then the pawns on their own (DESIGN.md §6h): every pawn, topped up to
+//! 200, gathered where all of them are on screen, and drawn as a dot, a
+//! silhouette and in full, with the pawns pass's CPU time, the figures and
+//! parts drawn, and the batch's draw calls.
+//!
 //! `--check` exits 1 when the world's CPU time on the whole map (clear, in
-//! a storm, or zooming through it) is over budget. `--sprite-mods N` adds N
+//! a storm, or zooming through it) is over budget, when 200 figures in full
+//! take over their budget, or when the figures take more than one call. `--sprite-mods N` adds N
 //! generated mods whose furniture is drawn from sprites. `--json FILE`
 //! writes the numbers, `--shots DIR` saves a screenshot of each view, and
 //! `--frames N` sets the frames per view.
@@ -31,13 +37,21 @@ use crate::{frame, light::PassTime, render, App, RawInput, RenderTimes, MIN_ZOOM
 use macroquad::prelude::*;
 use macroquad::telemetry;
 use rim_sim::defs::Category;
-use rim_sim::world::{Faction, Owner};
+use rim_sim::world::{Faction, Owner, Pawn};
 use rim_sim::{Command, IVec, Sim, TICKS_PER_DAY};
 use std::path::{Path, PathBuf};
 
 /// The world renderer's CPU budget per frame on the reference machine, in
 /// ms (DESIGN.md §8).
 const BUDGET_MS: f64 = 4.0;
+/// The pawns pass's share of it: 200 figures in full (DESIGN.md §6h).
+const FIGURES_MS: f64 = 0.4;
+/// Points a cell the crowd is drawn at: a dot, a silhouette, in full.
+const CROWD_ZOOMS: [f32; 3] = [7.0, 15.0, 40.0];
+/// The crowd's grid: columns, and cells between neighbours. 20 by 10 at
+/// two cells apart fits the reference screen at 40 points a cell.
+const CROWD_COLUMNS: i32 = 20;
+const CROWD_PITCH: i32 = 2;
 const SIZE: i32 = 250;
 const COLONISTS: usize = 30;
 const PAWNS: usize = 200;
@@ -282,6 +296,44 @@ fn light_the_colony(s: &mut Sim) {
             let _ = s.world.ecs.insert_one(e, Owner(Faction::Player));
         }
     }
+}
+
+/// Every pawn, topped up to `PAWNS` with colonists, the richest figure,
+/// moved on to a grid round `at` on the surface, every other one half way
+/// through a step in one of four directions. For drawing only: the sim is
+/// not stepped again.
+fn crowd(s: &mut Sim, at: IVec) {
+    let start = s.world.defs.start.as_ref().map(|st| st.creature_r);
+    while let Some(def) = start.filter(|_| s.world.pawns.len() < PAWNS) {
+        s.world.spawn_pawn(def, Faction::Player, at, None);
+    }
+    let rows = (PAWNS as i32 + CROWD_COLUMNS - 1) / CROWD_COLUMNS;
+    let steps = [(0, -1), (1, 0), (0, 1), (-1, 0)];
+    for (i, &e) in s.world.pawns.clone().iter().enumerate() {
+        let Ok(mut p) = s.world.ecs.get::<&mut Pawn>(e) else { continue };
+        let i = i as i32;
+        let (col, row) = (i % CROWD_COLUMNS, i / CROWD_COLUMNS);
+        p.pos = IVec::at(at.x + (col - CROWD_COLUMNS / 2) * CROWD_PITCH, at.y + (row - rows / 2) * CROWD_PITCH, 0);
+        p.active = true;
+        p.next = (i % 2 == 0).then(|| {
+            let (dx, dy) = steps[(i / 2 % 4) as usize];
+            p.pos.offset(dx, dy)
+        });
+        p.step_ticks = p.step_ticks.max(2);
+        p.progress = p.step_ticks / 2;
+    }
+}
+
+/// The crowd at one zoom.
+struct Crowd {
+    zoom: f32,
+    lod: crate::figures::Lod,
+    /// Mean CPU of the pawns pass, µs.
+    pawns: f64,
+    /// Figures and parts drawn, and the batch's draw calls, on the last frame.
+    shown: usize,
+    parts: usize,
+    calls: usize,
 }
 
 struct View {
@@ -704,6 +756,37 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
     }
     app.light.time_gpu(false);
     let rebuilt = pass_means(&rebuilds, &rebuilds);
+
+    // Last, as it moves every pawn: the crowd.
+    crowd(&mut app.sim, centre);
+    pin(&mut app, CLEAR);
+    app.cam.z = 0;
+    app.cam.x = centre.x as f32 + 0.5;
+    app.cam.y = centre.y as f32 + 0.5;
+    app.render_scale = Some(1.0);
+    app.motion.face(&app.sim.world, &app.worksites, 0.0);
+    let mut crowds = Vec::new();
+    for zoom in CROWD_ZOOMS {
+        app.cam.zoom = zoom;
+        for _ in 0..10 {
+            draw_one(&mut app, &mut time, None).await;
+        }
+        let mut sum = 0.0;
+        for _ in 0..frames {
+            draw_one(&mut app, &mut time, None).await;
+            sum += app.render_us.pawns;
+        }
+        let shot = shots.as_ref().map(|d| d.join(format!("crowd_{zoom}.png")));
+        draw_one(&mut app, &mut time, shot.as_deref()).await;
+        crowds.push(Crowd {
+            zoom,
+            lod: crate::figures::lod(zoom),
+            pawns: sum / frames.max(1) as f64,
+            shown: app.figures_shown.len(),
+            parts: app.figures.len(),
+            calls: app.figures.calls,
+        });
+    }
     let renderer = crate::light::gl_renderer();
 
     println!(
@@ -780,6 +863,24 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
         })
         .collect();
     println!("light rebuild on {last}, ms: {}", costs.join("; "));
+    println!();
+    println!(
+        "{:<10} {:>5} {:<10} {:>7} {:>7} {:>7} {:>6}",
+        "crowd", "zoom", "detail", "pawns", "figures", "parts", "calls"
+    );
+    for c in &crowds {
+        println!(
+            "{:<10} {:>5.0} {:<10} {:>7.3} {:>7} {:>7} {:>6}",
+            "",
+            c.zoom,
+            format!("{:?}", c.lod).to_lowercase(),
+            c.pawns / 1e3,
+            c.shown,
+            c.parts,
+            c.calls
+        );
+    }
+    println!("ms per frame of the pawns pass's CPU; budget {FIGURES_MS} ms for {PAWNS} in full, in one call");
     let soft = if crate::light::software_gl(&renderer) { " (software: gpu times are the CPU rasterising)" } else { "" };
     println!("gl: {renderer}{soft}");
     println!("lighting: {}", app.light.setting().name());
@@ -834,10 +935,25 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
                 format!("\"{}\": {{\"cpu_ms\": {:.4}, \"gpu_ms\": {gpu}}}", p.name, p.cpu / 1e3)
             })
             .collect();
+        let crowd: Vec<String> = crowds
+            .iter()
+            .map(|c| {
+                format!(
+                    "    {{\"zoom\": {}, \"detail\": \"{}\", \"pawns_ms\": {:.4}, \"figures\": {}, \"parts\": {}, \"draw_calls\": {}}}",
+                    c.zoom,
+                    format!("{:?}", c.lod).to_lowercase(),
+                    c.pawns / 1e3,
+                    c.shown,
+                    c.parts,
+                    c.calls
+                )
+            })
+            .collect();
         let json = format!(
-            "{{\n  \"screen\": [{}, {}],\n  \"dpi\": {dpi},\n  \"frames\": {frames},\n  \"budget_ms\": {BUDGET_MS},\n  \"gl_renderer\": \"{}\",\n  \"lighting\": \"{}\",\n  \"light_rebuild_view\": \"{last}\",\n  \"light_rebuild\": {{{}}},\n  \"views\": [\n{}\n  ]\n}}\n",
+            "{{\n  \"screen\": [{}, {}],\n  \"dpi\": {dpi},\n  \"frames\": {frames},\n  \"budget_ms\": {BUDGET_MS},\n  \"figures_budget_ms\": {FIGURES_MS},\n  \"crowd\": [\n{}\n  ],\n  \"gl_renderer\": \"{}\",\n  \"lighting\": \"{}\",\n  \"light_rebuild_view\": \"{last}\",\n  \"light_rebuild\": {{{}}},\n  \"views\": [\n{}\n  ]\n}}\n",
             screen_width(),
             screen_height(),
+            crowd.join(",\n"),
             renderer.replace('"', "'"),
             app.light.setting().name(),
             rebuild.join(", "),
@@ -865,6 +981,28 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
             std::process::exit(1);
         }
         println!("render bench: within budget ({name}: {mean:.3} <= {limit:.1} ms)");
+        let figures = FIGURES_MS * slack;
+        for c in &crowds {
+            if c.calls > 1 {
+                eprintln!("render bench: the crowd at {} takes {} draw calls, not one", c.zoom, c.calls);
+                std::process::exit(1);
+            }
+        }
+        let Some(full) = crowds.iter().find(|c| c.lod == crate::figures::Lod::Full) else {
+            unreachable!("CROWD_ZOOMS has a zoom in full")
+        };
+        if full.shown < PAWNS {
+            eprintln!("render bench: only {} of the crowd's {PAWNS} figures are on screen in full", full.shown);
+            std::process::exit(1);
+        }
+        let ms = full.pawns / 1e3;
+        if ms > figures {
+            eprintln!(
+                "render bench: {PAWNS} figures in full take {ms:.3} ms of CPU, over the budget of {figures:.2} ms"
+            );
+            std::process::exit(1);
+        }
+        println!("render bench: figures within budget ({PAWNS} in full: {ms:.3} <= {figures:.2} ms, one call)");
     }
     std::process::exit(0)
 }
@@ -872,6 +1010,26 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_crowd_is_200_on_one_level_and_fits_the_screen_in_full() {
+        let mut s = Sim::new(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mods"), 1).expect("the mods load");
+        let at = IVec::new(100, 100);
+        crowd(&mut s, at);
+        assert_eq!(s.world.pawns.len(), PAWNS);
+        let cells: Vec<IVec> = s.world.pawns.iter().map(|&e| s.world.ecs.get::<&Pawn>(e).unwrap().pos).collect();
+        assert!(cells.iter().all(|c| c.z == 0));
+        let span = |f: fn(&IVec) -> i32| cells.iter().map(f).max().unwrap() - cells.iter().map(f).min().unwrap() + 1;
+        // The reference screen at 40 points a cell is 48 by 27 cells.
+        assert!(
+            span(|c| c.x) <= 1920 / 40 - 2 && span(|c| c.y) <= 1080 / 40 - 2,
+            "{} by {}",
+            span(|c| c.x),
+            span(|c| c.y)
+        );
+        let walking = s.world.pawns.iter().filter(|&&e| s.world.ecs.get::<&Pawn>(e).unwrap().next.is_some()).count();
+        assert_eq!(walking, PAWNS / 2, "every other one mid-step");
+    }
 
     #[test]
     fn the_dusk_view_sets_the_clock_to_its_hour_on_the_same_day() {

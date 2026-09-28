@@ -2,8 +2,10 @@
 id: 5ea1df47-1cd8-49e4-9a3c-4629b541945d
 title: A pawns pass in rim --bench-render, held to its budget in CI
 type: feature
-status: backlog
+status: doing
 milestone: people
+assignee: Oddur Sigurdsson
+claimed: 2026-09-28
 depends_on:
 - 535a1fb9-2cd8-4798-b31c-04f89fb1aee0
 created: 2026-09-27
