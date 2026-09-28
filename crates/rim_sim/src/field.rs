@@ -262,6 +262,10 @@ pub struct Layer {
     /// or on every level's. Empty until the first update works it out from
     /// the `init` terms.
     pub stock: Vec<i32>,
+    /// Stock fields with `move_cost`: the extra cost each cell adds to the
+    /// map, in 10% steps. Empty until worked out from the values, which a
+    /// load does afresh, so it is never saved.
+    pub move_bucket: Vec<u8>,
 }
 
 pub struct Fields {
@@ -284,6 +288,11 @@ pub struct Fields {
     /// Scratch for a stock slice's new values, `(field, cell, value)`, so a
     /// tick's reads all see the values from before it.
     stock_next: Vec<(u32, u32, i32)>,
+    /// Stock cells a script set since the last update, `(field, cell)`,
+    /// for the move costs to catch up on.
+    stock_touched: Vec<(u32, u32)>,
+    /// Cells whose move cost changed bucket, for tests and the profiler.
+    pub move_changes: u64,
 }
 
 impl Fields {
@@ -301,6 +310,7 @@ impl Fields {
                     exposure: Vec::new(),
                     exposure_for: None,
                     stock: Vec::new(),
+                    move_bucket: Vec::new(),
                 })
                 .collect(),
             atmos: defs.fields.iter().map(|f| Atmos { value: terms::to_q(f.base), ..Default::default() }).collect(),
@@ -314,6 +324,8 @@ impl Fields {
             restamped: 0,
             revision: 0,
             stock_next: Vec::new(),
+            stock_touched: Vec::new(),
+            move_changes: 0,
         }
     }
 
@@ -548,6 +560,12 @@ impl Fields {
         if !changed.is_empty() {
             self.restamp_near(map, &changed);
         }
+        // Mud follows the terrain under it: a cell dug or filled is costed
+        // again now, not when its slice next comes round.
+        let terrain_moved = std::mem::take(&mut self.stock_touched)
+            .into_iter()
+            .chain(defs.move_fields.iter().flat_map(|&f| changed.iter().map(move |&c| (f as u32, c))))
+            .collect::<Vec<_>>();
         if map.room_rebuilds != self.seen_rebuilds {
             self.carry_rooms_over(defs, map);
             self.seen_rebuilds = map.room_rebuilds;
@@ -556,6 +574,55 @@ impl Fields {
             self.step_rooms(defs, map);
         }
         self.step_stock(defs, map, clock);
+        self.update_move_costs(defs, map, &terrain_moved);
+    }
+
+    /// Snow and mud: the map's extra move cost from each `move_cost` field,
+    /// in 10% steps, changed only where a cell's step changed. It is worked
+    /// out for this tick's stock slice and the cells in `also`; for every
+    /// cell when a field has none yet (a new map, a load). Either way each
+    /// cell's cost is its current value's, so a load walks as the live game.
+    fn update_move_costs(&mut self, defs: &DefDb, map: &mut Map, also: &[(u32, u32)]) {
+        let next = std::mem::take(&mut self.stock_next);
+        for &f in &defs.move_fields {
+            let n = self.layers[f].stock.len();
+            if self.layers[f].move_bucket.len() != n {
+                self.layers[f].move_bucket = vec![0; n];
+                for i in 0..n {
+                    self.cost_cell(defs, map, f, i);
+                }
+            }
+        }
+        for &(f, i, _) in &next {
+            if defs.fields[f as usize].move_curve.is_some() {
+                self.cost_cell(defs, map, f as usize, i as usize);
+            }
+        }
+        for &(f, i) in also {
+            if (i as usize) < self.layers[f as usize].move_bucket.len() {
+                self.cost_cell(defs, map, f as usize, i as usize);
+            }
+        }
+        self.stock_next = next;
+    }
+
+    /// Work out one cell's move cost from one field, and move the map's
+    /// extra cost by the change.
+    fn cost_cell(&mut self, defs: &DefDb, map: &mut Map, f: usize, i: usize) {
+        let fd = &defs.fields[f];
+        let Some(curve) = &fd.move_curve else { return };
+        let layer = &mut self.layers[f];
+        let mut pct = curve.eval(layer.stock[i] as i64);
+        if let Some(prop) = fd.move_by_r {
+            pct = pct * defs.terrain[map.terrain[i] as usize].props_q[prop] / Q;
+        }
+        let step = ((pct.max(0) + 5 * Q) / (10 * Q)).min(u8::MAX as i64) as u8;
+        let was = layer.move_bucket[i];
+        if step != was {
+            layer.move_bucket[i] = step;
+            map.add_extra_cost(i, (step as i32 - was as i32) * 10);
+            self.move_changes += 1;
+        }
     }
 
     /// Work out every stock field that hasn't been from its `init` terms:
@@ -635,10 +702,13 @@ impl Fields {
     pub fn set_stock(&mut self, defs: &DefDb, map: &Map, field: usize, p: IVec, v: f64, add: bool) -> Option<f64> {
         self.ensure_stock(defs, map);
         let fd = &defs.fields[field];
-        let cell = self.layers[field].stock.get_mut(map.idx(p))?;
+        let i = map.idx(p);
+        let cell = self.layers[field].stock.get_mut(i)?;
         let now = if add { *cell as i64 + terms::to_q(v) } else { terms::to_q(v) };
         *cell = now.clamp(terms::to_q(fd.range[0]), terms::to_q(fd.range[1])) as i32;
-        Some(terms::from_q(*cell as i64))
+        let v = terms::from_q(*cell as i64);
+        self.stock_touched.push((field as u32, i as u32));
+        Some(v)
     }
 
     /// Rooms were rebuilt: each new room starts at the cell-weighted average

@@ -7,6 +7,8 @@
 #   fertility    how well plants grow, 1 on grass
 #   drainage     how fast standing water leaves, 0 to 1
 #   water_table  how near the ground water is, 0 (dry) to 1 (at the surface)
+#   mud          how much it turns to mud when soaked, 1 on soil; sand,
+#                rock and water don't
 # `tags` are what `{ near = "water" }` measures the distance to.
 
 [[terrain]]
@@ -59,21 +61,21 @@ id = "marsh"
 label = "marsh"
 color = "#4d6645"
 path_cost = 180
-props = { fertility = 0.8, drainage = 0.1, water_table = 0.9 }
+props = { fertility = 0.8, drainage = 0.1, water_table = 0.9, mud = 1.0 }
 gen = { moisture = [0.8, 1.0], priority = 5 }
 
 [[terrain]]
 id = "rich_soil"
 label = "rich soil"
 color = "#4f7a33"
-props = { fertility = 1.4, drainage = 0.5, water_table = 0.6 }
+props = { fertility = 1.4, drainage = 0.5, water_table = 0.6, mud = 1.0 }
 gen = { moisture = [0.58, 0.8], priority = 4 }
 
 [[terrain]]
 id = "dirt"
 label = "dirt"
 color = "#8a7355"
-props = { fertility = 0.7, drainage = 0.6, water_table = 0.3 }
+props = { fertility = 0.7, drainage = 0.6, water_table = 0.3, mud = 1.0 }
 gen = { moisture = [0.0, 0.28], priority = 4 }
 
 [[terrain]]
@@ -81,4 +83,4 @@ id = "grass"
 label = "grass"
 color = "#5d8a3c"
 gen = { priority = 0 }
-props = { fertility = 1.0, drainage = 0.5, water_table = 0.4 }
+props = { fertility = 1.0, drainage = 0.5, water_table = 0.4, mud = 1.0 }

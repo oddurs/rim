@@ -17,6 +17,10 @@ range = [0.0, 100.0]
 period_minutes = 60
 color_low = "#b59a6a"
 color_high = "#2f6fb0"
+# Soaked soil is mud: past 90% a third slower to cross. Sand and rock
+# don't turn (core's `mud` terrain prop scales it).
+move_cost = [[90, 0.0], [95, 30.0]]
+move_cost_by = "mud"
 
 # Left alone, the ground settles to its water table, damper beside water.
 # Water itself is at 100. Under a roof it settles drier.
@@ -73,6 +77,8 @@ range = [0.0, 60.0]
 period_minutes = 60
 color_low = "#8a8f96"
 color_high = "#f4f8ff"
+# Wading: 20 cm is half as slow again, 50 cm two and a half times.
+move_cost = [[0, 0.0], [20, 50.0], [50, 150.0]]
 
 # Precipitation below freezing settles, a quarter centimetre per
 # millimetre (it packs as it lies), with sleet between -2° and 1°.
