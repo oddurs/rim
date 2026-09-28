@@ -2,12 +2,12 @@
 id: c2579dbc-dfcf-418d-994f-187289e86387
 title: 'Random streams per purpose: a new draw in one system stops reshuffling the rest'
 type: feature
-status: doing
+status: done
 milestone: proving-ground
 assignee: Oddur Sigurdsson
-claimed: 2026-09-27
 created: 2026-09-27
 updated: 2026-09-28
+closed_at: 2026-09-28
 priority: p0
 api: additive
 effort: m
@@ -30,7 +30,7 @@ The world has one RNG and 29 draw sites in seven files share it (terms 6, system
 
 - [x] A test: adding a mod that calls `rim.random()` every tick changes nothing else in a 3-day run on core (same spawns, same AI outcomes, same state hash outside that mod's data)
 - [x] A test: an extra draw in the `ai` stream leaves the map's spawns identical
-- [ ] Save, load and continue matches never saving (the existing test, still passing), and the crosscheck agrees on all four platforms
+- [x] Save, load and continue matches never saving (the existing test, still passing), and the crosscheck agrees on all four platforms
 - [x] The save format version is bumped and an old save reports a version change, not a divergence
 - [x] Determinism test passes
 
@@ -53,3 +53,7 @@ Rebased onto b591c0c3: apparel wear (#267) rounded with the shared rng in pawn o
 ## 2026-09-28
 
 Rebased onto #283: water_depth's rising-water test lost its drafted pawn to a core:wolf on dry ground at tick 8630, after the water had done its work; the new rolls brought the wolf. With quiet-field (the test's author), the test now despawns Wild and Hostile pawns before each step, as animals.rs's isolated() does; its assertions are unchanged. The drafted pawn not defending itself is filed as f3aa2844.
+
+## 2026-09-28
+
+Merged as #285 (2bfadfcd). Its own CI run https://github.com/oddurs/rim/actions/runs/36429877812 on 0b5c5485: all three Test jobs, the ARM crosscheck and 'Every platform reaches the same state' green, so the four platforms agree with streams; Client failed only main's four known tray checks (green-forest's fix). Save, load and continue matches never saving (snapshot::carrying_on_after_a_load_matches_never_saving) passes in that run.

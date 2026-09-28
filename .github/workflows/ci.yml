@@ -1,15 +1,40 @@
 name: CI
 
-# PRs run once, on pull_request. `push` is for main alone: on a PR branch it
-# ran the whole workflow a second time, in another concurrency group.
+# Lanes (DESIGN.md §8a). `scripts/ci-plan` picks one per run:
+#
+# - pr       a PR push: Linux only. Cancelled by the next push.
+# - queue    the full proof, every platform, on the exact result that lands:
+#            the merge queue's own PRs, a PR pushed while labelled `full-ci`,
+#            or by hand (workflow_dispatch). Not cancelled by another push.
+# - nightly  on main: the proof, and the full suites on macOS and Windows.
+#            It also saves the caches the other platforms' jobs start from.
+# - main     a push to main: the quick checks. The queue already proved it.
+# - none     drafts, and labels that change nothing.
+#
+# Jobs call `scripts/task` verbs, so CI and the laptop run the same gate.
+# No `labeled` trigger: a run for a label would skip every job, and a skipped
+# check counts as passed under a ruleset. Add `full-ci` before the push, or
+# dispatch the queue lane on the branch.
 on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [main]
-  pull_request:
+  schedule:
+    - cron: "23 7 * * *"
+  workflow_dispatch:
+    inputs:
+      lane:
+        description: queue (the four-platform proof) or nightly (the full suites)
+        type: choice
+        options: [queue, nightly]
+        default: queue
 
+# A PR's pushes cancel each other. The merge queue's own PRs, main, the nightly
+# and dispatched runs are never cancelled.
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.event.pull_request.number || github.ref }}-${{ github.event_name }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' && !startsWith(github.head_ref, 'mergify/merge-queue/') }}
 
 env:
   CARGO_TERM_COLOR: always
@@ -20,31 +45,54 @@ env:
   # the sim and Luau. Rust's own lld links Windows several times faster than
   # link.exe (Linux gets mold from setup-mold; macOS's ld is already fast).
   CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER: rust-lld.exe
+  NEXTEST_PROFILE: ci
 
 jobs:
+  plan:
+    name: Plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      lane: ${{ steps.plan.outputs.lane }}
+      code: ${{ steps.plan.outputs.code }}
+      toolchain: ${{ steps.plan.outputs.toolchain }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+      - id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          DRAFT: ${{ github.event.pull_request.draft }}
+          HEAD_REF: ${{ github.head_ref }}
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ' ') }}
+          LANE_INPUT: ${{ inputs.lane }}
+        run: scripts/ci-plan | tee -a "$GITHUB_OUTPUT"
+
   # The quick ones, on one runner: formatting, mod scripts against the
   # declared API, and the backlog.
   checks:
     name: Format, types, roadmap
+    needs: plan
+    if: needs.plan.outputs.lane != 'none'
     runs-on: ubuntu-latest
-    env:
-      LUAU_LSP_VERSION: 1.70.0
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
-      # rust-toolchain.toml pins the version; install that one, not stable.
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: 1.98.1
+          toolchain: ${{ needs.plan.outputs.toolchain }}
           components: rustfmt
-      - run: cargo fmt --all -- --check
+      - run: scripts/task fmt:check
+      # The version scripts/task checks for, so the two can't drift.
       - name: Install luau-lsp
         run: |
-          curl -fsSL -o luau-lsp.zip "https://github.com/JohnnyMorganz/luau-lsp/releases/download/$LUAU_LSP_VERSION/luau-lsp-linux-x86_64.zip"
+          version=$(sed -n 's/^LUAU_LSP_VERSION=//p' scripts/task)
+          curl -fsSL -o luau-lsp.zip "https://github.com/JohnnyMorganz/luau-lsp/releases/download/$version/luau-lsp-linux-x86_64.zip"
           unzip -q luau-lsp.zip -d "$RUNNER_TEMP/luau-lsp"
           echo "LUAU_LSP=$RUNNER_TEMP/luau-lsp/luau-lsp" >> "$GITHUB_ENV"
       # `cargo test` (api_types) keeps the declarations in step with the host.
-      - name: Mod scripts type-check
-        run: ./scripts/check-luau.sh
+      - run: scripts/task types
       # Format 4 (UUID identities) is not in a tagged release yet, so build the
       # commit that introduced it. Go back to install.sh with
       # CAIRN_VERSION=1.0.0-alpha.1 once that is tagged.
@@ -54,128 +102,138 @@ jobs:
           key: cairn-c7d4230
       - name: Install cairn
         run: command -v cairn || cargo install --locked --git https://github.com/oddurs/cairn --rev c7d4230 cairn-md
-      - name: Items match the schema and ROADMAP.md is up to date
-        run: cairn check --render --strict
+      - run: scripts/task roadmap
+      # The tooling's own tests: the pre-push hook, in throwaway repos.
+      - run: scripts/task scripts
 
+  # Linux runs the whole suite in every lane but main's.
   test:
-    name: Test (${{ matrix.os }})
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
+    name: Test (ubuntu-latest)
+    needs: plan
+    if: contains(fromJSON('["pr","queue","nightly"]'), needs.plan.outputs.lane) && needs.plan.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    # A cold build (after a toolchain bump, before the nightly saves) is most
+    # of it.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: 1.98.1
+          toolchain: ${{ needs.plan.outputs.toolchain }}
           components: clippy
       - uses: rui314/setup-mold@v1
-        if: runner.os == 'Linux'
       - uses: Swatinem/rust-cache@v2
         with:
-          # One dependency cache per OS, shared with the Linux sim and client
-          # jobs; this job builds every target, so it is the one that saves.
+          # One dependency cache, shared with the Linux sim and client jobs;
+          # this job builds every target, so it is the one that saves.
           shared-key: release
           # Only main saves: a cache per PR branch filled the 10 GB limit and
           # evicted main's, and the next PR built cold.
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: taiki-e/install-action@nextest
       - name: Install client system libraries
-        if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libx11-dev libxi-dev libgl1-mesa-dev libasound2-dev
-      - name: Clippy
-        run: cargo clippy --release --workspace --all-targets
+      - run: scripts/task lint
       # nextest runs every test binary's tests in parallel, each in its own
-      # process: half the time of `cargo test` locally. The crate has no
-      # doctests; if it gains some, add `cargo test --doc`.
-      # Off Linux, PRs leave out the two year-long weather games: they test
-      # platform-independent logic, and the crosscheck proves the platforms
-      # agree. Linux runs them for every PR, and every platform on main.
+      # process. The crate has no doctests; if it gains some, add them.
       - name: Test (includes the determinism test)
-        shell: bash
-        run: |
-          filter=()
-          if [ "$RUNNER_OS" != Linux ] && [ "$GITHUB_REF" != refs/heads/main ]; then
-            filter=(-E 'not (test(a_year_of_weather_is_deterministic) | test(the_forecast_is_what_happens))')
-          fi
-          cargo nextest run --release --workspace --profile ci "${filter[@]}"
+        run: scripts/task test
       # Wall-clock budgets, alone on the runner: in the full suite the other
       # tests share the cores and are what the budgets would measure. Linux
       # only: the frame budgets are for a player's machine, and one platform
       # catches a regression in the UI's own work (DESIGN.md §8a).
       - name: UI frame budgets (one test at a time)
-        if: runner.os == 'Linux'
-        env:
-          RIM_BUDGETS: 1
-        run: cargo nextest run --release -p rim_sim -p rim_ui -p rim_client --test-threads 1 -E 'test(a_burning_map_is_cheap) | test(/frame_budget/) | test(two_hundred_tokens_fit_the_frame_budget) | test(the_card_costs_little_over_two_hundred_stores) | test(/fonts/) | test(the_storage_overlay_over_200_stores_is_cheap)'
+        run: scripts/task budgets
       - name: Upload the test report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: junit-${{ matrix.os }}
+          name: junit-ubuntu-latest
           path: target/nextest/ci/junit.xml
           if-no-files-found: ignore
       # The binaries and examples, built with the whole workspace's features,
-      # so they reuse what the tests just built. `cargo run -p` resolves one
-      # package's features and rebuilt the sim: a minute a step.
-      - name: Build the binaries and examples
-        run: cargo build --release --workspace --bins --examples
+      # so they reuse what the tests just built.
+      - run: scripts/task build
       # Lockstep: the Luau VM must have no fused multiply-adds (see
-      # .cargo/config.toml). arm64 is where clang fuses them.
-      - name: Luau has no fused multiply-add
-        # objdump isn't on Windows runners, and MSVC doesn't contract a*b+c
-        # into an FMA under its default /fp:precise.
-        if: runner.os != 'Windows'
-        run: ./scripts/check-no-fma.sh
-      # Mods' own tests, through the player's binary with no display (no
-      # Xvfb here, and macOS runners have no OpenGL): `rim test` must never
-      # open a window.
-      - name: Mod tests (rim test)
-        run: target/release/rim test --junit target/rim-test.xml
-      - name: Mods load clean (rim check --strict)
-        run: target/release/rim check --strict
+      # .cargo/config.toml).
+      - run: scripts/task fma
+      # Mods' own tests, through the player's binary with no display: `rim
+      # test` must never open a window.
+      - name: Mod tests and clean loads
+        run: scripts/task mods --junit target/rim-test.xml
       - name: Upload the mod test report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: rim-test-${{ matrix.os }}
+          name: rim-test-ubuntu-latest
           path: target/rim-test.xml
           if-no-files-found: ignore
-      # Lockstep needs every platform to reach the same state (DESIGN.md §7);
-      # `agree` compares them. Here, where the sim is already built.
       - name: Crosscheck scenario
-        shell: bash
-        run: target/release/examples/crosscheck > crosscheck-${{ matrix.os }}.txt && cat crosscheck-${{ matrix.os }}.txt
+        run: target/release/examples/crosscheck > crosscheck-ubuntu-latest.txt && cat crosscheck-ubuntu-latest.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: crosscheck-${{ matrix.os }}
-          path: crosscheck-${{ matrix.os }}.txt
-      # Long sim runs off Linux only on main: the crosscheck proves the
-      # platforms agree, and `sim` runs these on Linux for every PR.
-      - name: Headless soak, 3 in-game days
-        if: runner.os != 'Linux' && github.ref == 'refs/heads/main'
-        run: target/release/examples/headless --days 3 --seed 1
-      - name: Climate report, one year
-        if: runner.os != 'Linux' && github.ref == 'refs/heads/main'
-        shell: bash
-        run: target/release/examples/year --seed 1
+          name: crosscheck-ubuntu-latest
+          path: crosscheck-ubuntu-latest.txt
 
-  # The fourth platform for the crosscheck: ARM Linux, which no test job is.
-  crosscheck-arm:
-    name: Crosscheck (ubuntu-24.04-arm)
-    runs-on: ubuntu-24.04-arm
+  # The queue's proof off Linux: every platform must reach the same state
+  # (DESIGN.md §7), and a save must load and carry on as if never saved.
+  proof:
+    name: Proof (${{ matrix.os }})
+    needs: plan
+    if: contains(fromJSON('["queue","nightly"]'), needs.plan.outputs.lane)
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: 1.98.1
+          toolchain: ${{ needs.plan.outputs.toolchain }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: taiki-e/install-action@nextest
+      - name: Save, load, and carry on
+        run: cargo nextest run --release -p rim_sim --test snapshot --test savefile
+      - name: Crosscheck scenario
+        shell: bash
+        run: cargo run --release -p rim_sim --example crosscheck > crosscheck-${{ matrix.os }}.txt && cat crosscheck-${{ matrix.os }}.txt
+      # arm64 is where clang fuses multiply-adds (see .cargo/config.toml).
+      - name: Luau has no fused multiply-add
+        shell: bash
+        run: scripts/task fma
+      - uses: actions/upload-artifact@v4
+        with:
+          name: crosscheck-${{ matrix.os }}
+          path: crosscheck-${{ matrix.os }}.txt
+
+  # The fourth platform for the crosscheck: ARM Linux.
+  crosscheck-arm:
+    name: Crosscheck (ubuntu-24.04-arm)
+    needs: plan
+    if: contains(fromJSON('["queue","nightly"]'), needs.plan.outputs.lane)
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ needs.plan.outputs.toolchain }}
       - uses: rui314/setup-mold@v1
       - uses: Swatinem/rust-cache@v2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: taiki-e/install-action@nextest
+      - name: Save, load, and carry on
+        run: cargo nextest run --release -p rim_sim --test snapshot --test savefile
       - name: Run the scenario
         run: cargo run --release -p rim_sim --example crosscheck > crosscheck-ubuntu-24.04-arm.txt && cat crosscheck-ubuntu-24.04-arm.txt
+      # arm64 is where clang fuses multiply-adds (see .cargo/config.toml).
+      - run: scripts/task fma
       - uses: actions/upload-artifact@v4
         with:
           name: crosscheck-ubuntu-24.04-arm
@@ -183,8 +241,10 @@ jobs:
 
   agree:
     name: Every platform reaches the same state
-    needs: [test, crosscheck-arm]
+    needs: [plan, test, proof, crosscheck-arm]
+    if: contains(fromJSON('["queue","nightly"]'), needs.plan.outputs.lane)
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -194,6 +254,8 @@ jobs:
         shell: bash
         run: |
           ls crosscheck-*.txt
+          n=$(ls crosscheck-*.txt | wc -l)
+          if [ "$n" -ne 4 ]; then echo "expected 4 platforms, got $n"; exit 1; fi
           first=$(ls crosscheck-*.txt | head -n 1)
           status=0
           for f in crosscheck-*.txt; do
@@ -208,51 +270,50 @@ jobs:
             for f in crosscheck-*.txt; do echo "== $f"; cat "$f"; done
             exit 1
           fi
-          echo "All $(ls crosscheck-*.txt | wc -l) platforms agree:"
+          echo "All $n platforms agree:"
           tail -n 1 "$first"
 
   # The long sim runs, beside the tests rather than after them.
   sim:
     name: Sim runs (soak, climate, benchmark)
+    needs: plan
+    if: contains(fromJSON('["pr","queue","nightly"]'), needs.plan.outputs.lane) && needs.plan.outputs.code == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: 1.98.1
+          toolchain: ${{ needs.plan.outputs.toolchain }}
       - uses: rui314/setup-mold@v1
       - uses: Swatinem/rust-cache@v2
         with:
           # The test job's: it built these dependencies and saves them.
           shared-key: release
           save-if: false
-      - name: Headless soak, 3 in-game days
-        run: cargo run --release -p rim_sim --example headless -- --days 3 --seed 1
-      # The base game must stand without any plugin (DESIGN.md §5).
-      - name: Core alone, 3 in-game days
-        run: cargo run --release -p rim_sim --example headless -- --days 3 --seed 1 --core
-      - name: Climate report, one year
-        run: cargo run --release -p rim_sim --example year -- --seed 1 | tee climate-report.txt
+      # Soaks with and without plugins (DESIGN.md §5), a year of climate, and
+      # DESIGN.md §8's benchmark: fails if the mean tick is over the 2 ms
+      # budget (3x slack on shared runners).
+      - run: scripts/task sim
       - name: Upload the climate report
         uses: actions/upload-artifact@v4
         with:
           name: climate-report
-          path: climate-report.txt
-      # DESIGN.md §8: 250x250, 30 colonists, 200 pawns. Fails if the mean tick
-      # is over the 2 ms budget (3x slack on shared runners).
-      - name: Benchmark, with a regression threshold
-        run: cargo run --release -p rim_sim --example bench -- --days 0.25 --check
+          path: target/climate-report.txt
 
   # The client, drawn: Linux renders in software under Xvfb (macOS runners
   # have no OpenGL).
   client:
     name: Client (autotest, render benchmark)
+    needs: plan
+    if: contains(fromJSON('["pr","queue","nightly"]'), needs.plan.outputs.lane) && needs.plan.outputs.code == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: 1.98.1
+          toolchain: ${{ needs.plan.outputs.toolchain }}
       - uses: rui314/setup-mold@v1
       - uses: Swatinem/rust-cache@v2
         with:
@@ -283,3 +344,49 @@ jobs:
           name: render-bench
           path: target/render-bench*
           if-no-files-found: ignore
+
+  # Every night on main, the whole suite and the long runs on macOS and
+  # Windows: what the queue's proof leaves out.
+  nightly:
+    name: Nightly (${{ matrix.os }})
+    needs: plan
+    if: needs.plan.outputs.lane == 'nightly'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ needs.plan.outputs.toolchain }}
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: taiki-e/install-action@nextest
+      - shell: bash
+        run: scripts/task lint
+      - shell: bash
+        run: scripts/task test
+      - name: Upload the test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-${{ matrix.os }}
+          path: target/nextest/ci/junit.xml
+          if-no-files-found: ignore
+      - shell: bash
+        run: scripts/task build
+      - shell: bash
+        run: scripts/task fma
+      - shell: bash
+        run: scripts/task mods
+      - name: Headless soak, 3 in-game days, and a climate year
+        shell: bash
+        run: |
+          target/release/examples/headless --days 3 --seed 1
+          target/release/examples/year --seed 1 > /dev/null

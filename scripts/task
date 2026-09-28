@@ -90,12 +90,20 @@ crosscheck() {
   target/release/examples/crosscheck >/dev/null
 }
 
+# Wall-clock budgets, one test at a time so nothing else shares the cores:
+# the suite counts work, and these time it (DESIGN.md §8a).
+budgets() {
+  step budgets
+  RIM_BUDGETS=1 cargo nextest run --release -p rim_sim -p rim_ui -p rim_client --test-threads 1 \
+    -E 'test(a_burning_map_is_cheap) | test(/frame_budget/) | test(two_hundred_tokens_fit_the_frame_budget) | test(the_card_costs_little_over_two_hundred_stores) | test(/fonts/) | test(the_storage_overlay_over_200_stores_is_cheap)'
+}
+
 # The long sim runs CI's sim job makes: slower than the gate, so not in `check`.
 sim() {
   step sim
   cargo run --release -p rim_sim --example headless -- --days 3 --seed 1
   cargo run --release -p rim_sim --example headless -- --days 3 --seed 1 --core
-  cargo run --release -p rim_sim --example year -- --seed 1 >/dev/null
+  cargo run --release -p rim_sim --example year -- --seed 1 >target/climate-report.txt
   cargo run --release -p rim_sim --example bench -- --days 0.25 --check
 }
 
@@ -152,7 +160,7 @@ stamp() {
 hooks() {
   git config extensions.worktreeConfig true
   git config --worktree core.hooksPath scripts/hooks
-  echo "hooks installed for $(git rev-parse --show-toplevel): $(ls scripts/hooks | tr '\n' ' ')"
+  echo "hooks installed for $(git rev-parse --show-toplevel): $(cd scripts/hooks && echo *)"
 }
 
 usage() {
@@ -171,6 +179,7 @@ usage: scripts/task <verb> [args]
   fma        the Luau VM has no fused multiply-add (after build)
   mods       rim test and rim check --strict (after build)
   crosscheck the crosscheck scenario runs to the end (after build)
+  budgets    the UI frame budgets, timed one test at a time
   sim        the long sim runs: soaks, a climate year, the sim bench
   autotest   the client autotest (opens a window, in the background)
   bench      the render bench with its budget (opens a window)
@@ -194,6 +203,7 @@ case "$verb" in
   fma) fma ;;
   mods) mods "$@" ;;
   crosscheck) crosscheck ;;
+  budgets) budgets ;;
   sim) sim ;;
   autotest) autotest ;;
   bench) bench ;;

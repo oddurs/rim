@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Which CI lane a run is (DESIGN.md §8a), for the `plan` job. Prints
+# `key=value` lines for $GITHUB_OUTPUT:
+#
+#   lane       pr | queue | nightly | main | none
+#   code       true unless the change touches only cairn items and top-level
+#              Markdown (tests read the guides in docs/modding/, so those count)
+#   toolchain  the Rust version rust-toolchain.toml pins
+#
+# Reads the GitHub event from the environment: EVENT, DRAFT, HEAD_REF, LABELS
+# (the PR's labels, space-separated), LANE_INPUT (workflow_dispatch). Diffs HEAD^1..HEAD for a PR, which is the
+# PR's change when the checkout is GitHub's merge commit.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+has_label() { case " ${LABELS:-} " in *" $1 "*) return 0 ;; esac; return 1; }
+
+lane="pr"
+case "${EVENT:?}" in
+  schedule) lane=nightly ;;
+  workflow_dispatch) lane="${LANE_INPUT:-queue}" ;;
+  push) lane=main ;;
+  pull_request)
+    if [[ "${HEAD_REF:-}" == mergify/merge-queue/* ]]; then
+      lane=queue # the merge queue's own branch: the full proof
+    elif [ "${DRAFT:-false}" = true ]; then
+      lane=none
+    elif has_label full-ci; then
+      lane=queue
+    fi
+    ;;
+  *) echo "ci-plan: unknown event ${EVENT}" >&2; exit 2 ;;
+esac
+
+code=true
+if [ "$lane" = pr ]; then
+  # --no-renames: a file moved into cairn/ still counts where it came from.
+  changed=$(git diff --name-only --no-renames HEAD^1 HEAD)
+  if [ -n "$changed" ] && ! grep -qvE '^(cairn/|[^/]+\.md$)' <<<"$changed"; then
+    code=false
+  fi
+fi
+
+toolchain=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' rust-toolchain.toml)
+[ -n "$toolchain" ] || { echo "ci-plan: no channel in rust-toolchain.toml" >&2; exit 1; }
+
+echo "lane=$lane"
+echo "code=$code"
+echo "toolchain=$toolchain"
