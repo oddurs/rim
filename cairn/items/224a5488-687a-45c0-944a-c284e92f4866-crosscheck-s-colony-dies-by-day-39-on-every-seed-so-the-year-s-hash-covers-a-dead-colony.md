@@ -3,7 +3,8 @@ id: 224a5488-687a-45c0-944a-c284e92f4866
 title: Crosscheck's colony dies by day 39 on every seed, so the year's hash covers a dead colony
 type: bug
 status: backlog
-milestone: proving-ground
+milestone: bare-metal
+assignee: lucky-harbor
 created: 2026-09-28
 updated: 2026-09-28
 priority: p1

@@ -3,9 +3,11 @@ id: a708c037-6a85-4190-b6c8-6d72ab5a30d7
 title: 'Pathing in snow and mud: searches reach 33k nodes and ticks spike'
 type: perf
 status: backlog
+milestone: bare-metal
+assignee: quiet-field
 created: 2026-09-28
 updated: 2026-09-28
-priority: p2
+priority: p0
 api: none
 effort: m
 layer: engine
