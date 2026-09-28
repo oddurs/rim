@@ -1,0 +1,20 @@
+# The seed corpus (DESIGN.md §7b): maps worth keeping, each with why.
+# Find one with `rim seeds find --where "..."`, look at it with
+# `rim seeds show SEED --out map.png`. A seed the nightly sweep broke joins
+# here once fixed, with `item` naming its cairn item. tests/corpus.rs plays
+# every seed here for a day and round-trips its save.
+
+[[seed]]
+id = "lake-at-the-door"
+seed = 5
+why = "Lakes on two sides of the start: pathing, flooding and fishing right beside the colony."
+
+[[seed]]
+id = "dry-start"
+seed = 94
+why = "No water within 40 cells of the start: a colony with nothing to drink nearby."
+
+[[seed]]
+id = "sixty-days"
+seed = 4
+why = "The crosscheck's seed: its colony lives all 60 days, so every platform plays a whole season."

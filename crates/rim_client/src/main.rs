@@ -23,6 +23,7 @@ mod quiet;
 mod roof;
 mod roomstate;
 mod save;
+mod seedcmd;
 mod sky;
 mod title;
 mod wear;
@@ -548,6 +549,7 @@ fn main() {
         Some("check") => std::process::exit(cli::check(&args[2..])),
         Some("replay") => std::process::exit(cli::replay(&args[2..])),
         Some("save") => std::process::exit(cli::save(&args[2..])),
+        Some("seeds") => std::process::exit(seedcmd::seeds(&args[2..])),
         _ => {}
     }
     // A test run, or a game started for someone who is doing something

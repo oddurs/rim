@@ -395,6 +395,70 @@ jobs:
           path: target/render-bench*
           if-no-files-found: ignore
 
+  # Every night, 200 seeds made from the date, each played for two days and
+  # round-tripped through a save (DESIGN.md §7b). A failure is filed as a
+  # cairn item in the `sweep-items` artifact, with the line that plays the
+  # seed again; Actions may not open the PR, so a person or an agent does.
+  sweep:
+    name: Seed sweep (200 seeds)
+    needs: plan
+    if: needs.plan.outputs.lane == 'nightly'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ needs.plan.outputs.toolchain }}
+      - uses: rui314/setup-mold@v1
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release
+          save-if: false
+      - name: Install client system libraries
+        run: sudo apt-get update && sudo apt-get install -y libx11-dev libxi-dev libgl1-mesa-dev libasound2-dev
+      - name: Which cairn
+        id: cairn
+        run: echo "rev=$(sed -n 's/^CAIRN_REV=//p' scripts/task)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/rim/cairn-${{ steps.cairn.outputs.rev }}
+          key: cairn-root-${{ steps.cairn.outputs.rev }}
+      - run: cargo build --release -p rim_client
+      - name: Sweep
+        id: sweep
+        # bash, for pipefail: a failed sweep must fail the step through tee.
+        shell: bash
+        run: |
+          date=$(date -u +%Y%m%d)
+          echo "date=$date" >> "$GITHUB_OUTPUT"
+          target/release/rim seeds sweep --date "$date" --n 200 --days 2 --jobs 4 --report target/sweep.tsv | tee target/sweep.txt
+      - name: File each failure as a cairn item
+        if: failure() && steps.sweep.outcome == 'failure'
+        run: |
+          ids=$(scripts/sweep-items target/sweep.tsv "${{ steps.sweep.outputs.date }}" "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID")
+          mkdir -p target/sweep-items
+          for id in $ids; do cp cairn/items/"$id"*.md target/sweep-items/; done
+          {
+            echo "## The night's sweep failed"
+            echo
+            echo "Each failure is a cairn item in the \`sweep-items\` artifact: copy them into \`cairn/items/\` and open a PR."
+            echo
+            echo '```text'
+            cat target/sweep.tsv
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload the sweep
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sweep-items
+          path: |
+            target/sweep.txt
+            target/sweep.tsv
+            target/sweep-items/
+          if-no-files-found: ignore
+
   # Every night on main, the whole suite and the long runs on macOS and
   # Windows: what the queue's proof leaves out.
   nightly:
