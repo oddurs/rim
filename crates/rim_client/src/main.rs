@@ -1565,8 +1565,9 @@ void main() {
 }
 
 /// How long changing level takes to fade from one level's frame to the
-/// next's, in seconds.
-const LEVEL_FADE: f32 = 0.15;
+/// next's, in seconds: twelve frames at 60 Hz, so no frame moves the
+/// brightness a tenth of the way from a noon surface to a cellar.
+const LEVEL_FADE: f32 = 0.2;
 
 /// Draw a frame at an alpha, its own alpha ignored: what the world left in
 /// it is not transparency, as for `blit_material`.
@@ -1656,6 +1657,10 @@ pub fn render(app: &mut App) {
             set_default_camera();
         }
         app.fade = kept.map(|rt| (rt, 0.0));
+        // The eye takes the new level's light at once, and the fade carries
+        // the change: a blend of two settled frames, the same share a frame
+        // however fast the frames come.
+        app.light.adapt_now();
     }
     update_world_target(app);
     let (sw, sh) = (screen_width(), screen_height());
@@ -1708,7 +1713,7 @@ pub fn render(app: &mut App) {
         gl_use_default_material();
         if let Some((from, k)) = &mut app.fade {
             // At most a 60th of a second a frame: never over in fewer than
-            // nine frames, however slow they come.
+            // twelve frames, however slow they come.
             *k += get_frame_time().min(1.0 / 60.0) / LEVEL_FADE;
             if app.fade_blit.is_none() {
                 app.fade_blit = fade_material();

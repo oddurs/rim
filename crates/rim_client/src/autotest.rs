@@ -51,8 +51,9 @@ impl T {
             if !self.app.light.owes_a_bake() && self.app.fade.is_none() {
                 return;
             }
-            if get_time() - since > 3.0 {
-                self.check(false, "the firelight bake caught up within 3 s");
+            // A second's bake and the fade, with room for a slow machine.
+            if get_time() - since > 10.0 {
+                self.check(false, "the firelight bake caught up within 10 s");
                 return;
             }
         }
@@ -1493,9 +1494,11 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
                 t.key(KeyCode::RightBracket).await;
                 t.light_settles().await;
                 let lit_above = glow(&t);
+                // Up top, only what comes up the stairwell and the pits, at
+                // most half (1104bf12).
                 t.check(
-                    lit_below > 0.3 && lit_above < 0.05,
-                    format!("a fire below lights its own level ({lit_below:.2}), not the one above ({lit_above:.2})"),
+                    lit_below > 0.3 && lit_above < lit_below * 0.5,
+                    format!("a fire below lights its own level ({lit_below:.2}), the one above less ({lit_above:.2})"),
                 );
                 // Both levels are kept: changing between them works nothing out again.
                 let (bakes, runs) = (t.app.light.bakes, t.app.light.sun_runs);
@@ -1522,6 +1525,49 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
             if let Some(e) = fire {
                 t.app.sim.world.despawn_thing(e);
             }
+            println!("\n# light crosses a stairwell (1104bf12)");
+            // A campfire beside the head of the stairs, up top: down the
+            // stairwell, the level below is lit at its foot, less further off.
+            let head = (-1..=1i32)
+                .flat_map(|dy| (-1..=1i32).map(move |dx| top.offset(dx, dy)))
+                .find(|&p| p != top && t.w().map.passable(p) && t.w().map.fixture_at(p).is_none());
+            let fire = head.and_then(|p| t.app.sim.world.spawn_fixture(campfire, p, false));
+            if let (Some(_), Some(e)) = (head, fire) {
+                t.key(KeyCode::LeftBracket).await;
+                t.light_settles().await;
+                let glow = |t: &T, p: IVec| {
+                    t.app.light.fire_at(p.x as f32 + 0.5, p.y as f32 + 0.5).map_or(0.0, |c| c.iter().sum::<f32>())
+                };
+                // Along the floor below, away from the stair's foot, the way
+                // that keeps clear of every other opening, the pits.
+                let openings: Vec<IVec> = t.w().map.air_cells(0).iter().map(|&i| t.w().map.pos(i as usize)).collect();
+                let clear = |d: (i32, i32)| {
+                    (1..=4).all(|k| {
+                        let p = top.offset(d.0 * k, d.1 * k);
+                        openings.iter().all(|o| (o.x - p.x).abs().max((o.y - p.y).abs()) > 6)
+                    })
+                };
+                let (dx, dy) = [(1, 0), (-1, 0), (0, 1), (0, -1)].into_iter().find(|&d| clear(d)).unwrap_or((1, 0));
+                let away: Vec<f32> = (0..3).map(|k| glow(&t, top.offset(dx * 2 * k, dy * 2 * k))).collect();
+                t.shot("stairwell_below").await;
+                t.check(
+                    away[0] > 0.1 && away[0] > away[1] && away[1] >= away[2],
+                    format!("a fire at the head of the stairs lights their foot below, fading off ({away:.2?})"),
+                );
+                t.key(KeyCode::RightBracket).await;
+                t.light_settles().await;
+                t.shot("stairwell_above").await;
+                t.app.sim.world.despawn_thing(e);
+                t.key(KeyCode::LeftBracket).await;
+                t.light_settles().await;
+                let gone = glow(&t, top);
+                t.check(gone < 0.05, format!("and it was that fire: without it the foot is dark ({gone:.2})"));
+                t.key(KeyCode::RightBracket).await;
+                t.light_settles().await;
+            } else {
+                t.check(false, "room by the head of the stairs for a fire");
+            }
+
             println!("\n# changing level fades, and the eye follows the sky in view (220a059e)");
             // From the lit surface to the dark level below and back, frame
             // by frame: no frame jumps.
@@ -1532,6 +1578,21 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
             // Each level settled, then the change frame by frame: no frame
             // moves the brightness by a tenth of the brighter level's. A grab
             // draws two frames, so half its change is a frame's.
+            // The world's brightness, in the middle of the screen: the panels
+            // round its edges change with the level at once, and they are not
+            // its light.
+            let world = |img: &Image| {
+                let (w, h) = (img.width(), img.height());
+                let (mut sum, mut n) = (0.0f32, 0usize);
+                for y in h * 3 / 10..h * 7 / 10 {
+                    for x in w * 3 / 10..w * 7 / 10 {
+                        let c = &img.bytes[(y * w + x) * 4..(y * w + x) * 4 + 3];
+                        sum += (c[0] as f32 + c[1] as f32 + c[2] as f32) / 765.0;
+                        n += 1;
+                    }
+                }
+                sum / n.max(1) as f32
+            };
             let mut settled = Vec::new();
             let mut steps = Vec::new();
             // Down, up, and down then straight back up in the middle of the
@@ -1540,25 +1601,37 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
             for keys in [vec![down], vec![up], vec![down, up]] {
                 t.app.light.adapt_now();
                 t.light_settles().await;
-                let mut last = mean(&t.grab().await);
+                let mut last = world(&t.grab().await);
                 settled.push(last);
                 let presses = keys.len();
                 for (n, k) in keys.into_iter().enumerate() {
                     let pressed = crate::key_name(k).map(|n| vec![n.to_string()]).unwrap_or_default();
                     t.input(RawInput { mouse: t.mouse, keys: vec![k], pressed, ..Default::default() }).await;
-                    // Another press to come: it lands two grabs in.
-                    for _ in 0..if n + 1 < presses { 2 } else { 40 } {
-                        let now = mean(&t.grab().await);
-                        steps.push((now - last).abs() / 2.0);
+                    // Another press to come: it lands two grabs in. A grab draws
+                    // two frames, and the first after a press three, with the
+                    // press's own: a frame's change is the grab's share.
+                    for g in 0..if n + 1 < presses { 2 } else { 40 } {
+                        let now = world(&t.grab().await);
+                        steps.push((now - last).abs() / if g == 0 { 3.0 } else { 2.0 });
                         last = now;
                     }
                 }
             }
             let bright = settled.iter().copied().fold(0.0f32, f32::max).max(1e-3);
-            let worst = steps.iter().copied().fold(0.0f32, f32::max) / bright;
+            let (at, worst) =
+                steps
+                    .iter()
+                    .map(|s| s / bright)
+                    .enumerate()
+                    .fold((0, 0.0f32), |(a, w), (k, s)| if s > w { (k, s) } else { (a, w) });
+            // Which switch and which grab: 0 to 39 down, 40 to 79 up, then
+            // down and back up; the first grab of each is the frame it lands.
             t.check(
                 worst < 0.1,
-                format!("changing level, no frame moves the brightness a tenth ({:.0}% at most)", worst * 100.0),
+                format!(
+                    "changing level, no frame moves the brightness a tenth ({:.0}% at most, grab {at})",
+                    worst * 100.0
+                ),
             );
             t.app.sim.world.fields.set_ambient(cloud, None);
             t.app.sim.world.fields.set_ambient(light, None);

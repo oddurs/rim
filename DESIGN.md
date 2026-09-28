@@ -2284,13 +2284,13 @@ next begins, and no pop when the view changes level.
   openings (1104bf12) and the crossfade and exposure on changing level
   (220a059e) are items of their own.
 - **Light crosses openings.** Every air cell, stairwell and ladder is an
-  opening. Each level's compose adds the light of the level above through
-  its openings, and the level below's through its own air cells, from a
-  blurred, half-resolution copy of that level's composed light, attenuated
-  per level (0.5 by default). So a torch at the top of a stairwell lights
-  the steps below and fades out around them, and a fire in a pit glows on
-  its rim. The cost is one read of a small texture per texel, and it is
-  skipped on a level with no openings.
+  opening. A light on the next level up or down that reaches an opening
+  gives a light there on this level: as bright as it still is at the
+  opening, halved for the level it crosses, reaching as far as it has left
+  to go, and shaded by this level's own walls (1104bf12). So a torch at the
+  top of a stairwell lights the steps below and fades out around them, and
+  a fire in a pit glows on its rim. It costs nothing on a level with no
+  lights near an opening.
 - **Sky down a shaft falls off with depth.** A column open to the sky gets
   direct sun only while the sun is inside the shaft's cone, which the same
   height-map march gives when the levels above count as solid height. The
@@ -2302,10 +2302,11 @@ next begins, and no pop when the view changes level.
   a shaft three levels deep reads as one gradient.
 - **Exposure is one continuous value.** The eye adapts to the open sky the
   view holds, the mean over the cells in view, so a shaft in view counts and
-  rock doesn't. It eases over about a second, a 60th of a second's worth a
-  frame at most, including when the view changes level. Changing level
-  fades the old level's last frame out over the new one for 150 ms, and
-  never in fewer than nine frames (220a059e).
+  rock doesn't. It eases over about a second by the clock, a 30th of a
+  second's worth a frame at most. Changing level, the eye takes the new
+  level's light at once, and the old level's last frame fades out over the
+  new one for 200 ms, never in fewer than twelve frames, so the change is a
+  blend of two settled frames (220a059e, 1104bf12).
 
 ### Presets
 

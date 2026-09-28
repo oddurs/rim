@@ -2,14 +2,14 @@
 id: 220a059e-4927-4f82-ab47-cc8477fd7e08
 title: Changing level crossfades the light, and the eye adapts to what the view shows
 type: feature
-status: doing
+status: done
 milestone: lighting
 assignee: Oddur Sigurdsson
-claimed: 2026-09-28
 depends_on:
 - 3124bd7b-9f9a-4d92-84e6-2df736b6e2fe
 created: 2026-09-28
 updated: 2026-09-28
+closed_at: 2026-09-28
 priority: p2
 api: none
 effort: s
