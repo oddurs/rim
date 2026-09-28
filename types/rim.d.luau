@@ -4,7 +4,7 @@
 type Faction = "player" | "hostile" | "wild"
 type MessageKind = "info" | "good" | "threat" | "bad"
 type CreatureInfo = { id: string, label: string, intelligent: boolean, aggressive: boolean, flees: boolean, plural: string, market_value: number, max_hp: number, wild: boolean }
-type ThingInfo = { id: string, label: string, market_value: number, food: boolean, nutrition: number?, item: boolean, tags: { string } }
+type ThingInfo = { id: string, label: string, market_value: number, food: boolean, nutrition: number?, item: boolean, category: string, tags: { string } }
 type NeedInfo = { id: string, label: string, satisfier: string, days_to_empty: number }
 type ModifierInfo = { id: string, stat: string, thing: string, value: number, reason: string, group: string, on: boolean }
 type StoreSlot = { slot: number, thing: string, count: number, made_of: string?, hp: number }
@@ -28,7 +28,7 @@ type OrderSpec = { label: string, needs: { OrderNeed }, work: number, work_type:
 type OrderInput = { thing: string?, tag: string?, count: number, have: number, match: string?, coming: boolean }
 type OrderInfo = { owner: string, label: string, needs: { OrderInput }, work: number, done: number, total: number, requires: { string } }
 type ItemQuery = { thing: string?, tag: string? }
-type ThingAt = { id: number, thing: string, x: number, y: number, z: number, count: number, blueprint: boolean }
+type ThingAt = { id: number, thing: string, x: number, y: number, z: number, count: number, blueprint: boolean, hp: number }
 
 declare rim: {
     -- A field's outdoor value.
@@ -51,12 +51,16 @@ declare rim: {
     count_pawns: (faction: Faction) -> number,
     -- Every creature def.
     creature_defs: {CreatureInfo},
+    -- Take hit points off a thing; at none left it's destroyed (true).
+    damage: (id: number, hp: number) -> boolean,
     -- The calendar date.
     date: () -> Date,
     -- Days since the game began, from 0.
     day: () -> number,
     -- Entries of a def kind a mod declared with [[kind]], in load order: "type" for your own kind, "weather:type" for another mod's.
     defs: (kind: string) -> { {[string]: any} },
+    -- Mark a thing for work with a designation, as the player's drag would, or clear its mark with nil.
+    designate: (id: number, designation: string?) -> (),
     -- A random open cell on the map edge that can reach the colony.
     edge_cell: () -> (number?, number?),
     -- Send an event to rim.on handlers in any mod. Only under your own name: "your_mod:event".
@@ -73,6 +77,10 @@ declare rim: {
     field_add: (id: string, x: number, y: number, amount: number, z: number?) -> number,
     -- Set a stock field at a cell on level z (the surface if nil), within its range; returns the new value.
     field_set: (id: string, x: number, y: number, value: number, z: number?) -> number,
+    -- The thing standing in a cell on level z (the surface if nil): a plant, rock someone works, a building. Nil if none.
+    fixture_at: (x: number, y: number, z: number?) -> number?,
+    -- The thing on a cell's floor layer, under what stands there. Nil if none.
+    floor_at: (x: number, y: number, z: number?) -> number?,
     -- A copy of stored script data, or nil. A bare key is your mod's; "weather:forecast" reads another's.
     get_data: (key: string) -> any,
     -- Whether some tool in the colony, lying about or in a hand, has every one of these tool tags. False for a tag no tool has.
@@ -109,6 +117,8 @@ declare rim: {
     on_migrate: (fn: (from_version: string, data: {[string]: any}) -> {[string]: any}) -> (),
     -- The work order on a thing and how far it's got, or nil.
     order: (site: number) -> OrderInfo?,
+    -- Put a whole thing that isn't an item (items are rim.spawn_item's) in a cell: on the floor layer for a floor, else standing. Nil if the cell's layer is taken. Returns its id.
+    place: (thing: string, x: number, y: number, z: number?) -> number?,
     -- Register a planner under your mod's name, for a planned work role (`planner = "mod:name"`). Once an in-game hour the engine calls it with the board (rim.work_board, its members marked) and takes back levels for its members: `{ [colonist id] = { [work] = { level = 2, reason = "..." } } }`. A level changes when two plans in a row agree. Never (0) and pinned cells are refused. Register at load time.
     planner: (name: string, fn: (board: WorkBoard) -> { [number]: { [string]: PlanCell | number } }) -> (),
     -- Post a work order on a thing (a station): bring what `needs` lists, by thing or by tag, then work `work` ticks there, holding a tool with every tag in `requires`. Colonists take it as `work_type` work. When it's done, `order_done` names what went in; make what it makes then. One order a site at a time.
@@ -125,6 +135,8 @@ declare rim: {
     random_int: (lo: number, hi: number) -> number,
     -- A colony reading, by qualified id ("core:food_days"); a bare name is your own mod's. Nil until published.
     reading: (id: string) -> number?,
+    -- Take a thing off the map for good, as if it were never there: false if it's already gone.
+    remove: (id: number) -> boolean,
     -- The room at a cell on level z (the surface if nil), or nil on a wall or door. `uncovered` counts cells beyond every roof support's span; `role` is the first [[room_role]] it meets, if any.
     room_at: (x: number, y: number, z: number?) -> Room?,
     -- A pawn says something: a speech bubble over it for `ticks` ticks (600 unless given). Higher `priority` wins when it has several lines or the screen is crowded; needs speak at 1, and 2 is the default. Only presentation: nothing in the sim reads it back.
