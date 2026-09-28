@@ -1722,7 +1722,7 @@ pub fn render(app: &mut App) {
     if alpha > 0.0 && app.cam.z == 0 {
         let lifted = app.hover_cell.map_or(0, |p| app.roofs.house_at(&app.sim.world, p));
         let tint = app.light.outdoor(&app.sim.world, &air, app.sky.flash());
-        let faces = app.light.roof_faces(&app.sim.world, &air);
+        let faces = app.light.roof_faces(&air);
         app.roofs.draw(&app.sim.world, &app.cam, draw::visible(app), alpha, lifted, tint, faces);
     }
     t.light += lap();

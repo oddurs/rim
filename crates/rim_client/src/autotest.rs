@@ -2695,6 +2695,80 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
             (0.6..0.9).contains(&contact),
             format!("the plan's contact shadow darkens under a wall at night and goes in the sun ({contact:.2})"),
         );
+        // 1a17d685: a mod's green moon, applied as the loader applies a
+        // mod's defs: its daylight term compiled, its body resolved, and
+        // nothing in the engine or here that knows it. It chooses to light
+        // the sim too, as core's moon doesn't. At midnight it outshines
+        // core's moon at any phase, takes the one shadow slot the preset
+        // has, and colours the night.
+        println!("\n# a mod's green moon lights the night green and casts its own shadows (1a17d685)");
+        t.app.light.pin_sun = None;
+        t.app.sim.world.fields.set_ambient(light, None);
+        // On to the next midnight (tick 0 is 06:00), a few hours at most.
+        // Time only runs forward: what later sections keep by the tick
+        // would take a clock set back for one that stopped.
+        let (tick, tpd) = (t.w().tick, rim_sim::TICKS_PER_DAY);
+        t.app.sim.world.tick = (tick + tpd / 4).div_ceil(tpd) * tpd - tpd / 4;
+        t.ticks(20);
+        t.app.light.adapt_now();
+        t.focus(p.offset(0, -2));
+        // The mean colour of the view's middle, as fractions of its sum.
+        let hue = |img: &Image| {
+            let (w, h) = (img.width() as u32, img.height() as u32);
+            let mut c = [0.0f32; 3];
+            for y in (h * 3 / 10..h * 7 / 10).step_by(7) {
+                for x in (w * 3 / 10..w * 7 / 10).step_by(7) {
+                    let px = img.get_pixel(x, y);
+                    c = [c[0] + px.r, c[1] + px.g, c[2] + px.b];
+                }
+            }
+            let sum = c.iter().sum::<f32>().max(1e-3);
+            c.map(|v| v / sum)
+        };
+        let core_night = hue(&t.grab().await);
+        // The world gets defs of its own with the mod's in them, and the
+        // core-only ones back after.
+        let before = t.app.sim.world.defs.clone();
+        let applied = (|| -> Result<(), String> {
+            let defs = std::sync::Arc::make_mut(&mut t.app.sim.world.defs);
+            let daylight = defs.lookup("field", "daylight").ok_or("no daylight")? as usize;
+            let term: rim_sim::terms::TermsDef = toml::from_str(
+                "[green_moon]\nscale = 6.0\nof = [{ input = \"hour\", curve = [[0, 1.0], [4, 1.0], [5, 0.0], [20, 0.0], [21, 1.0], [24, 1.0]] }]",
+            )
+            .map_err(|e| e.to_string())?;
+            let fields = |id: &str| defs.lookup("field", id).map(|f| f as usize);
+            let term = rim_sim::terms::Terms::compile(&term, "test", &fields, &mut Vec::new())?;
+            defs.fields[daylight].terms.terms.extend(term.terms);
+            let mut body: rim_sim::defs::SkyBodyDef = toml::from_str(
+                "id = \"test:green_moon\"\nfield = \"core:daylight\"\nterm = \"green_moon\"\nrise = 20.0\nset = 5.0\npeak = 40.0\narc = [0.0, 180.0]\ncolor = \"#7dffa0\"\nangular_size = 1.0",
+            )
+            .map_err(|e| e.to_string())?;
+            let fields = |id: &str| defs.lookup("field", id).map(|f| f as usize);
+            body.resolve(&defs.fields, fields, &mut Vec::new())?;
+            defs.sky_bodies.push(body);
+            Ok(())
+        })();
+        t.check(applied.is_ok(), format!("the green moon's defs apply: {applied:?}"));
+        t.ticks(20);
+        t.app.light.adapt_now();
+        t.frame().await;
+        let slots: Vec<String> =
+            t.app.light.shadow_bodies().iter().map(|&i| t.w().defs.sky_bodies[i].id.clone()).collect();
+        t.check(slots == ["test:green_moon"], format!("it casts the night's shadows, over core's moon ({slots:?})"));
+        // Up at 40° a little east of south, its shadow falls north of the
+        // wall, 1.2 cells long.
+        let (x, face) = (p.x as f32 + 0.5, p.y as f32);
+        let shade = t.app.light.sun_visibility(x, face - 0.5).unwrap_or(1.0);
+        let open = t.app.light.sun_visibility(x, face - 7.0).unwrap_or(0.0);
+        t.check(shade < 0.5 && open > 0.9, format!("its own shadow behind the wall ({shade:.2}, open {open:.2})"));
+        let green_night = hue(&t.grab().await);
+        t.check(
+            green_night[1] > core_night[1] + 0.01,
+            format!("and the night turns green (green {:.3} of the light, was {:.3})", green_night[1], core_night[1]),
+        );
+        t.shot("green_moon").await;
+        t.app.sim.world.defs = before;
+        t.ticks(20);
         t.app.light.pin_sun = None;
         t.app.sim.world.fields.set_ambient(cloud, None);
         t.app.sim.world.fields.set_ambient(light, None);

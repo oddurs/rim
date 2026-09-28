@@ -2201,7 +2201,20 @@ where they were built, and the sun moves a fraction of a degree a second.
     height map, rising `tan(elevation)` per cell, and stops at the first thing
     taller than the ray. Rebuilt when a body moves past a threshold (0.25° by
     default), otherwise free. The penumbra widens with distance from the
-    occluder, and cloud widens it further. A lightning flash takes the pass
+    occluder, and cloud and a wide body (`angular_size`) widen it further.
+    **Sky bodies** (1a17d685) are `[[sky_body]]` defs: a path, a colour, a
+    size, and how bright each is. That is a labelled term of a field when
+    its light is the sim's too (core's sun, `daylight`'s `sun`), or terms of
+    its own that only the renderer reads (core's moon). The sim's light
+    stays 0 at night, so nothing grows by moonlight; the picture's sky is
+    the sim's light and those bodies'. The pass marches up to four, one
+    per channel of its target: the brightest straight light first, as many
+    as the preset's `sky_shadows`, chosen each rebuild, so with one slot the
+    sun casts by day and the moon by night. Each lands in its own colour; a
+    body without a slot lights where the sky does. Where a body reaches it
+    clears the plan's contact shadow as much as its light is the day's
+    (wholly from 10% light), so a moonlit night keeps the convention. A
+    pinned sun (tests) takes all the sky's light, white. A lightning flash takes the pass
     for its few frames (ff818bb3): hard shadows from 40° up, from a random
     azimuth, worked out once as it strikes and once as it fades. It lights
     the cloud a little everywhere and the rest from where the bolt is.
@@ -2325,9 +2338,11 @@ player's settings file:
 | Soft sun shadows | no | yes | yes | yes |
 | Sun worked out again after | 1° | 0.25° | 0.1° | 0.02° |
 | Moving lights with shadows | 4 | 8 | 16 | 32 |
+| Sky bodies with shadows | 1 | 1 | 2 | 4 |
 
 Any setting overrides its preset (`texels_per_cell`, `sun_steps`,
-`soft_shadows`, `sun_rebuild_degrees`, `moving_shadows`), and `auto` keeps them as it steps.
+`soft_shadows`, `sun_rebuild_degrees`, `moving_shadows`, `sky_shadows`),
+and `auto` keeps them as it steps.
 
 `auto` (24bad102) starts at `medium`. It steps down a preset after each 3 s
 window in which the lighting's own GPU time averaged over 2 ms a frame, an

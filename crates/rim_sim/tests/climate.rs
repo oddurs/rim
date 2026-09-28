@@ -48,7 +48,8 @@ fn core_day_is_data_and_matches_the_old_script() {
         worst = worst.max((s.world.fields.ambient(t) - old_curve(h)).abs());
     }
     assert!(worst < 1.5, "core's day is within {worst:.2}° of the old curve, want < 1.5°");
-    // Light: full at noon, none at midnight.
+    // Light: full at noon, none at midnight: the moon lights only the
+    // picture.
     step_to(&mut s, 3 * TICKS_PER_DAY + TICKS_PER_DAY / 4);
     assert_eq!(s.world.fields.ambient(l), 100.0, "noon is full daylight");
     step_to(&mut s, 3 * TICKS_PER_DAY + TICKS_PER_DAY * 3 / 4);

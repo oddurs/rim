@@ -20,14 +20,17 @@ pub struct Quality {
     /// Moving lights that cast shadows, nearest the view first; the rest
     /// glow without.
     pub moving_shadows: u32,
+    /// Sky bodies that cast shadows, brightest first, up to 4; the rest
+    /// light without.
+    pub sky_shadows: u32,
 }
 
 /// The presets, cheapest first.
 pub const PRESETS: [(&str, Quality); 4] = [
-    ("low", Quality { texels: 1, sun_steps: 16, soft: false, sun_rebuild: 1.0, moving_shadows: 4 }),
-    ("medium", Quality { texels: 2, sun_steps: 28, soft: true, sun_rebuild: 0.25, moving_shadows: 8 }),
-    ("high", Quality { texels: 2, sun_steps: 40, soft: true, sun_rebuild: 0.1, moving_shadows: 16 }),
-    ("ultra", Quality { texels: 4, sun_steps: 56, soft: true, sun_rebuild: 0.02, moving_shadows: 32 }),
+    ("low", Quality { texels: 1, sun_steps: 16, soft: false, sun_rebuild: 1.0, moving_shadows: 4, sky_shadows: 1 }),
+    ("medium", Quality { texels: 2, sun_steps: 28, soft: true, sun_rebuild: 0.25, moving_shadows: 8, sky_shadows: 1 }),
+    ("high", Quality { texels: 2, sun_steps: 40, soft: true, sun_rebuild: 0.1, moving_shadows: 16, sky_shadows: 2 }),
+    ("ultra", Quality { texels: 4, sun_steps: 56, soft: true, sun_rebuild: 0.02, moving_shadows: 32, sky_shadows: 4 }),
 ];
 
 /// The default.
@@ -67,6 +70,7 @@ enum Override {
     SunSteps(u32),
     Soft(bool),
     MovingShadows(u32),
+    SkyShadows(u32),
     SunRebuild(f64),
 }
 
@@ -77,6 +81,7 @@ impl Override {
             Override::SunSteps(n) => q.sun_steps = n,
             Override::Soft(b) => q.soft = b,
             Override::MovingShadows(n) => q.moving_shadows = n,
+            Override::SkyShadows(n) => q.sky_shadows = n,
             Override::SunRebuild(d) => q.sun_rebuild = d,
         }
     }
@@ -114,6 +119,7 @@ impl Setting {
                 "sun_steps" => Override::SunSteps(int()?.clamp(4, 64) as u32),
                 "soft_shadows" => Override::Soft(flag()?),
                 "moving_shadows" => Override::MovingShadows(int()?.clamp(0, 64) as u32),
+                "sky_shadows" => Override::SkyShadows(int()?.clamp(0, 4) as u32),
                 "sun_rebuild_degrees" => {
                     let d = v.as_float().or(v.as_integer().map(|i| i as f64)).filter(|d| d.is_finite());
                     Override::SunRebuild(d.ok_or("lighting.sun_rebuild_degrees should be a number")?.clamp(0.01, 5.0))
@@ -223,10 +229,13 @@ mod tests {
         let text = "[lighting]\nquality = \"high\"\ntexels_per_cell = 4\nsun_steps = 90\nsoft_shadows = false\nsun_rebuild_degrees = 1\n";
         let s = Setting::from_settings(text).unwrap().unwrap();
         assert_eq!(s.name(), "high", "overrides keep the preset's name");
-        let want = Quality { texels: 4, sun_steps: 64, soft: false, sun_rebuild: 1.0, moving_shadows: 16 };
+        let want =
+            Quality { texels: 4, sun_steps: 64, soft: false, sun_rebuild: 1.0, moving_shadows: 16, sky_shadows: 2 };
         assert_eq!(s.quality, want, "steps are capped");
         let s = Setting::from_settings("[lighting]\nmoving_shadows = 2").unwrap().unwrap();
         assert_eq!(s.quality.moving_shadows, 2, "and the moving lights' cap");
+        let s = Setting::from_settings("[lighting]\nsky_shadows = 9").unwrap().unwrap();
+        assert_eq!(s.quality.sky_shadows, 4, "and the sky's, four at most");
         let s = Setting::from_settings("[lighting]\nsun_rebuild_degrees = 0.5").unwrap().unwrap();
         assert_eq!((s.name(), s.quality.sun_rebuild), ("medium", 0.5), "no preset is medium");
         assert_eq!(Setting::from_settings("render_scale = 0.5"), Ok(None), "unset is the default");

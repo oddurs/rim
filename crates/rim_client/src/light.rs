@@ -136,7 +136,11 @@ varying vec2 uv;
 uniform sampler2D occluders;
 uniform vec2 map;
 uniform vec2 res;
-uniform vec4 sun;
+uniform vec4 sun0;
+uniform vec4 sun1;
+uniform vec4 sun2;
+uniform vec4 sun3;
+uniform float count;
 uniform float steps;
 const float STEP = 0.4;
 const float MAX_HEIGHT = 4.0;
@@ -161,22 +165,14 @@ const float ROOF = 1.0;
 const float SILL = 0.28;
 const float LINTEL = 0.92;
 const float GLASS = 0.85;
-void main() {
-    vec2 p = gl_FragCoord.xy / res * map;
-    vec4 here = cell(p);
-    if (sun.z <= 0.0) {
-        gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
-        return;
-    }
+// How much of a body at `sun` (toward it in cells, tan elevation, penumbra
+// growth) reaches `p`, whose occluder is `here`.
+float march(vec2 p, vec4 here, vec4 sun) {
+    if (sun.z <= 0.0) return 0.0;
     // Under a roof, the sun gets in only through a window, between its sill
     // and lintel. The roof rests on what bounds the room, so a ray that
     // leaves any other way (a wall, a door, or water that closes a room
     // without a wall) stops there, however high it has climbed.
-    // Rock below the surface with more over it: its top is not the sky's.
-    if (kind(here) == 3.0) {
-        gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
-        return;
-    }
     bool inside = here.g > 0.5;
     float h0 = (!inside && here.b > 0.0) ? height(here) : 0.0;
     float vis = 1.0;
@@ -218,7 +214,23 @@ void main() {
     }
     // Still under the roof when the steps ran out: it never saw the sky.
     if (inside) vis = 0.0;
-    gl_FragColor = vec4(vis, 0.0, 0.0, 1.0);
+    return vis;
+}
+// Each shadowed sky body in a channel of its own, brightest in red.
+void main() {
+    vec2 p = gl_FragCoord.xy / res * map;
+    vec4 here = cell(p);
+    // Rock below the surface with more over it: its top is not the sky's.
+    if (kind(here) == 3.0) {
+        gl_FragColor = vec4(0.0);
+        return;
+    }
+    vec4 vis = vec4(0.0);
+    if (count > 0.5) vis.r = march(p, here, sun0);
+    if (count > 1.5) vis.g = march(p, here, sun1);
+    if (count > 2.5) vis.b = march(p, here, sun2);
+    if (count > 3.5) vis.a = march(p, here, sun3);
+    gl_FragColor = vis;
 }";
 
 // One light-giving thing per quad, all in one draw: its centre, reach and
@@ -334,7 +346,11 @@ uniform sampler2D sunlit;
 uniform sampler2D rooms;
 uniform float exposure;
 uniform vec3 ambient;
-uniform vec3 direct;
+uniform vec3 direct0;
+uniform vec3 direct1;
+uniform vec3 direct2;
+uniform vec3 direct3;
+uniform vec4 weights;
 uniform vec3 bolt;
 uniform vec3 night;
 uniform vec3 ch0;
@@ -365,17 +381,22 @@ void main() {
     // sun of its own cell, so the shadow it casts doesn't creep up its side.
     vec2 centre = (floor(uv / cell) + 0.5) * cell;
     float solid = mass_at(uv);
-    float sun = mix(texture2D(sunlit, uv).r, texture2D(sunlit, centre).r, solid);
+    vec4 vis = mix(texture2D(sunlit, uv), texture2D(sunlit, centre), solid);
     // Indoors, a room's share of the sky through its walls and windows,
     // and the sun itself where it comes through a pane: from this texel
     // alone, so the linear filter doesn't carry the sun on the wall's
     // outer face onto the floor inside.
     float share = texture2D(rooms, uv).r;
     float open = texture2D(rooms, uv).g;
-    float sun_in = texture2D(sunlit, (floor(uv * lres) + 0.5) / lres).r;
-    // A lightning flash, while it lasts, is what `sunlit` holds.
-    vec3 outside = ambient * open + (direct + bolt) * sun;
-    vec3 inside = (ambient + direct) * share + (direct + bolt) * sun_in;
+    vec4 vis_in = texture2D(sunlit, (floor(uv * lres) + 0.5) / lres);
+    // Each shadowed sky body in its channel, in its colour. A lightning
+    // flash, while it lasts, is what red holds.
+    vec3 lit = direct0 * vis.r + direct1 * vis.g + direct2 * vis.b + direct3 * vis.a + bolt * vis.r;
+    vec3 lit_in = direct0 * vis_in.r + direct1 * vis_in.g + direct2 * vis_in.b + direct3 * vis_in.a + bolt * vis_in.r;
+    vec3 outside = ambient * open + lit;
+    vec3 inside = (ambient + direct0 + direct1 + direct2 + direct3) * share + lit_in;
+    // How much of the direct light reaches here, for the contact shadow.
+    float sun = dot(vis, weights);
     // The baked firelight, and what the bake hasn't caught up with yet.
     vec4 f = (texture2D(Texture, uv) + texture2D(moving, uv)) / scale;
     vec3 fire = f.r * ch0 + f.g * ch1 + f.b * ch2 + f.a * ch3;
@@ -601,6 +622,48 @@ pub fn sun_at(path: &SunPath, hour: f64) -> (f64, f64) {
         return (path.arc[1], -1.0);
     }
     (path.arc[0] + (path.arc[1] - path.arc[0]) * f, path.peak * (std::f64::consts::PI * f).sin())
+}
+
+/// A sky body as it lights the world now (DESIGN.md §6e).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Body {
+    /// Which it is: its index among the sky's bodies, or `LONE_SUN`.
+    pub id: usize,
+    /// Azimuth and elevation, degrees.
+    pub at: (f64, f64),
+    /// Its share of the sky's light, 0 to 1: its term over its field's value.
+    pub share: f32,
+    /// Its colour, white at most.
+    pub rgb: Vec3,
+    /// How much wider than the sun it looks: its shadows soften as much more.
+    pub size: f32,
+    pub shadows: bool,
+}
+
+impl Body {
+    /// How much of the sky's light comes straight from it.
+    fn direct(&self, cloud: f32) -> f32 {
+        self.share * direct_share(self.at.1, cloud)
+    }
+}
+
+/// The `Body::id` of a sky's lone `sun`, where it declares no bodies.
+pub const LONE_SUN: usize = usize::MAX;
+
+/// Light, in the `light` field's units, at which a body's reach clears the
+/// plan's contact shadow wholly: daylight does, moonlight barely.
+const CONTACT_LIGHT: f32 = 10.0;
+
+/// Under this, in its field's units, a sky body gives no light.
+const DARK_BODY: f64 = 0.01;
+
+/// Which bodies cast shadows: those that may, above the horizon, brightest
+/// straight light first, `cap` at most. The rest light without.
+fn shadow_slots(bodies: &[Body], cloud: f32, cap: usize) -> Vec<usize> {
+    // Clear of the horizon, or its shadows round to none.
+    let mut up: Vec<&Body> = bodies.iter().filter(|b| b.shadows && b.at.1 > 0.5 && b.direct(cloud) > 1e-3).collect();
+    up.sort_by(|a, b| b.direct(cloud).total_cmp(&a.direct(cloud)).then(a.id.cmp(&b.id)));
+    up.into_iter().take(cap.min(4)).map(|b| b.id).collect()
 }
 
 /// How much of the sky's light comes straight from the sun: none below the
@@ -1061,9 +1124,14 @@ struct Level {
     any_sky: bool,
     /// The open sky each cell sees (`open_sky`), for the eye to adapt to.
     sky: Vec<f32>,
-    /// Where the sun reaches, R, `texels` per cell.
+    /// Where each shadowed sky body reaches, a channel each, brightest in
+    /// R, `texels` per cell.
     sunlit: Option<RenderTarget>,
-    sun_key: Option<SunKey>,
+    /// Whether it was a flash, each channel's body as it was marched, and
+    /// which bodies they are.
+    sun_key: Option<(bool, Vec<SunKey>, Vec<usize>)>,
+    /// The bodies in `sunlit`'s channels, by `Body::id`.
+    slots: Vec<usize>,
     /// `sunlit` holds a lightning flash's shadows, not the sun's.
     bolt: bool,
 }
@@ -1093,6 +1161,10 @@ pub struct Light {
     pub pin_sun: Option<(f64, f64)>,
     /// Times the sun pass has run.
     pub sun_runs: u64,
+    /// The sky's bodies this frame, and the picture's light from the sky
+    /// (`bodies`), worked out once in `prepare`.
+    lit: Vec<Body>,
+    sky_light: f32,
     /// Each lighting pass last frame, in order.
     pub passes: Vec<PassTime>,
     /// Time each pass on the GPU with a timer query (`time_gpu`).
@@ -1138,6 +1210,7 @@ impl Light {
         z: i32,
     ) {
         self.passes.clear();
+        (self.lit, self.sky_light) = self.bodies(w, air.light);
         self.cost_frame();
         self.cost_begin(0);
         self.view(z);
@@ -1237,6 +1310,12 @@ impl Light {
         Some((open, self.sun_visibility(x, y)?))
     }
 
+    /// The sky bodies casting shadows now, brightest first, by `Body::id`:
+    /// an index into the sky's bodies, or `LONE_SUN`.
+    pub fn shadow_bodies(&self) -> &[usize] {
+        &self.lv.slots
+    }
+
     /// Whether the sun target holds a lightning flash's shadows now.
     pub fn lit_by_flash(&self) -> bool {
         self.lv.bolt
@@ -1274,9 +1353,83 @@ impl Light {
         Some([c.r, c.g, c.b, c.a].map(|v| v / FIRE_SCALE))
     }
 
-    /// Where the sun is now: pinned, or on the sky's path.
-    fn sun(&self, w: &World) -> Option<(f64, f64)> {
-        self.pin_sun.or_else(|| w.defs.sky.sun.as_ref().map(|p| sun_at(p, w.hour())))
+    /// The sky's bodies now, in the sky's order, and the light the picture
+    /// has from the sky: the sim's `light`, and what the bodies that light
+    /// only the picture add to it (core's moon). A body's share is its part
+    /// of that. A sky with none has its lone `sun`, which is all its light.
+    /// A pinned sun is all the sky's light too, from where it's pinned: the
+    /// body with the most, moved.
+    pub fn bodies(&self, w: &World, light: f32) -> (Vec<Body>, f32) {
+        use rim_sim::defs::BodyLight;
+        use rim_sim::terms::Terms;
+        let (defs, hour) = (&w.defs, w.hour());
+        let mut sky = light;
+        let mut out: Vec<Body> = if defs.sky_bodies.is_empty() {
+            let at = defs.sky.sun.as_ref().map(|p| sun_at(p, hour)).or(self.pin_sun);
+            at.map(|at| Body { id: LONE_SUN, at, share: 1.0, rgb: Vec3::ONE, size: 1.0, shadows: true })
+                .into_iter()
+                .collect()
+        } else {
+            // A field's term is read against the field's terms themselves,
+            // so a field pinned for a test or pushed by a plugin still says
+            // whose light it is. A body all but dark (a new moon) is dark:
+            // alone in the sky, a glimmer would be all its light, and cast.
+            let eval = |terms: Vec<rim_sim::terms::Term>| w.fields.eval_global(&Terms { terms });
+            let lights: Vec<f32> = defs
+                .sky_bodies
+                .iter()
+                .map(|b| match &b.light {
+                    BodyLight::Field { field, term } => {
+                        let all = &defs.fields[*field].terms.terms;
+                        let mine = eval(all.iter().filter(|t| &t.label == term).cloned().collect());
+                        let total = eval(all.clone());
+                        if mine > DARK_BODY {
+                            (mine / total).clamp(0.0, 1.0) as f32 * light
+                        } else {
+                            0.0
+                        }
+                    }
+                    BodyLight::Own(t) => {
+                        let own = w.fields.eval_global(t) as f32;
+                        if own > DARK_BODY as f32 {
+                            own
+                        } else {
+                            0.0
+                        }
+                    }
+                    BodyLight::Unresolved => 0.0,
+                })
+                .collect();
+            sky += defs
+                .sky_bodies
+                .iter()
+                .zip(&lights)
+                .filter(|(b, _)| matches!(b.light, BodyLight::Own(_)))
+                .map(|(_, l)| l)
+                .sum::<f32>();
+            defs.sky_bodies
+                .iter()
+                .zip(lights)
+                .enumerate()
+                .map(|(id, (b, l))| {
+                    let share = if sky > 0.0 { (l / sky).clamp(0.0, 1.0) } else { 0.0 };
+                    let size = (b.angular_size / 0.5) as f32;
+                    Body { id, at: sun_at(&b.path(), hour), share, rgb: rgb3(b.rgb), size, shadows: b.shadows }
+                })
+                .collect()
+        };
+        if let Some(pin) = self.pin_sun {
+            let most = out.iter().enumerate().max_by(|a, b| a.1.share.total_cmp(&b.1.share)).map(|(i, _)| i);
+            for (i, b) in out.iter_mut().enumerate() {
+                if Some(i) == most {
+                    // A plain sun: white, the sun's size.
+                    (b.at, b.share, b.rgb, b.size, b.shadows) = (pin, 1.0, Vec3::ONE, 1.0, true);
+                } else {
+                    b.share = 0.0;
+                }
+            }
+        }
+        (out, sky)
     }
 
     fn material(&mut self, pass: Pass) -> Option<Material> {
@@ -1292,7 +1445,11 @@ impl Light {
                     vec![
                         UniformDesc::new("map", UniformType::Float2),
                         UniformDesc::new("res", UniformType::Float2),
-                        UniformDesc::new("sun", UniformType::Float4),
+                        UniformDesc::new("sun0", UniformType::Float4),
+                        UniformDesc::new("sun1", UniformType::Float4),
+                        UniformDesc::new("sun2", UniformType::Float4),
+                        UniformDesc::new("sun3", UniformType::Float4),
+                        UniformDesc::new("count", UniformType::Float1),
                         UniformDesc::new("steps", UniformType::Float1),
                     ],
                     vec!["occluders".to_string()],
@@ -1325,7 +1482,11 @@ impl Light {
                     MULTIPLY_FRAGMENT,
                     vec![
                         UniformDesc::new("ambient", UniformType::Float3),
-                        UniformDesc::new("direct", UniformType::Float3),
+                        UniformDesc::new("direct0", UniformType::Float3),
+                        UniformDesc::new("direct1", UniformType::Float3),
+                        UniformDesc::new("direct2", UniformType::Float3),
+                        UniformDesc::new("direct3", UniformType::Float3),
+                        UniformDesc::new("weights", UniformType::Float4),
                         UniformDesc::new("bolt", UniformType::Float3),
                         UniformDesc::new("night", UniformType::Float3),
                         UniformDesc::new("ch0", UniformType::Float3),
@@ -1634,18 +1795,23 @@ impl Light {
         let bolt = flash.strength > FLASH_ON && self.z >= 0;
         // Below the surface the occluders stand as tall as the levels above:
         // the sun reaches only down a shaft, inside its cone.
-        let key = if !self.lv.any_sky {
-            SunKey::Down
+        let (version, cloud) = (self.lv.occluders.version, air.cloud);
+        let key_of = |at, soft| SunKey::new(Some(at), soft, version, q.sun_rebuild, q.sun_steps);
+        let (keys, slots) = if !self.lv.any_sky {
+            (Vec::new(), Vec::new())
         } else if bolt {
-            let from = Some((flash.azimuth as f64, FLASH_ELEVATION));
-            SunKey::new(from, 0.0, self.lv.occluders.version, q.sun_rebuild, q.sun_steps)
+            (vec![key_of((flash.azimuth as f64, FLASH_ELEVATION), 0.0)], Vec::new())
         } else {
-            let soft = if q.soft { penumbra(air.cloud) } else { 0.0 };
-            SunKey::new(self.sun(w), soft, self.lv.occluders.version, q.sun_rebuild, q.sun_steps)
+            // Cloud softens the shadows; a wider body, more (below).
+            let slots = shadow_slots(&self.lit, cloud, q.sky_shadows as usize);
+            let soft = if q.soft { penumbra(cloud) } else { 0.0 };
+            let at = |id| self.lit.iter().find(|b| b.id == id).map_or((0.0, -1.0), |b| b.at);
+            (slots.iter().map(|&id| key_of(at(id), soft)).collect(), slots)
         };
+        let key = (bolt, keys, slots);
         let fits =
             self.lv.sunlit.as_ref().is_some_and(|t| (t.texture.width() as u32, t.texture.height() as u32) == size);
-        if fits && self.lv.sun_key == Some(key) {
+        if fits && self.lv.sun_key.as_ref() == Some(&key) {
             return false;
         }
         let Some(m) = self.material(Pass::Sun) else { return false };
@@ -1654,15 +1820,18 @@ impl Light {
             rt.texture.set_filter(FilterMode::Linear);
             self.lv.sunlit = Some(rt);
         }
+        // The keys' quantised bodies, so the result is exactly the key's.
+        let wide = |k: usize| key.2.get(k).and_then(|&id| self.lit.iter().find(|b| b.id == id)).map_or(1.0, |b| b.size);
+        for (k, name) in ["sun0", "sun1", "sun2", "sun3"].into_iter().enumerate() {
+            m.set_uniform(name, key.1.get(k).map_or(Vec4::ZERO, |s| s.toward().extend(s.soft() * wide(k))));
+        }
+        m.set_uniform("count", key.1.len() as f32);
+        (self.lv.slots, self.lv.bolt) = (key.2.clone(), bolt);
         self.lv.sun_key = Some(key);
-        self.lv.bolt = bolt;
-        // The key's quantised sun, so the result is exactly the key's.
-        let (toward, soft) = (key.toward(), key.soft());
         let (tw, th) = (size.0 as f32, size.1 as f32);
         m.set_texture("occluders", occ);
         m.set_uniform("map", vec2(w.map.w as f32, w.map.h as f32));
         m.set_uniform("res", vec2(tw, th));
-        m.set_uniform("sun", toward.extend(soft));
         m.set_uniform("steps", q.sun_steps as f32);
         set_camera(&Camera2D {
             zoom: vec2(2.0 / tw, 2.0 / th),
@@ -1683,7 +1852,36 @@ impl Light {
     /// lights open ground. Roofs are drawn in it.
     pub fn outdoor(&self, w: &World, air: &Air, flash: Flash) -> Vec3 {
         let (lit, bolt) = self.flash_light(flash);
-        ((Self::sky_color(w, air, lit) + bolt) * self.exposure.max(1.0)).max(rgb3(w.defs.sky.rgb_night))
+        let (ambient, direct, _) = self.split(self.sky_color(w, lit), air);
+        let sky = ambient + direct.iter().sum::<Vec3>();
+        ((sky + bolt) * self.exposure.max(1.0)).max(rgb3(w.defs.sky.rgb_night))
+    }
+
+    /// The sky's light `sky` by where it lands. Each shadowed body's
+    /// straight light goes through its channel, in its colour; a body
+    /// without one lights where the sky does, in its colour; the rest is
+    /// the sky's own. While `sunlit` holds a flash's shadows no body has
+    /// any: their light is the sky's for those few frames. Below the
+    /// surface, with no shaft, straight light lands nowhere. Last, how much
+    /// each channel's reach clears the plan's contact shadow: as much as its
+    /// light is the day's, so a moon leaves the night's convention be.
+    fn split(&self, sky: Vec3, air: &Air) -> (Vec3, [Vec3; 4], [f32; 4]) {
+        let (mut ambient, mut direct, mut weights) = (sky, [Vec3::ZERO; 4], [0.0f32; 4]);
+        let daylike = (self.sky_light / CONTACT_LIGHT).clamp(0.0, 1.0);
+        for b in &self.lit {
+            let d = if self.lv.bolt { 0.0 } else { b.direct(air.cloud) };
+            ambient -= sky * d;
+            match self.lv.slots.iter().position(|&i| i == b.id) {
+                Some(k) => (direct[k], weights[k]) = (sky * d * b.rgb, d / DIRECT * daylike),
+                None if self.lv.any_sky => ambient += sky * d * b.rgb,
+                None => {}
+            }
+        }
+        if self.lv.bolt {
+            weights[0] = 1.0;
+        }
+        let sum: f32 = weights.iter().sum();
+        (ambient.max(Vec3::ZERO), direct, if sum > 1.0 { weights.map(|x| x / sum) } else { weights })
     }
 
     /// A flash's light: how much it brightens the sky everywhere, and the
@@ -1699,14 +1897,15 @@ impl Light {
 
     /// How each way a roof slopes is lit, as `roof_faces` says, for the sun
     /// now.
-    pub fn roof_faces(&self, w: &World, air: &Air) -> [f32; 5] {
-        let sun = self.sun(w);
-        roof_faces(sun, direct_share(sun.map_or(-1.0, |s| s.1), air.cloud))
+    pub fn roof_faces(&self, air: &Air) -> [f32; 5] {
+        let direct = |b: &&Body| b.direct(air.cloud);
+        let brightest = self.lit.iter().max_by(|a, b| direct(a).total_cmp(&direct(b)));
+        roof_faces(brightest.map(|b| b.at), self.lit.iter().map(|b| b.direct(air.cloud)).sum())
     }
 
     /// The sky's colour and brightness now: white, tinted by `[[sky]]`
     /// tints, times the outdoor light, brightened by a lightning flash.
-    fn sky_color(w: &World, air: &Air, flash: f32) -> Vec3 {
+    fn sky_color(&self, w: &World, flash: f32) -> Vec3 {
         let sky = &w.defs.sky;
         let mut c = Vec3::ZERO;
         let mut total = 0.0;
@@ -1722,7 +1921,7 @@ impl Light {
         let tinted = c + Vec3::ONE * (1.0 - total);
         // Perceived brightness: an overcast day at half the light still
         // looks like day.
-        let bright = (air.light / 100.0).clamp(0.0, 1.44).sqrt() + flash;
+        let bright = (self.sky_light / 100.0).clamp(0.0, 1.44).sqrt() + flash;
         tinted * bright
     }
 
@@ -1747,11 +1946,8 @@ impl Light {
         // Below the surface the sky reaches only down a shaft (the rooms'
         // open sky), and night there is darker than night outside.
         let under = self.z < 0;
-        let (sky, bolt) = (Self::sky_color(w, air, lit), if under { Vec3::ZERO } else { bolt });
-        let elev = self.sun(w).map_or(-1.0, |s| s.1);
-        // While `sunlit` holds the bolt's shadows the sun has none: its
-        // light is the sky's for those few frames, not the bolt's pattern.
-        let share = if self.lv.bolt { 0.0 } else { direct_share(elev, air.cloud) };
+        let (sky, bolt) = (self.sky_color(w, lit), if under { Vec3::ZERO } else { bolt });
+        let (ambient, direct, weights) = self.split(sky, air);
         let def = &w.defs.sky;
         let (mw, mh) = (w.map.w as f32, w.map.h as f32);
         m.set_texture("occluders", occ);
@@ -1770,8 +1966,11 @@ impl Light {
             target
         };
         m.set_uniform("exposure", self.exposure);
-        m.set_uniform("ambient", sky * (1.0 - share));
-        m.set_uniform("direct", sky * share);
+        m.set_uniform("ambient", ambient);
+        for (k, name) in ["direct0", "direct1", "direct2", "direct3"].into_iter().enumerate() {
+            m.set_uniform(name, direct[k]);
+        }
+        m.set_uniform("weights", Vec4::from_array(weights));
         m.set_uniform("bolt", bolt);
         m.set_uniform("night", rgb3(def.rgb_night) * if under { UNDERGROUND } else { 1.0 });
         let fire = rgb3(def.rgb_fire) * 1.2;
@@ -1781,7 +1980,7 @@ impl Light {
         m.set_uniform("cell", vec2(1.0 / mw, 1.0 / mh));
         m.set_uniform("lres", vec2(mw, mh) * self.texels as f32);
         // With no sun path the contact shadow fades with daylight instead.
-        let day = if def.sun.is_none() { (air.light / 100.0).clamp(0.0, 1.0) } else { 0.0 };
+        let day = if self.lit.is_empty() { (air.light / 100.0).clamp(0.0, 1.0) } else { 0.0 };
         m.set_uniform("day", day);
         m.set_uniform("scale", FIRE_SCALE);
         gl_use_material(&m);
@@ -1918,6 +2117,66 @@ impl Light {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Core's sky at `hours` past the start (06:00 on the first day, whose
+    /// night has a full moon): which bodies cast shadows, with `cap` slots.
+    fn shadows_at(hours: f64, cap: usize) -> Vec<String> {
+        let mods = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mods");
+        let mut sim = rim_sim::Sim::build(&mods, 1, &|id| id == "core", 48).unwrap();
+        sim.world.tick = (hours / 24.0 * rim_sim::TICKS_PER_DAY as f64) as u64;
+        for _ in 0..40 {
+            sim.step();
+        }
+        let w = &sim.world;
+        let slots = shadow_slots(&Light::default().bodies(w, crate::sky::Air::read(w).light).0, 0.0, cap);
+        slots.iter().map(|&i| w.defs.sky_bodies[i].id.clone()).collect()
+    }
+
+    #[test]
+    fn with_one_shadow_slot_the_sun_casts_by_day_and_the_moon_by_night() {
+        assert_eq!(shadows_at(6.0, 1), ["core:sun"], "noon");
+        assert_eq!(shadows_at(18.0, 1), ["core:moon"], "midnight, under a full moon");
+        assert_eq!(shadows_at(18.0, 4), ["core:moon"], "the sun is down, however many slots");
+        // Half its cycle on, the moon is new at noon: the sun's.
+        assert_eq!(shadows_at(6.0 + 8.0 * 24.0, 4), ["core:sun"], "a new moon beside the sun casts nothing");
+    }
+
+    #[test]
+    fn a_moon_lights_in_its_colour_but_leaves_the_nights_contact_shadow() {
+        let moon = Body { id: 1, at: (90.0, 40.0), share: 1.0, rgb: vec3(0.5, 1.0, 0.6), size: 3.0, shadows: true };
+        // Moonlight is the picture's alone: the sim's light is 0, the sky's 1.5.
+        let mut light = Light { lit: vec![moon], sky_light: 1.5, ..Default::default() };
+        (light.lv.slots, light.lv.any_sky) = (vec![1], true);
+        let night = crate::sky::Air::default();
+        let (ambient, direct, weights) = light.split(Vec3::ONE, &night);
+        assert!((direct[0] - vec3(0.5, 1.0, 0.6) * DIRECT).length() < 1e-5, "its straight light, green: {direct:?}");
+        assert!((ambient - Vec3::splat(1.0 - DIRECT)).length() < 1e-5, "the rest is the sky's: {ambient:?}");
+        assert!(weights[0] < 0.2, "moonlight clears little of the contact shadow: {weights:?}");
+        light.sky_light = 90.0;
+        assert!((light.split(Vec3::ONE, &night).2[0] - 1.0).abs() < 1e-5, "daylight clears it");
+        light.sky_light = 1.5;
+        // Without a slot its light lands where the sky's does, still green.
+        light.lv.slots.clear();
+        let (ambient, direct, _) = light.split(Vec3::ONE, &night);
+        assert_eq!(direct, [Vec3::ZERO; 4]);
+        assert!((ambient - (Vec3::splat(1.0 - DIRECT) + vec3(0.5, 1.0, 0.6) * DIRECT)).length() < 1e-5);
+        // Below the surface with no shaft, straight light lands nowhere.
+        light.lv.any_sky = false;
+        assert!((light.split(Vec3::ONE, &night).0 - Vec3::splat(1.0 - DIRECT)).length() < 1e-5);
+    }
+
+    #[test]
+    fn the_brightest_straight_light_gets_the_slots_and_only_bodies_that_may() {
+        let body =
+            |id, elev: f64, share, shadows| Body { id, at: (90.0, elev), share, rgb: Vec3::ONE, size: 1.0, shadows };
+        let sky =
+            [body(0, 50.0, 0.2, true), body(1, 50.0, 0.7, true), body(2, 50.0, 0.9, false), body(3, -5.0, 1.0, true)];
+        assert_eq!(shadow_slots(&sky, 0.0, 4), [1, 0], "brightest first; none that may not, nor below the horizon");
+        assert_eq!(shadow_slots(&sky, 0.0, 1), [1]);
+        assert!(shadow_slots(&sky, 0.0, 0).is_empty());
+        let low = [body(0, 2.0, 0.9, true), body(1, 60.0, 0.5, true)];
+        assert_eq!(shadow_slots(&low, 0.0, 1), [1], "a body near the horizon gives less straight light");
+    }
 
     #[test]
     fn a_frame_never_waits_for_the_gpu_unless_the_bench_asks() {
