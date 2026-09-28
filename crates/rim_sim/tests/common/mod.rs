@@ -37,7 +37,11 @@ pub fn test_mods(name: &str, ship: &[&str], extra: &[(&str, &[(&str, &str)])]) -
         fs::create_dir_all(&m).unwrap();
         fs::write(
             m.join("mod.toml"),
-            format!("id = \"{id}\"\nname = \"{id}\"\nversion = \"0.1.0\"\napi = \"0.6\"\ndepends = [{deps}]\n"),
+            format!(
+                "id = \"{id}\"\nname = \"{id}\"\nversion = \"0.1.0\"\napi = \"{}.{}\"\ndepends = [{deps}]\n",
+                rim_sim::API_VERSION.0,
+                rim_sim::API_VERSION.1
+            ),
         )
         .unwrap();
         for (path, text) in *files {

@@ -1,7 +1,7 @@
 id = "fire"
 name = "Fire"
 version = "0.1.0"
-api = "0.6"
+api = "0.7"
 ui_api = "0.6"
 description = "Fire: dry grass and timber burn, the wind carries it, rain and wet ground put it out, and dry lightning starts it. Colonists beat out what burns near home."
 depends = ["core", "weather"]

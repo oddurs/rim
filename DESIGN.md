@@ -2202,8 +2202,11 @@ where they were built, and the sun moves a fraction of a degree a second.
     taller than the ray. Rebuilt when a body moves past a threshold (0.25° by
     default), otherwise free. The penumbra widens with distance from the
     occluder, and cloud and a wide body (`angular_size`) widen it further.
-    **Sky bodies** (1a17d685) are `[[sky_body]]` defs: a path, a colour, a
-    size, and how bright each is. That is a labelled term of a field when
+    **Sky bodies** (1a17d685) are `[[sky_body]]` defs: an orbit, a colour,
+    a size, and how bright each is. Where each is, is the sim's (0a27bfbb):
+    the renderer takes altitude and azimuth from `World::sky_body_states`
+    and keeps no path of its own (efd56e49), so shadows swing through the
+    seasons and the picture and the sim are one sky. That is a labelled term of a field when
     its light is the sim's too (core's sun, `daylight`'s `sun`), or terms of
     its own that only the renderer reads (a mod's choice). Core's sun and
     moon are both `daylight` terms, worked out from where they are (below):

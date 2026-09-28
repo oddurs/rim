@@ -51,26 +51,28 @@ const STACKED: i32 = 40;
 /// A copy of `mods` plus `n` generated mods, each a piece of furniture
 /// drawn from a sprite of its own: the colony gets built of them, so the
 /// bench shows what twenty mods' art costs in draw calls.
-fn with_sprite_mods(mods: &Path, n: usize) -> Result<PathBuf, String> {
-    fn copy(from: &Path, to: &Path) -> std::io::Result<()> {
-        std::fs::create_dir_all(to)?;
-        for e in std::fs::read_dir(from)?.flatten() {
-            let p = e.path();
-            if p.is_dir() {
-                copy(&p, &to.join(e.file_name()))?;
-            } else {
-                std::fs::copy(&p, to.join(e.file_name()))?;
-            }
+/// A folder copied, with everything in it: a mods folder to add to.
+pub(crate) fn copy_dir(from: &Path, to: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(to)?;
+    for e in std::fs::read_dir(from)?.flatten() {
+        let p = e.path();
+        if p.is_dir() {
+            copy_dir(&p, &to.join(e.file_name()))?;
+        } else {
+            std::fs::copy(&p, to.join(e.file_name()))?;
         }
-        Ok(())
     }
+    Ok(())
+}
+
+fn with_sprite_mods(mods: &Path, n: usize) -> Result<PathBuf, String> {
     let err = |e: std::io::Error| format!("render bench: sprite mods: {e}");
     // Fresh each run: a left-over folder from a reused pid would add mods.
     let dir = std::env::temp_dir().join(format!("rim-bench-sprites-{}", std::process::id()));
     if dir.exists() {
         std::fs::remove_dir_all(&dir).map_err(err)?;
     }
-    copy(mods, &dir).map_err(err)?;
+    copy_dir(mods, &dir).map_err(err)?;
     let art = mods.join("wildlife_plus/sprites/salt_lick.png");
     for k in 0..n {
         let m = dir.join(format!("art{k:02}"));
@@ -78,7 +80,7 @@ fn with_sprite_mods(mods: &Path, n: usize) -> Result<PathBuf, String> {
         std::fs::create_dir_all(m.join("defs")).map_err(err)?;
         std::fs::copy(&art, m.join("sprites/piece.png")).map_err(err)?;
         let manifest = format!(
-            "id = \"art{k:02}\"\nname = \"Art {k}\"\nversion = \"0.0.0\"\napi = \"0.6\"\ndepends = [\"core\"]\n"
+            "id = \"art{k:02}\"\nname = \"Art {k}\"\nversion = \"0.0.0\"\napi = \"0.7\"\ndepends = [\"core\"]\n"
         );
         std::fs::write(m.join("mod.toml"), manifest).map_err(err)?;
         let def = "[[thing]]\nid = \"piece\"\nlabel = \"piece\"\ncolor = \"#a08060\"\ncategory = \"building\"\n\
@@ -401,19 +403,20 @@ const VIEWS: [View; 10] = [
         storm: false,
         zooming: false,
         scale: 1.0,
-        hour: Some(18.67),
+        hour: Some(17.25),
         lit: true,
         level: None,
         moving: 64,
     },
-    // Long shadows and lit fires: the most the lighting does.
+    // Long shadows and lit fires: the most the lighting does. The sun is
+    // where the sim has it: at 17:15 on the bench's day, about 9° up.
     View {
         name: "dusk",
         zoom: None,
         storm: false,
         zooming: false,
         scale: 1.0,
-        hour: Some(18.67),
+        hour: Some(17.25),
         lit: true,
         level: None,
         moving: 0,

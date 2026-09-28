@@ -205,7 +205,7 @@ end)
     std::fs::write(extra.join("defs/patch.toml"), patch).unwrap();
     std::fs::write(
         extra.join("mod.toml"),
-        "id = \"other\"\nname = \"Other\"\nversion = \"0.1.0\"\napi = \"0.6\"\ndepends = [\"planning\"]\n",
+        "id = \"other\"\nname = \"Other\"\nversion = \"0.1.0\"\napi = \"0.7\"\ndepends = [\"planning\"]\n",
     )
     .unwrap();
     let mut s = Sim::new(&dir, 1).unwrap();

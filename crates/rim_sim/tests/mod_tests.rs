@@ -111,7 +111,7 @@ fn a_world_with_no_seed_gets_one_from_the_test_name() {
     std::fs::create_dir_all(m.join("tests")).unwrap();
     std::fs::write(
         m.join("mod.toml"),
-        "id = \"seeded\"\nname = \"seeded\"\nversion = \"0.1.0\"\napi = \"0.6\"\ndepends = [\"core\"]\n",
+        "id = \"seeded\"\nname = \"seeded\"\nversion = \"0.1.0\"\napi = \"0.7\"\ndepends = [\"core\"]\n",
     )
     .unwrap();
     std::fs::write(

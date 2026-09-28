@@ -28,40 +28,30 @@ of = [{ input = "hour", curve = [[17.5, 0.0], [19.5, 0.45], [21.0, 0.0]] }]
 color = "#8a98b0"
 of = [{ ambient = "cloud", curve = [[40, 0.0], [100, 0.4]] }]
 
-# The bodies the renderer lights the world from: where each crosses the
-# sky, its colour, and how soft its shadows are. How bright the sun is, is
-# a term of the daylight field, the sim's light. The brightest cast
-# shadows, as many as the lighting preset allows.
+# The bodies in the sky. The sim works out where each is from its orbit;
+# the renderer lights the world from there, in each one's colour, with
+# shadows as soft as it is wide. How bright the sun is, is a term of the
+# daylight field, the sim's light. The brightest cast shadows, as many as
+# the lighting preset allows.
 
-# Up with its term at 05:00, down at 21:00, 60° at its highest, rising in
-# the east (0°) and setting a little north of west (190°, the map's y grows
-# south).
+# The sun: warm white, half a degree across.
 [[sky_body]]
 id = "sun"
 field = "daylight"
 term = "sun"
-rise = 5.0
-set = 21.0
-peak = 60.0
-arc = [-10.0, 190.0]
 color = "#fff6e8"
 angular_size = 0.5
 # Its orbit, for the sim: highest at noon, and 23° north of the equator at
 # midsummer, as far south at midwinter.
 tilt = 23.0
 
-# Across the night from the east as the sun does, lower, cold, and wider
-# for its halo. Its light is daylight's `moon` term, the sim's as well as
-# the picture's, so plants grow a little by a full moon; cloud dims it as it
-# dims the sun.
+# The moon: cold, and wider for its halo. Its light is daylight's `moon`
+# term, the sim's as well as the picture's, so plants grow a little by a
+# full moon; cloud dims it as it dims the sun.
 [[sky_body]]
 id = "moon"
 field = "daylight"
 term = "moon"
-rise = 19.5
-set = 5.5
-peak = 45.0
-arc = [20.0, 160.0]
 color = "#aebfff"
 angular_size = 1.5
 # Its orbit: it laps the sun once a phase cycle, 15/14 of a day between

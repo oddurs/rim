@@ -1,6 +1,6 @@
 id = "iron"
 name = "Iron"
 version = "0.1.0"
-api = "0.6"
+api = "0.7"
 description = "Bog iron dug from the marsh, charcoal, a bloomery and a forge: nails, fittings, the saw that makes planks quick, and the iron pick."
 depends = ["core", "crafting", "primitive", "timber"]

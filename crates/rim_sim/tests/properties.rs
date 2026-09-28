@@ -274,7 +274,7 @@ fn load_in_order(dir: &Path, patches: &[Vec<(usize, usize, u32)>], order: &[usiz
     let manifest = |id: &str, after: &[String]| {
         let deps = if id == "base" { String::new() } else { "depends = [\"base\"]\n".to_string() };
         let after = after.iter().map(|a| format!("\"{a}\"")).collect::<Vec<_>>().join(", ");
-        format!("id = \"{id}\"\nname = \"{id}\"\nversion = \"0.1.0\"\napi = \"0.6\"\n{deps}load_after = [{after}]\n")
+        format!("id = \"{id}\"\nname = \"{id}\"\nversion = \"0.1.0\"\napi = \"0.7\"\n{deps}load_after = [{after}]\n")
     };
     write(dir.join("base/mod.toml"), manifest("base", &[]));
     // The least a game loads with (docs/modding/replacing-core.md), then the

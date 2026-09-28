@@ -1,6 +1,8 @@
-# Sky bodies are `daylight` terms: how bright each is, over the hour and
-# any cycle of days. Weather sets `cloud`, and core's `light` is daylight
-# dimmed by cloud, so these suns dim in a storm without naming the weather.
+# Two suns and a green moon. Each is a [[sky_body]] with an orbit, which the
+# sim works out where it is from, and a `daylight` term, which reads how far
+# up it is: so its light follows where it stands, not the clock. Weather
+# sets `cloud`, and core's `light` is daylight dimmed by cloud, so these
+# suns dim in a storm without naming the weather.
 
 [[patch]]
 target = "field/core:daylight"
@@ -15,32 +17,34 @@ scale = 0.0
 scale = 0.0
 of = []
 
-# A red sun, up early and dim.
+# A red sun, dim, highest at 10:00.
 [patch.set.ambient.red_sun]
-of = [{ input = "hour", curve = [[4, 0.0], [7, 40.0], [13, 40.0], [16, 0.0]] }]
+scale = 40.0
+of = [{ input = "body", body = "two_suns:red_sun", of = "up" }]
 
-# A white sun, up late. Together they stay within daylight's 0 to 100.
+# A white sun, highest at 16:00. Together they stay within daylight's 0 to
+# 100.
 [patch.set.ambient.white_sun]
-of = [{ input = "hour", curve = [[9, 0.0], [12, 60.0], [20, 60.0], [23, 0.0]] }]
+scale = 60.0
+of = [{ input = "body", body = "core:sun", of = "up" }]
 
-# A green moon: up through the night, full every eight days. Unlike core's
-# moon, whose light is the picture's alone, this one lights the sim too: a
-# daylight term, so plants grow by it. Its phase is a cycle, 0 to 1 over
-# `days`, full halfway; the game starts at 06:00, so a quarter-day offset
-# makes it full at midnight.
+# A green moon, full every eight days. Like core's moon it lights the sim:
+# a daylight term, so plants grow a little by it. It laps nothing, so its
+# phase is its own; a quarter-day offset makes it full at midnight, since
+# the game starts at 06:00.
 [patch.set.ambient.green_moon]
 scale = 12.0
 of = [
-  { input = "hour", curve = [[0, 1.0], [3, 1.0], [5, 0.0], [21, 0.0], [23, 1.0], [24, 1.0]] },
-  { input = "cycle", days = 8, offset = 0.25, curve = [[0, 0.0], [0.5, 1.0], [1, 0.0]] },
+  { input = "body", body = "two_suns:green_moon", of = "up" },
+  { input = "body", body = "two_suns:green_moon", of = "phase" },
 ]
 
-# Where each crosses the sky, for the renderer: core's sun body follows the
-# white sun, and the red sun and green moon are bodies of their own. The
-# brightest cast shadows, as many as the lighting preset allows.
+# Core's sun body is the white sun now; the red sun and green moon are
+# bodies of their own. The brightest cast shadows, as many as the lighting
+# preset allows.
 [[patch]]
 target = "sky_body/core:sun"
-set = { term = "white_sun", rise = 9.0, set = 23.0, peak = 55.0 }
+set = { term = "white_sun", transit = 16.0 }
 
 # One moon, the green one: core's goes.
 [[patch]]
@@ -51,10 +55,7 @@ remove = true
 id = "red_sun"
 field = "core:daylight"
 term = "red_sun"
-rise = 4.0
-set = 16.0
-peak = 30.0
-arc = [30.0, 150.0]
+transit = 10.0
 color = "#ff9a70"
 angular_size = 1.2
 
@@ -62,21 +63,21 @@ angular_size = 1.2
 id = "green_moon"
 field = "core:daylight"
 term = "green_moon"
-rise = 21.0
-set = 5.0
-peak = 50.0
-arc = [0.0, 180.0]
+transit = 1.0
+phase_days = 8.0
+phase_offset = 0.25
 color = "#7dffa0"
 angular_size = 2.0
 
-# The moon's light is green, as strong as the moon is full. A tint of its
+# The moon's light is green, as strong as it is up and lit. A tint of its
 # own, so core's dawn, dusk and overcast tints stay.
 [[patch]]
 target = "sky/core:core"
 
 [patch.set.tint.green_moon]
+scale = 0.5
 color = "#7dffa0"
 of = [
-  { input = "hour", curve = [[0, 0.5], [3, 0.5], [5, 0.0], [21, 0.0], [23, 0.5], [24, 0.5]] },
-  { input = "cycle", days = 8, offset = 0.25, curve = [[0, 0.0], [0.5, 1.0], [1, 0.0]] },
+  { input = "body", body = "two_suns:green_moon", of = "up" },
+  { input = "body", body = "two_suns:green_moon", of = "phase" },
 ]
