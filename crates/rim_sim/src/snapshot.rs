@@ -280,6 +280,7 @@ impl Snapshot {
             ("engine:world".to_string(), enc(&world)),
             ("engine:map".to_string(), enc(&w.map.terrain)),
             ("engine:seen".to_string(), enc(&w.map.seen_bits())),
+            ("engine:water".to_string(), enc(&w.water.saved())),
             ("engine:zones".to_string(), enc(&w.zones)),
             ("engine:fields".to_string(), enc(&w.fields.saved(&w.map))),
             ("engine:scripts".to_string(), enc(&ScriptsSection { disabled_hooks, disabled_handlers })),
@@ -832,6 +833,14 @@ impl Snapshot {
         }
         w.map.ensure_regions();
         w.map.ensure_rooms();
+        // Basins come from the map; the save has only their water. A save
+        // from before water keeps none.
+        let water: Vec<crate::water::SavedBasin> = match self.sections.contains_key("engine:water") {
+            true => dec(self, "engine:water")?,
+            false => Vec::new(),
+        };
+        let defs = w.defs.clone();
+        w.water.restore(&w.map, &defs, &water);
         for (e, t, blueprint, _) in &things {
             if !blueprint {
                 w.fields.add_emitters(&defs, &w.map, *e, t.def, t.pos);

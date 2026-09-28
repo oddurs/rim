@@ -802,6 +802,12 @@ pub enum GameEvent {
     LevelOpened {
         z: i32,
     },
+    /// Water broke into a dug space that had none coming: at `at`, from
+    /// terrain `source` (a river, an aquifer).
+    Breach {
+        at: IVec,
+        source: DefId,
+    },
     NewDay {
         day: u64,
     },
@@ -857,6 +863,9 @@ pub struct World {
     pub map: Map,
     /// Temperature, light and other field layers over the map.
     pub fields: Fields,
+    /// Water in what has been dug (DESIGN.md §6d). Derived from the map
+    /// but for its volumes.
+    pub water: crate::water::Water,
     pub rng: Rng,
     pub tick: u64,
     /// Pawns in spawn order; iteration order is part of determinism.
@@ -954,9 +963,11 @@ impl World {
                     .collect(),
             );
             m.set_terrain_air(defs.terrain.iter().map(|t| t.air).collect());
+            m.set_terrain_pours(defs.terrain.iter().map(|t| t.pours > 0).collect());
             m
         };
         let fields = Fields::new(&defs, map.cells());
+        let water = crate::water::Water::new(&map);
         let zones = crate::zone::Zones::new(map.cells());
         let things = defs.things.len();
         let mut world = World {
@@ -965,6 +976,7 @@ impl World {
             ecs: hecs::World::new(),
             next_entity: 1,
             fields,
+            water,
             map,
             rng: Rng::new(seed),
             tick: 0,
@@ -1827,6 +1839,21 @@ impl World {
                 self.place_lot(lot, to);
             }
         }
+    }
+
+    /// Rebuild the basins the map has changed under, and move the water a
+    /// tick: sources pour and seep, water falls, fronts spread.
+    pub fn update_water(&mut self) {
+        let defs = self.defs.clone();
+        for b in self.water.update(&self.map, &defs, false) {
+            self.events.push(GameEvent::Breach { at: b.at, source: b.source });
+        }
+        self.water.step(crate::TICKS_PER_DAY);
+    }
+
+    /// Water at `p`, in sevenths of a cell (DESIGN.md §6d).
+    pub fn water_depth(&self, p: IVec) -> u32 {
+        self.water.depth(&self.map, p)
     }
 
     /// The rock a cell is made of, if its terrain is solid (DESIGN.md §6d).

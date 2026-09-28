@@ -31,6 +31,7 @@ pub mod stock;
 pub mod store;
 pub mod systems;
 pub mod terms;
+pub mod water;
 pub mod world;
 pub mod zone;
 

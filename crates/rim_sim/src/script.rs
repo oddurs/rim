@@ -2352,6 +2352,13 @@ impl ScriptHost {
                 t.set("z", *z)?;
                 "level_opened"
             }
+            GameEvent::Breach { at, source } => {
+                t.set("x", at.x)?;
+                t.set("y", at.y)?;
+                t.set("z", at.z)?;
+                t.set("source", defs.terrain[*source as usize].id.as_str())?;
+                "breach"
+            }
             GameEvent::NewDay { day } => {
                 t.set("day", *day)?;
                 "new_day"

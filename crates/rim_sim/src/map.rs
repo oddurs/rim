@@ -89,6 +89,8 @@ pub struct Map {
     link: Vec<u32>,
     /// Per terrain: is it air, a cell with no floor (a pit, a shaft).
     terrain_air: Vec<bool>,
+    /// Per terrain: is it water that never runs out (DESIGN.md §6d).
+    terrain_pours: Vec<bool>,
     /// Air cells per level, by plane, sorted: what light and water cross.
     air: Vec<Vec<u32>>,
     /// Region ids joined at portals, one table per faction: a region
@@ -104,6 +106,13 @@ pub struct Map {
     /// §6d): rock shows what it's made of once seen, and prospecting reads
     /// it. The surface and what is over it start seen.
     seen: Vec<u64>,
+    /// The same, for what water can stand in: terrain, and whether a
+    /// fixture blocks. Placing furniture moves `level_rev` and not this, so
+    /// basins aren't rebuilt for it.
+    water_rev: Vec<u64>,
+    /// Per level, bumped when a cell becomes or stops being air or water
+    /// that pours: all the level below reads of it for its basins.
+    ground_rev: Vec<u64>,
     /// Chunks across (see `CHUNK`).
     chunks_w: i32,
     /// Per chunk: bumped when a cell's terrain changes.
@@ -219,10 +228,13 @@ impl Map {
             portals: Vec::new(),
             link: vec![0; n],
             terrain_air: Vec::new(),
+            terrain_pours: Vec::new(),
             air: vec![Vec::new(); (below + above + 1) as usize],
             reach: std::array::from_fn(|_| std::collections::BTreeMap::new()),
             reach_dirty: true,
             level_rev: vec![0; (below + above + 1) as usize],
+            water_rev: vec![0; (below + above + 1) as usize],
+            ground_rev: vec![0; (below + above + 1) as usize],
             revision: 0,
             seen: {
                 let mut bits = vec![0u64; n.div_ceil(64)];
@@ -424,6 +436,7 @@ impl Map {
         let was = self.span_at(i);
         self.near.changed(i, self.terrain[i], def);
         let was_air = self.is_air(i);
+        let was_terrain = self.terrain[i];
         self.terrain[i] = def;
         if self.is_air(i) != was_air {
             let list = &mut self.air[i / self.plane];
@@ -442,6 +455,14 @@ impl Map {
         }
         self.terrain_cost[i] = cost.min(u16::MAX as u32) as u16;
         self.footing[i] = self.has_footing(i);
+        self.water_rev[i / self.plane] += 1;
+        let wet = |m: &Self, t: DefId| {
+            let t = t as usize;
+            m.terrain_air.get(t).copied().unwrap_or(false) || m.terrain_pours.get(t).copied().unwrap_or(false)
+        };
+        if wet(self, was_terrain) != wet(self, def) {
+            self.ground_rev[i / self.plane] += 1;
+        }
         self.dirty_regions(i);
         self.rooms_dirty = true;
         self.changed.push(i as u32);
@@ -458,6 +479,9 @@ impl Map {
         // door is a wall to everyone but its owner, so gaining or losing
         // one changes who can reach what.
         let was = (self.passable_i(i), self.fix_door[i]);
+        if self.fix_block[i] != blocks {
+            self.water_rev[i / self.plane] += 1;
+        }
         self.fix_block[i] = blocks;
         self.fix_door[i] = door;
         if e.is_none() {
@@ -858,6 +882,11 @@ impl Map {
     /// the defs, when the world is made.
     /// Which terrains are air, by terrain id. Set once, from the defs, when
     /// the world is made.
+    /// Which terrains are water that never runs out.
+    pub fn set_terrain_pours(&mut self, pours: Vec<bool>) {
+        self.terrain_pours = pours;
+    }
+
     pub fn set_terrain_air(&mut self, air: Vec<bool>) {
         self.terrain_air = air;
         for list in &mut self.air {
@@ -888,6 +917,29 @@ impl Map {
     fn bump(&mut self, i: usize) {
         self.revision += 1;
         self.level_rev[i / self.plane] += 1;
+    }
+
+    /// What water can stand in on level `z` changed when this moved.
+    pub fn water_revision(&self, z: i32) -> u64 {
+        if !self.levels().contains(&z) {
+            return 0;
+        }
+        self.water_rev[self.slot(z)]
+    }
+
+    /// A cell of level `z` became or stopped being air or pouring water
+    /// when this moved.
+    pub fn ground_revision(&self, z: i32) -> u64 {
+        if !self.levels().contains(&z) {
+            return 0;
+        }
+        self.ground_rev[self.slot(z)]
+    }
+
+    /// Does `fixture` stand in the way of water at cell `i`?
+    #[inline]
+    pub fn blocks_water(&self, i: usize) -> bool {
+        self.fix_block[i]
     }
 
     /// `revision`, for level `z` only.
@@ -933,6 +985,9 @@ impl Map {
         self.reach_dirty = true;
         self.bump(t);
         self.bump(b);
+        // Water goes down stairs as it does through air.
+        self.water_rev[t / self.plane] += 1;
+        self.water_rev[b / self.plane] += 1;
     }
 
     /// Take away the portal whose top is `top`.
@@ -946,6 +1001,9 @@ impl Map {
         self.reach_dirty = true;
         self.bump(t);
         self.bump(b);
+        // Water goes down stairs as it does through air.
+        self.water_rev[t / self.plane] += 1;
+        self.water_rev[b / self.plane] += 1;
     }
 
     pub fn set_terrain_spans(&mut self, spans: Vec<u8>) {
