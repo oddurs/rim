@@ -1155,6 +1155,7 @@ fn dshare() -> f64 {
 /// How the renderer colours light. The sim ignores it: light is a scalar in
 /// the simulation, and colour is the renderer's business.
 #[derive(Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct SkyDef {
     pub id: String,
     /// Colour tints over the day, by label, so a mod can add one (a green
@@ -1173,11 +1174,6 @@ pub struct SkyDef {
     /// renderer's indoor share is this plus that, at most 1.
     #[serde(default = "dshare")]
     pub indoor_share: f64,
-    /// Where the sun crosses the sky, for the shadows the renderer casts
-    /// (DESIGN.md §6e). How bright it is stays the `daylight` field; this
-    /// is only where it is. Unset: no sun shadows.
-    #[serde(default)]
-    pub sun: Option<SunPath>,
     #[serde(skip)]
     pub rgb_night: [u8; 3],
     #[serde(skip)]
@@ -1201,40 +1197,15 @@ pub enum Flicker {
     Steady,
 }
 
-/// A sky body's daily path: up at `rise`, down at `set` (hours), highest at
-/// noon between them, crossing from azimuth `arc[0]` to `arc[1]` (degrees;
-/// 0 is east, 90 south, the way the map's y grows).
-#[derive(Clone, Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct SunPath {
-    pub rise: f64,
-    pub set: f64,
-    /// Elevation at its highest, degrees.
-    pub peak: f64,
-    pub arc: [f64; 2],
-}
-
-impl SunPath {
-    /// Rise and set are hours from 0 to 24, apart, the peak is 0 to 90°,
-    /// and the arc is finite.
-    fn valid(&self) -> bool {
-        let hours = |h: f64| (0.0..24.0).contains(&h);
-        hours(self.rise)
-            && hours(self.set)
-            && self.rise != self.set
-            && (0.0..=90.0).contains(&self.peak)
-            && self.arc.iter().all(|a| a.is_finite())
-    }
-}
-
 fn dwhite() -> String {
     "#ffffff".into()
 }
 fn dhalf_degree() -> f64 {
     0.5
 }
-/// A body in the sky the renderer lights the world from: where it crosses
-/// the sky, its colour, and how soft its shadows are (DESIGN.md §6e). How
+/// A body in the sky: its orbit, which the sim works out where it is from
+/// (`sky::state`), and for the renderer its colour and how soft its
+/// shadows are (DESIGN.md §6e). How
 /// bright it is, is terms, so phases and eclipses are the terms' business:
 /// either one labelled term of a field, when its light is the sim's too
 /// (core's sun is `daylight`'s `sun`), or terms of its own, in `light`'s
@@ -1254,12 +1225,6 @@ pub struct SkyBodyDef {
     pub scale: f64,
     #[serde(default)]
     pub of: Vec<InputDef>,
-    /// Up at `rise`, down at `set` (hours), highest at the middle of the
-    /// two, crossing azimuths `arc` (as `SunPath`).
-    pub rise: f64,
-    pub set: f64,
-    pub peak: f64,
-    pub arc: [f64; 2],
     #[serde(default = "dwhite")]
     pub color: String,
     /// How wide it looks, degrees: a wider body casts softer shadows. The
@@ -1319,11 +1284,7 @@ pub enum BodyLight {
 }
 
 impl SkyBodyDef {
-    pub fn path(&self) -> SunPath {
-        SunPath { rise: self.rise, set: self.set, peak: self.peak, arc: self.arc }
-    }
-
-    /// Check it against the loaded fields: its colour parses, its path is
+    /// Check it against the loaded fields: its colour parses, its orbit is
     /// one, and its field has the term, or its own terms compile.
     pub fn resolve(
         &mut self,
@@ -1332,10 +1293,8 @@ impl SkyBodyDef {
         warnings: &mut Vec<String>,
     ) -> Result<(), String> {
         let ctx = format!("sky_body/{}", self.id);
-        if !self.path().valid() || !(0.0..=20.0).contains(&self.angular_size) {
-            return Err(format!(
-                "{ctx}: needs rise and set hours from 0 to 24, apart, a peak of 0 to 90°, and an angular_size of 0 to 20°"
-            ));
+        if !(0.0..=20.0).contains(&self.angular_size) {
+            return Err(format!("{ctx}: needs an angular_size of 0 to 20°"));
         }
         self.rgb = parse_color(&self.color).map_err(|e| format!("{ctx}: {e}"))?;
         let tpd = crate::TICKS_PER_DAY as f64;
@@ -1394,7 +1353,6 @@ impl Default for SkyDef {
             night: dnight(),
             firelight: dfire(),
             indoor_share: dshare(),
-            sun: None,
             rgb_night: [74, 84, 120],
             rgb_fire: [255, 176, 96],
         }
@@ -2714,14 +2672,6 @@ impl DefDb {
         };
         sky.rgb_night = parse_color(&sky.night).map_err(|e| format!("sky/{}: {e}", sky.id))?;
         sky.rgb_fire = parse_color(&sky.firelight).map_err(|e| format!("sky/{}: {e}", sky.id))?;
-        if let Some(sun) = &sky.sun {
-            if !sun.valid() {
-                return Err(format!(
-                    "sky/{}: sun needs rise and set hours from 0 to 24, apart, and a peak of 0 to 90°",
-                    sky.id
-                ));
-            }
-        }
         for (label, t) in &mut sky.tint {
             let ctx = format!("sky/{}, tint '{label}'", sky.id);
             t.rgb = parse_color(&t.color).map_err(|e| format!("{ctx}: {e}"))?;
@@ -2741,14 +2691,6 @@ impl DefDb {
                 body: &|id: &str| body_in(&home, id),
             };
             b.resolve(fields, &names, &mut warnings)?;
-        }
-        // Bodies say where the light comes from; a sky's lone `sun` is for a
-        // sky that declares none.
-        if sky.sun.is_some() && !self.sky_bodies.is_empty() {
-            warnings.push(format!(
-                "sky/{}: `sun` is ignored beside [[sky_body]]s; patch the body instead (sky_body/{})",
-                sky.id, self.sky_bodies[0].id
-            ));
         }
         self.warnings.extend(warnings);
         for d in &mut self.needs {

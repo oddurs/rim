@@ -26,7 +26,7 @@ use crate::sky::{Air, Flash};
 use crate::Cam;
 use macroquad::miniquad::{BlendFactor, BlendState, BlendValue, Equation};
 use macroquad::prelude::*;
-use rim_sim::defs::{Flicker, SunPath};
+use rim_sim::defs::Flicker;
 use rim_sim::map::Map;
 use rim_sim::world::{Thing, World};
 use rim_sim::IVec;
@@ -613,21 +613,10 @@ fn flush_batches() {
     unsafe { get_internal_gl() }.flush();
 }
 
-/// Where a sky body is at `hour`: azimuth and elevation in degrees. Below
-/// the horizon the elevation is 0 or less.
-pub fn sun_at(path: &SunPath, hour: f64) -> (f64, f64) {
-    let span = (path.set - path.rise).rem_euclid(24.0);
-    let f = (hour - path.rise).rem_euclid(24.0) / span;
-    if f >= 1.0 {
-        return (path.arc[1], -1.0);
-    }
-    (path.arc[0] + (path.arc[1] - path.arc[0]) * f, path.peak * (std::f64::consts::PI * f).sin())
-}
-
 /// A sky body as it lights the world now (DESIGN.md §6e).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Body {
-    /// Which it is: its index among the sky's bodies, or `LONE_SUN`.
+    /// Which it is: its index among the sky's bodies, or `PINNED`.
     pub id: usize,
     /// Azimuth and elevation, degrees.
     pub at: (f64, f64),
@@ -647,8 +636,8 @@ impl Body {
     }
 }
 
-/// The `Body::id` of a sky's lone `sun`, where it declares no bodies.
-pub const LONE_SUN: usize = usize::MAX;
+/// The `Body::id` of a pinned sun in a sky that declares no bodies.
+pub const PINNED: usize = usize::MAX;
 
 /// Light, in the `light` field's units, at which a body's reach clears the
 /// plan's contact shadow wholly: daylight does, moonlight barely.
@@ -1311,7 +1300,7 @@ impl Light {
     }
 
     /// The sky bodies casting shadows now, brightest first, by `Body::id`:
-    /// an index into the sky's bodies, or `LONE_SUN`.
+    /// an index into the sky's bodies, or `PINNED`.
     pub fn shadow_bodies(&self) -> &[usize] {
         &self.lv.slots
     }
@@ -1356,19 +1345,17 @@ impl Light {
     /// The sky's bodies now, in the sky's order, and the light the picture
     /// has from the sky: the sim's `light`, and what the bodies that light
     /// only the picture add to it (core's moon). A body's share is its part
-    /// of that. A sky with none has its lone `sun`, which is all its light.
-    /// A pinned sun is all the sky's light too, from where it's pinned: the
-    /// body with the most, moved.
+    /// of that. Where each is, is the sim's (`World::sky_body_states`). A
+    /// pinned sun is all the sky's light, from where it's pinned: the body
+    /// with the most, moved, or in a sky with none, a sun of its own.
     pub fn bodies(&self, w: &World, light: f32) -> (Vec<Body>, f32) {
         use rim_sim::defs::BodyLight;
         use rim_sim::terms::Terms;
-        let (defs, hour) = (&w.defs, w.hour());
+        let (defs, states) = (&w.defs, w.sky_body_states());
         let mut sky = light;
         let mut out: Vec<Body> = if defs.sky_bodies.is_empty() {
-            let at = defs.sky.sun.as_ref().map(|p| sun_at(p, hour)).or(self.pin_sun);
-            at.map(|at| Body { id: LONE_SUN, at, share: 1.0, rgb: Vec3::ONE, size: 1.0, shadows: true })
-                .into_iter()
-                .collect()
+            let pinned = |at| Body { id: PINNED, at, share: 1.0, rgb: Vec3::ONE, size: 1.0, shadows: true };
+            self.pin_sun.map(pinned).into_iter().collect()
         } else {
             // A field's term is read against the field's terms themselves,
             // so a field pinned for a test or pushed by a plugin still says
@@ -1378,7 +1365,8 @@ impl Light {
             let lights: Vec<f32> = defs
                 .sky_bodies
                 .iter()
-                .map(|b| match &b.light {
+                .enumerate()
+                .map(|(id, b)| match &b.light {
                     BodyLight::Field { field, term } => {
                         let all = &defs.fields[*field].terms.terms;
                         let mine = eval(all.iter().filter(|t| &t.label == term).cloned().collect());
@@ -1389,8 +1377,11 @@ impl Light {
                             0.0
                         }
                     }
+                    // Picture-only light is its terms' while it is up:
+                    // below the horizon it gives none, whatever they say.
                     BodyLight::Own(t) => {
-                        let own = w.fields.eval_global(t) as f32;
+                        let up = states.get(id).map_or(0.0, |s| s.up) as f32;
+                        let own = w.fields.eval_global(t) as f32 * up;
                         if own > DARK_BODY as f32 {
                             own
                         } else {
@@ -1414,7 +1405,8 @@ impl Light {
                 .map(|(id, (b, l))| {
                     let share = if sky > 0.0 { (l / sky).clamp(0.0, 1.0) } else { 0.0 };
                     let size = (b.angular_size / 0.5) as f32;
-                    Body { id, at: sun_at(&b.path(), hour), share, rgb: rgb3(b.rgb), size, shadows: b.shadows }
+                    let at = states.get(id).map_or((0.0, -90.0), |s| (s.azimuth, s.altitude));
+                    Body { id, at, share, rgb: rgb3(b.rgb), size, shadows: b.shadows }
                 })
                 .collect()
         };
@@ -1979,7 +1971,7 @@ impl Light {
         }
         m.set_uniform("cell", vec2(1.0 / mw, 1.0 / mh));
         m.set_uniform("lres", vec2(mw, mh) * self.texels as f32);
-        // With no sun path the contact shadow fades with daylight instead.
+        // With no bodies the contact shadow fades with daylight instead.
         let day = if self.lit.is_empty() { (air.light / 100.0).clamp(0.0, 1.0) } else { 0.0 };
         m.set_uniform("day", day);
         m.set_uniform("scale", FIRE_SCALE);
@@ -2118,18 +2110,35 @@ impl Light {
 mod tests {
     use super::*;
 
-    /// Core's sky at `hours` past the start (06:00 on the first day, whose
-    /// night has a full moon): which bodies cast shadows, with `cap` slots.
-    fn shadows_at(hours: f64, cap: usize) -> Vec<String> {
+    /// Core's world `hours` past the start (06:00 on the first day, whose
+    /// midnight has a full moon): its bodies, and the sim's light.
+    fn core_at(hours: f64) -> (rim_sim::Sim, Vec<Body>, f32, f32) {
         let mods = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mods");
         let mut sim = rim_sim::Sim::build(&mods, 1, &|id| id == "core", 48).unwrap();
         sim.world.tick = (hours / 24.0 * rim_sim::TICKS_PER_DAY as f64) as u64;
         for _ in 0..40 {
             sim.step();
         }
-        let w = &sim.world;
-        let slots = shadow_slots(&Light::default().bodies(w, crate::sky::Air::read(w).light).0, 0.0, cap);
-        slots.iter().map(|&i| w.defs.sky_bodies[i].id.clone()).collect()
+        let light = crate::sky::Air::read(&sim.world).light;
+        let (bodies, picture) = Light::default().bodies(&sim.world, light);
+        (sim, bodies, light, picture)
+    }
+
+    /// Which of core's bodies cast shadows at `hours`, with `cap` slots.
+    fn shadows_at(hours: f64, cap: usize) -> Vec<String> {
+        let (sim, bodies, ..) = core_at(hours);
+        shadow_slots(&bodies, 0.0, cap).iter().map(|&i| sim.world.defs.sky_bodies[i].id.clone()).collect()
+    }
+
+    #[test]
+    fn the_moons_light_in_the_picture_is_the_sims_own_number() {
+        // Core's moon is a daylight term: the first midnight, full, it is
+        // all the sky's light, in the sim and the picture alike.
+        let (sim, bodies, light, picture) = core_at(18.0);
+        let moon = bodies.iter().find(|b| sim.world.defs.sky_bodies[b.id].id == "core:moon").unwrap();
+        assert!(light > 1.0, "the sim is lit by the full moon at midnight: {light}");
+        assert_eq!(picture, light, "the picture's sky light is the sim's");
+        assert!((moon.share - 1.0).abs() < 1e-6, "and all of it is the moon's: {}", moon.share);
     }
 
     #[test]
@@ -2137,32 +2146,15 @@ mod tests {
         assert_eq!(shadows_at(6.0, 1), ["core:sun"], "noon");
         assert_eq!(shadows_at(18.0, 1), ["core:moon"], "midnight, under a full moon");
         assert_eq!(shadows_at(18.0, 4), ["core:moon"], "the sun is down, however many slots");
-        // Half its cycle on, the moon is new at noon: the sun's.
-        assert_eq!(shadows_at(6.0 + 8.0 * 24.0, 4), ["core:sun"], "a new moon beside the sun casts nothing");
     }
 
     #[test]
-    fn a_moon_lights_in_its_colour_but_leaves_the_nights_contact_shadow() {
-        let moon = Body { id: 1, at: (90.0, 40.0), share: 1.0, rgb: vec3(0.5, 1.0, 0.6), size: 3.0, shadows: true };
-        // Moonlight is the picture's alone: the sim's light is 0, the sky's 1.5.
-        let mut light = Light { lit: vec![moon], sky_light: 1.5, ..Default::default() };
-        (light.lv.slots, light.lv.any_sky) = (vec![1], true);
-        let night = crate::sky::Air::default();
-        let (ambient, direct, weights) = light.split(Vec3::ONE, &night);
-        assert!((direct[0] - vec3(0.5, 1.0, 0.6) * DIRECT).length() < 1e-5, "its straight light, green: {direct:?}");
-        assert!((ambient - Vec3::splat(1.0 - DIRECT)).length() < 1e-5, "the rest is the sky's: {ambient:?}");
-        assert!(weights[0] < 0.2, "moonlight clears little of the contact shadow: {weights:?}");
-        light.sky_light = 90.0;
-        assert!((light.split(Vec3::ONE, &night).2[0] - 1.0).abs() < 1e-5, "daylight clears it");
-        light.sky_light = 1.5;
-        // Without a slot its light lands where the sky's does, still green.
-        light.lv.slots.clear();
-        let (ambient, direct, _) = light.split(Vec3::ONE, &night);
-        assert_eq!(direct, [Vec3::ZERO; 4]);
-        assert!((ambient - (Vec3::splat(1.0 - DIRECT) + vec3(0.5, 1.0, 0.6) * DIRECT)).length() < 1e-5);
-        // Below the surface with no shaft, straight light lands nowhere.
-        light.lv.any_sky = false;
-        assert!((light.split(Vec3::ONE, &night).0 - Vec3::splat(1.0 - DIRECT)).length() < 1e-5);
+    fn a_new_moon_up_beside_the_noon_sun_casts_nothing() {
+        // New at noon eight days on: up beside the sun, and dark.
+        let (sim, ..) = core_at(198.0);
+        let up: Vec<bool> = sim.world.sky_body_states().iter().map(|s| s.up > 0.5).collect();
+        assert!(up.iter().all(|&u| u), "both are up: {up:?}");
+        assert_eq!(shadows_at(198.0, 4), ["core:sun"]);
     }
 
     #[test]
@@ -2200,18 +2192,6 @@ mod tests {
         assert!(!times_a_pass("", ""));
         assert!(software_gl("llvmpipe (LLVM 17.0.6, 256 bits)"));
         assert!(!software_gl("Mesa Intel(R) UHD Graphics 620 (KBL GT2)"));
-    }
-
-    #[test]
-    fn the_sun_rises_in_the_east_peaks_at_noon_and_sets() {
-        let path = SunPath { rise: 5.0, set: 21.0, peak: 60.0, arc: [-10.0, 190.0] };
-        let (az, elev) = sun_at(&path, 5.0);
-        assert!((az + 10.0).abs() < 1e-9 && elev.abs() < 1e-9, "on the horizon at rise");
-        let (az, elev) = sun_at(&path, 13.0);
-        assert!((az - 90.0).abs() < 1e-9 && (elev - 60.0).abs() < 1e-9, "due south, highest, halfway");
-        assert!(sun_at(&path, 23.0).1 < 0.0 && sun_at(&path, 2.0).1 < 0.0, "down at night");
-        let wrap = SunPath { rise: 20.0, set: 4.0, peak: 30.0, arc: [0.0, 180.0] };
-        assert!((sun_at(&wrap, 0.0).1 - 30.0).abs() < 1e-9, "a path may cross midnight");
     }
 
     #[test]

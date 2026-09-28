@@ -2761,7 +2761,7 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
             let term = rim_sim::terms::Terms::compile(&term, "test", &fields, &mut Vec::new())?;
             defs.fields[daylight].terms.terms.extend(term.terms);
             let mut body: rim_sim::defs::SkyBodyDef = toml::from_str(
-                "id = \"test:green_moon\"\nfield = \"core:daylight\"\nterm = \"green_moon\"\nrise = 20.0\nset = 5.0\npeak = 40.0\narc = [0.0, 180.0]\ncolor = \"#7dffa0\"\nangular_size = 1.0",
+                "id = \"test:green_moon\"\nfield = \"core:daylight\"\nterm = \"green_moon\"\ntransit = 0.0\ncolor = \"#7dffa0\"\nangular_size = 1.0",
             )
             .map_err(|e| e.to_string())?;
             let fields = |id: &str| defs.lookup("field", id).map(|f| f as usize);
@@ -2776,8 +2776,8 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         let slots: Vec<String> =
             t.app.light.shadow_bodies().iter().map(|&i| t.w().defs.sky_bodies[i].id.clone()).collect();
         t.check(slots == ["test:green_moon"], format!("it casts the night's shadows, over core's moon ({slots:?})"));
-        // Up at 40° a little east of south, its shadow falls north of the
-        // wall, 1.2 cells long.
+        // Highest at midnight, on the equator's line at latitude 45: 45° up,
+        // due south, so its shadow falls north of the wall, a cell long.
         let (x, face) = (p.x as f32 + 0.5, p.y as f32);
         let shade = t.app.light.sun_visibility(x, face - 0.5).unwrap_or(1.0);
         let open = t.app.light.sun_visibility(x, face - 7.0).unwrap_or(0.0);
@@ -2790,6 +2790,90 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         t.shot("green_moon").await;
         t.app.sim.world.defs = before;
         t.ticks(20);
+        // efd56e49: the sun is where the sim has it, so its shadow swings
+        // through the year. The same hour, 09:00, on the days in the year
+        // ahead where the sun stands highest and lowest then, in the order
+        // they come: the clock only runs forward.
+        println!("\n# at the same hour a shadow points another way at midsummer and midwinter (efd56e49)");
+        // A wall of its own, with nothing else within four cells: shade that
+        // lands on a neighbour's top would read as no shadow at all.
+        let open = |w: &World, q: IVec| {
+            (-4..=4).all(|dy| {
+                (-4..=4).all(|dx| {
+                    let c = q.offset(dx, dy);
+                    w.map.inb(c) && w.map.passable(c) && w.map.fixture_at(c).is_none() && w.solid_at(c).is_none()
+                })
+            })
+        };
+        let spot_at = (0..60i32)
+            .flat_map(|r| (-r..=r).flat_map(move |dy| (-r..=r).map(move |dx| site.offset(dx, dy))))
+            .find(|&q| open(t.w(), q));
+        let sun = t.w().defs.sky_bodies.iter().position(|b| b.id == "core:sun");
+        t.check(sun.is_some(), "core's sun is a sky body");
+        let lone = spot_at.and_then(|q| t.app.sim.world.spawn_fixture(wall, q, false).map(|e| (q, e)));
+        t.check(lone.is_some(), "a lone wall stands in the open for it");
+        if let (Some(sun), Some((q, lone))) = (sun, lone) {
+            let (tpd, year) = (rim_sim::TICKS_PER_DAY, t.w().defs.calendar.year_days as u64);
+            let (was, first) = (t.w().tick, t.w().tick / tpd + 1);
+            // Tick 0 is 06:00, so 09:00 is an eighth of a day in.
+            let nine = |d: u64| (first + d) * tpd + tpd / 8;
+            let altitude = |t: &T, d| {
+                let defs = &t.w().defs;
+                rim_sim::sky::state(&defs.sky_bodies[sun], &defs.calendar, nine(d)).altitude
+            };
+            let by = |a: &u64, b: &u64| altitude(&t, *a).total_cmp(&altitude(&t, *b));
+            let (high, low) = ((0..year).max_by(by).unwrap_or(0), (0..year).min_by(by).unwrap_or(0));
+            t.focus(q);
+            t.ticks(2);
+            let (cx, cy) = (q.x as f32 + 0.5, q.y as f32 + 0.5);
+            // A spot in the wall's shadow, as the sun stands: away from it,
+            // past the wall's own half cell and inside the shadow's length.
+            let spot = |(az, alt): (f64, f64)| {
+                let (away, long) = ((az + 180.0).to_radians() as f32, (1.0 / alt.to_radians().tan()).min(3.0) as f32);
+                let d = 0.5 + 0.5 * long;
+                (cx + away.cos() * d, cy + away.sin() * d)
+            };
+            let mut seen = Vec::new();
+            for day in if high < low { [high, low] } else { [low, high] } {
+                t.app.sim.world.tick = nine(day);
+                t.ticks(20);
+                t.app.light.adapt_now();
+                for _ in 0..3 {
+                    t.frame().await;
+                }
+                let light = crate::sky::Air::read(t.w()).light;
+                let at = t.app.light.bodies(t.w(), light).0.get(sun).map_or((0.0, -90.0), |b| b.at);
+                seen.push((day == high, at, t.app.light.sun_image()));
+            }
+            let vis = |img: &Option<Image>, (x, y): (f32, f32)| {
+                img.as_ref().and_then(|i| t.app.light.sun_in(i, x, y)).unwrap_or(-1.0)
+            };
+            let (a, b) = (&seen[0], &seen[1]);
+            let (sa, sb) = (spot(a.1), spot(b.1));
+            let (own_a, own_b, cross_a, cross_b) = (vis(&a.2, sa), vis(&b.2, sb), vis(&b.2, sa), vis(&a.2, sb));
+            let turned = ((a.1 .0 - b.1 .0 + 540.0).rem_euclid(360.0) - 180.0).abs();
+            let says = seen
+                .iter()
+                .map(|&(h, (az, alt), _)| {
+                    format!("{}: sun at {az:.0}°, {alt:.0}° up", if h { "midsummer" } else { "midwinter" })
+                })
+                .collect::<Vec<_>>()
+                .join("; ");
+            t.check(
+                turned > 10.0 && (0.0..0.5).contains(&own_a) && (0.0..0.5).contains(&own_b) && (cross_a > 0.5 || cross_b > 0.5),
+                format!(
+                    "the shadow swings {turned:.0}°: each season's shadow spot is dark ({own_a:.2}, {own_b:.2}) and one lit in the other ({cross_a:.2}, {cross_b:.2}); {says}"
+                ),
+            );
+            t.shot("season_shadows").await;
+            t.app.sim.world.despawn_thing(lone);
+            // On to the date and hour it was, a year later: later sections
+            // keep their season and time of day, and the clock only runs
+            // forward.
+            let years = (t.w().tick - was).div_ceil(year * tpd);
+            t.app.sim.world.tick = was + years * year * tpd;
+            t.ticks(20);
+        }
         t.app.light.pin_sun = None;
         t.app.sim.world.fields.set_ambient(cloud, None);
         t.app.sim.world.fields.set_ambient(light, None);

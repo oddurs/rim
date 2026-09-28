@@ -10,10 +10,9 @@ use rim_sim::{Sim, TICKS_PER_DAY};
 
 const HOUR: u64 = TICKS_PER_DAY / 24;
 
-/// A body from its TOML, resolved alone. Its light is its own `of`, and
-/// the renderer's path fields are only there because the schema wants them.
+/// A body from its TOML, resolved alone. Its light is its own `of`.
 fn body(orbit: &str) -> SkyBodyDef {
-    let src = format!("id = \"b\"\nof = [1.0]\nrise = 6.0\nset = 18.0\npeak = 45.0\narc = [0.0, 180.0]\n{orbit}");
+    let src = format!("id = \"b\"\nof = [1.0]\n{orbit}");
     let mut b: SkyBodyDef = toml::from_str(&src).unwrap();
     b.resolve(&[], &|_: &str| None, &mut Vec::new()).unwrap();
     b
@@ -218,7 +217,7 @@ fn an_orbit_out_of_range_is_an_error() {
         ("tilt = 100.0", "tilt of -90 to 90"),
         ("phase_days = 0.01", "phase_days needs an hour"),
     ] {
-        let src = format!("id = \"b\"\nof = [1.0]\nrise = 6.0\nset = 18.0\npeak = 45.0\narc = [0.0, 180.0]\n{orbit}");
+        let src = format!("id = \"b\"\nof = [1.0]\n{orbit}");
         let mut b: SkyBodyDef = toml::from_str(&src).unwrap();
         let err = b.resolve(&[], &|_: &str| None, &mut Vec::new()).unwrap_err();
         assert!(err.contains(says), "{says}: {err}");

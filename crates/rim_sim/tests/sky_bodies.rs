@@ -18,10 +18,7 @@ of = [{ input = "hour", curve = [[0, 1.0], [4, 1.0], [5, 0.0], [20, 0.0], [21, 1
 id = "green_moon"
 field = "core:daylight"
 term = "green_moon"
-rise = 20.0
-set = 5.0
-peak = 70.0
-arc = [0.0, 180.0]
+transit = 0.0
 color = "#7dffa0"
 "##;
 
@@ -42,7 +39,7 @@ fn a_sky_body_names_a_field_and_a_term_it_has() {
     for (bad, says) in [
         (GREEN_MOON.replace("term = \"green_moon\"", "term = \"blue_moon\""), "has no term 'blue_moon'"),
         (GREEN_MOON.replace("field = \"core:daylight\"\nterm", "field = \"moonshine\"\nterm"), "unknown field"),
-        (GREEN_MOON.replace("peak = 70.0", "peak = 120.0"), "peak of 0 to 90"),
+        (GREEN_MOON.replace("transit = 0.0", "transit = 0.0\nangular_size = 30.0"), "angular_size of 0 to 20"),
     ] {
         let dir = common::test_mods("sky-bodies-bad", &["core"], &[("moons", &[("defs/sky.toml", bad.as_str())])]);
         let err = Sim::build(&dir, 1, &|_| true, 32).err().expect("it doesn't load");
@@ -52,12 +49,17 @@ fn a_sky_body_names_a_field_and_a_term_it_has() {
 }
 
 #[test]
-fn a_lone_sun_beside_bodies_is_a_warning() {
-    let patch = "[[patch]]\ntarget = \"sky/core:core\"\nset = { sun = { rise = 6.0, set = 18.0, peak = 40.0, arc = [0.0, 180.0] } }\n";
-    let dir = common::test_mods("sky-bodies-sun", &["core"], &[("old", &[("defs/sky.toml", patch)])]);
-    let sim = Sim::build(&dir, 1, &|_| true, 32).unwrap();
-    assert!(sim.warnings.iter().any(|w| w.contains("`sun` is ignored")), "{:?}", sim.warnings);
-    let _ = std::fs::remove_dir_all(dir);
+fn a_sky_has_no_path_of_its_own_any_more() {
+    // Where a body is, is its orbit's: the sky's lone `sun` and a body's
+    // rise, set, peak and arc went with API 0.7, loudly.
+    let old = "[[patch]]\ntarget = \"sky/core:core\"\nset = { sun = { rise = 6.0, set = 18.0, peak = 40.0, arc = [0.0, 180.0] } }\n";
+    let path = GREEN_MOON.replace("transit = 0.0", "rise = 20.0\nset = 5.0\npeak = 70.0\narc = [0.0, 180.0]");
+    for (bad, says) in [(old.to_string(), "unknown field `sun`"), (path, "unknown field `arc`")] {
+        let dir = common::test_mods("sky-bodies-old", &["core"], &[("old", &[("defs/sky.toml", bad.as_str())])]);
+        let err = Sim::build(&dir, 1, &|_| true, 32).err().expect("it doesn't load");
+        assert!(err.contains(says), "{says}: {err}");
+        let _ = std::fs::remove_dir_all(dir);
+    }
 }
 
 #[test]

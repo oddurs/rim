@@ -1,6 +1,6 @@
 id = "timber"
 name = "Timber"
 version = "0.1.0"
-api = "0.6"
+api = "0.7"
 description = "Planks, hewn from logs with an axe, and what they make: plank walls, crates, shelves, tool racks and a granary."
 depends = ["core", "crafting", "primitive"]
