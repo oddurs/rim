@@ -2041,6 +2041,13 @@ What was built (3979868c):
   `drown` of their health an hour. A door with `holds_water` stops water.
   Swimming waits on movement classes (3fea3b3d): until then nobody swims,
   and a trench is air, which nobody walks anyway.
+- Movement classes (3fea3b3d): a `[[movement]]` with `drop = 1` lets a
+  creature naming it climb down a pit's side and up the other. There is no
+  second flood fill: climbers share the walkers' regions, joined across
+  each pit's sides in a reach table of their own, kept only when some
+  creature loaded climbs. With 976 pit cells that join costs 0.064 ms
+  whenever regions change; with no climbers, nothing. A* gives a climber
+  the pit edges as it gives everyone the stairs. Core ships no climbers.
 - Drawing it (202b16c4): one texture a level, a texel a cell, clear at a
   seventh and near opaque full, over what stands on the level and under
   who walks it; the level below's water shows through air with the rest

@@ -262,6 +262,7 @@ pub fn load_only(mods_dir: &Path, enabled: &dyn Fn(&str) -> bool) -> Result<Load
             "room_role" => defs.room_roles.push(de!(v)?),
             "stratum" => defs.strata.push(de!(v)?),
             "fluid" => defs.fluids.push(de!(v)?),
+            "movement" => defs.movements.push(de!(v)?),
             "modifier" => defs.modifiers.push(de!(v)?),
             "vein" => defs.veins.push(de!(v)?),
             "plan" => defs.plans.push(de!(v)?),
