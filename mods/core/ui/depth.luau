@@ -58,11 +58,17 @@ ui.define("core:depth", function(view)
 	if #levels < 2 and here == 0 then
 		return nil
 	end
-	-- Alerts about something on a level count there.
+	-- An alert counts on each level something it is about is on, once.
 	local warned: { [number]: number } = {}
 	for _, a in alerts.active(view) do
-		local z = a.subject and view.level_of(a.subject)
-		if z then
+		local on: { [number]: boolean } = {}
+		for _, id in a.subjects or { a.subject } do
+			local z = view.level_of(id)
+			if z then
+				on[z] = true
+			end
+		end
+		for z in on do
 			warned[z] = (warned[z] or 0) + 1
 		end
 	end

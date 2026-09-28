@@ -9,6 +9,7 @@
 --         check = function(view)          -- nil when all is well
 --             if view.count_pawns("player") > 0 and not has_salt(view) then
 --                 return "No salt: meat will spoil"   -- or { text = ..., subject = id }
+--                                                     -- subjects = { ids } names all it is about
 --             end
 --         end,
 --     })
@@ -66,7 +67,7 @@ local function evaluate(view)
 		elseif type(r) == "string" then
 			item = { text = r }
 		elseif type(r) == "table" and r.text then
-			item = { text = r.text, subject = r.subject }
+			item = { text = r.text, subject = r.subject, subjects = r.subjects }
 		end
 		if item then
 			item.id = a.id
