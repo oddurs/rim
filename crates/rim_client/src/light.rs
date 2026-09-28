@@ -29,6 +29,7 @@ use macroquad::prelude::*;
 use rim_sim::defs::{Flicker, SunPath};
 use rim_sim::map::Map;
 use rim_sim::world::{Thing, World};
+use rim_sim::IVec;
 
 // What the presets tune (texels a cell, sun steps, softness, when the sun
 // is worked out again, upsampling) is `crate::quality`.
@@ -651,6 +652,98 @@ fn lamps(w: &World, z: i32) -> Vec<Lamp> {
         .collect()
 }
 
+/// How much of a light a level passes on to the next through an opening.
+const ACROSS: f32 = 0.5;
+
+/// The light that reaches level `z` from the levels beside it, through the
+/// openings between: the air over it and under it, and its stairs and
+/// ladders. Each light on the next level up or down that reaches an opening
+/// gives a light there, on `z`: as bright as it still is at the opening,
+/// less `ACROSS` for the level it crosses, reaching as far as it has left to
+/// go. `z`'s own walls then shade it, so a torch at the head of a stair
+/// lights the steps below and fades out from the stairwell.
+fn lamps_across(w: &World, z: i32) -> Vec<Lamp> {
+    let m = &w.map;
+    // Where light crosses to z, and from which level: the cells of z it
+    // arrives in.
+    let mut openings: Vec<(IVec, i32)> = Vec::new();
+    // Air on the level above opens onto z; z's own air opens onto the level below.
+    openings.extend(m.air_cells(z + 1).iter().map(|&i| (m.pos(i as usize), z + 1)));
+    openings.extend(m.air_cells(z).iter().map(|&i| (m.pos(i as usize), z - 1)));
+    for p in m.portals() {
+        if p.bottom.z == z && p.top.z == z + 1 {
+            openings.push((p.bottom, z + 1));
+        } else if p.top.z == z && p.bottom.z == z - 1 {
+            openings.push((p.top, z - 1));
+        }
+    }
+    if openings.is_empty() {
+        return Vec::new();
+    }
+    let (above, below) = (lamps(w, z + 1), lamps(w, z - 1));
+    let light = w.defs.lookup("field", "light");
+    let mut out = Vec::new();
+    for (from, lights) in [(z + 1, &above), (z - 1, &below)] {
+        for l in lights {
+            // What of this light reaches each opening onto z from its level.
+            let mut through = Vec::new();
+            for &(o, level) in &openings {
+                if level != from {
+                    continue;
+                }
+                let (ox, oy) = (o.x as f32 + 0.5, o.y as f32 + 0.5);
+                let d = ((l.x - ox).powi(2) + (l.y - oy).powi(2)).sqrt();
+                if d >= l.reach || !in_sight(w, light, (l.x, l.y), (ox, oy), from) {
+                    continue;
+                }
+                // The bake's falloff, as the shader has it.
+                let x2 = (d / l.reach).powi(2);
+                let fall = (1.0 - x2 * x2).powi(2) / (1.0 + 0.08 * d * d);
+                through.push(Lamp {
+                    x: ox,
+                    y: oy,
+                    reach: (l.reach - d).max(0.75),
+                    strength: l.strength * fall,
+                    channel: l.channel,
+                });
+            }
+            // A wide opening is many lights, which add up where they meet:
+            // together they give no more than the brightest of them, so a
+            // pit isn't brighter below than the light is above.
+            let (sum, most) = through.iter().fold((0.0f32, 0.0f32), |(s, m), t| (s + t.strength, m.max(t.strength)));
+            let share = if sum > 0.0 { most / sum } else { 0.0 };
+            out.extend(
+                through
+                    .into_iter()
+                    .map(|t| Lamp { strength: t.strength * share * ACROSS, ..t })
+                    .filter(|t| t.strength >= 0.01),
+            );
+        }
+    }
+    out
+}
+
+/// Whether light from `a` reaches `b` on level `z`, both in cells: no wall
+/// or door stands between them there. Half a cell a step.
+fn in_sight(w: &World, light: Option<rim_sim::defs::DefId>, a: (f32, f32), b: (f32, f32), z: i32) -> bool {
+    let m = &w.map;
+    let d = ((b.0 - a.0).powi(2) + (b.1 - a.1).powi(2)).sqrt();
+    let n = (d * 2.0).ceil() as i32;
+    (1..n).all(|k| {
+        let t = k as f32 / n as f32;
+        let p = IVec::at((a.0 + (b.0 - a.0) * t).floor() as i32, (a.1 + (b.1 - a.1) * t).floor() as i32, z);
+        // The light's own cell and the opening's don't shade it.
+        let (from, to) = ((a.0.floor() as i32, a.1.floor() as i32), (b.0.floor() as i32, b.1.floor() as i32));
+        (p.x, p.y) == from
+            || (p.x, p.y) == to
+            || !m.inb(p)
+            || !matches!(
+                crate::occluders::occluder_at(w, m.idx(p), light),
+                crate::occluders::Occluder::Solid { .. } | crate::occluders::Occluder::Door { .. }
+            )
+    })
+}
+
 /// Lights per mesh: macroquad caps a draw at 16,000 vertices and 24,000
 /// indices (`draw_call_*_capacity` in main.rs), four and six a light.
 const LAMPS_PER_MESH: usize = 4_000;
@@ -836,13 +929,16 @@ struct Level {
     fires: Option<RenderTarget>,
     /// The field revision, occluders and size last looked at, so a frame
     /// in which nothing changed doesn't even list the lights.
-    fires_seen: Option<(u64, u64)>,
+    fires_seen: Option<(u64, u64, u64)>,
     /// The lights `fires` was baked from.
     baked: Vec<Lamp>,
     /// The lights the field has now. The bake catches up with them at most
     /// once a `SETTLE`; until it does, the ones it hasn't baked are drawn as
     /// moving lights.
     current: Vec<Lamp>,
+    /// How many of `current` are the level's own; the rest come through
+    /// openings from the levels beside.
+    own: usize,
     /// A bake is owed, and the walls that changed since the last one: all
     /// of them with `owed_whole`.
     owed: bool,
@@ -1177,16 +1273,24 @@ impl Light {
     fn bake_fires(&mut self, w: &World, now: f64) -> bool {
         let Some(occ) = self.lv.occluders.texture.clone() else { return false };
         let size = (w.map.w as u32 * self.texels, w.map.h as u32 * self.texels);
-        let seen = (w.fields.revision, self.lv.occluders.version);
+        // The levels beside this one: their openings and lights reach it.
+        let (m, z) = (&w.map, self.z);
+        // This level and those beside it: their openings, and the lights
+        // beside that reach through them.
+        let beside = m.levels().filter(|&k| (k - z).abs() <= 1).map(|k| m.level_revision(k)).sum::<u64>();
+        let seen = (w.fields.revision, self.lv.occluders.version, beside);
         let fits =
             self.lv.fires.as_ref().is_some_and(|t| (t.texture.width() as u32, t.texture.height() as u32) == size);
         if !fits || self.lv.fires_seen != Some(seen) {
-            if self.lv.fires_seen.is_none_or(|(_, v)| v != self.lv.occluders.version) {
+            if self.lv.fires_seen.is_none_or(|(_, v, _)| v != self.lv.occluders.version) {
                 self.lv.owed_whole |= self.lv.occluders.whole;
                 self.lv.owed_walls.extend_from_slice(&self.lv.occluders.changed);
             }
             self.lv.fires_seen = Some(seen);
             self.lv.current = lamps(w, self.z);
+            // The level's own lights first: they alone fill its rooms.
+            self.lv.own = self.lv.current.len();
+            self.lv.current.extend(lamps_across(w, self.z));
             self.lv.owed = true;
         }
         // At most one bake a SETTLE: a spreading fire's new flames are drawn
@@ -1208,7 +1312,7 @@ impl Light {
         // light over its whole floor, so a change to any fill redoes
         // everything; a room rebuild that leaves every fill as it was
         // doesn't.
-        let fill = fill(w, &lamps, self.z);
+        let fill = fill(w, &lamps[..self.lv.own.min(lamps.len())], self.z);
         let work = if fits && fill == self.lv.fill { redo(&self.lv.baked, &lamps, walls) } else { Redo::Whole };
         if work == Redo::Nothing {
             return false;
@@ -1719,6 +1823,48 @@ mod tests {
         assert_eq!(order, [(1.5, true), (3.5, true), (5.5, false), (7.5, false), (9.5, false)]);
         assert!(capped.iter().all(|l| l.strength.abs() == 0.6), "past the cap they glow as bright");
         assert!(cap_shadows(&lights, vec2(0.0, 0.5), 8).iter().all(|l| l.strength > 0.0), "under the cap, all");
+    }
+
+    #[test]
+    fn a_wide_opening_passes_on_half_a_light_at_most_and_a_wall_stops_it() {
+        let mods = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mods");
+        let mut s = rim_sim::Sim::new(&mods, 3).expect("mods load");
+        let w = &mut s.world;
+        let (air, grass) = (
+            w.defs.terrain.iter().position(|d| d.air).unwrap() as rim_sim::defs::DefId,
+            w.defs.lookup("terrain", "grass").unwrap(),
+        );
+        // Open grass up top, a 3×3 pit two cells from a campfire.
+        let o = w.colony_center().unwrap().offset(12, 12);
+        for y in -2..6 {
+            for x in -4..6 {
+                let p = o.offset(x, y);
+                for e in [w.map.fixture_at(p), w.map.item_at(p), w.map.floor_at(p)].into_iter().flatten() {
+                    w.despawn_thing(e);
+                }
+                w.map.set_terrain(p, grass, 100);
+            }
+        }
+        for p in (0..3).flat_map(|y| (0..3).map(move |x| o.offset(x, y))) {
+            w.map.set_terrain(p, air, 0);
+        }
+        let campfire = w.defs.thing_id("campfire").unwrap();
+        w.spawn_fixture(campfire, o.offset(-2, 1), false).unwrap();
+        let fire = lamps(w, 0)[0];
+        let across = lamps_across(w, -1);
+        assert_eq!(across.len(), 9, "a light at each cell of the pit");
+        let total: f32 = across.iter().map(|l| l.strength).sum();
+        assert!(
+            total <= fire.strength * ACROSS + 1e-4,
+            "{total} from {}: no brighter below than half the fire",
+            fire.strength
+        );
+        // A wall between the fire and the pit: nothing gets through.
+        let wall = w.defs.thing_id("wall").unwrap();
+        for y in -1..4 {
+            w.spawn_fixture(wall, o.offset(-1, y), false).unwrap();
+        }
+        assert!(lamps_across(w, -1).is_empty(), "the wall stands between");
     }
 
     #[test]

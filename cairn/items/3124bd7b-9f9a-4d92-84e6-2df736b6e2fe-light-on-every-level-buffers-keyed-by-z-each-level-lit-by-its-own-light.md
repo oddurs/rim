@@ -2,10 +2,9 @@
 id: 3124bd7b-9f9a-4d92-84e6-2df736b6e2fe
 title: 'Light on every level: buffers keyed by z, each level lit by its own light'
 type: feature
-status: doing
+status: done
 milestone: lighting
 assignee: Oddur Sigurdsson
-claimed: 2026-09-28
 depends_on:
 - 5689930d-2bd1-4838-b403-a72bc61c31e9
 - 6fd6b13b-1186-46f4-876e-743d173e03d7
@@ -14,6 +13,7 @@ depends_on:
 - e311c029-499c-4764-a4d6-6d1f933f00f9
 created: 2026-09-26
 updated: 2026-09-28
+closed_at: 2026-09-28
 priority: p1
 api: none
 effort: m
@@ -35,7 +35,7 @@ Depth draws one level at a time with the level below through air (DESIGN.md §6d
 
 - [x] Each level is lit by its own fires, and a level below the surface with none is dark (autotest readback)
 - [x] Changing level with all three levels cached runs no bake and no occluder rebuild (test)
-- [ ] Bench on the stacked scene (5689930d) recorded here, inside budget
+- [x] Bench on the stacked scene (5689930d) recorded here, inside budget
 
 ## 2026-09-26
 
@@ -52,3 +52,7 @@ Split: this item keeps the per-level buffers and each level's own light. The sky
 ## 2026-09-28
 
 Done as: everything the light keeps for a level (occluders, firelight bake and moving lights, sun target, rooms and fill) moved into a Level, keyed by z. The one in view is Light::lv, levels one away stay cached, and further ones are let go. Occluders pack level z's chunks. Lamps, fill and room shares read level z. Below the surface the sun key is Down, the sky's light is zero, room shares are zero, and night's floor is a quarter of the surface's (UNDERGROUND). The multiply runs on every level, and the view's z == 0 gate went (agreed with quiet-field); roofs stay surface-only. Autotest, on the view section's stacked scene: in full daylight up top, level -1 reads 0.07 to the surface's 0.32, with sun 0. A campfire below lights its level at 0.79 and the surface at 0.00. Switching between the cached levels ran 0 bakes, 0 sun passes and no repack. Criterion 3 (bench) comes from CI's stacked and below views, now lit.
+
+## 2026-09-28
+
+Bench, from main's CI on 5a2f5477 (Linux llvmpipe, 100 frames), with the levels lit: the stacked view draws the world in 0.585 ms mean and the below view in 0.369 ms, inside the 4 ms budget. Their multiply is 0.012 and 0.015 ms of CPU, and the other lighting passes did no work on steady frames. The render check passed.
