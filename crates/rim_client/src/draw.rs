@@ -934,55 +934,17 @@ fn storage_overlay(app: &App) {
 
 /// Tool previews and markers, drawn after lighting so they stay readable.
 pub fn world_ui(app: &App) {
-    let w = &app.sim.world;
     let cam = &app.cam;
-    let z = cam.zoom;
-
     zones(app);
     app.marks.draw(cam, visible(app));
     replacements(app);
-    // Selection, a select drag's box and the order tools' previews are the
-    // overlay's (overlay::scene).
-    if matches!(app.tool, Tool::Designate(_) | Tool::Cancel) {
-        return;
-    }
-    let (mx, my) = app.pointer;
-    // A plan is placed with a click, not dragged out.
-    let dragging = app.drag_start.filter(|_| !matches!(app.tool, Tool::Plan(_) | Tool::Select));
-    if let Some(a) = dragging {
-        let b = cam.tile_at(mx, my);
-        let (ax, ay) = (a.x.min(b.x) as f32, a.y.min(b.y) as f32);
-        let (bx, by) = (a.x.max(b.x) as f32 + 1.0, a.y.max(b.y) as f32 + 1.0);
-        let (s0x, s0y) = cam.to_screen(ax, ay);
-        let (s1x, s1y) = cam.to_screen(bx, by);
-        let c = tool_color(app);
-        let outline = match app.tool {
-            Tool::Build(t) => w.defs.thing(t).blocks,
-            _ => false,
-        };
-        if matches!(app.tool, Tool::Stockpile | Tool::ClearZone | Tool::Grow(_)) {
-            // The cells themselves show in `zones`; the box is a line.
-            let p = &app.palette;
-            let (bw, bh) = (s1x - s0x, s1y - s0y);
-            draw_rectangle_lines(s0x - 1.0, s0y - 1.0, bw + 2.0, bh + 2.0, p.hair + 2.0, p.keyline);
-            draw_rectangle_lines(s0x, s0y, bw, bh, p.hair, p.zone);
-            return;
-        }
-        if outline {
-            // Show exactly the cells that will get walls.
-            for (ra, rb) in crate::build_rects(true, a, b) {
-                let (p0x, p0y) = cam.to_screen(ra.x.min(rb.x) as f32, ra.y.min(rb.y) as f32);
-                let (p1x, p1y) = cam.to_screen(ra.x.max(rb.x) as f32 + 1.0, ra.y.max(rb.y) as f32 + 1.0);
-                draw_rectangle(p0x, p0y, p1x - p0x, p1y - p0y, alpha(c, 0.35));
-            }
-        } else {
-            draw_rectangle(s0x, s0y, s1x - s0x, s1y - s0y, alpha(c, 0.18));
-        }
-        draw_rectangle_lines(s0x, s0y, s1x - s0x, s1y - s0y, 2.0, c);
-    } else if let Tool::Plan(plan) = app.tool {
+    // Selection, drags and every tool's preview are the overlay's
+    // (overlay::scene), except a house plan's pieces and the box of a zone
+    // or grow drag (whose cells are drawn in `zones`) or of saving a plan.
+    if let Tool::Plan(plan) = app.tool {
         // The plan's pieces where they'd go, turned as they'd be placed.
-        let tp = cam.tile_at(mx, my);
-        let defs = &w.defs;
+        let (tp, z) = (cam.tile_at(app.pointer.0, app.pointer.1), cam.zoom);
+        let defs = &app.sim.world.defs;
         for piece in defs.plans[plan as usize].placed(defs, tp, app.build_facing) {
             let td = defs.thing(piece.thing);
             let c = rgb(defs.thing(piece.stuff.unwrap_or(piece.thing)).rgb);
@@ -992,18 +954,22 @@ pub fn world_ui(app: &App) {
                 draw_rectangle_lines(sx, sy, z, z, 1.5, alpha(c, 0.9));
             }
         }
-    } else if app.tool != Tool::Select {
-        let (mx, my) = app.pointer;
-        let tp = cam.tile_at(mx, my);
-        let (sx, sy) = cam.to_screen(tp.x as f32, tp.y as f32);
-        // A thing bigger than a cell shows its footprint, turned as it will
-        // be placed (T turns it).
-        let [fw, fh] = match app.tool {
-            Tool::Build(t) => w.defs.thing(t).size_facing(app.build_facing),
-            _ => [1, 1],
-        };
-        draw_rectangle_lines(sx, sy, z * fw as f32, z * fh as f32, 2.0, tool_color(app));
+        return;
     }
+    let Some(a) = app
+        .drag_start
+        .filter(|_| matches!(app.tool, Tool::Stockpile | Tool::ClearZone | Tool::Grow(_) | Tool::SavePlan))
+    else {
+        return;
+    };
+    let b = cam.tile_at(app.pointer.0, app.pointer.1);
+    let (s0x, s0y) = cam.to_screen(a.x.min(b.x) as f32, a.y.min(b.y) as f32);
+    let (s1x, s1y) = cam.to_screen(a.x.max(b.x) as f32 + 1.0, a.y.max(b.y) as f32 + 1.0);
+    let p = &app.palette;
+    let (bw, bh) = (s1x - s0x, s1y - s0y);
+    draw_rectangle_lines(s0x - 1.0, s0y - 1.0, bw + 2.0, bh + 2.0, p.hair + 2.0, p.keyline);
+    let c = if app.tool == Tool::SavePlan { p.chalk } else { p.zone };
+    draw_rectangle_lines(s0x, s0y, bw, bh, p.hair, c);
 }
 
 /// Plans that replace a standing piece (DESIGN.md §6c): the old piece as
@@ -1765,10 +1731,6 @@ fn edges(
             }
         }
     }
-}
-
-fn tool_color(app: &App) -> Color {
-    app.tools.iter().find(|b| b.tool == app.tool).map_or(WHITE, |b| crate::tool_colour(app, b))
 }
 
 // ================================================================== UI

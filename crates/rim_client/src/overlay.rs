@@ -8,7 +8,7 @@
 
 use crate::{draw, App};
 use macroquad::prelude::*;
-use rim_sim::command::Target;
+use rim_sim::command::{Blocker, Place, Target};
 use rim_sim::defs::DefId;
 use rim_sim::hecs::Entity;
 use rim_sim::world::Pawn;
@@ -58,6 +58,11 @@ pub struct Palette {
     pub keyline: Color,
     /// Allowed but costly, and urgent marks: the theme's `bad`.
     pub caution: Color,
+    /// Can't: the theme's `threat`.
+    pub threat: Color,
+    /// The player's plans: the theme's `accent`, and a ghost's wash.
+    pub intent: Color,
+    pub intent_fill: Color,
     /// Line weights: hover's, a selected or hovered stockpile's and a
     /// store's outline (`stroke`); a stockpile's edge and a drag box's
     /// (`hair`).
@@ -69,8 +74,6 @@ pub struct Palette {
     pub zone_fill: Color,
     /// A grid line (`grid`), and measuring's every fifth.
     pub seam: Color,
-    /// Can't: the theme's `threat`.
-    pub threat: Color,
     pub seam_major: Color,
     pub firm: f32,
     pub bracket_gap: f32,
@@ -99,8 +102,10 @@ impl Palette {
             chalk: c("chalk", "#f2eee3"),
             keyline: c("keyline", "#080a0c8c"),
             caution: c("bad", "#ffb35a"),
-            seam: c("seam", "#0000001f"),
             threat: c("threat", "#ff6b5a"),
+            intent: c("accent", "#5ab4ff"),
+            intent_fill: c("intent_fill", "#5ab4ff4d"),
+            seam: c("seam", "#0000001f"),
             seam_major: c("seam_major", "#00000052"),
             stroke: shape("stroke", 1.5),
             hair: shape("hair", 1.0),
@@ -195,11 +200,26 @@ pub enum Mark {
         color: Color,
         cancel: bool,
     },
-    /// A cell's frame: faint where the tool in hand has nothing to do, or
-    /// shaking where a click was refused.
+    /// What a build will put up: its footprint, whether a natural thing
+    /// is cleared first, and which way it faces if it's bigger than a cell.
+    Ghost {
+        rect: [f32; 4],
+        clears: bool,
+        facing: Option<u8>,
+    },
+    /// A build that can't go up: grey over its footprint, a cross on the
+    /// cell that blocks it.
+    Blocked {
+        rect: [f32; 4],
+        cell: [f32; 4],
+    },
+    /// A cell's frame: faint where the tool in hand has nothing to do,
+    /// shaking where a click was refused, or in the zone colour under a
+    /// zone tool. Chalk when `color` is none.
     Frame {
         rect: [f32; 4],
         alpha: f32,
+        color: Option<Color>,
     },
     /// A select drag's box, snapped to cells: dashed when it takes
     /// colonists out.
@@ -344,6 +364,9 @@ pub fn drag_hint(app: &App) -> Option<String> {
     }
     if let Some(op) = &app.order_preview {
         return op.hint(app);
+    }
+    if let Some(bp) = &app.build_preview {
+        return bp.hint();
     }
     if let Some(a) = app.drag_start.filter(|_| crate::is_box(app, app.pointer)) {
         let b = app.cam.tile_at(app.pointer.0, app.pointer.1);
@@ -505,6 +528,154 @@ impl OrderPreview {
             None => "Nothing to cancel here".into(),
         }
     }
+}
+
+/// What a build tool would put up at the pointer, or across its drag, cell
+/// by cell from the sim's own `build_preview` (DESIGN.md §6f). Made once a
+/// frame.
+pub struct BuildPreview {
+    pub thing: DefId,
+    pub dragging: bool,
+    pub cells: Vec<(IVec, Place)>,
+    pub facing: u8,
+    /// What it was worked out for: from, to, facing, material and the
+    /// world's tick. The same question isn't asked twice.
+    key: (IVec, IVec, u8, Option<DefId>, u64),
+    /// Its hint, and why a click would do nothing, worked out once.
+    hint: Option<String>,
+    refusal: String,
+}
+
+impl BuildPreview {
+    /// The build tool's preview at the pointer or across its drag; `last`
+    /// is kept when nothing it depends on changed.
+    pub fn of(app: &App, last: Option<BuildPreview>) -> Option<BuildPreview> {
+        let crate::Tool::Build(thing) = app.tool else { return None };
+        if app.drag_start.is_none() && app.hover_cell.is_none() {
+            return None;
+        }
+        let cell = app.cam.tile_at(app.pointer.0, app.pointer.1);
+        let a = app.drag_start.unwrap_or(cell);
+        let key = (a, cell, app.build_facing, crate::chosen_material(app, thing), app.sim.world.tick);
+        if let Some(bp) =
+            last.filter(|bp| bp.key == key && bp.thing == thing && bp.dragging == app.drag_start.is_some())
+        {
+            return Some(bp);
+        }
+        Some(BuildPreview::between(app, thing, a, cell, app.drag_start.is_some()))
+    }
+
+    /// What building `thing` from `a` to `b` would put up, as the sim does
+    /// it: rectangle by rectangle, a later one finding the earlier ones'
+    /// plans in its way.
+    pub fn between(app: &App, thing: DefId, a: IVec, b: IVec, dragging: bool) -> BuildPreview {
+        let w = &app.sim.world;
+        let td = w.defs.thing(thing);
+        let facing = app.build_facing;
+        let stuff = crate::chosen_material(app, thing);
+        let foot = |p: IVec| -> Vec<IVec> { td.footprint(p, facing).collect() };
+        let mut claimed: Vec<IVec> = Vec::new();
+        let mut cells = Vec::new();
+        for (ra, rb) in crate::build_rects(td.blocks, a, b) {
+            let rect = rim_sim::command::build_preview(w, thing, stuff, ra, rb, facing);
+            let mut mine = Vec::new();
+            for (p, pl) in rect {
+                let pl = match pl {
+                    pl if goes_up(pl) && foot(p).iter().any(|c| claimed.contains(c)) => {
+                        Place::Blocked(Blocker::Overlap)
+                    }
+                    other => other,
+                };
+                if goes_up(pl) {
+                    mine.extend(foot(p));
+                }
+                cells.push((p, pl));
+            }
+            claimed.extend(mine);
+        }
+        let mut bp = BuildPreview {
+            thing,
+            dragging,
+            cells,
+            facing,
+            key: (a, b, facing, stuff, w.tick),
+            hint: None,
+            refusal: String::new(),
+        };
+        bp.refusal = bp.blocked(app).unwrap_or_else(|| "Nothing can be built here".into());
+        bp.hint = bp.work_out_hint(app);
+        bp
+    }
+
+    /// How many go up, of how many the drag asked for (a cell a footprint
+    /// already covers isn't asked).
+    pub fn counts(&self) -> (usize, usize) {
+        let asked = self.cells.iter().filter(|(_, pl)| *pl != Place::Blocked(Blocker::Overlap)).count();
+        let up = self.cells.iter().filter(|(_, pl)| goes_up(*pl)).count();
+        (up, asked)
+    }
+
+    /// Why the first blocked cell is blocked: "Blocked by a table".
+    fn blocked(&self, app: &App) -> Option<String> {
+        let w = &app.sim.world;
+        let why = self.cells.iter().find_map(|(_, pl)| match pl {
+            Place::Blocked(b) if *b != Blocker::Overlap => Some(*b),
+            _ => None,
+        })?;
+        Some(match why {
+            Blocker::Terrain(p) => {
+                format!("Can't build on {}", w.defs.terrain[w.map.terrain[w.map.idx(p)] as usize].label.to_lowercase())
+            }
+            Blocker::Solid(_) => "Can't build in solid rock".into(),
+            Blocker::Occupied(e) => match w.thing(e) {
+                Some(t) => format!("Blocked by {}", with_article(&w.defs.thing(t.def).label)),
+                None => "Something is in the way".into(),
+            },
+            Blocker::OutOfBounds => "Off the edge of the map".into(),
+            Blocker::Overlap => unreachable!("filtered out above"),
+            Blocker::NoMaterial => "No material chosen to build it from".into(),
+            Blocker::NotBuildable => "This can't be built".into(),
+            Blocker::NoDig => "Nothing here to dig into".into(),
+            // A bridge goes over a pit and nowhere else.
+            Blocker::NotOverAir => "It only spans an open pit".into(),
+            // Research or a plugin holds it back: its own reason, "Research joinery".
+            Blocker::Locked => w.build_lock(self.thing).unwrap_or_else(|| "Can't be built yet".into()),
+        })
+    }
+
+    fn work_out_hint(&self, app: &App) -> Option<String> {
+        let (up, asked) = self.counts();
+        if !self.dragging {
+            return if up == 0 { self.blocked(app) } else { None };
+        }
+        let noun = plural(&app.sim.world.defs.thing(self.thing).label, asked);
+        let count = if up == asked { format!("{asked} {noun}") } else { format!("{up} of {asked} {noun}") };
+        let cost = crate::build_cost_for(app, self.thing, up as u32);
+        Some(if cost.is_empty() { count } else { format!("{count} · {cost}") })
+    }
+
+    /// The pointer's hint: "18 walls · 90 logs", "16 of 18 walls · 80 logs"
+    /// during a drag; why over a cell it can't go.
+    pub fn hint(&self) -> Option<String> {
+        self.hint.clone()
+    }
+
+    /// Why a click here put nothing up.
+    pub fn refusal(&self) -> String {
+        self.refusal.clone()
+    }
+}
+
+/// Does a plan go up in this cell: now, after clearing, or in place of
+/// what stands there?
+fn goes_up(pl: Place) -> bool {
+    matches!(pl, Place::Open | Place::Clears(_) | Place::Replaces(_))
+}
+
+/// A label with "a" or "an" before it.
+fn with_article(label: &str) -> String {
+    let an = label.chars().next().is_some_and(|c| "aeiouAEIOU".contains(c));
+    format!("{} {label}", if an { "an" } else { "a" })
 }
 
 /// `label`, counted: "wall", "walls", "workbenches", "berry bushes".
@@ -827,9 +998,67 @@ pub fn scene(app: &App) -> Scene {
             marks.extend(aims.map(|aim| Mark::Target { aim, color: hue, cancel }));
         } else if op.targets.is_empty() {
             let (x, y) = cam.to_screen(op.b.x as f32, op.b.y as f32);
-            marks.push(Mark::Frame { rect: [x, y, cam.zoom, cam.zoom], alpha: FAINT_FRAME });
+            marks.push(Mark::Frame { rect: [x, y, cam.zoom, cam.zoom], alpha: FAINT_FRAME, color: None });
         } else {
             marks.extend(aims.map(|aim| Mark::Aimed { aim, color: hue }));
+        }
+    }
+    // A build tool: a ghost of what goes up, cell by cell; a refused click
+    // shakes it.
+    if let Some(bp) = &app.build_preview {
+        let td = w.defs.thing(bp.thing);
+        let [fw, fh] = td.size_facing(bp.facing);
+        let multi = fw * fh > 1;
+        // Only the refused cell's ghost shakes.
+        let shake_at = |p: IVec| match &app.refused {
+            Some((_, at, t0)) if *at == p && !app.chalk.instant && ((now - t0) / SHAKE_SECS) < 1.0 => {
+                let k = ((now - t0) / SHAKE_SECS) as f32;
+                (k * std::f32::consts::TAU * 2.0).sin() * 3.0 * (1.0 - k)
+            }
+            _ => 0.0,
+        };
+        let cell_rect = |p: IVec, dx: f32| {
+            let (x, y) = cam.to_screen(p.x as f32, p.y as f32);
+            [x + dx, y, cam.zoom, cam.zoom]
+        };
+        let foot = |p: IVec, dx: f32| {
+            let [x, y, _, _] = cell_rect(p, dx);
+            [x, y, cam.zoom * fw as f32, cam.zoom * fh as f32]
+        };
+        for &(p, pl) in &bp.cells {
+            let dx = shake_at(p);
+            let rect = if multi { foot(p, dx) } else { cell_rect(p, dx) };
+            // Only what's on screen: a big drag is mostly off it.
+            if !on_screen(rect) {
+                continue;
+            }
+            match pl {
+                Place::Open => marks.push(Mark::Ghost { rect, clears: false, facing: multi.then_some(bp.facing) }),
+                // A replacement goes up once the old piece comes down: it
+                // clears first too.
+                Place::Clears(_) | Place::Replaces(_) => {
+                    marks.push(Mark::Ghost { rect, clears: true, facing: multi.then_some(bp.facing) })
+                }
+                Place::Blocked(Blocker::Overlap) => {}
+                Place::Blocked(b) => {
+                    // The cross goes on the cell that's in the way.
+                    let at = match b {
+                        Blocker::Terrain(q) | Blocker::Solid(q) => q,
+                        Blocker::Occupied(e) => {
+                            td.footprint(p, bp.facing).find(|&c| w.map.fixture_at(c) == Some(e)).unwrap_or(p)
+                        }
+                        _ => p,
+                    };
+                    marks.push(Mark::Blocked { rect, cell: cell_rect(at, dx) });
+                }
+            }
+        }
+    }
+    // A zone tool's cell under the pointer, before a drag starts.
+    if matches!(app.tool, crate::Tool::Stockpile | crate::Tool::ClearZone) && app.drag_start.is_none() {
+        if let Some(c) = app.hover_cell {
+            let (x, y) = cam.to_screen(c.x as f32, c.y as f32);
+            marks.push(Mark::Frame { rect: [x, y, cam.zoom, cam.zoom], alpha: 0.8, color: Some(p.zone) });
         }
     }
     // A refused click: its cell's frame shakes, and the hint says why.
@@ -838,7 +1067,7 @@ pub fn scene(app: &App) -> Scene {
         if k < 1.0 {
             let shake = if app.chalk.instant { 0.0 } else { (k * std::f32::consts::TAU * 2.0).sin() * 3.0 * (1.0 - k) };
             let (x, y) = cam.to_screen(cell.x as f32, cell.y as f32);
-            marks.push(Mark::Frame { rect: [x + shake, y, cam.zoom, cam.zoom], alpha: 1.0 });
+            marks.push(Mark::Frame { rect: [x + shake, y, cam.zoom, cam.zoom], alpha: 1.0, color: None });
         }
     }
     // With the storage overlay on, a selected loose stack shows where it
@@ -1029,6 +1258,50 @@ fn chevron(p: &Palette, (x, y): (f32, f32), angle: f32) {
     draw_triangle(tip, notch, fore, p.chalk);
 }
 
+/// A ghost of a plan: the intent wash and edge, a caution triangle where a
+/// natural thing is cleared first, and for a thing bigger than a cell a
+/// chevron on the side it faces.
+fn ghost(p: &Palette, [x, y, w, h]: [f32; 4], clears: bool, facing: Option<u8>) {
+    draw_rectangle(x + 1.0, y + 1.0, w - 2.0, h - 2.0, p.intent_fill);
+    let inner = [x + 1.5, y + 1.5, w - 3.0, h - 3.0];
+    draw_rectangle_lines(
+        inner[0] - 1.0,
+        inner[1] - 1.0,
+        inner[2] + 2.0,
+        inner[3] + 2.0,
+        1.25 + 2.0,
+        fade(p.keyline, 0.45),
+    );
+    draw_rectangle_lines(inner[0], inner[1], inner[2], inner[3], 1.25, fade(p.intent, 0.92));
+    if clears {
+        let q = (w.min(h) * 0.3).max(6.0);
+        let (tx, ty) = (x + 3.0, y + 3.0);
+        let (a, b, c) = (vec2(tx, ty), vec2(tx + q, ty), vec2(tx, ty + q));
+        for (u, v) in [(a, b), (b, c), (c, a)] {
+            draw_line(u.x, u.y, v.x, v.y, 2.0, p.keyline);
+        }
+        draw_triangle(a, b, c, p.caution);
+    }
+    if let Some(f) = facing {
+        // Quarter turns clockwise from south: the chevron sits inside the
+        // edge it faces, pointing out.
+        let angle = std::f32::consts::FRAC_PI_2 * (f as f32 + 1.0);
+        let (cx, cy) = (x + w / 2.0, y + h / 2.0);
+        let (dx, dy) = (angle.cos(), angle.sin());
+        let reach = (w / 2.0 * dx.abs() + h / 2.0 * dy.abs()) - 7.0;
+        chevron(p, (cx + dx * reach, cy + dy * reach), angle);
+    }
+}
+
+/// A red cross over a cell, on a keyline.
+fn cross(p: &Palette, [x, y, w, h]: [f32; 4]) {
+    let i = (w * 0.28).max(3.0);
+    for (a, b) in [((x + i, y + i), (x + w - i, y + h - i)), ((x + w - i, y + i), (x + i, y + h - i))] {
+        draw_line(a.0, a.1, b.0, b.1, 1.75 + 2.0, fade(p.keyline, 0.6));
+        draw_line(a.0, a.1, b.0, b.1, 1.75, p.threat);
+    }
+}
+
 /// A target an order drag will mark: a ring in its hue and its dot to
 /// come, or for Cancel a dimming over what it takes back.
 fn target(p: &Palette, aim: Aim, c: Color, cancel: bool) {
@@ -1064,10 +1337,22 @@ pub fn draw(scene: &Scene, p: &Palette, zoom: f32) {
                 Aim::Disc(c, r) => ring(p, c, r - p.stroke / 2.0, p.stroke, *color, 1.0),
             },
             Mark::Target { aim, color, cancel } => target(p, *aim, *color, *cancel),
-            Mark::Frame { rect, alpha } => {
+            Mark::Ghost { rect, clears, facing } => ghost(p, *rect, *clears, *facing),
+            Mark::Blocked { rect, cell } => {
+                let [x, y, w, h] = *rect;
+                if [x, y, w, h] != *cell {
+                    // A footprint that can't go: grey, not blue.
+                    draw_rectangle(x, y, w, h, fade(p.chalk, 0.1));
+                    draw_rectangle_lines(x + 1.0, y + 1.0, w - 2.0, h - 2.0, p.stroke, fade(p.chalk, 0.5));
+                }
+                let [cx, cy, cw, ch] = *cell;
+                draw_rectangle(cx + 1.0, cy + 1.0, cw - 2.0, ch - 2.0, fade(p.threat, 0.13));
+                cross(p, *cell);
+            }
+            Mark::Frame { rect, alpha, color } => {
                 let [x, y, w, h] = *rect;
                 draw_rectangle_lines(x - 1.0, y - 1.0, w + 2.0, h + 2.0, p.hair + 2.0, fade(p.keyline, *alpha));
-                draw_rectangle_lines(x, y, w, h, p.hair, fade(p.chalk, *alpha));
+                draw_rectangle_lines(x, y, w, h, p.hair, fade(color.unwrap_or(p.chalk), *alpha));
             }
             Mark::Hover { rect, alpha } => {
                 let a = HOVER_ALPHA * alpha;
@@ -1169,6 +1454,8 @@ mod tests {
         assert_eq!(plural("quarry", 2), "quarries");
         assert_eq!(plural("tray", 2), "trays");
         assert_eq!(plural("thing", 0), "things");
+        assert_eq!(with_article("oak tree"), "an oak tree");
+        assert_eq!(with_article("table"), "a table");
     }
 
     #[test]

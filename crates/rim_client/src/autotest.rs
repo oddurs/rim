@@ -774,7 +774,15 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.input(RawInput { mouse: (ax, ay), left_pressed: true, ..Default::default() }).await;
     t.input(RawInput { mouse: (bx, by), ..Default::default() }).await;
     t.frame().await;
-    t.check(t.ui_text().contains("6 × 6"), "dragging shows its size at the cursor");
+    // A wall drag ghosts exactly the cells that get walls, and the hint
+    // counts them with their cost (e8f313d6).
+    let ghosts = crate::overlay::scene(&t.app).marks.iter().filter(|m| matches!(m, Mark::Ghost { .. })).count();
+    let hint = crate::overlay::drag_hint(&t.app).unwrap_or_default();
+    t.check(
+        ghosts == 20 && hint.starts_with("20 walls") && t.ui_text().contains("20 walls"),
+        format!("a wall drag ghosts its 20 cells and counts them by the pointer ({ghosts}, {hint:?})"),
+    );
+    t.shot("chalk-build-run").await;
     t.input(RawInput { mouse: (bx, by), left_released: true, ..Default::default() }).await;
     t.ticks(1);
     t.check(
@@ -804,6 +812,123 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         t.count::<&Blueprint>() == 21,
         format!("walls, a door and a bed are planned ({})", t.count::<&Blueprint>()),
     );
+    // A run through a tree and over a plan: the tree is cleared first
+    // (a triangle), the plan blocks (a cross), and the rest goes up. What's
+    // ghosted is what's planned (e8f313d6).
+    let oak = defs.thing_id("tree_oak").unwrap();
+    let run = {
+        let w = t.w();
+        let plans: Vec<IVec> = w.ecs.query::<(&Thing, &Blueprint)>().iter().map(|(th, _)| th.pos).collect();
+        plans.iter().find_map(|&b| {
+            (2..12)
+                .flat_map(|d| [b.offset(-d, 0), b.offset(d, 0)])
+                .find(|&q| w.map.fixture_at(q).and_then(|f| w.thing(f)).is_some_and(|th| th.def == oak))
+                .map(|q| (q, b))
+        })
+    };
+    match run {
+        Some((tree_at, plan_at)) => {
+            t.click_tool("build:core:wall").await;
+            t.focus(IVec::new((tree_at.x + plan_at.x) / 2, tree_at.y));
+            t.input(RawInput { mouse: t.screen(tree_at), left_pressed: true, ..Default::default() }).await;
+            t.input(RawInput { mouse: t.screen(plan_at), ..Default::default() }).await;
+            let marks = crate::overlay::scene(&t.app).marks;
+            let clears = marks.iter().filter(|m| matches!(m, Mark::Ghost { clears: true, .. })).count();
+            let blocked = marks.iter().filter(|m| matches!(m, Mark::Blocked { .. })).count();
+            let hint = crate::overlay::drag_hint(&t.app).unwrap_or_default();
+            let (up, asked) = t.app.build_preview.as_ref().map_or((0, 0), |bp| bp.counts());
+            let want = format!("{up} of {asked} walls");
+            t.check(
+                clears >= 1 && blocked >= 1 && hint.starts_with(&want),
+                format!("a run through a tree and a plan: a triangle, a cross, and '{want}' ({clears}, {blocked}, {hint:?})"),
+            );
+            t.shot("chalk-build-blocked").await;
+            let open: Vec<IVec> = t.app.build_preview.as_ref().map_or(Vec::new(), |bp| {
+                bp.cells.iter().filter(|(_, pl)| *pl == rim_sim::command::Place::Open).map(|(p, _)| *p).collect()
+            });
+            let before: Vec<IVec> = t.w().ecs.query::<(&Thing, &Blueprint)>().iter().map(|(th, _)| th.pos).collect();
+            t.input(RawInput { mouse: t.screen(plan_at), left_released: true, ..Default::default() }).await;
+            t.ticks(1);
+            let mut fresh: Vec<IVec> = t
+                .w()
+                .ecs
+                .query::<(&Thing, &Blueprint)>()
+                .iter()
+                .map(|(th, _)| th.pos)
+                .filter(|p| !before.contains(p))
+                .collect();
+            let mut open = open;
+            fresh.sort_by_key(|p| (p.x, p.y));
+            open.sort_by_key(|p| (p.x, p.y));
+            let marked = t.w().map.fixture_at(tree_at).is_some_and(|f| t.w().ecs.get::<&Planned>(f).is_ok());
+            t.check(
+                fresh == open && marked,
+                format!(
+                    "the plans went up where the ghosts were, and the tree waits to be felled ({} of {})",
+                    fresh.len(),
+                    open.len()
+                ),
+            );
+            // Take the run back, so the counts that follow are the hut's.
+            for &p in fresh.iter().chain([tree_at].iter()) {
+                t.app.sim.push(Command::Cancel { a: p, b: p });
+            }
+            t.ticks(1);
+            t.key(KeyCode::Escape).await;
+        }
+        None => t.check(false, "a tree on a row with a plan, for a run through both"),
+    }
+    // A thing bigger than a cell ghosts its footprint, and T turns it.
+    if let Some(pile) = defs.thing_id("primitive:woodpile").or_else(|| defs.thing_id("woodpile")) {
+        let spot = open_square(t.w(), home, 3).expect("open ground for a woodpile");
+        t.focus(spot);
+        t.app.tool = Tool::Build(pile);
+        t.mouse = t.screen(spot);
+        let size = |t: &T| {
+            crate::overlay::scene(&t.app).marks.iter().find_map(|m| {
+                if let Mark::Ghost { rect, facing: Some(_), .. } = m {
+                    Some((rect[2].round(), rect[3].round()))
+                } else {
+                    None
+                }
+            })
+        };
+        t.frame().await;
+        t.frame().await;
+        let before = size(&t);
+        t.key(KeyCode::T).await;
+        t.frame().await;
+        let after = size(&t);
+        t.check(
+            before.zip(after).is_some_and(|(b, a)| b.0 == a.1 && b.1 == a.0 && b.0 != b.1),
+            format!("T turns a woodpile's ghost ({before:?} to {after:?})"),
+        );
+        t.app.build_facing = 0;
+        t.app.tool = Tool::Select;
+    } else {
+        t.check(false, "a woodpile, for a footprint bigger than a cell");
+    }
+    // A bed over a table: blocked, and the hint names what's in the way.
+    let (bed, table) = (defs.thing_id("bed").expect("beds"), defs.thing_id("table").expect("tables"));
+    let spot = open_square(t.w(), home, 3).expect("open ground for a table");
+    match t.app.sim.world.spawn_fixture(table, spot, false) {
+        Some(e) => {
+            t.focus(spot);
+            t.app.tool = Tool::Build(bed);
+            t.mouse = t.screen(spot);
+            t.frame().await;
+            t.frame().await;
+            let crossed = crate::overlay::scene(&t.app).marks.iter().any(|m| matches!(m, Mark::Blocked { .. }));
+            let hint = crate::overlay::drag_hint(&t.app);
+            t.check(
+                crossed && hint.as_deref() == Some("Blocked by a table"),
+                format!("a bed's ghost over a table is blocked, and says by what ({crossed}, {hint:?})"),
+            );
+            t.app.tool = Tool::Select;
+            t.app.sim.world.despawn_thing(e);
+        }
+        None => t.check(false, "open ground for a table"),
+    }
     // Drawing the room again over its door: the ring skips what is there.
     t.click_tool("build:core:wall").await;
     t.drag(site, site.offset(5, 5)).await;
