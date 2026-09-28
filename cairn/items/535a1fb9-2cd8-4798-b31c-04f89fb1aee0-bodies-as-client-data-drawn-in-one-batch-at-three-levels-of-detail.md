@@ -2,14 +2,14 @@
 id: 535a1fb9-2cd8-4798-b31c-04f89fb1aee0
 title: Bodies as client data, drawn in one batch at three levels of detail
 type: feature
-status: doing
+status: done
 milestone: people
 assignee: Oddur Sigurdsson
-claimed: 2026-09-28
 depends_on:
 - cc289956-8b67-429b-8f9a-5a98e651398e
 created: 2026-09-27
 updated: 2026-09-28
+closed_at: 2026-09-28
 priority: p0
 api: additive
 pillar:
@@ -83,7 +83,7 @@ sockets = { hair = "head", worn = "torso", hold = [0, -0.22], shoulder = [0.16, 
 - [x] One draw call for all pawns at every level of detail (bench counts draw calls)
 - [x] The level switches at 10 and 20 px a cell (unit test on the chooser)
 - [x] Screenshots at 7, 15 and 40 px a cell in the autotest
-- [ ] `rim --bench-render`: 200 pawns at full detail inside 0.4 ms of CPU on the reference machine, or the measured number and why, noted here
+- [x] `rim --bench-render`: 200 pawns at full detail inside 0.4 ms of CPU on the reference machine, or the measured number and why, noted here
 - [x] Editing `ui/bodies.toml` in a running game redraws every pawn with no sim reload
 - [x] docs/modding/bodies.md documents `[[body]]`, parts, sockets and channels
 
@@ -102,3 +102,7 @@ Two changes from the item as planned. (1) A body names the creatures it draws (c
 ## 2026-09-28
 
 Evidence. Loader: rim_ui body::tests (core's file reads cleanly; bad parts name body and part; the guide's samples read; a creature claimed twice goes to the later body with a warning). Hot reload: rim_ui engine test a_changed_body_reloads_without_touching_the_sim (a new head redraws; a broken file keeps the last good bodies, the error naming core/ui/bodies.toml: body human: part head; the sim's state hash is unchanged). Client: figures::tests (the level switches at 10 and 20 points; a figure is one quad a part, fewer as silhouette and dot; parts turn with the figure and the shadow doesn't; every shipped creature has a body and a missing one warns). Autotest seed 7: 390/390, including one draw call for every pawn's figure at 7, 15 and 40 points a cell, with shots figures-dot, figures-silhouette, figures-full. The bench now adds the figure batch's calls to its count, and F3 shows figures: calls and parts.
+
+## 2026-09-28
+
+Measured, not on the reference machine: #352's crowd bench on CI (llvmpipe, run 36491129977) draws 200 figures in full in 0.109 ms of pawns-pass CPU and one call. The spike measured 0.087 ms on an M4 Pro. The 2017 reference machine stays a manual check. The pass is gated in CI from #352 (0.4 ms with CI's 1.5x slack).
