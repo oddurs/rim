@@ -219,7 +219,15 @@ pub fn thing(
     let th = w.ecs.get::<&Thing>(e).ok()?;
     // A thing covering several cells is one entity in each of them, and is
     // drawn once, from its anchor, across them all.
-    if th.pos != cell {
+    // A portal's bottom holds the thing too, and draws its bottom end.
+    let end = w.map.portal_at(w.map.idx(cell)).filter(|p| p.top == th.pos).map(|p| {
+        if p.top == cell {
+            rim_sim::look::End::Top
+        } else {
+            rim_sim::look::End::Bottom
+        }
+    });
+    if th.pos != cell && end != Some(rim_sim::look::End::Bottom) {
         return None;
     }
     let td = defs.thing(th.def);
@@ -253,7 +261,7 @@ pub fn thing(
     let z = zt;
     let (sx, sy) = at;
     let look = &td.look_r;
-    let cx = Ctx { join: join_of(look), orient: orient_of(w, cell, look, span, th.facing), made_of };
+    let cx = Ctx { join: join_of(look), orient: orient_of(w, cell, look, span, th.facing), made_of, end };
     if let Ok(bp) = w.ecs.get::<&Blueprint>(e) {
         plan(s, w, e, &bp, &look.layers, c, cell, at, z, t, span, cx);
         return None;
@@ -420,7 +428,8 @@ const LABEL_ZOOM: f32 = 22.0;
 #[allow(clippy::too_many_arguments)]
 pub fn rock(s: &mut impl Sink, w: &World, def: rim_sim::defs::DefId, cell: IVec, at: (f32, f32), z: f32, t: f32) {
     let td = w.defs.thing(def);
-    let cx = Ctx { join: join_of(&td.look_r), orient: orient_of(w, cell, &td.look_r, td.size, 0), made_of: None };
+    let cx =
+        Ctx { join: join_of(&td.look_r), orient: orient_of(w, cell, &td.look_r, td.size, 0), made_of: None, end: None };
     paint(s, w, &td.look_r.layers, cx, rgb(td.rgb), cell, at, z, t, td.size);
 }
 
@@ -955,6 +964,9 @@ fn paint(
     // The colour of the mass, for the seam drawn over everything else.
     let mut massed = None;
     for l in layers {
+        if l.end.is_some() && l.end != cx.end {
+            continue;
+        }
         let base = l.color.map_or(own, |[r, g, b, a]| Color::from_rgba(r, g, b, a));
         let mut f = l.shade;
         if l.vary > 0.0 {
@@ -1120,6 +1132,8 @@ pub struct Ctx {
     pub orient: Orient,
     /// What it is built of, for a pattern that shows the material.
     pub made_of: Option<rim_sim::defs::DefId>,
+    /// Which end of a portal the cell is, for layers drawn on one end.
+    pub end: Option<rim_sim::look::End>,
 }
 
 pub fn join_of(look: &rim_sim::look::Look) -> Join {
@@ -1711,6 +1725,41 @@ mod tests {
             };
             self.0.iter().rev().find(|(p, _)| covers(p)).map(|(_, c)| *c)
         }
+    }
+
+    /// A stair is drawn on both of its levels: its bottom end, which holds
+    /// the stair without being its anchor, shows the UP arrow, and the top
+    /// shows DN.
+    #[test]
+    fn a_stair_says_up_at_the_bottom_and_down_at_the_top() {
+        let mut s = Sim::with_mods(std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../mods")), 1, &|m| {
+            m == "core"
+        })
+        .unwrap();
+        let stairs = s.world.defs.thing_id("stairs").unwrap();
+        let top = IVec::new(20, 20);
+        if let Some(e) = s.world.map.fixture_at(top) {
+            s.world.despawn_thing(e);
+        }
+        let e = s.world.spawn_fixture_of(stairs, top, false, None).expect("stairs");
+        s.world.open_portal(e);
+        let bottom = IVec::at(top.x, top.y, top.z - 1);
+        assert_eq!(s.world.map.fixture_at(bottom), Some(e), "the stair holds its bottom cell");
+        let w = &s.world;
+        let z = 48.0;
+        let arrow = shade(rgb(w.defs.thing(stairs).rgb), 0.3);
+        // Halfway along the UP arrow's left head stroke.
+        let head = |c: IVec| (c.x as f32 * z + 0.44 * z, c.y as f32 * z + 0.25 * z);
+        let paint = |c: IVec| {
+            let mut canvas = Canvas::default();
+            let drawn = thing(&mut canvas, w, e, c, (c.x as f32 * z, c.y as f32 * z), z, 0.0, Tone::default());
+            (drawn.is_some() || !canvas.0.is_empty(), canvas)
+        };
+        let (drawn_top, top_canvas) = paint(top);
+        let (drawn_bottom, bottom_canvas) = paint(bottom);
+        assert!(drawn_top && drawn_bottom, "both ends are drawn");
+        assert_eq!(bottom_canvas.top(head(bottom)), Some(arrow), "UP at the bottom");
+        assert_ne!(top_canvas.top(head(top)), Some(arrow), "no UP at the top");
     }
 
     /// Where a run of wall changes material, the thin seam at the joint is

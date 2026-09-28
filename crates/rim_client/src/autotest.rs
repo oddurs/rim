@@ -1026,6 +1026,7 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         ],
         ["core:bed", "", "core:table", "core:chair", "", "core:stove", "", "core:campfire", ""],
         ["core:floor", "core:floor", "", "core:pillar", "", "crafting:spot", "", "crafting:workbench", ""],
+        ["core:stairs", "", "core:ladder", "", "", "", "", "", ""],
     ];
     let free = |w: &World, p: IVec| w.map.passable(p) && w.map.fixture_at(p).is_none() && w.map.item_at(p).is_none();
     t.clear_dock().await;
@@ -1033,13 +1034,20 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         .flat_map(|r| (-r..=r).flat_map(move |dy| (-r..=r).map(move |dx| home.offset(dx, dy))))
         .find(|&o| (-1..7).all(|y| (-1..10).all(|x| free(t.w(), o.offset(x, y)))));
     let mut placed = 0;
+    let mut portals = Vec::new();
     if let Some(o) = corner {
         for (row, ids) in gallery.iter().enumerate() {
             for (x, id) in ids.iter().enumerate().filter(|(_, id)| !id.is_empty()) {
                 let Some(def) = t.w().defs.thing_id(id) else { continue };
                 let stuff = t.w().defs.thing(def).build.as_ref().and_then(|b| b.stuff.as_ref()).map(|_| wood);
                 let p = o.offset(x as i32, row as i32 * 2);
-                placed += t.app.sim.world.spawn_fixture_of(def, p, false, stuff).is_some() as usize;
+                let e = t.app.sim.world.spawn_fixture_of(def, p, false, stuff);
+                // Stairs and ladders reach the level below, as when dug.
+                if let Some(e) = e.filter(|_| t.w().defs.thing(def).portal.is_some()) {
+                    t.app.sim.world.open_portal(e);
+                    portals.push((e, IVec::at(p.x, p.y, p.z - 1)));
+                }
+                placed += e.is_some() as usize;
             }
         }
         t.app.sim.world.map.ensure_rooms();
@@ -1048,7 +1056,16 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         t.focus(o.offset(4, 2));
         t.grab().await;
         t.shot("plan_gallery").await;
+        // One level down, the stair and the ladder's other ends, saying UP.
+        t.app.cam.z -= 1;
+        for _ in 0..12 {
+            t.frame().await;
+        }
+        t.shot("plan_gallery_below").await;
+        t.app.cam.z += 1;
         t.app.cam.zoom = zoom;
+        let held = portals.iter().filter(|&&(e, below)| t.w().map.fixture_at(below) == Some(e)).count();
+        t.check(held == 2, format!("the stair and the ladder reach the level below ({held} of 2)"));
     }
     let want = gallery.iter().flatten().filter(|id| !id.is_empty()).count();
     t.check(placed == want, format!("the gallery holds every core building ({placed} of {want})"));
