@@ -28,6 +28,8 @@ const DOT_STEP: f32 = 5.0;
 pub struct Palette {
     pub chalk: Color,
     pub keyline: Color,
+    /// A grid line (`grid`).
+    pub seam: Color,
     pub firm: f32,
     pub bracket_gap: f32,
     pub bracket_arm_min: f32,
@@ -54,6 +56,7 @@ impl Palette {
         Palette {
             chalk: c("chalk", "#f2eee3"),
             keyline: c("keyline", "#080a0c8c"),
+            seam: c("seam", "#0000001f"),
             firm: shape("firm", 2.0),
             bracket_gap: shape("bracket_gap", 3.0),
             bracket_arm_min: shape("bracket_arm_min", 4.0),
@@ -218,8 +221,9 @@ pub fn scene(app: &App) -> Scene {
     Scene { marks }
 }
 
-fn fade(c: Color, a: f32) -> Color {
-    Color::new(c.r, c.g, c.b, c.a * a)
+/// `c` with its alpha scaled by `a`, at most opaque.
+pub(crate) fn fade(c: Color, a: f32) -> Color {
+    Color::new(c.r, c.g, c.b, (c.a * a).min(1.0))
 }
 
 /// Four corner brackets around `rect`, `gap` outside it, each on a
@@ -307,9 +311,7 @@ pub fn draw(scene: &Scene, p: &Palette, zoom: f32) {
             Mark::Path { points, alpha } => dotted(p, points, p.chalk, 0.6 * alpha),
             Mark::Haul { from, to } => dashed(p, *from, *to, zoom),
             Mark::Brackets { rect, gap, alpha } => brackets(p, *rect, *gap, p.chalk, *alpha),
-            // A point further out than brackets: a ring's line is round,
-            // and hover sits on the body's edge inside it.
-            Mark::Ring { center, r, gap, alpha } => ring(p, *center, r + gap + 1.0, p.firm, p.chalk, *alpha),
+            Mark::Ring { center, r, gap, alpha } => ring(p, *center, r + gap, p.firm, p.chalk, *alpha),
             Mark::Chip(_) => {}
         }
     }

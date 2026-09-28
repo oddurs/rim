@@ -79,13 +79,12 @@ Shadows from the sun, the moons and every wall; torches that flicker and fill th
 
 ## chalkline — Chalkline
 
-`###·······` 23% · 3 of 13 done
+`####······` 31% · 4 of 13 done
 
 The grid, hover, selection, drag previews, placement ghosts and marks, drawn in one visual language. Design: DESIGN.md §6f. Concept and live map with every state: https://claude.ai/artifact/N2buE4YpoduQdxpE1zZTHv
 
 - [ ] `11080b20` Zones in violet; a selected zone turns chalk; paint and erase preview <sup>feature · p1 · s · client</sup>
 - [ ] `463983bb` Box select: a snapped box that previews, Shift adds, Alt removes <sup>feature · p1 · s · client</sup>
-- [ ] `553bfb19` The grid: Rest, Lens and Plan, drawn as a groove under things <sup>feature · p0 · m · client</sup>
 - [ ] `7ffd8d09` Unreachable jobs carry a red notch <sup>feature · p3 · s · client</sup>
 - [ ] `b6d0a4cc` A selection off screen leaves a chevron at the edge <sup>feature · p2 · s · client</sup>
 - [ ] `bb769d00` Designate: targets light in their hue, on hover and across a drag <sup>feature · p0 · m · client</sup>
@@ -93,6 +92,7 @@ The grid, hover, selection, drag previews, placement ghosts and marks, drawn in 
 - [ ] `bf3079fb` Order ring in chalk, urgent that breathes, and a reduce-motion setting <sup>feature · p3 · s · client</sup>
 - [ ] `e8f313d6` Build ghosts: fits, clears first, or blocked <sup>feature · p0 · m · client</sup>
 - [ ] `f5bc43e3` Measure: G holds a counting grid with rulers <sup>feature · p2 · s · client</sup>
+- [x] `553bfb19` The grid: Rest, Lens and Plan, drawn as a groove under things <sup>feature · p0 · m · client</sup>
 - [x] `a207eded` Can the planner name the jobs nobody can reach, one by one? <sup>spike · p3 · s · engine</sup>
 - [x] `cd59b515` Ask the sim what an order would do: designate and build previews <sup>feature · p0 · m · engine</sup>
 - [x] `d83192ed` Overlays read the theme: chalk selection on a keyline, as a testable scene <sup>feature · p0 · m · client</sup>

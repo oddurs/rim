@@ -73,5 +73,6 @@ track = "#ffffff14"
 backdrop = "#00000073"
 # World overlays (DESIGN.md §6f). Chalk is attention, hue is kind, blue is
 # yours.
-chalk = "#f2eee3"        # selection
+chalk = "#f2eee3"        # selection, the grid's lit edge
 keyline = "#080a0c8c"    # under every overlay stroke, so it reads on any ground
+seam = "#0000001f"       # a grid line, darkening the ground it crosses

@@ -254,6 +254,52 @@ fn block_diff(a: &Image, b: &Image) -> f32 {
     total / (bx * by) as f32
 }
 
+/// Mean difference of two screenshots, 0 to 255 per channel, in a square
+/// of `r` points about the screen point `at`.
+fn patch_diff(a: &Image, b: &Image, at: (f32, f32), r: f32) -> f32 {
+    let dpi = screen_dpi_scale();
+    let (w, h) = (a.width as i32, a.height as i32);
+    let (cx, cy, rr) = ((at.0 * dpi) as i32, (at.1 * dpi) as i32, (r * dpi) as i32);
+    let (mut sum, mut n) = (0.0, 0);
+    for y in (cy - rr).max(0)..=(cy + rr).min(h - 1) {
+        for x in (cx - rr).max(0)..=(cx + rr).min(w - 1) {
+            // GL reads the bottom row first.
+            let o = (((h - 1 - y) * w + x) * 4) as usize;
+            sum += (0..3).map(|c| (a.bytes[o + c] as f32 - b.bytes[o + c] as f32).abs()).sum::<f32>();
+            n += 3;
+        }
+    }
+    sum / n.max(1) as f32
+}
+
+/// The grid over open ground at `o` (the pointer two cells in): the
+/// screen with the select tool, with the wall tool armed, and mid-drag.
+async fn grid_shots(t: &mut T, o: IVec, wall: rim_sim::defs::DefId) -> [Image; 3] {
+    let at = t.screen(o.offset(2, 2));
+    t.mouse = at;
+    t.app.tool = Tool::Select;
+    t.app.drag_start = None;
+    // Long enough for the grid to fade out after its hold.
+    for _ in 0..50 {
+        t.frame().await;
+    }
+    let rest = t.grab().await;
+    t.app.tool = Tool::Build(wall);
+    for _ in 0..20 {
+        t.frame().await;
+    }
+    let lens = t.grab().await;
+    // From the cell before: a drag, not a click.
+    t.app.drag_start = Some(o.offset(1, 1));
+    for _ in 0..20 {
+        t.frame().await;
+    }
+    let plan = t.grab().await;
+    t.app.drag_start = None;
+    t.app.tool = Tool::Select;
+    [rest, lens, plan]
+}
+
 fn open_square(w: &World, c: IVec, size: i32) -> Option<IVec> {
     let free = |p: IVec| w.map.passable(p) && w.map.fixture_at(p).is_none() && w.map.item_at(p).is_none();
     (2..30i32)
@@ -1781,6 +1827,22 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     }
     t.focus(site.offset(3, 3));
     t.shot("night").await;
+    // The grid darkens with the ground, and still shows (553bfb19).
+    if let Some(o) = open_square(t.w(), site, 6) {
+        let was = t.app.paused;
+        t.app.paused = true;
+        // No rain: falling streaks would move pixels between the shots.
+        let rain = t.w().defs.lookup("field", "precipitation").unwrap() as usize;
+        t.app.sim.world.fields.set_ambient(rain, Some(0.0));
+        t.focus(o.offset(3, 3));
+        let [rest, _, plan] = grid_shots(&mut t, o, defs.thing_id("wall").expect("walls")).await;
+        let corner = t.app.cam.to_screen(o.x as f32 + 4.0, o.y as f32 + 4.0);
+        let d = patch_diff(&rest, &plan, corner, 4.0);
+        t.check(d > 0.3, format!("at night the grid still shows near the pointer ({d:.2})"));
+        t.focus(site.offset(3, 3));
+        t.app.paused = was;
+        t.app.sim.world.fields.set_ambient(rain, None);
+    }
 
     // A storm at night, mid-flash.
     set(&mut t, [8.0, 9.0, 16.0, 20.0, 100.0, 0.0]);
@@ -2435,6 +2497,52 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     } else {
         t.check(false, "a wall of ours to right-click");
     }
+
+    // ---------------------------------------------------------- 553bfb19 the grid
+    // It shows while a tool is in hand, as a groove things stand on.
+    println!("\n# the grid (553bfb19)");
+    t.app.paused = true;
+    t.clear_dock().await;
+    // No rain: falling streaks would move pixels between the shots.
+    let rain = t.w().defs.lookup("field", "precipitation").unwrap() as usize;
+    t.app.sim.world.fields.set_ambient(rain, Some(0.0));
+    let wall = defs.thing_id("wall").expect("walls");
+    let o = open_square(t.w(), home, 6).expect("open ground near home");
+    t.focus(o.offset(3, 3));
+    t.app.cam.zoom = 28.0;
+    // A built wall of its own, in the square's corner away from where the
+    // grid is read: what stands on a cell hides the lines under it.
+    let standing = t.app.sim.world.spawn_fixture(wall, o.offset(5, 0), false);
+    let [rest, lens, plan] = grid_shots(&mut t, o, wall).await;
+    // A corner two cells from the pointer: inside the lens, clear of the
+    // cursor's own cell.
+    let corner = t.app.cam.to_screen(o.x as f32 + 4.0, o.y as f32 + 4.0);
+    let (dl, dp) = (patch_diff(&rest, &lens, corner, 4.0), patch_diff(&rest, &plan, corner, 4.0));
+    t.check(dl > 0.5, format!("arming a tool puts ticks at the corners near the pointer ({dl:.2})"));
+    t.check(dp > 0.5, format!("dragging draws the lines ({dp:.2})"));
+    // Whatever stands on a cell hides the lines: a wall, since it never
+    // sways (trees move on the wall clock, so their pixels never match).
+    let d = patch_diff(&rest, &plan, t.screen(o.offset(5, 0)), 0.3 * t.app.cam.zoom);
+    t.check(d < 0.5, format!("a wall hides the lines under it ({d:.2})"));
+    if let Some(e) = standing {
+        t.app.sim.world.despawn_thing(e);
+    }
+    for (name, img) in [("chalk-grid-rest", &rest), ("chalk-grid-lens", &lens), ("chalk-grid-plan", &plan)] {
+        t.shots += 1;
+        let path = t.dir.join(format!("{:02}_{name}.png", t.shots));
+        img.export_png(path.to_str().unwrap());
+        println!("shot  {}", path.display());
+    }
+    t.app.cam.zoom = 8.0;
+    let [rest, _, plan] = grid_shots(&mut t, o, wall).await;
+    let corner = t.app.cam.to_screen(o.x as f32 + 4.0, o.y as f32 + 4.0);
+    let d = patch_diff(&rest, &plan, corner, 6.0);
+    t.check(d < 0.2, format!("at 8 points a cell there's no grid ({d:.2})"));
+    let shown = crate::grid::strength(&t.app);
+    t.check(shown == (0.0, 0.0), format!("putting the tool down fades the grid out ({shown:?})"));
+    t.app.cam.zoom = 28.0;
+    t.app.paused = false;
+    t.app.sim.world.fields.set_ambient(rain, None);
 
     // ---------------------------------------------------------- 86dcd0ca several selected
     // Last, since it adds colonists.
