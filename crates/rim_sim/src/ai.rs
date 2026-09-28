@@ -106,14 +106,15 @@ fn go_to(w: &mut World, p: &mut Pawn, goal: Goal) -> Go {
         return Go::Moving;
     }
     w.map.ensure_regions();
-    if !w.map.can_reach_for(p.pos, goal, p.faction) {
+    let climbs = w.climbs(p);
+    if !w.map.can_reach_as(p.pos, goal, p.faction, climbs) {
         return Go::Failed;
     }
     // The regions say a path exists, so the search is sure to find one; a
     // cap below the whole map would only give up on a long way round and
     // have the pawn ask again, and again.
     let cap = w.map.cells() as u32;
-    match w.pf.find(&w.map, p.pos, goal, cap, p.faction) {
+    match w.pf.find_as(&w.map, p.pos, goal, cap, p.faction, climbs) {
         Some(path) => {
             p.path = path;
             p.path_goal = Some(goal);
@@ -146,8 +147,9 @@ fn advance_movement(w: &mut World, p: &mut Pawn) {
         let diag = n.x != p.pos.x && n.y != p.pos.y;
         let speed = w.defs.creature(p.def).speed;
         // A step between levels is the portal's to price, not the floor's.
+        // A step between levels is stairs, or a climber on a pit's side.
         let cost = match n.z != p.pos.z {
-            true => w.map.through(w.map.idx(p.pos), p.faction).map_or(w.map.cost(n), |(_, c)| c as u32),
+            true => w.map.through(w.map.idx(p.pos), p.faction).map_or(crate::path::CLIMB_COST, |(_, c)| c) as u32,
             false => w.map.cost(n),
         };
         p.step_ticks = (speed * cost / 100 * if diag { 14 } else { 10 } / 10).max(1);

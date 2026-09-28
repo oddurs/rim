@@ -106,6 +106,11 @@ pub struct Map {
     /// Region ids joined at portals, one table per faction: a region
     /// that no portal touches is its own.
     reach: [std::collections::BTreeMap<u32, u32>; Faction::ALL.len()],
+    /// The same for creatures that climb a pit's side (a `[[movement]]`
+    /// with `drop`), joined at the pits as well; kept only when some
+    /// creature loaded climbs.
+    climb_reach: [std::collections::BTreeMap<u32, u32>; Faction::ALL.len()],
+    climbers: bool,
     reach_dirty: bool,
     /// Bumped whenever passability changes; renderers can use it to cache.
     pub revision: u64,
@@ -249,6 +254,8 @@ impl Map {
             terrain_pours: Vec::new(),
             air: vec![Vec::new(); (below + above + 1) as usize],
             reach: std::array::from_fn(|_| std::collections::BTreeMap::new()),
+            climb_reach: std::array::from_fn(|_| std::collections::BTreeMap::new()),
+            climbers: false,
             reach_dirty: true,
             level_rev: vec![0; (below + above + 1) as usize],
             water_rev: vec![0; (below + above + 1) as usize],
@@ -662,43 +669,101 @@ impl Map {
     /// over the portals, in order, so the result is the same every time.
     fn join_reach(&mut self) {
         self.reach_dirty = false;
-        for who in Faction::ALL {
-            let mut roots: std::collections::BTreeMap<u32, u32> = std::collections::BTreeMap::new();
-            fn find(roots: &mut std::collections::BTreeMap<u32, u32>, r: u32) -> u32 {
-                let mut x = r;
-                while let Some(&up) = roots.get(&x).filter(|&&up| up != x) {
-                    x = up;
-                }
-                roots.insert(r, x);
-                x
+        type Roots = std::collections::BTreeMap<u32, u32>;
+        fn find(roots: &mut Roots, r: u32) -> u32 {
+            let mut x = r;
+            while let Some(&up) = roots.get(&x).filter(|&&up| up != x) {
+                x = up;
             }
-            for p in &self.portals {
-                if !p.open_to(who) {
-                    continue;
-                }
-                let layer = &self.regions[who as usize];
-                let (a, b) = (layer[self.idx(p.top)], layer[self.idx(p.bottom)]);
-                if a == 0 || b == 0 {
-                    continue;
-                }
-                let (ra, rb) = (find(&mut roots, a), find(&mut roots, b));
-                // The smaller id is the root, so the order joins came in
-                // doesn't matter.
-                let (lo, hi) = (ra.min(rb), ra.max(rb));
-                roots.insert(hi, lo);
-                roots.insert(lo, lo);
+            roots.insert(r, x);
+            x
+        }
+        fn join(roots: &mut Roots, a: u32, b: u32) {
+            if a == 0 || b == 0 {
+                return;
             }
+            let (ra, rb) = (find(roots, a), find(roots, b));
+            // The smaller id is the root, so the order joins came in
+            // doesn't matter.
+            let (lo, hi) = (ra.min(rb), ra.max(rb));
+            roots.insert(hi, lo);
+            roots.insert(lo, lo);
+        }
+        fn settle(roots: &mut Roots) {
             let keys: Vec<u32> = roots.keys().copied().collect();
             for k in keys {
-                find(&mut roots, k);
+                find(roots, k);
             }
+        }
+        for who in Faction::ALL {
+            let layer = &self.regions[who as usize];
+            let mut roots = Roots::new();
+            for p in self.portals.iter().filter(|p| p.open_to(who)) {
+                join(&mut roots, layer[self.idx(p.top)], layer[self.idx(p.bottom)]);
+            }
+            if self.climbers {
+                // A pit's side: the ground beside it at the top joins the
+                // floor it drops to.
+                let mut climb = roots.clone();
+                for air in &self.air {
+                    for &a in air {
+                        let a = a as usize;
+                        let top = self.pos(a);
+                        if self.passable_i(a) || top.z <= -self.below {
+                            continue;
+                        }
+                        let b = self.idx(IVec::at(top.x, top.y, top.z - 1));
+                        if !self.passable_for(self.pos(b), who) {
+                            continue;
+                        }
+                        for (dx, dy) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
+                            let n = top.offset(dx, dy);
+                            if self.passable_for(n, who) {
+                                join(&mut climb, layer[self.idx(n)], layer[b]);
+                            }
+                        }
+                    }
+                }
+                settle(&mut climb);
+                self.climb_reach[who as usize] = climb;
+            }
+            settle(&mut roots);
             self.reach[who as usize] = roots;
         }
     }
 
-    /// Which joined area region `r` belongs to, for `who`.
-    fn reach_of(&self, r: u32, who: Faction) -> u32 {
-        self.reach[who as usize].get(&r).copied().unwrap_or(r)
+    /// Which joined area region `r` belongs to, for `who`, climbing or not.
+    fn reach_of(&self, r: u32, who: Faction, climbs: bool) -> u32 {
+        let table = if climbs && self.climbers { &self.climb_reach } else { &self.reach };
+        table[who as usize].get(&r).copied().unwrap_or(r)
+    }
+
+    /// Some creature climbs a pit's side: keep reach for them too.
+    pub fn set_climbers(&mut self, on: bool) {
+        self.climbers = on;
+        self.reach_dirty = true;
+    }
+
+    /// The ways a climber goes from cell `i` besides walking (DESIGN.md
+    /// §6d): down a pit's side beside it, or up the side of the pit over
+    /// it. None where no creature climbs.
+    pub fn climbs(&self, i: usize) -> impl Iterator<Item = usize> + '_ {
+        let p = self.pos(i);
+        let side = move |dx: i32, dy: i32| p.offset(dx, dy);
+        let down = [(1, 0), (-1, 0), (0, 1), (0, -1)].into_iter().filter_map(move |(dx, dy)| {
+            let a = side(dx, dy);
+            let ok = self.climbers && self.inb(a) && p.z > -self.below && self.is_air(self.idx(a)) && !self.passable(a);
+            ok.then(|| IVec::at(a.x, a.y, a.z - 1)).filter(|b| self.passable(*b)).map(|b| self.idx(b))
+        });
+        let over = IVec::at(p.x, p.y, p.z + 1);
+        let pit = self.climbers && self.inb(over) && self.is_air(self.idx(over)) && !self.passable(over);
+        let up = [(1, 0), (-1, 0), (0, 1), (0, -1)]
+            .into_iter()
+            .filter(move |_| pit)
+            .map(move |(dx, dy)| over.offset(dx, dy))
+            .filter(|n| self.passable(*n))
+            .map(|n| self.idx(n));
+        down.chain(up)
     }
 
     /// Number the connected areas among `cells` (one level), from `base + 1`.
@@ -788,10 +853,15 @@ impl Map {
 
     /// Cheap reachability test, from `who`'s side of the doors.
     pub fn can_reach_for(&self, from: IVec, goal: Goal, who: Faction) -> bool {
+        self.can_reach_as(from, goal, who, false)
+    }
+
+    /// `can_reach_for`, for a creature that climbs a pit's side or not.
+    pub fn can_reach_as(&self, from: IVec, goal: Goal, who: Faction, climbs: bool) -> bool {
         // Regions joined at the portals: a cell below is reached by stairs.
         let region_at = |p: IVec| match self.region_at_for(p, who) {
             0 => 0,
-            r => self.reach_of(r, who),
+            r => self.reach_of(r, who, climbs),
         };
         let rf = region_at(from);
         if rf == 0 {

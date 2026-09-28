@@ -1002,6 +1002,9 @@ impl World {
                     .collect(),
             );
             m.set_terrain_air(defs.terrain.iter().map(|t| t.air).collect());
+            m.set_climbers(
+                defs.creatures.iter().any(|c| c.movement_r.is_some_and(|m| defs.movements[m as usize].drop > 0)),
+            );
             m.set_terrain_pours(defs.terrain.iter().map(|t| t.pours > 0).collect());
             m
         };
@@ -2066,6 +2069,11 @@ impl World {
                 p.path_goal = Some(Goal::Cell(to));
             }
         }
+    }
+
+    /// Does this pawn climb a pit's side (a `[[movement]]` with `drop`)?
+    pub fn climbs(&self, p: &Pawn) -> bool {
+        self.defs.creature(p.def).movement_r.is_some_and(|m| self.defs.movements[m as usize].drop > 0)
     }
 
     /// Water at `p`, in sevenths of a cell (DESIGN.md §6d).

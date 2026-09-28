@@ -47,6 +47,10 @@ impl Goal {
     }
 }
 
+/// A climb down or up a pit's side, as a step's cost in percent: three
+/// open cells' worth.
+pub const CLIMB_COST: u16 = 300;
+
 #[derive(Default)]
 pub struct Pathfinder {
     g: Vec<u32>,
@@ -71,8 +75,21 @@ impl Pathfinder {
     /// Returns the path as a stack: `last()` is the next step. Excludes
     /// `start`. Doors `who` does not own are walls to this search.
     pub fn find(&mut self, map: &Map, start: IVec, goal: Goal, max_nodes: u32, who: Faction) -> Option<Vec<IVec>> {
+        self.find_as(map, start, goal, max_nodes, who, false)
+    }
+
+    /// `find`, for a creature that climbs a pit's side or not.
+    pub fn find_as(
+        &mut self,
+        map: &Map,
+        start: IVec,
+        goal: Goal,
+        max_nodes: u32,
+        who: Faction,
+        climbs: bool,
+    ) -> Option<Vec<IVec>> {
         let t = std::time::Instant::now();
-        let path = self.search(map, start, goal, max_nodes, who);
+        let path = self.search(map, start, goal, max_nodes, who, climbs);
         self.micros += t.elapsed().as_secs_f64() * 1e6;
         self.failed += path.is_none() as u64;
         path
@@ -96,7 +113,15 @@ impl Pathfinder {
         self.gen
     }
 
-    fn search(&mut self, map: &Map, start: IVec, goal: Goal, max_nodes: u32, who: Faction) -> Option<Vec<IVec>> {
+    fn search(
+        &mut self,
+        map: &Map,
+        start: IVec,
+        goal: Goal,
+        max_nodes: u32,
+        who: Faction,
+        climbs: bool,
+    ) -> Option<Vec<IVec>> {
         let gen = self.next_gen(map);
         self.searches += 1;
         self.heap.clear();
@@ -158,8 +183,10 @@ impl Pathfinder {
                 }
             }
             // Up or down the stairs (DESIGN.md §6d): one more edge, where
-            // there is a portal this faction may use.
-            if let Some((qi, cost)) = map.through(ci, who) {
+            // there is a portal this faction may use; and for a climber, down
+            // a pit's side or up it, at a scramble's cost.
+            let climb = map.climbs(ci).filter(|_| climbs).map(|qi| (qi, CLIMB_COST));
+            for (qi, cost) in map.through(ci, who).into_iter().chain(climb) {
                 let q = map.pos(qi);
                 if self.closed_gen[qi] != gen && map.passable_for(q, who) {
                     let ng = cg + (10 * cost as u32 / 100).max(1);

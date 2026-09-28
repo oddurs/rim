@@ -147,6 +147,18 @@ fn d_wade_cost() -> u32 {
     100
 }
 
+/// A way of getting about beyond walking (DESIGN.md §6d): a creature with
+/// it climbs down a pit's side to the level below and back up. Core ships
+/// none; a mod's goats or spiders name one.
+#[derive(Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct MovementDef {
+    pub id: String,
+    pub label: String,
+    /// Levels it can climb down and up where a pit's side is: 0 or 1.
+    pub drop: u32,
+}
+
 /// The deepest stratum sets how far down the map goes.
 #[derive(Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
@@ -791,6 +803,11 @@ pub struct CreatureDef {
     pub spawn: Option<CreatureSpawn>,
     #[serde(skip)]
     pub rgb: [u8; 3],
+    /// How it gets about beyond walking: a `[[movement]]` id.
+    #[serde(default)]
+    pub movement: Option<String>,
+    #[serde(skip)]
+    pub movement_r: Option<DefId>,
     #[serde(skip)]
     pub butcher_r: Vec<(DefId, u32)>,
     #[serde(skip)]
@@ -1916,6 +1933,7 @@ pub struct DefDb {
     pub fluids: Vec<FluidDef>,
     /// Veins map generation lays into stock fields, in load order.
     pub veins: Vec<VeinDef>,
+    pub movements: Vec<MovementDef>,
     pub category_roots: Vec<DefId>,
     /// Entries of the kinds mods declare (`[[kind]]`), by qualified kind
     /// ("weather:type"), in load order: plain data for scripts.
@@ -2040,6 +2058,7 @@ pub const KINDS: &[&str] = &[
     "store_priority",
     "stratum",
     "fluid",
+    "movement",
     "modifier",
     "vein",
 ];
@@ -2084,6 +2103,7 @@ impl DefDb {
             "item_category" => self.item_categories[i].id.clone(),
             "stratum" => self.strata[i].id.clone(),
             "fluid" => self.fluids[i].id.clone(),
+            "movement" => self.movements[i].id.clone(),
             "modifier" => self.modifiers[i].id.clone(),
             "vein" => self.veins[i].id.clone(),
             _ => String::new(),
@@ -2182,6 +2202,9 @@ impl DefDb {
         for (i, d) in self.veins.iter().enumerate() {
             index.insert(("vein", d.id.clone()), i as DefId);
         }
+        for (i, d) in self.movements.iter().enumerate() {
+            index.insert(("movement", d.id.clone()), i as DefId);
+        }
         for (i, d) in self.plans.iter().enumerate() {
             index.insert(("plan", d.id.clone()), i as DefId);
         }
@@ -2277,6 +2300,11 @@ impl DefDb {
             }
         }
         let mut levels = std::collections::BTreeSet::new();
+        for m in &self.movements {
+            if m.drop > 1 {
+                return Err(format!("movement/{}: `drop` is 0 or 1: a pit's side is one level", m.id));
+            }
+        }
         for f in &self.fluids {
             if !(0 < f.wade && f.wade <= f.swim && f.swim <= f.no_air && f.no_air <= crate::water::FULL) {
                 return Err(format!("fluid/{}: depths are sevenths, 0 < wade <= swim <= no_air <= 7", f.id));
@@ -2930,6 +2958,7 @@ impl DefDb {
             let ctx = format!("creature/{}", d.id);
             d.rgb = parse_color(&d.color).map_err(|e| format!("{ctx}: {e}"))?;
             d.butcher_r = counts(&d.butcher, &ctx)?;
+            d.movement_r = d.movement.as_deref().map(|m| get("movement", m, &ctx)).transpose()?;
             d.needs_r = d.needs.iter().map(|n| get("need", n, &ctx)).collect::<Result<_, _>>()?;
             if let Some(s) = &mut d.spawn {
                 s.terrain_r = s.terrain.iter().map(|t| get("terrain", t, &ctx)).collect::<Result<_, _>>()?;
