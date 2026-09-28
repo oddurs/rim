@@ -2,11 +2,12 @@
 id: 224a5488-687a-45c0-944a-c284e92f4866
 title: Crosscheck's colony dies by day 39 on every seed, so the year's hash covers a dead colony
 type: bug
-status: backlog
+status: done
 milestone: bare-metal
 assignee: lucky-harbor
 created: 2026-09-28
 updated: 2026-09-28
+closed_at: 2026-09-28
 priority: p1
 api: none
 effort: m
@@ -54,6 +55,14 @@ Tick: the colony is gone by day 39 (tick 780000)
 
 ## Acceptance criteria
 
-- [ ] crosscheck prints the day the colony is lost, and fails if that's before the last day
-- [ ] The default seed and scenario keep a colony alive for all 60 days, measured on main
-- [ ] The comment in examples/crosscheck.rs says what the year's hash covers, and it's true
+- [x] crosscheck prints the day the colony is lost, and fails if that's before the last day
+- [x] The default seed and scenario keep a colony alive for all 60 days, measured on main
+- [x] The comment in examples/crosscheck.rs says what the year's hash covers, and it's true
+
+## 2026-09-28
+
+Measured again on main b90b069e: seed 4's colony was gone on day 18, not 39. A wildlife_plus boar stampede of 7 at 431 points killed all 9 colonists in 4,900 ticks; the three raids before it fled without a death. Filed as 6ca1ea2e under defense.
+
+Fix: the crosscheck turns random threats off through a new storyteller export, set_threats(false), kept in the storyteller's saved memory, so the twin and every reload carry it. It fires one raid through the storyteller on day 10, so combat stays in the hash. Good and neutral incidents, and the weather plugin's own storms and cold snaps, still come. It prints colonists a day and fails on the day the colony is lost. mods/core/tests/storyteller.luau checks that the dice bring no threat in 12 days with threats off (it fails with the call removed) and that fire still does.
+
+Year runs, seeds 1-12, all shipped mods: 4, 5, 6, 10, 11 and 12 live all 60 days (seed 4: 16 colonists on day 60, never under 9 after the raid). 1, 2 and 8 make no hand axe by day 5, 3 and 7 leave a blueprint waiting, 9 is lost on day 2: the scenario's own stone-age opening, as on main, and the harness says so.

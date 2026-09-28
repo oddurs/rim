@@ -5,11 +5,15 @@
 //!
 //! All shipped mods, a fixed seed, and a player's commands (gather, forage,
 //! a campfire, a crafting spot with bills for a hammerstone and a hand axe,
-//! then chop and a wooden hut with a door and a bed), so it exercises the
-//! engine, the storyteller and its incidents, the weather plugin, the
-//! building code and work orders, over one calendar year by default so every season's weather
-//! and growth is in the hash. Prints the state hash at the end of each day, so when two
-//! platforms disagree the output shows the first day they diverged.
+//! then chop and a wooden hut with a door and a bed), over one calendar year
+//! by default. The colony lives the whole year, so the hash covers its work
+//! orders, building, needs and newcomers through every season's weather and
+//! growth, and fails if it doesn't. The storyteller rolls its dice all year,
+//! with threats off: an undefended colony falls to a stampede or a pack
+//! within weeks (224a5488), and a dead colony leaves only wildlife and
+//! weather to hash. One raid on day RAID_DAY keeps combat in it. Prints the
+//! state hash at the end of each day, so when two platforms disagree the
+//! output shows the first day they diverged.
 //!
 //! A twin of the game is saved and loaded every few days (DESIGN.md §7a),
 //! and must match the one that never saved, section for section, every day.
@@ -19,17 +23,29 @@ use rim_sim::snapshot::Snapshot;
 use rim_sim::{Command, IVec, Sim, TICKS_PER_DAY};
 use std::path::Path;
 
+const STORYTELLER: &str = "@core/scripts/storyteller";
+/// The day the one raid comes, at dawn: past the stone-age opening, with the
+/// hut up and a few colonists to meet it.
+const RAID_DAY: u64 = 10;
+
+/// Call core's storyteller, as the harness's hand on the dice.
+fn storyteller(s: &mut Sim, export: &str, args: &[Option<Data>]) {
+    let Sim { scripts, world, .. } = s;
+    if let Err(e) = scripts.call_export(world, STORYTELLER, export, args) {
+        eprintln!("the storyteller's {export} failed: {e}");
+        std::process::exit(1);
+    }
+}
+
 fn arg(name: &str, default: u64) -> u64 {
     let a: Vec<String> = std::env::args().collect();
     a.iter().position(|x| x == name).and_then(|i| a.get(i + 1)).and_then(|v| v.parse().ok()).unwrap_or(default)
 }
 
 fn main() {
-    // Seed 4: a colony that lives all 60 days, long enough for the hash to
-    // cover its work orders, building and needs. The seed follows the map,
-    // and a change to worldgen can move it: at 192 cells with mining's
-    // veins, seeds 1, 2, 3, 5, 7 and 8 lose the colony or stall by day 5,
-    // and 4, 6, 9, 10, 11 and 12 live.
+    // Seed 4: its colony makes its tools and hut by day 5 and lives the
+    // year. The seed follows the map, and a change to worldgen can move it:
+    // the checks below say so rather than hash less than they claim.
     let seed = arg("--seed", 4);
     let mods = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mods");
     let mut s = Sim::new(&mods, seed).expect("mods load");
@@ -89,7 +105,9 @@ fn main() {
         g.push(Command::Build { thing: thing("bed"), stuff: wood, a: at(2, 2), b: at(2, 2), facing: 0 });
     };
 
-    // The commands apply on the first tick; the twin splits off after it.
+    storyteller(&mut s, "set_threats", &[Some(Data::Bool(false))]);
+    // The commands apply on the first tick; the twin splits off after it,
+    // and the storyteller's memory, threats off, goes with it.
     s.step();
     let mut twin = Snapshot::capture(&s).restore(&mods, &|_| true).expect("the twin loads");
 
@@ -131,6 +149,11 @@ fn main() {
             billed |= bills.is_some();
             chopping |= armed;
         }
+        if day == RAID_DAY {
+            for g in [&mut s, &mut twin] {
+                storyteller(g, "fire", &[Some(Data::Str("raid".into()))]);
+            }
+        }
         let ticks = if day == 1 { TICKS_PER_DAY - 1 } else { TICKS_PER_DAY };
         for _ in 0..ticks {
             s.step();
@@ -146,15 +169,16 @@ fn main() {
             twin = Snapshot::from_bytes(&bytes).and_then(|b| b.restore(&mods, &|_| true)).expect("the twin reloads");
         }
         let w = &s.world;
+        // The rest of the year hashes wildlife and weather alone.
+        let colonists = w.colonists().count();
+        if colonists == 0 {
+            eprintln!("day {day}: the colony is lost, before the year's last day ({days})");
+            std::process::exit(1);
+        }
         // The scenario means to build its hut: a blueprint still waiting by
         // day 5 is a lost material or a lost job, not a determinism result.
         if day == 5 {
             use rim_sim::world::{Blueprint, Thing};
-            // A dead colony covers nothing of what this harness is for.
-            if w.colonists().next().is_none() {
-                eprintln!("day 5: the colony is gone; pick a seed where the scenario lives");
-                std::process::exit(1);
-            }
             let unbuilt = w.ecs.query::<&Thing>().with::<&Blueprint>().iter().count();
             let fires = w.ecs.query::<&Thing>().without::<&Blueprint>().iter().filter(|t| t.def == campfire).count();
             // Without an axe the scenario never reached its work orders or
@@ -172,7 +196,7 @@ fn main() {
             }
         }
         println!(
-            "day {day:>3}  hash {:016x}  snapshot {:016x}  pawns {:>3}  messages {:>4}",
+            "day {day:>3}  hash {:016x}  snapshot {:016x}  pawns {:>3}  colonists {colonists:>2}  messages {:>4}",
             w.state_hash(),
             snap.hash(),
             w.pawns.len(),

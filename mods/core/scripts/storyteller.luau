@@ -32,7 +32,7 @@ local MTB_DAYS = 0.9 -- mean days between incidents for a poor colony
 -- saved with the game and part of the state hash (DESIGN.md §7a).
 local MEMORY = "core:storyteller"
 
-local function memory(): { last: number, last_threat: number }
+local function memory(): { last: number, last_threat: number, quiet: boolean? }
 	return rim.get_data(MEMORY) or { last = 0, last_threat = 0 }
 end
 
@@ -93,8 +93,9 @@ rim.every(CHECK_TICKS, function()
 	local day = ctx.day
 
 	local total, pool = 0, {}
+	local threats = day >= GRACE_DAYS and not memory().quiet
 	for _, inc in incidents do
-		local ok = day >= inc.min_day and (inc.kind ~= "threat" or day >= GRACE_DAYS)
+		local ok = day >= inc.min_day and (inc.kind ~= "threat" or threats)
 		if ok and inc.can_fire then
 			ok = inc.can_fire(ctx)
 		end
@@ -146,6 +147,15 @@ local function fire(id: string, overrides: { [string]: any }?): boolean
 	error(`no incident '{id}'`)
 end
 
+-- Whether the dice may pick threats: off, only `fire` brings one. For
+-- harnesses that must keep a colony to measure it (the cross-machine
+-- determinism run); saved with the rest of the storyteller's memory.
+local function set_threats(on: boolean)
+	local m = memory()
+	m.quiet = not on
+	rim.set_data(MEMORY, m)
+end
+
 -- Registered incident ids, in order.
 local function ids(): { string }
 	local out = {}
@@ -159,4 +169,5 @@ return {
 	register_incident = register_incident,
 	fire = fire,
 	ids = ids,
+	set_threats = set_threats,
 }
