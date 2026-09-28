@@ -943,6 +943,7 @@ impl Snapshot {
                 return Err("engine:zones doesn't match the map's size".into());
             }
             let mut lost: BTreeMap<String, u32> = BTreeMap::new();
+            let mut fallow: Vec<u32> = Vec::new();
             for z in &mut zones.list {
                 let mut allows = Vec::new();
                 for &d in &z.filter.allows {
@@ -954,10 +955,22 @@ impl Snapshot {
                 z.filter.allows = allows;
                 // A refused material that's gone refuses nothing.
                 z.filter.refuses = z.filter.refuses.iter().filter_map(|&d| remap.get("thing", d)).collect();
+                // A field of a crop that's gone, or can't be sown now, is
+                // no field: its cells are cleared below.
+                if let Some(p) = z.plant {
+                    match remap.get("thing", p).filter(|&d| defs.sowable(d)) {
+                        Some(d) => z.plant = Some(d),
+                        None => {
+                            notes.push(format!("{} is gone: it grew {}", z.name, remap.name("thing", p)));
+                            fallow.push(z.id);
+                        }
+                    }
+                }
             }
             for (id, n) in lost {
                 notes.push(format!("{n} stockpiles no longer take {id}"));
             }
+            zones.cells.iter_mut().filter(|c| fallow.contains(c)).for_each(|c| *c = 0);
             zones.tidy();
             // A scale a mod shortened can't hold a level past its top.
             let top = defs.store_priority.labels.len().saturating_sub(1) as u8;

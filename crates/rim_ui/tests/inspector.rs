@@ -160,7 +160,7 @@ fn a_colonist_panel_has_overview_skills_and_work_tabs() {
     for s in &sim.world.defs.skills {
         assert!(ui.find(&format!("core:inspector.skill.{}", s.id)).is_some(), "{}: {tree}", s.id);
     }
-    assert_eq!(tip(&mut ui, &sim, &mut cv, "core:inspector.skill.core:plants", 1.0), "Trained by Chop, Harvest");
+    assert_eq!(tip(&mut ui, &sim, &mut cv, "core:inspector.skill.core:plants", 1.0), "Trained by Chop, Sow, Harvest");
 
     let tab = ui.find("core:inspector.tabs.work").expect("a work tab");
     click(&mut ui, &sim, &mut cv, centre(tab));

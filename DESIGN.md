@@ -385,6 +385,15 @@ of = [{ input = "hour", curve = [[3, -1.0], [9, 0.0], [15, 1.0], [21, 0.0], [27,
   layer not worn warmer, and takes the warmest off once it's 6° above
   comfort; garments wear out by the day. Primitive's hide wrap and leather
   cloak are the first.
+- **Farming is a plugin** (`mods/farming`, after the weather plugin): the
+  engine gives it a growing zone (a zone with a `plant` and a filter that
+  takes nothing), a buildable raised by a work other than building
+  (`build.by`, so crops are sown by `farming:sow` with its skill and stay
+  out of the build menu), and a pass that lays a crop's plans on a zone's
+  empty cells while it would grow, takes unstarted ones back when it
+  wouldn't, and marks grown crops for harvest. Potatoes are food and
+  frost-tender; flax is fibre and hardier. Both read warmth, light,
+  fertility and the ground's wetness.
 - **Tables keyed by label**, not arrays: a patch can change one term
   (`set = { ambient = { day = { scale = 11.0 } } }`) and conflicts are
   reported per term.

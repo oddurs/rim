@@ -80,6 +80,19 @@ pub enum Command {
         b: IVec,
         zone: Option<u32>,
     },
+    /// Paint cells into a growing zone of `plant`: into `zone`, or a new
+    /// one when it's `None`.
+    GrowZone {
+        a: IVec,
+        b: IVec,
+        zone: Option<u32>,
+        plant: DefId,
+    },
+    /// Change what a growing zone sows.
+    ZonePlant {
+        zone: u32,
+        plant: DefId,
+    },
     /// Take cells out of whatever zone they're in.
     ClearZone {
         a: IVec,
@@ -605,6 +618,21 @@ pub fn apply(w: &mut World, c: Command) {
         }
         Command::Stockpile { a, b, zone: Some(id) } => {
             w.zones.paint(&w.map, a, b, Some(id));
+            w.zones_changed();
+        }
+        // Only something sown can be grown: a plant whose build is another
+        // work's (`by`), which a growing zone lays out as plans.
+        Command::GrowZone { plant, .. } | Command::ZonePlant { plant, .. } if !defs.sowable(plant) => {}
+        Command::GrowZone { a, b, zone: None, plant } => {
+            w.zones.create_growing(&defs, &w.map, a, b, plant);
+            w.zones_changed();
+        }
+        Command::GrowZone { a, b, zone: Some(id), .. } => {
+            w.zones.paint(&w.map, a, b, Some(id));
+            w.zones_changed();
+        }
+        Command::ZonePlant { zone, plant } => {
+            w.zones.set_plant(zone, plant);
             w.zones_changed();
         }
         Command::ClearZone { a, b } => {

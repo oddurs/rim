@@ -675,12 +675,11 @@ Dig down. The map becomes a stack of 2D levels joined only at stairs, ladders an
 
 ## crafting — Crafting
 
-`##########` 91% · 29 of 32 done · due 2027-05-01
+`##########` 94% · 30 of 32 done · due 2027-05-01
 
 Production chains: workbenches and bills, cooking, farming, tailoring, research as a plugin.
 
 - [ ] `308074c6` Getting wet: pawn wetness and clothing insulation <sup>feature · p2 · m · engine</sup>
-- [ ] `b1444a26` Farming: growing zones and crops <sup>feature · p0 · l · engine</sup>
 - [ ] `db7f1e06` Mining that rewards looking: rock kinds, veins and prospecting <sup>content · p1 · m · core</sup>
 - [x] `01691032` Item categories and one filter: things, materials and condition <sup>feature · p1 · m · engine</sup>
 - [x] `0927f0af` Tailoring: make apparel <sup>content · p2 · s · core</sup>
@@ -702,6 +701,7 @@ Production chains: workbenches and bills, cooking, farming, tailoring, research 
 - [x] `9b569a33` Terrain properties, tags and distance-to inputs <sup>feature · p0 · s · engine</sup>
 - [x] `9bd9e8ab` Fire: burning, spread by wind, put out by rain <sup>feature · p1 · l · engine</sup>
 - [x] `ac643c1f` Stock ledger and holdings: counts by thing, material and chunk <sup>perf · p1 · m · engine</sup>
+- [x] `b1444a26` Farming: growing zones and crops <sup>feature · p0 · l · engine</sup>
 - [x] `c2b1b623` Map generation seeds spawns by def index, so adding a def reshuffles maps <sup>bug · p2 · s · engine</sup>
 - [x] `ca22f222` Bills pick their ingredients: one material per order, and a filter <sup>feature · p2 · m · plugin</sup>
 - [x] `d0362b0c` Apparel: colonists wear what tailors make <sup>feature · p2 · l · engine</sup>

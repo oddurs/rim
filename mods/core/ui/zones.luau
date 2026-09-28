@@ -24,8 +24,13 @@ menus.kind("zone", {
 		return string.format(t("core:zones.cells", "%d cells"), ctx.subject.cells)
 	end,
 })
+-- These are a stockpile's; a growing zone takes nothing.
+local function stockpile(ctx): boolean
+	return ctx.subject.plant == nil
+end
 menus.add("zone", {
 	id = "core:zone.edit",
+	applies = stockpile,
 	label = t("core:zone.edit", "What it takes…"),
 	group = "manage",
 	primary = function()
@@ -42,8 +47,8 @@ local function allow_all(on: boolean)
 		end
 	end
 end
-menus.add("zone", { id = "core:zone.allow_all", label = t("core:zone.allow_all", "Take everything"), group = "manage", run = allow_all(true) })
-menus.add("zone", { id = "core:zone.forbid_all", label = t("core:zone.forbid_all", "Take nothing"), group = "manage", run = allow_all(false) })
+menus.add("zone", { id = "core:zone.allow_all", applies = stockpile, label = t("core:zone.allow_all", "Take everything"), group = "manage", run = allow_all(true) })
+menus.add("zone", { id = "core:zone.forbid_all", applies = stockpile, label = t("core:zone.forbid_all", "Take nothing"), group = "manage", run = allow_all(false) })
 -- A stack only moves to a store at a higher level (DESIGN.md §4f).
 local function step_level(by: number)
 	return function(ctx)
@@ -51,13 +56,18 @@ local function step_level(by: number)
 		act.store_level(ctx.id, math.clamp(ctx.subject.level + by, 0, top))
 	end
 end
-menus.add("zone", { id = "core:zone.raise", label = t("core:zone.raise", "Raise priority"), group = "manage", run = step_level(1) })
-menus.add("zone", { id = "core:zone.lower", label = t("core:zone.lower", "Lower priority"), group = "manage", run = step_level(-1) })
+menus.add("zone", { id = "core:zone.raise", applies = stockpile, label = t("core:zone.raise", "Raise priority"), group = "manage", run = step_level(1) })
+menus.add("zone", { id = "core:zone.lower", applies = stockpile, label = t("core:zone.lower", "Lower priority"), group = "manage", run = step_level(-1) })
 
 local PER_ROW = 4
 
 ui.window("core:zones", { title = t("core:zones.title", "Stockpiles"), w = 460, h = 320, sheet = true }, function(view)
-	local zones = view.zones()
+	local zones = {}
+	for _, z in view.zones() do
+		if z.plant == nil then
+			table.insert(zones, z)
+		end
+	end
 	if #zones == 0 then
 		return col({ pad = "m" }, {
 			label(t("core:zones.none", "No stockpiles yet. Paint one with the stockpile tool."), { color = "muted", wrap = true }),

@@ -817,6 +817,7 @@ impl UiVm {
         });
         act!("set_stance", String, |id| UiAction::SetStance(id));
         act!("zone_allow", (u32, String, bool), |(zone, item, on)| UiAction::ZoneAllow(zone, item, on));
+        act!("zone_plant", (u32, String), |(zone, plant)| UiAction::ZonePlant(zone, plant));
         act!("store_level", (Value, u8), |(store, level)| UiAction::StoreLevel(store_ref(&store)?, level));
         act!("store_filter", (Value, Table), |(store, edit)| UiAction::StoreFilter(
             store_ref(&store)?,
@@ -1461,6 +1462,18 @@ impl UiVm {
         view!("store_levels", (), |lua, l, _a| {
             lua.create_sequence_from(l.world.defs.store_priority.labels.iter().map(String::as_str))
         });
+        view!("crops", (), |lua, l, _a| {
+            let t = lua.create_table()?;
+            let defs = &l.world.defs;
+            for (_, d) in defs.things.iter().enumerate().filter(|&(i, _)| defs.sowable(i as rim_sim::defs::DefId)) {
+                let row = lua.create_table()?;
+                row.set("id", d.id.as_str())?;
+                row.set("label", d.label.as_str())?;
+                row.set("color", format!("#{:02x}{:02x}{:02x}", d.rgb[0], d.rgb[1], d.rgb[2]))?;
+                t.push(row)?;
+            }
+            Ok(t)
+        });
         view!("zones", (), |lua, l, _a| {
             let t = lua.create_table()?;
             let zones = &l.world.zones;
@@ -1475,6 +1488,10 @@ impl UiVm {
                 }
                 row.set("allows", allows)?;
                 row.set("level", z.level)?;
+                if let Some(p) = z.plant {
+                    row.set("plant", l.world.defs.thing(p).id.as_str())?;
+                    row.set("plant_label", l.world.defs.thing(p).label.as_str())?;
+                }
                 let labels = &l.world.defs.store_priority.labels;
                 row.set("level_label", labels.get(z.level as usize).map_or("", String::as_str))?;
                 t.push(row)?;

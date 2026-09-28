@@ -49,6 +49,9 @@ pub enum Tool {
     SavePlan,
     /// Paint a stockpile: extends the one zone a drag touches, else a new one.
     Stockpile,
+    /// Paint a growing zone of this plant: extends the one field of it a
+    /// drag touches, else a new one.
+    Grow(DefId),
     /// Take cells out of their zone.
     ClearZone,
     Cancel,
@@ -837,7 +840,12 @@ fn toolbar(sim: &Sim) -> Vec<ToolDef> {
     }
     items.push(tool("cancel".into(), "Cancel", Tool::Cancel, Color::from_rgba(200, 80, 80, 255), "orders", ""));
     let mut builds: Vec<(usize, &rim_sim::defs::ThingDef, &str)> =
-        defs.things.iter().enumerate().filter_map(|(i, t)| Some((i, t, t.build.as_ref()?.menu.as_str()))).collect();
+        // What another work raises (a crop is sown) isn't built from the menu.
+        defs.things
+            .iter()
+            .enumerate()
+            .filter_map(|(i, t)| Some((i, t, t.build.as_ref().filter(|b| b.by.is_none())?.menu.as_str())))
+            .collect();
     // Menus in the order their first thing is defined, so core's come first
     // and a mod's new menu lands after them.
     let mut menus: Vec<&str> = Vec::new();
@@ -864,6 +872,10 @@ fn toolbar(sim: &Sim) -> Vec<ToolDef> {
     let plan = Color::from_rgba(160, 200, 240, 255);
     items.push(tool("plan:save".into(), "Save as plan", Tool::SavePlan, plan, "build", "plans"));
     items.push(tool("stockpile".into(), "Stockpile", Tool::Stockpile, WHITE, "zones", ""));
+    for (i, t) in defs.things.iter().enumerate().filter(|&(i, _)| defs.sowable(i as DefId)) {
+        let label = format!("Grow {}", t.label);
+        items.push(tool(format!("grow:{}", t.id), &label, Tool::Grow(i as DefId), WHITE, "zones", ""));
+    }
     items.push(tool("clear_zone".into(), "Clear zone", Tool::ClearZone, WHITE, "zones", ""));
     items
 }
@@ -872,9 +884,13 @@ fn toolbar(sim: &Sim) -> Vec<ToolDef> {
 pub fn tool_colour(app: &App, t: &ToolDef) -> Color {
     match t.tool {
         Tool::Stockpile | Tool::ClearZone => app.palette.zone,
+        Tool::Grow(_) => GROW,
         _ => t.color,
     }
 }
+
+/// Growing zones: a field's green, set apart from a stockpile's blue.
+pub const GROW: Color = Color::new(0.55, 0.8, 0.35, 1.0);
 
 pub fn rgb(c: [u8; 3]) -> Color {
     Color::from_rgba(c[0], c[1], c[2], 255)
@@ -1698,6 +1714,11 @@ fn apply_ui(app: &mut App, a: UiAction) {
             select(app, Vec::new());
             app.selected_zone = zone;
         }
+        UiAction::ZonePlant(zone, plant) => {
+            if let Some(plant) = app.sim.world.defs.thing_id(&plant) {
+                app.sim.push(Command::ZonePlant { zone, plant });
+            }
+        }
         UiAction::ZoneAllow(zone, item, on) => {
             if let Some(thing) = app.sim.world.defs.thing_id(&item) {
                 app.sim.push(Command::ZoneAllow { zone, thing, on });
@@ -2284,6 +2305,15 @@ pub fn apply(app: &mut App, action: Action) {
                 Tool::Stockpile => {
                     let zone = app.sim.world.zones.touched(&app.sim.world.map, a, b);
                     app.sim.push(Command::Stockpile { a, b, zone });
+                }
+                Tool::Grow(plant) => {
+                    // Extends a field of the same crop; never a stockpile.
+                    let w = &app.sim.world;
+                    let zone = w
+                        .zones
+                        .touched(&w.map, a, b)
+                        .filter(|&id| w.zones.get(id).is_some_and(|z| z.plant == Some(plant)));
+                    app.sim.push(Command::GrowZone { a, b, zone, plant });
                 }
                 Tool::ClearZone => app.sim.push(Command::ClearZone { a, b }),
                 Tool::Cancel => app.sim.push(Command::Cancel { a, b }),

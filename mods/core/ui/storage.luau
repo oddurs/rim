@@ -105,8 +105,9 @@ function storage.ref(sel)
 	return { thing = sel.id }
 end
 
+-- A stockpile or a container; a growing zone (one with a `plant`) is no store.
 local function is_store(sel): boolean
-	return sel.kind == "zone" or (sel.kind == "thing" and sel.store == true)
+	return (sel.kind == "zone" and sel.plant == nil) or (sel.kind == "thing" and sel.store == true)
 end
 
 -- On, off or some of: the things under a category a store could take.

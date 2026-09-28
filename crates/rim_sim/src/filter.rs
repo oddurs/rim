@@ -47,6 +47,11 @@ pub enum FilterEdit {
 }
 
 impl Filter {
+    /// No item at all: a growing zone's, so nothing is hauled to it.
+    pub fn nothing() -> Filter {
+        Filter { allows: Vec::new(), refuses: Vec::new(), hp: WHOLE }
+    }
+
     /// Every item there is now, any material, any condition.
     pub fn everything(defs: &DefDb) -> Filter {
         let allows = (0..defs.things.len() as DefId).filter(|&d| defs.thing(d).category == Category::Item).collect();

@@ -106,7 +106,7 @@ type StoreView = {
 }
 type ItemCategory = { id: string, label: string, children: { string }, items: { string }, under: { string } }
 type ItemCategories = { roots: { string }, by_id: { [string]: ItemCategory } }
-type Zone = { id: number, name: string, cells: number, allows: { [string]: boolean }, level: number, level_label: string }
+type Zone = { id: number, name: string, cells: number, allows: { [string]: boolean }, level: number, level_label: string, plant: string?, plant_label: string? }
 type Item = { id: string, label: string, color: string }
 type WorkType = { id: string, label: string, icon: string, order: number, default: number }
 type BoardCol = { id: string, label: string, icon: string, skill: string?, waiting: number, default: number, on: number, high: number }
@@ -190,6 +190,7 @@ pub const UI_API: &[UiDoc] = &[
     d!("act.ui_scale", "(scale: number) -> ()", "Set the player's UI scale, 0.75 to 2 on top of the display's; it is saved with their settings."),
     d!("act.undo", "() -> ()", "Take back the last order given: the colonists stop the job it gave them, and a mark it put on something goes."),
     d!("act.zone_allow", "(zone: number, item: string, on: boolean) -> ()", "Let a stockpile take an item, or stop it."),
+    d!("act.zone_plant", "(zone: number, plant: string) -> ()", "Change what a growing zone sows, by the plant's id."),
     d!("act.zoom", "(factor: number) -> ()", "Zoom the map by a factor about the middle of the screen (1.12 is one wheel notch in)."),
     d!("ui.anchored", "(node: Node?) -> Node", "A node attached to a pawn (entity) or cell, on the anchored layer."),
     d!(
@@ -271,6 +272,7 @@ pub const UI_API: &[UiDoc] = &[
     d!("view.colony_lost", "() -> boolean", "Whether every colonist is gone."),
     d!("view.compact", "() -> boolean", "Whether the screen is small (under 1440 logical pixels wide, UI scale included): core picks denser layouts."),
     d!("view.count_pawns", "(faction: string) -> number", "Living pawns of \"player\", \"hostile\" or \"wild\"."),
+    d!("view.crops", "() -> { Item }", "The plants a growing zone can sow, in load order: each grows, and is raised by a work of its own (`build.by`)."),
     d!("view.data", "(key: string) -> any", "A copy of data a sim script stored with rim.set_data, or nil."),
     d!("view.date", "() -> UiDate", "The calendar date, counted from 1."),
     d!("view.day", "() -> number", "The day, counted from 1."),
@@ -347,7 +349,7 @@ pub const UI_API: &[UiDoc] = &[
     d!("view.warnings", "() -> { string }", "Load warnings."),
     d!("view.wealth", "() -> number", "The colony's wealth."),
     d!("view.work_types", "() -> { WorkType }", "The work types, in tie-break order."),
-    d!("view.zones", "() -> { Zone }", "The stockpiles, oldest first, with how many cells each has, which items it takes, and its level (0 is lowest) and that level's name."),
+    d!("view.zones", "() -> { Zone }", "The zones, oldest first: stockpiles, with how many cells each has, which items it takes, and its level (0 is lowest) and that level's name; and growing zones, which say the `plant` they sow and take nothing."),
 ];
 
 /// `types/ui.d.luau`.

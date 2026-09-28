@@ -25,7 +25,10 @@ fn every_item_lands_in_the_categories_it_should() {
     let sim = Sim::new(&common::mods(), 1).unwrap();
     let defs = &sim.world.defs;
     let direct = |id: &str| ids(defs, &defs.item_categories[category(defs, id) as usize].items);
-    assert_eq!(direct("core:food"), ["core:berries", "core:raw_meat", "crafting:roast_meat", "primitive:stew"]);
+    assert_eq!(
+        direct("core:food"),
+        ["core:berries", "core:raw_meat", "crafting:roast_meat", "farming:potatoes", "primitive:stew"]
+    );
     assert_eq!(
         direct("core:materials"),
         [

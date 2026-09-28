@@ -787,7 +787,8 @@ pub fn storage_view(w: &World, (x0, y0, x1, y1): (i32, i32, i32, i32), level: i3
     for y in y0..=y1 {
         for x in x0..=x1 {
             let p = IVec::at(x, y, level);
-            let Some(z) = w.zones.at(&w.map, p) else { continue };
+            // A growing zone is no store.
+            let Some(z) = w.zones.at(&w.map, p).filter(|z| z.plant.is_none()) else { continue };
             v.washes.push((p, [1, 1], z.level as f32 / top));
             seen.insert(z.id);
         }
@@ -874,7 +875,7 @@ pub fn world_ui(app: &App) {
             Tool::Build(t) => w.defs.thing(t).blocks,
             _ => false,
         };
-        if matches!(app.tool, Tool::Stockpile | Tool::ClearZone) {
+        if matches!(app.tool, Tool::Stockpile | Tool::ClearZone | Tool::Grow(_)) {
             // The cells themselves show in `zones`; the box is a line.
             let p = &app.palette;
             let (bw, bh) = (s1x - s0x, s1y - s0y);
@@ -972,6 +973,13 @@ impl ZonePreview {
         let w = &app.sim.world;
         let joins = match app.tool {
             Tool::Stockpile => Some(w.zones.touched(&w.map, a, b).unwrap_or(NEW_ZONE)),
+            // A field joins only a field of the same crop.
+            Tool::Grow(plant) => Some(
+                w.zones
+                    .touched(&w.map, a, b)
+                    .filter(|&id| w.zones.get(id).is_some_and(|z| z.plant == Some(plant)))
+                    .unwrap_or(NEW_ZONE),
+            ),
             Tool::ClearZone => None,
             _ => return None,
         };
@@ -1019,6 +1027,10 @@ fn zones(app: &App) {
     let clearing = preview.is_some_and(|zp| zp.joins.is_none());
     // Hatching runs in world space, so it flows from cell to cell.
     let origin = cam.to_screen(0.0, 0.0);
+    // A field, or the new one a Grow drag is making.
+    let growing = |id: u32| {
+        w.zones.get(id).is_some_and(|z| z.plant.is_some()) || (id == NEW_ZONE && matches!(app.tool, Tool::Grow(_)))
+    };
     for y in y0..=y1 {
         for x in x0..=x1 {
             let id = zone(x, y);
@@ -1037,7 +1049,9 @@ fn zones(app: &App) {
             } else {
                 1.0
             };
-            draw_rectangle(sx, sy, z, z, overlay::fade(p.zone_fill, wash));
+            // A growing zone is green, a stockpile the theme's violet.
+            let fill = if growing(id) { alpha(crate::GROW, p.zone_fill.a) } else { p.zone_fill };
+            draw_rectangle(sx, sy, z, z, overlay::fade(fill, wash));
             let open = |dx: i32, dy: i32| zone(x + dx, y + dy) != id;
             let edges = [open(0, -1), open(1, 0), open(0, 1), open(-1, 0)];
             // An inner corner: both sides joined, the cell between them not.
@@ -1057,16 +1071,18 @@ fn zones(app: &App) {
     }
 }
 
-/// How stockpile `id`'s edge is drawn: its colour, its width, and whether
-/// it sits on a keyline. Chalk when it's selected; violet otherwise,
-/// stronger while it's hovered.
+/// How zone `id`'s edge is drawn: its colour, its width, and whether it
+/// sits on a keyline. Chalk when it's selected; otherwise violet for a
+/// stockpile and green for a growing zone, stronger while it's hovered.
 pub fn zone_edge(app: &App, id: u32) -> (Color, f32, bool) {
     let p = &app.palette;
     if app.selected_zone == Some(id) {
         return (p.chalk, p.stroke, true);
     }
     let lift = app.chalk.zone_hover(id);
-    (overlay::fade(p.zone, 0.8 + 0.2 * lift), p.hair + (p.stroke - p.hair) * lift, false)
+    let growing = app.sim.world.zones.get(id).is_some_and(|z| z.plant.is_some());
+    let base = if growing { crate::GROW } else { p.zone };
+    (overlay::fade(base, 0.8 + 0.2 * lift), p.hair + (p.stroke - p.hair) * lift, false)
 }
 
 /// A zone cell's edges `[top, right, bottom, left]` and inner corners

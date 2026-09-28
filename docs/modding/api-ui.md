@@ -47,6 +47,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `act.ui_scale` | `(scale: number) -> ()` | Set the player's UI scale, 0.75 to 2 on top of the display's; it is saved with their settings. |
 | `act.undo` | `() -> ()` | Take back the last order given: the colonists stop the job it gave them, and a mark it put on something goes. |
 | `act.zone_allow` | `(zone: number, item: string, on: boolean) -> ()` | Let a stockpile take an item, or stop it. |
+| `act.zone_plant` | `(zone: number, plant: string) -> ()` | Change what a growing zone sows, by the plant's id. |
 | `act.zoom` | `(factor: number) -> ()` | Zoom the map by a factor about the middle of the screen (1.12 is one wheel notch in). |
 | `ui.anchored` | `(node: Node?) -> Node` | A node attached to a pawn (entity) or cell, on the anchored layer. |
 | `ui.bind` | `(id: string, opts: { key: string?, label: string?, when: (() -> boolean)? }, run: () -> ()) -> ()` | A named action with a default key ("space", "f3", "ctrl+k"): it fires from the key when no text input is typing, and from the command palette. With no key it is in the palette alone. With when, the key is the action's only while when returns true; otherwise the key goes on to the game (Tab to the next colonist). The player's keybinds file overrides the key. Two mods binding one id or one key is reported. |
@@ -88,6 +89,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `view.colony_lost` | `() -> boolean` | Whether every colonist is gone. |
 | `view.compact` | `() -> boolean` | Whether the screen is small (under 1440 logical pixels wide, UI scale included): core picks denser layouts. |
 | `view.count_pawns` | `(faction: string) -> number` | Living pawns of "player", "hostile" or "wild". |
+| `view.crops` | `() -> { Item }` | The plants a growing zone can sow, in load order: each grows, and is raised by a work of its own (`build.by`). |
 | `view.data` | `(key: string) -> any` | A copy of data a sim script stored with rim.set_data, or nil. |
 | `view.date` | `() -> UiDate` | The calendar date, counted from 1. |
 | `view.day` | `() -> number` | The day, counted from 1. |
@@ -152,4 +154,4 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `view.warnings` | `() -> { string }` | Load warnings. |
 | `view.wealth` | `() -> number` | The colony's wealth. |
 | `view.work_types` | `() -> { WorkType }` | The work types, in tie-break order. |
-| `view.zones` | `() -> { Zone }` | The stockpiles, oldest first, with how many cells each has, which items it takes, and its level (0 is lowest) and that level's name. |
+| `view.zones` | `() -> { Zone }` | The zones, oldest first: stockpiles, with how many cells each has, which items it takes, and its level (0 is lowest) and that level's name; and growing zones, which say the `plant` they sow and take nothing. |
