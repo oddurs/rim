@@ -226,6 +226,31 @@ impl T {
             self.click_ui(&format!("core:dock.groups.{group}")).await;
             self.frame().await;
         }
+        // The tray is a fixed height and a longer list scrolls (toolbar.luau):
+        // wheel the row into view, as a player would, and click it where it
+        // is drawn. Layout rects are before scrolling; the offset is apart.
+        let shown = |t: &T| {
+            let r = t.ui_rect(&id)?;
+            let off = t.app.ui.scroll_offset("core:dock.list").unwrap_or(0.0) / screen_dpi_scale();
+            Some([r[0], r[1] - off, r[2], r[3]])
+        };
+        for _ in 0..20 {
+            let (Some(r), Some(list)) = (shown(self), self.ui_rect("core:dock.list")) else { break };
+            let (below, above) = (r[1] + r[3] > list[1] + list[3], r[1] < list[1]);
+            if !below && !above {
+                break;
+            }
+            let over = (list[0] + list[2] / 2.0, list[1] + list[3] / 2.0);
+            let wheel = if below { -1.0 } else { 1.0 };
+            self.input(RawInput { mouse: over, wheel, ..Default::default() }).await;
+            self.frame().await;
+        }
+        if let Some(r) = shown(self).filter(|_| self.ui_rect("core:dock.list").is_some()) {
+            self.frame().await;
+            self.click((r[0] + r[2] / 2.0, r[1] + r[3] / 2.0)).await;
+            self.frame().await;
+            return true;
+        }
         let clicked = self.click_ui(&id).await;
         // Let the pick land: the tray folds on the next frame, and the tray
         // floats over the map, so a press in the same frame would hit it.

@@ -617,6 +617,7 @@ local function tray_frame(view, tools, open: string)
 		finder,
 		{
 			kind = "scroll",
+			id = "core:dock.list",
 			grow = 1,
 			minh = 0,
 			gap = "s",
