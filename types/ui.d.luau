@@ -197,7 +197,7 @@ declare act: {
     focus: (id: number) -> (),
     -- Show level z: 0 is the surface, below it is negative. Past the top or bottom level it stays at the last.
     level: (z: number) -> (),
-    -- The lighting preset: 'low', 'medium', 'high' or 'ultra'. Settings the player set by hand under [lighting] stay. Saved for the player.
+    -- The lighting preset: 'low', 'medium', 'high', 'ultra', or 'auto', which starts at medium and steps down while the lighting runs slow. Settings the player set by hand under [lighting] stay. Saved for the player.
     lighting: (preset: string) -> (),
     -- Play a save from view.saves() (the title screen).
     load: (path: string) -> (),

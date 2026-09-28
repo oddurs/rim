@@ -2915,15 +2915,44 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.app.ui.rebind("core:lighting_low", Some("f9"));
     t.key(KeyCode::F9).await;
     t.frame().await;
-    let q = t.app.light.setting.quality;
+    let q = t.app.light.setting().quality;
     t.check(
-        t.app.light.setting.name() == "low" && q.sun_steps == 16 && !q.soft,
-        format!("Lighting: low takes at once ({}, {} sun steps)", t.app.light.setting.name(), q.sun_steps),
+        t.app.light.setting().name() == "low" && q.sun_steps == 16 && !q.soft,
+        format!("Lighting: low takes at once ({}, {} sun steps)", t.app.light.setting().name(), q.sun_steps),
     );
     t.app.ui.rebind("core:lighting_low", None);
     crate::apply_ui(&mut t.app, rim_ui::view::UiAction::Lighting("medium".into()));
     t.frame().await;
-    t.check(t.app.light.setting.name() == "medium", "and back to medium");
+    t.check(t.app.light.setting().name() == "medium", "and back to medium");
+
+    println!("\n# lighting auto starts at medium and steps down only on the lighting's own time (24bad102)");
+    t.app.ui.rebind("core:lighting_auto", Some("f9"));
+    t.key(KeyCode::F9).await;
+    t.frame().await;
+    t.app.ui.rebind("core:lighting_auto", None);
+    let s = t.app.light.setting();
+    t.check(s.auto && s.name() == "medium", format!("Lighting: auto starts at medium ({})", s.name()));
+    // Where GL times the lighting it reads the queries back as it goes, and
+    // may step down (CI's software GL is slow); on Apple's it stays put.
+    let start = get_time();
+    while get_time() - start < crate::quality::AUTO_WINDOW + 0.5 {
+        t.frame().await;
+    }
+    // Where GL can time a pass, auto has read frames back; where it can't
+    // (Apple's), it has said so and stays at medium.
+    let (s, read) = (t.app.light.setting(), t.app.light.cost_frames);
+    let timed = t.app.light.can_time_cost();
+    t.check(
+        s.auto && if timed == Some(true) { read > 30 } else { timed == Some(false) && s.name() == "medium" },
+        format!(
+            "after a window of frames: {read} read back, at {}, on {} (timer: {timed:?})",
+            s.name(),
+            crate::light::gl_renderer()
+        ),
+    );
+    crate::apply_ui(&mut t.app, rim_ui::view::UiAction::Lighting("medium".into()));
+    t.frame().await;
+    t.check(!t.app.light.setting().auto && t.app.light.setting().name() == "medium", "and a chosen preset ends it");
 
     // ---------------------------------------------------------- fda56c8e camera by device
     println!("\n# the camera answers a mouse and a trackpad (fda56c8e)");

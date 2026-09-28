@@ -21,7 +21,7 @@
 //! the sun takes over.
 
 use crate::occluders::Occluders;
-use crate::quality::{texels_for, Setting};
+use crate::quality::{texels_for, Setting, Watch};
 use crate::sky::{Air, Flash};
 use crate::Cam;
 use macroquad::miniquad::{BlendFactor, BlendState, BlendValue, Equation};
@@ -401,14 +401,14 @@ pub struct PassTime {
     pub draws: u32,
 }
 
-/// The GPU timer, made the first time the bench asks for one.
+/// A GPU timer, made the first time it's asked for.
 #[derive(Default)]
-enum Timer {
+enum Timer<T> {
     #[default]
     Untried,
     /// GL has no timer, or none that can time a pass.
     Unavailable,
-    Ready(GpuTimer),
+    Ready(T),
 }
 
 /// `glGetString(GL_RENDERER)`: miniquad doesn't name the constant.
@@ -440,7 +440,7 @@ struct GpuTimer(u32);
 impl GpuTimer {
     /// One, if the context has a timer that can time one pass.
     fn new() -> Option<GpuTimer> {
-        if !times_a_pass(&gl_string(miniquad::gl::GL_VERSION), &gl_renderer()) {
+        if !gl_times_a_pass() {
             return None;
         }
         let mut id = 0;
@@ -473,6 +473,98 @@ impl Drop for GpuTimer {
         // SAFETY: a query `new` made, deleted once.
         unsafe { miniquad::gl::glDeleteQueries(1, &self.0) };
     }
+}
+
+/// Frames a lighting time is read back after: by then the GPU has long run
+/// them, so reading never waits.
+const COST_FRAMES: usize = 4;
+
+/// What `auto` reads: the lighting's GPU time a frame, from timer queries
+/// read back `COST_FRAMES` later. A frame has two: the passes before the
+/// world is drawn, and the multiply after it.
+struct CostTimer {
+    ids: [[u32; 2]; COST_FRAMES],
+    /// Per frame in flight: which of its queries ran, and what it was timed
+    /// under (`Light::cost_tag`).
+    ran: [([bool; 2], (usize, u32)); COST_FRAMES],
+    /// The frame being timed, whether this one is, and the query open in it.
+    at: usize,
+    timing: bool,
+    open: bool,
+}
+
+impl CostTimer {
+    fn new() -> Option<CostTimer> {
+        if !gl_times_a_pass() {
+            return None;
+        }
+        let mut ids = [[0; 2]; COST_FRAMES];
+        // SAFETY: desktop GL 3.3 has query objects; on the render thread.
+        unsafe { miniquad::gl::glGenQueries((2 * COST_FRAMES) as i32, ids.as_mut_ptr().cast()) };
+        let ran = [([false; 2], (0, 0)); COST_FRAMES];
+        let t = CostTimer { ids, ran, at: 0, timing: false, open: false };
+        ids.iter().flatten().all(|&id| id != 0).then_some(t)
+    }
+
+    /// Start a frame, timed under `tag`, in the oldest frame's queries: what
+    /// that frame was timed under and its GPU time, µs, if both its queries
+    /// ran. A GPU still running it holds its queries, and this frame goes
+    /// untimed rather than restart one the GPU hasn't finished.
+    fn frame(&mut self, tag: (usize, u32)) -> Option<((usize, u32), f64)> {
+        use miniquad::gl::*;
+        let next = (self.at + 1) % COST_FRAMES;
+        let (ran, was) = self.ran[next];
+        let mut ns = [0 as GLuint64; 2];
+        for ((&id, ns), _) in self.ids[next].iter().zip(&mut ns).zip(ran).filter(|(_, r)| *r) {
+            let mut ready: GLint = 0;
+            // SAFETY: a query that has ended; asking whether it's ready, and
+            // reading it once it is, doesn't wait.
+            unsafe {
+                glGetQueryObjectiv(id, GL_QUERY_RESULT_AVAILABLE, &mut ready);
+                if ready == 0 {
+                    self.timing = false;
+                    return None;
+                }
+                glGetQueryObjectui64v(id, GL_QUERY_RESULT, ns);
+            }
+        }
+        (self.at, self.timing) = (next, true);
+        self.ran[next] = ([false; 2], tag);
+        (ran == [true; 2]).then(|| (was, (ns[0] + ns[1]) as f64 / 1e3))
+    }
+
+    /// Time query `k` of this frame, until `end`.
+    fn begin(&mut self, k: usize) {
+        if !self.timing {
+            return;
+        }
+        flush_batches();
+        // SAFETY: a query `new` made whose last result has been read, and
+        // none other running: `end` closes each.
+        unsafe { miniquad::gl::glBeginQuery(miniquad::gl::GL_TIME_ELAPSED, self.ids[self.at][k]) };
+        self.ran[self.at].0[k] = true;
+        self.open = true;
+    }
+
+    fn end(&mut self) {
+        if std::mem::take(&mut self.open) {
+            flush_batches();
+            // SAFETY: ends the query `begin` started, without waiting for it.
+            unsafe { miniquad::gl::glEndQuery(miniquad::gl::GL_TIME_ELAPSED) };
+        }
+    }
+}
+
+impl Drop for CostTimer {
+    fn drop(&mut self) {
+        // SAFETY: the queries `new` made, deleted once.
+        unsafe { miniquad::gl::glDeleteQueries((2 * COST_FRAMES) as i32, self.ids.as_ptr().cast()) };
+    }
+}
+
+/// Whether this context's GL can time one pass.
+fn gl_times_a_pass() -> bool {
+    times_a_pass(&gl_string(miniquad::gl::GL_VERSION), &gl_renderer())
 }
 
 /// Whether GL can time one pass: desktop GL 3.3 or later has timer queries
@@ -994,7 +1086,7 @@ pub struct Light {
     /// Nothing, for a pass that couldn't run: no sun, no fire.
     blank: Option<Texture2D>,
     /// The player's lighting setting.
-    pub setting: Setting,
+    setting: Setting,
     /// Light texels per cell now: the setting's, fewer when zoomed out.
     texels: u32,
     /// Pin the sun: (azimuth, elevation), degrees. For tests and the bench.
@@ -1005,7 +1097,14 @@ pub struct Light {
     pub passes: Vec<PassTime>,
     /// Time each pass on the GPU with a timer query (`time_gpu`).
     gpu_timing: bool,
-    query: Timer,
+    query: Timer<GpuTimer>,
+    /// What `auto` times the lighting with, and what it has seen: the
+    /// frames it has read, and which setting (a count of `set`s) they are
+    /// for.
+    cost: Timer<CostTimer>,
+    watch: Watch,
+    pub cost_frames: u64,
+    chosen: u32,
     /// The level in view, and what the light keeps for it.
     z: i32,
     lv: Level,
@@ -1039,6 +1138,8 @@ impl Light {
         z: i32,
     ) {
         self.passes.clear();
+        self.cost_frame();
+        self.cost_begin(0);
         self.view(z);
         // Zooming out drops texels, so the light never costs more than the
         // pixels it covers; a new size rebuilds every target.
@@ -1060,6 +1161,7 @@ impl Light {
         let t = self.pass_begin();
         let ran = self.update_sun(w, air, flash);
         self.pass_end("sun", t, ran, ran as u32);
+        self.cost_end();
     }
 
     /// The open sky over the cells in view, on average: how much of the
@@ -1101,9 +1203,11 @@ impl Light {
 
     /// Multiply the world by the light. Call after everything lit is drawn.
     pub fn multiply(&mut self, w: &World, cam: &Cam, air: &Air, flash: Flash) {
+        self.cost_begin(1);
         let t = self.pass_begin();
         let drew = self.draw_multiply(w, cam, air, flash);
         self.pass_end("multiply", t, drew, drew as u32);
+        self.cost_end();
     }
 
     /// Forget every cached result, so the next frame rebuilds them all: what
@@ -1693,6 +1797,28 @@ impl Light {
         true
     }
 
+    /// The lighting setting that runs: under `auto`, the preset it's at.
+    pub fn setting(&self) -> &Setting {
+        &self.setting
+    }
+
+    /// The player chose a setting: under `auto`, it watches afresh, and
+    /// frames timed before are let go.
+    pub fn set(&mut self, setting: Setting) {
+        self.setting = setting;
+        self.watch = Watch::default();
+        self.chosen = self.chosen.wrapping_add(1);
+    }
+
+    /// Whether `auto` can time the lighting here: None until GL has said.
+    pub fn can_time_cost(&self) -> Option<bool> {
+        match self.cost {
+            Timer::Untried => None,
+            Timer::Unavailable => Some(false),
+            Timer::Ready(_) => Some(true),
+        }
+    }
+
     /// Time each pass on the GPU. Only the render bench does: reading a
     /// timer back waits for the GPU, which a real frame must never do.
     pub fn time_gpu(&mut self, on: bool) {
@@ -1710,6 +1836,64 @@ impl Light {
         match &mut self.query {
             Timer::Ready(t) => Some(t),
             _ => None,
+        }
+    }
+
+    /// The timer `auto` reads, while it has a preset to step down to. Not
+    /// while the bench times each pass: queries don't nest.
+    fn cost(&mut self) -> Option<&mut CostTimer> {
+        if !self.setting.auto || self.setting.preset == 0 || self.gpu_timing {
+            return None;
+        }
+        // GL names itself once it has a context; until then, ask again later.
+        if matches!(self.cost, Timer::Untried) && !gl_renderer().is_empty() {
+            self.cost = CostTimer::new().map_or_else(
+                || {
+                    // Apple's GPU draws a frame in tiles, all passes at once,
+                    // so there is nothing to read the lighting's share from.
+                    eprintln!(
+                        "rim: lighting auto: {} can't time the lighting on its own, so it stays at {}",
+                        gl_renderer(),
+                        self.setting.name()
+                    );
+                    Timer::Unavailable
+                },
+                Timer::Ready,
+            );
+        }
+        match &mut self.cost {
+            Timer::Ready(c) => Some(c),
+            _ => None,
+        }
+    }
+
+    /// Under `auto`, a new frame: judge the one timed `COST_FRAMES` ago.
+    fn cost_frame(&mut self) {
+        let tag = (self.setting.preset, self.chosen);
+        let Some(timed) = self.cost().map(|c| c.frame(tag)) else { return };
+        // A frame from before the player last chose is no longer theirs.
+        let Some(((preset, _), us)) = timed.filter(|((_, c), _)| *c == tag.1) else { return };
+        self.cost_frames += 1;
+        if let Some(mean) = self.setting.watch(&mut self.watch, get_time(), preset, us) {
+            eprintln!(
+                "rim: lighting auto: {:.1} ms a frame on the GPU, over {:.1}; down to {}",
+                mean / 1e3,
+                crate::quality::AUTO_BUDGET_US / 1e3,
+                self.setting.name()
+            );
+        }
+    }
+
+    fn cost_begin(&mut self, k: usize) {
+        if let Some(c) = self.cost() {
+            c.begin(k);
+        }
+    }
+
+    /// Close the query `cost_begin` opened, whatever changed since.
+    fn cost_end(&mut self) {
+        if let Timer::Ready(c) = &mut self.cost {
+            c.end();
         }
     }
 
