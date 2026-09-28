@@ -7,7 +7,8 @@
 //! nine views: the whole map at the lowest zoom, mid, close, the whole map
 //! in a storm, a zoom gesture from the whole map to close and back, the
 //! storm again at half render scale, a level dug out below the colony seen
-//! from the surface through pits and then from the level itself, and the
+//! from the surface through pits and then from the level itself, flooded
+//! from a river in its wall, and the
 //! whole map at dusk, when the colony's fires matter. Per view: each pass's CPU time, the time macroquad
 //! takes to hand the frame to GL ("submit"), the time the GPU takes to
 //! finish it (Linux only, where macroquad calls glFinish under telemetry),
@@ -583,6 +584,16 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
             let at = centre.offset(COLONY / 2 + 4, -STACKED / 2);
             if stacked(&mut app.sim, at, STACKED).is_none() {
                 eprintln!("render bench: the mods have no way down or no air to dig the stacked scene with");
+            }
+            // A river breaks into the room's west wall and floods it
+            // (202b16c4), so the level below is measured with water drawn.
+            let defs = app.sim.world.defs.clone();
+            if let Some(river) = defs.terrain.iter().position(|t| t.pours > 0) {
+                let wall = IVec::at(at.x - 1, at.y + STACKED / 2, -1);
+                app.sim.world.map.set_terrain(wall, river as rim_sim::defs::DefId, 0);
+                for _ in 0..2_000 {
+                    app.sim.step();
+                }
             }
         }
         app.cam.z = v.level.unwrap_or(0);

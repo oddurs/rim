@@ -3360,6 +3360,53 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     }
     t.app.sim.world.despawn_thing(tree);
 
+    // Water in basins (202b16c4), last: it runs the world on, which moves
+    // what sections after it would find. A room dug beside water that never runs
+    // out fills ring by ring from where it comes in, and is drawn so.
+    {
+        println!("\n# water drawn by depth (202b16c4)");
+        let paused = t.app.paused;
+        t.app.paused = true;
+        let defs = t.w().defs.clone();
+        let o = IVec::at(home.x + 20, home.y - 20, -1);
+        let mut room = Vec::new();
+        for y in 0..10 {
+            for x in 0..14 {
+                let p = o.offset(x, y);
+                if let Some(leaves) = t.w().solid_at(p).and_then(|r| r.leaves_r) {
+                    t.app.sim.world.map.set_terrain(p, leaves, defs.terrain[leaves as usize].path_cost);
+                    room.push(p);
+                }
+            }
+        }
+        // A river running into its west wall.
+        let river = defs.terrain.iter().position(|d| d.pours > 0).expect("water that pours") as rim_sim::defs::DefId;
+        t.app.sim.world.map.set_terrain(o.offset(-1, 5), river, 0);
+        let wet = |t: &T| room.iter().filter(|&&p| t.w().water_depth(p) > 0).count();
+        t.ticks(6);
+        t.app.cam.z = -1;
+        t.focus(o.offset(7, 5));
+        t.app.cam.zoom = 24.0;
+        for _ in 0..12 {
+            t.frame().await;
+        }
+        let early = wet(&t);
+        t.check(
+            early > 0 && early < room.len(),
+            format!("the water comes in and spreads ({early} of {} cells)", room.len()),
+        );
+        t.shot("water_filling").await;
+        t.ticks(400);
+        for _ in 0..12 {
+            t.frame().await;
+        }
+        let full = room.iter().all(|&p| t.w().water_depth(p) == rim_sim::water::FULL);
+        t.check(full, "and fills the room to the brim");
+        t.shot("water_full").await;
+        t.app.cam.z = 0;
+        t.app.paused = paused;
+    }
+
     println!("\n{} passed, {} failed; screenshots in {}", t.passed, t.failed.len(), t.dir.display());
     for f in &t.failed {
         println!("  FAIL {f}");

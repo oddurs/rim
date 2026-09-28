@@ -174,6 +174,7 @@ pub struct App {
     pub light: light::Light,
     /// The terrain, baked into a texture.
     pub ground: draw::Ground,
+    pub water: draw::Water,
     /// What each render pass cost last frame.
     pub render_us: RenderTimes,
     /// Floors, items and fixtures, cached per chunk on the GPU.
@@ -729,6 +730,7 @@ async fn game() {
         marks: roomstate::RoomMarks::default(),
         light: light::Light::with(lighting),
         ground: draw::Ground::default(),
+        water: draw::Water::default(),
         render_us: RenderTimes::default(),
         meshes: mesh::Meshes::default(),
         worksites: worksite::Worksites::default(),
@@ -1554,6 +1556,7 @@ pub fn render(app: &mut App) {
         });
     }
     app.ground.update(&app.sim.world, app.cam.z);
+    app.water.update(&app.sim.world, app.cam.z, get_time());
     t.ground = lap();
     app.worksites.follow_level(app.cam.z);
     app.worksites.update(&app.sim.world, app.cam.zoom >= worksite::DETAIL_ZOOM);
