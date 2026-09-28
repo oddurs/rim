@@ -17,18 +17,35 @@ pub(super) async fn indoors(t: &mut T, carry: &mut Carry) {
     let mut placed = Vec::new();
     let mut flooded = Vec::new();
     // A free square `side` across, the nearest to `near`, with a cell of
-    // free ground round it so one room doesn't wall in another.
-    let square = |w: &World, near: IVec, side: i32| {
+    // free ground round it so one room doesn't wall in another, and `open`
+    // cells more to the west, where a low sun comes in.
+    let square = |w: &World, near: IVec, side: i32, open: i32| {
         let free =
-            |p: IVec| w.map.inb(p) && w.map.passable(p) && w.map.fixture_at(p).is_none() && w.map.item_at(p).is_none();
-        (0..80i32)
-            .flat_map(|r| (-r..=r).flat_map(move |dy| (-r..=r).map(move |dx| near.offset(dx, dy))))
-            .find(|o| (-1..=side).all(|y| (-1..=side).all(|x| free(o.offset(x, y)))))
+            |p: IVec| dry(w, p) && w.map.passable(p) && w.map.fixture_at(p).is_none() && w.map.item_at(p).is_none();
+        (0..80i32).flat_map(|r| (-r..=r).flat_map(move |dy| (-r..=r).map(move |dx| near.offset(dx, dy)))).find(|o| {
+            // West of it, only what casts a shadow matters, and plants
+            // are cleared.
+            let low = |p: IVec| {
+                w.map.inb(p)
+                    && w.solid_at(p).is_none()
+                    && w.map.fixture_at(p).and_then(|f| w.thing(f)).is_none_or(|th| w.defs.thing(th.def).natural)
+            };
+            (-1..=side)
+                .all(|y| (-1..=side).all(|x| free(o.offset(x, y))) && (-1 - open..-1).all(|x| low(o.offset(x, y))))
+        })
     };
     // A ring of walls `side` across, the middle of its west wall a window,
     // deep water or wall as asked, and a stove in the middle if asked.
     let mut build = |t: &mut T, near: IVec, side: i32, west: &str, lit: bool| {
-        let o = square(t.w(), near, side)?;
+        // A window's low sun needs the ground west of it clear: 1 / tan 12°
+        // is 4.7 cells of a wall's shadow.
+        let open = if west == "window" { 6 } else { 0 };
+        let o = square(t.w(), near, side, open)?;
+        for p in (0..side).flat_map(|y| (-1 - open..-1).map(move |x| o.offset(x, y))) {
+            if let Some(e) = t.w().map.fixture_at(p) {
+                t.app.sim.world.despawn_thing(e);
+            }
+        }
         for dy in 0..side {
             for dx in 0..side {
                 let edge = dx == 0 || dy == 0 || dx == side - 1 || dy == side - 1;
@@ -52,10 +69,11 @@ pub(super) async fn indoors(t: &mut T, carry: &mut Carry) {
         }
         Some(o)
     };
-    let beamed = build(t, site.offset(-24, 12), 5, "window", false);
+    // The window last, so no other room stands in its sun.
     let dark = build(t, site.offset(-24, 20), 5, "wall", true);
     let hall = build(t, site.offset(-34, 12), 7, "wall", true);
     let moat = build(t, site.offset(-34, 22), 5, "water", false);
+    let beamed = build(t, site.offset(-24, 12), 5, "window", false);
     t.ticks(2);
     t.light_settles().await;
     let inside = |o: IVec, side: i32| (1..side - 1).flat_map(move |dy| (1..side - 1).map(move |dx| o.offset(dx, dy)));

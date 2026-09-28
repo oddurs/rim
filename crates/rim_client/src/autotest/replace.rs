@@ -14,6 +14,9 @@ pub(super) async fn replace_in_place(t: &mut T, carry: &mut Carry) {
     println!("\n# a wall planned over another is drawn hatched over it until they swap (DESIGN.md §6c)");
     let north = hut.offset(2, 0);
     t.focus(north);
+    // The pointer off the map: the wall tool is still in hand, and its ghost
+    // under the pointer would land on the wall on some maps.
+    let pointer = std::mem::replace(&mut t.mouse, (4.0, 200.0));
     // Blue less red, over the cell: the hatch is pale blue on wood.
     let blueness = |img: &Image, t: &T| {
         let mut sum = 0.0;
@@ -33,6 +36,7 @@ pub(super) async fn replace_in_place(t: &mut T, carry: &mut Carry) {
     let after = blueness(&img, t);
     t.check(after > before + 0.05, format!("the plan is drawn over the wall ({before:.2} -> {after:.2})"));
     t.shot("replace").await;
+    t.mouse = pointer;
     t.app.sim.push(Command::Cancel { a: north, b: north });
     t.ticks(1);
 
@@ -172,7 +176,26 @@ pub(super) async fn replace_in_place(t: &mut T, carry: &mut Carry) {
         println!("\n# one level at a time (5689930d)");
         let paused = t.app.paused;
         t.app.paused = true;
-        let top = crate::bench::stacked(&mut t.app.sim, home.offset(-24, 6), 16);
+        // Open ground over rock that digs, away from home's buildings:
+        // wherever this map has it, not where one map did.
+        let over_rock = |w: &World, o: IVec| {
+            (-1..17).all(|y| {
+                (-1..17).all(|x| {
+                    let p = o.offset(x, y);
+                    let built =
+                        w.map.fixture_at(p).and_then(|e| w.thing(e)).is_some_and(|th| !w.defs.thing(th.def).natural);
+                    dry(w, p)
+                        && w.map.passable(p)
+                        && !built
+                        && w.solid_at(IVec::at(p.x, p.y, p.z - 1)).is_some_and(|r| r.leaves_r.is_some())
+                })
+            })
+        };
+        let near = home.offset(-24, 6);
+        let at = (0..60i32)
+            .flat_map(|r| (-r..=r).flat_map(move |dy| (-r..=r).map(move |dx| near.offset(dx, dy))))
+            .find(|&o| over_rock(t.w(), o));
+        let top = at.and_then(|o| crate::bench::stacked(&mut t.app.sim, o, 16));
         t.check(top.is_some(), "the stacked scene digs a way down, pits and a room below");
         if let Some(top) = top {
             let below: Vec<Entity> = t.w().colonists().filter(|&e| t.pawn(e).pos.z == -1).collect();
@@ -332,8 +355,10 @@ pub(super) async fn replace_in_place(t: &mut T, carry: &mut Carry) {
                 let away: Vec<f32> = (0..3).map(|k| glow(t, top.offset(dx * 2 * k, dy * 2 * k))).collect();
                 t.shot("stairwell_below").await;
                 t.check(
-                    away[0] > 0.1 && away[0] > away[1] && away[1] >= away[2],
-                    format!("a fire at the head of the stairs lights their foot below, fading off ({away:.2?})"),
+                    // The light is read back in steps of a 153rd: the foot and
+                    // the cell two on can be a step apart either way.
+                    away[0] > 0.1 && away[1] - away[0] < 0.01 && away[2] < away[0].min(away[1]) - 0.02,
+                    format!("a fire at the head of the stairs lights their foot below, fading off ({away:.3?})"),
                 );
                 t.key(KeyCode::RightBracket).await;
                 t.light_settles().await;
