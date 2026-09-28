@@ -47,3 +47,7 @@ Measured (release, 250x250, Apple M4 Pro under load, CPU only since this GPU can
 ## 2026-09-26
 
 Review fixes: shader failures are per shader, so without the sun's the world is still lit, just with no sun shadows. The multiply takes highp like the sun pass. The sun key collapses to Down below the horizon and rounds cloud softness to fiftieths, so night and cloud drift don't rerun the pass. The march ignores anything no taller than where the ray set out, so a wall top at dawn isn't shaded by the wall beside it. Canopies cast a lighter contact band, so trees keep a shadow at night. Without a sun path the contact band fades with daylight. The autotest pins full daylight for this section and checks on screen that the shadow falls north of the wall (0.56 of the lit ground). Declined: a fringe beside roofed ground. Roofed means an enclosed room, so the bleed lands on a lit wall top.
+
+## 2026-09-27
+
+People (5d09b04e, DESIGN.md §6h): a pawn's soft shadow is a `world = true` body part (535a1fb9). Once the sun direction is available to the client, the shadow can offset away from it instead of a fixed down-right.

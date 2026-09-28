@@ -7,7 +7,7 @@ milestone: crafting
 depends_on:
 - 03b9b791-082e-48f1-b51e-af6f42627685
 created: 2026-09-23
-updated: 2026-09-23
+updated: 2026-09-27
 priority: p2
 api: additive
 effort: m
@@ -30,3 +30,7 @@ Feels-like temperature (0189) penalises rain while it falls. A colonist who walk
 
 - [ ] Wet colonists feel colder until dry
 - [ ] Apparel shifts the comfort range
+
+## 2026-09-27
+
+People (5d09b04e): a wet pawn can darken a step through a gait fact or a feature's condition once pawn tags exist.

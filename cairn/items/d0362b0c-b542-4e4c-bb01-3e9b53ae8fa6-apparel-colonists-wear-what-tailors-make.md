@@ -34,3 +34,7 @@ Tailoring (0927f0af) got as far as leather: the engine has no way to wear anythi
 ## 2026-09-27
 
 Split from 0927f0af (tailoring). That item shipped hides from butchering and leather. Wearing is engine work the codebase doesn't have yet: no equip slot, no wear job, no insulation stat. It's filed here rather than built halfway. Pairs with 308074c6, which reads insulation.
+
+## 2026-09-27
+
+People (5d09b04e, DESIGN.md §6h): a worn garment draws as layers at the body's torso socket (535a1fb9), tinted and patterned by its material, so leather reads as leather. Until clothes exist, the torso takes the skin colour: the castaway is naked.
