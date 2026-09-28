@@ -22,7 +22,7 @@
 
 use crate::occluders::Occluders;
 use crate::quality::{texels_for, Setting};
-use crate::sky::Air;
+use crate::sky::{Air, Flash};
 use crate::Cam;
 use macroquad::miniquad::{BlendFactor, BlendState, BlendValue, Equation};
 use macroquad::prelude::*;
@@ -32,6 +32,15 @@ use rim_sim::world::{Thing, World};
 
 // What the presets tune (texels a cell, sun steps, softness, when the sun
 // is worked out again, upsampling) is `crate::quality`.
+/// A flash brighter than this casts shadows: the sun pass works them out
+/// once as it strikes and once as it fades, whatever it lasts.
+const FLASH_ON: f32 = 0.1;
+/// Where a bolt lights from: high, so its shadows are short and hard.
+const FLASH_ELEVATION: f64 = 40.0;
+/// A bolt's light, blue-white, at full strength.
+const FLASH_RGB: Vec3 = vec3(0.8, 0.88, 1.0);
+/// What of a flash lights everything, shadow or not: the cloud it lights.
+const FLASH_AMBIENT: f32 = 0.35;
 /// The share of the sky's light that comes straight from the sun on a clear
 /// day; the rest is the sky itself, which also reaches into shadow.
 const DIRECT: f32 = 0.6;
@@ -259,6 +268,7 @@ uniform sampler2D rooms;
 uniform float exposure;
 uniform vec3 ambient;
 uniform vec3 direct;
+uniform vec3 bolt;
 uniform vec3 night;
 uniform vec3 ch0;
 uniform vec3 ch1;
@@ -295,8 +305,9 @@ void main() {
     // outer face onto the floor inside.
     float share = texture2D(rooms, uv).r;
     float sun_in = texture2D(sunlit, (floor(uv * lres) + 0.5) / lres).r;
-    vec3 outside = ambient + direct * sun;
-    vec3 inside = (ambient + direct) * share + direct * sun_in;
+    // A lightning flash, while it lasts, is what `sunlit` holds.
+    vec3 outside = ambient + (direct + bolt) * sun;
+    vec3 inside = (ambient + direct) * share + (direct + bolt) * sun_in;
     vec4 f = texture2D(Texture, uv) / scale;
     vec3 fire = f.r * ch0 + f.g * ch1 + f.b * ch2 + f.a * ch3;
     // Firelight adds to the sky, and the eye's exposure scales both: a fire
@@ -775,6 +786,8 @@ pub struct Light {
     /// Where the sun reaches, R, `texels` per cell.
     sunlit: Option<RenderTarget>,
     sun_key: Option<SunKey>,
+    /// `sunlit` holds a lightning flash's shadows, not the sun's.
+    bolt: bool,
     materials: [Option<Material>; 4],
     /// Which shaders failed to build, by pass: without the sun's, the world
     /// is lit without sun shadows; without the bake, without firelight;
@@ -807,7 +820,7 @@ impl Light {
     /// with the default camera: it draws into targets of its own.
     /// `roofs` is each cell's roof, in steps in from its eaves
     /// (`Roofs::height`), so a house shades by its roof's shape.
-    pub fn prepare(&mut self, w: &World, air: &Air, px_per_cell: f32, roofs: &[u8]) {
+    pub fn prepare(&mut self, w: &World, air: &Air, px_per_cell: f32, roofs: &[u8], flash: Flash) {
         self.passes.clear();
         // Zooming out drops texels, so the light never costs more than the
         // pixels it covers; a new size rebuilds every target.
@@ -822,12 +835,12 @@ impl Light {
         let draws = if baked { self.draws } else { 0 };
         self.pass_end("firelight", t, baked, draws);
         let t = self.pass_begin();
-        let ran = self.update_sun(w, air);
+        let ran = self.update_sun(w, air, flash);
         self.pass_end("sun", t, ran, ran as u32);
     }
 
     /// Multiply the world by the light. Call after everything lit is drawn.
-    pub fn multiply(&mut self, w: &World, cam: &Cam, air: &Air, flash: f32) {
+    pub fn multiply(&mut self, w: &World, cam: &Cam, air: &Air, flash: Flash) {
         let t = self.pass_begin();
         let drew = self.draw_multiply(w, cam, air, flash);
         self.pass_end("multiply", t, drew, drew as u32);
@@ -847,6 +860,11 @@ impl Light {
     /// depend on how long the light before lasted.
     pub fn adapt_now(&mut self) {
         self.exposure = 0.0;
+    }
+
+    /// Whether the sun target holds a lightning flash's shadows now.
+    pub fn lit_by_flash(&self) -> bool {
+        self.bolt
     }
 
     /// The sun's visibility at a point, in cells: the light texel it falls
@@ -933,6 +951,7 @@ impl Light {
                     vec![
                         UniformDesc::new("ambient", UniformType::Float3),
                         UniformDesc::new("direct", UniformType::Float3),
+                        UniformDesc::new("bolt", UniformType::Float3),
                         UniformDesc::new("night", UniformType::Float3),
                         UniformDesc::new("ch0", UniformType::Float3),
                         UniformDesc::new("ch1", UniformType::Float3),
@@ -1113,12 +1132,20 @@ impl Light {
 
     /// Work out where the sun reaches, if it moved or the occluders changed.
     /// Whether it did.
-    fn update_sun(&mut self, w: &World, air: &Air) -> bool {
+    fn update_sun(&mut self, w: &World, air: &Air, flash: Flash) -> bool {
         let Some(occ) = self.occluders.texture.clone() else { return false };
         let size = (w.map.w as u32 * self.texels, w.map.h as u32 * self.texels);
         let q = self.setting.quality;
-        let soft = if q.soft { penumbra(air.cloud) } else { 0.0 };
-        let key = SunKey::new(self.sun(w), soft, self.occluders.version, q.sun_rebuild, q.sun_steps);
+        // A flash is a light of its own for its few frames: one key while it
+        // lasts, hard-edged, from where the bolt is.
+        let bolt = flash.strength > FLASH_ON;
+        let key = if bolt {
+            let from = Some((flash.azimuth as f64, FLASH_ELEVATION));
+            SunKey::new(from, 0.0, self.occluders.version, q.sun_rebuild, q.sun_steps)
+        } else {
+            let soft = if q.soft { penumbra(air.cloud) } else { 0.0 };
+            SunKey::new(self.sun(w), soft, self.occluders.version, q.sun_rebuild, q.sun_steps)
+        };
         let fits = self.sunlit.as_ref().is_some_and(|t| (t.texture.width() as u32, t.texture.height() as u32) == size);
         if fits && self.sun_key == Some(key) {
             return false;
@@ -1130,6 +1157,7 @@ impl Light {
             self.sunlit = Some(rt);
         }
         self.sun_key = Some(key);
+        self.bolt = bolt;
         // The key's quantised sun, so the result is exactly the key's.
         let (toward, soft) = (key.toward(), key.soft());
         let (tw, th) = (size.0 as f32, size.1 as f32);
@@ -1155,8 +1183,20 @@ impl Light {
     /// The light on something outdoors, above every shadow: the sky as the
     /// eye has adapted to it, never darker than night, as the multiply
     /// lights open ground. Roofs are drawn in it.
-    pub fn outdoor(&self, w: &World, air: &Air, flash: f32) -> Vec3 {
-        (Self::sky_color(w, air, flash) * self.exposure.max(1.0)).max(rgb3(w.defs.sky.rgb_night))
+    pub fn outdoor(&self, w: &World, air: &Air, flash: Flash) -> Vec3 {
+        let (lit, bolt) = self.flash_light(flash);
+        ((Self::sky_color(w, air, lit) + bolt) * self.exposure.max(1.0)).max(rgb3(w.defs.sky.rgb_night))
+    }
+
+    /// A flash's light: how much it brightens the sky everywhere, and the
+    /// bolt's own, which lands only where `sunlit` says. A flash struck
+    /// since the sun pass last ran lights everything evenly for its frame.
+    fn flash_light(&self, flash: Flash) -> (f32, Vec3) {
+        if self.bolt {
+            (flash.strength * FLASH_AMBIENT, FLASH_RGB * flash.strength * (1.0 - FLASH_AMBIENT))
+        } else {
+            (flash.strength, Vec3::ZERO)
+        }
     }
 
     /// How each way a roof slopes is lit, as `roof_faces` says, for the sun
@@ -1190,7 +1230,7 @@ impl Light {
 
     /// Draw the light over the world with multiply blending. Whether it
     /// drew: without the shader the world stays unlit.
-    fn draw_multiply(&mut self, w: &World, cam: &Cam, air: &Air, flash: f32) -> bool {
+    fn draw_multiply(&mut self, w: &World, cam: &Cam, air: &Air, flash: Flash) -> bool {
         let Some(occ) = self.occluders.texture.clone() else { return false };
         // Without the sun pass the sun reaches nowhere; without the bake,
         // no fire does.
@@ -1199,9 +1239,14 @@ impl Light {
         let sun = self.sunlit.as_ref().map_or(blank.clone(), |t| t.texture.clone());
         let rooms = self.rooms.clone().unwrap_or(blank);
         let Some(m) = self.material(Pass::Multiply) else { return false };
-        let sky = Self::sky_color(w, air, flash);
+        // A flash whose shadows are worked out lights the cloud a little and
+        // the rest from where it is; one struck since, not yet, lights all.
+        let (lit, bolt) = self.flash_light(flash);
+        let sky = Self::sky_color(w, air, lit);
         let elev = self.sun(w).map_or(-1.0, |s| s.1);
-        let share = direct_share(elev, air.cloud);
+        // While `sunlit` holds the bolt's shadows the sun has none: its
+        // light is the sky's for those few frames, not the bolt's pattern.
+        let share = if self.bolt { 0.0 } else { direct_share(elev, air.cloud) };
         let def = &w.defs.sky;
         let (mw, mh) = (w.map.w as f32, w.map.h as f32);
         m.set_texture("occluders", occ);
@@ -1217,6 +1262,7 @@ impl Light {
         m.set_uniform("exposure", self.exposure);
         m.set_uniform("ambient", sky * (1.0 - share));
         m.set_uniform("direct", sky * share);
+        m.set_uniform("bolt", bolt);
         m.set_uniform("night", rgb3(def.rgb_night));
         let fire = rgb3(def.rgb_fire) * 1.2;
         for (k, name) in ["ch0", "ch1", "ch2", "ch3"].into_iter().enumerate() {
