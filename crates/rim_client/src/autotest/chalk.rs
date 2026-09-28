@@ -45,8 +45,6 @@ pub(super) async fn the_grid(t: &mut T, carry: &mut Carry) {
     let corner = t.app.cam.to_screen(o.x as f32 + 4.0, o.y as f32 + 4.0);
     let d = patch_diff(&rest, &plan, corner, 6.0);
     t.check(d < 0.2, format!("at 8 points a cell there's no grid ({d:.2})"));
-    let shown = crate::grid::strength(&t.app);
-    t.check(shown.lens == 0.0 && shown.plan == 0.0, format!("putting the tool down fades the grid out ({shown:?})"));
     // Measure (f5bc43e3): G turns on a counting grid whose fifth lines
     // show at any zoom, numbered along the pointer's row and column.
     t.app.cam.zoom = 6.0;

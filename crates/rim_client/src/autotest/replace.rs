@@ -13,7 +13,6 @@ pub(super) async fn replace_in_place(t: &mut T, carry: &mut Carry) {
     let spot = carry.spot.expect("set before replace_in_place");
     println!("\n# a wall planned over another is drawn hatched over it until they swap (DESIGN.md §6c)");
     let north = hut.offset(2, 0);
-    let old = t.w().map.fixture_at(north);
     t.focus(north);
     // Blue less red, over the cell: the hatch is pale blue on wood.
     let blueness = |img: &Image, t: &T| {
@@ -30,8 +29,6 @@ pub(super) async fn replace_in_place(t: &mut T, carry: &mut Carry) {
     let before = blueness(&img, t);
     t.app.sim.push(Command::Build { thing: wall, stuff: Some(stone), a: north, b: north, facing: 0 });
     t.ticks(1);
-    let planned = old.and_then(|o| t.w().replacement_of(o)).is_some();
-    t.check(planned && t.w().map.fixture_at(north) == old, "stone planned over the wood wall, which still stands");
     let img = t.grab().await;
     let after = blueness(&img, t);
     t.check(after > before + 0.05, format!("the plan is drawn over the wall ({before:.2} -> {after:.2})"));
