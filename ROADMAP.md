@@ -629,7 +629,7 @@ Dig down. The map becomes a stack of 2D levels joined only at stairs, ladders an
 
 ## crafting — Crafting
 
-`#######···` 68% · 19 of 28 done · due 2027-05-01
+`#######···` 69% · 20 of 29 done · due 2027-05-01
 
 Production chains: workbenches and bills, cooking, farming, tailoring, research as a plugin.
 
@@ -652,6 +652,7 @@ Production chains: workbenches and bills, cooking, farming, tailoring, research 
 - [x] `6ce26632` The UI draws a thing's look: the item token <sup>feature · p1 · m · client</sup>
 - [x] `6ec6da26` primitive: baskets, pots as stores, a woodpile and a stone bin <sup>content · p2 · s · plugin</sup>
 - [x] `704889c9` Research as a plugin <sup>feature · p1 · l · plugin</sup>
+- [x] `87f54c25` The stock-field cost test times 0.003 ms under load and flakes <sup>bug · p1</sup>
 - [x] `9b569a33` Terrain properties, tags and distance-to inputs <sup>feature · p0 · s · engine</sup>
 - [x] `ac643c1f` Stock ledger and holdings: counts by thing, material and chunk <sup>perf · p1 · m · engine</sup>
 - [x] `c2b1b623` Map generation seeds spawns by def index, so adding a def reshuffles maps <sup>bug · p2 · s · engine</sup>
