@@ -2,14 +2,14 @@
 id: 349e1b52-2784-4e98-98e3-73fb36f6fad3
 title: A lightning flash lights evenly on its first frame
 type: bug
-status: doing
+status: done
 milestone: lighting
 assignee: Oddur Sigurdsson
-claimed: 2026-09-27
 depends_on:
 - ff818bb3-7175-48f0-a3c3-c346c9bc2469
 created: 2026-09-27
-updated: 2026-09-27
+updated: 2026-09-28
+closed_at: 2026-09-28
 priority: p3
 api: none
 effort: s

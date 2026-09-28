@@ -40,6 +40,22 @@ impl T {
         next_frame().await;
     }
 
+    /// Frames until the firelight bake has caught up: it bakes at most once
+    /// a second, and draws what it hasn't baked yet as moving lights.
+    async fn light_settles(&mut self) {
+        let since = get_time();
+        loop {
+            self.frame().await;
+            if !self.app.light.owes_a_bake() {
+                return;
+            }
+            if get_time() - since > 3.0 {
+                self.check(false, "the firelight bake caught up within 3 s");
+                return;
+            }
+        }
+    }
+
     async fn frame(&mut self) {
         let raw = RawInput { mouse: self.mouse, ..Default::default() };
         self.input(raw).await;
@@ -2124,7 +2140,7 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         let (a, c) = (o.offset(3, 7), o.offset(9, 7));
         let first = t.app.sim.world.spawn_fixture(campfire, a, false);
         t.ticks(2);
-        t.frame().await;
+        t.light_settles().await;
         let glow = |t: &T, q: IVec| {
             t.app.light.fire_at(q.x as f32 + 0.5, q.y as f32 + 0.5).map_or(0.0, |v| v.iter().sum::<f32>())
         };
@@ -2133,7 +2149,7 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         // Six cells away, a second fire's glow overlaps the first's.
         let second = t.app.sim.world.spawn_fixture(campfire, c, false);
         t.ticks(2);
-        t.frame().await;
+        t.light_settles().await;
         let draws = t.app.light.passes.iter().find(|p| p.name == "firelight").map_or(0, |p| p.draws);
         t.check(draws == 2, format!("the new fire redoes one area, not the map ({draws} draws)"));
         let spots = [a, c, o.offset(6, 7), o.offset(0, 7), o.offset(12, 7)];
@@ -2212,6 +2228,7 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     let hall = build(&mut t, site.offset(-34, 12), 7, "wall", true);
     let moat = build(&mut t, site.offset(-34, 22), 5, "water", false);
     t.ticks(2);
+    t.light_settles().await;
     let inside = |o: IVec, side: i32| (1..side - 1).flat_map(move |dy| (1..side - 1).map(move |dx| o.offset(dx, dy)));
     let texels = |q: IVec| {
         [0.25, 0.75].into_iter().flat_map(move |fy| [0.25, 0.75].map(|fx| (q.x as f32 + fx, q.y as f32 + fy)))
@@ -2287,12 +2304,12 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         if let Some(far) = far {
             // Rooms rebuilt by hand, not by ticking: a tick can finish
             // building a fire somewhere, and that would rightly rebake.
-            t.frame().await;
+            t.light_settles().await;
             let rebuilds = t.w().map.room_rebuilds;
             let bakes = t.app.light.bakes;
             placed.extend(t.app.sim.world.spawn_fixture(wall, far, false));
             t.app.sim.world.map.ensure_rooms();
-            t.frame().await;
+            t.light_settles().await;
             t.check(
                 t.w().map.room_rebuilds > rebuilds && t.app.light.bakes == bakes,
                 format!(
@@ -2322,11 +2339,11 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
                 w.map.inb(p) && w.map.passable(p) && w.map.fixture_at(p).is_none() && past(p) && shares_chunk(p)
             });
         if let Some(near) = near {
-            t.frame().await;
+            t.light_settles().await;
             let bakes = t.app.light.bakes;
             placed.extend(t.app.sim.world.spawn_fixture(wall, near, false));
             t.app.sim.world.map.ensure_rooms();
-            t.frame().await;
+            t.light_settles().await;
             t.check(
                 t.app.light.bakes == bakes,
                 format!(
@@ -2345,7 +2362,7 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         }
         let bakes = t.app.light.bakes;
         t.ticks(2);
-        t.frame().await;
+        t.light_settles().await;
         let after = glow(&t, dark.offset(1, 1));
         t.check(
             !t.w().map.indoors(dark.offset(2, 2)) && t.app.light.bakes > bakes && after < before - 0.05,
@@ -2480,6 +2497,66 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     for f in calm {
         t.app.sim.world.fields.set_ambient(f, None);
     }
+
+    // ---------------------------------------------------------- 5a69f9c9 moving lights
+    println!("\n# moving lights: a spreading fire glows at once and bakes at most once a second (5a69f9c9)");
+    t.app.paused = true;
+    t.light_settles().await;
+    let flames = defs.thing_id("fire:flames").expect("the fire plugin's flames");
+    // A run of open ground the fire spreads along, a cell a frame.
+    let open = |w: &World, p: IVec| w.map.passable(p) && w.map.fixture_at(p).is_none() && w.map.floor_at(p).is_none();
+    const RUN: i32 = 40;
+    let run = (0..120i32)
+        .flat_map(|r| (-r..=r).flat_map(move |dy| (-r..=r).map(move |dx| site.offset(dx, dy))))
+        .find(|&p| (0..RUN).all(|dx| t.w().map.inb(p.offset(dx, 0)) && open(t.w(), p.offset(dx, 0))));
+    let mut burning = Vec::new();
+    if let Some(o) = run {
+        t.focus(o.offset(RUN / 2, 0));
+        let (bakes, since) = (t.app.light.bakes, get_time());
+        let mut dim = f32::MAX;
+        for dx in 0..RUN {
+            burning.extend(t.app.sim.world.spawn_fixture(flames, o.offset(dx, 0), false));
+            t.frame().await;
+            // Baked or not yet, a new flame lights its own cell the frame it
+            // appears.
+            let (x, y) = (o.x as f32 + dx as f32 + 0.5, o.y as f32 + 0.5);
+            let sum = |c: Option<[f32; 4]>| c.map_or(0.0, |c| c.iter().sum::<f32>());
+            dim = dim.min(sum(t.app.light.fire_at(x, y)) + sum(t.app.light.moving_at(x, y)));
+        }
+        let (baked, took) = (t.app.light.bakes - bakes, get_time() - since);
+        t.check(dim > 0.2, format!("every new flame glows the frame it appears (dimmest {dim:.2})"));
+        t.check(
+            (baked as f64) <= took.ceil() + 1.0,
+            format!("{RUN} flames in {took:.1} s bake {baked} times: at most once a second"),
+        );
+        t.light_settles().await;
+        t.check(t.app.light.moving_lit.1 == 0, "and once the bake catches up, none is left moving");
+    } else {
+        t.check(false, "a run of open ground for a fire");
+    }
+    // 64 lights moving round the view, each a little further out than the
+    // last: the preset's 8 nearest cast shadows, and all of them glow.
+    let (cx, cy) = (t.app.cam.x, t.app.cam.y);
+    let ring = |k: usize| {
+        let (r, a) = (3.0 + 0.2 * k as f32, k as f32 * 0.098);
+        vec2(cx + r * a.cos(), cy + r * a.sin())
+    };
+    t.app.light.set_moving((0..64).map(|k| (ring(k), 4.0, 60.0)));
+    t.frame().await;
+    let (shadowed, all) = t.app.light.moving_lit;
+    let far = ring(63);
+    let glow = t.app.light.moving_at(far.x, far.y).map_or(0.0, |c| c.iter().sum::<f32>());
+    t.check(
+        (shadowed, all) == (8, 64) && glow > 0.2,
+        format!("64 moving lights: {shadowed} cast shadows, {all} drawn, and past the cap they glow ({glow:.2})"),
+    );
+    t.shot("moving_lights").await;
+    t.app.light.set_moving([]);
+    for e in burning {
+        t.app.sim.world.despawn_thing(e);
+    }
+    t.light_settles().await;
+    t.app.paused = false;
 
     // ---------------------------------------------------------- 508ad373 lighting from the palette
     println!("\n# a lighting preset from the palette takes at once (508ad373)");

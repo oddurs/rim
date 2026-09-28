@@ -1506,7 +1506,8 @@ pub fn render(app: &mut App) {
     // The sky first: a flash that strikes this frame is lit from its bolt
     // this frame.
     app.sky.update(&air);
-    app.light.prepare(&app.sim.world, &air, px_per_cell, &app.roofs.height, app.sky.flash());
+    let centre = vec2(app.cam.x, app.cam.y);
+    app.light.prepare(&app.sim.world, &air, px_per_cell, &app.roofs.height, app.sky.flash(), centre);
     t.light = lap();
     update_world_target(app);
     let (sw, sh) = (screen_width(), screen_height());
