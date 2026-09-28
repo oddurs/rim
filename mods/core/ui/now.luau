@@ -94,6 +94,16 @@ local CRITICAL = 0.15
 
 -- ─── Core's alerts, through the same registry a mod uses ───────────────────
 
+-- Every id in a list of people: what an alert about them all names, so
+-- the depth ruler marks each level one of them is on.
+local function ids(list): { number }
+	local out = {}
+	for _, p in list do
+		table.insert(out, p.id)
+	end
+	return out
+end
+
 -- "Asa", "Asa and Bo", "Asa and 3 others".
 local function names(list): string
 	if #list == 1 then
@@ -115,7 +125,7 @@ alerts.add({
 			end
 		end
 		if #hurt > 0 then
-			return { text = string.format(t("core:alerts.hurt", "%s badly hurt"), names(hurt)), subject = hurt[1].id }
+			return { text = string.format(t("core:alerts.hurt", "%s badly hurt"), names(hurt)), subject = hurt[1].id, subjects = ids(hurt) }
 		end
 		return nil
 	end,
@@ -148,7 +158,7 @@ alerts.add({
 			end
 		end
 		if #idle > 0 then
-			return { text = string.format(t("core:alerts.idle", "%s idle"), names(idle)), subject = idle[1].id }
+			return { text = string.format(t("core:alerts.idle", "%s idle"), names(idle)), subject = idle[1].id, subjects = ids(idle) }
 		end
 		return nil
 	end,

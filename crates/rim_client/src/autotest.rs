@@ -1267,6 +1267,10 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
             let max = t.w().defs.creature(t.pawn(hurt).def).max_hp;
             let hp = t.pawn(hurt).hp;
             t.app.sim.world.ecs.get::<&mut Pawn>(hurt).unwrap().hp = max / 10;
+            // The founder hurt too, up top: the alert names them first, and
+            // still counts below for the one down there (4796c539).
+            let founder_hp = t.pawn(founder).hp;
+            t.app.sim.world.ecs.get::<&mut Pawn>(founder).unwrap().hp = max / 10;
             t.focus(top);
             t.app.cam.zoom = 20.0;
             // Long enough for the zoom to settle: a chunk drawn scaled from
@@ -1277,6 +1281,7 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
             t.check(t.ui_rect("core:depth.level.-1").is_some(), "the ruler lists the level dug into");
             t.check(t.ui_rect("core:depth.count.-1").is_some(), "with the colonists on it");
             t.check(t.ui_rect("core:depth.alerts.-1").is_some(), "and the alert about one of them");
+            t.check(t.ui_rect("core:depth.alerts.0").is_some(), "which counts up top too, for the founder");
             t.check(t.ui_rect("core:depth.level.-2").is_none(), "but not a level nobody has reached");
             t.shot("level_surface").await;
             t.key(KeyCode::LeftBracket).await;
@@ -1305,6 +1310,7 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
             t.click_ui(&format!("core:colonists.{name}")).await;
             t.check(t.app.cam.z == -1, "selecting a colonist on another level shows their level");
             t.app.sim.world.ecs.get::<&mut Pawn>(hurt).unwrap().hp = hp;
+            t.app.sim.world.ecs.get::<&mut Pawn>(founder).unwrap().hp = founder_hp;
             t.key(KeyCode::Escape).await;
             t.key(KeyCode::RightBracket).await;
         }

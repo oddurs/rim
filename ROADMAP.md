@@ -651,7 +651,7 @@ Lockstep co-op on top of determinism: command broadcast, desync detection, mod-l
 
 ## depth — Depth
 
-`#######···` 64% · 7 of 11 done
+`#######···` 67% · 8 of 12 done
 
 Dig down. The map becomes a stack of 2D levels joined only at stairs, ladders and holes, rock becomes terrain, and water fills what you dig into. Design: DESIGN.md §6d.
 
@@ -661,6 +661,7 @@ Dig down. The map becomes a stack of 2D levels joined only at stairs, ladders an
 - [ ] `f2a8ffc7` Underground: rock is a roof, the cellar keeps the year's mean, and it's dark <sup>content · p2 · s · core</sup>
 - [x] `3979868c` Basins: water fills what you dig into <sup>feature · p1 · l · engine</sup>
 - [x] `3f90e043` Strata: the levels below are made from \[\[stratum\]\] defs <sup>feature · p0 · m · engine</sup>
+- [x] `4796c539` The depth ruler misses an alert whose first subject is on another level <sup>bug · p0 · s · core</sup>
 - [x] `5689930d` The view: one level at a time, \[ and \], and the depth ruler <sup>feature · p0 · m · client</sup>
 - [x] `8cc6252d` Rock is terrain: solid cells, mining them, and worksites <sup>feature · p0 · l · engine</sup>
 - [x] `acd85584` Portals: stairs, ladders, digging down, and paths across levels <sup>feature · p0 · l · engine</sup>

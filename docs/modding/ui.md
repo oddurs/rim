@@ -487,7 +487,9 @@ alerts.add({
 
 A check returns nothing when all is well. Given a `subject`, the alert
 selects and centres on it when clicked; `on_click` in the definition
-overrides that. Checks run at most four times a second however often the
+overrides that. An alert about several pawns or things can name them all
+in `subjects = { ids }`: the depth ruler counts it on every level one of
+them is on, where `subject` alone would put it only on the first's. Checks run at most four times a second however often the
 panel is rebuilt, so one may read the world freely, and a check that errors
 shows as a bad alert naming it. Each alert's row has the id
 `core:alerts.<id>`.
