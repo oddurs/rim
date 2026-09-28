@@ -26,6 +26,7 @@ pub mod savetext;
 pub mod script;
 pub mod shelter;
 pub mod sim;
+pub mod sky;
 pub mod snapshot;
 pub mod stock;
 pub mod store;

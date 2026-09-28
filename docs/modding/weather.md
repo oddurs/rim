@@ -45,6 +45,7 @@ That reads: 10°C, plus 9° times a curve over the hour of the day.
 | `{ input = "hour" }` | Hour of the day, 0 to 24 |
 | `{ input = "year" }` | Fraction of the year, 0 to 1 |
 | `{ input = "cycle", days = 8, offset = 2 }` | 0 to 1 over its own period of `days`; `offset` days into it at the game's start (default 0). A moon's phases |
+| `{ input = "body", body = "core:moon", of = "phase" }` | Where a `[[sky_body]]` is: `of` is `"altitude"` (degrees above the horizon, -90 to 90), `"azimuth"` (0 to 360, 0 east, 90 south), `"up"` (0 below the horizon to 1 above, through a twilight) or `"phase"` (the lit fraction, 0 to 1). See [where the bodies are](#where-the-bodies-are) |
 | `{ ambient = "cloud" }` | Another field's outdoor value |
 | `{ field = "temperature" }` | Another field's value at the cell being read (a derived field's terms); elsewhere its outdoor value |
 | `{ noise = "gusts", hours = 2 }` | Smooth noise from -1 to 1, changing over about `hours` game hours |
@@ -274,7 +275,9 @@ tests and tools, not mods.
 ## The calendar
 
 Core's `[[calendar]]` sets a 60-day year of four seasons, starting on day 9 of
-spring. Patch `calendar/core` for a longer year or different seasons.
+spring, at `latitude` 45° north, with `midsummer` (the longest day, as a
+fraction of the year) in the middle of summer, 0.375. Patch `calendar/core`
+for a longer year, different seasons, or a world nearer the pole.
 
 <!-- not a sample -->
 ```lua
@@ -474,6 +477,34 @@ angular_size = 2.0
 
 A sky with no bodies may give `[[sky]]` a lone `sun` path instead, lit by
 all of its light; beside bodies it's ignored, with a warning.
+
+### Where the bodies are
+
+The sim works out where each `[[sky_body]]` is from the tick and its orbit,
+the same on every machine, and terms read it with `input = "body"`:
+
+| Key | Default | |
+|---|---|---|
+| `day_period` | 1.0 | Days between one crossing of the sky and the next. A moon that laps the sun once a phase cycle takes `phase_days / (phase_days − 1)`, so it rises later each day |
+| `transit` | 12.0 | The hour after the game's first midnight it is highest. Over 24 is fine: a moon full on the first night is highest at 24 |
+| `tilt` | 0.0 | Degrees north of the equator at the calendar's `midsummer`, and as far south at midwinter. The sun's is 23; a full moon, opposite it, is -23 |
+| `phase_days` | none | Days from new to new, full halfway. None: always lit |
+| `phase_offset` | 0.0 | Days into the cycle at the game's start, as `cycle`'s `offset` |
+
+The calendar's `latitude` (default 45) sets how high they climb and how the
+day's length follows the year: at 45° with a tilt of 23, the sun is up 15
+hours at midsummer and under 9 at midwinter. `up` rises from 0 to 1 while a
+body is within 6° of the horizon, so light ramps through a twilight. Core's
+moon:
+
+<!-- not a sample -->
+```toml
+day_period = 1.0714286
+transit = 24.0
+tilt = -23.0
+phase_days = 15.0
+phase_offset = 6.75
+```
 
 ## What stops light
 

@@ -2744,7 +2744,7 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
             )
             .map_err(|e| e.to_string())?;
             let fields = |id: &str| defs.lookup("field", id).map(|f| f as usize);
-            body.resolve(&defs.fields, fields, &mut Vec::new())?;
+            body.resolve(&defs.fields, &fields, &mut Vec::new())?;
             defs.sky_bodies.push(body);
             Ok(())
         })();

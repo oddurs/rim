@@ -8,3 +8,8 @@ year_days = 60
 seasons = ["spring", "summer", "autumn", "winter"]
 # 0-based: the game starts on day 9 of spring.
 start_day = 8
+# Where the world is: at 45° north the sun climbs to 68° at midsummer, a
+# day 15 hours long, and to 22° at midwinter, a day under 9. Midsummer is the
+# middle of summer, where mods/weather puts the warmest days.
+latitude = 45.0
+midsummer = 0.375

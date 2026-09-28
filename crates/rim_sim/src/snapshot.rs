@@ -923,7 +923,7 @@ impl Snapshot {
         }
         // Under other defs the map itself may differ (a removed mod's walls
         // are gone), so room values are carried over cell by cell.
-        w.fields.restore(&mut w.map, fields, remap.to.is_some());
+        w.fields.restore(&w.defs, &mut w.map, fields, remap.to.is_some());
         w.refresh_boundaries();
 
         for (name, bytes) in &self.sections {

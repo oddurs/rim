@@ -71,6 +71,7 @@ are in [Scripting rules](scripting.md).
 | `rim.set_reading` | `(id: string, value: number) -> ()` | Publish a colony reading, like "food_days", under your mod's name (kept to thousandths). Rules with `when = { reading = "mod:id", below = ..., until = ... }` switch on and off as it crosses their marks, firing `rule_started` and `rule_stopped`. Publish on your own cadence: hourly is plenty. |
 | `rim.set_stance` | `(stance: string) -> ()` | Put the colony in a stance: its priority rules hold until another. For incidents; the player's comes as a command. |
 | `rim.set_terrain` | `(x: number, y: number, terrain: string, z: number?) -> ()` | Change the terrain at a cell on level z (the surface if nil): what a level generator uses. |
+| `rim.sky_body` | `(id: string) -> SkyBody` | Where a sky body is: degrees above the horizon and round it (0 east, 90 south), how far up it is (0 to 1, through a twilight) and how much of it is lit (0 to 1). |
 | `rim.spawn_item` | `(thing: string, x: number, y: number, count: number, stuff: string?, z: number?) -> number` | Drop items near a cell, merging into stacks; returns how many didn't fit. stuff is what they're made of (a flint axe): it sets their hp and quality, and they stack only with the same. z is the level (the surface if nil). |
 | `rim.spawn_pawn` | `(creature: string, faction: Faction, x: number, y: number, name: string?, z: number?) -> (number?, string?)` | Spawn a creature on level z (the surface if nil); returns its id and name, or nil if the cell is blocked. |
 | `rim.stance` | `() -> string?` | The colony's stance, or nil if no mod defines any. |
@@ -107,6 +108,7 @@ type StoreInfo = { level: number, slots: number, contents: { StoreSlot } }
 type StockQuery = { thing: string?, tag: string?, category: string? }
 type ItemCategoryInfo = { id: string, label: string, parent: string?, order: number, children: { string }, items: { string } }
 type Date = { year: number, season: string, season_index: number, day: number, day_of_year: number, year_days: number, year_fraction: number }
+type SkyBody = { altitude: number, azimuth: number, up: number, phase: number }
 type Room = { id: number, cells: number, enclosed: boolean, uncovered: number, role: string?, role_label: string? }
 type PriorityPart = { kind: "default" | "role" | "pin" | "rule", label: string, delta: number }
 type WorkRoleInfo = { index: number, id: string?, label: string, edited: boolean }

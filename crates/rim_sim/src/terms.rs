@@ -15,7 +15,7 @@
 //! transcendental maths, so lockstep holds on every platform.
 //!
 //! Inputs are global (time of day and year, a cycle of any number of days,
-//! other fields' outdoor values, noise, constants), plus those read at the cell a derived or stock field
+//! where a sky body is, other fields' outdoor values, noise, constants), plus those read at the cell a derived or stock field
 //! is worked out at: `field`, another field's value there (its outdoor value
 //! where there is no cell); `terrain`, a property of the ground there;
 //! `near`, how many cells it is to the nearest terrain with a tag; and
@@ -65,7 +65,7 @@ pub struct TermDef {
 #[serde(untagged)]
 pub enum InputDef {
     Const(f64),
-    Source(SourceDef),
+    Source(Box<SourceDef>),
 }
 
 #[derive(Deserialize, Clone, Debug, Default)]
@@ -73,9 +73,13 @@ pub enum InputDef {
 pub struct SourceDef {
     /// `"year"` (0..1), `"hour"` (0..24), `"cycle"` (0..1 over `days`),
     /// `"sky"` (0 in an enclosed room, 1 elsewhere), `"depth"` (levels
-    /// below the surface, 0 on it), or for a stock field's rate `"self"`,
-    /// `"base"` or `"above_base"`.
+    /// below the surface, 0 on it), `"body"` (where a sky body is), or for
+    /// a stock field's rate `"self"`, `"base"` or `"above_base"`.
     pub input: Option<String>,
+    /// For `input = "body"`: which `[[sky_body]]`, and what of it:
+    /// `"altitude"` or `"azimuth"` (degrees), `"up"` or `"phase"` (0..1).
+    pub body: Option<String>,
+    pub of: Option<String>,
     /// Another field's outdoor value.
     pub ambient: Option<String>,
     /// Another field's value at the cell being read, for a derived field;
@@ -117,6 +121,10 @@ enum Src {
         period: u64,
     },
     Depth,
+    Body {
+        body: usize,
+        of: BodyOf,
+    },
     Sky,
     Own,
     Base,
@@ -190,6 +198,26 @@ pub struct Terms {
     pub terms: Vec<Term>,
 }
 
+/// What of a sky body a term reads.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum BodyOf {
+    Altitude,
+    Azimuth,
+    Up,
+    Phase,
+}
+
+impl BodyOf {
+    pub fn read(self, b: &crate::sky::BodyState) -> i64 {
+        to_q(match self {
+            BodyOf::Altitude => b.altitude,
+            BodyOf::Azimuth => b.azimuth,
+            BodyOf::Up => b.up,
+            BodyOf::Phase => b.phase,
+        })
+    }
+}
+
 /// What terms can read. Values in `Q` units.
 pub trait Env {
     /// Fraction of the year, 0..Q.
@@ -220,6 +248,10 @@ pub trait Env {
     fn depth(&self) -> i64 {
         0
     }
+    /// Something of a sky body, times `Q`; 0 by default.
+    fn body(&self, _body: usize, _of: BodyOf) -> i64 {
+        0
+    }
     /// A stock field's own value where it is being worked out.
     fn own(&self) -> i64 {
         0
@@ -239,6 +271,10 @@ pub trait Names {
     }
     /// A terrain tag, by name.
     fn tag(&self, _name: &str) -> Option<usize> {
+        None
+    }
+    /// A sky body, by id.
+    fn body(&self, _id: &str) -> Option<usize> {
         None
     }
 }
@@ -312,6 +348,7 @@ impl Terms {
                 Src::Hour => env.hour(),
                 Src::Cycle { offset, period } => cycle(env.tick(), offset, period),
                 Src::Depth => env.depth(),
+                Src::Body { body, of } => env.body(body, of),
                 Src::Sky => env.sky(),
                 Src::Own => env.own(),
                 Src::Base => env.base(),
@@ -355,6 +392,9 @@ fn compile_source(s: &SourceDef, ctx: &str, names: &dyn Names, warnings: &mut Ve
     if (s.days != 0.0 || s.offset != 0.0) && s.input.as_deref() != Some("cycle") {
         return Err(format!("{ctx}: `days` and `offset` are for `input = \"cycle\"`"));
     }
+    if (s.body.is_some() || s.of.is_some()) && s.input.as_deref() != Some("body") {
+        return Err(format!("{ctx}: `body` and `of` are for `input = \"body\"`"));
+    }
     let src = if let Some(i) = &s.input {
         match i.as_str() {
             "year" => Src::Year,
@@ -370,13 +410,29 @@ fn compile_source(s: &SourceDef, ctx: &str, names: &dyn Names, warnings: &mut Ve
                 Src::Cycle { offset: offset as u64, period: period as u64 }
             }
             "depth" => Src::Depth,
+            "body" => {
+                let id = s.body.as_deref().ok_or_else(|| format!("{ctx}: `input = \"body\"` needs a `body`"))?;
+                let body = names.body(id).ok_or_else(|| format!("{ctx}: unknown sky body '{id}'"))?;
+                let of = match s.of.as_deref() {
+                    Some("altitude") => BodyOf::Altitude,
+                    Some("azimuth") => BodyOf::Azimuth,
+                    Some("up") => BodyOf::Up,
+                    Some("phase") => BodyOf::Phase,
+                    other => {
+                        return Err(format!(
+                            "{ctx}: a body input needs `of` = \"altitude\", \"azimuth\", \"up\" or \"phase\", not {other:?}"
+                        ))
+                    }
+                };
+                Src::Body { body, of }
+            }
             "sky" => Src::Sky,
             "self" => Src::Own,
             "base" => Src::Base,
             "above_base" => Src::AboveBase,
             other => {
                 return Err(format!(
-                    "{ctx}: unknown input '{other}' (have: year, hour, cycle, depth, sky, self, base, above_base)"
+                    "{ctx}: unknown input '{other}' (have: year, hour, cycle, depth, body, sky, self, base, above_base)"
                 ))
             }
         }

@@ -26,7 +26,8 @@
 
 use crate::defs::{DefDb, DefId, FieldKind, IndoorMode, StockLevels};
 use crate::map::{Map, NEIGHBORS8};
-use crate::terms::{self, Env, Q};
+use crate::sky::{self, BodyState};
+use crate::terms::{self, BodyOf, Env, Q};
 use crate::{IVec, TICKS_PER_DAY};
 use hecs::Entity;
 use std::collections::VecDeque;
@@ -83,6 +84,7 @@ struct AmbEnv<'a> {
     tick: u64,
     seed: u64,
     vals: &'a [i64],
+    bodies: &'a [BodyState],
     /// Levels below the surface, times `Q`, for `below` terms.
     depth: i64,
 }
@@ -96,6 +98,9 @@ impl Env for AmbEnv<'_> {
     }
     fn depth(&self) -> i64 {
         self.depth
+    }
+    fn body(&self, body: usize, of: BodyOf) -> i64 {
+        of.read(&self.bodies[body])
     }
     fn ambient(&self, f: usize) -> i64 {
         self.vals[f]
@@ -136,6 +141,9 @@ impl Env for CellEnv<'_> {
     }
     fn depth(&self) -> i64 {
         (-self.p.z).max(0) as i64 * Q
+    }
+    fn body(&self, body: usize, of: BodyOf) -> i64 {
+        of.read(&self.fields.bodies[body])
     }
     fn field(&self, f: usize) -> i64 {
         self.fields.value_fixed(self.defs, self.map, f, self.p) as i64 * (Q / FIXED as i64)
@@ -196,6 +204,9 @@ impl Env for Sheltered<'_> {
     }
     fn near(&self, tag: usize) -> i64 {
         self.0.near(tag)
+    }
+    fn body(&self, body: usize, of: BodyOf) -> i64 {
+        self.0.body(body, of)
     }
     fn sky(&self) -> i64 {
         0
@@ -307,6 +318,9 @@ pub struct Fields {
     stock_touched: Vec<(u32, u32)>,
     /// Cells whose move cost changed bucket, for tests and the profiler.
     pub move_changes: u64,
+    /// Where each sky body is, worked out with the outdoor values, in
+    /// `defs.sky_bodies` order.
+    bodies: Vec<BodyState>,
 }
 
 impl Fields {
@@ -338,6 +352,7 @@ impl Fields {
             queue: VecDeque::new(),
             restamped: 0,
             revision: 0,
+            bodies: sky::states(defs, 0),
             stock_next: Vec::new(),
             stock_touched: Vec::new(),
             move_changes: 0,
@@ -475,6 +490,7 @@ impl Fields {
     pub fn update_ambient(&mut self, defs: &DefDb, clock: Clock) {
         let tick = clock.tick;
         self.last_clock = Some(clock);
+        self.bodies = sky::states(defs, tick);
         let mut vals: Vec<i64> = self.atmos.iter().map(|a| a.value).collect();
         for &f in &defs.ambient_order {
             let fd = &defs.fields[f];
@@ -488,8 +504,15 @@ impl Fields {
             let v = match a.pin {
                 Some(v) => v,
                 None => {
-                    let env =
-                        AmbEnv { year: clock.year, hour: clock.hour, tick, seed: clock.seed, vals: &vals, depth: 0 };
+                    let env = AmbEnv {
+                        year: clock.year,
+                        hour: clock.hour,
+                        tick,
+                        seed: clock.seed,
+                        vals: &vals,
+                        bodies: &self.bodies,
+                        depth: 0,
+                    };
                     let base = if fd.terms.is_empty() { terms::to_q(fd.base) } else { fd.terms.eval(&env) };
                     base + a.pushes.iter().map(|p| p.value(tick)).sum::<i64>()
                 }
@@ -511,6 +534,7 @@ impl Fields {
                             tick,
                             seed: clock.seed,
                             vals: &vals,
+                            bodies: &self.bodies,
                             depth: depth * Q,
                         };
                         fd.below_terms.eval(&env)
@@ -576,8 +600,15 @@ impl Fields {
             return vec![("pinned".into(), terms::from_q(v))];
         }
         let vals: Vec<i64> = self.atmos.iter().map(|a| a.value).collect();
-        let env =
-            AmbEnv { year: clock.year, hour: clock.hour, tick: clock.tick, seed: clock.seed, vals: &vals, depth: 0 };
+        let env = AmbEnv {
+            year: clock.year,
+            hour: clock.hour,
+            tick: clock.tick,
+            seed: clock.seed,
+            vals: &vals,
+            bodies: &self.bodies,
+            depth: 0,
+        };
         let fd = &defs.fields[field];
         let mut out: Vec<(String, f64)> = if fd.terms.is_empty() {
             vec![("base".into(), fd.base)]
@@ -593,8 +624,15 @@ impl Fields {
     pub fn eval_global(&self, terms: &terms::Terms) -> f64 {
         let clock = self.last_clock.unwrap_or(Clock { tick: 0, year: 0, hour: 0, seed: 0 });
         let vals: Vec<i64> = self.atmos.iter().map(|a| a.value).collect();
-        let env =
-            AmbEnv { year: clock.year, hour: clock.hour, tick: clock.tick, seed: clock.seed, vals: &vals, depth: 0 };
+        let env = AmbEnv {
+            year: clock.year,
+            hour: clock.hour,
+            tick: clock.tick,
+            seed: clock.seed,
+            vals: &vals,
+            bodies: &self.bodies,
+            depth: 0,
+        };
         terms::from_q(terms.eval(&env))
     }
 
@@ -858,7 +896,7 @@ impl Fields {
     /// Put back what `saved` kept, once the map has its things and rooms.
     /// `map_changed`: the map isn't the one the values were saved on, so
     /// they are carried over to its rooms cell by cell.
-    pub fn restore(&mut self, map: &mut Map, s: SavedFields, map_changed: bool) {
+    pub fn restore(&mut self, defs: &DefDb, map: &mut Map, s: SavedFields, map_changed: bool) {
         self.atmos = s.atmos;
         for (l, (ambient, rooms)) in self.layers.iter_mut().zip(s.ambient.into_iter().zip(s.rooms)) {
             l.ambient = ambient;
@@ -870,6 +908,9 @@ impl Fields {
             l.stock = stock;
         }
         self.last_clock = s.last_clock;
+        // Bodies aren't saved: they follow from the tick they were last
+        // worked out at.
+        self.bodies = sky::states(defs, s.last_clock.map_or(0, |c| c.tick));
         if s.pending_carry || map_changed {
             // The live game carries room values over to the new rooms on its
             // next update, from these ids; so will this one.
@@ -877,6 +918,12 @@ impl Fields {
         } else {
             self.seen_rebuilds = map.room_rebuilds;
         }
+    }
+
+    /// Where each sky body is, as last worked out, in `defs.sky_bodies`
+    /// order.
+    pub fn bodies(&self) -> &[BodyState] {
+        &self.bodies
     }
 
     /// Value at a cell, in hundredths.
