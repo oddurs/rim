@@ -1,0 +1,141 @@
+#!/usr/bin/env bash
+# Tests for scripts/hooks/pre-push, in throwaway repos with a bare remote.
+# `scripts/task scripts` runs it, and so `check`; it takes seconds and needs
+# only git.
+set -euo pipefail
+hook="$(cd "$(dirname "$0")" && pwd)/hooks/pre-push"
+tmp=$(mktemp -d)
+trap 'command rm -rf "$tmp"' EXIT
+fails=0
+
+git() { command git -c user.name=t -c user.email=t@t -c init.defaultBranch=main "$@"; }
+
+# A repo whose `scripts/task roadmap` only says it ran, a remote with main on
+# it, and the hook under test.
+fresh() {
+  command rm -rf "$tmp/remote" "$tmp/repo"
+  git init -q --bare "$tmp/remote"
+  git init -q "$tmp/repo"
+  cd "$tmp/repo"
+  mkdir -p scripts cairn
+  printf '#!/bin/sh\necho "roadmap ran"\n' >scripts/task
+  chmod +x scripts/task
+  echo base >code.rs
+  git add -A && git commit -qm base
+  git remote add origin "$tmp/remote"
+  git push -q origin main
+}
+
+commit() { # file, content, message
+  echo "$2" >"$1" && git add -A && git commit -qm "$3"
+}
+
+# The hook's verdict on pushing HEAD to a new branch, and what it printed.
+push_verdict() {
+  local sha out
+  sha=$(git rev-parse HEAD)
+  if out=$(echo "refs/heads/x $sha refs/heads/x 0000000000000000000000000000000000000000" | bash "$hook" origin "$tmp/remote" 2>&1); then
+    echo "ok: ${out//$'\n'/ }"
+  else
+    echo "refused: ${out//$'\n'/ }"
+  fi
+}
+
+passes() { git rev-parse HEAD >"$(git rev-parse --git-dir)/rim-check-passed"; }
+
+expect() { # name, pattern, verdict
+  if grep -qE "$2" <<<"$3"; then
+    echo "ok    $1"
+  else
+    echo "FAIL  $1: wanted /$2/, got: $3"
+    fails=$((fails + 1))
+  fi
+}
+
+# 1. A docs-only commit stacked on a pushed code branch runs only the roadmap check.
+fresh
+git checkout -qb lower && commit code.rs lower "code on the lower branch" && passes
+git push -q origin lower
+git checkout -qb upper && commit cairn/item.md note "an item"
+expect "a docs commit on a pushed code branch needs only the roadmap check" '^ok: .*roadmap ran' "$(push_verdict)"
+
+# 2. A code commit on the same stack is refused without a check.
+commit code.rs upper "code on the upper branch"
+expect "a code commit on the stack is refused unchecked" '^refused: .*hasn.t passed' "$(push_verdict)"
+
+# 3. After the lower branch merges under another sha, the upper branch rebased
+#    onto main goes on its checked patch.
+fresh
+git checkout -qb lower && commit code.rs lower "lower" && git push -q origin lower
+git checkout -qb upper && commit other.rs upper "upper" && passes
+git checkout -q main && echo lower >code.rs && git add -A && git commit -qm "lower, squashed by the queue" && git push -q origin main
+git checkout -q upper && git rebase -q --onto main lower
+expect "a stacked branch rebased after its lower branch merged goes" '^ok: .*rebased, the same change' "$(push_verdict)"
+
+# 4. The same rebase with a commit dropped needs the check again.
+fresh
+git checkout -qb work && commit a.rs a "a" && commit b.rs b "b, which a needs" && passes
+git checkout -qb without-b main && commit a.rs a "a"
+expect "a rebase that drops a checked commit is refused" '^refused:' "$(push_verdict)"
+
+# 5. The checked commit itself goes, and a push the remote already has goes.
+fresh
+git checkout -qb work && commit a.rs a "a" && passes
+expect "the checked commit goes" '^ok:' "$(push_verdict)"
+git push -q origin work
+git checkout -qb again
+expect "a commit the remote already has goes" '^ok:' "$(push_verdict)"
+
+# 6. A plain code commit with no check is refused.
+fresh
+commit code.rs changed "unchecked"
+expect "an unchecked code commit is refused" '^refused:' "$(push_verdict)"
+
+# 7. A checked branch already pushed, rebased onto a main that moved, goes.
+fresh
+git checkout -qb work && commit a.rs a "a" && passes && git push -q origin work
+git checkout -q main && commit m.rs m "main moves" && git push -q origin main
+git checkout -q work && git rebase -q main
+expect "a pushed checked branch rebased onto a newer main goes" '^ok: .*rebased, the same change' "$(push_verdict)"
+
+# 8. An amend that changes only whitespace inside a string is a new change.
+fresh
+git checkout -qb work && commit a.rs 'let s = "stone block";' "a" && passes
+echo 'let s = "stoneblock";' >a.rs && git add -A && git commit -q --amend --no-edit
+expect "an amend that changes whitespace in a string is refused" '^refused:' "$(push_verdict)"
+
+# 9. Moving a guide out of docs/modding/ is not a docs-only change.
+fresh
+mkdir -p docs/modding && commit docs/modding/guide.md guide "a guide" && git push -q origin main
+git checkout -qb work && git mv docs/modding/guide.md GUIDE.md && git commit -qm "move the guide"
+expect "a guide renamed out of docs/modding/ is refused" '^refused:' "$(push_verdict)"
+
+# 10. An upper branch rebased onto its lower branch, which gained a commit and
+#     was pushed, goes on its checked commit.
+fresh
+git checkout -qb lower && commit l.rs l "lower" && git push -q origin lower
+git checkout -qb upper && commit u.rs u "upper" && passes
+git checkout -q lower && commit l2.rs l2 "lower, after review" && git push -q origin lower
+git checkout -q upper && git rebase -q lower
+expect "an upper branch rebased onto its updated, pushed lower branch goes" '^ok: .*rebased' "$(push_verdict)"
+
+# 11. A branch with no history in common says why it is refused.
+fresh
+git checkout -q --orphan alone && git rm -rqf . && commit x.rs x "alone"
+expect "an orphan branch is refused with the reason" '^refused: .*hasn.t passed' "$(push_verdict)"
+
+# 12. Two refs at once, one unchecked: refused.
+fresh
+git checkout -qb checked && commit a.rs a "a" && passes
+git checkout -qb unchecked main && commit b.rs b "b"
+verdict=$( (
+  echo "refs/heads/checked $(git rev-parse checked) refs/heads/checked 0000000000000000000000000000000000000000"
+  echo "refs/heads/unchecked $(git rev-parse unchecked) refs/heads/unchecked 0000000000000000000000000000000000000000"
+) | bash "$hook" origin "$tmp/remote" 2>&1 && echo ok || echo refused)
+expect "a push of two refs with one unchecked is refused" 'refused$' "$verdict"
+
+if [ "$fails" -gt 0 ]; then
+  echo "pre-push: $fails failed"
+  exit 1
+fi
+echo "pre-push: all cases pass"

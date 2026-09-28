@@ -7,11 +7,18 @@
 # `scripts/task check` records the commit it passed on, with a clean tree, and
 # this checks that record against what is being pushed.
 #
-# - A clean rebase of a checked commit onto a newer main is the same change:
-#   its patch (ROADMAP.md aside) matches the checked one, so it goes, and CI
-#   proves the new combination, as the merge queue expects.
+# What a push adds is the commits the remote doesn't have yet, judged from the
+# newest commit below them that it does: a commit stacked on a pushed branch
+# carries only its own change.
+#
+# - A clean rebase of a checked commit is the same change, commit by commit
+#   (ROADMAP.md aside, whitespace counted): every commit pushed matches one the
+#   check covered, and every one it covered that the remote lacks is pushed or
+#   landed on main. It goes, and CI proves the new combination, as the merge
+#   queue expects. A commit dropped on the way needs the check again, unless
+#   the remote already had it.
 # - Deleting a remote branch or pushing a tag checks nothing.
-# - A push that touches only cairn items and top-level Markdown needs only the
+# - A push that adds only cairn items and top-level Markdown needs only the
 #   roadmap check, run here. Markdown elsewhere counts as code: tests read the
 #   guides in docs/modding/.
 set -euo pipefail
@@ -29,30 +36,47 @@ done
 stamp="$(git rev-parse --git-dir)/rim-check-passed"
 passed=$(cat "$stamp" 2>/dev/null || true)
 
-# The change a commit makes on top of main, as a patch id.
-patch() {
-  local base
-  base=$(git merge-base "$1" origin/main 2>/dev/null) || return 0
-  git diff "$base" "$1" -- . ':(exclude)ROADMAP.md' | git patch-id --stable | cut -d' ' -f1
+# A commit's own change, ROADMAP.md aside (it is rendered, and differs after
+# any rebase), as a patch id. Verbatim: whitespace in a string is code too.
+empty_tree=$(git hash-object -t tree /dev/null)
+pid() {
+  local parent
+  parent=$(git rev-parse -q --verify "$1^" || echo "$empty_tree")
+  git diff --no-renames "$parent" "$1" -- . ':(exclude)ROADMAP.md' | git patch-id --verbatim | cut -d' ' -f1
+}
+
+# The commits below $1 that the remote doesn't have, oldest first.
+unpushed() {
+  git rev-list --topo-order --reverse "$1" --not --remotes=origin
+}
+
+# Every commit in $1 has a patch id among $2's.
+covered() {
+  local c
+  for c in $1; do grep -qx "$c" <<<"$2" || return 1; done
 }
 
 for sha in "${pushing[@]}"; do
   [ "$sha" = "$passed" ] && continue
-  if [ -n "$passed" ] && git cat-file -e "$passed" 2>/dev/null; then
-    was=$(patch "$passed")
-    if [ -n "$was" ] && [ "$was" = "$(patch "$sha")" ]; then
+  new=$(unpushed "$sha")
+  [ -z "$new" ] && continue # the remote has all of it already
+  if [ -n "$passed" ] && git cat-file -e "$passed" 2>/dev/null && git rev-parse -q --verify origin/main >/dev/null; then
+    new_ids=$(for c in $new; do pid "$c"; done)
+    checked=$(for c in $(git rev-list "$passed" --not origin/main); do pid "$c"; done)
+    lacking=$(for c in $(unpushed "$passed"); do pid "$c"; done)
+    if covered "$new_ids" "$checked" && { covered "$lacking" "$new_ids" ||
+      covered "$lacking" "$new_ids"$'\n'"$(for c in $(git rev-list "$(git merge-base "$passed" origin/main)..origin/main"); do pid "$c"; done)"; }; then
       echo "pre-push: $sha is $passed rebased, the same change; CI proves it on the new main"
       continue
     fi
   fi
-  base=$(git merge-base "$sha" origin/main 2>/dev/null || true)
-  if [ -n "$base" ]; then
-    changed=$(git diff --name-only "$base" "$sha")
-    if [ -n "$changed" ] && ! grep -qvE '^(cairn/|[^/]+\.md$)' <<<"$changed"; then
-      echo "pre-push: $sha touches only cairn items and top-level Markdown; running the roadmap check"
-      scripts/task roadmap
-      continue
-    fi
+  # No renames: a guide moved out of docs/modding/ is a change to code.
+  onto=$(git rev-parse -q --verify "$(head -1 <<<"$new")^" || echo "$empty_tree")
+  changed=$(git diff --no-renames --name-only "$onto" "$sha")
+  if [ -n "$changed" ] && ! grep -qvE '^(cairn/|[^/]+\.md$)' <<<"$changed"; then
+    echo "pre-push: $sha adds only cairn items and top-level Markdown; running the roadmap check"
+    scripts/task roadmap
+    continue
   fi
   echo "pre-push: scripts/task check hasn't passed on $sha (last pass: ${passed:-none})." >&2
   echo "          Check out what you push, commit everything, and run scripts/task check." >&2
