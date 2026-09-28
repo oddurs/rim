@@ -355,7 +355,7 @@ jobs:
     needs: plan
     if: contains(fromJSON('["pr","queue","nightly"]'), needs.plan.outputs.lane) && needs.plan.outputs.code == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25  # 3c65738f side-by-side only: not for main
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@master

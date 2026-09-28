@@ -53,13 +53,16 @@ pub struct Setting {
     pub quality: Quality,
     /// `auto`: start at medium and step down while the lighting runs slow.
     pub auto: bool,
+    /// `flat`: no marches or bakes, only the sim's light field, tinted
+    /// (DESIGN.md §6e). Below low, outside the ladder `auto` steps down.
+    pub flat: bool,
     /// What the player set by hand, kept over whichever preset runs.
     overrides: Vec<Override>,
 }
 
 impl Default for Setting {
     fn default() -> Self {
-        Setting { preset: MEDIUM, quality: PRESETS[MEDIUM].1, auto: false, overrides: Vec::new() }
+        Setting { preset: MEDIUM, quality: PRESETS[MEDIUM].1, auto: false, flat: false, overrides: Vec::new() }
     }
 }
 
@@ -88,11 +91,15 @@ impl Override {
 }
 
 impl Setting {
-    /// A preset by name: `low`, `medium`, `high`, `ultra`, or `auto`.
+    /// A preset by name: `flat`, `low`, `medium`, `high`, `ultra`, or `auto`.
     pub fn named(name: &str) -> Option<Setting> {
-        let auto = name == "auto";
-        let preset = if auto { MEDIUM } else { PRESETS.iter().position(|(n, _)| *n == name)? };
-        Some(Setting { preset, quality: PRESETS[preset].1, auto, overrides: Vec::new() })
+        let (auto, flat) = (name == "auto", name == "flat");
+        let preset = match name {
+            "auto" => MEDIUM,
+            "flat" => 0,
+            _ => PRESETS.iter().position(|(n, _)| *n == name)?,
+        };
+        Some(Setting { preset, quality: PRESETS[preset].1, auto, flat, overrides: Vec::new() })
     }
 
     /// The `[lighting]` table of a settings file, if it has one. A table
@@ -106,7 +113,7 @@ impl Setting {
             Some(q) => q.as_str().ok_or("lighting.quality should be a string")?,
         };
         let mut s = Setting::named(name)
-            .ok_or_else(|| format!("lighting.quality should be low, medium, high, ultra or auto, not {name}"))?;
+            .ok_or_else(|| format!("lighting.quality should be flat, low, medium, high, ultra or auto, not {name}"))?;
         for (key, v) in l {
             let int = || v.as_integer().ok_or_else(|| format!("lighting.{key} should be a whole number"));
             let flag = || v.as_bool().ok_or_else(|| format!("lighting.{key} should be true or false"));
@@ -133,7 +140,11 @@ impl Setting {
 
     /// The preset that runs: under `auto`, the one it has stepped down to.
     pub fn name(&self) -> &'static str {
-        PRESETS[self.preset].0
+        if self.flat {
+            "flat"
+        } else {
+            PRESETS[self.preset].0
+        }
     }
 
     /// Run `preset`, with what the player set by hand still over it.
@@ -329,6 +340,18 @@ mod tests {
         let mut s = Setting::named("high").unwrap();
         run(&mut s, &mut w, &mut t, 60.0, AUTO_WINDOW * 5.0, AUTO_BUDGET_US * 5.0);
         assert_eq!(s.name(), "high", "only auto steps");
+    }
+
+    #[test]
+    fn flat_is_a_setting_of_its_own_below_the_ladder() {
+        let s = Setting::from_settings("[lighting]\nquality = \"flat\"").unwrap().unwrap();
+        assert!(s.flat && !s.auto && s.name() == "flat", "{s:?}");
+        assert!(!Setting::named("low").unwrap().flat, "low is low");
+        // Auto steps down the ladder and stops at low, never at flat.
+        let (mut w, mut t) = (Watch::default(), 0.0);
+        let mut auto = Setting::named("auto").unwrap();
+        run(&mut auto, &mut w, &mut t, 60.0, AUTO_WINDOW * 10.0, AUTO_BUDGET_US * 5.0);
+        assert!(auto.name() == "low" && !auto.flat);
     }
 
     #[test]

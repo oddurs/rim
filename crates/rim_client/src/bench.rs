@@ -431,6 +431,42 @@ const VIEWS: [View; 10] = [
 /// Ticks between evaluations of outdoor terms, which the sky is made of.
 const TERMS_EVERY: usize = 20;
 
+/// `--side-by-side DIR` (3c65738f): the same close views under `medium` and
+/// `flat`, as pictures to compare: the colony at noon and at dusk, and a
+/// hut lit by its own fire at night, `<view>_<preset>.png` each.
+async fn side_by_side(app: &mut App, time: &mut f64, dir: &Path, centre: IVec) {
+    if let Err(e) = std::fs::create_dir_all(dir) {
+        eprintln!("render bench: could not create {}: {e}", dir.display());
+        std::process::exit(2);
+    }
+    light_the_colony(&mut app.sim);
+    pin(app, CLEAR);
+    // The first lamp stands five cells into the colony's corner room.
+    let hut = centre.offset(-COLONY / 2 + 5, -COLONY / 2 + 5);
+    for (name, hour, at, zoom) in
+        [("noon", 12.0, centre, 28.0), ("dusk", 17.25, centre, 28.0), ("hut", 22.0, hut, 48.0)]
+    {
+        app.sim.world.tick = tick_at_hour(app.sim.world.tick, hour);
+        for _ in 0..TERMS_EVERY {
+            app.sim.step();
+        }
+        (app.cam.x, app.cam.y, app.cam.zoom) = (at.x as f32 + 0.5, at.y as f32 + 0.5, zoom);
+        for preset in ["medium", "flat"] {
+            app.light.set(crate::quality::Setting::named(preset).unwrap_or_default());
+            app.light.adapt_now();
+            for _ in 0..30 {
+                draw_one(app, time, None).await;
+            }
+            let shot = dir.join(format!("{name}_{preset}.png"));
+            draw_one(app, time, Some(&shot)).await;
+            println!("side by side: {}", shot.display());
+        }
+    }
+}
+
+/// Frames each view settles for under `flat` before the side-by-side.
+const FLAT_WARM: usize = 10;
+
 /// Frames per view that time each lighting pass on the GPU.
 const GPU_FRAMES: usize = 30;
 /// Frames that each rebuild every cached lighting result.
@@ -479,6 +515,9 @@ struct Run {
     /// Per frame, the wall time from one frame's start to the next's, in
     /// ms: every pass, submit, the GPU and the present, and any wait.
     walls: Vec<f64>,
+    /// The same view's frames again under the `flat` lighting preset, for
+    /// the side-by-side (3c65738f); empty when the bench runs flat.
+    flat: Vec<(RenderTimes, f64, Option<f64>)>,
 }
 
 /// One lighting pass over a view's frames.
@@ -604,6 +643,10 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
     request_new_screen_size(1920.0 / dpi, 1080.0 / dpi);
     next_frame().await;
     let mut time = 0.0;
+    if let Some(dir) = opt("--side-by-side").map(PathBuf::from) {
+        side_by_side(&mut app, &mut time, &dir, centre).await;
+        std::process::exit(0);
+    }
 
     let mut results = Vec::new();
     let mut dug = false;
@@ -712,6 +755,32 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
         }
         app.light.time_gpu(false);
         r.passes = pass_means(&passes, &waited);
+        // The side-by-side: the same frames, moving lights and all, under
+        // `flat`, then back to the preset the bench runs.
+        if !app.light.setting().flat {
+            let was = app.light.setting().clone();
+            app.light.set(crate::quality::Setting::named("flat").unwrap_or_default());
+            // A fifth of the frames: CI's client job has no room for twice
+            // the bench, and a mean of twenty holds.
+            for k in 0..FLAT_WARM {
+                app.light.set_moving(circling(k));
+                draw_one(&mut app, &mut time, None).await;
+            }
+            for k in FLAT_WARM..FLAT_WARM + (frames / 5).max(10) {
+                if v.zooming {
+                    app.cam.zoom = gesture_zoom(k);
+                }
+                app.light.set_moving(circling(k));
+                draw_one(&mut app, &mut time, None).await;
+                let zones = telemetry::frame().zones;
+                let submit = zone(&zones, "Event::draw end_frame").unwrap_or(0.0) + app.render_us.gl;
+                r.flat.push((app.render_us, submit, zone(&zones, "glFinish/glFLush")));
+            }
+            let shot =
+                shots.as_ref().map(|d| d.join(format!("{}_flat.png", v.name.replace(' ', "_").replace('%', ""))));
+            draw_one(&mut app, &mut time, shot.as_deref()).await;
+            app.light.set(was);
+        }
         results.push(r);
     }
 
@@ -820,6 +889,29 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
     println!("gl: {renderer}{soft}");
     println!("machine: {}", machine());
     println!("lighting: {}", app.light.setting().name());
+    if results.iter().any(|r| !r.flat.is_empty()) {
+        println!("\nlighting side-by-side, ms per frame: {} against flat, the same frames", app.light.setting().name());
+        println!(
+            "{:<10} {:>8} {:>8} {:>8} {:>8}   {:>8} {:>8} {:>8} {:>8}",
+            "view", "world", "light", "submit", "gpu", "world", "light", "submit", "gpu"
+        );
+        for r in &results {
+            let flat = Run { flat: Vec::new(), frames: r.flat.clone(), ..Default::default() };
+            let gpu = |g: Option<f64>| g.map_or("-".into(), |g| format!("{g:.3}"));
+            println!(
+                "{:<10} {:>8.3} {:>8.3} {:>8.3} {:>8}   {:>8.3} {:>8.3} {:>8.3} {:>8}",
+                r.name,
+                r.mean(|f| f.0.world()),
+                r.mean(|f| f.0.light),
+                r.mean(|f| f.1),
+                gpu(r.gpu_ms()),
+                flat.mean(|f| f.0.world()),
+                flat.mean(|f| f.0.light),
+                flat.mean(|f| f.1),
+                gpu(flat.gpu_ms()),
+            );
+        }
+    }
 
     if let Some(path) = opt("--json") {
         let views: Vec<String> = results
@@ -846,7 +938,7 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
                     r.rest_ms()
                 );
                 format!(
-                    "    {{\"view\": \"{}\", \"zoom\": {}, {whole}\"world_ms\": {:.4}, \"world_p50_ms\": {:.4}, \"world_p99_ms\": {:.4}, \"ground_ms\": {:.4}, \"things_ms\": {:.4}, \"pawns_ms\": {:.4}, \"weather_ms\": {:.4}, \"light_ms\": {:.4}, \"ui_ms\": {:.4}, \"submit_ms\": {:.4}, \"gpu_ms\": {}, \"draw_calls\": {}, \"indices\": {}, \"particles\": {}, \"rebuilt\": {}, \"live\": {}, \"light_passes\": [{}]}}",
+                    "    {{\"view\": \"{}\", \"zoom\": {}, {whole}\"world_ms\": {:.4}, \"world_p50_ms\": {:.4}, \"world_p99_ms\": {:.4}, \"ground_ms\": {:.4}, \"things_ms\": {:.4}, \"pawns_ms\": {:.4}, \"weather_ms\": {:.4}, \"light_ms\": {:.4}, \"ui_ms\": {:.4}, \"submit_ms\": {:.4}, \"gpu_ms\": {}, \"draw_calls\": {}, \"indices\": {}, \"particles\": {}, \"rebuilt\": {}, \"live\": {}, \"light_passes\": [{}]{}}}",
                     r.name,
                     r.zoom,
                     r.mean(|f| f.0.world()),
@@ -865,7 +957,19 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
                     r.particles,
                     r.rebuilt,
                     r.live,
-                    passes.join(", ")
+                    passes.join(", "),
+                    if r.flat.is_empty() {
+                        String::new()
+                    } else {
+                        let flat = Run { frames: r.flat.clone(), ..Default::default() };
+                        format!(
+                            ", \"flat\": {{\"world_ms\": {:.4}, \"light_ms\": {:.4}, \"submit_ms\": {:.4}, \"gpu_ms\": {}}}",
+                            flat.mean(|f| f.0.world()),
+                            flat.mean(|f| f.0.light),
+                            flat.mean(|f| f.1),
+                            flat.gpu_ms().map_or("null".into(), |g| format!("{g:.4}"))
+                        )
+                    }
                 )
             })
             .collect();

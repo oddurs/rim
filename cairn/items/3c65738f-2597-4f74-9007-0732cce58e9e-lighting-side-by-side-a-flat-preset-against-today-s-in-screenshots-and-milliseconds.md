@@ -2,9 +2,10 @@
 id: 3c65738f-2597-4f74-9007-0732cce58e9e
 title: 'Lighting side-by-side: a flat preset against today''s, in screenshots and milliseconds'
 type: spike
-status: backlog
+status: doing
 milestone: bare-metal
-assignee: quiet-meadow
+assignee: Oddur Sigurdsson
+claimed: 2026-09-28
 created: 2026-09-28
 updated: 2026-09-28
 priority: p0

@@ -332,6 +332,49 @@ void main() {
 // which the linear filter softens where a floor meets its wall. Then the
 // plan's contact shadow, down and to the right of every mass, fading as the
 // sun reaches the ground there.
+/// The `flat` preset's whole lighting (3c65738f): the sim's light field as
+/// it is, the sky's share of each cell (the rooms texture) and its
+/// firelight stamps (this draw's texture, `STAMP_RANGE` light at most),
+/// bilinear between cell centres. The plan's contact shadow, which fades
+/// with daylight, is the only direction.
+const FLAT_FRAGMENT: &str = "#version 100
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
+precision mediump float;
+#endif
+varying vec2 uv;
+uniform sampler2D Texture;
+uniform sampler2D occluders;
+uniform sampler2D rooms;
+uniform vec3 sky;
+uniform vec3 night;
+uniform vec3 fire;
+uniform vec2 cell;
+uniform float day;
+uniform float exposure;
+float mass_at(vec2 p) {
+    vec4 o = texture2D(occluders, (floor(p / cell) + 0.5) * cell);
+    return step(0.99, o.b) * (1.0 - step(0.5, o.g));
+}
+float casts(vec2 p) {
+    vec4 o = texture2D(occluders, (floor(p / cell) + 0.5) * cell);
+    return (step(0.99, o.b) + 0.5 * step(0.5, o.b) * (1.0 - step(0.99, o.b))) * (1.0 - step(0.5, o.g));
+}
+void main() {
+    vec4 o = texture2D(occluders, uv);
+    vec4 r = texture2D(rooms, uv);
+    vec3 lit = sky * mix(r.g, r.r, o.g);
+    // Perceived, as the sky's is: a stamp at half strength reads brighter
+    // than half.
+    float f = texture2D(Texture, uv).r * 1.5; // STAMP_RANGE
+    vec3 c = max(night, (lit + fire * sqrt(f)) * exposure);
+    float solid = mass_at(uv);
+    float under = 0.5 * (casts(uv - cell * 0.18) + casts(uv - cell * 0.36)) * (1.0 - solid);
+    c *= 1.0 - 0.3 * under * (1.0 - day);
+    gl_FragColor = vec4(c, 1.0);
+}";
+
 const MULTIPLY_FRAGMENT: &str = "#version 100
 #ifdef GL_FRAGMENT_PRECISION_HIGH
 precision highp float;
@@ -643,6 +686,10 @@ pub const PINNED: usize = usize::MAX;
 /// plan's contact shadow wholly: daylight does, moonlight barely.
 const CONTACT_LIGHT: f32 = 10.0;
 
+/// The most firelight the `flat` stamps hold, in the light field's units
+/// over 100: brighter stamps clip.
+const STAMP_RANGE: f32 = 1.5;
+
 /// Under this, in its field's units, a sky body gives no light.
 const DARK_BODY: f64 = 0.01;
 
@@ -704,6 +751,7 @@ enum Pass {
     Bake = 1,
     Multiply = 2,
     Clear = 3,
+    Flat = 4,
 }
 
 /// A light-giving thing, as the bake draws it.
@@ -1074,6 +1122,10 @@ struct Level {
     /// The field revision, occluders and size last looked at, so a frame
     /// in which nothing changed doesn't even list the lights.
     fires_seen: Option<(u64, u64, u64)>,
+    /// Under `flat`: the sim's firelight stamps, one texel a cell, and the
+    /// fields' revision they are of.
+    stamps: Option<Texture2D>,
+    stamps_seen: Option<u64>,
     /// The lights `fires` was baked from.
     baked: Vec<Lamp>,
     /// The lights the field has now. The bake catches up with them at most
@@ -1139,11 +1191,11 @@ pub struct Light {
     dt: f32,
     /// Times firelight has been baked, whole or in part.
     pub bakes: u64,
-    materials: [Option<Material>; 4],
+    materials: [Option<Material>; 5],
     /// Which shaders failed to build, by pass: without the sun's, the world
     /// is lit without sun shadows; without the bake, without firelight;
     /// without the multiply, unlit.
-    failed: [bool; 4],
+    failed: [bool; 5],
     /// Nothing, for a pass that couldn't run: no sun, no fire.
     blank: Option<Texture2D>,
     /// The player's lighting setting.
@@ -1222,6 +1274,14 @@ impl Light {
         let rooms = self.update_rooms(w);
         // Uploads, not draws.
         self.pass_end("occluders", t, changed || rooms, 0);
+        if self.setting.flat {
+            // The sim's light as it is: no bake, no marches, no sun.
+            let t = self.pass_begin();
+            let ran = self.update_stamps(w);
+            self.pass_end("stamps", t, ran, 0);
+            self.cost_end();
+            return;
+        }
         let t = self.pass_begin();
         let baked = self.bake_fires(w, self.now);
         let draws = if baked { self.lv.draws } else { 0 };
@@ -1276,7 +1336,8 @@ impl Light {
     pub fn multiply(&mut self, w: &World, cam: &Cam, air: &Air, flash: Flash) {
         self.cost_begin(1);
         let t = self.pass_begin();
-        let drew = self.draw_multiply(w, cam, air, flash);
+        let drew =
+            if self.setting.flat { self.draw_flat(w, cam, flash) } else { self.draw_multiply(w, cam, air, flash) };
         self.pass_end("multiply", t, drew, drew as u32);
         self.cost_end();
     }
@@ -1511,6 +1572,27 @@ impl Light {
                         ..Default::default()
                     },
                 ),
+                Pass::Flat => (
+                    VERTEX,
+                    FLAT_FRAGMENT,
+                    vec![
+                        UniformDesc::new("sky", UniformType::Float3),
+                        UniformDesc::new("night", UniformType::Float3),
+                        UniformDesc::new("fire", UniformType::Float3),
+                        UniformDesc::new("cell", UniformType::Float2),
+                        UniformDesc::new("day", UniformType::Float1),
+                        UniformDesc::new("exposure", UniformType::Float1),
+                    ],
+                    vec!["occluders".to_string(), "rooms".to_string()],
+                    PipelineParams {
+                        color_blend: Some(BlendState::new(
+                            Equation::Add,
+                            BlendFactor::Value(BlendValue::DestinationColor),
+                            BlendFactor::Zero,
+                        )),
+                        ..Default::default()
+                    },
+                ),
             };
             let m = load_material(
                 ShaderSource::Glsl { vertex, fragment },
@@ -1524,6 +1606,7 @@ impl Light {
                         Pass::Bake => "without firelight",
                         Pass::Multiply => "unlit",
                         Pass::Clear => "with firelight rebaked whole",
+                        Pass::Flat => "unlit",
                     };
                     eprintln!("lighting shader failed, drawing {without}: {e}");
                     self.failed[pass as usize] = true;
@@ -1928,6 +2011,87 @@ impl Light {
 
     /// Draw the light over the world with multiply blending. Whether it
     /// drew: without the shader the world stays unlit.
+    /// The eye adapts to the sky the view holds: on the surface all of it,
+    /// below it what comes down the shafts in view. About a second to
+    /// settle, by the clock, and no more than a 30th of a second's worth in
+    /// one frame, so a stalled frame doesn't jump.
+    fn adapt(&mut self, w: &World, cam: &Cam, sky: Vec3) {
+        let seen = if self.z < 0 { self.view_sky(w, cam) } else { 1.0 };
+        let target = exposure_for(sky * seen);
+        self.exposure = if self.exposure > 0.0 {
+            self.exposure + (target - self.exposure) * (1.0 - (-1.6 * self.dt.min(1.0 / 30.0)).exp())
+        } else {
+            target
+        };
+    }
+
+    /// Under `flat`, the sim's firelight stamps for the level in view, one
+    /// texel a cell, if they changed. Whether they did.
+    fn update_stamps(&mut self, w: &World) -> bool {
+        let m = &w.map;
+        let seen = w.fields.revision ^ (m.room_rebuilds << 32);
+        let fits = self.lv.stamps.as_ref().is_some_and(|t| t.width() as i32 == m.w && t.height() as i32 == m.h);
+        if fits && self.lv.stamps_seen == Some(seen) {
+            return false;
+        }
+        let Some(light) = w.defs.lookup("field", "light").map(|f| f as usize) else { return false };
+        let stamped = &w.fields.layers[light].stamped;
+        let mut bytes = vec![0u8; (m.w * m.h * 4) as usize];
+        for i in 0..(m.w * m.h) as usize {
+            let p = m.pos(i);
+            // Hundredths of the light field's units, to STAMP_RANGE at most.
+            let v = stamped.get(m.idx(rim_sim::IVec::at(p.x, p.y, self.z))).copied().unwrap_or(0);
+            bytes[i * 4] = ((v as f32 / (100.0 * STAMP_RANGE)).clamp(0.0, 1.0) * 255.0).round() as u8;
+            bytes[i * 4 + 3] = 255;
+        }
+        let img = Image { bytes, width: m.w as u16, height: m.h as u16 };
+        match &self.lv.stamps {
+            Some(t) if fits => t.update(&img),
+            _ => {
+                let t = Texture2D::from_image(&img);
+                t.set_filter(FilterMode::Linear);
+                self.lv.stamps = Some(t);
+            }
+        }
+        self.lv.stamps_seen = Some(seen);
+        true
+    }
+
+    /// Under `flat`, light the world by the sim's light field alone. Whether
+    /// it drew.
+    fn draw_flat(&mut self, w: &World, cam: &Cam, flash: Flash) -> bool {
+        let (Some(occ), Some(stamps)) = (self.lv.occluders.texture.clone(), self.lv.stamps.clone()) else {
+            return false;
+        };
+        let blank = self.blank.get_or_insert_with(|| Texture2D::from_rgba8(1, 1, &[0, 0, 0, 0])).clone();
+        let rooms = self.lv.rooms.clone().unwrap_or(blank);
+        let Some(m) = self.material(Pass::Flat) else { return false };
+        // A flash lights everything evenly: there is no pass to shadow it.
+        let sky = self.sky_color(w, flash.strength);
+        self.adapt(w, cam, sky);
+        let def = &w.defs.sky;
+        let (mw, mh) = (w.map.w as f32, w.map.h as f32);
+        m.set_texture("occluders", occ);
+        m.set_texture("rooms", rooms);
+        m.set_uniform("sky", sky);
+        m.set_uniform("night", rgb3(def.rgb_night) * if self.z < 0 { UNDERGROUND } else { 1.0 });
+        m.set_uniform("fire", channel_colour(rgb3(def.rgb_fire) * 1.2, 0, self.now));
+        m.set_uniform("cell", vec2(1.0 / mw, 1.0 / mh));
+        m.set_uniform("day", (self.sky_light / 100.0).clamp(0.0, 1.0));
+        m.set_uniform("exposure", self.exposure);
+        gl_use_material(&m);
+        let (sx, sy) = cam.to_screen(0.0, 0.0);
+        draw_texture_ex(
+            &stamps,
+            sx,
+            sy,
+            WHITE,
+            DrawTextureParams { dest_size: Some(vec2(mw * cam.zoom, mh * cam.zoom)), ..Default::default() },
+        );
+        gl_use_default_material();
+        true
+    }
+
     fn draw_multiply(&mut self, w: &World, cam: &Cam, air: &Air, flash: Flash) -> bool {
         let Some(occ) = self.lv.occluders.texture.clone() else { return false };
         // Without the sun pass the sun reaches nowhere; without the bake,
@@ -1957,15 +2121,7 @@ impl Light {
         m.set_texture("moving", moving);
         // The eye adapts to the sky the view holds: on the surface all of
         // it, below it what comes down the shafts in view.
-        let seen = if under { self.view_sky(w, cam) } else { 1.0 };
-        let target = exposure_for(sky * seen);
-        // About a second to settle, by the clock, and no more than a 30th of
-        // a second's worth in one frame, so a stalled frame doesn't jump.
-        self.exposure = if self.exposure > 0.0 {
-            self.exposure + (target - self.exposure) * (1.0 - (-1.6 * self.dt.min(1.0 / 30.0)).exp())
-        } else {
-            target
-        };
+        self.adapt(w, cam, sky);
         m.set_uniform("exposure", self.exposure);
         m.set_uniform("ambient", ambient);
         for (k, name) in ["direct0", "direct1", "direct2", "direct3"].into_iter().enumerate() {
