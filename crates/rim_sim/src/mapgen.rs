@@ -138,6 +138,41 @@ fn strata(w: &mut World, defs: &DefDb, seed: u64) {
     }
 }
 
+/// Lay each `[[vein]]` into its stock field (DESIGN.md §6d): from about
+/// `chance` of the cells of its terrains, a wandering blob of `size` cells,
+/// each holding an `amount`. Every choice hashes the seed, the vein's id and
+/// the cell, so the same seed lays the same veins on every machine and the
+/// world's RNG is left alone.
+pub fn veins(w: &mut World) {
+    let defs = w.defs.clone();
+    let unit = |h: u64| (h >> 11) as f64 / (1u64 << 53) as f64;
+    for v in &defs.veins {
+        let salt = mix(w.seed ^ hash_str(&v.id));
+        for start in 0..w.map.cells() {
+            let h = mix(salt ^ start as u64);
+            if !v.within_r.contains(&w.map.terrain[start]) || unit(h) >= v.chance {
+                continue;
+            }
+            let size = v.size[0] + (mix(h ^ 1) % (v.size[1] - v.size[0] + 1) as u64) as u32;
+            let mut at = w.map.pos(start);
+            for k in 0..size as u64 {
+                let i = w.map.idx(at);
+                let step = mix(h ^ (k << 8) ^ 2);
+                if v.within_r.contains(&w.map.terrain[i]) {
+                    // Whole units, so a vein is spent exactly.
+                    let amount = (v.amount[0] + (v.amount[1] - v.amount[0]) * unit(step)).round();
+                    w.fields.set_stock(&defs, &w.map, v.field_r, at, amount, false);
+                }
+                let (dx, dy) = crate::map::NEIGHBORS8[(step % 8) as usize];
+                let next = at.offset(dx, dy);
+                if w.map.inb(next) {
+                    at = next;
+                }
+            }
+        }
+    }
+}
+
 /// Fractal noise in [0, 1] at a cell, for scripts that generate a level
 /// (`rim.noise`): the same numbers on every machine.
 pub fn noise(x: f64, y: f64, seed: u64) -> f64 {

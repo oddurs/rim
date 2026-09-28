@@ -75,6 +75,8 @@ impl Sim {
         let mut world = World::with_levels(defs.clone(), size, size, below, above, seed);
         let start = mapgen::generate(&mut world);
         m.scripts.generate_levels(&mut world)?;
+        // After every level's rock is set, scripts' included.
+        mapgen::veins(&mut world);
 
         let s = defs.start.as_ref().unwrap();
         for i in 0..s.count {

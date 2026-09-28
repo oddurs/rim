@@ -263,6 +263,7 @@ pub fn load_only(mods_dir: &Path, enabled: &dyn Fn(&str) -> bool) -> Result<Load
             "stratum" => defs.strata.push(de!(v)?),
             "fluid" => defs.fluids.push(de!(v)?),
             "modifier" => defs.modifiers.push(de!(v)?),
+            "vein" => defs.veins.push(de!(v)?),
             "plan" => defs.plans.push(de!(v)?),
             "priority_rule" => defs.priority_rules.push(de!(v)?),
             "priority_scale" => {

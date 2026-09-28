@@ -709,6 +709,11 @@ impl Fields {
         next.clear();
         for &f in &defs.stock_fields {
             let fd = &defs.fields[f];
+            // No rate terms: it holds what scripts and map generation put
+            // there (ore), and costs nothing a tick.
+            if fd.rate_terms.is_empty() {
+                continue;
+            }
             let n = stock_cells(fd.levels, map) as u64;
             let k = clock.tick % fd.period;
             let (a, b) = ((k * n / fd.period) as usize, ((k + 1) * n / fd.period) as usize);

@@ -1528,9 +1528,23 @@ fn run_harvest(
                         w.map.touch(t.pos);
                     }
                 }
+                // A vein's yield is what the field there holds, and taking it
+                // leaves that much less.
+                let drawn = hd.draw.as_ref().map(|d| {
+                    let n = w.drawable(t.pos, d);
+                    let defs = w.defs.clone();
+                    w.fields.set_stock(&defs, &w.map, d.field_r, t.pos, -(n as f64 * d.per), true);
+                    n
+                });
                 for &(yd, n) in &hd.yields_r {
-                    let n = if hd.destroy { ((n as f64 * share).round() as u32).max(1) } else { n };
-                    w.place_item(yd, t.pos, n);
+                    let n = match drawn {
+                        Some(d) => d,
+                        None if hd.destroy => ((n as f64 * share).round() as u32).max(1),
+                        None => n,
+                    };
+                    if n > 0 {
+                        w.place_item(yd, t.pos, n);
+                    }
                 }
                 if hd.requires_r != 0 {
                     w.wear_tool(p);
