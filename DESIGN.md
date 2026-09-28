@@ -2400,6 +2400,111 @@ view to hold that.
 
 ---
 
+## 6h. People: plan figures
+
+A pawn is a disc in its creature's colour. A colonist, a raider and a wolf
+differ only in colour and size, nothing shows which way anyone faces, and a
+pawn snaps 90° at every corner of its path. The plan, with a live mock of
+every figure below: <https://claude.ai/artifact/8DZuqGrqTQ6Dx7ry85JwXf>.
+
+### Tension: a picture of a person, or a plan of one?
+
+- **For a front-facing figure (RimWorld's paper doll):** faces, and the
+  look players already know from the genre.
+- **Against:** it needs a drawing per facing for every part, it can't turn
+  smoothly, and it clashes with a world drawn as a plan (§6c). From above,
+  a face is the one thing you can't see anyway.
+- **Ruling:** **a person is a plan figure**, seen from above and drawn in
+  the plan's ink: a shadow, two feet, two hands, a torso, a head and its
+  hair, outlined at the `light` weight like furniture. It turns to any
+  angle for free, and a walk reads from above as feet and hands trading
+  places. People are told apart as across a square: hair, skin, build,
+  clothes and what they carry. The castaway starts naked (§3), which reads
+  as a torso in skin colour. The colonist bar and the inspector show the
+  same figure, so a player learns someone once.
+
+### Tension: whose clock moves a stride?
+
+- **The wall clock:** simple, and smooth at any frame rate.
+- **Against:** a paused game would keep walking, 6× would blur into a
+  shuffle, and a replay or a screenshot test would never look the same
+  twice. Work styles already ruled this for strikes (§6b).
+- **Ruling:** **motion follows the sim.** The stride's phase advances with
+  the distance a pawn is drawn to move; idle breathing advances with the
+  sim tick. A paused game holds still, 6× is coherent, and slower steps in
+  snow take longer without shortening. With `reduce_motion` on, every
+  channel rests and pawns glide.
+
+### Tension: sharp corners or round ones?
+
+- **Sharp:** exactly what the sim does; §6a: "sub-cell movement is render
+  interpolation and never feeds back".
+- **Against:** a figure with a facing that snaps 90° at every cell centre
+  looks broken.
+- **Ruling:** **corners are rounded in the renderer, inside the corner
+  cell.** The last and first 35% of the two steps around a corner become
+  one curve through the cell's centre. The curve stays inside the cell the
+  sim says the pawn is in, and the sim's distance maps to distance along it,
+  so the pawn arrives when the sim says. Facing follows the curve, turned at
+  most 12 radians a game second. The client remembers one thing per pawn,
+  the cell it came from, and rebuilds that from nothing on load.
+
+### Tension: sim state or client data?
+
+- **In defs, like things' looks:** one place for everything a mod adds.
+- **Against:** everything here is presentation. In defs it would be
+  sim-side (§10), so a hair style would start an epoch and have to match in
+  co-op.
+- **Ruling:** **what people look like is client data**, under a mod's
+  `ui/`: `[[body]]`, `[[gait]]`, `[[feature]]`, `[[palette]]`.
+  - A body part is a look layer (`disc`, `box`, `line`, `arc`, `sprite`,
+    the four weights) plus the gait channel that moves it. Written facing
+    north, so a mod's sprites are drawn that way and turn with the part.
+  - A gait has conditions on a fixed set of pawn facts (moving, running,
+    carrying, bulky, health, rest, drafted, working), and the most specific
+    match wins; a tie is a contested slot (§10). Emotions arrive as more
+    facts and more gaits.
+  - The sim stores a person's appearance as picks (a seed and ids) it never
+    reads, rolled per pawn with a counter-based draw (§7b), so a new hair
+    style never reshuffles anyone's traits. A client that lacks a picked
+    feature rolls a fallback from the seed; a co-op peer without your hair
+    mod sees one.
+  - Things' looks stay in defs until presentation leaves the sim hash
+    (§7a). Pawns start on the right side.
+
+### Tension: how is a character made?
+
+- **Full editing (RimWorld's reroll screen):** players enjoy shaping their
+  founder.
+- **Against:** editing traits and skills is a difficulty dial by another
+  name, and §1 has none.
+- **Ruling:** **looks are free; the person comes from the premise.** On the
+  New colony screen's cast card, name, skin, build and hair can be changed at
+  will. Traits and skills come from the premise (§4g). A premise that allows
+  it offers "Roll another warrior", which rolls a whole person, never one
+  stat; the roll number joins the seed code, so a shared code brings the
+  same founder.
+
+### Cost
+
+The sim pays nothing new per tick. Each pawn's appearance is resolved once
+into a part list, cached until its clothes or hair change. Per frame, each
+visible pawn costs a pose (a curve, a facing, two sines) and at most 14
+primitives, all pawns in one draw call.
+
+| Level | Pixels a cell | Draws |
+|---|---|---|
+| Dot | below 10 | a disc and the faction ring |
+| Silhouette | 10 to 20 | shadow, torso, head, hair colour, ring |
+| Full figure | from 20 (the detail zoom, §6b) | every part |
+
+Budget: 200 pawns at full detail within 0.4 ms of the renderer's 4 ms (§8),
+held by a pawns pass in `rim --bench-render`. How the primitives reach the
+GPU (distance-field quads, tessellation or pre-rendered frames) is a spike's
+to answer on macOS's GL before the body is built.
+
+---
+
 ## 7. Determinism is non-negotiable
 
 - All player input becomes a `Command` that is applied at a tick boundary.

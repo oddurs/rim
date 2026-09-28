@@ -133,6 +133,23 @@ What mining looks like: a hill with height, rock kinds you can tell apart, ore s
 - [ ] `e77facff` The mining worksite: fresh break, fracture, sparks and hewn floor <sup>feature · p1 · m · client</sup>
 - [ ] `e856a44d` The mine order as a cut line <sup>feature · p1 · s · client</sup>
 
+## people — People
+
+`··········` 0% · 0 of 10 done
+
+People seen from above: a pawn drawn as a plan figure in the plan's own ink,
+
+- [ ] `3e96a103` The cast card: meet, name and dress the founder on New colony <sup>feature · p2 · m · client</sup>
+- [ ] `41843e8a` The rig on F12, and a Bodies page in the kit gallery <sup>feature · p2 · s · client</sup>
+- [ ] `535a1fb9` Bodies as client data, drawn in one batch at three levels of detail <sup>feature · p0 · l · client</sup>
+- [ ] `5ea1df47` A pawns pass in rim --bench-render, held to its budget in CI <sup>feature · p0 · s · tooling</sup>
+- [ ] `6cb4f2f9` Lying down: asleep in a bed or on the ground, and downed <sup>feature · p1 · s · client</sup>
+- [ ] `6f8be218` Hands: carried items, bulky loads on the shoulder, tools and the work swing <sup>feature · p1 · m · client</sup>
+- [ ] `809e1fc5` Gaits as client data: the stride follows distance, the most specific gait wins <sup>feature · p0 · m · client</sup>
+- [ ] `8469a7ff` Appearance: hair, skin and build as client data, picks kept on the pawn <sup>feature · p1 · m · engine</sup>
+- [ ] `cc289956` How figures reach the GPU: distance-field quads, tessellation or pre-rendered frames <sup>spike · p0 · s · client</sup>
+- [ ] `daee2c36` Round the corners and turn smoothly: pawns follow a curve inside the corner cell <sup>feature · p0 · s · client</sup>
+
 ## graphics — Graphics
 
 `##########` 100% · 8 of 8 done

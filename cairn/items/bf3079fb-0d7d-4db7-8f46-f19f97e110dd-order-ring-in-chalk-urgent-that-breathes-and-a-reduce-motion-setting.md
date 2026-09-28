@@ -30,3 +30,7 @@ area: ui
 - [ ] A unit test parses `reduce_motion = true`, and a bad value is an error, like `saved_render_scale`
 - [ ] Autotest: after the "Reduce motion: on" binding, the urgent mark's ring radius is the same in two frames 0.5 s apart
 - [ ] Screenshot `chalk-urgent`
+
+## 2026-09-27
+
+People (5d09b04e): gaits (809e1fc5) read this item's reduce_motion setting: every channel rests and pawns glide.

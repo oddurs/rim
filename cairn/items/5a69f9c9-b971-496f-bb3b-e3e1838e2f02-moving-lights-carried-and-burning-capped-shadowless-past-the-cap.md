@@ -8,7 +8,7 @@ depends_on:
 - 6fd6b13b-1186-46f4-876e-743d173e03d7
 - 9bd9e8ab-6eef-44dc-b814-0b376ceec1e5
 created: 2026-09-26
-updated: 2026-09-26
+updated: 2026-09-27
 priority: p1
 api: none
 effort: m
@@ -34,3 +34,7 @@ A colonist carrying a torch at night, a burning roof, fire arrows: these move or
 ## 2026-09-26
 
 Blocked until something moves while emitting light. Core has no carried light, and burning (9bd9e8ab) is blocked itself, so a dynamic-light path now would have no caller. Everything that emits light today (campfire, stove) is a fixture, which the static bake covers. Unblock when fire spreads or a carried light lands.
+
+## 2026-09-27
+
+People (5d09b04e): a carried torch is a held item on the body's hold socket (6f8be218). That makes it the moving light's first caller, and a reason to unblock this.

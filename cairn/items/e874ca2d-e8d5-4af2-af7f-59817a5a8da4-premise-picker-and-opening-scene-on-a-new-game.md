@@ -28,3 +28,5 @@ pillar:
 ## 2026-09-27
 
 The New colony screen is built by 73751f4f (the default game is a set), which leaves a Premise slot showing the castaway. This item fills that slot rather than building its own screen.
+
+People (5d09b04e): the cast card (3e96a103) fills this picker's cast display with the live figure, editable looks and, when the premise allows, a whole-person reroll.

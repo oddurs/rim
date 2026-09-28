@@ -31,3 +31,7 @@ The world has one RNG and 29 draw sites in seven files share it (terms 6, system
 - [ ] Save, load and continue matches never saving (the existing test, still passing), and the crosscheck agrees on all four platforms
 - [ ] The save format version is bumped and an old save reports a version change, not a divergence
 - [ ] Determinism test passes
+
+## 2026-09-27
+
+People (5d09b04e): appearance (8469a7ff) is the first per-entity counter-based draw outside the sim's systems: picks rolled at spawn, keyed by the pawn.

@@ -7,7 +7,7 @@ milestone: crafting
 depends_on:
 - 6dd4891c-f65e-4707-96f9-e6d46c6cd446
 created: 2026-09-23
-updated: 2026-09-23
+updated: 2026-09-27
 priority: p3
 api: additive
 effort: s
@@ -37,3 +37,7 @@ Deep snow should change how a winter plays: short trips, woodpiles near the door
 ## 2026-09-23
 
 Moved to Crafting with snow cover (0187).
+
+## 2026-09-27
+
+People (5d09b04e, DESIGN.md §6h): the stride's phase follows distance, so slower steps in snow simply take longer; nothing in the figure needs to change.
