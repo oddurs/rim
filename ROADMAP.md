@@ -672,7 +672,7 @@ Dig down. The map becomes a stack of 2D levels joined only at stairs, ladders an
 
 ## crafting — Crafting
 
-`##########` 90% · 28 of 31 done · due 2027-05-01
+`##########` 91% · 29 of 32 done · due 2027-05-01
 
 Production chains: workbenches and bills, cooking, farming, tailoring, research as a plugin.
 
@@ -681,6 +681,7 @@ Production chains: workbenches and bills, cooking, farming, tailoring, research 
 - [ ] `db7f1e06` Mining that rewards looking: rock kinds, veins and prospecting <sup>content · p1 · m · core</sup>
 - [x] `01691032` Item categories and one filter: things, materials and condition <sup>feature · p1 · m · engine</sup>
 - [x] `0927f0af` Tailoring: make apparel <sup>content · p2 · s · core</sup>
+- [x] `259b6390` The client autotest's weather day kills colonists on some machines, and later sections need the founder <sup>bug · p0</sup>
 - [x] `27d51e02` mods/iron: bog iron, charcoal, bloomery and forge, nails, fittings, saw and pick <sup>content · p2 · l · plugin</sup>
 - [x] `282efef8` Containers: a store block with slots <sup>feature · p1 · l · engine</sup>
 - [x] `2c03427e` Cooking: raw food into meals <sup>content · p1 · s · core</sup>
