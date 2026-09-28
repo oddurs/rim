@@ -27,6 +27,8 @@ satisfier = "field"
 # How cold it feels, wind and rain included, not the thermometer.
 field = "feels_like"
 comfort = [10.0, 32.0]
+# Clothes ease it: the cold end drops by what the colonist wears.
+insulated = true
 days_to_empty = 0.2
 recover_days = 0.1
 say = { below = 0.3, lines = ["I'm freezing.", "Can't feel my fingers.", "It's so cold."] }

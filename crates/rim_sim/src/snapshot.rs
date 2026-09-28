@@ -297,6 +297,7 @@ impl Snapshot {
             ("engine:growth".to_string(), component::<Growth>(w)),
             ("engine:work".to_string(), component::<Work>(w)),
             ("engine:held".to_string(), component::<Held>(w)),
+            ("engine:worn".to_string(), component::<Worn>(w)),
             ("engine:order".to_string(), component::<Order>(w)),
             ("engine:store".to_string(), component::<Store>(w)),
             ("engine:contained".to_string(), component::<Contained>(w)),
@@ -684,6 +685,14 @@ impl Snapshot {
             for (e, r) in dec::<Vec<(Entity, crate::world::Replaces)>>(self, "engine:replaces")? {
                 add(e, &|b| {
                     b.add(r);
+                });
+            }
+        }
+        // Optional: saves from before apparel lack it.
+        if self.sections.contains_key("engine:worn") {
+            for (e, g) in dec::<Vec<(Entity, Worn)>>(self, "engine:worn")? {
+                add(e, &|b| {
+                    b.add(g);
                 });
             }
         }

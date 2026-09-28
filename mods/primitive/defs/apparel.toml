@@ -1,0 +1,52 @@
+# Clothes: what makes a winter survivable. Worn, a garment lowers the cold
+# end of the warmth need's comfort by its insulation; a colonist dresses
+# when it's colder out than they can stand, and undresses once it's mild.
+# One garment a layer.
+
+[[thing]]
+id = "hide_wrap"
+label = "hide wrap"
+color = "#8a5f3d"
+category = "item"
+look.layers = [
+    { draw = "fill", x = 0.22, y = 0.24, w = 0.56, h = 0.52, shade = 0.9 },
+    { draw = "outline", x = 0.22, y = 0.24, w = 0.56, h = 0.52, width = 1.0, shade = 0.6 },
+]
+hp = 60
+market_value = 6.0
+stack_limit = 1
+apparel = { layer = "body", insulation = 6.0, wear_per_day = 1.0 }
+
+[[thing]]
+id = "leather_cloak"
+label = "leather cloak"
+color = "#6b4428"
+category = "item"
+look.layers = [
+    { draw = "fill", x = 0.18, y = 0.2, w = 0.64, h = 0.6 },
+    { draw = "outline", x = 0.18, y = 0.2, w = 0.64, h = 0.6, width = 1.0, shade = 0.55 },
+]
+hp = 100
+market_value = 14.0
+stack_limit = 1
+apparel = { layer = "outer", insulation = 10.0, wear_per_day = 0.5 }
+
+[[crafting.recipe]]
+id = "hide_wrap"
+label = "hide wrap"
+station = "crafting:hand"
+inputs = [{ tag = "hide", count = 2 }]
+outputs = [{ thing = "hide_wrap" }]
+requires = ["cutting"]
+work = 500
+stuff = false
+
+[[crafting.recipe]]
+id = "leather_cloak"
+label = "leather cloak"
+station = "crafting:hand"
+inputs = [{ tag = "leather", count = 3 }]
+outputs = [{ thing = "leather_cloak" }]
+requires = ["cutting"]
+work = 800
+stuff = false

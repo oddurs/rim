@@ -700,6 +700,12 @@ pub fn pawns(app: &App) {
         let r = cd.size * z;
         disc(&mut Immediate(&app.world_atlas), sx + 1.5, sy + 2.0, r, Color::new(0.0, 0.0, 0.0, 0.3));
         disc(&mut Immediate(&app.world_atlas), sx, sy, r, rgb(cd.rgb));
+        // What it wears: a band of each garment's colour, outer layers out.
+        for (k, &g) in p.worn.iter().enumerate() {
+            let Some(t) = w.thing(g) else { continue };
+            let c = rgb(defs.thing(w.ecs.get::<&MadeOf>(g).map(|m| m.0).unwrap_or(t.def)).rgb);
+            draw_circle_lines(sx, sy, r * (0.72 - 0.22 * k as f32).max(0.2), (r * 0.22).max(1.0), c);
+        }
         let ring = match p.faction {
             Faction::Player => Some(PLAYER),
             Faction::Hostile => Some(HOSTILE),

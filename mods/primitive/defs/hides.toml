@@ -1,6 +1,6 @@
 # Hides: a hunted animal's skin, scraped with an edge and dried into
-# leather at a crafting spot. Leather is what tailoring will cut clothes
-# from, once colonists can wear them.
+# leather at a crafting spot. Leather is what clothes are cut from
+# (apparel.toml).
 
 [[thing]]
 id = "hide"

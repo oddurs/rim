@@ -124,6 +124,10 @@ pub enum Job {
         need: DefId,
         until: u64,
     },
+    /// Fetch a garment and put it on.
+    Dress {
+        item: Entity,
+    },
     Attack {
         target: Entity,
         until: u64,
@@ -174,6 +178,7 @@ impl Job {
             Job::Sleep { stage: 1, .. } => "sleeping",
             Job::Sleep { .. } => "going to sleep",
             Job::Comfort { .. } => "warming up",
+            Job::Dress { .. } => "dressing for the cold",
             Job::Attack { .. } => "fighting",
             Job::Breach { .. } => "breaking in",
             Job::Bridge { .. } => "bridging",
@@ -237,6 +242,9 @@ pub struct Pawn {
     /// The tool it holds, off the map while it's held (DESIGN.md §4e).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hand: Option<Entity>,
+    /// What it wears, off the map like a held tool: one garment a layer.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub worn: Vec<Entity>,
     /// Experience per skill, by skill def, sorted; a level follows from it.
     #[serde(default)]
     pub skills: Vec<(DefId, u32)>,
@@ -682,6 +690,13 @@ impl Growth {
 /// A harvest waiting on the plant's growth, not on a day: `Regrow`'s
 /// `ready_at` for it. The growth pass clears it once the plant is grown.
 pub const WHEN_GROWN: u64 = u64::MAX;
+
+/// A garment on a pawn (`Pawn::worn`): off the map, out of the stock, and
+/// nobody else's to take.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub struct Worn {
+    pub by: Entity,
+}
 
 /// Harvests growing back, each named by its key:
 /// `harvest` is ready again at `ready_at`, and any others are in `also`.
@@ -2136,6 +2151,62 @@ impl World {
         }
     }
 
+    /// Degrees of warmth what `p` wears adds: each garment's insulation
+    /// times its material's `insulation` factor.
+    pub fn insulation(&self, p: &Pawn) -> f64 {
+        p.worn
+            .iter()
+            .filter_map(|&g| {
+                let t = self.thing(g)?;
+                let a = self.defs.thing(t.def).apparel.as_ref()?;
+                let made_of = self.ecs.get::<&MadeOf>(g).ok().map(|m| m.0);
+                Some(a.insulation * self.defs.factor(made_of, "insulation"))
+            })
+            .sum()
+    }
+
+    /// The layer a garment is worn on.
+    pub fn layer_of(&self, g: Entity) -> Option<&str> {
+        let t = self.thing(g)?;
+        self.defs.thing(t.def).apparel.as_ref().map(|a| a.layer.as_str())
+    }
+
+    /// `by` puts on `item` from the map, taking off and putting down what
+    /// it wore on the same layer.
+    pub fn put_on(&mut self, by: Entity, p: &mut Pawn, item: Entity) {
+        let Some(t) = self.thing(item) else { return };
+        let Some(layer) = self.layer_of(item).map(str::to_string) else { return };
+        let at = t.pos;
+        if self.map.item_at(at) == Some(item) {
+            self.stock_change(item, -(t.count as i64), -1);
+            self.map.set_item(at, None);
+        }
+        if let Ok(c) = self.ecs.get::<&Contained>(item).map(|c| *c) {
+            self.stock_change(item, -(t.count as i64), -1);
+            let _ = self.ecs.remove_one::<Contained>(item);
+            if let Ok(mut st) = self.ecs.get::<&mut Store>(c.store) {
+                st.slots[c.slot as usize] = None;
+            }
+            self.map.touch(at);
+        }
+        self.fields.remove_emitters(item);
+        let _ = self.ecs.insert_one(item, Worn { by });
+        if self.reservations.get(&item) == Some(&by) {
+            self.reservations.remove(&item);
+        }
+        if let Some(old) = p.worn.iter().copied().find(|&g| self.layer_of(g) == Some(layer.as_str())) {
+            self.take_off(p, old, at);
+        }
+        p.worn.push(item);
+    }
+
+    /// `p` takes off a garment and puts it down near `near`.
+    pub fn take_off(&mut self, p: &mut Pawn, g: Entity, near: IVec) {
+        p.worn.retain(|&w| w != g);
+        let _ = self.ecs.remove_one::<Worn>(g);
+        self.put_down(g, near);
+    }
+
     /// A held tool goes back on the map, in the nearest free cell to `near`,
     /// however far that is (nothing is lost).
     pub fn put_down(&mut self, tool: Entity, near: IVec) {
@@ -2932,6 +3003,9 @@ impl World {
                     h = crate::rng::mix(h ^ (s as u64) << 40 ^ xp as u64);
                 }
                 h = crate::rng::mix(h ^ p.work_frac as u64);
+                for g in &p.worn {
+                    h = crate::rng::mix(h ^ g.to_bits().get() ^ 0x3057);
+                }
             }
         }
         for t in self.ecs.query::<&Thing>().iter() {
