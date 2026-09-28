@@ -25,10 +25,12 @@ fn arg(name: &str, default: u64) -> u64 {
 }
 
 fn main() {
-    // Seed 5: a colony that lives long enough for the hash to cover its
-    // work orders, building and needs. The seed follows the map: at 192
-    // cells, seeds 3, 7 and 9 lose the colony by day 5.
-    let seed = arg("--seed", 5);
+    // Seed 4: a colony that lives all 60 days, long enough for the hash to
+    // cover its work orders, building and needs. The seed follows the map,
+    // and a change to worldgen can move it: at 192 cells with mining's
+    // veins, seeds 1, 2, 3, 5, 7 and 8 lose the colony or stall by day 5,
+    // and 4, 6, 9, 10, 11 and 12 live.
+    let seed = arg("--seed", 4);
     let mods = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mods");
     let mut s = Sim::new(&mods, seed).expect("mods load");
     let days = arg("--days", s.world.defs.calendar.year_days as u64);
