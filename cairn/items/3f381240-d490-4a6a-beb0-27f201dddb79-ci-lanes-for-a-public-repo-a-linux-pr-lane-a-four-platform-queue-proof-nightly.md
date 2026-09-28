@@ -34,7 +34,7 @@ Every PR push runs seven jobs on Linux, macOS, Windows and ARM and cancels its p
 
 - [ ] A PR run starts only Linux jobs and finishes in under 7 minutes (run linked, timings recorded)
 - [x] A queue-lane run (by `workflow_dispatch` on a branch) runs all four platforms and `agree` (run linked)
-- [ ] A docs-only PR runs the checks job alone, and a draft runs nothing (runs linked)
+- [x] A docs-only PR runs the checks job alone, and a draft runs nothing (runs linked)
 - [x] A nightly run by `workflow_dispatch` runs the full macOS and Windows suites (run linked)
 - [x] Every job has a timeout; only PR runs cancel in progress
 - [x] PR #138 closed with a pointer to this item
@@ -50,3 +50,11 @@ Runs on 97c09a9e (base b591c0c3, before #290's autotest founder fix, so Client f
 - Queue lane https://github.com/oddurs/rim/actions/runs/36379984853 : Proof macOS 3m28s, Proof Windows 4m15s, ARM crosscheck 2m10s, Test ubuntu 5m12s, agree success.
 - Nightly lane https://github.com/oddurs/rim/actions/runs/36379069658 : Nightly macOS 6m42s, Nightly Windows 11m29s, both proofs, ARM, agree success.
 Every job has timeout-minutes (plan 5, checks 15, test 45, proof 30, crosscheck-arm 30, agree 5, sim 20, client 20, nightly 60), and cancel-in-progress is true only for pull_request events outside mergify/merge-queue/*. #138 closed with a pointer here. The checks job now also runs scripts/task scripts (#308's hook tests). Left for after merge: criterion 1 on a run with main's warm cache (this cold run took 7m16s wall, 16 s over), and criterion 3 from the cairn-only PR that closes this item, opened as a draft first.
+
+## 2026-09-28
+
+Merged as #287 (c35cb3cb). main's push run https://github.com/oddurs/rim/actions/runs/36455234599 ran Plan and checks only, 29 s. A nightly dispatched on main right after (https://github.com/oddurs/rim/actions/runs/36455392607) saves main's caches for PR runs.
+
+## 2026-09-28
+
+Criterion 3: the draft run https://github.com/oddurs/rim/actions/runs/36455454309 ran Plan only (6 s) and skipped every other job; the same PR marked ready, docs only, ran Plan and checks alone: https://github.com/oddurs/rim/actions/runs/36455520184 (attempt 2; attempt 1 was cancelled from outside), 32 s. Criterion 1 is not met: on warm caches a PR run took 17m19s (https://github.com/oddurs/rim/actions/runs/36458855344), with Client's autotest under xvfb about 14 minutes and Test 8m13s. Filed as 2ede9239-d2f9-49a9-b7fa-c862a82fb846; this item closes when that lands.
