@@ -2,13 +2,15 @@
 id: 7ffd8d09-545b-4c69-9950-7f6912463f96
 title: Unreachable jobs carry a red notch
 type: feature
-status: planned
+status: done
 milestone: chalkline
+assignee: Oddur Sigurdsson
 depends_on:
 - a207eded-13e8-468d-9b4a-1255cbb38d02
 - d83192ed-0a3e-4a6f-a39a-04ce94a68935
 created: 2026-09-27
 updated: 2026-09-27
+closed_at: 2026-09-27
 priority: p3
 api: none
 effort: s
@@ -27,8 +29,8 @@ A marked tree across a river waits forever, and nothing on the map says so. DESI
 
 ## Acceptance criteria
 
-- [ ] Autotest: a tree marked to chop on an island with no path shows a notch mark within one planner pass; after a path is built, the notch goes away
-- [ ] Screenshot `chalk-unreachable`
+- [x] Autotest: a tree marked to chop on an island with no path shows a notch mark within one planner pass; after a path is built, the notch goes away
+- [x] Screenshot `chalk-unreachable`
 
 ## 2026-09-27
 

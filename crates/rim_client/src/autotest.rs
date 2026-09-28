@@ -2791,6 +2791,54 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.check(after > marked + 0.3, format!("and the amber goes from the map ({after:.2} from amber)"));
     t.app.paused = false;
 
+    // ---------------------------------------------------------- 7ffd8d09 unreachable
+    // A tree marked to chop, walled in: a notch on it, and gone once a
+    // way in opens.
+    println!("\n# unreachable jobs (7ffd8d09)");
+    let oak = defs.thing_id("tree_oak").expect("oaks");
+    let (wall, wood) = (defs.thing_id("wall").expect("walls"), defs.thing_id("wood").unwrap());
+    let chop = defs.lookup("designation", "chop").unwrap();
+    let o = open_square(t.w(), home, 3).expect("open ground for an island");
+    let middle = o.offset(1, 1);
+    let tree = t.app.sim.world.spawn_fixture(oak, middle, false).expect("a tree");
+    let ring: Vec<IVec> = (0..3).flat_map(|y| (0..3).map(move |x| o.offset(x, y))).filter(|&c| c != middle).collect();
+    let walls: Vec<Option<Entity>> =
+        ring.iter().map(|&c| t.app.sim.world.spawn_fixture_of(wall, c, false, Some(wood))).collect();
+    t.check(walls.iter().all(Option::is_some), "eight walls round the island's tree");
+    t.app.sim.push(Command::Designate { designation: chop, a: middle, b: middle });
+    t.ticks(1);
+    t.focus(middle);
+    t.app.cam.z = middle.z;
+    t.input(RawInput { mouse: t.screen(middle), ..Default::default() }).await;
+    t.frame().await;
+    let notched = |t: &T| {
+        let bottom_left = t.app.cam.to_screen(middle.x as f32, middle.y as f32 + 1.0);
+        crate::overlay::scene(&t.app).marks.iter().any(|m| {
+            matches!(m, Mark::Notch { at, .. } if (at.0 - bottom_left.0).abs() < 1.0 && (at.1 - bottom_left.1).abs() < 1.0)
+        })
+    };
+    let marked = t.w().ecs.get::<&Designated>(tree).is_ok();
+    t.check(marked && notched(&t), format!("a marked tree walled in carries a notch (marked {marked})"));
+    let says = crate::overlay::scene(&t.app)
+        .marks
+        .iter()
+        .any(|m| matches!(m, Mark::Chip(c) if c.text == "No one can reach this"));
+    t.check(says, "hovering it says no one can reach it");
+    t.shot("chalk-unreachable").await;
+    // A way in: the wall to the left of the tree goes.
+    if let Some(e) = walls[3] {
+        t.app.sim.world.despawn_thing(e);
+    }
+    t.ticks(1);
+    t.frame().await;
+    t.check(!notched(&t), "a way in takes the notch away");
+    for e in walls.into_iter().flatten() {
+        if t.w().thing(e).is_some() {
+            t.app.sim.world.despawn_thing(e);
+        }
+    }
+    t.app.sim.world.despawn_thing(tree);
+
     println!("\n{} passed, {} failed; screenshots in {}", t.passed, t.failed.len(), t.dir.display());
     for f in &t.failed {
         println!("  FAIL {f}");

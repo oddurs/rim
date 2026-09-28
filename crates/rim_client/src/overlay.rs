@@ -10,6 +10,7 @@ use crate::{draw, App};
 use macroquad::prelude::*;
 use rim_sim::hecs::Entity;
 use rim_sim::world::Pawn;
+use rim_sim::IVec;
 use rim_ui::paint::Draw;
 use rim_ui::theme::{Rgba, Theme};
 
@@ -30,6 +31,8 @@ pub struct Palette {
     pub keyline: Color,
     /// A grid line (`grid`).
     pub seam: Color,
+    /// Can't: the theme's `threat`.
+    pub threat: Color,
     pub firm: f32,
     pub bracket_gap: f32,
     pub bracket_arm_min: f32,
@@ -57,6 +60,7 @@ impl Palette {
             chalk: c("chalk", "#f2eee3"),
             keyline: c("keyline", "#080a0c8c"),
             seam: c("seam", "#0000001f"),
+            threat: c("threat", "#ff6b5a"),
             firm: shape("firm", 2.0),
             bracket_gap: shape("bracket_gap", 3.0),
             bracket_arm_min: shape("bracket_arm_min", 4.0),
@@ -102,8 +106,17 @@ pub enum Mark {
         from: (f32, f32),
         to: (f32, f32),
     },
+    /// A job no colonist can reach: a triangle `size` points on a side in
+    /// the bottom-left corner at `at`.
+    Notch {
+        at: (f32, f32),
+        size: f32,
+    },
     Chip(Chip),
 }
+
+/// A notch's side, against the cell.
+const NOTCH_CELL: f32 = 0.3;
 
 /// A small label by the pointer or a mark: "3 selected", "Chop · 4 trees".
 #[derive(Clone, Debug, PartialEq)]
@@ -207,6 +220,29 @@ pub fn scene(app: &App) -> Scene {
     if let (true, Some(at)) = (group, primary) {
         marks.push(Mark::Chip(Chip { at, text: format!("{} selected", picked.len()) }));
     }
+    // A job no one can reach carries a notch at its bottom-left, and says
+    // why under the pointer. The map's regions answer: a few lookups a job.
+    let (x0, y0, x1, y1) = draw::visible(app);
+    for e in rim_sim::ai::unreachable_jobs(w, IVec::at(x0, y0, cam.z), IVec::at(x1, y1, cam.z)) {
+        let (rect, cells) = if let Some((c, r)) = draw::pawn_disc(app, e) {
+            ([c.0 - r, c.1 - r, 2.0 * r, 2.0 * r], w.pawn_pos(e).map(|p| (p, [1, 1])))
+        } else if let Some(t) = w.thing(e) {
+            let size = w.defs.thing(t.def).size_facing(t.facing);
+            let (sx, sy) = cam.to_screen(t.pos.x as f32, t.pos.y as f32);
+            ([sx, sy, z * size[0] as f32, z * size[1] as f32], Some((t.pos, size)))
+        } else {
+            continue;
+        };
+        let at = (rect[0], rect[1] + rect[3]);
+        marks.push(Mark::Notch { at, size: (z * NOTCH_CELL).max(4.0) });
+        let over = |(p, [fw, fh]): (IVec, [u32; 2])| {
+            let (fw, fh) = (fw as i32, fh as i32);
+            app.hover_cell.is_some_and(|c| (p.x..p.x + fw).contains(&c.x) && (p.y..p.y + fh).contains(&c.y))
+        };
+        if cells.is_some_and(over) {
+            marks.push(Mark::Chip(Chip { at: (at.0, at.1 + 4.0), text: "No one can reach this".into() }));
+        }
+    }
     // With the storage overlay on, a selected loose stack shows where it
     // will be carried.
     if app.storage_overlay {
@@ -303,6 +339,14 @@ fn dashed(p: &Palette, (ax, ay): (f32, f32), (bx, by): (f32, f32), z: f32) {
     }
 }
 
+/// A right triangle in `threat` filling the corner at `at` (a footprint's
+/// bottom-left), on a keyline that stays outside the footprint's edge.
+fn notch(p: &Palette, (x, y): (f32, f32), s: f32) {
+    let k = 1.0;
+    draw_triangle(vec2(x - k, y + k), vec2(x + s + 2.0 * k, y + k), vec2(x - k, y - s - 2.0 * k), p.keyline);
+    draw_triangle(vec2(x, y), vec2(x + s, y), vec2(x, y - s), p.threat);
+}
+
 /// Paint the scene's world marks. Chips are text: `chips` turns them into
 /// the UI's draw list.
 pub fn draw(scene: &Scene, p: &Palette, zoom: f32) {
@@ -312,6 +356,7 @@ pub fn draw(scene: &Scene, p: &Palette, zoom: f32) {
             Mark::Haul { from, to } => dashed(p, *from, *to, zoom),
             Mark::Brackets { rect, gap, alpha } => brackets(p, *rect, *gap, p.chalk, *alpha),
             Mark::Ring { center, r, gap, alpha } => ring(p, *center, r + gap, p.firm, p.chalk, *alpha),
+            Mark::Notch { at, size } => notch(p, *at, *size),
             Mark::Chip(_) => {}
         }
     }
