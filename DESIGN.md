@@ -2151,7 +2151,14 @@ where they were built, and the sun moves a fraction of a degree a second.
     Rebaked only for lights within reach of a change, the rule the sim
     already uses to re-stamp emitters.
   - **Dynamic lights** (carried, burning, moving): the same march every frame,
-    up to a cap per preset; past it they glow without shadows.
+    up to a cap per preset, nearest the view first; past it they glow
+    without shadows. The static bake runs at most once a second
+    (5a69f9c9). A change after a quiet second bakes at once; one within a
+    second of the last bake waits for the next. Meanwhile a light that
+    comes, such as a spreading fire's new flame, is drawn as a dynamic
+    light, with its shadows and outside the cap, so a fire never rebakes
+    every frame. A light that goes, or a wall that changes, waits in the
+    bake until then, a second at most.
   - **Compose** at light resolution, then **multiply** the world, as today.
 - **Falloff** is `I · (1 − (d/r)⁴)² / (1 + 0.08·d²)`: close to inverse-square
   near the flame and exactly zero at the radius, so a light's quad is tight.
@@ -2248,9 +2255,10 @@ player's settings file:
 | Sun steps (0.4 cells each) | 16 | 28 | 40 | 56 |
 | Soft sun shadows | no | yes | yes | yes |
 | Sun worked out again after | 1° | 0.25° | 0.1° | 0.02° |
+| Moving lights with shadows | 4 | 8 | 16 | 32 |
 
 Any setting overrides its preset (`texels_per_cell`, `sun_steps`,
-`soft_shadows`, `sun_rebuild_degrees`). There is no `auto` yet (24bad102):
+`soft_shadows`, `sun_rebuild_degrees`, `moving_shadows`). There is no `auto` yet (24bad102):
 the frame's time mixes the sim and the UI with the light, and a GPU timer
 works only off Apple, so it would have turned the lights down for the wrong
 reason. Light is upsampled bilinearly in every preset; bicubic was tried and

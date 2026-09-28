@@ -17,14 +17,17 @@ pub struct Quality {
     /// How far the sun moves, in degrees, before its shadows are worked out
     /// again.
     pub sun_rebuild: f64,
+    /// Moving lights that cast shadows, nearest the view first; the rest
+    /// glow without.
+    pub moving_shadows: u32,
 }
 
 /// The presets, cheapest first.
 pub const PRESETS: [(&str, Quality); 4] = [
-    ("low", Quality { texels: 1, sun_steps: 16, soft: false, sun_rebuild: 1.0 }),
-    ("medium", Quality { texels: 2, sun_steps: 28, soft: true, sun_rebuild: 0.25 }),
-    ("high", Quality { texels: 2, sun_steps: 40, soft: true, sun_rebuild: 0.1 }),
-    ("ultra", Quality { texels: 4, sun_steps: 56, soft: true, sun_rebuild: 0.02 }),
+    ("low", Quality { texels: 1, sun_steps: 16, soft: false, sun_rebuild: 1.0, moving_shadows: 4 }),
+    ("medium", Quality { texels: 2, sun_steps: 28, soft: true, sun_rebuild: 0.25, moving_shadows: 8 }),
+    ("high", Quality { texels: 2, sun_steps: 40, soft: true, sun_rebuild: 0.1, moving_shadows: 16 }),
+    ("ultra", Quality { texels: 4, sun_steps: 56, soft: true, sun_rebuild: 0.02, moving_shadows: 32 }),
 ];
 
 /// The default.
@@ -86,6 +89,7 @@ impl Setting {
                 }
                 "sun_steps" => q.sun_steps = int()?.clamp(4, 64) as u32,
                 "soft_shadows" => q.soft = flag()?,
+                "moving_shadows" => q.moving_shadows = int()?.clamp(0, 64) as u32,
                 "sun_rebuild_degrees" => {
                     let d = v.as_float().or(v.as_integer().map(|i| i as f64)).filter(|d| d.is_finite());
                     q.sun_rebuild = d.ok_or("lighting.sun_rebuild_degrees should be a number")?.clamp(0.01, 5.0);
@@ -131,7 +135,10 @@ mod tests {
         let text = "[lighting]\nquality = \"high\"\ntexels_per_cell = 4\nsun_steps = 90\nsoft_shadows = false\nsun_rebuild_degrees = 1\n";
         let s = Setting::from_settings(text).unwrap().unwrap();
         assert_eq!(s.name(), "high", "overrides keep the preset's name");
-        assert_eq!(s.quality, Quality { texels: 4, sun_steps: 64, soft: false, sun_rebuild: 1.0 }, "steps are capped");
+        let want = Quality { texels: 4, sun_steps: 64, soft: false, sun_rebuild: 1.0, moving_shadows: 16 };
+        assert_eq!(s.quality, want, "steps are capped");
+        let s = Setting::from_settings("[lighting]\nmoving_shadows = 2").unwrap().unwrap();
+        assert_eq!(s.quality.moving_shadows, 2, "and the moving lights' cap");
         let s = Setting::from_settings("[lighting]\nsun_rebuild_degrees = 0.5").unwrap().unwrap();
         assert_eq!((s.name(), s.quality.sun_rebuild), ("medium", 0.5), "no preset is medium");
         assert_eq!(Setting::from_settings("render_scale = 0.5"), Ok(None), "unset is the default");

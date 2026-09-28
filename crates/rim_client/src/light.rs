@@ -49,6 +49,21 @@ const STEADY: usize = 3;
 /// Baked firelight is stored at this fraction, so overlapping fires can add
 /// up past full before the 8-bit target clips; both shaders take it.
 const FIRE_SCALE: f32 = 0.6;
+/// Moving lights nearest `centre` first, and past the first `cap` of them,
+/// their strength negated: the bake shader draws those without shadows.
+fn cap_shadows(lights: &[Lamp], centre: Vec2, cap: usize) -> Vec<Lamp> {
+    let mut lights = lights.to_vec();
+    let near = |l: &Lamp| vec2(l.x, l.y).distance_squared(centre);
+    lights.sort_by(|a, b| near(a).total_cmp(&near(b)));
+    for l in lights.iter_mut().skip(cap) {
+        l.strength = -l.strength;
+    }
+    lights
+}
+
+/// The least time between firelight bakes, in seconds. A light that comes
+/// sooner is drawn as a moving light until the next.
+const SETTLE: f64 = 1.0;
 /// The farthest a light's shadows are traced, in cells: the bake's march
 /// takes at most 95 steps. Longer reaches are cut to it.
 pub const MAX_REACH: f32 = 23.0;
@@ -233,11 +248,16 @@ void main() {
     float fall = (1.0 - x2 * x2);
     fall = fall * fall / (1.0 + 0.08 * d * d);
     vec2 across = d > 0.001 ? vec2(-dv.y, dv.x) / d : vec2(0.0);
-    float lit = 0.0;
-    for (int r = 0; r < 8; r++) {
-        lit += trace(p, lamp.xy + across * (float(r) / 7.0 - 0.5) * 2.0 * FLAME);
+    // A light past the moving lights' cap comes with its strength negated:
+    // it glows, and casts no shadow.
+    float lit = 8.0;
+    if (lamp.w > 0.0) {
+        lit = 0.0;
+        for (int r = 0; r < 8; r++) {
+            lit += trace(p, lamp.xy + across * (float(r) / 7.0 - 0.5) * 2.0 * FLAME);
+        }
     }
-    gl_FragColor = channel * (lamp.w * fall * lit / 8.0 * scale);
+    gl_FragColor = channel * (abs(lamp.w) * fall * lit / 8.0 * scale);
 }";
 
 // Zero a light target where a partial bake redraws, under a scissor.
@@ -262,6 +282,7 @@ precision mediump float;
 #endif
 varying vec2 uv;
 uniform sampler2D Texture;
+uniform sampler2D moving;
 uniform sampler2D occluders;
 uniform sampler2D sunlit;
 uniform sampler2D rooms;
@@ -308,7 +329,8 @@ void main() {
     // A lightning flash, while it lasts, is what `sunlit` holds.
     vec3 outside = ambient + (direct + bolt) * sun;
     vec3 inside = (ambient + direct) * share + (direct + bolt) * sun_in;
-    vec4 f = texture2D(Texture, uv) / scale;
+    // The baked firelight, and what the bake hasn't caught up with yet.
+    vec4 f = (texture2D(Texture, uv) + texture2D(moving, uv)) / scale;
     vec3 fire = f.r * ch0 + f.g * ch1 + f.b * ch2 + f.a * ch3;
     // Firelight adds to the sky, and the eye's exposure scales both: a fire
     // reads strong at night and weak at noon because the eye adapts.
@@ -768,6 +790,26 @@ pub struct Light {
     fires_seen: Option<(u64, u64)>,
     /// The lights `fires` was baked from.
     baked: Vec<Lamp>,
+    /// The lights the field has now. The bake catches up with them at most
+    /// once a `SETTLE`; until it does, the ones it hasn't baked are drawn as
+    /// moving lights.
+    current: Vec<Lamp>,
+    /// A bake is owed, and the walls that changed since the last one: all
+    /// of them with `owed_whole`.
+    owed: bool,
+    owed_walls: Vec<(i32, i32, i32, i32)>,
+    owed_whole: bool,
+    /// When the last bake ran, by the clock.
+    last_bake: f64,
+    /// Firelight the bake doesn't hold, drawn every frame: lights that came
+    /// since the last bake, and moving ones.
+    moving: Option<RenderTarget>,
+    /// Whether `moving` holds any light now.
+    moving_drawn: bool,
+    /// Moving lights this frame (`set_moving`).
+    carried: Vec<Lamp>,
+    /// Lights drawn into `moving` last frame: with shadows, and in all.
+    pub moving_lit: (usize, usize),
     /// Lights in the last bake, and the draws it took.
     lamps: usize,
     draws: u32,
@@ -820,7 +862,9 @@ impl Light {
     /// with the default camera: it draws into targets of its own.
     /// `roofs` is each cell's roof, in steps in from its eaves
     /// (`Roofs::height`), so a house shades by its roof's shape.
-    pub fn prepare(&mut self, w: &World, air: &Air, px_per_cell: f32, roofs: &[u8], flash: Flash) {
+    /// `centre` is the middle of the view, in cells: moving lights nearest
+    /// it cast shadows first.
+    pub fn prepare(&mut self, w: &World, air: &Air, px_per_cell: f32, roofs: &[u8], flash: Flash, centre: Vec2) {
         self.passes.clear();
         // Zooming out drops texels, so the light never costs more than the
         // pixels it covers; a new size rebuilds every target.
@@ -831,9 +875,12 @@ impl Light {
         // Uploads, not draws.
         self.pass_end("occluders", t, changed || rooms, 0);
         let t = self.pass_begin();
-        let baked = self.bake_fires(w);
+        let baked = self.bake_fires(w, get_time());
         let draws = if baked { self.draws } else { 0 };
         self.pass_end("firelight", t, baked, draws);
+        let t = self.pass_begin();
+        let drew = self.draw_moving(w, centre);
+        self.pass_end("moving", t, drew, drew as u32);
         let t = self.pass_begin();
         let ran = self.update_sun(w, air, flash);
         self.pass_end("sun", t, ran, ran as u32);
@@ -850,6 +897,7 @@ impl Light {
     /// the render bench times as the cost of a change.
     pub fn invalidate(&mut self) {
         self.fires_seen = None;
+        self.last_bake = f64::NEG_INFINITY;
         self.rooms_key = None;
         self.sun_key = None;
         self.occluders.invalidate();
@@ -963,7 +1011,7 @@ impl Light {
                         UniformDesc::new("day", UniformType::Float1),
                         UniformDesc::new("exposure", UniformType::Float1),
                     ],
-                    vec!["occluders".to_string(), "sunlit".to_string(), "rooms".to_string()],
+                    vec!["occluders".to_string(), "sunlit".to_string(), "rooms".to_string(), "moving".to_string()],
                     PipelineParams {
                         // Multiply: result = source × destination.
                         color_blend: Some(BlendState::new(
@@ -999,18 +1047,34 @@ impl Light {
 
     /// Bake every light-giving thing's glow, if a light or the occluders
     /// changed. Whether it did.
-    fn bake_fires(&mut self, w: &World) -> bool {
+    fn bake_fires(&mut self, w: &World, now: f64) -> bool {
         let Some(occ) = self.occluders.texture.clone() else { return false };
         let size = (w.map.w as u32 * self.texels, w.map.h as u32 * self.texels);
         let seen = (w.fields.revision, self.occluders.version);
         let fits = self.fires.as_ref().is_some_and(|t| (t.texture.width() as u32, t.texture.height() as u32) == size);
-        if fits && self.fires_seen == Some(seen) {
+        if !fits || self.fires_seen != Some(seen) {
+            if self.fires_seen.is_none_or(|(_, v)| v != self.occluders.version) {
+                self.owed_whole |= self.occluders.whole;
+                self.owed_walls.extend_from_slice(&self.occluders.changed);
+            }
+            self.fires_seen = Some(seen);
+            self.current = lamps(w);
+            self.owed = true;
+        }
+        // At most one bake a SETTLE: a spreading fire's new flames are drawn
+        // as moving lights meanwhile, rather than rebaking every frame.
+        if !self.owed || (fits && now - self.last_bake < SETTLE) {
             return false;
         }
-        let walls_moved = self.fires_seen.is_none_or(|(_, v)| v != self.occluders.version);
-        self.fires_seen = Some(seen);
-        let lamps = lamps(w);
-        let walls = walls_moved.then(|| if self.occluders.whole { &[][..] } else { &self.occluders.changed[..] });
+        let (Some(m), Some(clear)) = (self.material(Pass::Bake), self.material(Pass::Clear)) else { return false };
+        self.owed = false;
+        let lamps = self.current.clone();
+        let owed_walls = std::mem::take(&mut self.owed_walls);
+        let walls = if std::mem::take(&mut self.owed_whole) {
+            Some(&[][..])
+        } else {
+            (!owed_walls.is_empty()).then_some(&owed_walls[..])
+        };
         // A heater re-stamped, or a wall went up where no light reaches: the
         // glow is the same, and nothing is redone. A room's fill spreads a
         // light over its whole floor, so a change to any fill redoes
@@ -1021,7 +1085,6 @@ impl Light {
         if work == Redo::Nothing {
             return false;
         }
-        let (Some(m), Some(clear)) = (self.material(Pass::Bake), self.material(Pass::Clear)) else { return false };
         if !fits {
             let rt = render_target(size.0, size.1);
             rt.texture.set_filter(FilterMode::Linear);
@@ -1085,7 +1148,87 @@ impl Light {
         self.lamps = lamps.len();
         self.baked = lamps;
         self.bakes += 1;
+        self.last_bake = now;
         true
+    }
+
+    /// Draw the firelight the bake doesn't hold: lights that came since the
+    /// last bake, and moving ones. The preset's cap of them cast shadows,
+    /// nearest the view first; the rest glow without. Whether it drew.
+    fn draw_moving(&mut self, w: &World, centre: Vec2) -> bool {
+        // Lights the bake hasn't caught up with; with none owed, it has.
+        let baked = &self.baked;
+        let waiting: Vec<Lamp> =
+            if self.owed { self.current.iter().filter(|l| !baked.contains(l)).copied().collect() } else { Vec::new() };
+        let Some(fires) = self.fires.as_ref() else { return false };
+        let size = (fires.texture.width(), fires.texture.height());
+        if waiting.is_empty() && self.carried.is_empty() && !self.moving_drawn {
+            self.moving_lit = (0, 0);
+            return false;
+        }
+        let Some(m) = self.material(Pass::Bake) else { return false };
+        let Some(occ) = self.occluders.texture.clone() else { return false };
+        if self.moving.as_ref().is_none_or(|t| (t.texture.width(), t.texture.height()) != size) {
+            let rt = render_target(size.0 as u32, size.1 as u32);
+            rt.texture.set_filter(FilterMode::Linear);
+            self.moving = Some(rt);
+        }
+        // Lights waiting for the bake are still: they cast shadows, as the
+        // bake will give them, for the second at most they wait. Moving ones
+        // share the preset's cap.
+        let cap = self.setting.quality.moving_shadows as usize;
+        let moving = cap_shadows(&self.carried, centre, cap);
+        let lights: Vec<Lamp> = waiting.iter().chain(&moving).copied().collect();
+        let (tw, th) = size;
+        set_camera(&Camera2D {
+            zoom: vec2(2.0 / tw, 2.0 / th),
+            target: vec2(tw / 2.0, th / 2.0),
+            render_target: self.moving.clone(),
+            ..Default::default()
+        });
+        clear_background(Color::new(0.0, 0.0, 0.0, 0.0));
+        m.set_texture("occluders", occ);
+        m.set_uniform("map", vec2(w.map.w as f32, w.map.h as f32));
+        m.set_uniform("res", vec2(tw, th));
+        m.set_uniform("scale", FIRE_SCALE);
+        gl_use_material(&m);
+        for mesh in lamp_meshes(&lights, self.texels as f32) {
+            draw_mesh(&mesh);
+        }
+        gl_use_default_material();
+        set_default_camera();
+        self.moving_drawn = !lights.is_empty();
+        self.moving_lit = (waiting.len() + moving.iter().filter(|l| l.strength > 0.0).count(), lights.len());
+        true
+    }
+
+    /// Lights that move, for this frame and until set again: where each is,
+    /// in cells, how far it reaches and how bright it is at the source, in
+    /// the light field's units. They flicker as fire does.
+    pub fn set_moving(&mut self, lights: impl IntoIterator<Item = (Vec2, f32, f32)>) {
+        self.carried = lights
+            .into_iter()
+            .map(|(p, reach, amount)| Lamp {
+                x: p.x,
+                y: p.y,
+                reach: reach.clamp(0.75, MAX_REACH),
+                strength: (amount / 100.0).clamp(0.0, 1.0 / FIRE_SCALE),
+                channel: channel_of(Flicker::Fire, p.x.floor() as i32, p.y.floor() as i32),
+            })
+            .collect();
+    }
+
+    /// Whether the lights have changed since the last bake, which waits for
+    /// the `SETTLE` to pass.
+    pub fn owes_a_bake(&self) -> bool {
+        self.owed
+    }
+
+    /// The moving lights' firelight at a point, in cells: each channel's
+    /// brightness, read back from the GPU. Slow, for tests.
+    pub fn moving_at(&self, x: f32, y: f32) -> Option<[f32; 4]> {
+        let c = self.texel(&self.moving.as_ref()?.texture.get_texture_data(), x, y)?;
+        Some([c.r, c.g, c.b, c.a].map(|v| v / FIRE_SCALE))
     }
 
     /// Each roofed cell's share of the sky: `[[sky]]`'s `indoor_share`, what
@@ -1236,6 +1379,10 @@ impl Light {
         // no fire does.
         let blank = self.blank.get_or_insert_with(|| Texture2D::from_rgba8(1, 1, &[0, 0, 0, 0])).clone();
         let fires = self.fires.as_ref().map_or(blank.clone(), |t| t.texture.clone());
+        let moving = match &self.moving {
+            Some(t) if self.moving_drawn => t.texture.clone(),
+            _ => blank.clone(),
+        };
         let sun = self.sunlit.as_ref().map_or(blank.clone(), |t| t.texture.clone());
         let rooms = self.rooms.clone().unwrap_or(blank);
         let Some(m) = self.material(Pass::Multiply) else { return false };
@@ -1252,6 +1399,7 @@ impl Light {
         m.set_texture("occluders", occ);
         m.set_texture("sunlit", sun);
         m.set_texture("rooms", rooms);
+        m.set_texture("moving", moving);
         let target = exposure_for(sky);
         // A frame's worth of adapting, about a second to settle.
         self.exposure = if self.exposure > 0.0 {
@@ -1406,6 +1554,17 @@ mod tests {
         assert_eq!(redo(&[a, b], &[a, b, c], None), Redo::Areas(vec![c.area()]), "a new light, only its own area");
         assert_eq!(redo(&[a, b], &[a], None), Redo::Areas(vec![b.area()]), "a light gone");
         assert_eq!(redo(&[a], &[a], Some(&[])), Redo::Whole, "every wall repacked");
+    }
+
+    #[test]
+    fn the_moving_lights_nearest_the_view_cast_the_shadows() {
+        let at = |x: f32| Lamp { x, y: 0.5, reach: 4.0, strength: 0.6, channel: 0 };
+        let lights: Vec<Lamp> = [9.5, 1.5, 5.5, 3.5, 7.5].into_iter().map(at).collect();
+        let capped = cap_shadows(&lights, vec2(0.0, 0.5), 2);
+        let order: Vec<(f32, bool)> = capped.iter().map(|l| (l.x, l.strength > 0.0)).collect();
+        assert_eq!(order, [(1.5, true), (3.5, true), (5.5, false), (7.5, false), (9.5, false)]);
+        assert!(capped.iter().all(|l| l.strength.abs() == 0.6), "past the cap they glow as bright");
+        assert!(cap_shadows(&lights, vec2(0.0, 0.5), 8).iter().all(|l| l.strength > 0.0), "under the cap, all");
     }
 
     #[test]

@@ -296,9 +296,11 @@ struct View {
     lit: bool,
     /// Dig the stacked scene first (`stacked`), and show this level.
     level: Option<i32>,
+    /// Lights moving round the view's centre, frame by frame.
+    moving: usize,
 }
 
-const VIEWS: [View; 9] = [
+const VIEWS: [View; 10] = [
     View {
         name: "whole map",
         zoom: None,
@@ -308,6 +310,7 @@ const VIEWS: [View; 9] = [
         hour: None,
         lit: false,
         level: None,
+        moving: 0,
     },
     View {
         name: "mid",
@@ -318,6 +321,7 @@ const VIEWS: [View; 9] = [
         hour: None,
         lit: false,
         level: None,
+        moving: 0,
     },
     View {
         name: "close",
@@ -328,8 +332,19 @@ const VIEWS: [View; 9] = [
         hour: None,
         lit: false,
         level: None,
+        moving: 0,
     },
-    View { name: "storm", zoom: None, storm: true, zooming: false, scale: 1.0, hour: None, lit: false, level: None },
+    View {
+        name: "storm",
+        zoom: None,
+        storm: true,
+        zooming: false,
+        scale: 1.0,
+        hour: None,
+        lit: false,
+        level: None,
+        moving: 0,
+    },
     View {
         name: "zooming",
         zoom: Some(12.0),
@@ -339,6 +354,7 @@ const VIEWS: [View; 9] = [
         hour: None,
         lit: false,
         level: None,
+        moving: 0,
     },
     // The storm at half the pixels: what render scale saves the GPU.
     View {
@@ -350,6 +366,7 @@ const VIEWS: [View; 9] = [
         hour: None,
         lit: false,
         level: None,
+        moving: 0,
     },
     // A level dug out below the colony (DESIGN.md §6d): the surface with
     // it showing through pits, then the level itself, nearly all rock.
@@ -362,6 +379,7 @@ const VIEWS: [View; 9] = [
         hour: None,
         lit: false,
         level: Some(0),
+        moving: 0,
     },
     View {
         name: "below",
@@ -372,6 +390,20 @@ const VIEWS: [View; 9] = [
         hour: None,
         lit: false,
         level: Some(-1),
+        moving: 0,
+    },
+    // Dusk with 64 lights moving round the colony: the preset's cap of
+    // them cast shadows, the rest glow (5a69f9c9).
+    View {
+        name: "moving",
+        zoom: None,
+        storm: false,
+        zooming: false,
+        scale: 1.0,
+        hour: Some(18.67),
+        lit: true,
+        level: None,
+        moving: 64,
     },
     // Long shadows and lit fires: the most the lighting does.
     View {
@@ -383,6 +415,7 @@ const VIEWS: [View; 9] = [
         hour: Some(18.67),
         lit: true,
         level: None,
+        moving: 0,
     },
 ];
 
@@ -580,10 +613,19 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
         // A gesture warms up on the gesture, so measuring doesn't start
         // with a jump from wherever the last view left the zoom.
         const WARM: usize = 30;
+        // Moving lights circle the colony, a little on each frame.
+        let around = vec2(centre.x as f32 + 0.5, centre.y as f32 + 0.5);
+        let circling = |k: usize| {
+            (0..v.moving).map(move |i| {
+                let (r, a) = (6.0 + 12.0 * i as f32 / v.moving as f32, i as f32 * 0.7 + k as f32 * 0.02);
+                (around + r * vec2(a.cos(), a.sin()), 4.0, 60.0)
+            })
+        };
         for k in 0..WARM {
             if v.zooming {
                 app.cam.zoom = gesture_zoom(k);
             }
+            app.light.set_moving(circling(k));
             draw_one(&mut app, &mut time, None).await;
         }
         let mut r =
@@ -593,6 +635,7 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
             if v.zooming {
                 app.cam.zoom = gesture_zoom(k);
             }
+            app.light.set_moving(circling(k));
             draw_one(&mut app, &mut time, None).await;
             r.rebuilt += app.meshes.rebuilt;
             let zones = telemetry::frame().zones;
