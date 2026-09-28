@@ -94,21 +94,20 @@ jobs:
           echo "LUAU_LSP=$RUNNER_TEMP/luau-lsp/luau-lsp" >> "$GITHUB_ENV"
       # `cargo test` (api_types) keeps the declarations in step with the host.
       - run: scripts/task types
-      # Format 4 (UUID identities) is not in a tagged release yet, so build the
-      # commit that introduced it. Go back to install.sh with
-      # CAIRN_VERSION=1.0.0-alpha.1 once that is tagged.
+      # scripts/task installs the cairn rev it names, once; this keeps it.
+      - name: Which cairn
+        id: cairn
+        run: echo "rev=$(sed -n 's/^CAIRN_REV=//p' scripts/task)" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@v4
         with:
-          path: ~/.cargo/bin/cairn
-          key: cairn-c7d4230
-      - name: Install cairn
-        run: command -v cairn || cargo install --locked --git https://github.com/oddurs/cairn --rev c7d4230 cairn-md
+          path: ~/.cache/rim/cairn-${{ steps.cairn.outputs.rev }}
+          key: cairn-root-${{ steps.cairn.outputs.rev }}
       - run: scripts/task roadmap
       # ROADMAP.md isn't tracked (DESIGN.md §8a): main's is rendered here and
       # kept as the `roadmap` artifact.
       - name: Render the roadmap
         if: needs.plan.outputs.lane == 'main'
-        run: cairn render -q --no-hooks
+        run: ~/.cache/rim/cairn-${{ steps.cairn.outputs.rev }}/bin/cairn render -q --no-hooks
       - name: Upload the roadmap
         if: needs.plan.outputs.lane == 'main'
         uses: actions/upload-artifact@v4

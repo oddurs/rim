@@ -7,7 +7,7 @@
 #   scripts/task test [-- ARGS]   nextest over the workspace; ARGS go to nextest
 #   scripts/task <verb>           any one step (see `scripts/task help`)
 #
-# Needs: cargo, cargo-nextest, cairn, and luau-lsp (LUAU_LSP or on PATH) at
+# Needs: cargo, cargo-nextest, and luau-lsp (LUAU_LSP or on PATH) at
 # the version CI pins. A passing `check` on a clean tree records the commit,
 # and the pre-push hook refuses a push of any other.
 set -Eeuo pipefail
@@ -51,13 +51,29 @@ types() {
   LUAU_LSP="$LUAU_LSP" ./scripts/check-luau.sh
 }
 
+# The cairn CI uses, written once here: CI reads it from this line. The gate
+# runs this rev whatever `cairn` is on PATH, since another version can pass or
+# fail the items differently, and a newer one rewrote every agent's items once
+# (2026-09-27). Installed once per rev, outside any worktree, and shared.
+CAIRN_REV=c7d4230
+CAIRN_ROOT="${XDG_CACHE_HOME:-$HOME/.cache}/rim/cairn-$CAIRN_REV"
+CAIRN="$CAIRN_ROOT/bin/cairn"
+
+pinned_cairn() {
+  [ -x "$CAIRN" ] && return
+  need cargo "Install Rust from https://rustup.rs."
+  echo "scripts/task: installing cairn $CAIRN_REV into $CAIRN_ROOT (once)"
+  cargo install -q --locked --git https://github.com/oddurs/cairn --rev "$CAIRN_REV" --root "$CAIRN_ROOT" cairn-md
+}
+
 # ROADMAP.md isn't tracked: `cairn render` writes it for a local look, and
 # CI uploads it from main. Here the items are checked, and that they render.
 roadmap() {
   step roadmap
-  need cairn "See https://github.com/oddurs/cairn."
-  cairn check --strict
-  cairn render -q --no-hooks -o - >/dev/null
+  pinned_cairn
+  echo "cairn $CAIRN_REV ($CAIRN)"
+  "$CAIRN" check --strict
+  "$CAIRN" render -q --no-hooks -o - >/dev/null
 }
 
 lint() { step lint; cargo clippy --release --workspace --all-targets "${DENY[@]}"; }

@@ -2,12 +2,14 @@
 id: aa9610a0-c8b2-4352-af66-1ef3aa13e69c
 title: scripts/task runs cairn at the pinned rev, installed into the project
 type: chore
-status: backlog
+status: done
 milestone: proving-ground
+assignee: Oddur Sigurdsson
 depends_on:
 - 9b435cd8-40ed-4c0f-8a41-ef3b892811c2
 created: 2026-09-27
-updated: 2026-09-27
+updated: 2026-09-28
+closed_at: 2026-09-28
 priority: p1
 api: none
 effort: s
@@ -25,5 +27,13 @@ area: tests
 
 ## Acceptance criteria
 
-- [ ] With a different cairn first on PATH, `scripts/task roadmap` uses the pinned one (shown)
-- [ ] CI installs cairn at the rev read from scripts/task
+- [x] With a different cairn first on PATH, `scripts/task roadmap` uses the pinned one (shown)
+- [x] CI installs cairn at the rev read from scripts/task
+
+## 2026-09-28
+
+scripts/task names the rev once (CAIRN_REV=c7d4230) and runs cairn from ${XDG_CACHE_HOME:-~/.cache}/rim/cairn-<rev>, installing it there on first use (31 s here). Not .tools/ in the project, as proposed: every agent worktree would build its own. The checks job reads the rev from scripts/task, caches that directory under cairn-root-<rev>, and main's roadmap render runs the same binary. Shown: with a stub cairn that exits 9 first on PATH, scripts/task roadmap printed 'cairn c7d4230 (~/.cache/rim/cairn-c7d4230/bin/cairn)' and passed.
+
+## 2026-09-28
+
+CI: the PR run https://github.com/oddurs/rim/actions/runs/36466052808 missed the new cache key (cairn-root-c7d4230), and scripts/task roadmap installed cairn c7d4230 in 40 s, ran it from /home/runner/.cache/rim/cairn-c7d4230/bin/cairn and passed (570 items).
