@@ -167,6 +167,8 @@ impl Portal {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Room {
     pub id: u32,
+    /// The level it is on: a room never spans two.
+    pub level: i32,
     pub cells: u32,
     pub touches_edge: bool,
     /// Cells beyond the reach of every support: open to the sky.
@@ -815,7 +817,8 @@ impl Map {
                 continue;
             }
             let id = self.rooms.len() as u32 + 1;
-            let mut room = Room { id, cells: 0, touches_edge: false, uncovered: 0 };
+            let level = self.pos(start).z;
+            let mut room = Room { id, level, cells: 0, touches_edge: false, uncovered: 0 };
             let mut boundary = Vec::new();
             self.room[start] = id;
             stack.push(start);

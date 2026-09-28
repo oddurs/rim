@@ -905,6 +905,11 @@ pub struct FieldDef {
     /// read that cell. Outdoors it's also the field's outdoor value.
     #[serde(default)]
     pub value: Option<TermsDef>,
+    /// Below the surface, in place of `ambient` (DESIGN.md §6d): terms that
+    /// may read `depth`, the levels down. A field without them is 0 below:
+    /// no daylight, no wind, no rain.
+    #[serde(default)]
+    pub below: Option<TermsDef>,
     #[serde(default)]
     pub indoor: IndoorMode,
     #[serde(default)]
@@ -989,6 +994,9 @@ pub struct FieldDef {
     /// Compiled `leak` terms (empty: `leak_per_hour` is the leak).
     #[serde(skip)]
     pub leak_terms: Terms,
+    /// Compiled `below` terms (empty: 0 below the surface).
+    #[serde(skip)]
+    pub below_terms: Terms,
     /// The constant part of `ambient` (0 when it's terms).
     #[serde(skip)]
     pub base: f64,
@@ -2269,6 +2277,15 @@ impl DefDb {
                 // Out in the open is fully exposed, so that's what it reads
                 // wherever the map doesn't say otherwise.
                 d.base = 100.0;
+            }
+            if let Some(below) = &d.below {
+                if d.kind != FieldKind::Ambient {
+                    return Err(format!(
+                        "field/{}: `below` is for a field with an outdoor value; derived and stock fields read their cell",
+                        d.id
+                    ));
+                }
+                d.below_terms = Terms::compile(below, &format!("field/{}, below", d.id), &field_index, &mut warnings)?;
             }
             if let Some(leak) = &d.leak {
                 if d.leak_per_hour != 0.0 {

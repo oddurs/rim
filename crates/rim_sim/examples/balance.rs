@@ -15,7 +15,8 @@
 //! a patch mod to a copy of the mods folder), `--show SEED` (print that run's
 //! messages), `--trench DAY` (that day the bot digs a ring of pits five
 //! cells round the hut, with a drawbridge before the door, DESIGN.md §6d),
-//! `--tools` (one of every tool for each colonist, laid by the start: the
+//! `--cellar DAY` (that day the bot digs stairs beside the hut and a 5x5
+//! cellar at -1 under it, DESIGN.md §6d), `--tools` (one of every tool for each colonist, laid by the start: the
 //! bot crafts none, and digging and chopping wait on them), `--raid DAY` (a
 //! raid that day, fired through the storyteller, so runs with
 //! and without a trench meet the same threat). Runs over more than one season
@@ -75,6 +76,10 @@ struct Report {
     trench_blocked: usize,
     /// The day the drawbridge before the door stood.
     drawbridge_day: Option<f64>,
+    /// The day the cellar was dug out, with `--cellar`, and colonist-hours
+    /// spent below the surface.
+    cellar_day: Option<f64>,
+    below_ticks: u64,
     /// A raider got inside the trench's ring (or within its radius, with
     /// no trench), with `--raid`.
     raiders_in: bool,
@@ -240,6 +245,12 @@ fn play(mods: &Path, seed: u64, days: u64) -> Report {
     // The ring's cell before the door: the drawbridge goes over it.
     let gate = centre.offset(0, RING);
     let trench = std::env::args().any(|a| a == "--trench").then(|| arg("--trench", 3) * TICKS_PER_DAY);
+    let cellar = std::env::args().any(|a| a == "--cellar").then(|| arg("--cellar", 1) * TICKS_PER_DAY);
+    // Stairs by the hut, and the cellar dug round their foot once they stand.
+    let stairs_at = (3..12)
+        .flat_map(|r| [centre.offset(r, 0), centre.offset(-r, 0), centre.offset(0, r), centre.offset(0, -r)])
+        .find(|&p| s.world.can_dig(p) && !ring.contains(&p));
+    let mut cellar_marked = false;
     let raid = std::env::args().any(|a| a == "--raid").then(|| arg("--raid", 6) * TICKS_PER_DAY);
     let air = |s: &Sim, p: IVec| s.world.map.inb(p) && s.world.map.is_air(s.world.map.idx(p));
     let mut seen = 0;
@@ -256,6 +267,21 @@ fn play(mods: &Path, seed: u64, days: u64) -> Report {
             let t = defs.lookup("field", "temperature").unwrap() as usize;
             let now = s.world.tick;
             s.world.fields.push_ambient(t, "cold_snap", -(arg("--snap-drop", 8) as f64), now, Some(48.0), 3.0);
+        }
+        if let (Some(t), Some(top)) = (cellar, stairs_at) {
+            if s.world.tick == t {
+                s.push(Command::Build { stuff: None, thing: thing("stairs"), a: top, b: top, facing: 0 });
+            }
+            let down = s.world.map.portals().iter().any(|p| p.top == top);
+            if down && !cellar_marked {
+                cellar_marked = true;
+                let foot = IVec::at(top.x, top.y, -1);
+                s.push(Command::Designate {
+                    designation: des("core:mine"),
+                    a: foot.offset(-2, -2),
+                    b: foot.offset(2, 2),
+                });
+            }
         }
         if trench == Some(s.world.tick) {
             r.trench_blocked = ring.iter().filter(|&&p| !s.world.can_dig(p)).count();
@@ -294,6 +320,7 @@ fn play(mods: &Path, seed: u64, days: u64) -> Report {
             for e in w.colonists() {
                 let p = w.ecs.get::<&Pawn>(e).unwrap();
                 r.samples += 1;
+                r.below_ticks += 60 * (p.pos.z < 0) as u64;
                 r.idle_samples += matches!(p.job, rim_sim::world::Job::Idle) as u64;
                 let job = format!("{:?}", p.job).split([' ', '{', '(']).next().unwrap_or("").to_string();
                 let attacker =
@@ -339,6 +366,13 @@ fn play(mods: &Path, seed: u64, days: u64) -> Report {
             }
             if hut.is_some() && r.hut_done_day.is_none() && w.ecs.query::<&Blueprint>().iter().next().is_none() {
                 r.hut_done_day = Some(day);
+            }
+            if let (true, None, Some(top)) = (cellar_marked, r.cellar_day, stairs_at) {
+                let foot = IVec::at(top.x, top.y, -1);
+                let open = (-2..=2).all(|y| (-2..=2).all(|x| w.solid_at(foot.offset(x, y)).is_none()));
+                if open {
+                    r.cellar_day = Some(day);
+                }
             }
             let standing = w.map.fixture_at(gate).is_some_and(|f| w.ecs.get::<&Blueprint>(f).is_err());
             if trench.is_some() && r.drawbridge_day.is_none() && standing {
@@ -431,7 +465,7 @@ fn main() {
     let mut patches = Vec::new();
     if std::env::args().any(|a| a == "--start-day") {
         let day = arg("--start-day", 0);
-        patches.push(format!("[[patch]]\ntarget = \"calendar/core\"\nset = {{ start_day = {day} }}\n"));
+        patches.push(format!("[[patch]]\ntarget = \"calendar/core:core\"\nset = {{ start_day = {day} }}\n"));
     }
     if std::env::args().any(|a| a == "--bridge-work") {
         let work = arg("--bridge-work", 120);
@@ -564,6 +598,15 @@ fn main() {
         println!("raiders got inside:       {inside}/{n}");
         println!("deaths from the raid day: {deaths} over {n} runs");
         println!("bridges standing:         {bridges:.1} a run");
+    }
+    if std::env::args().any(|a| a == "--cellar") {
+        let dug: Vec<f64> = reports.iter().filter_map(|r| r.cellar_day).collect();
+        let mean = dug.iter().sum::<f64>() / dug.len().max(1) as f64;
+        let below = reports.iter().map(|r| r.below_ticks).sum::<u64>() as f64 / TICKS_PER_DAY as f64 * 24.0 / n;
+        println!(
+            "cellar dug:               {}/{n} runs, mean day {mean:.2}; {below:.1} colonist-hours below a run",
+            dug.len()
+        );
     }
     if std::env::args().any(|a| a == "--trench") {
         let dug: Vec<f64> = reports.iter().filter_map(|r| r.trench_done_day).collect();

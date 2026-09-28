@@ -83,6 +83,8 @@ struct AmbEnv<'a> {
     tick: u64,
     seed: u64,
     vals: &'a [i64],
+    /// Levels below the surface, times `Q`, for `below` terms.
+    depth: i64,
 }
 
 impl Env for AmbEnv<'_> {
@@ -91,6 +93,9 @@ impl Env for AmbEnv<'_> {
     }
     fn hour(&self) -> i64 {
         self.hour
+    }
+    fn depth(&self) -> i64 {
+        self.depth
     }
     fn ambient(&self, f: usize) -> i64 {
         self.vals[f]
@@ -124,7 +129,13 @@ impl Env for CellEnv<'_> {
         self.clock.hour
     }
     fn ambient(&self, f: usize) -> i64 {
-        self.fields.atmos[f].value
+        match self.p.z {
+            z if z < 0 => self.fields.outdoor(f, z) as i64 * (Q / FIXED as i64),
+            _ => self.fields.atmos[f].value,
+        }
+    }
+    fn depth(&self) -> i64 {
+        (-self.p.z).max(0) as i64 * Q
     }
     fn field(&self, f: usize) -> i64 {
         self.fields.value_fixed(self.defs, self.map, f, self.p) as i64 * (Q / FIXED as i64)
@@ -246,6 +257,9 @@ pub struct Layer {
     pub stamped: Vec<i32>,
     /// Open-sky value.
     pub ambient: i32,
+    /// The outdoor value below the surface, a level at a time from -1
+    /// (DESIGN.md §6d): the field's `below` terms, or 0.
+    pub below: Vec<i32>,
     /// Per-room value for `indoor = "room"` fields, indexed by room id - 1.
     pub rooms: Vec<i32>,
     /// Per-room multiplier on the field's leak, from what encloses the room.
@@ -304,6 +318,7 @@ impl Fields {
                 .map(|f| Layer {
                     stamped: vec![0; cells],
                     ambient: (f.base * FIXED) as i32,
+                    below: Vec::new(),
                     rooms: Vec::new(),
                     leak_mult: Vec::new(),
                     pass: Vec::new(),
@@ -473,7 +488,8 @@ impl Fields {
             let v = match a.pin {
                 Some(v) => v,
                 None => {
-                    let env = AmbEnv { year: clock.year, hour: clock.hour, tick, seed: clock.seed, vals: &vals };
+                    let env =
+                        AmbEnv { year: clock.year, hour: clock.hour, tick, seed: clock.seed, vals: &vals, depth: 0 };
                     let base = if fd.terms.is_empty() { terms::to_q(fd.base) } else { fd.terms.eval(&env) };
                     base + a.pushes.iter().map(|p| p.value(tick)).sum::<i64>()
                 }
@@ -481,6 +497,37 @@ impl Fields {
             a.value = v;
             vals[f] = v;
             self.layers[f].ambient = (v / (Q / FIXED as i64)) as i32;
+            // Below, what the ground keeps: no pushes reach it, so a cold
+            // snap stays on the surface.
+            let below = &mut self.layers[f].below;
+            below.clear();
+            for depth in 1..=defs.depth() as i64 {
+                let v = match fd.below_terms.terms.is_empty() {
+                    true => 0,
+                    false => {
+                        let env = AmbEnv {
+                            year: clock.year,
+                            hour: clock.hour,
+                            tick,
+                            seed: clock.seed,
+                            vals: &vals,
+                            depth: depth * Q,
+                        };
+                        fd.below_terms.eval(&env)
+                    }
+                };
+                below.push((v / (Q / FIXED as i64)) as i32);
+            }
+        }
+    }
+
+    /// Field `f`'s outdoor value on level `z`, in hundredths: the sky's on
+    /// and above the surface, the ground's below it.
+    pub fn outdoor(&self, f: usize, z: i32) -> i32 {
+        let l = &self.layers[f];
+        match z {
+            z if z < 0 => l.below.get((-z - 1) as usize).copied().unwrap_or(0),
+            _ => l.ambient,
         }
     }
 
@@ -529,7 +576,8 @@ impl Fields {
             return vec![("pinned".into(), terms::from_q(v))];
         }
         let vals: Vec<i64> = self.atmos.iter().map(|a| a.value).collect();
-        let env = AmbEnv { year: clock.year, hour: clock.hour, tick: clock.tick, seed: clock.seed, vals: &vals };
+        let env =
+            AmbEnv { year: clock.year, hour: clock.hour, tick: clock.tick, seed: clock.seed, vals: &vals, depth: 0 };
         let fd = &defs.fields[field];
         let mut out: Vec<(String, f64)> = if fd.terms.is_empty() {
             vec![("base".into(), fd.base)]
@@ -545,7 +593,8 @@ impl Fields {
     pub fn eval_global(&self, terms: &terms::Terms) -> f64 {
         let clock = self.last_clock.unwrap_or(Clock { tick: 0, year: 0, hour: 0, seed: 0 });
         let vals: Vec<i64> = self.atmos.iter().map(|a| a.value).collect();
-        let env = AmbEnv { year: clock.year, hour: clock.hour, tick: clock.tick, seed: clock.seed, vals: &vals };
+        let env =
+            AmbEnv { year: clock.year, hour: clock.hour, tick: clock.tick, seed: clock.seed, vals: &vals, depth: 0 };
         terms::from_q(terms.eval(&env))
     }
 
@@ -728,7 +777,11 @@ impl Fields {
                 if new_id == 0 {
                     continue;
                 }
-                let before = old.get(old_id.wrapping_sub(1) as usize).copied().unwrap_or(layer.ambient);
+                let here = match map.pos(i).z {
+                    z if z < 0 => layer.below.get((-z - 1) as usize).copied().unwrap_or(0),
+                    _ => layer.ambient,
+                };
+                let before = old.get(old_id.wrapping_sub(1) as usize).copied().unwrap_or(here);
                 sum[new_id as usize - 1] += before as i64;
                 count[new_id as usize - 1] += 1;
             }
@@ -763,9 +816,13 @@ impl Fields {
                     heat[r.id as usize - 1] += e.amount as i64;
                 }
             }
-            let ambient = layer.ambient;
             for (r, (value, heat)) in layer.rooms.iter_mut().zip(&heat).enumerate() {
                 let room = map.room_by_id(r as u32 + 1);
+                // A room leaks toward the outdoors of its own level.
+                let ambient = match room.level {
+                    z if z < 0 => layer.below.get((-z - 1) as usize).copied().unwrap_or(0),
+                    _ => layer.ambient,
+                };
                 if !room.enclosed() {
                     *value = ambient;
                     continue;
@@ -843,16 +900,17 @@ impl Fields {
             return if indoors.is_some() { 0 } else { open * FIXED as i32 };
         }
         let stamped = layer.stamped[map.idx(p)];
+        let outdoor = self.outdoor(field, p.z);
         match (defs.fields[field].indoor, indoors) {
-            (_, None) | (IndoorMode::Outdoor, _) => layer.ambient + stamped,
+            (_, None) | (IndoorMode::Outdoor, _) => outdoor + stamped,
             // Dark inside, except for what the boundary lets through.
             (IndoorMode::None, Some(r)) => {
                 let pass = layer.pass.get(r.id as usize - 1).copied().unwrap_or(0.0);
-                stamped + (layer.ambient as f64 * pass).round() as i32
+                stamped + (outdoor as f64 * pass).round() as i32
             }
             // The room's value already includes what its emitters put in;
             // adding their local stamp too would count the same fire twice.
-            (IndoorMode::Room, Some(r)) => layer.rooms.get(r.id as usize - 1).copied().unwrap_or(layer.ambient),
+            (IndoorMode::Room, Some(r)) => layer.rooms.get(r.id as usize - 1).copied().unwrap_or(outdoor),
         }
     }
 
