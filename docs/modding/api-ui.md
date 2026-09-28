@@ -99,6 +99,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `view.explain` | `(field: string) -> { Part }` | Each term and push that makes up a field's outdoor value. |
 | `view.explain_work` | `(id: number) -> { WorkWhy }?` | The why panel: each work type in tie-break order with why the colonist would take it or passes it over ("Needs a chopping tool", "Build first"), and which it picks; `urgent` if that pick is a job the player marked. |
 | `view.fields` | `() -> { FieldInfo }` | The field layers. |
+| `view.frame` | `() -> string` | The live frame budget: the last second's median and worst frame, draw calls and the biggest render pass, refreshed a few times a second. |
 | `view.hint` | `() -> string?` | What a right-click would do. |
 | `view.hour` | `() -> number` | Hour of the day, 0 to 24. |
 | `view.hover` | `() -> Hover?` | What's under the cursor. |

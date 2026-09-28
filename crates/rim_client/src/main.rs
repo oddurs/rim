@@ -11,6 +11,7 @@ mod bench;
 mod cli;
 mod draw;
 mod figures;
+mod frames;
 mod grid;
 mod light;
 mod mesh;
@@ -138,6 +139,8 @@ pub struct App {
     pub speed: u32,
     pub show_profiler: bool,
     pub show_devtools: bool,
+    /// The last second's frames, for the profiler's header.
+    pub frames: frames::FrameStats,
     /// Field layer drawn over the map, if any (cycled with O).
     pub overlay: Option<usize>,
     /// The storage overlay: the last stop of the O cycle, after the fields.
@@ -417,8 +420,9 @@ fn conf() -> macroquad::conf::Conf {
             sample_count: 1,
             platform: Platform {
                 // Vsync where the platform honours it (macOS paces frames
-                // with the display itself and ignores this).
-                swap_interval: Some(1),
+                // with the display itself and ignores this); off for the
+                // render bench, which measures a frame's cost, not the display.
+                swap_interval: Some(if std::env::args().any(|a| a == "--bench-render") { 0 } else { 1 }),
                 // The sim runs every frame, so never block waiting for input.
                 blocking_event_loop: false,
                 // Metal can't run the GLSL lighting shader (sky.rs).
@@ -654,6 +658,7 @@ async fn game() {
         speed: 1,
         show_profiler: false,
         show_devtools: false,
+        frames: Default::default(),
         overlay: None,
         storage_overlay: false,
         hint: None,
@@ -1173,6 +1178,7 @@ pub fn client_view(app: &mut App, mouse: (f32, f32), time: f64) -> ClientView {
         time,
         profile: app.profile.0.clone(),
         stats: app.profile.1.clone(),
+        frame: app.frames.line().to_string(),
         mods: s.mods.iter().map(|m| (m.id.clone(), m.version.clone(), m.name.clone())).collect(),
         warnings: s.warnings.iter().cloned().chain(app.ui.warnings()).collect(),
         title: false,
@@ -1588,6 +1594,7 @@ pub fn render(app: &mut App) {
     draw::ui(&app.last_draw, &app.atlas, white, dpi);
     t.ui = lap();
     app.render_us = t;
+    app.frames.record(app.meshes.calls + app.figures.calls, &app.render_us.rows());
 }
 
 /// Glyphs shaped since the last frame go to the GPU.

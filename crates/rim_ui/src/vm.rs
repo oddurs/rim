@@ -1670,6 +1670,7 @@ impl UiVm {
             Ok(t)
         });
         view!("stats", (), |lua, l, _a| lua.create_sequence_from(l.client.stats.iter().cloned()));
+        view!("frame", (), |_lua, l, _a| Ok(l.client.frame.clone()));
         view!("mods", (), |lua, l, _a| {
             let t = lua.create_table()?;
             for (id, version, name) in &l.client.mods {

@@ -102,6 +102,9 @@ pub struct ClientView {
     /// Profiler rows (name, smoothed µs), refreshed a few times a second.
     pub profile: Vec<(String, f64)>,
     pub stats: Vec<String>,
+    /// The live frame budget: the last second's median and worst frame,
+    /// draw calls and the biggest pass, refreshed a few times a second.
+    pub frame: String,
     /// (id, version, name) in load order.
     pub mods: Vec<(String, String, String)>,
     pub warnings: Vec<String>,

@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# The render bench with its window in front, on a quiet machine
+# (docs/engineering/benchmarks.md). macOS throttles a hidden window, so a
+# run in the background, or behind another window, measures nothing.
+#
+#   scripts/bench-front [OUT.json]      default: target/bench-front.json
+#
+# Ask the merger for a bench slot first: two benches at once swing the
+# numbers up to 8x. Keep the window in front and the machine idle until it
+# prints its tables.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+out=${1:-target/bench-front.json}
+mkdir -p "$(dirname "$out")"
+cargo build -q --release -p rim_client
+bin="${CARGO_TARGET_DIR:-target}/release/rim"
+echo "bench-front: the window opens in front; leave it there and the machine idle"
+# No --background: the window takes focus, as a player's would.
+"$bin" --seed 1 --bench-render --frames 300 --json "$out"
+echo "bench-front: numbers in $out"
