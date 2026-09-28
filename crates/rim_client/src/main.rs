@@ -191,6 +191,13 @@ pub struct App {
     /// Puts `world_target` on the screen without blending: what the world
     /// left in its alpha is not transparency.
     blit: Option<Material>,
+    /// Changing level, the last frame of the level left, fading out over
+    /// the new one, and how far it has (0 to 1).
+    fade: Option<(RenderTarget, f32)>,
+    /// The level the last frame drew, to know when it changes.
+    drawn_z: i32,
+    /// Draws `fade`'s frame at an alpha, its own alpha ignored as `blit`'s is.
+    fade_blit: Option<Material>,
     /// Where the player's settings are saved; none in the autotest.
     settings_file: Option<PathBuf>,
     /// Input subscriber for wheel events (see `Wheel`).
@@ -738,6 +745,9 @@ async fn game() {
         render_scale,
         world_target: None,
         blit: None,
+        fade: None,
+        drawn_z: 0,
+        fade_blit: None,
         settings_file,
         wheel_sub,
         saver,
@@ -1522,6 +1532,48 @@ void main() {
     m.map_err(|e| eprintln!("render scale blit shader failed, blending instead: {e}")).ok()
 }
 
+/// How long changing level takes to fade from one level's frame to the
+/// next's, in seconds.
+const LEVEL_FADE: f32 = 0.15;
+
+/// Draw a frame at an alpha, its own alpha ignored: what the world left in
+/// it is not transparency, as for `blit_material`.
+fn fade_material() -> Option<Material> {
+    const VERTEX: &str = "#version 100
+attribute vec3 position;
+attribute vec2 texcoord;
+varying lowp vec2 uv;
+uniform mat4 Model;
+uniform mat4 Projection;
+void main() {
+    gl_Position = Projection * Model * vec4(position, 1);
+    uv = texcoord;
+}";
+    const FRAGMENT: &str = "#version 100
+varying lowp vec2 uv;
+uniform sampler2D Texture;
+uniform lowp float alpha;
+void main() {
+    gl_FragColor = vec4(texture2D(Texture, uv).rgb, alpha);
+}";
+    use macroquad::miniquad::{BlendFactor, BlendState, BlendValue, Equation};
+    let over = BlendState::new(
+        Equation::Add,
+        BlendFactor::Value(BlendValue::SourceAlpha),
+        BlendFactor::OneMinusValue(BlendValue::SourceAlpha),
+    );
+    let m = load_material(
+        ShaderSource::Glsl { vertex: VERTEX, fragment: FRAGMENT },
+        MaterialParams {
+            uniforms: vec![UniformDesc::new("alpha", UniformType::Float1)],
+            pipeline_params: PipelineParams { color_blend: Some(over), ..Default::default() },
+            ..Default::default()
+        },
+    );
+    // Without it a level change cuts instead of fading; say so.
+    m.map_err(|e| eprintln!("level fade shader failed, cutting instead: {e}")).ok()
+}
+
 pub fn render(app: &mut App) {
     let mut clock = std::time::Instant::now();
     let mut lap = || {
@@ -1544,6 +1596,35 @@ pub fn render(app: &mut App) {
     let centre = vec2(app.cam.x, app.cam.y);
     app.light.prepare(&app.sim.world, &air, px_per_cell, &app.roofs.height, app.sky.flash(), centre, app.cam.z);
     t.light = lap();
+    // Changing level: the frame the level left drew stays, and fades out
+    // over the new one, so the light doesn't jump (DESIGN.md §6e, Depth).
+    if app.cam.z != app.drawn_z {
+        app.drawn_z = app.cam.z;
+        let kept = app.world_target.take();
+        // Changing again mid-fade: what the screen shows is the mix, so
+        // that is what fades out now, not the last level's frame alone.
+        if let (Some(rt), Some((from, k)), Some(m)) = (&kept, &app.fade, &app.fade_blit) {
+            let (w, h) = (rt.texture.width(), rt.texture.height());
+            set_camera(&Camera2D {
+                zoom: vec2(2.0 / w, 2.0 / h),
+                target: vec2(w / 2.0, h / 2.0),
+                render_target: Some(rt.clone()),
+                ..Default::default()
+            });
+            m.set_uniform("alpha", (1.0 - *k).max(0.0));
+            gl_use_material(m);
+            draw_texture_ex(
+                &from.texture,
+                0.0,
+                0.0,
+                WHITE,
+                DrawTextureParams { dest_size: Some(vec2(w, h)), ..Default::default() },
+            );
+            gl_use_default_material();
+            set_default_camera();
+        }
+        app.fade = kept.map(|rt| (rt, 0.0));
+    }
     update_world_target(app);
     let (sw, sh) = (screen_width(), screen_height());
     if let Some(rt) = &app.world_target {
@@ -1591,8 +1672,25 @@ pub fn render(app: &mut App) {
             gl_use_material(m);
         }
         let size = DrawTextureParams { dest_size: Some(vec2(sw, sh)), ..Default::default() };
-        draw_texture_ex(&rt.texture, 0.0, 0.0, WHITE, size);
+        draw_texture_ex(&rt.texture, 0.0, 0.0, WHITE, size.clone());
         gl_use_default_material();
+        if let Some((from, k)) = &mut app.fade {
+            // At most a 60th of a second a frame: never over in fewer than
+            // nine frames, however slow they come.
+            *k += get_frame_time().min(1.0 / 60.0) / LEVEL_FADE;
+            if app.fade_blit.is_none() {
+                app.fade_blit = fade_material();
+            }
+            if let (Some(m), true) = (&app.fade_blit, *k < 1.0) {
+                m.set_uniform("alpha", 1.0 - *k);
+                gl_use_material(m);
+                draw_texture_ex(&from.texture, 0.0, 0.0, WHITE, size);
+                gl_use_default_material();
+            }
+            if *k >= 1.0 || app.fade_blit.is_none() {
+                app.fade = None;
+            }
+        }
         // Switching cameras hands the target's batch to GL: submission,
         // like the meshes'.
         t.gl += lap();

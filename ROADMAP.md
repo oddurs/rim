@@ -64,8 +64,8 @@ Shadows from the sun, the moons and every wall; torches that flicker and fill th
 
 - [ ] `1104bf12` Light crosses openings: a level lit through its stairwells and air by the levels beside it <sup>feature · p2 · m · client</sup>
 - [ ] `1a17d685` Moons and planets: \[\[sky_body\]\] gives a body a path, colour and softness <sup>feature · p2 · m · client</sup>
-- [ ] `220a059e` Changing level crossfades the light, and the eye adapts to what the view shows <sup>feature · p2 · s · client</sup>
 - [ ] `24bad102` Lighting auto preset: step down when the lighting itself runs slow <sup>feature · p3 · m · client</sup>
+- [ ] `220a059e` Changing level crossfades the light, and the eye adapts to what the view shows <sup>feature · p2 · s · client</sup>
 - [ ] `3124bd7b` Light on every level: buffers keyed by z, each level lit by its own light <sup>feature · p1 · m · client</sup>
 - [ ] `7161f369` Sky down a shaft: the levels above are height, and the open sky narrows with depth <sup>feature · p2 · m · client</sup>
 - [x] `0779def9` Decide: the plan's one light, or the sun's shadows <sup>spike · p0 · s · client</sup>
