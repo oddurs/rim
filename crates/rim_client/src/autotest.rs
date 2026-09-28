@@ -1444,6 +1444,85 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
             t.app.sim.world.ecs.get::<&mut Pawn>(founder).unwrap().hp = founder_hp;
             t.key(KeyCode::Escape).await;
             t.key(KeyCode::RightBracket).await;
+
+            println!("\n# every level is lit by its own light (3124bd7b)");
+            // Full daylight up top: below, none of it reaches.
+            let field = |t: &T, id: &str| t.w().defs.lookup("field", id).unwrap() as usize;
+            let (cloud, light) = (field(&t, "cloud"), field(&t, "light"));
+            t.app.sim.world.fields.set_ambient(cloud, Some(0.0));
+            t.app.sim.world.fields.set_ambient(light, Some(100.0));
+            t.app.light.adapt_now();
+            t.focus(top);
+            t.light_settles().await;
+            let mean = |img: &Image| {
+                let n = img.bytes.len() / 4;
+                img.bytes.chunks(4).map(|c| c[0] as f32 + c[1] as f32 + c[2] as f32).sum::<f32>() / (n as f32 * 765.0)
+            };
+            let surface = mean(&t.grab().await);
+            t.key(KeyCode::LeftBracket).await;
+            t.app.light.adapt_now();
+            t.light_settles().await;
+            let below = mean(&t.grab().await);
+            let sun = t.app.light.sun_visibility(top.x as f32 + 0.5, top.y as f32 + 0.5).unwrap_or(1.0);
+            t.check(
+                t.app.cam.z == -1 && below < surface * 0.5 && sun == 0.0,
+                format!(
+                    "below the surface no daylight reaches ({below:.2} to the surface's {surface:.2}, sun {sun:.2})"
+                ),
+            );
+            // A fire on the level below lights it, and only it.
+            let campfire = defs.thing_id("campfire").unwrap();
+            let spot =
+                (-8..=8i32).flat_map(|dy| (-8..=8i32).map(move |dx| IVec::at(top.x + dx, top.y + dy, -1))).find(|&p| {
+                    let m = &t.w().map;
+                    m.inb(p) && m.passable(p) && m.fixture_at(p).is_none() && m.item_at(p).is_none()
+                });
+            let fire = spot.and_then(|p| t.app.sim.world.spawn_fixture(campfire, p, false));
+            if let (Some(p), Some(_)) = (spot, fire) {
+                t.light_settles().await;
+                let glow = |t: &T| {
+                    t.app.light.fire_at(p.x as f32 + 0.5, p.y as f32 + 0.5).map_or(0.0, |c| c.iter().sum::<f32>())
+                };
+                let lit_below = glow(&t);
+                t.shot("light_below").await;
+                t.key(KeyCode::RightBracket).await;
+                t.light_settles().await;
+                let lit_above = glow(&t);
+                t.check(
+                    lit_below > 0.3 && lit_above < 0.05,
+                    format!("a fire below lights its own level ({lit_below:.2}), not the one above ({lit_above:.2})"),
+                );
+                // Both levels are kept: changing between them works nothing out again.
+                let (bakes, runs) = (t.app.light.bakes, t.app.light.sun_runs);
+                let mut repacked = false;
+                for k in [KeyCode::LeftBracket, KeyCode::RightBracket, KeyCode::LeftBracket, KeyCode::RightBracket] {
+                    t.key(k).await;
+                    repacked |= t.app.light.passes.iter().any(|p| p.name == "occluders" && p.ran);
+                    for _ in 0..3 {
+                        t.frame().await;
+                        repacked |= t.app.light.passes.iter().any(|p| p.name == "occluders" && p.ran);
+                    }
+                }
+                t.check(
+                    t.app.light.bakes == bakes && t.app.light.sun_runs == runs && !repacked,
+                    format!(
+                        "changing between cached levels bakes nothing ({} bakes, {} sun passes, repacked {repacked})",
+                        t.app.light.bakes - bakes,
+                        t.app.light.sun_runs - runs
+                    ),
+                );
+            } else {
+                t.check(false, "free floor below for a fire");
+            }
+            if let Some(e) = fire {
+                t.app.sim.world.despawn_thing(e);
+            }
+            t.app.sim.world.fields.set_ambient(cloud, None);
+            t.app.sim.world.fields.set_ambient(light, None);
+            if t.app.cam.z != 0 {
+                t.key(KeyCode::RightBracket).await;
+            }
+            t.app.light.adapt_now();
         }
         t.app.paused = paused;
     }

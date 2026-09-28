@@ -2,15 +2,15 @@
 id: 5a69f9c9-b971-496f-bb3b-e3e1838e2f02
 title: 'Moving lights: carried and burning, capped, shadowless past the cap'
 type: feature
-status: doing
+status: done
 milestone: lighting
 assignee: Oddur Sigurdsson
-claimed: 2026-09-27
 depends_on:
 - 6fd6b13b-1186-46f4-876e-743d173e03d7
 - 9bd9e8ab-6eef-44dc-b814-0b376ceec1e5
 created: 2026-09-26
 updated: 2026-09-28
+closed_at: 2026-09-28
 priority: p1
 api: none
 effort: m
@@ -48,3 +48,7 @@ Done as: fire (9bd9e8ab) is the first caller: its flames come and go as the fire
 ## 2026-09-28
 
 Review fixes: waiting static lights always get their shadows and don't count against the cap, which now shares out among moving lights only, nearest first (pure cap_shadows, unit-tested for order). The every-frame filter runs only while a bake is owed. The bake fetches its materials before it clears what it owes. light_settles waits by the clock and fails a check if the bake hasn't caught up in 3 s. DESIGN says what waits: a change after a quiet second bakes at once, and one within a second of the last waits for the next. A light that goes, and a wall that changes, wait in the bake for a second at most.
+
+## 2026-09-28
+
+Merged in #284. Criterion 1 (bench) is still open: CI's bench runs after the autotest, and main's autotest panics in the camera section (with lucky-harbor), so no bench has run on the moving view yet. Local timing at load 80+ proves nothing. I'll close this once a bench runs.

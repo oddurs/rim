@@ -1521,7 +1521,7 @@ pub fn render(app: &mut App) {
     // this frame.
     app.sky.update(&air);
     let centre = vec2(app.cam.x, app.cam.y);
-    app.light.prepare(&app.sim.world, &air, px_per_cell, &app.roofs.height, app.sky.flash(), centre);
+    app.light.prepare(&app.sim.world, &air, px_per_cell, &app.roofs.height, app.sky.flash(), centre, app.cam.z);
     t.light = lap();
     update_world_target(app);
     let (sw, sh) = (screen_width(), screen_height());
@@ -1548,12 +1548,8 @@ pub fn render(app: &mut App) {
         app.sky.weather(&app.sim.world, &app.cam, &air);
     }
     t.weather = lap();
-    // The light is the surface's: under it, until lighting keeps it per
-    // level (3124bd7b), a level is drawn unlit rather than lit as the
-    // surface is.
-    if app.cam.z == 0 {
-        app.light.multiply(&app.sim.world, &app.cam, &air, app.sky.flash());
-    }
+    // Every level is lit by its own light (DESIGN.md §6e, Depth).
+    app.light.multiply(&app.sim.world, &app.cam, &air, app.sky.flash());
     // Roofs are outdoors whatever is under them: after the light, lit by
     // the sky and the sun. The house under the pointer lifts its roof.
     let alpha = roof::Roofs::alpha(app.cam.zoom);
