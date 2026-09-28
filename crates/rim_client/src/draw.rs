@@ -941,7 +941,11 @@ pub fn world_ui(app: &App) {
     zones(app);
     app.marks.draw(cam, visible(app));
     replacements(app);
-    // Selection and a select drag's box are the overlay's (overlay::scene).
+    // Selection, a select drag's box and the order tools' previews are the
+    // overlay's (overlay::scene).
+    if matches!(app.tool, Tool::Designate(_) | Tool::Cancel) {
+        return;
+    }
     let (mx, my) = app.pointer;
     // A plan is placed with a click, not dragged out.
     let dragging = app.drag_start.filter(|_| !matches!(app.tool, Tool::Plan(_) | Tool::Select));

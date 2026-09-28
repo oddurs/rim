@@ -327,6 +327,53 @@ fn is_floor(w: &World, thing: DefId) -> bool {
     w.defs.thing(thing).category == crate::defs::Category::Floor
 }
 
+/// What a Cancel order would take back (DESIGN.md §6f): each thing in
+/// the rectangle with a mark, a plan over it, or a blueprint, and each
+/// creature there with a mark. `apply` walks this list.
+pub fn cancel_preview(w: &World, a: IVec, b: IVec) -> Vec<Entity> {
+    let taken = |e: Entity| {
+        w.ecs.get::<&Designated>(e).is_ok() || w.ecs.get::<&Planned>(e).is_ok() || w.ecs.get::<&Blueprint>(e).is_ok()
+    };
+    // A thing bigger than a cell is in the rectangle once per cell.
+    let mut seen = std::collections::BTreeSet::new();
+    let mut out: Vec<Entity> = Vec::new();
+    for f in cells(w, a, b).flat_map(|p| [w.map.fixture_at(p), w.map.floor_at(p)]).flatten() {
+        if taken(f) && seen.insert(f) {
+            out.push(f);
+        }
+    }
+    // A building bigger than a cell takes back its marks on the rest of its
+    // footprint too (`World::unplan`), inside the rectangle or not.
+    let mut siblings = Vec::new();
+    for &f in &out {
+        let Some(plan) = w.ecs.get::<&Planned>(f).ok().map(|p| *p) else { continue };
+        let Some(at) = plan.at else { continue };
+        for c in w.defs.thing(plan.thing).footprint(at, plan.facing) {
+            let sibling = w.map.fixture_at(c).filter(|&g| w.ecs.get::<&Planned>(g).is_ok_and(|p| p.at == Some(at)));
+            if let Some(g) = sibling.filter(|&g| seen.insert(g)) {
+                siblings.push(g);
+            }
+        }
+    }
+    out.extend(siblings);
+    // Replacements are on no layer: the piece they replace is.
+    let mut replacing: Vec<Entity> = w
+        .ecs
+        .query::<(Entity, &Thing, &Replaces)>()
+        .iter()
+        .filter(|(e, t, _)| in_rect(t.pos, a, b) && taken(*e))
+        .map(|(e, _, _)| e)
+        .collect();
+    replacing.sort_unstable_by_key(|e| e.id());
+    out.extend(replacing.into_iter().filter(|&e| seen.insert(e)));
+    for &e in &w.pawns {
+        if w.pawn_pos(e).is_some_and(|p| in_rect(p, a, b)) && w.ecs.get::<&Designated>(e).is_ok() {
+            out.push(e);
+        }
+    }
+    out
+}
+
 /// What `Command::Build` would do in each cell of the rectangle, row by
 /// row. Nothing is changed: `apply` acts on exactly this list. A plan
 /// placed earlier in the order covers its footprint for the cells after.
@@ -564,19 +611,12 @@ pub fn apply(w: &mut World, c: Command) {
             }
         }
         Command::Cancel { a, b } => {
-            let mut targets: Vec<Entity> =
-                cells(w, a, b).flat_map(|p| [w.map.fixture_at(p), w.map.floor_at(p)]).flatten().collect();
-            // Replacements are on no layer: the piece they replace is.
-            let mut replacing: Vec<Entity> = w
-                .ecs
-                .query::<(Entity, &Thing, &Replaces)>()
-                .iter()
-                .filter(|(_, t, _)| in_rect(t.pos, a, b))
-                .map(|(e, _, _)| e)
-                .collect();
-            replacing.sort_unstable_by_key(|e| e.id());
-            targets.extend(replacing);
-            for f in targets {
+            for f in cancel_preview(w, a, b) {
+                // A creature only loses its mark.
+                if w.ecs.get::<&Pawn>(f).is_ok() {
+                    let _ = w.ecs.remove_one::<Designated>(f);
+                    continue;
+                }
                 // Cancelling a plan over grass or a tree leaves it be.
                 if !w.unplan(f) && w.ecs.remove_one::<Designated>(f).is_ok() {
                     w.touch(f);
@@ -594,11 +634,6 @@ pub fn apply(w: &mut World, c: Command) {
                             w.place_item(c.0, p, n);
                         }
                     }
-                }
-            }
-            for e in w.pawns.clone() {
-                if w.pawn_pos(e).is_some_and(|p| in_rect(p, a, b)) {
-                    let _ = w.ecs.remove_one::<Designated>(e);
                 }
             }
         }

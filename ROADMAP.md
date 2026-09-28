@@ -87,11 +87,10 @@ Shadows from the sun, the moons and every wall; torches that flicker and fill th
 
 ## chalkline — Chalkline
 
-`#########·` 87% · 13 of 15 done
+`##########` 93% · 14 of 15 done
 
 The grid, hover, selection, drag previews, placement ghosts and marks, drawn in one visual language. Design: DESIGN.md §6f. Concept and live map with every state: https://claude.ai/artifact/N2buE4YpoduQdxpE1zZTHv
 
-- [ ] `bb769d00` Designate: targets light in their hue, on hover and across a drag <sup>feature · p0 · m · client</sup>
 - [ ] `e8f313d6` Build ghosts: fits, clears first, or blocked <sup>feature · p0 · m · client</sup>
 - [x] `03f93b60` Box select's autotest counts a fixed squad, not who stands in the box <sup>bug · p1 · s · client</sup>
 - [x] `11080b20` Zones in violet; a selected zone turns chalk; paint and erase preview <sup>feature · p1 · s · client</sup>
@@ -101,6 +100,7 @@ The grid, hover, selection, drag previews, placement ghosts and marks, drawn in 
 - [x] `a207eded` Can the planner name the jobs nobody can reach, one by one? <sup>spike · p3 · s · engine</sup>
 - [x] `b53ca900` Box select's Alt-drag setup looks beside a sim cell, not where the colonist is drawn <sup>bug · p1 · s · client</sup>
 - [x] `b6d0a4cc` A selection off screen leaves a chevron at the edge <sup>feature · p2 · s · client</sup>
+- [x] `bb769d00` Designate: targets light in their hue, on hover and across a drag <sup>feature · p0 · m · client</sup>
 - [x] `bd7a158e` Hover: an edge on the thing under the pointer <sup>feature · p1 · s · client</sup>
 - [x] `bf3079fb` Order ring in chalk, urgent that breathes, and a reduce-motion setting <sup>feature · p3 · s · client</sup>
 - [x] `cd59b515` Ask the sim what an order would do: designate and build previews <sup>feature · p0 · m · engine</sup>

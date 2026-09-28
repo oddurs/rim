@@ -217,6 +217,10 @@ pub struct App {
     pub reduce_motion: bool,
     /// What a stockpile or clear-zone drag will change, made once a frame.
     pub zone_preview: Option<draw::ZonePreview>,
+    /// What a designate or cancel tool would do, made once a frame.
+    pub order_preview: Option<overlay::OrderPreview>,
+    /// A click that did nothing: why, where, and when.
+    pub refused: Option<(String, IVec, f64)>,
     /// The pointer as this frame's input had it, in screen points. Previews
     /// follow it rather than the OS cursor, so replayed input (the
     /// autotest) draws what it did.
@@ -772,6 +776,8 @@ async fn game() {
         measure: false,
         reduce_motion,
         zone_preview: None,
+        order_preview: None,
+        refused: None,
     };
     app.selected = app.sim.world.colonists().next();
 
@@ -904,6 +910,20 @@ fn toolbar(sim: &Sim) -> Vec<ToolDef> {
     }
     items.push(tool("clear_zone".into(), "Clear zone", Tool::ClearZone, WHITE, "zones", ""));
     items
+}
+
+/// A click with an order tool that would do nothing: say why, at the cell.
+/// A drag that takes nothing is quiet; a click is a question.
+fn refuse_if_idle(app: &mut App, designation: Option<DefId>, a: IVec, b: IVec) {
+    if a != b {
+        return;
+    }
+    // Asked of the cell released on: last frame's preview may be for
+    // another, when the pointer moved and clicked in one frame.
+    let op = overlay::OrderPreview::between(app, designation, a, b, false);
+    if op.targets.is_empty() {
+        app.refused = Some((op.refusal(app), a, app.chalk.now()));
+    }
 }
 
 /// A tool's colour: its own, or for the zone tools the theme's `zone`.
@@ -1391,6 +1411,7 @@ pub fn frame(app: &mut App, raw: &RawInput) {
     let dragging = app.dragged;
     app.pointer = (mx, my);
     app.zone_preview = draw::ZonePreview::of(app);
+    app.order_preview = overlay::OrderPreview::of(app);
     let pointer = (!app.mouse_over_ui).then(|| app.cam.to_world(mx, my));
     app.grid.update(grid::level(app.tool, dragging), app.measure, pointer, raw.time, app.reduce_motion);
     let hovered = if app.tool == Tool::Select && !dragging && pointer.is_some() { hovered(app, mx, my) } else { None };
@@ -1794,6 +1815,7 @@ fn apply_ui(app: &mut App, a: UiAction) {
             if let Some(t) = app.tools.iter().find(|t| t.key == key) {
                 app.tool = t.tool;
                 app.drag_start = None;
+                app.refused = None;
             }
         }
         UiAction::Preview(key) => {
@@ -2155,6 +2177,7 @@ fn right_button(app: &mut App, raw: &RawInput, cv: &rim_ui::view::ClientView, ca
         if app.tool != Tool::Select {
             app.tool = Tool::Select;
             app.drag_start = None;
+            app.refused = None;
             return;
         }
         app.right = Some(RightPress { at: (mx, my), last: (mx, my), t: raw.time, moved: false, opened: false });
@@ -2421,6 +2444,8 @@ pub fn apply(app: &mut App, action: Action) {
         // Select acts on release: a click picks what's under it, a drag
         // picks the colonists in the box.
         Action::LeftDown(x, y) => {
+            // A new press is a new question: the last refusal is answered.
+            app.refused = None;
             // With the select tool, a chevron for a selection off screen
             // brings it back.
             if app.tool == Tool::Select {
@@ -2438,12 +2463,8 @@ pub fn apply(app: &mut App, action: Action) {
             let defs = app.sim.world.defs.clone();
             match app.tool {
                 Tool::Designate(d) => {
-                    // A click on a creature uses a generous box so moving targets are caught.
-                    let (a, b) = if defs.designations[d as usize].targets == Targets::Creature && a == b {
-                        (a.offset(-1, -1), b.offset(1, 1))
-                    } else {
-                        (a, b)
-                    };
+                    refuse_if_idle(app, Some(d), a, b);
+                    let (a, b) = overlay::designate_box(app, d, a, b);
                     app.sim.push(Command::Designate { designation: d, a, b });
                 }
                 Tool::Build(t) => {
@@ -2470,7 +2491,10 @@ pub fn apply(app: &mut App, action: Action) {
                     app.sim.push(Command::GrowZone { a, b, zone, plant });
                 }
                 Tool::ClearZone => app.sim.push(Command::ClearZone { a, b }),
-                Tool::Cancel => app.sim.push(Command::Cancel { a, b }),
+                Tool::Cancel => {
+                    refuse_if_idle(app, None, a, b);
+                    app.sim.push(Command::Cancel { a, b });
+                }
                 Tool::Select => {
                     let (fx, fy) = app.drag_from;
                     if !is_box(app, (x, y)) {
