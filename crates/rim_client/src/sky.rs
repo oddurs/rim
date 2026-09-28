@@ -34,13 +34,27 @@ pub struct Sky {
     /// Where the bolt is, as an azimuth in degrees: a new one each flash.
     flash_from: f32,
     next_flash: f64,
+    /// A flash asked for (`strike`), to fall on the next `update`.
+    strike: bool,
+    /// Seconds since the last `update`, at most a tenth.
+    dt: f32,
     /// Particles skipped last frame because they were over an enclosed room.
     pub hidden: usize,
 }
 
 impl Default for Sky {
     fn default() -> Self {
-        Sky { parts: Vec::new(), rng: 0x5EED, last: 0.0, flash: 0.0, flash_from: 0.0, next_flash: 0.0, hidden: 0 }
+        Sky {
+            parts: Vec::new(),
+            rng: 0x5EED,
+            last: 0.0,
+            flash: 0.0,
+            flash_from: 0.0,
+            next_flash: 0.0,
+            strike: false,
+            dt: 0.0,
+            hidden: 0,
+        }
     }
 }
 
@@ -97,10 +111,32 @@ impl Sky {
 
     /// Precipitation, fog and lightning. Call before `Light::multiply`, so
     /// the weather is lit (and darkened) like the world.
-    pub fn weather(&mut self, w: &World, cam: &Cam, air: &Air) {
+    /// Move the sky on: a flash fades, or strikes. Call before the light is
+    /// prepared, so the flash it works shadows out for is this frame's.
+    pub fn update(&mut self, air: &Air) {
         let now = get_time();
-        let dt = ((now - self.last) as f32).clamp(0.0, 0.1);
+        self.dt = ((now - self.last) as f32).clamp(0.0, 0.1);
         self.last = now;
+        // Lightning: storms (heavy precipitation and a strong wind).
+        self.flash = (self.flash - self.dt * 4.0).max(0.0);
+        let mut strike = std::mem::take(&mut self.strike);
+        if air.precipitation > 4.0 && air.wind > 10.0 {
+            if now >= self.next_flash {
+                strike |= self.next_flash > 0.0;
+                self.next_flash = now + 3.0 + self.rand() as f64 * 9.0;
+            }
+        } else {
+            self.next_flash = 0.0;
+        }
+        if strike {
+            self.flash = 0.9;
+            self.flash_from = self.rand() * 360.0;
+        }
+    }
+
+    /// Precipitation and fog, drawn. Call `update` first in the frame.
+    pub fn weather(&mut self, w: &World, cam: &Cam, air: &Air) {
+        let (now, dt) = (get_time(), self.dt);
         let (sw, sh) = (screen_width(), screen_height());
 
         // Fog: a flat veil plus a few slow, soft banks drifting with the wind.
@@ -174,20 +210,6 @@ impl Sky {
                 draw_line(p.x, p.y, p.x - p.vx * len, p.y - p.vy * len, 1.0, Color::new(0.7, 0.8, 0.95, 0.4));
             }
         }
-
-        // Lightning: storms (heavy precipitation and a strong wind).
-        self.flash = (self.flash - dt * 4.0).max(0.0);
-        if air.precipitation > 4.0 && air.wind > 10.0 {
-            if now >= self.next_flash {
-                if self.next_flash > 0.0 {
-                    self.flash = 0.9;
-                    self.flash_from = self.rand() * 360.0;
-                }
-                self.next_flash = now + 3.0 + self.rand() as f64 * 9.0;
-            }
-        } else {
-            self.next_flash = 0.0;
-        }
     }
 
     fn spawn(&mut self, snow: bool, x: f32, y: f32, wx: f32, wy: f32) -> Particle {
@@ -199,10 +221,10 @@ impl Sky {
         Particle { x, y, vx, vy, snow, phase: self.rand() * 6.0 }
     }
 
-    /// A lightning flash now (tools and the autotest; storms flash on their own).
+    /// A lightning flash on the next `update`, as a storm's own would fall
+    /// (tools and the autotest; storms flash on their own).
     pub fn strike(&mut self) {
-        self.flash = 0.9;
-        self.flash_from = self.rand() * 360.0;
+        self.strike = true;
         self.next_flash = get_time() + 3.0;
     }
 

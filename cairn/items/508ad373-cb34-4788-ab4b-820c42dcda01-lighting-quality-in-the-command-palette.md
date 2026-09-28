@@ -2,12 +2,12 @@
 id: 508ad373-cb34-4788-ab4b-820c42dcda01
 title: Lighting quality in the command palette
 type: feature
-status: doing
+status: done
 milestone: lighting
 assignee: Oddur Sigurdsson
-claimed: 2026-09-27
 created: 2026-09-27
 updated: 2026-09-27
+closed_at: 2026-09-27
 priority: p3
 api: additive
 effort: s

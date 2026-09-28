@@ -1502,6 +1502,9 @@ pub fn render(app: &mut App) {
     // Roofs first: the light reads their heights. Only a room rebuild
     // works them out again.
     app.roofs.update(&app.sim.world);
+    // The sky first: a flash that strikes this frame is lit from its bolt
+    // this frame.
+    app.sky.update(&air);
     app.light.prepare(&app.sim.world, &air, px_per_cell, &app.roofs.height, app.sky.flash());
     t.light = lap();
     update_world_target(app);
