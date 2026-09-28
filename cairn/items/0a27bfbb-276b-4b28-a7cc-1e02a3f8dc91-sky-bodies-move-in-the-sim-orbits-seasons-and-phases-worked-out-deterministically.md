@@ -2,8 +2,10 @@
 id: 0a27bfbb-276b-4b28-a7cc-1e02a3f8dc91
 title: 'Sky bodies move in the sim: orbits, seasons and phases, worked out deterministically'
 type: feature
-status: backlog
+status: doing
 milestone: lighting
+assignee: Oddur Sigurdsson
+claimed: 2026-09-28
 created: 2026-09-28
 updated: 2026-09-28
 priority: p1
@@ -35,8 +37,16 @@ The user wants the sun and moon simulated in full (2026-09-28). That reverses th
 
 ## Acceptance criteria
 
-- [ ] At latitude 45 the sun's day is longer at midsummer than at midwinter, and equal at the equinoxes; noon altitude follows the season (test)
-- [ ] The moon's phase cycles with `phase_days`, and it rises later each day by its `day_period` (test)
-- [ ] A guard test finds no std trig or transcendental calls in rim_sim/src, and the in-crate functions match std within 1e-6 (test)
+- [x] At latitude 45 the sun's day is longer at midsummer than at midwinter, and equal at the equinoxes; noon altitude follows the season (test)
+- [x] The moon's phase cycles with `phase_days`, and it rises later each day by its `day_period` (test)
+- [x] A guard test finds no std trig or transcendental calls in rim_sim/src, and the in-crate functions match std within 1e-6 (test)
 - [ ] A year of body states hashes the same run to run (test), and agree passes on all four platforms in the queue lane
-- [ ] DESIGN.md describes the model; docs/modding and types list the new `sky_body` fields and the `body` input
+- [x] DESIGN.md describes the model; docs/modding and types list the new `sky_body` fields and the `body` input
+
+## 2026-09-28
+
+Built as rim_sim::sky. Body states are worked out in Fields::update_ambient, on the outdoor values' beat (AMBIENT_INTERVAL = 20 ticks, when the sun moves 0.36°), so there is one cache and no second clock. A load recomputes them from the saved clock. A refresh costs 157 ns for core's two bodies, about 8 ns a tick. Added a `transit` hour (default 12) beside the listed orbit fields: without it a moon's crossing can't be placed against its phases. Core's moon has day_period 15/14, so it laps the sun once a phase cycle and every full moon is highest at midnight, and tilt -23, so a full moon rides high in winter. The calendar gains `midsummer` (default 0.25; core 0.375, where mods/weather's warmest day is). The maths: sin by Taylor to x^19 on ±π/2, atan folded to ±tan(π/8) with 21 terms, atan2 by quadrant, altitude as atan2(up, horizontal), so no asin. All within 5e-16 of std. f64::sqrt is allowed: IEEE 754 requires it correctly rounded, and it's an instruction, not libm. The guard (tests/no_trig.rs) bans method and f64::/f32:: forms. `x.log(b)` counts only with a number for its base, since savefile has a method of its own named log. Scripts read a body with rim.sky_body(id). Nothing in core reads a body yet, so the sim's numbers are unchanged until a9e6b195.
+
+## 2026-09-28
+
+Criterion 5: docs/modding/weather.md lists the orbit keys and the body input. types/rim.d.luau gains the SkyBody type and rim.sky_body; the defs have no schema file of their own. Criterion 4's hash test is pinned; agree is for the queue lane.

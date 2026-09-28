@@ -2218,6 +2218,22 @@ where they were built, and the sun moves a fraction of a degree a second.
     for its few frames (ff818bb3): hard shadows from 40° up, from a random
     azimuth, worked out once as it strikes and once as it fades. It lights
     the cloud a little everywhere and the rest from where the bolt is.
+  - **Where the bodies are** (0a27bfbb) is the sim's, worked out from the
+    tick alone and never saved (`rim_sim::sky`). A body turns about the
+    world's axis once a `day_period` (the sun 1; a moon that laps it once a
+    phase cycle, 15/14), highest at its `transit` hour. Its declination is
+    `tilt · cos(2π(year − midsummer))`, and with the calendar's `latitude`
+    that gives its altitude and azimuth: at 45° the sun's day is 15.3 hours
+    at midsummer and 8.7 at midwinter, and its noon is 68° and 22° high.
+    `up` ramps from 0 at 6° below the horizon to 1 at 6° above, the
+    twilight. `phase` is `(1 − cos 2πc)/2` over `phase_days`, 1 for a body
+    without. They're worked out with the outdoor values, every 20 ticks
+    (the sun moves 0.36°), and kept in `Fields`. Terms read them as
+    `{ input = "body", body, of }`, and `World::sky_body_states` is the
+    renderer's one source. The maths is in-crate (`sky::sin`, `cos`,
+    `atan2`), from + − × ÷ and `sqrt`, which IEEE 754 rounds alike on
+    every machine; the platform's libm doesn't, and a guard test keeps
+    std's trig out of the sim.
   - **Static lights** (anything that emits `light` and doesn't move): soft
     shadows baked once, with 8 rays, into one of four **flicker channels**.
     Flicker is then four colours a frame, for one torch or a thousand.

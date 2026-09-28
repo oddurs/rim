@@ -1110,11 +1110,33 @@ pub struct CalendarDef {
     /// Day of the year (0-based) that the game starts on.
     #[serde(default)]
     pub start_day: u32,
+    /// The world's latitude, degrees: how high the sky's bodies climb and
+    /// how the day's length follows the year.
+    #[serde(default = "d45")]
+    pub latitude: f64,
+    /// When in the year (0..1) bodies with a `tilt` are furthest north: the
+    /// longest day, north of the equator.
+    #[serde(default = "dquarter")]
+    pub midsummer: f64,
+}
+
+fn d45() -> f64 {
+    45.0
+}
+fn dquarter() -> f64 {
+    0.25
 }
 
 impl Default for CalendarDef {
     fn default() -> Self {
-        CalendarDef { id: "default".into(), year_days: 60, seasons: vec!["year".into()], start_day: 0 }
+        CalendarDef {
+            id: "default".into(),
+            year_days: 60,
+            seasons: vec!["year".into()],
+            start_day: 0,
+            latitude: d45(),
+            midsummer: dquarter(),
+        }
     }
 }
 
@@ -1247,10 +1269,42 @@ pub struct SkyBodyDef {
     /// Whether it casts shadows when it's among the brightest.
     #[serde(default = "dtrue")]
     pub shadows: bool,
+    /// Its orbit, for the sim (`sky::state`): days between one crossing
+    /// of the sky and the next (the sun 1, a moon a little more, so it
+    /// rises later each day) ...
+    #[serde(default = "d_one")]
+    pub day_period: f64,
+    /// ... the hour after the first midnight it is highest ...
+    #[serde(default = "dnoon")]
+    pub transit: f64,
+    /// ... and how many degrees north of the equator it swings at the
+    /// calendar's midsummer, and as far south at midwinter (the sun about
+    /// 23; negative for a full moon, high in winter).
+    #[serde(default)]
+    pub tilt: f64,
+    /// Days from new to new, lit fully halfway, and how far into that the
+    /// game starts, as `input = "cycle"` counts. Unset: always lit.
+    #[serde(default)]
+    pub phase_days: Option<f64>,
+    #[serde(default)]
+    pub phase_offset: f64,
     #[serde(skip)]
     pub rgb: [u8; 3],
     #[serde(skip)]
     pub light: BodyLight,
+    /// The orbit in ticks, resolved.
+    #[serde(skip)]
+    pub period_ticks: i64,
+    #[serde(skip)]
+    pub transit_ticks: i64,
+    #[serde(skip)]
+    pub phase_ticks: Option<u64>,
+    #[serde(skip)]
+    pub phase_offset_ticks: u64,
+}
+
+fn dnoon() -> f64 {
+    12.0
 }
 
 /// Where a sky body's brightness comes from, resolved.
@@ -1274,7 +1328,7 @@ impl SkyBodyDef {
     pub fn resolve(
         &mut self,
         fields: &[FieldDef],
-        field: impl Fn(&str) -> Option<usize>,
+        names: &dyn crate::terms::Names,
         warnings: &mut Vec<String>,
     ) -> Result<(), String> {
         let ctx = format!("sky_body/{}", self.id);
@@ -1284,9 +1338,28 @@ impl SkyBodyDef {
             ));
         }
         self.rgb = parse_color(&self.color).map_err(|e| format!("{ctx}: {e}"))?;
+        let tpd = crate::TICKS_PER_DAY as f64;
+        let hour_or_more = 1.0 / 24.0..=3.65e8;
+        if !(hour_or_more.contains(&self.day_period) && self.transit.is_finite() && (-90.0..=90.0).contains(&self.tilt))
+        {
+            return Err(format!(
+                "{ctx}: needs a day_period of an hour (1/24) or more, a transit hour, and a tilt of -90 to 90°"
+            ));
+        }
+        self.period_ticks = (self.day_period * tpd).round() as i64;
+        self.transit_ticks = (self.transit * tpd / 24.0).round() as i64;
+        self.phase_ticks = match self.phase_days {
+            Some(d) if hour_or_more.contains(&d) && self.phase_offset.is_finite() => Some((d * tpd).round() as u64),
+            Some(_) => return Err(format!("{ctx}: phase_days needs an hour (1/24) or more")),
+            None => None,
+        };
+        self.phase_offset_ticks = match self.phase_ticks {
+            Some(p) => (self.phase_offset * tpd).round().rem_euclid(p as f64) as u64,
+            None => 0,
+        };
         self.light = match (&self.field, &self.term, self.of.is_empty()) {
             (Some(name), Some(term), true) => {
-                let i = field(name).ok_or_else(|| format!("{ctx}: unknown field '{name}'"))?;
+                let i = names.field(name).ok_or_else(|| format!("{ctx}: unknown field '{name}'"))?;
                 let f = &fields[i];
                 if !f.terms.terms.iter().any(|t| &t.label == term) {
                     let have: Vec<&str> = f.terms.terms.iter().map(|t| t.label.as_str()).collect();
@@ -1297,7 +1370,7 @@ impl SkyBodyDef {
             (None, None, false) => {
                 let one: TermsDef =
                     [(self.id.clone(), TermDef { scale: self.scale, of: self.of.clone() })].into_iter().collect();
-                let terms = Terms::compile(&one, &ctx, &field, warnings)?;
+                let terms = Terms::compile(&one, &ctx, names, warnings)?;
                 if terms.reads_own() {
                     return Err(format!("{ctx}: `self`, `base` and `above_base` are for a stock field's rate"));
                 }
@@ -1968,6 +2041,7 @@ struct TermNames<'a> {
     field: &'a dyn Fn(&str) -> Option<usize>,
     props: &'a [String],
     tags: &'a [String],
+    body: &'a dyn Fn(&str) -> Option<usize>,
 }
 
 impl crate::terms::Names for TermNames<'_> {
@@ -1979,6 +2053,9 @@ impl crate::terms::Names for TermNames<'_> {
     }
     fn tag(&self, name: &str) -> Option<usize> {
         self.tags.binary_search_by(|t| t.as_str().cmp(name)).ok()
+    }
+    fn body(&self, id: &str) -> Option<usize> {
+        (self.body)(id)
     }
 }
 
@@ -2467,12 +2544,17 @@ impl DefDb {
             }
         }
         let field_in = |home: &str, id: &str| get("field", id, &format!("field/{home}:")).ok().map(|i| i as usize);
+        let body_in = |home: &str, id: &str| get("sky_body", id, &format!("sky_body/{home}:")).ok().map(|i| i as usize);
         let (terrain_props, terrain_tags) = (&self.terrain_props, &self.terrain_tags);
         let mut warnings = Vec::new();
         for d in &mut self.fields {
             let home = home_of(&d.id).to_string();
-            let field_index =
-                TermNames { field: &|id: &str| field_in(&home, id), props: terrain_props, tags: terrain_tags };
+            let field_index = TermNames {
+                field: &|id: &str| field_in(&home, id),
+                props: terrain_props,
+                tags: terrain_tags,
+                body: &|id: &str| body_in(&home, id),
+            };
             d.rgb_low = parse_color(&d.color_low).map_err(|e| format!("field/{}: {e}", d.id))?;
             d.rgb_high = parse_color(&d.color_high).map_err(|e| format!("field/{}: {e}", d.id))?;
             match &d.ambient {
@@ -2619,9 +2701,17 @@ impl DefDb {
             c.seasons.push("year".into());
         }
         c.start_day %= c.year_days;
+        if !((-90.0..=90.0).contains(&c.latitude) && (0.0..=1.0).contains(&c.midsummer)) {
+            return Err(format!("calendar/{}: needs a latitude of -90 to 90° and a midsummer of 0 to 1", c.id));
+        }
         let sky = &mut self.sky;
         let sky_home = home_of(&sky.id).to_string();
-        let field_index = |id: &str| field_in(&sky_home, id);
+        let field_index = TermNames {
+            field: &|id: &str| field_in(&sky_home, id),
+            props: &[],
+            tags: &[],
+            body: &|id: &str| body_in(&sky_home, id),
+        };
         sky.rgb_night = parse_color(&sky.night).map_err(|e| format!("sky/{}: {e}", sky.id))?;
         sky.rgb_fire = parse_color(&sky.firelight).map_err(|e| format!("sky/{}: {e}", sky.id))?;
         if let Some(sun) = &sky.sun {
@@ -2644,7 +2734,13 @@ impl DefDb {
         let fields = &self.fields;
         for b in &mut self.sky_bodies {
             let home = home_of(&b.id).to_string();
-            b.resolve(fields, |id| field_in(&home, id), &mut warnings)?;
+            let names = TermNames {
+                field: &|id: &str| field_in(&home, id),
+                props: &[],
+                tags: &[],
+                body: &|id: &str| body_in(&home, id),
+            };
+            b.resolve(fields, &names, &mut warnings)?;
         }
         // Bodies say where the light comes from; a sky's lone `sun` is for a
         // sky that declares none.
@@ -3002,7 +3098,12 @@ impl DefDb {
             // Spoiling and keeping are terms read at a cell, like a derived
             // field's.
             let home = home_of(&d.id).to_string();
-            let names = TermNames { field: &|id: &str| field_in(&home, id), props: terrain_props, tags: terrain_tags };
+            let names = TermNames {
+                field: &|id: &str| field_in(&home, id),
+                props: terrain_props,
+                tags: terrain_tags,
+                body: &|id: &str| body_in(&home, id),
+            };
             if let Some(sp) = &mut d.spoil {
                 sp.rate_terms = Terms::compile(&sp.rate, &format!("{ctx}, spoil.rate"), &names, &mut spoil_warnings)?;
                 if !(sp.days > 0.0 && sp.days.is_finite()) || sp.rate_terms.reads_own() {

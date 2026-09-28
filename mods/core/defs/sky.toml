@@ -46,6 +46,9 @@ peak = 60.0
 arc = [-10.0, 190.0]
 color = "#fff6e8"
 angular_size = 0.5
+# Its orbit, for the sim: highest at noon, and 23° north of the equator at
+# midsummer, as far south at midwinter.
+tilt = 23.0
 
 # Across the night from the east as the sun does, lower, cold, and wider
 # for its halo. Its light is the picture's alone: the sim's stays dark at
@@ -66,3 +69,12 @@ peak = 45.0
 arc = [20.0, 160.0]
 color = "#aebfff"
 angular_size = 1.5
+# Its orbit: it laps the sun once a phase cycle, 15/14 of a day between
+# crossings, so it rises 1.7 hours later each day, and full moons are highest
+# at midnight, the first after the first night. Opposite the sun, a full moon
+# rides high in winter and low in summer.
+day_period = 1.0714286
+transit = 24.0
+tilt = -23.0
+phase_days = 15.0
+phase_offset = 6.75

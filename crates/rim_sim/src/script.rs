@@ -284,6 +284,7 @@ type StoreInfo = { level: number, slots: number, contents: { StoreSlot } }
 type StockQuery = { thing: string?, tag: string?, category: string? }
 type ItemCategoryInfo = { id: string, label: string, parent: string?, order: number, children: { string }, items: { string } }
 type Date = { year: number, season: string, season_index: number, day: number, day_of_year: number, year_days: number, year_fraction: number }
+type SkyBody = { altitude: number, azimuth: number, up: number, phase: number }
 type Room = { id: number, cells: number, enclosed: boolean, uncovered: number, role: string?, role_label: string? }
 type PriorityPart = { kind: "default" | "role" | "pin" | "rule", label: string, delta: number }
 type WorkRoleInfo = { index: number, id: string?, label: string, edited: boolean }
@@ -1333,6 +1334,28 @@ impl ScriptHost {
             })?;
             rim.set("date", f)?;
             self.declare("date", "() -> Date", "The calendar date.");
+        }
+        {
+            let ptr = self.world.clone();
+            let f = lua.create_function(move |lua, id: String| {
+                let from = calling_mod(lua).unwrap_or_default();
+                let t = lua.create_table()?;
+                with_world(&ptr, |w| {
+                    let b = w.sky_body_states()[def_id(w, "sky_body", &id, &from)? as usize];
+                    t.set("altitude", b.altitude)?;
+                    t.set("azimuth", b.azimuth)?;
+                    t.set("up", b.up)?;
+                    t.set("phase", b.phase)?;
+                    Ok(())
+                })?;
+                Ok(t)
+            })?;
+            rim.set("sky_body", f)?;
+            self.declare(
+                "sky_body",
+                "(id: string) -> SkyBody",
+                "Where a sky body is: degrees above the horizon and round it (0 east, 90 south), how far up it is (0 to 1, through a twilight) and how much of it is lit (0 to 1).",
+            );
         }
         let seasons = lua.create_sequence_from(defs.calendar.seasons.iter().map(|s| s.as_str()))?;
         rim.set("seasons", seasons)?;

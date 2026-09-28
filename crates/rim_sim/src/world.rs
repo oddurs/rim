@@ -1157,6 +1157,13 @@ impl World {
         }
     }
 
+    /// Where each sky body is, in `defs.sky_bodies` order: the one source
+    /// of the sky the renderer draws (DESIGN.md §6e). Worked out with the
+    /// outdoor values, every `AMBIENT_INTERVAL` ticks.
+    pub fn sky_body_states(&self) -> &[crate::sky::BodyState] {
+        self.fields.bodies()
+    }
+
     pub fn is_night(&self) -> bool {
         let h = self.hour();
         !(6.0..21.0).contains(&h)
