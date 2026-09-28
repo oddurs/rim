@@ -577,6 +577,7 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
     println!("light rebuild on {last}, ms: {}", costs.join("; "));
     let soft = if crate::light::software_gl(&renderer) { " (software: gpu times are the CPU rasterising)" } else { "" };
     println!("gl: {renderer}{soft}");
+    println!("lighting: {}", app.light.setting.name());
 
     if let Some(path) = opt("--json") {
         let views: Vec<String> = results
@@ -629,10 +630,11 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
             })
             .collect();
         let json = format!(
-            "{{\n  \"screen\": [{}, {}],\n  \"dpi\": {dpi},\n  \"frames\": {frames},\n  \"budget_ms\": {BUDGET_MS},\n  \"gl_renderer\": \"{}\",\n  \"light_rebuild_view\": \"{last}\",\n  \"light_rebuild\": {{{}}},\n  \"views\": [\n{}\n  ]\n}}\n",
+            "{{\n  \"screen\": [{}, {}],\n  \"dpi\": {dpi},\n  \"frames\": {frames},\n  \"budget_ms\": {BUDGET_MS},\n  \"gl_renderer\": \"{}\",\n  \"lighting\": \"{}\",\n  \"light_rebuild_view\": \"{last}\",\n  \"light_rebuild\": {{{}}},\n  \"views\": [\n{}\n  ]\n}}\n",
             screen_width(),
             screen_height(),
             renderer.replace('"', "'"),
+            app.light.setting.name(),
             rebuild.join(", "),
             views.join(",\n")
         );

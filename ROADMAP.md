@@ -57,18 +57,20 @@ Seeds, tests, CI and the merge queue, so that every change is checked the same w
 
 ## lighting — Lighting
 
-`#####·····` 42% · 5 of 12 done
+`#####·····` 43% · 6 of 14 done
 
 Shadows from the sun, the moons and every wall; torches that flicker and fill their rooms; sunbeams through windows. The sim's `light` field is unchanged: all of it is the renderer's, computed at the rate each kind of light changes. Design: DESIGN.md §6e. Concept and live demo: https://claude.ai/artifact/SC5Coj3UKKjxVCSxLKEq1t
 
-- [ ] `12fbe8fb` Lighting presets, the settings file, and resolution that follows zoom <sup>feature · p1 · s · client</sup>
 - [ ] `153dda59` Roofs take the sun: the hipped roof field shades by it and casts shadows <sup>feature · p2 · s · client</sup>
 - [ ] `1a17d685` Moons and planets: \[\[sky_body\]\] gives a body a path, colour and softness <sup>feature · p2 · m · client</sup>
+- [ ] `24bad102` Lighting auto preset: step down when the lighting itself runs slow <sup>feature · p3 · m · client</sup>
 - [ ] `3124bd7b` Light on every level: buffers keyed by z, sky only down open shafts <sup>feature · p1 · m · client</sup>
+- [ ] `508ad373` Lighting quality in the command palette <sup>feature · p3 · s · client</sup>
 - [ ] `ff818bb3` Lightning casts shadows <sup>feature · p3 · s · client</sup>
-- [ ] `2f13e01d` Indoors: sunbeams through windows, room fill, and exposure <sup>feature · p1 · m · client</sup>
+- [ ] `12fbe8fb` Lighting presets, the settings file, and resolution that follows zoom <sup>feature · p1 · s · client</sup>
 - [ ] `5a69f9c9` Moving lights: carried and burning, capped, shadowless past the cap <sup>feature · p1 · m · client</sup>
 - [x] `0779def9` Decide: the plan's one light, or the sun's shadows <sup>spike · p0 · s · client</sup>
+- [x] `2f13e01d` Indoors: sunbeams through windows, room fill, and exposure <sup>feature · p1 · m · client</sup>
 - [x] `6a6dfe88` Lighting in the render bench: every pass, CPU and GPU time <sup>perf · p0 · s · client</sup>
 - [x] `6fd6b13b` Firelight baked with soft shadows into four flicker channels <sup>feature · p0 · m · client</sup>
 - [x] `8f4f1de8` Sun shadows: march the height map toward the sun, cached until it moves <sup>feature · p0 · m · client</sup>

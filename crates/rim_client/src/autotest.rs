@@ -1933,16 +1933,16 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         t.check(all_in, "the huts, the hall and a hut closed by water are rooms");
         // Low in the west, the sun comes through the west window in a bar
         // across the floor; high in the south, it can't get in at all.
-        let lit_inside = |img: &Image, o: IVec| {
-            inside(o, 5).flat_map(texels).filter_map(|(x, y)| crate::light::sun_in(img, x, y)).fold(0.0f32, f32::max)
+        let lit_inside = |light: &crate::light::Light, img: &Image, o: IVec| {
+            inside(o, 5).flat_map(texels).filter_map(|(x, y)| light.sun_in(img, x, y)).fold(0.0f32, f32::max)
         };
         t.app.light.pin_sun = Some((180.0, 12.0));
         t.frame().await;
-        let beam = t.app.light.sun_image().map_or(0.0, |img| lit_inside(&img, beamed));
+        let beam = t.app.light.sun_image().map_or(0.0, |img| lit_inside(&t.app.light, &img, beamed));
         t.check(beam > 0.5, format!("a low western sun throws a beam through the west window ({beam:.2})"));
         t.app.light.pin_sun = Some((90.0, 60.0));
         t.frame().await;
-        let noon = t.app.light.sun_image().map_or(1.0, |img| lit_inside(&img, beamed));
+        let noon = t.app.light.sun_image().map_or(1.0, |img| lit_inside(&t.app.light, &img, beamed));
         t.check(noon < 0.05, format!("and none at noon from the south, where there is no window ({noon:.2})"));
         // A room with no window never sees the sun, from anywhere in the sky,
         // even where water rather than a wall closes it.
@@ -1952,8 +1952,8 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
                 t.app.light.pin_sun = Some((az as f64, elev));
                 t.frame().await;
                 if let Some(img) = t.app.light.sun_image() {
-                    leak = leak.max(lit_inside(&img, dark));
-                    wet = wet.max(lit_inside(&img, moat));
+                    leak = leak.max(lit_inside(&t.app.light, &img, dark));
+                    wet = wet.max(lit_inside(&t.app.light, &img, moat));
                 } else {
                     (leak, wet) = (1.0, 1.0);
                 }

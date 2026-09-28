@@ -21,6 +21,7 @@
 //! the sun takes over.
 
 use crate::occluders::Occluders;
+use crate::quality::{texels_for, Setting};
 use crate::sky::Air;
 use crate::Cam;
 use macroquad::miniquad::{BlendFactor, BlendState, BlendValue, Equation};
@@ -29,12 +30,8 @@ use rim_sim::defs::{Flicker, SunPath};
 use rim_sim::map::Map;
 use rim_sim::world::{Thing, World};
 
-/// Light texels per cell.
-const TEXELS: u32 = 2;
-/// Steps the sun march takes, 0.4 cells each: shadows reach 11 cells.
-const SUN_STEPS: f32 = 28.0;
-/// How far the sun moves before its shadows are worked out again, degrees.
-const SUN_QUANT: f64 = 0.25;
+// What the presets tune (texels a cell, sun steps, softness, when the sun
+// is worked out again, upsampling) is `crate::quality`.
 /// The share of the sky's light that comes straight from the sun on a clear
 /// day; the rest is the sky itself, which also reaches into shadow.
 const DIRECT: f32 = 0.6;
@@ -611,18 +608,6 @@ fn channel_colour(fire: Vec3, channel: usize, t: f64) -> Vec3 {
     vec3(fire.x * f, fire.y * f * (0.86 + 0.14 * f), fire.z * f * (0.72 + 0.28 * f))
 }
 
-/// The light texel a point in cells falls in, from a target read back.
-fn texel(img: &Image, x: f32, y: f32) -> Option<Color> {
-    let (px, py) = ((x * TEXELS as f32).floor(), (y * TEXELS as f32).floor());
-    (px >= 0.0 && py >= 0.0 && px < img.width as f32 && py < img.height as f32)
-        .then(|| img.get_pixel(px as u32, py as u32))
-}
-
-/// The sun's visibility at a point in cells, from `Light::sun_image`.
-pub fn sun_in(img: &Image, x: f32, y: f32) -> Option<f32> {
-    texel(img, x, y).map(|c| c.r)
-}
-
 /// How far the eye opens up for a sky this bright: not at all by day, up to
 /// 2.6 times on a moonless night. Firelight is scaled with it, which is why a
 /// fire reads strong at night and weak at noon.
@@ -688,21 +673,27 @@ enum SunKey {
     /// Below the horizon: nothing is lit, whatever the cloud or the walls.
     Down,
     Up {
-        /// Azimuth and elevation, in `SUN_QUANT` steps.
+        /// Azimuth and elevation, in steps of `step` thousandths of a degree.
         az: i64,
         elev: i64,
+        step: i64,
         /// Penumbra growth, in fiftieths.
         soft: i64,
+        /// Steps the march takes: a preset changed mid-game redoes it.
+        steps: u32,
         occluders: u64,
     },
 }
 
 impl SunKey {
-    fn new(sun: Option<(f64, f64)>, soft: f32, occluders: u64) -> SunKey {
-        let q = |x: f64| (x / SUN_QUANT).round() as i64;
+    /// The sun at `(azimuth, elevation)`, rounded to `step` degrees, marched
+    /// `steps` times.
+    fn new(sun: Option<(f64, f64)>, soft: f32, occluders: u64, step: f64, steps: u32) -> SunKey {
+        let step = ((step * 1000.0).round() as i64).max(1);
+        let q = |x: f64| (x * 1000.0 / step as f64).round() as i64;
         match sun {
             Some((az, elev)) if q(elev) > 0 => {
-                SunKey::Up { az: q(az), elev: q(elev), soft: (soft * 50.0).round() as i64, occluders }
+                SunKey::Up { az: q(az), elev: q(elev), step, soft: (soft * 50.0).round() as i64, steps, occluders }
             }
             _ => SunKey::Down,
         }
@@ -712,8 +703,9 @@ impl SunKey {
     fn toward(self) -> Vec3 {
         match self {
             SunKey::Down => Vec3::ZERO,
-            SunKey::Up { az, elev, .. } => {
-                let (az, elev) = ((az as f64 * SUN_QUANT).to_radians(), (elev as f64 * SUN_QUANT).to_radians());
+            SunKey::Up { az, elev, step, .. } => {
+                let deg = |k: i64| (k * step) as f64 / 1000.0;
+                let (az, elev) = (deg(az).to_radians(), deg(elev).to_radians());
                 vec3(az.cos() as f32, az.sin() as f32, elev.tan() as f32)
             }
         }
@@ -731,7 +723,7 @@ impl SunKey {
 pub struct Light {
     /// What stops light, per cell.
     pub occluders: Occluders,
-    /// Firelight, baked: one flicker channel per colour channel, `TEXELS`
+    /// Firelight, baked: one flicker channel per colour channel, `texels`
     /// per cell, stored at 0.6 of its brightness so overlapping fires can
     /// add up past full before the texture clips (the shaders' SCALE).
     fires: Option<RenderTarget>,
@@ -755,7 +747,7 @@ pub struct Light {
     exposure: f32,
     /// Times firelight has been baked, whole or in part.
     pub bakes: u64,
-    /// Where the sun reaches, R, `TEXELS` per cell.
+    /// Where the sun reaches, R, `texels` per cell.
     sunlit: Option<RenderTarget>,
     sun_key: Option<SunKey>,
     materials: [Option<Material>; 4],
@@ -765,6 +757,10 @@ pub struct Light {
     failed: [bool; 4],
     /// Nothing, for a pass that couldn't run: no sun, no fire.
     blank: Option<Texture2D>,
+    /// The player's lighting setting.
+    pub setting: Setting,
+    /// Light texels per cell now: the setting's, fewer when zoomed out.
+    texels: u32,
     /// Pin the sun: (azimuth, elevation), degrees. For tests and the bench.
     pub pin_sun: Option<(f64, f64)>,
     /// Times the sun pass has run.
@@ -777,10 +773,18 @@ pub struct Light {
 }
 
 impl Light {
+    /// Lighting to the player's setting.
+    pub fn with(setting: Setting) -> Light {
+        Light { setting, ..Default::default() }
+    }
+
     /// Bring every cached result up to date. Call before the world is drawn,
     /// with the default camera: it draws into targets of its own.
-    pub fn prepare(&mut self, w: &World, air: &Air) {
+    pub fn prepare(&mut self, w: &World, air: &Air, px_per_cell: f32) {
         self.passes.clear();
+        // Zooming out drops texels, so the light never costs more than the
+        // pixels it covers; a new size rebuilds every target.
+        self.texels = texels_for(self.setting.quality.texels, px_per_cell, self.texels.max(1));
         let t = self.pass_begin();
         let changed = self.occluders.update(w);
         let rooms = self.update_rooms(w);
@@ -821,7 +825,20 @@ impl Light {
     /// The sun's visibility at a point, in cells: the light texel it falls
     /// in, 0 to 1, read back from the GPU. Slow, for tests.
     pub fn sun_visibility(&self, x: f32, y: f32) -> Option<f32> {
-        sun_in(&self.sun_image()?, x, y)
+        self.sun_in(&self.sun_image()?, x, y)
+    }
+
+    /// The sun's visibility at a point in cells, from `sun_image`.
+    pub fn sun_in(&self, img: &Image, x: f32, y: f32) -> Option<f32> {
+        self.texel(img, x, y).map(|c| c.r)
+    }
+
+    /// The light texel a point in cells falls in, from a target read back.
+    fn texel(&self, img: &Image, x: f32, y: f32) -> Option<Color> {
+        let t = self.texels as f32;
+        let (px, py) = ((x * t).floor(), (y * t).floor());
+        (px >= 0.0 && py >= 0.0 && px < img.width as f32 && py < img.height as f32)
+            .then(|| img.get_pixel(px as u32, py as u32))
     }
 
     /// Where the sun reaches, read back from the GPU, for `sun_in`. Slow,
@@ -833,7 +850,7 @@ impl Light {
     /// The baked firelight at a point, in cells: each channel's brightness,
     /// read back from the GPU. Slow, for tests.
     pub fn fire_at(&self, x: f32, y: f32) -> Option<[f32; 4]> {
-        let c = texel(&self.fires.as_ref()?.texture.get_texture_data(), x, y)?;
+        let c = self.texel(&self.fires.as_ref()?.texture.get_texture_data(), x, y)?;
         Some([c.r, c.g, c.b, c.a].map(|v| v / FIRE_SCALE))
     }
 
@@ -938,7 +955,7 @@ impl Light {
     /// changed. Whether it did.
     fn bake_fires(&mut self, w: &World) -> bool {
         let Some(occ) = self.occluders.texture.clone() else { return false };
-        let size = (w.map.w as u32 * TEXELS, w.map.h as u32 * TEXELS);
+        let size = (w.map.w as u32 * self.texels, w.map.h as u32 * self.texels);
         let seen = (w.fields.revision, self.occluders.version);
         let fits = self.fires.as_ref().is_some_and(|t| (t.texture.width() as u32, t.texture.height() as u32) == size);
         if fits && self.fires_seen == Some(seen) {
@@ -965,7 +982,7 @@ impl Light {
             self.fires = Some(rt);
         }
         let (tw, th) = (size.0 as f32, size.1 as f32);
-        let t = TEXELS as f32;
+        let t = self.texels as f32;
         set_camera(&Camera2D {
             zoom: vec2(2.0 / tw, 2.0 / th),
             target: vec2(tw / 2.0, th / 2.0),
@@ -1071,8 +1088,10 @@ impl Light {
     /// Whether it did.
     fn update_sun(&mut self, w: &World, air: &Air) -> bool {
         let Some(occ) = self.occluders.texture.clone() else { return false };
-        let size = (w.map.w as u32 * TEXELS, w.map.h as u32 * TEXELS);
-        let key = SunKey::new(self.sun(w), penumbra(air.cloud), self.occluders.version);
+        let size = (w.map.w as u32 * self.texels, w.map.h as u32 * self.texels);
+        let q = self.setting.quality;
+        let soft = if q.soft { penumbra(air.cloud) } else { 0.0 };
+        let key = SunKey::new(self.sun(w), soft, self.occluders.version, q.sun_rebuild, q.sun_steps);
         let fits = self.sunlit.as_ref().is_some_and(|t| (t.texture.width() as u32, t.texture.height() as u32) == size);
         if fits && self.sun_key == Some(key) {
             return false;
@@ -1091,7 +1110,7 @@ impl Light {
         m.set_uniform("map", vec2(w.map.w as f32, w.map.h as f32));
         m.set_uniform("res", vec2(tw, th));
         m.set_uniform("sun", toward.extend(soft));
-        m.set_uniform("steps", SUN_STEPS);
+        m.set_uniform("steps", q.sun_steps as f32);
         set_camera(&Camera2D {
             zoom: vec2(2.0 / tw, 2.0 / th),
             target: vec2(tw / 2.0, th / 2.0),
@@ -1169,7 +1188,7 @@ impl Light {
             m.set_uniform(name, channel_colour(fire, k, get_time()));
         }
         m.set_uniform("cell", vec2(1.0 / mw, 1.0 / mh));
-        m.set_uniform("lres", vec2(mw, mh) * TEXELS as f32);
+        m.set_uniform("lres", vec2(mw, mh) * self.texels as f32);
         // With no sun path the contact shadow fades with daylight instead.
         let day = if def.sun.is_none() { (air.light / 100.0).clamp(0.0, 1.0) } else { 0.0 };
         m.set_uniform("day", day);
@@ -1267,12 +1286,17 @@ mod tests {
 
     #[test]
     fn a_sun_below_the_horizon_is_worked_out_once_whatever_the_weather() {
-        assert_eq!(SunKey::new(Some((180.0, -5.0)), 0.18, 7), SunKey::new(None, 0.03, 9), "down is down");
-        assert_eq!(SunKey::new(Some((90.0, 0.1)), 0.03, 1), SunKey::Down, "under a quarter degree is down");
-        let up = SunKey::new(Some((90.0, 30.0)), 0.03, 1);
-        assert_eq!(up, SunKey::new(Some((90.1, 30.1)), 0.035, 1), "small moves and cloud drift reuse it");
-        assert_ne!(up, SunKey::new(Some((90.3, 30.0)), 0.03, 1), "a quarter degree works it out again");
-        assert_ne!(up, SunKey::new(Some((90.0, 30.0)), 0.03, 2), "so do changed walls");
+        assert_eq!(
+            SunKey::new(Some((180.0, -5.0)), 0.18, 7, 0.25, 28),
+            SunKey::new(None, 0.03, 9, 0.25, 28),
+            "down is down"
+        );
+        assert_eq!(SunKey::new(Some((90.0, 0.1)), 0.03, 1, 0.25, 28), SunKey::Down, "under a quarter degree is down");
+        let up = SunKey::new(Some((90.0, 30.0)), 0.03, 1, 0.25, 28);
+        assert_eq!(up, SunKey::new(Some((90.1, 30.1)), 0.035, 1, 0.25, 28), "small moves and cloud drift reuse it");
+        assert_ne!(up, SunKey::new(Some((90.3, 30.0)), 0.03, 1, 0.25, 28), "a quarter degree works it out again");
+        assert_ne!(up, SunKey::new(Some((90.0, 30.0)), 0.03, 2, 0.25, 28), "so do changed walls");
+        assert_ne!(up, SunKey::new(Some((90.0, 30.0)), 0.03, 1, 0.25, 40), "and a preset that marches further");
         assert_eq!(SunKey::Down.toward(), Vec3::ZERO);
     }
 

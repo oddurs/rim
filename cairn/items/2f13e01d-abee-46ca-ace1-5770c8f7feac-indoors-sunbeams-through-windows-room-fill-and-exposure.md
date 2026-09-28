@@ -2,15 +2,15 @@
 id: 2f13e01d-abee-46ca-ace1-5770c8f7feac
 title: 'Indoors: sunbeams through windows, room fill, and exposure'
 type: feature
-status: doing
+status: done
 milestone: lighting
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 depends_on:
 - 6fd6b13b-1186-46f4-876e-743d173e03d7
 - 8f4f1de8-5784-4377-8cee-25bcf223275e
 created: 2026-09-26
 updated: 2026-09-27
+closed_at: 2026-09-27
 priority: p1
 api: none
 effort: m

@@ -2085,12 +2085,26 @@ next begins, and no pop when the view changes level.
 
 ### Presets
 
-`low`, `medium` (the default), `high`, `ultra`, and `auto`, which times the
-lighting passes on first launch and drops a preset if they exceed 1 ms.
-Any setting overrides its preset. Static lights bake at 8 rays in every
-preset, because the bake runs only on edits. A light texel never gets smaller
-than 4 screen pixels: at the minimum zoom (4 px a cell) the buffer drops to
-1 texel per cell, so zooming out doesn't raise the cost.
+`low`, `medium` (the default), `high` and `ultra`, from `[lighting]` in the
+player's settings file:
+
+| | low | medium | high | ultra |
+|---|---|---|---|---|
+| Light texels per cell, at most | 1 | 2 | 2 | 4 |
+| Sun steps (0.4 cells each) | 16 | 28 | 40 | 56 |
+| Soft sun shadows | no | yes | yes | yes |
+| Sun worked out again after | 1° | 0.25° | 0.1° | 0.02° |
+
+Any setting overrides its preset (`texels_per_cell`, `sun_steps`,
+`soft_shadows`, `sun_rebuild_degrees`). There is no `auto` yet (24bad102):
+the frame's time mixes the sim and the UI with the light, and a GPU timer
+works only off Apple, so it would have turned the lights down for the wrong
+reason. Light is upsampled bilinearly in every preset; bicubic was tried and
+changed nothing visible at 2 texels a cell. Static lights bake at 8 rays in every preset, because the bake runs only on
+edits. A light texel never gets smaller than 4 screen pixels: at the minimum
+zoom (4 points a cell on a 1x screen) the buffer drops to 1 texel per cell,
+so zooming out doesn't raise the cost, and it grows back only with a fifth
+to spare, so it doesn't flicker between sizes at the edge.
 
 ### Cost and constraints
 
