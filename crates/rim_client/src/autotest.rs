@@ -3124,6 +3124,85 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.input(RawInput { mouse: t.mouse, pressed: vec!["ctrl+k".into()], ..Default::default() }).await;
     t.settle().await;
     t.check(!t.app.ui.is_open("core:palette"), "Ctrl+K closes the palette");
+
+    // Motion (bf3079fb): an urgent mark breathes; with reduce motion on, it
+    // holds still.
+    let oak = defs.thing_id("tree_oak").unwrap();
+    let chop = defs.lookup("designation", "chop").unwrap();
+    let urgent = {
+        let w = t.w();
+        let (x0, y0, x1, y1) = draw::visible(&t.app);
+        (y0 + 2..y1 - 2)
+            .flat_map(|y| (x0 + 2..x1 - 2).map(move |x| IVec::new(x, y)))
+            .find_map(|p| w.map.fixture_at(p).filter(|&f| w.thing(f).is_some_and(|th| th.def == oak)))
+    };
+    match urgent {
+        Some(tree) => {
+            let p = t.w().thing(tree).unwrap().pos;
+            t.app.sim.push(Command::Designate { designation: chop, a: p, b: p });
+            t.ticks(1);
+            t.app.sim.push(Command::MarkUrgent { target: tree, on: true });
+            t.ticks(1);
+            let breath = |t: &T| {
+                crate::overlay::scene(&t.app).marks.iter().find_map(|m| {
+                    if let Mark::Breathe { r, .. } = m {
+                        Some(*r)
+                    } else {
+                        None
+                    }
+                })
+            };
+            let r0 = breath(&t);
+            for _ in 0..30 {
+                t.frame().await;
+            }
+            let r1 = breath(&t);
+            t.check(r0.is_some() && r0 != r1, format!("an urgent mark's ring breathes ({r0:?}, {r1:?})"));
+            t.shot("chalk-urgent").await;
+            // An order's ring grows over a quarter of a second.
+            let ack = |t: &T| {
+                crate::overlay::scene(&t.app).marks.iter().find_map(|m| {
+                    if let Mark::Ack { r, .. } = m {
+                        Some(*r)
+                    } else {
+                        None
+                    }
+                })
+            };
+            t.app.order_flash = Some((p, t.app.chalk.now()));
+            t.frame().await;
+            let a0 = ack(&t);
+            for _ in 0..6 {
+                t.frame().await;
+            }
+            let a1 = ack(&t);
+            t.check(a0.zip(a1).is_some_and(|(x, y)| y > x), format!("an order's ring grows ({a0:?}, {a1:?})"));
+            t.input(RawInput { mouse: t.mouse, pressed: vec!["ctrl+k".into()], ..Default::default() }).await;
+            t.input(RawInput { mouse: t.mouse, chars: "reduce motion: on".chars().collect(), ..Default::default() })
+                .await;
+            t.key(KeyCode::Enter).await;
+            t.check(t.app.reduce_motion, "the palette's Reduce motion: on stills the map");
+            let r0 = breath(&t);
+            for _ in 0..30 {
+                t.frame().await;
+            }
+            let r1 = breath(&t);
+            t.check(r0.is_some() && r0 == r1, format!("and the urgent ring holds still ({r0:?}, {r1:?})"));
+            t.app.order_flash = Some((p, t.app.chalk.now()));
+            t.frame().await;
+            let a0 = ack(&t);
+            for _ in 0..6 {
+                t.frame().await;
+            }
+            let a1 = ack(&t);
+            t.check(a0.is_some() && a0 == a1, format!("and an order's ring is still ({a0:?}, {a1:?})"));
+            t.app.reduce_motion = false;
+            t.app.sim.push(Command::MarkUrgent { target: tree, on: false });
+            t.app.sim.push(Command::Cancel { a: p, b: p });
+            t.ticks(1);
+        }
+        None => t.check(false, "a tree on screen to mark urgent"),
+    }
     t.app.cam.zoom = 28.0;
     t.app.paused = false;
     t.app.sim.world.fields.set_ambient(rain, None);

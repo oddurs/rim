@@ -2,12 +2,14 @@
 id: bf3079fb-0d7d-4db7-8f46-f19f97e110dd
 title: Order ring in chalk, urgent that breathes, and a reduce-motion setting
 type: feature
-status: planned
+status: done
 milestone: chalkline
+assignee: Oddur Sigurdsson
 depends_on:
 - d83192ed-0a3e-4a6f-a39a-04ce94a68935
 created: 2026-09-27
-updated: 2026-09-27
+updated: 2026-09-28
+closed_at: 2026-09-28
 priority: p3
 api: additive
 effort: s
@@ -27,10 +29,18 @@ area: ui
 
 ## Acceptance criteria
 
-- [ ] A unit test parses `reduce_motion = true`, and a bad value is an error, like `saved_render_scale`
-- [ ] Autotest: after the "Reduce motion: on" binding, the urgent mark's ring radius is the same in two frames 0.5 s apart
-- [ ] Screenshot `chalk-urgent`
+- [x] A unit test parses `reduce_motion = true`, and a bad value is an error, like `saved_render_scale`
+- [x] Autotest: after the "Reduce motion: on" binding, the urgent mark's ring radius is the same in two frames 0.5 s apart
+- [x] Screenshot `chalk-urgent`
 
 ## 2026-09-27
 
 People (5d09b04e): gaits (809e1fc5) read this item's reduce_motion setting: every channel rests and pawns glide.
+
+## 2026-09-27
+
+Stacked on the off-screen chevron (b6d0a4cc) and the Chalkline stack below it.
+
+## 2026-09-27
+
+Review: findings applied. Declined two: the URGENT disc stays a constant colour, since it's drawn in the cached mesh and a theme token there would force a rebuild on every reload; and the urgent ring doesn't follow the tone shift, which it doesn't need at 35% amber over a mark that already does.

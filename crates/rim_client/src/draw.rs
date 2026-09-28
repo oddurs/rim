@@ -962,7 +962,6 @@ pub fn world_ui(app: &App) {
             let (bw, bh) = (s1x - s0x, s1y - s0y);
             draw_rectangle_lines(s0x - 1.0, s0y - 1.0, bw + 2.0, bh + 2.0, p.hair + 2.0, p.keyline);
             draw_rectangle_lines(s0x, s0y, bw, bh, p.hair, p.zone);
-            order_flash(app);
             return;
         }
         if outline {
@@ -1001,7 +1000,6 @@ pub fn world_ui(app: &App) {
         };
         draw_rectangle_lines(sx, sy, z * fw as f32, z * fh as f32, 2.0, tool_color(app));
     }
-    order_flash(app);
 }
 
 /// Plans that replace a standing piece (DESIGN.md §6c): the old piece as
@@ -1763,22 +1761,6 @@ fn edges(
             }
         }
     }
-}
-
-/// A ring that closes on the cell an order just landed in, so the click
-/// is visibly acknowledged even when the pawn takes a moment to turn around.
-const FLASH_SECS: f64 = 0.45;
-
-fn order_flash(app: &App) {
-    let Some((cell, at)) = app.order_flash else { return };
-    let t = (get_time() - at) / FLASH_SECS;
-    if !(0.0..1.0).contains(&t) {
-        return;
-    }
-    let z = app.cam.zoom;
-    let (cx, cy) = app.cam.to_screen(cell.x as f32 + 0.5, cell.y as f32 + 0.5);
-    let r = z * (1.4 - 0.7 * t as f32);
-    draw_circle_lines(cx, cy, r, 2.0, alpha(PLAYER, 1.0 - t as f32));
 }
 
 fn tool_color(app: &App) -> Color {

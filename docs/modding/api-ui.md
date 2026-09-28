@@ -21,6 +21,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `act.new_colony` | `() -> ()` | Start a new colony (the title screen). |
 | `act.order` | `(key: string, x: number, y: number, on: number?) -> ()` | Give the selected colonists the order named key at a map spot (a row from view.orders), each one it's on offer to. |
 | `act.preview` | `(key: string?) -> ()` | Point the materials view (view.stuff) at a buildable by its tool key, for a card describing it; nil goes back to the tool in hand. |
+| `act.reduce_motion` | `(on: boolean) -> ()` | Make the map's overlays still: hover, selection and the grid appear and go at once, and marks don't move. Saved for the player. |
 | `act.render_scale` | `(scale: number) -> ()` | Draw the world at this fraction of the screen's pixels, 0.25 to 1; the UI stays sharp. Saved for the player. |
 | `act.role_from_colonist` | `(label: string, id: number) -> ()` | Make a work role of the player's from a colonist's levels (role and pins), keeping what differs from the defaults. It joins the end of view.board().roles. |
 | `act.role_from_role` | `(label: string, role: number) -> ()` | Make a work role of the player's, copying another. It joins the end of view.board().roles. |

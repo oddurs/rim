@@ -209,6 +209,8 @@ declare act: {
     order: (key: string, x: number, y: number, on: number?) -> (),
     -- Point the materials view (view.stuff) at a buildable by its tool key, for a card describing it; nil goes back to the tool in hand.
     preview: (key: string?) -> (),
+    -- Make the map's overlays still: hover, selection and the grid appear and go at once, and marks don't move. Saved for the player.
+    reduce_motion: (on: boolean) -> (),
     -- Draw the world at this fraction of the screen's pixels, 0.25 to 1; the UI stays sharp. Saved for the player.
     render_scale: (scale: number) -> (),
     -- Make a work role of the player's from a colonist's levels (role and pins), keeping what differs from the defaults. It joins the end of view.board().roles.

@@ -157,6 +157,11 @@ pub const UI_API: &[UiDoc] = &[
     d!("act.order", "(key: string, x: number, y: number, on: number?) -> ()", "Give the selected colonists the order named key at a map spot (a row from view.orders), each one it's on offer to."),
     d!("act.preview", "(key: string?) -> ()", "Point the materials view (view.stuff) at a buildable by its tool key, for a card describing it; nil goes back to the tool in hand."),
     d!(
+        "act.reduce_motion",
+        "(on: boolean) -> ()",
+        "Make the map's overlays still: hover, selection and the grid appear and go at once, and marks don't move. Saved for the player."
+    ),
+    d!(
         "act.render_scale",
         "(scale: number) -> ()",
         "Draw the world at this fraction of the screen's pixels, 0.25 to 1; the UI stays sharp. Saved for the player."

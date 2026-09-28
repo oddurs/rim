@@ -213,6 +213,8 @@ pub struct App {
     pub dragged: bool,
     /// The measuring grid is on (G).
     pub measure: bool,
+    /// The player asked for a still map: overlays appear and go at once.
+    pub reduce_motion: bool,
     /// What a stockpile or clear-zone drag will change, made once a frame.
     pub zone_preview: Option<draw::ZonePreview>,
     /// The pointer as this frame's input had it, in screen points. Previews
@@ -318,8 +320,8 @@ fn typed_char(c: char) -> Option<char> {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_rects, classify, markable, save_lighting, save_setting, saved_render_scale, saved_scroll_mode,
-        saved_ui_scale, Scroll, ScrollMode,
+        build_rects, classify, markable, save_lighting, save_setting, saved_flag, saved_render_scale,
+        saved_scroll_mode, saved_ui_scale, Scroll, ScrollMode,
     };
     use rim_sim::IVec;
 
@@ -374,6 +376,15 @@ mod tests {
         let s = rim_sim::Sim::new(&mods, 1).unwrap();
         let gather = s.world.defs.lookup("designation", "core:gather").unwrap();
         assert!(markable(&s.world.defs, gather));
+    }
+
+    #[test]
+    fn reduce_motion_is_a_yes_or_no() {
+        assert_eq!(saved_flag("reduce_motion = true", "reduce_motion"), Ok(Some(true)));
+        assert_eq!(saved_flag("reduce_motion = false", "reduce_motion"), Ok(Some(false)));
+        assert_eq!(saved_flag("render_scale = 0.5", "reduce_motion"), Ok(None));
+        assert!(saved_flag("reduce_motion = \"yes\"", "reduce_motion").is_err());
+        assert!(saved_flag("reduce_motion = 1", "reduce_motion").is_err());
     }
 
     #[test]
@@ -611,6 +622,8 @@ async fn game() {
             })
         })
         .unwrap_or_default();
+    let reduce_motion =
+        settings.as_deref().and_then(|text| setting(saved_flag(text, "reduce_motion"))).unwrap_or(false);
     // `--lighting <preset>` for the bench and tests; else the settings file.
     let lighting = match args.windows(2).find(|w| w[0] == "--lighting") {
         Some(w) => quality::Setting::named(&w[1]).unwrap_or_else(|| {
@@ -757,6 +770,7 @@ async fn game() {
         pointer: (0.0, 0.0),
         dragged: false,
         measure: false,
+        reduce_motion,
         zone_preview: None,
     };
     app.selected = app.sim.world.colonists().next();
@@ -1011,6 +1025,24 @@ impl ScrollMode {
     }
     fn parse(s: &str) -> Option<ScrollMode> {
         [ScrollMode::Auto, ScrollMode::Zoom, ScrollMode::Pan].into_iter().find(|m| m.name() == s)
+    }
+}
+
+/// A setting as read from the settings file, or none: one it gets wrong
+/// is reported and left at its default.
+fn setting<T>(r: Result<Option<T>, String>) -> Option<T> {
+    r.unwrap_or_else(|e| {
+        eprintln!("  warning: settings file: {e}");
+        None
+    })
+}
+
+/// A yes-or-no setting, if the settings file holds it.
+fn saved_flag(text: &str, key: &str) -> Result<Option<bool>, String> {
+    let t: toml::Table = toml::from_str(text).map_err(|e| e.to_string())?;
+    match t.get(key) {
+        None => Ok(None),
+        Some(v) => v.as_bool().map(Some).ok_or_else(|| format!("{key} should be true or false, not {v}")),
     }
 }
 
@@ -1360,9 +1392,9 @@ pub fn frame(app: &mut App, raw: &RawInput) {
     app.pointer = (mx, my);
     app.zone_preview = draw::ZonePreview::of(app);
     let pointer = (!app.mouse_over_ui).then(|| app.cam.to_world(mx, my));
-    app.grid.update(grid::level(app.tool, dragging), app.measure, pointer, raw.time);
+    app.grid.update(grid::level(app.tool, dragging), app.measure, pointer, raw.time, app.reduce_motion);
     let hovered = if app.tool == Tool::Select && !dragging && pointer.is_some() { hovered(app, mx, my) } else { None };
-    app.chalk.update(&picked, hovered, raw.time);
+    app.chalk.update(&picked, hovered, raw.time, app.reduce_motion);
 }
 
 /// CPU time of each render pass last frame, in µs. This is building the
@@ -1868,6 +1900,14 @@ fn apply_ui(app: &mut App, a: UiAction) {
         UiAction::ToggleDevtools => apply(app, Action::ToggleDevtools),
         UiAction::ToggleMeasure => app.measure = !app.measure,
         UiAction::ToggleOutlines => app.ui.toggle_outlines(),
+        UiAction::ReduceMotion(on) => {
+            app.reduce_motion = on;
+            if let Some(p) = &app.settings_file {
+                if let Err(e) = save_setting(p, "reduce_motion", toml::Value::Boolean(on)) {
+                    eprintln!("rim: could not save settings: {e}");
+                }
+            }
+        }
         UiAction::RenderScale(s) => {
             let Some(s) = valid_render_scale(s as f64) else { return };
             if app.render_scale == Some(s) {
@@ -2222,7 +2262,7 @@ fn give_orders(app: &mut App, cell: IVec, on: Option<Entity>, pick: Option<&str>
         app.sim.push(Command::Order { pawn: e, cell, on, pick: pick.map(str::to_string) });
     }
     let Some((first, label)) = said else { return };
-    app.order_flash = Some((cell, get_time()));
+    app.order_flash = Some((cell, app.chalk.now()));
     let what = label.to_lowercase();
     let who = match undo.len() {
         1 => app.sim.world.ecs.get::<&Pawn>(first).map(|p| p.name.clone()).unwrap_or_default(),
