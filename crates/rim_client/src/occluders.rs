@@ -155,8 +155,9 @@ const STALE: (u64, u64) = (u64::MAX, u64::MAX);
 impl Occluders {
     /// Bring the texture up to date with `w` and its roofs' heights, per
     /// cell (`Roofs::height`). Whether it changed.
-    pub fn update(&mut self, w: &World, roofs: &[u8]) -> bool {
-        let (whole, dirty) = self.pack(w, roofs);
+    /// Level `z`'s cells: one `Occluders` a level.
+    pub fn update(&mut self, w: &World, roofs: &[u8], z: i32) -> bool {
+        let (whole, dirty) = self.pack(w, roofs, z);
         if dirty.is_empty() && self.texture.is_some() {
             return false;
         }
@@ -197,10 +198,12 @@ impl Occluders {
     /// whose roof did, or the whole map when nothing is packed yet. Whether
     /// it was whole, and per repacked chunk the box round the texels that
     /// changed in it, as (x, y, w, h) in cells.
-    fn pack(&mut self, w: &World, roofs: &[u8]) -> (bool, Vec<(i32, i32, i32, i32)>) {
+    fn pack(&mut self, w: &World, roofs: &[u8], z: i32) -> (bool, Vec<(i32, i32, i32, i32)>) {
         let m = &w.map;
-        let (cw, ch) = m.chunks();
-        let chunks = (cw * ch) as usize;
+        let level = m.level_chunks(z);
+        let chunks = level.len();
+        // Cell (x, y) of level z: its index in the map, and its texel's.
+        let cell = |x: i32, y: i32| (m.idx(rim_sim::IVec::at(x, y, z)), (y * m.w + x) as usize);
         let whole = self.bytes.is_empty() || self.size != (m.w, m.h);
         if whole {
             self.bytes = vec![0; (m.w * m.h * 4) as usize];
@@ -210,34 +213,34 @@ impl Occluders {
             // A room rebuild can roof or unroof any cell, or raise a roof
             // over it: repack the chunks where one did, found by the first
             // cell that disagrees.
-            for c in 0..chunks {
-                if self.seen[c] == STALE {
+            for (k, c) in level.clone().enumerate() {
+                if self.seen[k] == STALE {
                     continue;
                 }
                 let o = m.chunk_origin(c);
                 let roof_moved = (o.y..(o.y + CHUNK).min(m.h)).any(|y| {
                     (o.x..(o.x + CHUNK).min(m.w)).any(|x| {
-                        let i = (y * m.w + x) as usize;
+                        let (i, b) = cell(x, y);
                         match roof_at(w, roofs, i) {
-                            Some(r) => self.bytes[i * 4..i * 4 + 4] != texel(Occluder::Open, Some(r)),
-                            None => self.bytes[i * 4 + 1] == 255,
+                            Some(r) => self.bytes[b * 4..b * 4 + 4] != texel(Occluder::Open, Some(r)),
+                            None => self.bytes[b * 4 + 1] == 255,
                         }
                     })
                 });
                 if roof_moved {
-                    self.seen[c] = STALE;
+                    self.seen[k] = STALE;
                 }
             }
         }
         self.rooms = m.room_rebuilds;
         let light = w.defs.lookup("field", "light");
         let mut dirty = Vec::new();
-        for c in 0..chunks {
+        for (k, c) in level.enumerate() {
             let rev = (m.terrain_rev(c), m.fixture_rev(c));
-            if self.seen[c] == rev {
+            if self.seen[k] == rev {
                 continue;
             }
-            self.seen[c] = rev;
+            self.seen[k] = rev;
             let o = m.chunk_origin(c);
             let (x1, y1) = ((o.x + CHUNK).min(m.w), (o.y + CHUNK).min(m.h));
             // The cells whose texels changed, as a box: a pass redoes what
@@ -245,10 +248,10 @@ impl Occluders {
             let mut bounds: Option<(i32, i32, i32, i32)> = None;
             for y in o.y..y1 {
                 for x in o.x..x1 {
-                    let i = (y * m.w + x) as usize;
+                    let (i, b) = cell(x, y);
                     let t = texel(occluder_at(w, i, light), roof_at(w, roofs, i));
-                    if self.bytes[i * 4..i * 4 + 4] != t {
-                        self.bytes[i * 4..i * 4 + 4].copy_from_slice(&t);
+                    if self.bytes[b * 4..b * 4 + 4] != t {
+                        self.bytes[b * 4..b * 4 + 4].copy_from_slice(&t);
                         bounds =
                             Some(bounds.map_or((x, y, x, y), |(a, b, c, d)| (a.min(x), b.min(y), c.max(x), d.max(y))));
                     }
@@ -337,7 +340,7 @@ mod tests {
         }
         place(w, "wall", p.offset(4, 0), true);
         let mut o = Occluders::default();
-        o.pack(w, &[]);
+        o.pack(w, &[], 0);
         let at = |k: i32| o.at(w.map.idx(p.offset(k, 0)));
         assert_eq!(at(0), texel(Occluder::Solid { height: STOREY }, None), "a wall");
         let pass = w.defs.things[w.defs.lookup("thing", "window").unwrap() as usize].boundary[0].pass;
@@ -351,13 +354,13 @@ mod tests {
     fn only_what_stands_in_a_cell_wakes_it_not_hauling() {
         let mut s = sim();
         let mut o = Occluders::default();
-        let (whole, first) = o.pack(&s.world, &[]);
+        let (whole, first) = o.pack(&s.world, &[], 0);
         assert!(whole && !first.is_empty());
-        let (_, again) = o.pack(&s.world, &[]);
+        let (_, again) = o.pack(&s.world, &[], 0);
         assert!(again.is_empty(), "nothing changed, nothing repacked: {again:?}");
         let p = open_block(&s.world, 1, 1);
         place(&mut s.world, "tree_oak", p, false);
-        let (whole, dirty) = o.pack(&s.world, &[]);
+        let (whole, dirty) = o.pack(&s.world, &[], 0);
         assert!(!whole, "a tree doesn't rebuild rooms");
         assert_eq!(
             dirty,
@@ -370,7 +373,7 @@ mod tests {
         let q = open_block(&s.world, 1, 1);
         let stone = s.world.defs.things.iter().position(|d| d.category == Category::Item).unwrap();
         s.world.place_item(stone as DefId, q, 1);
-        let (_, dirty) = o.pack(&s.world, &[]);
+        let (_, dirty) = o.pack(&s.world, &[], 0);
         assert!(dirty.is_empty() && o.seen == before, "hauling repacks nothing");
     }
 
@@ -379,7 +382,7 @@ mod tests {
         let mut s = sim();
         let mut o = Occluders::default();
         s.world.map.ensure_rooms();
-        o.pack(&s.world, &[]);
+        o.pack(&s.world, &[], 0);
         // A 3×3 hut: a ring of walls round one cell.
         let p = open_block(&s.world, 3, 3);
         for (dx, dy) in [(0, 0), (1, 0), (2, 0), (0, 1), (2, 1), (0, 2), (1, 2), (2, 2)] {
@@ -387,7 +390,7 @@ mod tests {
         }
         s.world.map.ensure_rooms();
         assert!(s.world.map.indoors(p.offset(1, 1)), "the hut is a room");
-        let (whole, dirty) = o.pack(&s.world, &[]);
+        let (whole, dirty) = o.pack(&s.world, &[], 0);
         let (cw, ch) = s.world.map.chunks();
         assert!(!whole && (1..=4).contains(&dirty.len()) && dirty.len() < (cw * ch) as usize, "{} chunks", dirty.len());
         assert_eq!(o.at(s.world.map.idx(p.offset(1, 1)))[1], 255, "the floor is under a roof");
@@ -411,7 +414,7 @@ mod tests {
         let mut roofs = crate::roof::Roofs::default();
         roofs.update(&s.world);
         let mut o = Occluders::default();
-        o.pack(&s.world, &roofs.height);
+        o.pack(&s.world, &roofs.height, 0);
         let at = |x: i32, y: i32| o.at(s.world.map.idx(p.offset(x, y)));
         assert_eq!(at(1, 1), texel(Occluder::Open, Some(2)), "a cell in from the wall is half a storey up");
         assert_eq!(at(2, 2), texel(Occluder::Open, Some(3)), "the ridge a storey up");

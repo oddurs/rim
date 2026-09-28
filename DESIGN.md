@@ -2221,7 +2221,13 @@ Light is per level, like everything else in §6d, and it has to be
 next begins, and no pop when the view changes level.
 
 - Buffers are keyed by `z`. The viewed level and its neighbours above and
-  below stay cached; the rest are evicted with their chunk meshes.
+  below stay cached; the rest are evicted with their chunk meshes. Each
+  level is lit by its own lights; below the surface no sky reaches, and a
+  level with no light of its own is dark but for a quarter of night's
+  light, enough to make out the rock (3124bd7b). The rest of this section
+  is split into items of its own: the sky down a shaft (7161f369), light
+  across openings (1104bf12), and the crossfade and exposure on changing
+  level (220a059e).
 - **Light crosses openings.** Every air cell, stairwell and ladder is an
   opening. Each level's compose adds the light of the level above through
   its openings, and the level below's through its own air cells, from a
