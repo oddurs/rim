@@ -4,8 +4,10 @@ title: 'Claims: defs that exclude each other, reported by the loader and picked 
 type: feature
 status: backlog
 milestone: story
+depends_on:
+- dbb92ebe-dc7b-4217-87f8-d64567858117
 created: 2026-09-26
-updated: 2026-09-26
+updated: 2026-09-27
 priority: p1
 api: additive
 effort: m
@@ -26,4 +28,12 @@ should say so, as it does for patch conflicts, and never pick silently (DESIGN.m
 - [ ] Any def may declare `claims = [...]`
 - [ ] Two enabled defs claiming a tag are reported as a conflict with both names
 - [ ] The player picks one; the pick is kept in the save (the modlist lockfile takes it when it lands)
-- [ ] With no pick, the conflict blocks a new game rather than choosing
+- [ ] Claims resolve by the contested-slot ladder (dbb92ebe): a compatibility mod, the pick, then load order, labelled; a claim never blocks a new game
+
+## 2026-09-27
+
+First non-story user: the storyteller itself (a77aec3a). Core's [[storyteller]] def claims "storyteller", and a replacement pacer mod claims it too, so claims must work for any def kind, not only threads.
+
+## 2026-09-27
+
+Decided 2026-09-27 (modding review, PR #246): a claim is one kind of contested slot, and every contested slot resolves by one ladder (dbb92ebe): a compatibility mod that depends on both contenders, then the player's pick, then load order, labelled. The old criterion that an unpicked claim blocks a new game is replaced: Content Patcher's Exclusive loads show where blocking leads (neither side applies), and a player with forty mods shouldn't face a questionnaire. The earlier note naming the storyteller as the first non-story user is superseded: the storyteller is a singleton kind now (a77aec3a), because with a claim, core's own storyteller would make every replacement a question.

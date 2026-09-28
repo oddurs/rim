@@ -14,8 +14,10 @@ ruling turns out wrong, change the ruling and keep the argument.
 
 > **Everything you build makes you visible, and visibility brings the world to you: settlers, traders, beasts and raiders.**
 
-There is no difficulty slider, and a premise (§4g) sets only how a run
-opens, so the game needs one rule that produces its own difficulty curve. That rule is **Wealth is gravity.**
+The default game has no difficulty slider, and a premise (§4g) sets only
+how a run opens, so the game needs one rule that produces its own difficulty
+curve. That rule is **Wealth is gravity.** No slider and wealth as gravity
+are core's opinions, not the engine's; §6 says where that line is.
 Every event in the game is something being pulled toward your colony.
 
 ### Tension: wealth-scaled threats punish building
@@ -1046,8 +1048,10 @@ effects on opinion; only its wording is telling.
   traits, skills, who is founder), what they carry, their history with each
   other, and an opening. The schema has no field for the raid budget, the
   wealth scorer or era thresholds. Core's castaway is the default premise,
-  so a game with no story mod plays as it does today. There is still no
-  difficulty picker.
+  so a game with no story mod plays as it does today. Core has no
+  difficulty picker. That's core's opinion, not an engine rule (§6): the
+  storyteller is a singleton a mod can patch, so a mod can bring its own,
+  and the engine never learns the word.
 
 ### Tension: can you load more than one?
 
@@ -1059,11 +1063,12 @@ effects on opinion; only its wording is telling.
   thread is a chain of beats gated by conditions (an era, a day, an event, a
   bond), optionally bound to one premise; with another premise it is skipped
   with a reason. A thread never fires anything itself: a beat is an *offer* to
-  core's storyteller, which spends one tension budget on offers and its own
+  the storyteller, which spends one tension budget on offers and its own
   incidents alike. Five threads make a run more varied, not harder.
 - A def may **claim** a tag (`claims = ["early_raids"]`). Two enabled defs
-  claiming one tag are a conflict the loader reports like a patch conflict,
-  and the player picks one. The pick is kept in the save until the modlist
+  claiming one tag are a contested slot (§10): a compatibility mod settles
+  it, else the player's pick, else load order, labelled. A claim never
+  blocks a new game. The pick is kept in the save until the modlist
   lockfile lands, then in the lockfile. Claims are generic: any kind can use
   them.
 
@@ -1241,12 +1246,16 @@ plugin everything else builds on. Three rules decide what goes in:
    name, core defines it: `temperature`, `precipitation`, `human`, `wood`,
    the calendar. Plugins meet through core's names instead of depending on
    each other, so farming can read `precipitation` whether or not the
-   weather plugin is what sets it.
+   weather plugin is what sets it. Tags too: a bare tag (`bed`, `chopping`,
+   `ore`) is core's, and core declares it; a plugin's own tags carry its
+   name (`primitive:knappable`).
 3. **Depth goes out.** Anything that deepens a loop rather than completing it
    is a plugin: seasons, weather, mood, crafting chains.
 
 The test: with every plugin removed the game is complete but shallow (a CI
 run proves it); with core removed nothing works, because the names are gone.
+A total conversion replaces core by declaring those names itself, and a CI
+fixture with no core keeps that path real.
 
 - **Tension:** mood is RimWorld's soul, so leaving it out makes the core feel thin.
 - **Ruling:** ship mood as the **first first-party plugin** (`rim.mood`). If
@@ -1293,6 +1302,45 @@ stat pipeline (wealth, threat)       ←  modifiers from every mod
   modders need a hook that doesn't exist, that's a feature request against the
   engine, and it's cheap to add because the engine is small. The API is semver'd
   (`api = "0.1"` in `mod.toml`).
+
+### Tension: which opinions does the engine enforce?
+
+- **For enforcing the game's taste in the engine:** rim has opinions (no
+  difficulty slider, wealth as gravity, eras that only go forward), and
+  they are the game. A platform that lets any mod undo them has no identity.
+- **Against:** a modder can get round an opinion the engine enforces only by
+  forking, or by the patch-anything workaround the engine exists to
+  prevent. And core is a plugin (§5). If its opinions were engine rules,
+  that would stop being true.
+- **Ruling:** **the engine enforces only what someone else relies on.** Ask
+  of any rule: if a mod broke it, who else would pay?
+  - **Someone else** (co-op peers, a replay, a bug report, other mods,
+    trust in the index): it's a **wall**, and the engine holds it. The grid
+    and the tick (§6a), determinism (§7), no native code and no I/O (§10),
+    load order from manifests (§10), named extension points instead of
+    patch-anything (above), declarative defs (§10), and a UI that never
+    writes the sim (§11). A mod that needs to cross one is a fork, and we
+    say so.
+  - **Only the player who installed the mod:** it's an **opinion**, and it
+    lives in core or the default game (§10), where a mod can change it. No
+    difficulty slider (§1), wealth as gravity (§1), eras that only go
+    forward (§2), a plain look (§6a), a HUD that holds still (§11). The
+    default game ships them and is balanced around them. A game that
+    changes them is labelled, never blocked.
+- **The storyteller is the worked example.** Core's storyteller splits in
+  two. The **incident registry** is shared vocabulary that every mod
+  registers into. The **pacer** decides when an incident fires, and which.
+  Core declares one `[[storyteller]]`, a **singleton kind** like the
+  calendar and the sky, and it names core's pacer. A replacement patches
+  that one field, so installing one replacement simply works, and two
+  replacements are a contested slot (§10). A difficulty mod is just a
+  pacer.
+  - A claim was considered and rejected: core's own storyteller would
+    always claim too, so every replacement would become a question.
+- The argument in full, with a mock of starting a game from a set of mods:
+  <https://claude.ai/artifact/FoavEVM94kqHnQmiXBkhDn>. Every modding
+  detail argued against Factorio, RimWorld, Content Patcher, Luanti,
+  Minecraft and Paradox: <https://claude.ai/artifact/NXiPKN7pnSTWFDRCJPgtFg>.
 
 ### Costs we accept
 
@@ -1647,8 +1695,9 @@ floor at (z+1, c) may be built  when  covered(z, c)  or  a support stands at (z,
   (Camp: "a shelter, a bed and a fire"), mood ("slept in a barracks") and
   the storyteller would each classify them again, and could disagree.
 - **Ruling:** **room roles are data.** A `[[room_role]]` has `needs` (tag
-  counts) and optional limits (size, indoors). In load order, the first
-  role a room meets names it. The engine counts the tags inside each room
+  counts) and optional limits (size, indoors). The most specific role a
+  room meets names it (the most needed tags), then a role's `priority`; a
+  tie is a contested slot (§10). Load order never decides what a room is. The engine counts the tags inside each room
   at room rebuild and when furniture changes, which is the same bitset
   match as tools (§4e). Core declares `bedroom`, `dormitory`, `home` and
   `hall`. Crafting adds `workshop`. Scripts read `rim.room_at(x, y).role`,
@@ -2337,6 +2386,51 @@ same operation as a mod update. Migration happens only at an epoch
 boundary, so it's the only place the format has to be read by a different
 version of the code.
 
+### Tension: what counts as a change of code?
+
+- **A version per mod (what epochs recorded first):** simple, and authors
+  already bump versions.
+- **Against:** versions are typed by hand and cover the whole mod. Adding a
+  theme mod starts an epoch and drops the unreplayed tail, for a mod the
+  sim never reads. Editing a def without a bump keeps the epoch, and the
+  log replays under different code until a checkpoint hash disagrees.
+- **Ruling:** **an epoch keys on what the sim runs, by hash.** Each
+  sim-side mod (§10) contributes a hash of its `mod.toml` sim fields,
+  `defs/` and `scripts/`; the version is recorded but not compared. Colony
+  options and sim picks count too. A mod with only `ui/` never starts an
+  epoch. The load report names the input that differs.
+  - The lockfile hashes every file of every mod, for integrity. That is a
+    different job.
+  - Presentation fields in defs (`look`, `color`, `label`) stay in the
+    hash until no sim path reads text (§4g).
+
+### Tension: say what changed before opening, or after?
+
+- **After (today):** open the save under whatever mods are installed, then
+  report what went: the ticks after the last snapshot, and the things whose
+  defs are gone ("dropped 3 × boars:boar").
+- **Against:** the player learns what they lost once it's gone. The new
+  epoch has begun and the tail can't replay. And when the player has only
+  *added* a mod since saving, nothing needed to go: every mod the save used
+  is still there, and the loader already takes an `enabled` filter.
+- **Ruling:** **a save says what changed before it opens.** The last epoch
+  lists its mods and versions, so comparing them with what's installed
+  needs no world. The title screen marks a save whose mods differ.
+  Opening one first shows what was added, removed and updated, what the
+  removed mods take with them in the player's words ("3 boars, from
+  Wildlife+"), and how many ticks can't replay. When every mod the save
+  used is still installed at its version, the first choice is **Open as
+  saved**: load under the save's own mods, with no new epoch and nothing
+  lost.
+- **Old versions stay.** Installs live in a store keyed by id, version and
+  hash. A version stays while a save uses it, and a missing one is fetched
+  from the index, the same path co-op join takes. Bug bundles embed their
+  mods' sim sides, so a report reproduces anywhere.
+- **Forks inherit.** A mod may declare `migrates_from = ["old_id"]` and
+  rename defs with `[[rename]]`, so a fork adopts a removed mod's things
+  instead of dropping them. Each rename applies once, recorded in the
+  epoch.
+
 ### What a snapshot holds
 
 - **A header:** save format version, engine and API version, seed, tick,
@@ -2586,6 +2680,13 @@ PR to the index. If that loop is good, content follows.
   A modpack is just a lockfile someone shared.
 - The index requires an SPDX `license` in `mod.toml`, so modpacks and forks
   know what they're allowed to do.
+- The index pins each release by content hash, so a moved tag can't swap
+  code under a modpack. It also keeps a `compat/` directory where anyone
+  can file a compatibility rule by pull request, and the crater's results
+  land there. The loader names the source of each rule it applies.
+- A dependency names a version range. `breaks = [{ id, versions, why }]`
+  refuses a pair and shows why. There's no warn-only incompatibility:
+  warnings get ignored, and contested slots have their own rule.
 
 ### Tension: global ids or namespaced ids?
 
@@ -2645,7 +2746,74 @@ PR to the index. If that loop is good, content follows.
   Patches gain `append`, `remove` and match-by-key for arrays; today setting
   a list replaces all of it. Load-time def generation is **deferred** until a
   real mod needs it. If it comes, it must emit defs and patches through the
-  same tracked pipeline.
+  same tracked pipeline. Until then, twenty ore variants are generated at
+  authoring time by any script, committed and reviewed like code.
+
+### Tension: a mod list, or a game?
+
+- **For showing the list:** it's honest. rim is a set of mods, and hiding
+  that hides the platform.
+- **Against:** the first-party plugins are split for modders, not players.
+  Iron needs four mods. A new player meets six switches that mean nothing
+  to them, and each one is a way to leave the balanced game without
+  knowing it.
+- **Ruling:** **players choose a game, and the list is one click away.**
+  - The default game is a **set**: a named list of mods (`sets/rim.toml`)
+    that the default install is balanced as (§6, "Costs we accept").
+    `wildlife_plus` is an example, so it stays installed but out of the
+    set.
+  - New colony shows the game as one line, "rim", with Start ready.
+    Change opens the mods. Leaving the set changes one label, "Untested
+    combination: rim +Wildlife+". It never blocks and never warns.
+  - A save remembers the set it started from, so the title screen and the
+    top bar can name the game.
+  - A set lists sim-side mods only, may pin colony option values, and
+    carries `aliases` so a renamed set still names old saves. When the
+    lockfile lands, a set is a lockfile that ships with rim, and a modpack
+    is one someone shared.
+  - Dev-only plugins (`mods/devtools`, §11a) are never in a set and never
+    listed outside a `--dev` game.
+  - Games started from the command line, like the autotests, still load
+    every installed mod unless they name a set.
+
+### Tension: does every mod belong to the colony?
+
+- **For one list:** simpler, and a mod is a mod.
+- **Against:** §11 promises each co-op player their own UI mods. With one
+  list, a theme mod starts an epoch in every save, and co-op refuses a
+  player over a colour. Factorio requires every mod to match in
+  multiplayer, so players install a friend's minimap to join.
+- **Ruling:** **a mod's side comes from its folders.** `defs/` or
+  `scripts/` put it on the sim side, and its `ui/` still loads in the
+  client. A mod with only `ui/` is client-side: the player's own. Sets,
+  epochs, seed codes, "Open as saved" and the co-op handshake compare sim
+  sides only. A sim-side mod may not depend on a client-side one. There's
+  no `side` field: a declared side can be wrong, and a derived one can't.
+
+### Tension: do mods get settings?
+
+- **For:** players want to tune a mod (wolf density, winter length)
+  without editing TOML. A modder with no settings fakes them with patches.
+- **Against:** a setting that changes the simulation is input (§7). If it
+  lived in a per-player config file, two machines would run different
+  games from one save, and a replay or a bug report couldn't say which.
+- **Ruling:** **mods declare typed options in three scopes, and what the
+  sim reads belongs to the colony.**
+  - A mod lists `[[option]]`s in `mod.toml`: an id, a name, a kind (bool,
+    an integer in a range, or a choice), a default and a scope. Values are
+    never floats, and the engine types and defaults every one.
+  - **colony** options are chosen on New colony and recorded in the epoch,
+    then the lockfile. They may **gate patches** (`when = { option = ...,
+    is = ... }`) and scripts read them. Changing one later is an epoch
+    boundary, like a mod update.
+  - **live** options are read by scripts only. A change is a `Command`,
+    logged and replayed; in co-op the host decides.
+  - **player** options live beside the client's settings and are read by
+    the UI VM only. The sim can never read them.
+  - Gated patches resolve before patches merge, so conflict detection sees
+    exactly the patches that apply. Factorio's startup settings and
+    Content Patcher's `When` do the same; RimWorld's per-user settings
+    shaping the sim are the case to avoid.
 
 ### Tension: should players set the load order?
 
@@ -2654,11 +2822,41 @@ PR to the index. If that loop is good, content follows.
 - **Against:** it's hidden state. Two players with the same mods get different
   games, co-op desyncs, and bug reports can't be reproduced. Ordering is a
   job for the loader, not for players.
-- **Ruling:** **order is derived from manifests only** (§6). When patches
-  conflict, the mod manager shows the conflict and the player picks a winner
-  per field. That choice is written into the modlist lockfile, so it is
-  explicit, shareable and reproducible. Mod authors resolve conflicts
-  properly with `load_after` or a compatibility patch.
+- **Ruling:** **order is derived from manifests only** (§6). When mods
+  conflict, the next tension's ladder settles it, and a player's pick is
+  written into the modlist lockfile, so it is explicit, shareable and
+  reproducible. Mod authors resolve conflicts properly with `load_after` or
+  a compatibility patch.
+
+### Tension: when two mods want one slot
+
+- **For a rule per mechanism:** each mechanism knows its own stakes. A
+  missing calendar is fatal; a replaced button is cosmetic.
+- **Against:** the rules drifted into five answers across nine mechanisms:
+  a load error (a second built-in singleton, a second level generator),
+  the last one silently winning (`[[start]]`), the first one silently
+  winning (room roles), a warning with load order deciding (patched fields,
+  replaced lists, `ui.replace`, theme tokens), and a planned pick that
+  blocks the game (claims). Nine rules is nine things to learn, and two of
+  them are silent.
+- **Ruling:** **one ladder for every contested slot.** A slot is one field
+  of one def, one UI id, one theme token, one level generator or one claim
+  tag. It resolves by the first rung that applies:
+  1. **A compatibility mod.** A mod that depends on every contender and
+     sets the slot itself wins, and no one is asked.
+  2. **The player's pick.** Sim picks go in the lockfile, client picks in
+     the player's settings. A pick is keyed by the slot and its
+     contenders' versions, so an update asks again instead of reusing a
+     stale answer.
+  3. **Load order**, labelled "decided by load order" on New colony and in
+     F3.
+  - A contest is never silent and never blocks a game. Redefining a
+    singleton stays a load error, because that's an authoring mistake;
+    two patches to its fields are the contest.
+  - No ecosystem we found lets players pick field winners, so the first and
+    last rungs should settle almost everything. Content Patcher's
+    `Exclusive` loads, where two claimants cancel each other out, are the
+    failure to avoid.
 
 ### Tension: what can a mod from a random repo do?
 
@@ -2671,8 +2869,9 @@ PR to the index. If that loop is good, content follows.
   I/O. The Luau VM runs in sandbox mode, the engine tables are frozen, and
   each mod gets hard instruction and memory limits, so a runaway script is
   stopped and named instead of hanging the game. Installing a data or Luau
-  mod needs no permission prompt. The WASM tier (§6) is the only one that
-  declares capabilities.
+  mod needs no permission prompt. A capability comes from how the game was
+  started, never from a prompt a player clicks through: `dev` works only in
+  a `--dev` game (§11a). The WASM tier (§6) declares the rest.
 - Scripts share the sim's determinism rules. Library math that can differ
   across platforms (`math.sin` and friends from the C library) is replaced
   with deterministic implementations, so co-op and replays hold across
@@ -2690,7 +2889,14 @@ PR to the index. If that loop is good, content follows.
   - A deprecated call keeps working for one minor version, logs a warning
     with its replacement, and names the version it will be removed in.
   - **Mod crater:** engine CI runs every indexed mod's tests against the
-    change. Breaks are found by us, before modders find them.
+    change. Breaks are found by us, before modders find them, and the
+    results are published to the index, so the game can say "known broken
+    on this engine" before a colony starts.
+  - **Data outlives code.** Declarative data (`mod.toml`, defs, patches,
+    themes) is read through a shim for each past API minor, so a data-only
+    mod keeps loading across engine updates, as Content Patcher's `Format`
+    keeps old packs working. Only scripts follow the deprecation window. A
+    data format change lands with its shim and a fixture mod.
 
 ### Tension: how do modders know their mod works?
 
@@ -2815,7 +3021,8 @@ another mod.
 - **Ruling:** every component has a **namespaced id** (`core:clock`,
   `core:inspector.tabs`). Mods get four operations, applied in load order:
   `ui.extend` (add children), `ui.replace`, `ui.wrap` and `ui.remove`. Two
-  mods replacing the same id is reported as a conflict, like def patches.
+  mods replacing the same id is a contested slot (§10), like def patches;
+  the player's pick lives in their own settings.
 
 ### Built for hacking
 

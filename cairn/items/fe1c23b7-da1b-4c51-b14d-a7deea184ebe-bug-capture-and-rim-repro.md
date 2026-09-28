@@ -28,3 +28,7 @@ F8 writes a `.rimbug` bundle: the save, mod lock, commit, seed, the last in-game
 
 - [ ] A bundle made at tick N opens at tick N with the same state hash (test)
 - [ ] Loading a save doesn't change the file (test)
+
+## 2026-09-27
+
+Bug bundles should embed the sim sides of their mods, so a report reproduces without the index (ead42976).

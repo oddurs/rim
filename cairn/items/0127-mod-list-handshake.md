@@ -7,7 +7,7 @@ milestone: co-op
 depends_on:
 - 9e979a26-5dc0-4122-b62d-fc48f14d8488
 created: 2026-09-22
-updated: 2026-09-23
+updated: 2026-09-27
 priority: p0
 api: none
 effort: s
@@ -26,3 +26,7 @@ Peers must run identical mods.
 
 - [ ] Compare modlist lockfiles (0152): ids, versions, content hashes and conflict choices
 - [ ] Offer to install the host's exact modlist
+
+## 2026-09-27
+
+Decided 2026-09-27 (modding review, PR #246): the handshake compares the colony only: sim-side mods by their sim hashes (173de74c), colony options and sim picks. Client-side mods (e4b96647) are each player's own, as DESIGN.md §11 promises. Factorio requires every mod to match, so players install a friend's minimap to join; rim shouldn't.
