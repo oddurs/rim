@@ -4,7 +4,8 @@
 //!
 //! `--core` loads core alone (no weather plugin). Prints one row per day:
 //! season, temperature (min / mean / max), hours of precipitation (and how
-//! much fell as snow), cloud, wind, and the weather spells that started.
+//! much fell as snow), cloud, wind, the ground's wetness (mean) and snow
+//! (deepest) on an open grass cell, and the weather spells that started.
 //! Ends with how often each weather type came up.
 
 use rim_sim::data::Data;
@@ -26,14 +27,24 @@ fn main() {
     let f = |s: &Sim, id: &str| s.world.defs.lookup("field", id).map(|i| i as usize);
     let (temp, precip, cloud, wind) =
         (f(&s, "temperature").unwrap(), f(&s, "precipitation"), f(&s, "cloud"), f(&s, "wind"));
+    let (wet, snow) = (f(&s, "weather:wetness"), f(&s, "weather:snow"));
+    // Open grass away from the colony, where the weather lands unhindered.
+    let ground = {
+        let grass = s.world.defs.lookup("terrain", "grass").unwrap();
+        let (m, home) = (&s.world.map, s.world.colony_center().unwrap());
+        (0..m.plane())
+            .map(|i| m.pos(i))
+            .find(|&p| p.chebyshev(home) > 30 && m.terrain[m.idx(p)] == grass && m.fixture_at(p).is_none())
+    };
 
-    println!("day  season    temp min/mean/max   rain h  snow h  cloud  wind  weather");
+    println!("day  season    temp min/mean/max   rain h  snow h  cloud  wind  wet %  snow cm  weather");
     let mut counts: BTreeMap<String, u32> = BTreeMap::new();
     let mut last_current = String::new();
     let step = TICKS_PER_DAY / 96; // every 15 minutes
     for day in 0..days {
         let (mut lo, mut hi, mut sum) = (f64::MAX, f64::MIN, 0.0);
         let (mut rain_h, mut snow_h, mut cloud_sum, mut wind_sum) = (0.0, 0.0, 0.0, 0.0);
+        let (mut wet_sum, mut snow_max) = (0.0, 0.0f64);
         let mut started: Vec<String> = Vec::new();
         let season = s.world.season().to_string();
         for _ in 0..96 {
@@ -54,6 +65,12 @@ fn main() {
             }
             cloud_sum += a(cloud);
             wind_sum += a(wind);
+            let at = |i: Option<usize>| match (i, ground) {
+                (Some(i), Some(p)) => s.world.fields.value(&s.world.defs, &s.world.map, i, p),
+                _ => 0.0,
+            };
+            wet_sum += at(wet);
+            snow_max = snow_max.max(at(snow));
             let current = s
                 .world
                 .data
@@ -69,7 +86,7 @@ fn main() {
             }
         }
         println!(
-            "{:>3}  {:<8} {:>5.1} {:>5.1} {:>5.1}      {:>5.1}   {:>5.1}   {:>4.0}  {:>4.1}  {}",
+            "{:>3}  {:<8} {:>5.1} {:>5.1} {:>5.1}      {:>5.1}   {:>5.1}   {:>4.0}  {:>4.1}  {:>5.0}  {:>7.1}  {}",
             day + 1,
             season,
             lo,
@@ -79,6 +96,8 @@ fn main() {
             snow_h,
             cloud_sum / 96.0,
             wind_sum / 96.0,
+            wet_sum / 96.0,
+            snow_max,
             started.join(", ")
         );
     }

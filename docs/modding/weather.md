@@ -12,7 +12,7 @@ The design and its reasoning are in [DESIGN.md §4c](../../DESIGN.md).
 |---|---|
 | Engine | Terms and curves, the calendar, named contributions to outdoor values, script data and events |
 | `core` | The calendar, the sun, and the *names* of the atmosphere: `temperature`, `daylight`, `light`, `cloud`, `precipitation`, `wind`, `wind_dir`, `fog`. Day and night as data. No weather |
-| `mods/weather` | Seasons, weather types, the forecast, cold snaps and storms, the weather readout |
+| `mods/weather` | Seasons, weather types, the forecast, cold snaps and storms, the weather readout, and what the weather leaves on the ground: `weather:wetness` and `weather:snow` |
 
 Core declares `precipitation` even though only the weather plugin sets it.
 That's deliberate: the renderer draws rain from it, and a farming mod can read

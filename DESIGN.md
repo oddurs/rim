@@ -282,7 +282,7 @@ the map a mood.
 |---|---|
 | Engine | Terms and curves, the calendar, named contributions to outdoor values, script data and events |
 | `core` | The calendar, and the atmosphere fields as shared names: `temperature`, `daylight`, `light`, `cloud`, `precipitation`, `wind`, `wind_dir`, `fog`. The sun as data |
-| `mods/weather` | Seasons (by patching core's terms), weather types, the forecast, weather incidents, the weather HUD |
+| `mods/weather` | Seasons (by patching core's terms), weather types, the forecast, weather incidents, the weather HUD, and the ground it leaves: wetness (0–100%) and snow (0–60 cm), stock fields in `defs/ground.toml` |
 
 Core declares `precipitation` even though only the weather plugin sets it,
 because two plugins must agree on the name: the renderer draws rain from it,

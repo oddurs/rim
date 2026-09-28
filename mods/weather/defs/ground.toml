@@ -1,0 +1,93 @@
+# The ground remembers the weather (DESIGN.md §4c): wetness and snow are
+# stock fields, a value per cell that the weather changes over time. Both
+# happen only under open sky (`input = "sky"`), so a roofed floor stays dry
+# and clear of snow.
+#
+# Tuning (tests/ground.rs holds them to it): a day of rain takes grass from
+# its base to about 80%, and two sunny days dry it back; sand dries in half
+# a day; marsh never drops below 70%; snow builds in cold precipitation and
+# a spring thaw clears it within four days.
+
+[[field]]
+id = "wetness"
+label = "wetness"
+unit = "%"
+kind = "stock"
+range = [0.0, 100.0]
+period_minutes = 60
+color_low = "#b59a6a"
+color_high = "#2f6fb0"
+
+# Left alone, the ground settles to its water table, damper beside water.
+# Water itself is at 100. Under a roof it settles drier.
+[field.base.table]
+scale = 100.0
+of = [{ terrain = "water_table" }, { input = "sky", curve = [[0, 0.5], [1, 1.0]] }]
+
+[field.base.shore]
+of = [{ near = "water", curve = [[0, 0.0], [1, 25.0], [3, 10.0], [6, 0.0]] }]
+
+[field.init.table]
+scale = 100.0
+of = [{ terrain = "water_table" }]
+
+[field.init.shore]
+of = [{ near = "water", curve = [[0, 0.0], [1, 25.0], [3, 10.0], [6, 0.0]] }]
+
+# Rain soaks in where it reaches the ground, as rain: below freezing it
+# falls as snow instead.
+[field.rate.rain]
+scale = 1.0
+of = [
+  { field = "core:precipitation" },
+  { input = "sky" },
+  { field = "core:temperature", curve = [[-1, 0.0], [1, 1.0]] },
+]
+
+# Drying: back toward the base, faster on ground that drains, in warmth,
+# in wind and under a clear sky.
+[field.rate.drying]
+scale = -0.035
+of = [
+  { input = "above_base" },
+  { terrain = "drainage", curve = [[0.0, 0.3], [0.5, 1.0], [0.9, 3.5]] },
+  { field = "core:temperature", curve = [[-5, 0.3], [10, 1.0], [25, 1.8]] },
+  { ambient = "core:wind", curve = [[0, 1.0], [10, 1.5]] },
+  { ambient = "core:cloud", curve = [[0, 1.2], [100, 0.6]] },
+]
+
+# Snow melting into the ground.
+[field.rate.melt]
+scale = 1.5
+of = [
+  { field = "snow", curve = [[0, 0.0], [1, 1.0]] },
+  { field = "core:temperature", curve = [[0, 0.0], [10, 10.0]] },
+]
+
+[[field]]
+id = "snow"
+label = "snow"
+unit = "cm"
+kind = "stock"
+range = [0.0, 60.0]
+period_minutes = 60
+color_low = "#8a8f96"
+color_high = "#f4f8ff"
+
+# Precipitation below freezing settles, a quarter centimetre per
+# millimetre (it packs as it lies), with sleet between -2° and 1°.
+[field.rate.fall]
+scale = 0.25
+of = [
+  { field = "core:precipitation" },
+  { input = "sky" },
+  { field = "core:temperature", curve = [[-2, 1.0], [1, 0.0]] },
+]
+
+# It melts by degree-hours above freezing, faster in rain.
+[field.rate.melt]
+scale = -0.08
+of = [
+  { field = "core:temperature", curve = [[0, 0.0], [20, 20.0]] },
+  { field = "core:precipitation", curve = [[0, 1.0], [5, 2.0]] },
+]
