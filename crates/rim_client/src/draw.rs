@@ -859,12 +859,10 @@ pub fn world_ui(app: &App) {
     zones(app);
     app.marks.draw(cam, visible(app));
     replacements(app);
-    // Selection is the overlay's (overlay::scene).
-    // Drag rectangle preview; a select drag shows once it leaves its cell.
+    // Selection and a select drag's box are the overlay's (overlay::scene).
     let (mx, my) = app.pointer;
     // A plan is placed with a click, not dragged out.
-    let dragging =
-        app.drag_start.filter(|_| !matches!(app.tool, Tool::Plan(_)) && (app.tool != Tool::Select || app.dragged));
+    let dragging = app.drag_start.filter(|_| !matches!(app.tool, Tool::Plan(_) | Tool::Select));
     if let Some(a) = dragging {
         let b = cam.tile_at(mx, my);
         let (ax, ay) = (a.x.min(b.x) as f32, a.y.min(b.y) as f32);
