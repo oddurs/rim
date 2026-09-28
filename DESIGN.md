@@ -2293,10 +2293,12 @@ next begins, and no pop when the view changes level.
 - **The level below, through air, is lit by its own light** and dimmed by a
   depth tint per level, the same curve at every step down, so looking down
   a shaft three levels deep reads as one gradient.
-- **Exposure is one continuous value.** It blends between sky-driven and
-  firelight-driven by how much sky reaches the view, and eases over about a
-  second, including when the view changes level. Changing level crossfades
-  the two cached buffers for 150 ms.
+- **Exposure is one continuous value.** The eye adapts to the open sky the
+  view holds, the mean over the cells in view, so a shaft in view counts and
+  rock doesn't. It eases over about a second, a 60th of a second's worth a
+  frame at most, including when the view changes level. Changing level
+  fades the old level's last frame out over the new one for 150 ms, and
+  never in fewer than nine frames (220a059e).
 
 ### Presets
 

@@ -46,7 +46,9 @@ impl T {
         let since = get_time();
         loop {
             self.frame().await;
-            if !self.app.light.owes_a_bake() {
+            // Changing level fades for a moment too; what's on screen is
+            // only one level's once it has.
+            if !self.app.light.owes_a_bake() && self.app.fade.is_none() {
                 return;
             }
             if get_time() - since > 3.0 {
@@ -1520,6 +1522,47 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
             if let Some(e) = fire {
                 t.app.sim.world.despawn_thing(e);
             }
+            println!("\n# changing level fades, and the eye follows the sky in view (220a059e)");
+            // From the lit surface to the dark level below and back, frame
+            // by frame: no frame jumps.
+            t.app.sim.world.fields.set_ambient(cloud, Some(0.0));
+            t.app.sim.world.fields.set_ambient(light, Some(100.0));
+            t.app.light.adapt_now();
+            t.light_settles().await;
+            // Each level settled, then the change frame by frame: no frame
+            // moves the brightness by a tenth of the brighter level's. A grab
+            // draws two frames, so half its change is a frame's.
+            let mut settled = Vec::new();
+            let mut steps = Vec::new();
+            // Down, up, and down then straight back up in the middle of the
+            // fade: the mix on screen fades out, it doesn't jump.
+            let (down, up) = (KeyCode::LeftBracket, KeyCode::RightBracket);
+            for keys in [vec![down], vec![up], vec![down, up]] {
+                t.app.light.adapt_now();
+                t.light_settles().await;
+                let mut last = mean(&t.grab().await);
+                settled.push(last);
+                let presses = keys.len();
+                for (n, k) in keys.into_iter().enumerate() {
+                    let pressed = crate::key_name(k).map(|n| vec![n.to_string()]).unwrap_or_default();
+                    t.input(RawInput { mouse: t.mouse, keys: vec![k], pressed, ..Default::default() }).await;
+                    // Another press to come: it lands two grabs in.
+                    for _ in 0..if n + 1 < presses { 2 } else { 40 } {
+                        let now = mean(&t.grab().await);
+                        steps.push((now - last).abs() / 2.0);
+                        last = now;
+                    }
+                }
+            }
+            let bright = settled.iter().copied().fold(0.0f32, f32::max).max(1e-3);
+            let worst = steps.iter().copied().fold(0.0f32, f32::max) / bright;
+            t.check(
+                worst < 0.1,
+                format!("changing level, no frame moves the brightness a tenth ({:.0}% at most)", worst * 100.0),
+            );
+            t.app.sim.world.fields.set_ambient(cloud, None);
+            t.app.sim.world.fields.set_ambient(light, None);
+
             println!("\n# the sky down a shaft (7161f369)");
             // Three pits beside the stacked scene, one, two and three levels
             // deep, at noon under a clear sky.
@@ -1601,6 +1644,9 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
             t.app.sim.world.map.ensure_rooms();
             t.app.light.pin_sun = None;
             t.app.cam.z = 0;
+            // Back on the surface once its fade is over, and the eye with it.
+            t.app.light.adapt_now();
+            t.light_settles().await;
             t.app.sim.world.fields.set_ambient(cloud, None);
             t.app.sim.world.fields.set_ambient(light, None);
             if t.app.cam.z != 0 {

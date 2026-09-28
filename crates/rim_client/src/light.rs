@@ -871,6 +871,8 @@ struct Level {
     /// Whether any cell of the level sees the open sky: below the surface,
     /// without a shaft the sun pass has nothing to do.
     any_sky: bool,
+    /// The open sky each cell sees (`open_sky`), for the eye to adapt to.
+    sky: Vec<f32>,
     /// Where the sun reaches, R, `texels` per cell.
     sunlit: Option<RenderTarget>,
     sun_key: Option<SunKey>,
@@ -962,6 +964,30 @@ impl Light {
         let t = self.pass_begin();
         let ran = self.update_sun(w, air, flash);
         self.pass_end("sun", t, ran, ran as u32);
+    }
+
+    /// The open sky over the cells in view, on average: how much of the
+    /// sky's light the view holds. A sample of them, a few thousand at most.
+    fn view_sky(&self, w: &World, cam: &Cam) -> f32 {
+        let (m, sky) = (&w.map, &self.lv.sky);
+        if sky.len() != (m.w * m.h) as usize {
+            return 0.0;
+        }
+        let (a, b) = (cam.to_world(0.0, 0.0), cam.to_world(screen_width(), screen_height()));
+        let (x0, y0) = ((a.0.floor() as i32).max(0), (a.1.floor() as i32).max(0));
+        let (x1, y1) = ((b.0.ceil() as i32).min(m.w), (b.1.ceil() as i32).min(m.h));
+        if x1 <= x0 || y1 <= y0 {
+            return 0.0;
+        }
+        let step = (((x1 - x0) * (y1 - y0)) as f32 / 4096.0).sqrt().ceil().max(1.0) as usize;
+        let (mut sum, mut n) = (0.0, 0);
+        for y in (y0..y1).step_by(step) {
+            for x in (x0..x1).step_by(step) {
+                sum += sky[(y * m.w + x) as usize];
+                n += 1;
+            }
+        }
+        sum / n.max(1) as f32
     }
 
     /// Show level `z`: what the light keeps for the one in view goes to the
@@ -1365,6 +1391,7 @@ impl Light {
         }
         let sky = open_sky(m, z);
         self.lv.any_sky = sky.iter().any(|&s| s > 0.0);
+        self.lv.sky = sky.clone();
         let mut bytes = vec![0u8; (m.w * m.h * 4) as usize];
         for i in 0..(m.w * m.h) as usize {
             let p = m.pos(i);
@@ -1523,12 +1550,14 @@ impl Light {
         m.set_texture("sunlit", sun);
         m.set_texture("rooms", rooms);
         m.set_texture("moving", moving);
-        // Below the surface the eye adapts to the dark: a shaft's sky is
-        // little of the view (the level-change blend is 220a059e).
-        let target = exposure_for(if under { Vec3::ZERO } else { sky });
-        // A frame's worth of adapting, about a second to settle.
+        // The eye adapts to the sky the view holds: on the surface all of
+        // it, below it what comes down the shafts in view.
+        let seen = if under { self.view_sky(w, cam) } else { 1.0 };
+        let target = exposure_for(sky * seen);
+        // About a second to settle, by the clock, and no more than a 30th of
+        // a second's worth in one frame, so a stalled frame doesn't jump.
         self.exposure = if self.exposure > 0.0 {
-            self.exposure + (target - self.exposure) * (get_frame_time() * 1.6).min(1.0)
+            self.exposure + (target - self.exposure) * (1.0 - (-1.6 * get_frame_time().min(1.0 / 30.0)).exp())
         } else {
             target
         };
