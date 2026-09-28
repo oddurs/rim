@@ -164,3 +164,60 @@ fn a_door_that_holds_water_keeps_it_out() {
     assert!(dry.iter().all(|&p| s.world.water_depth(p) == 0), "the other stays dry");
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn a_miner_who_breaches_a_lake_at_the_end_of_a_tunnel_gets_out() {
+    let mut s = core();
+    let c = s.world.colony_center().unwrap();
+    // Stairs down on open ground, and a tunnel at -1 running east from
+    // their foot.
+    let top = (2..20)
+        .flat_map(|r| [c.offset(r, 0), c.offset(-r, 0), c.offset(0, r), c.offset(0, -r)])
+        .find(|&p| s.world.can_dig(p) && (1..12).all(|x| s.world.solid_at(IVec::at(p.x + x, p.y, -1)).is_some()))
+        .expect("somewhere to dig");
+    let tunnel: Vec<IVec> = (0..12).map(|x| IVec::at(top.x + x, top.y, -1)).collect();
+    for &p in &tunnel {
+        dig(&mut s, p);
+    }
+    let stairs = s.world.defs.thing_id("stairs").unwrap();
+    let e = s.world.spawn_fixture_of(stairs, top, false, None).expect("stairs");
+    s.world.open_portal(e);
+    let human = s.world.defs.start.as_ref().unwrap().creature_r;
+    let end = tunnel[11];
+    let miner = s.world.spawn_pawn(human, Faction::Player, end, None);
+    s.push(rim_sim::Command::Draft { pawn: miner, on: true });
+    for _ in 0..rim_sim::world::WATER_EVERY {
+        s.step();
+    }
+    // The lake breaks in over the end of the tunnel: it fills from there
+    // in a few ticks, over the miner's head.
+    set(&mut s, IVec::new(end.x, end.y), "deep_water");
+    let f = s.world.defs.fluids[0].clone();
+    // Only the water: no wolf or raider gets to the miner first.
+    let alone = |s: &mut Sim| {
+        for e in s.world.pawns.clone() {
+            if s.world.ecs.get::<&Pawn>(e).is_ok_and(|p| p.faction != Faction::Player) {
+                let _ = s.world.ecs.despawn(e);
+            }
+        }
+        let ecs = &s.world.ecs;
+        s.world.pawns.retain(|&e| ecs.contains(e));
+    };
+    let mut flooded = false;
+    for _ in 0..200 {
+        alone(&mut s);
+        s.step();
+        if s.world.water_depth(end) >= f.no_air {
+            flooded = true;
+            break;
+        }
+    }
+    assert!(flooded, "the tunnel floods to the roof");
+    for _ in 0..3_000 {
+        alone(&mut s);
+        s.step();
+    }
+    let p = (*s.world.ecs.get::<&Pawn>(miner).expect("the miner is still here")).clone();
+    assert!(!p.dead, "the miner got out alive (hp {})", p.hp);
+    assert!(s.world.water_depth(p.pos) < f.wade, "and is on dry ground (at {:?})", p.pos);
+}

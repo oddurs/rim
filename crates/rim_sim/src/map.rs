@@ -603,6 +603,12 @@ impl Map {
         self.footing[i] != was
     }
 
+    /// Could `i` be walked if the water in it were gone? What someone
+    /// scrambling out of water may step through.
+    pub fn passable_wet(&self, i: usize) -> bool {
+        (self.terrain_cost[i] > 0 || self.floor_cost[i] > 0 || self.fix_span[i]) && !self.fix_block[i]
+    }
+
     fn has_footing(&self, i: usize) -> bool {
         (self.terrain_cost[i] > 0 && self.water_cost[i] != DEEP) || self.floor_cost[i] > 0 || self.fix_span[i]
     }

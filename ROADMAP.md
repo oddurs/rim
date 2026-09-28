@@ -657,18 +657,18 @@ Lockstep co-op on top of determinism: command broadcast, desync detection, mod-l
 
 ## depth — Depth
 
-`#########·` 85% · 11 of 13 done
+`##########` 92% · 12 of 13 done
 
 Dig down. The map becomes a stack of 2D levels joined only at stairs, ladders and holes, rock becomes terrain, and water fills what you dig into. Design: DESIGN.md §6d.
 
 - [ ] `3fea3b3d` Movement classes: a creature that drops a level, with its own region layer <sup>feature · p2 · m · engine</sup>
-- [ ] `78d59e24` A pawn caught in deep water can't get out <sup>bug · p2 · s · engine</sup>
 - [x] `202b16c4` Draw the water in basins, by depth <sup>feature · p2 · s · client</sup>
 - [x] `3979868c` Basins: water fills what you dig into <sup>feature · p1 · l · engine</sup>
 - [x] `3f90e043` Strata: the levels below are made from \[\[stratum\]\] defs <sup>feature · p0 · m · engine</sup>
 - [x] `4796c539` The depth ruler misses an alert whose first subject is on another level <sup>bug · p0 · s · core</sup>
 - [x] `5689930d` The view: one level at a time, \[ and \], and the depth ruler <sup>feature · p0 · m · client</sup>
 - [x] `695ef115` Water depth: wading, swimming and drowning in a basin <sup>feature · p1 · m · engine</sup>
+- [x] `78d59e24` A pawn caught in deep water can't get out <sup>bug · p2 · s · engine</sup>
 - [x] `8cc6252d` Rock is terrain: solid cells, mining them, and worksites <sup>feature · p0 · l · engine</sup>
 - [x] `acd85584` Portals: stairs, ladders, digging down, and paths across levels <sup>feature · p0 · l · engine</sup>
 - [x] `ba8253df` Pits and bridges: trenches that raiders have to bridge <sup>feature · p1 · m · engine</sup>
