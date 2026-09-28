@@ -3122,10 +3122,16 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     let rings = marks.iter().filter(|m| matches!(m, Mark::HoverRing { .. })).count();
     let chip = crate::overlay::drag_hint(&t.app);
     let boxed_up = marks.iter().any(|m| matches!(m, Mark::Marquee { dashed: false, .. }));
-    let n = squad.len();
+    // Whoever stands in the box: the three set up, and anyone the colony
+    // gained since who has wandered in.
+    let inside = crate::boxed_colonists(&t.app, a, b);
+    let n = inside.len();
     t.check(
-        boxed_up && rings == n && chip == Some(format!("5 × 5 · {n} colonists")),
-        format!("a select drag's box previews who it picks ({rings} rings, {chip:?})"),
+        boxed_up
+            && squad.iter().all(|e| inside.contains(e))
+            && rings == n
+            && chip == Some(format!("5 × 5 · {n} colonists")),
+        format!("a select drag's box previews who it picks ({rings} rings for {n} inside, {chip:?})"),
     );
     t.shot("chalk-box").await;
     t.input(RawInput { mouse: t.screen(b), left_released: true, ..Default::default() }).await;
