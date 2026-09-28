@@ -55,6 +55,7 @@ jobs:
     outputs:
       lane: ${{ steps.plan.outputs.lane }}
       code: ${{ steps.plan.outputs.code }}
+      render: ${{ steps.plan.outputs.render }}
       toolchain: ${{ steps.plan.outputs.toolchain }}
     steps:
       - uses: actions/checkout@v5
@@ -118,6 +119,29 @@ jobs:
       # The tooling's own tests: the pre-push hook, in throwaway repos.
       - run: scripts/task scripts
 
+  # Clippy over every target, beside the tests: its own cache, since check
+  # metadata isn't what the test build leaves.
+  lint:
+    name: Lint
+    needs: plan
+    if: contains(fromJSON('["pr","queue","nightly"]'), needs.plan.outputs.lane) && needs.plan.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ needs.plan.outputs.toolchain }}
+          components: clippy
+      - uses: rui314/setup-mold@v1
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: lint
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Install client system libraries
+        run: sudo apt-get update && sudo apt-get install -y libx11-dev libxi-dev libgl1-mesa-dev libasound2-dev
+      - run: scripts/task lint
+
   # Linux runs the whole suite in every lane but main's.
   test:
     name: Test (ubuntu-latest)
@@ -132,7 +156,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ needs.plan.outputs.toolchain }}
-          components: clippy
       - uses: rui314/setup-mold@v1
       - uses: Swatinem/rust-cache@v2
         with:
@@ -145,7 +168,6 @@ jobs:
       - uses: taiki-e/install-action@nextest
       - name: Install client system libraries
         run: sudo apt-get update && sudo apt-get install -y libx11-dev libxi-dev libgl1-mesa-dev libasound2-dev
-      - run: scripts/task lint
       # nextest runs every test binary's tests in parallel, each in its own
       # process. The crate has no doctests; if it gains some, add them.
       - name: Test (includes the determinism test)
@@ -163,29 +185,6 @@ jobs:
           name: junit-ubuntu-latest
           path: target/nextest/ci/junit.xml
           if-no-files-found: ignore
-      # The binaries and examples, built with the whole workspace's features,
-      # so they reuse what the tests just built.
-      - run: scripts/task build
-      # Lockstep: the Luau VM must have no fused multiply-adds (see
-      # .cargo/config.toml).
-      - run: scripts/task fma
-      # Mods' own tests, through the player's binary with no display: `rim
-      # test` must never open a window.
-      - name: Mod tests and clean loads
-        run: scripts/task mods --junit target/rim-test.xml
-      - name: Upload the mod test report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: rim-test-ubuntu-latest
-          path: target/rim-test.xml
-          if-no-files-found: ignore
-      - name: Crosscheck scenario
-        run: target/release/examples/crosscheck > crosscheck-ubuntu-latest.txt && cat crosscheck-ubuntu-latest.txt
-      - uses: actions/upload-artifact@v4
-        with:
-          name: crosscheck-ubuntu-latest
-          path: crosscheck-ubuntu-latest.txt
 
   # The queue's proof off Linux: every platform must reach the same state
   # (DESIGN.md §7), and a save must load and carry on as if never saved.
@@ -253,7 +252,7 @@ jobs:
 
   agree:
     name: Every platform reaches the same state
-    needs: [plan, test, proof, crosscheck-arm]
+    needs: [plan, sim, proof, crosscheck-arm]
     if: contains(fromJSON('["queue","nightly"]'), needs.plan.outputs.lane)
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -285,9 +284,10 @@ jobs:
           echo "All $n platforms agree:"
           tail -n 1 "$first"
 
-  # The long sim runs, beside the tests rather than after them.
+  # The binaries, the mods through them, the Linux crosscheck and the long
+  # sim runs, beside the tests rather than after them.
   sim:
-    name: Sim runs (soak, climate, benchmark)
+    name: Build, mods, crosscheck, sim runs
     needs: plan
     if: contains(fromJSON('["pr","queue","nightly"]'), needs.plan.outputs.lane) && needs.plan.outputs.code == 'true'
     runs-on: ubuntu-latest
@@ -303,6 +303,30 @@ jobs:
           # The test job's: it built these dependencies and saves them.
           shared-key: release
           save-if: false
+      - name: Install client system libraries
+        run: sudo apt-get update && sudo apt-get install -y libx11-dev libxi-dev libgl1-mesa-dev libasound2-dev
+      # The binaries and examples, which the sim runs below reuse.
+      - run: scripts/task build
+      # Lockstep: the Luau VM must have no fused multiply-adds (see
+      # .cargo/config.toml).
+      - run: scripts/task fma
+      # Mods' own tests, through the player's binary with no display: `rim
+      # test` must never open a window.
+      - name: Mod tests and clean loads
+        run: scripts/task mods --junit target/rim-test.xml
+      - name: Upload the mod test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rim-test-ubuntu-latest
+          path: target/rim-test.xml
+          if-no-files-found: ignore
+      - name: Crosscheck scenario
+        run: target/release/examples/crosscheck > crosscheck-ubuntu-latest.txt && cat crosscheck-ubuntu-latest.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: crosscheck-ubuntu-latest
+          path: crosscheck-ubuntu-latest.txt
       # Soaks with and without plugins (DESIGN.md §5), a year of climate, and
       # DESIGN.md §8's benchmark: fails if the mean tick is over the 2 ms
       # budget (3x slack on shared runners).
@@ -347,10 +371,13 @@ jobs:
       # DESIGN.md §8: the world renderer's CPU time on the whole bench map, with
       # twenty mods' sprites in it, against its budget (1.5x slack on shared
       # runners). The gate compares means; 100 frames a view holds them.
+      # On a PR only when it touches the client or the lockfile: 1000 frames
+      # under software GL take ten minutes. The queue runs it on everything.
       - name: Render benchmark, with a budget
+        if: needs.plan.outputs.render == 'true'
         run: xvfb-run -a -s "-screen 0 1920x1080x24" target/release/rim --seed 1 --bench-render --frames 100 --sprite-mods 20 --check --json target/render-bench.json --shots target/render-bench
       - name: Upload the render benchmark
-        if: always()
+        if: always() && needs.plan.outputs.render == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: render-bench

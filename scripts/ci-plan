@@ -5,6 +5,9 @@
 #   lane       pr | queue | nightly | main | none
 #   code       true unless the change touches only cairn items and top-level
 #              Markdown (tests read the guides in docs/modding/, so those count)
+#   render     whether the render benchmark runs: in every lane but a PR's, and
+#              in a PR that touches the client or the lockfile (a bench run
+#              takes ten minutes under software GL)
 #   toolchain  the Rust version rust-toolchain.toml pins
 #
 # Reads the GitHub event from the environment: EVENT, DRAFT, HEAD_REF, LABELS
@@ -33,12 +36,14 @@ case "${EVENT:?}" in
 esac
 
 code=true
+render=true
 if [ "$lane" = pr ]; then
   # --no-renames: a file moved into cairn/ still counts where it came from.
   changed=$(git diff --name-only --no-renames HEAD^1 HEAD)
   if [ -n "$changed" ] && ! grep -qvE '^(cairn/|[^/]+\.md$)' <<<"$changed"; then
     code=false
   fi
+  grep -qE '^(crates/rim_client/|Cargo\.lock$)' <<<"$changed" || render=false
 fi
 
 toolchain=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' rust-toolchain.toml)
@@ -46,4 +51,5 @@ toolchain=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' rust-toolchain.toml)
 
 echo "lane=$lane"
 echo "code=$code"
+echo "render=$render"
 echo "toolchain=$toolchain"
