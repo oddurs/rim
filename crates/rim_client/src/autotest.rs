@@ -1914,7 +1914,7 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     let runs = t.app.light.sun_runs;
     t.app.sky.strike();
     t.frame().await;
-    t.frame().await;
+    // One frame: the flash is lit from its bolt from the frame it strikes.
     let lit = t.app.light.lit_by_flash()
         && t.app.light.sun_image().is_some_and(|img| {
             let px = |k: usize| img.bytes[k * 4];
