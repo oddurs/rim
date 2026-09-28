@@ -27,3 +27,7 @@ Main went red after #261: the view's autotest hurts a colonist at −1 and expec
 ## Acceptance criteria
 
 - [x] The autotest's ruler check holds with a colonist hurt on the surface as well
+
+## 2026-09-27
+
+Main went red again on both ruler-alert checks after later merges. The alerts panel re-checks at most every 0.25 s of client time, and the section waited 12 frames (0.2 s) after hurting colonists, so whether it saw the new alerts depended on where earlier sections left that phase. It waits 30 frames now (0.5 s), past one period.
