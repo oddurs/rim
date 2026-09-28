@@ -105,6 +105,9 @@ impl T {
     fn ticks(&mut self, n: u32) {
         for _ in 0..n {
             self.app.sim.step();
+            // What the game's frame does after its ticks.
+            self.app.motion.stepped(&self.app.sim.world);
+            self.app.motion.face(&self.app.sim.world, &self.app.worksites, 0.0);
         }
     }
 
@@ -134,7 +137,7 @@ impl T {
     }
 
     fn pawn_screen(&self, e: Entity) -> (f32, f32) {
-        let (x, y) = draw::pawn_pos(&self.pawn(e), self.app.tick_frac());
+        let (x, y) = draw::pawn_pos(&self.app, e, &self.pawn(e));
         self.app.cam.to_screen(x, y)
     }
 
@@ -946,24 +949,42 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     t.act(Action::Speed(6));
     t.check(t.app.speed == 6 && !t.app.paused, "speed 6x");
     let mut saw_interp = false;
+    // Turns are drawn round inside the corner cell (DESIGN.md §6h): the
+    // drawn founder never leaves the cells the sim has them between.
+    let (mut saw_round, mut strayed) = (false, None);
     // Long enough to chop, haul and build on any map: stop early once a wall
     // stands and the walking interpolation has been seen.
     let built_walls =
         |t: &T| t.w().ecs.query::<&Thing>().without::<&Blueprint>().iter().filter(|th| th.def == wall).count();
     for i in 0..12000 {
-        if i >= 6000 && saw_interp && built_walls(&t) > 0 {
+        if i >= 6000 && saw_interp && saw_round && built_walls(&t) > 0 {
             break;
         }
         t.ticks(1);
-        if !saw_interp {
-            let p = t.pawn(founder);
-            if p.next.is_some() && p.progress > 0 && p.progress < p.step_ticks {
-                let (x, y) = draw::pawn_pos(&p, t.app.tick_frac());
-                saw_interp = (x.fract() - 0.5).abs() > 1e-3 || (y.fract() - 0.5).abs() > 1e-3;
-            }
+        let p = t.pawn(founder);
+        let Some(n) = p.next else { continue };
+        let (x, y) = draw::pawn_pos(&t.app, founder, &p);
+        if !saw_interp && p.progress > 0 && p.progress < p.step_ticks {
+            saw_interp = (x.fract() - 0.5).abs() > 1e-3 || (y.fract() - 0.5).abs() > 1e-3;
+        }
+        let (lo, hi) = ((p.pos.x.min(n.x), p.pos.y.min(n.y)), (p.pos.x.max(n.x) + 1, p.pos.y.max(n.y) + 1));
+        let within = (lo.0 as f32..=hi.0 as f32).contains(&x) && (lo.1 as f32..=hi.1 as f32).contains(&y);
+        if !within && strayed.is_none() {
+            strayed = Some(format!("({x:.2}, {y:.2}) stepping {:?} to {n:?}", p.pos));
+        }
+        let (lx, ly) = p.drawn_at(t.app.tick_frac());
+        if !saw_round && (x - lx).abs().max((y - ly).abs()) > 0.02 {
+            saw_round = true;
+            let (cam, paused) = ((t.app.cam.x, t.app.cam.y, t.app.cam.zoom), t.app.paused);
+            (t.app.cam.x, t.app.cam.y, t.app.cam.zoom, t.app.paused) = (x, y, 56.0, true);
+            t.shot("round-turn").await;
+            (t.app.cam.x, t.app.cam.y, t.app.cam.zoom, t.app.paused) = (cam.0, cam.1, cam.2, paused);
         }
     }
     t.check(saw_interp, "pawns are drawn between cells while walking");
+    t.check(saw_round, "a turn is drawn round, off the straight steps");
+    t.check(strayed.is_none(), format!("the drawn pawn stays in the cells it steps between ({strayed:?})"));
+    t.check(t.app.motion.facing(founder).is_some(), "a pawn that has walked faces a way");
     let built = t.w().ecs.query::<&Thing>().without::<&Blueprint>().iter().filter(|th| th.def == wall).count();
     t.check(built > 0, format!("the warrior chopped and built walls ({built})"));
     t.focus(site.offset(3, 3));
@@ -3678,7 +3699,7 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     // is a cell on from the sim's mid-step, and others may stand close.
     let drawn = |t: &T, e: Entity| {
         let pawn = t.pawn(e);
-        let (x, y) = draw::pawn_pos(&pawn, t.app.tick_frac());
+        let (x, y) = draw::pawn_pos(&t.app, e, &pawn);
         IVec::at(x.floor() as i32, y.floor() as i32, pawn.pos.z)
     };
     let (one, p, alone) = boxed

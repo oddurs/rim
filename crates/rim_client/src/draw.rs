@@ -22,9 +22,10 @@ const URGENT: Color = Color::new(1.0, 0.70, 0.35, 1.0);
 const PLAYER: Color = Color::new(0.35, 0.8, 1.0, 1.0);
 const HOSTILE: Color = Color::new(1.0, 0.3, 0.25, 1.0);
 
-/// Interpolated position of a pawn's center, in tiles.
-pub fn pawn_pos(p: &Pawn, frac: f32) -> (f32, f32) {
-    p.drawn_at(frac)
+/// Where a pawn's centre is drawn, in tiles: between ticks along its step,
+/// and round its turns (DESIGN.md §6h).
+pub fn pawn_pos(app: &App, e: Entity, p: &Pawn) -> (f32, f32) {
+    rim_ui::turns::drawn_through(p, app.motion.from(e), app.tick_frac())
 }
 
 /// What a plant fades toward while dormant, and browns toward when hurt.
@@ -727,8 +728,8 @@ pub fn readouts(app: &App) -> Vec<(f32, f32, String)> {
 
 /// Where a pawn is drawn, in tiles: between steps, and lunging at its work
 /// when close enough to see it.
-fn drawn_at(app: &App, p: &Pawn) -> (f32, f32) {
-    let (px, py) = pawn_pos(p, app.tick_frac());
+fn drawn_at(app: &App, e: Entity, p: &Pawn) -> (f32, f32) {
+    let (px, py) = pawn_pos(app, e, p);
     if app.cam.zoom < DETAIL_ZOOM {
         return (px, py);
     }
@@ -742,7 +743,7 @@ pub fn pawn_disc(app: &App, e: Entity) -> Option<((f32, f32), f32)> {
     let w = &app.sim.world;
     // Only on the level shown (DESIGN.md §6d).
     let p = w.ecs.get::<&Pawn>(e).ok().filter(|p| p.active && p.pos.z == app.cam.z)?;
-    let (px, py) = drawn_at(app, &p);
+    let (px, py) = drawn_at(app, e, &p);
     Some((app.cam.to_screen(px, py), w.defs.creature(p.def).size * app.cam.zoom))
 }
 
@@ -769,7 +770,7 @@ pub fn pawns(app: &App) {
             continue;
         }
         let cd = defs.creature(p.def);
-        let (px, py) = drawn_at(app, &p);
+        let (px, py) = drawn_at(app, e, &p);
         if px < x0 - 1.0 || px > x1 + 1.0 || py < y0 - 1.0 || py > y1 + 1.0 {
             continue;
         }

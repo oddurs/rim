@@ -67,6 +67,9 @@ pub struct ClientView {
     /// How far into the next sim tick this frame falls (0 to 1): pawns and
     /// what's anchored to them are drawn that far along their step.
     pub frac: f32,
+    /// The cell each pawn last stepped out of, as the renderer remembers
+    /// it, so names follow the pawn round its turns (DESIGN.md §6h).
+    pub came_from: std::sync::Arc<CameFrom>,
     /// What the inspector shows: the one selected thing, or the first of
     /// several selected colonists.
     pub selected: Option<Entity>,
@@ -231,10 +234,14 @@ pub enum UiAction {
     NewColony,
 }
 
+/// The cell each pawn last stepped out of, kept by the renderer: what
+/// `turns::drawn_through` rounds a turn with.
+pub type CameFrom = std::collections::HashMap<Entity, IVec>;
+
 /// Screen position of a pawn (physical pixels), interpolated between cells
-/// the same way the world renderer draws it.
-pub fn pawn_screen(p: &rim_sim::world::Pawn, cv: &ClientView) -> (f32, f32) {
-    let (x, y) = p.drawn_at(cv.frac);
+/// and round its turns the same way the world renderer draws it.
+pub fn pawn_screen(e: Entity, p: &rim_sim::world::Pawn, cv: &ClientView) -> (f32, f32) {
+    let (x, y) = crate::turns::drawn_through(p, cv.came_from.get(&e).copied(), cv.frac);
     cell_screen(x, y, cv)
 }
 
@@ -254,12 +261,13 @@ pub fn anchor_screen(
     cam: (f32, f32, f32),
     screen: (f32, f32),
     frac: f32,
+    came: &CameFrom,
 ) -> Option<(f32, f32)> {
     match anchor {
         crate::node::Anchor::Entity(bits) => {
             let e = rim_sim::hecs::Entity::from_bits(bits)?;
             let p = world.ecs.get::<&rim_sim::world::Pawn>(e).ok()?;
-            let (x, y) = p.drawn_at(frac);
+            let (x, y) = crate::turns::drawn_through(&p, came.get(&e).copied(), frac);
             Some(to_screen(x, y, cam, screen))
         }
         crate::node::Anchor::Cell(x, y) => Some(to_screen(x as f32 + 0.5, y as f32 + 0.5, cam, screen)),
