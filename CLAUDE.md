@@ -11,6 +11,10 @@ content ids in engine code, it belongs in a mod instead.
   `scripts/task test -- <filter>` while working; `scripts/task help` for the rest.
 - Sim changes must stay deterministic: the world's random streams only (§7b), no HashMap iteration,
   all player input through `Command`.
+- ROADMAP.md isn't tracked. `cairn render` writes it (gitignored) for a
+  local look, and CI uploads main's as the `roadmap` artifact; there is
+  nothing to re-render after a rebase. Where the generated block below says
+  `cairn render`, that is all it does.
 - Dropping an item or moving a milestone's `due` is a person's call:
   `cairn propose <ID> status=dropped --why "..."`, then `cairn proposals`.
   The cairn block below is generated: `cairn agent --view next --write CLAUDE.md`.

@@ -103,6 +103,18 @@ jobs:
       - name: Install cairn
         run: command -v cairn || cargo install --locked --git https://github.com/oddurs/cairn --rev c7d4230 cairn-md
       - run: scripts/task roadmap
+      # ROADMAP.md isn't tracked (DESIGN.md §8a): main's is rendered here and
+      # kept as the `roadmap` artifact.
+      - name: Render the roadmap
+        if: needs.plan.outputs.lane == 'main'
+        run: cairn render -q --no-hooks
+      - name: Upload the roadmap
+        if: needs.plan.outputs.lane == 'main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: roadmap
+          path: ROADMAP.md
+          retention-days: 90
       # The tooling's own tests: the pre-push hook, in throwaway repos.
       - run: scripts/task scripts
 

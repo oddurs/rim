@@ -1,1 +1,5 @@
 /target
+
+# Rendered from cairn/items by `cairn render`; CI uploads it from main as
+# the `roadmap` artifact. Untracked so no branch carries it (DESIGN.md §8a).
+/ROADMAP.md
