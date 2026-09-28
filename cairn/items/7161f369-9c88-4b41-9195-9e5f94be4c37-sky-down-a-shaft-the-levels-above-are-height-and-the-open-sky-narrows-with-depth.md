@@ -2,14 +2,14 @@
 id: 7161f369-9c88-4b41-9195-9e5f94be4c37
 title: 'Sky down a shaft: the levels above are height, and the open sky narrows with depth'
 type: feature
-status: doing
+status: done
 milestone: lighting
 assignee: Oddur Sigurdsson
-claimed: 2026-09-28
 depends_on:
 - 3124bd7b-9f9a-4d92-84e6-2df736b6e2fe
 created: 2026-09-28
 updated: 2026-09-28
+closed_at: 2026-09-28
 priority: p2
 api: none
 effort: m
