@@ -122,6 +122,31 @@ pub struct SolidDef {
 }
 
 /// A level below the surface, as map generation fills it (DESIGN.md §6d).
+/// What water in a basin does to who stands in it (DESIGN.md §6d). Depths
+/// are in sevenths of a cell. Basins hold the first fluid loaded; with none,
+/// water is only scenery.
+#[derive(Deserialize, Clone, Debug)]
+#[serde(deny_unknown_fields)]
+pub struct FluidDef {
+    pub id: String,
+    pub label: String,
+    /// From this depth a step costs `wade_cost` percent more.
+    pub wade: u32,
+    #[serde(default = "d_wade_cost")]
+    pub wade_cost: u32,
+    /// From this depth nobody walks it: it takes swimming.
+    pub swim: u32,
+    /// At this depth there is no air, and whoever is in it drowns.
+    pub no_air: u32,
+    /// Health lost an hour with no air, as a share of the most a creature
+    /// has.
+    pub drown: f64,
+}
+
+fn d_wade_cost() -> u32 {
+    100
+}
+
 /// The deepest stratum sets how far down the map goes.
 #[derive(Deserialize, Clone, Debug)]
 #[serde(deny_unknown_fields)]
@@ -236,6 +261,10 @@ pub struct ThingDef {
     /// Passable, but bounds rooms like a wall does.
     #[serde(default)]
     pub door: bool,
+    /// It stops water: a door with a seal, a watertight hatch. Walls stop
+    /// water anyway; doors pass it without this (DESIGN.md §6d).
+    #[serde(default)]
+    pub holds_water: bool,
     /// A way down: the thing stands in its cell and the one below it, and
     /// pawns step between them (DESIGN.md §6d).
     #[serde(default)]
@@ -1801,6 +1830,7 @@ pub struct DefDb {
     pub thing_modifiers: Vec<Vec<u16>>,
     /// The levels below the surface, in no particular order.
     pub strata: Vec<StratumDef>,
+    pub fluids: Vec<FluidDef>,
     pub category_roots: Vec<DefId>,
     /// Entries of the kinds mods declare (`[[kind]]`), by qualified kind
     /// ("weather:type"), in load order: plain data for scripts.
@@ -1924,6 +1954,7 @@ pub const KINDS: &[&str] = &[
     "item_category",
     "store_priority",
     "stratum",
+    "fluid",
     "modifier",
 ];
 
@@ -1966,6 +1997,7 @@ impl DefDb {
             "field" => self.fields[i].id.clone(),
             "item_category" => self.item_categories[i].id.clone(),
             "stratum" => self.strata[i].id.clone(),
+            "fluid" => self.fluids[i].id.clone(),
             "modifier" => self.modifiers[i].id.clone(),
             _ => String::new(),
         }
@@ -2043,6 +2075,9 @@ impl DefDb {
         }
         for (i, d) in self.strata.iter().enumerate() {
             index.insert(("stratum", d.id.clone()), i as DefId);
+        }
+        for (i, d) in self.fluids.iter().enumerate() {
+            index.insert(("fluid", d.id.clone()), i as DefId);
         }
         for (i, d) in self.plans.iter().enumerate() {
             index.insert(("plan", d.id.clone()), i as DefId);
@@ -2139,6 +2174,11 @@ impl DefDb {
             }
         }
         let mut levels = std::collections::BTreeSet::new();
+        for f in &self.fluids {
+            if !(0 < f.wade && f.wade <= f.swim && f.swim <= f.no_air && f.no_air <= crate::water::FULL) {
+                return Err(format!("fluid/{}: depths are sevenths, 0 < wade <= swim <= no_air <= 7", f.id));
+            }
+        }
         for st in &mut self.strata {
             let ctx = format!("stratum/{}", st.id);
             if st.level >= 0 {

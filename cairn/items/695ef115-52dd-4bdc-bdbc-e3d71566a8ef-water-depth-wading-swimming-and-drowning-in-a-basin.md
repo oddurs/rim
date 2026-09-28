@@ -2,12 +2,14 @@
 id: 695ef115-52dd-4bdc-bdbc-e3d71566a8ef
 title: 'Water depth: wading, swimming and drowning in a basin'
 type: feature
-status: backlog
+status: done
 milestone: depth
+assignee: Oddur Sigurdsson
 depends_on:
 - 3979868c-6de5-4926-8277-b4402adab473
 created: 2026-09-27
 updated: 2026-09-27
+closed_at: 2026-09-27
 priority: p1
 api: additive
 effort: m
@@ -27,6 +29,10 @@ Split from 3979868c (basins): water that fills a mine is only a hazard, or a moa
 
 ## Acceptance criteria
 
-- [ ] A flooded trench blocks non-swimmers (scene test)
-- [ ] Colonists leave water that is rising past wading depth; nobody drowns in the scene test
-- [ ] Determinism test passes
+- [x] A flooded trench blocks non-swimmers (scene test)
+- [x] Colonists leave water that is rising past wading depth; nobody drowns in the scene test
+- [x] Determinism test passes
+
+## 2026-09-27
+
+Built: [[fluid]] (core:water: wade 2, swim 4, no air 7, drown 2.0 an hour); water costs applied every 60 ticks (WATER_EVERY), which is also the most often regions rebuild for it; deep water takes footing unless a floor or span is over it; pawns in rising water past wading flee to dry ground on their level or the one above; drowning at no air; holds_water doors. Criterion 1 is met by a flooded tunnel rather than a trench: a trench is air, which nobody walks, so flooding it changes nothing until swimmers exist (3fea3b3d).

@@ -34,6 +34,12 @@ pub struct Map {
     fix_block: Vec<bool>,
     /// A fixture here spans air: a drawbridge (DESIGN.md §6d).
     fix_span: Vec<bool>,
+    /// A fixture here holds water back: a sealed door.
+    fix_holds: Vec<bool>,
+    /// What the water standing here adds to a step's cost, in percent;
+    /// `DEEP` is past wading and takes the footing away unless a floor or
+    /// a span stands over it (DESIGN.md §6d).
+    water_cost: Vec<u16>,
     /// Something to stand on: walkable terrain, a floor, or a fixture that
     /// spans air. What `passable_i` reads, kept so a floor over a pit is
     /// ground without the hot path asking three arrays.
@@ -176,6 +182,9 @@ impl Room {
     }
 }
 
+/// Water past wading: see `Map::set_water`.
+pub const DEEP: u16 = u16::MAX;
+
 pub const NEIGHBORS8: [(i32, i32); 8] = [(1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (-1, 1), (1, -1), (-1, -1)];
 
 impl Map {
@@ -210,6 +219,8 @@ impl Map {
             floor_cost: vec![0; n],
             fix_block: vec![false; n],
             fix_span: vec![false; n],
+            fix_holds: vec![false; n],
+            water_cost: vec![0; n],
             footing: (0..n).map(|i| i < plane).collect(),
             fix_cost: vec![0; n],
             extra_cost: vec![0; n],
@@ -433,7 +444,11 @@ impl Map {
             (0, t) => t,
             (f, _) => f,
         };
-        ground as u32 + self.fix_cost[i] as u32 + self.extra_cost[i] as u32
+        let water = match self.water_cost[i] {
+            DEEP => 0,
+            w => w,
+        };
+        ground as u32 + self.fix_cost[i] as u32 + self.extra_cost[i] as u32 + water as u32
     }
 
     /// Change the extra move cost at cell `i` by `delta` percent.
@@ -502,6 +517,10 @@ impl Map {
         self.fix_door[i] = door;
         if e.is_none() {
             self.fix_span[i] = false;
+            if self.fix_holds[i] {
+                self.fix_holds[i] = false;
+                self.water_rev[i / self.plane] += 1;
+            }
             self.footing[i] = self.has_footing(i);
         }
         if (self.passable_i(i), self.fix_door[i]) != was {
@@ -559,8 +578,31 @@ impl Map {
         self.bump(i);
     }
 
+    /// The fixture at `p` holds water back (a sealed door), or doesn't.
+    /// Removing the fixture clears it.
+    pub fn set_holds_water(&mut self, p: IVec, holds: bool) {
+        let i = self.idx(p);
+        if self.fix_holds[i] != holds {
+            self.fix_holds[i] = holds;
+            self.water_rev[i / self.plane] += 1;
+        }
+    }
+
+    /// Water here adds `cost` percent to a step, or with `DEEP` takes the
+    /// footing away. Returns whether that changed who can walk it.
+    pub fn set_water(&mut self, i: usize, cost: u16) -> bool {
+        if self.water_cost[i] == cost {
+            return false;
+        }
+        let was = self.footing[i];
+        self.water_cost[i] = cost;
+        self.refoot(i);
+        self.bump(i);
+        self.footing[i] != was
+    }
+
     fn has_footing(&self, i: usize) -> bool {
-        self.terrain_cost[i] > 0 || self.floor_cost[i] > 0 || self.fix_span[i]
+        (self.terrain_cost[i] > 0 && self.water_cost[i] != DEEP) || self.floor_cost[i] > 0 || self.fix_span[i]
     }
 
     /// Work out cell `i`'s footing again, rebuilding what reads it when it
@@ -955,7 +997,7 @@ impl Map {
     /// Does `fixture` stand in the way of water at cell `i`?
     #[inline]
     pub fn blocks_water(&self, i: usize) -> bool {
-        self.fix_block[i]
+        self.fix_block[i] || self.fix_holds[i]
     }
 
     /// `revision`, for level `z` only.

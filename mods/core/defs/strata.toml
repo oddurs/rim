@@ -258,3 +258,18 @@ path_cost = 80
 hp = 150
 market_value = 12
 build = { menu = "dig", work = 300, stuff = { category = "structural", count = 8 }, spans = true }
+
+# ------------------------------------------------------------ water
+
+# What water standing in a basin does (DESIGN.md §6d), in sevenths of a
+# cell: from the knee, at 2, every step costs double; past the waist, at 4,
+# nobody who can't swim goes; over the head, at 7, nobody breathes, and a
+# colonist caught there is dead in half an hour.
+[[fluid]]
+id = "water"
+label = "water"
+wade = 2
+wade_cost = 100
+swim = 4
+no_air = 7
+drown = 2.0

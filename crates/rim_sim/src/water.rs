@@ -45,6 +45,11 @@ pub struct Basin {
     /// Where a source first touches it: the basin's cell and the source's
     /// terrain, for the breach event.
     source: Option<(u32, DefId)>,
+    /// The step cost and wet cells last put on the map (`Water::costs`).
+    applied: Option<(u16, u32)>,
+    /// Its volume at the last `costs`, and whether it had risen since.
+    last_volume: u64,
+    rising: bool,
 }
 
 impl Basin {
@@ -119,6 +124,8 @@ pub struct Water {
     /// to clear.
     mark: Vec<u32>,
     walk: u32,
+    /// Cells of basins a rebuild took away, whose cost on the map is stale.
+    stale: Vec<u32>,
 }
 
 impl Water {
@@ -132,6 +139,7 @@ impl Water {
             primed: false,
             mark: vec![0; map.cells()],
             walk: 0,
+            stale: Vec::new(),
         }
     }
 
@@ -195,6 +203,7 @@ impl Water {
         let start = map.idx(IVec::at(0, 0, z));
         let range = start..start + map.plane();
         let old = std::mem::take(&mut self.levels[k].basins);
+        self.stale.extend(old.iter().flat_map(|b| b.cells.iter().copied()));
         let old_of = self.basin_of[range.clone()].to_vec();
         let old_place = self.place[range.clone()].to_vec();
         self.basin_of[range.clone()].fill(0);
@@ -403,6 +412,29 @@ impl Water {
                     b.front += 1;
                 }
             }
+        }
+    }
+
+    /// Is the water at `p` rising: more than at the last `costs`?
+    pub fn rising(&self, map: &Map, p: IVec) -> bool {
+        map.inb(p) && self.basin_at(p.z, map.idx(p)).is_some_and(|b| b.rising)
+    }
+
+    /// What the water adds to crossing each cell, where that changed since
+    /// the last call: (cell, cost) in `out`, stale cells first. `cost_of`
+    /// turns a depth into a step's cost. Also notes which basins rose.
+    pub fn costs(&mut self, cost_of: impl Fn(u32) -> u16, out: &mut Vec<(u32, u16)>) {
+        out.extend(self.stale.drain(..).map(|c| (c, 0)));
+        for b in self.levels.iter_mut().flat_map(|l| &mut l.basins) {
+            b.rising = b.volume > b.last_volume;
+            b.last_volume = b.volume;
+            let now = (cost_of(b.depth()), b.wet());
+            if b.applied == Some(now) {
+                continue;
+            }
+            b.applied = Some(now);
+            let (cost, wet) = now;
+            out.extend(b.cells.iter().enumerate().map(|(n, &c)| (c, if (n as u32) < wet { cost } else { 0 })));
         }
     }
 
