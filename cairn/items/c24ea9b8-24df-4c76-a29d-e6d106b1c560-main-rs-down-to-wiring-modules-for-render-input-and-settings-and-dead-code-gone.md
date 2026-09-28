@@ -2,7 +2,7 @@
 id: c24ea9b8-24df-4c76-a29d-e6d106b1c560
 title: 'main.rs down to wiring: modules for render, input and settings, and dead code gone'
 type: chore
-status: backlog
+status: doing
 milestone: bare-metal
 assignee: calm-forest
 created: 2026-09-28
@@ -26,3 +26,7 @@ Move render(), input and settings into their own modules, and delete unused code
 
 - [ ] main.rs is under 600 lines
 - [ ] rim_client is smaller in lines at the end than at the start, with the count in the PR
+
+## 2026-09-28
+
+Baseline on b90b069e: main.rs 2,686 lines, rim_client 19,836. A search for functions and constants with no callers found none outside tests and FFI bindings, so the line savings will come from consolidating duplicated helpers (alpha, shade and disc exist in several files), not from deleting uncalled code. Step 1 is settings into settings.rs; render() follows once lucky-harbor's render clock change (RawInput dt, app.now) has merged, since both touch the level fade.
