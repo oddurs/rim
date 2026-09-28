@@ -2205,9 +2205,11 @@ where they were built, and the sun moves a fraction of a degree a second.
     **Sky bodies** (1a17d685) are `[[sky_body]]` defs: a path, a colour, a
     size, and how bright each is. That is a labelled term of a field when
     its light is the sim's too (core's sun, `daylight`'s `sun`), or terms of
-    its own that only the renderer reads (core's moon). The sim's light
-    stays 0 at night, so nothing grows by moonlight; the picture's sky is
-    the sim's light and those bodies'. The pass marches up to four, one
+    its own that only the renderer reads (a mod's choice). Core's sun and
+    moon are both `daylight` terms, worked out from where they are (below):
+    a full moon gives the sim a little light at night, so plants grow a
+    little by it (the user's decision, 2026-09-28), and a new moon none.
+    The picture's sky is the sim's light and those bodies'. The pass marches up to four, one
     per channel of its target: the brightest straight light first, as many
     as the preset's `sky_shadows`, chosen each rebuild, so with one slot the
     sun casts by day and the moon by night. Each lands in its own colour; a

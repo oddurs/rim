@@ -9,6 +9,12 @@ target = "field/core:daylight"
 [patch.set.ambient.sun]
 scale = 0.0
 
+# Core's moon, gone too: its term reads the moon body this mod removes
+# (below), so the term goes with it, inputs and all.
+[patch.set.ambient.moon]
+scale = 0.0
+of = []
+
 # A red sun, up early and dim.
 [patch.set.ambient.red_sun]
 of = [{ input = "hour", curve = [[4, 0.0], [7, 40.0], [13, 40.0], [16, 0.0]] }]

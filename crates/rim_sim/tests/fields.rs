@@ -293,16 +293,17 @@ fn core_climate_drives_the_day() {
     let l = field(&s, "light");
     let mut coldest = f64::MAX;
     let mut warmest = f64::MIN;
-    let mut dark = false;
+    let mut darkest = f64::MAX;
     for _ in 0..TICKS_PER_DAY {
         s.step();
         let a = s.world.fields.ambient(t);
         coldest = coldest.min(a);
         warmest = warmest.max(a);
-        dark |= s.world.fields.ambient(l) == 0.0;
+        darkest = darkest.min(s.world.fields.ambient(l));
     }
     // Core climate: mean 10°, swinging 9° either way (03:00 coldest, 15:00 warmest).
     assert!((0.5..2.0).contains(&coldest) && (18.0..19.5).contains(&warmest), "day ran {coldest}..{warmest}°");
-    assert!(dark, "nights get dark");
+    // Dark but for the moon, whose light is 1.5 at most.
+    assert!(darkest <= 1.5, "nights get dark: {darkest}");
     let _ = Faction::Player;
 }

@@ -61,14 +61,20 @@ fn a_lone_sun_beside_bodies_is_a_warning() {
 }
 
 #[test]
-fn cores_moon_lights_the_picture_and_not_the_sim() {
+fn cores_moon_lights_the_sim_as_the_sun_does() {
     let sim = Sim::build(&common::mods(), 1, &|id| id == "core", 32).unwrap();
     let defs = &sim.world.defs;
-    let moon = defs.sky_bodies.iter().find(|b| b.id == "core:moon").expect("core has a moon");
-    assert!(matches!(moon.light, rim_sim::defs::BodyLight::Own(_)), "its own terms, not a field's");
     let daylight = defs.lookup("field", "daylight").unwrap() as usize;
+    for (body, term) in [("core:sun", "sun"), ("core:moon", "moon")] {
+        let b = defs.sky_bodies.iter().find(|b| b.id == body).expect("core has it");
+        assert!(
+            matches!(&b.light, rim_sim::defs::BodyLight::Field { field, term: t } if *field == daylight && t == term),
+            "{body} is daylight's {term}: {:?}",
+            b.light
+        );
+    }
     let terms: Vec<&str> = defs.fields[daylight].terms.terms.iter().map(|t| t.label.as_str()).collect();
-    assert_eq!(terms, ["sun"], "daylight is the sun's alone");
+    assert_eq!(terms, ["moon", "sun"]);
 }
 
 #[test]

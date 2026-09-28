@@ -67,12 +67,26 @@ color_low = "#0b0d1a"
 color_high = "#fff1a8"
 overlay = false
 
-# Full sun 08:00-18:00, dark 21:00-05:00, smooth ramps between.
+# The sun, from where it is (sky_body/sun): dark once it's 6° below the
+# horizon, up through the twilight to full 6° above it, and brighter the
+# higher it climbs. A midsummer noon, 68° up, is full; a midwinter noon, 22°
+# up, 90%. How long it's up follows the calendar's latitude and the year.
 [field.ambient.sun]
-of = [{ input = "hour", curve = [
-  [5, 0.0], [6, 25.9], [7, 74.1], [8, 100.0],
-  [18, 100.0], [19, 74.1], [20, 25.9], [21, 0.0],
-] }]
+scale = 100.0
+of = [
+  { input = "body", body = "sun", of = "up" },
+  { input = "body", body = "sun", of = "altitude", curve = [[0, 0.75], [30, 1.0]] },
+]
+
+# The moon: faint beside the sun, as bright as it's full and up. A full
+# moon's light is a plant's twentieth of a day's, so crops grow a little
+# by it; a new moon gives none.
+[field.ambient.moon]
+scale = 1.5
+of = [
+  { input = "body", body = "moon", of = "up" },
+  { input = "body", body = "moon", of = "phase" },
+]
 
 # Light that reaches the ground: the sky, dimmed by cloud (a storm is a dark
 # afternoon). Indoors is dark unless something lights it.

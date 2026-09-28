@@ -445,8 +445,10 @@ Where a body is in the sky, its colour and its shadows are a
 `[[sky_body]]`. How bright it is, is one of two things. A `field` and its
 `term` make its light the sim's too: core's sun is `daylight`'s `sun`, so
 plants grow by it. Terms of its own (`scale` and `of`, in `light`'s units,
-as a tint's strength is written) light only the picture: core's moon is
-one, so the sim's night stays dark and nothing grows by moonlight. A body
+as a tint's strength is written) light only the picture. Core's sun and
+moon are both `daylight` terms, read from where they are (`input =
+"body"`): a full moon lights the night a little, and crops grow a little by
+it. A body
 gives the hours it rises and sets, how high it climbs, the arc of azimuths it
 crosses (0° is east, 90° south, the way the map's y grows), its `color`,
 its `angular_size` in degrees (the sun's is 0.5; a wider body casts softer
@@ -494,8 +496,10 @@ the same on every machine, and terms read it with `input = "body"`:
 The calendar's `latitude` (default 45) sets how high they climb and how the
 day's length follows the year: at 45° with a tilt of 23, the sun is up 15
 hours at midsummer and under 9 at midwinter. `up` rises from 0 to 1 while a
-body is within 6° of the horizon, so light ramps through a twilight. Core's
-moon:
+body is within 6° of the horizon, so light ramps through a twilight. A term
+that names a body that's gone is a load error, so a mod that removes core's
+moon empties `daylight`'s `moon` term too, as
+[`examples/two_suns`](examples/two_suns) does. Core's moon:
 
 <!-- not a sample -->
 ```toml
