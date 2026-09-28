@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Tests for scripts/task's verbs that run what cargo built, with stub
+# binaries in a throwaway target dir. `scripts/task scripts` runs it.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+tmp=$(mktemp -d)
+trap 'command rm -rf "$tmp"' EXIT
+fails=0
+
+# A stub that logs its name and arguments to $tmp/ran.
+stub() {
+  mkdir -p "$(dirname "$1")"
+  printf '#!/bin/sh\necho "%s $*" >>"%s/ran"\n' "$2" "$tmp" >"$1"
+  chmod +x "$1"
+}
+
+expect() { # name, pattern
+  if grep -qE "$2" "$tmp/ran" 2>/dev/null; then
+    echo "ok    $1"
+  else
+    echo "FAIL  $1: wanted /$2/ in: $(cat "$tmp/ran" 2>/dev/null)"
+    fails=$((fails + 1))
+  fi
+  : >"$tmp/ran"
+}
+
+stub "$tmp/elsewhere/release/rim" rim
+stub "$tmp/elsewhere/release/examples/crosscheck" crosscheck
+CARGO_TARGET_DIR="$tmp/elsewhere" scripts/task mods >/dev/null 2>&1 || echo "mods exited $?" >>"$tmp/ran"
+expect "mods runs rim from CARGO_TARGET_DIR" '^rim check --strict$'
+CARGO_TARGET_DIR="$tmp/elsewhere" scripts/task crosscheck >/dev/null 2>&1 || echo "crosscheck exited $?" >>"$tmp/ran"
+expect "crosscheck runs from CARGO_TARGET_DIR" '^crosscheck ?$'
+
+# sim writes its report under the repo's target/, even before cargo made one
+# there: a copy of the script in a bare repo, with a stub cargo.
+mkdir -p "$tmp/repo/scripts" "$tmp/bin"
+command cp -f scripts/task "$tmp/repo/scripts/task"
+git -C "$tmp/repo" init -q
+printf '#!/bin/sh\necho "cargo $*"\n' >"$tmp/bin/cargo" && chmod +x "$tmp/bin/cargo"
+PATH="$tmp/bin:$PATH" CARGO_TARGET_DIR="$tmp/elsewhere" "$tmp/repo/scripts/task" sim >/dev/null 2>&1 || echo "sim exited $?" >>"$tmp/ran"
+[ -s "$tmp/repo/target/climate-report.txt" ] && echo "report written" >>"$tmp/ran"
+expect "sim writes its report under the repo's target/" '^report written$'
+
+if [ "$fails" -gt 0 ]; then
+  echo "task: $fails failed"
+  exit 1
+fi
+echo "task: all cases pass"
