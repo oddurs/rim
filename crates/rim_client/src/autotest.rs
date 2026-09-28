@@ -1319,9 +1319,11 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
             t.app.sim.world.ecs.get::<&mut Pawn>(founder).unwrap().hp = max / 10;
             t.focus(top);
             t.app.cam.zoom = 20.0;
-            // Long enough for the zoom to settle: a chunk drawn scaled from
-            // another zoom is rebuilt once it has, whatever level is shown.
-            for _ in 0..12 {
+            // Long enough for the zoom to settle (a chunk drawn scaled from
+            // another zoom is rebuilt once it has, whatever level is shown),
+            // and for the alerts to be checked again: at most every quarter
+            // second, and a frame here is a sixtieth.
+            for _ in 0..30 {
                 t.frame().await;
             }
             t.check(t.ui_rect("core:depth.level.-1").is_some(), "the ruler lists the level dug into");
