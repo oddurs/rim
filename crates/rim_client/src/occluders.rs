@@ -39,6 +39,9 @@ const DOOR_FIRE: f64 = 0.7;
 pub const WINDOW: u8 = 1;
 /// R's low bits: a door.
 pub const DOOR: u8 = 2;
+/// R's low bits: rock below the surface with more over it, whose top is not
+/// open to the sky.
+pub const COVERED: u8 = 3;
 
 /// What stands in a cell, as light sees it.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -84,6 +87,33 @@ pub fn texel(o: Occluder, roof: Option<u8>) -> [u8; 4] {
         Occluder::Door { height } => [height_and(height, DOOR), 0, 255, u(DOOR_FIRE)],
         Occluder::Canopy { height } => [height_and(height, 0), 0, u(CANOPY_SKY), 0],
     }
+}
+
+/// A cell below the surface with rock or floor over it, `depth` storeys
+/// down: the levels above are as tall as it is deep, so a ray from a shaft
+/// meets them, and the sun reaches in only inside the shaft's cone. Open
+/// floor and what stands in it are under a roof, as indoors. Rock stays a
+/// mass, for its contact shadow, but kind `COVERED`: its top is the surface,
+/// and the sun doesn't light it from there. Firelight stops as it would.
+pub fn covered(o: Occluder, depth: f64) -> [u8; 4] {
+    let d = depth.max(STOREY);
+    let u = |x: f64| (x.clamp(0.0, 1.0) * 255.0).round() as u8;
+    match o {
+        Occluder::Solid { height } => [height_and(height.max(d), COVERED), 0, 255, 255],
+        Occluder::Window { pass, .. } => [height_and(d, WINDOW), 255, 255, u(1.0 - pass)],
+        Occluder::Door { .. } => [height_and(d, DOOR), 255, 255, u(DOOR_FIRE)],
+        Occluder::Open | Occluder::Canopy { .. } => [height_and(d, 0), 255, 255, 0],
+    }
+}
+
+/// Whether the sky is open over cell (x, y) of level `z`: every level above
+/// it is air there, with no floor laid over it, and no roof over it at the
+/// surface. Always on the surface and above it.
+pub fn open_to_sky(m: &rim_sim::map::Map, x: i32, y: i32, z: i32) -> bool {
+    (z + 1..=0).all(|up| {
+        let p = rim_sim::IVec::at(x, y, up);
+        m.is_air(m.idx(p)) && m.floor_at(p).is_none() && !(up == 0 && m.indoors(p))
+    })
 }
 
 /// What stands in cell `i`: its fixture, or the rock it is. `light` is the
@@ -209,7 +239,7 @@ impl Occluders {
             self.bytes = vec![0; (m.w * m.h * 4) as usize];
             self.seen = vec![STALE; chunks];
             self.size = (m.w, m.h);
-        } else if self.rooms != m.room_rebuilds {
+        } else if self.rooms != m.room_rebuilds && z >= 0 {
             // A room rebuild can roof or unroof any cell, or raise a roof
             // over it: repack the chunks where one did, found by the first
             // cell that disagrees.
@@ -234,9 +264,18 @@ impl Occluders {
         }
         self.rooms = m.room_rebuilds;
         let light = w.defs.lookup("field", "light");
+        let depth = (-z).max(0) as f64 * STOREY;
         let mut dirty = Vec::new();
-        for (k, c) in level.enumerate() {
-            let rev = (m.terrain_rev(c), m.fixture_rev(c));
+        for (k, c) in level.clone().enumerate() {
+            // Below the surface a cell is open or covered by what's above
+            // it, so digging up there repacks it too.
+            let above: u64 = (z + 1..=0)
+                .map(|up| {
+                    let c = m.level_chunks(up).start + k;
+                    m.terrain_rev(c) + m.fixture_rev(c)
+                })
+                .sum();
+            let rev = (m.terrain_rev(c), m.fixture_rev(c) + above);
             if self.seen[k] == rev {
                 continue;
             }
@@ -249,7 +288,13 @@ impl Occluders {
             for y in o.y..y1 {
                 for x in o.x..x1 {
                     let (i, b) = cell(x, y);
-                    let t = texel(occluder_at(w, i, light), roof_at(w, roofs, i));
+                    let t = if z >= 0 {
+                        texel(occluder_at(w, i, light), roof_at(w, roofs, i))
+                    } else if open_to_sky(m, x, y, z) {
+                        texel(occluder_at(w, i, light), None)
+                    } else {
+                        covered(occluder_at(w, i, light), depth)
+                    };
                     if self.bytes[b * 4..b * 4 + 4] != t {
                         self.bytes[b * 4..b * 4 + 4].copy_from_slice(&t);
                         bounds =
@@ -397,6 +442,17 @@ mod tests {
         let hut =
             |&(x, y, w, h): &(i32, i32, i32, i32)| x >= p.x - 1 && y >= p.y - 1 && x + w <= p.x + 4 && y + h <= p.y + 4;
         assert!(dirty.iter().all(hut), "only the hut's own cells: {dirty:?}");
+    }
+
+    #[test]
+    fn below_the_surface_what_rock_covers_is_as_tall_as_it_is_deep() {
+        let rock = covered(Occluder::Solid { height: STOREY }, 2.0);
+        assert_eq!(rock, [32 << 2 | COVERED, 0, 255, 255], "two storeys of rock, still a mass, marked covered");
+        let floor = covered(Occluder::Open, 2.0);
+        assert_eq!(floor, [32 << 2, 255, 255, 0], "open floor under rock is roofed, and passes firelight");
+        let door = covered(Occluder::Door { height: STOREY }, 2.0);
+        assert_eq!(door, [32 << 2 | DOOR, 255, 255, 179], "a door below still leaks firelight at its edges");
+        assert_eq!(covered(Occluder::Open, 0.5)[0], 16 << 2, "never less than a storey");
     }
 
     #[test]

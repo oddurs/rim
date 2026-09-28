@@ -30,7 +30,7 @@ A colonist carrying a torch at night, a burning roof, fire arrows: these move or
 
 ## Acceptance criteria
 
-- [ ] 64 moving lights at `medium`: 8 cast shadows, all glow, frame inside budget (bench)
+- [x] 64 moving lights at `medium`: 8 cast shadows, all glow, frame inside budget (bench)
 - [x] A burning building never triggers more than one static rebake a second (test)
 
 ## 2026-09-26
@@ -52,3 +52,7 @@ Review fixes: waiting static lights always get their shadows and don't count aga
 ## 2026-09-28
 
 Merged in #284. Criterion 1 (bench) is still open: CI's bench runs after the autotest, and main's autotest panics in the camera section (with lucky-harbor), so no bench has run on the moving view yet. Local timing at load 80+ proves nothing. I'll close this once a bench runs.
+
+## 2026-09-28
+
+Bench, from main's CI on e75589b9 (Linux llvmpipe, 100 frames): the 'moving' view (64 moving lights circling the colony at dusk, medium: 8 with shadows) draws the world in 3.586 ms mean, inside the 4 ms budget, and the render check passed ('within budget (moving: 3.586 <= 6.0 ms)'). The moving pass is 2.90 ms of that CPU. llvmpipe rasterises on the CPU, so that's the software renderer's cost; its GPU timer query reads 0.33 ms.

@@ -1464,10 +1464,13 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
             t.light_settles().await;
             let below = mean(&t.grab().await);
             let sun = t.app.light.sun_visibility(top.x as f32 + 0.5, top.y as f32 + 0.5).unwrap_or(1.0);
+            // The stacked scene has pits, and the sky comes down those
+            // (7161f369): the level is darker than the surface, and sunless
+            // where rock is over it.
             t.check(
-                t.app.cam.z == -1 && below < surface * 0.5 && sun == 0.0,
+                t.app.cam.z == -1 && below < surface * 0.75 && sun == 0.0,
                 format!(
-                    "below the surface no daylight reaches ({below:.2} to the surface's {surface:.2}, sun {sun:.2})"
+                    "less daylight reaches below ({below:.2} to the surface's {surface:.2}, sun {sun:.2} under rock)"
                 ),
             );
             // A fire on the level below lights it, and only it.
@@ -1517,6 +1520,87 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
             if let Some(e) = fire {
                 t.app.sim.world.despawn_thing(e);
             }
+            println!("\n# the sky down a shaft (7161f369)");
+            // Three pits beside the stacked scene, one, two and three levels
+            // deep, at noon under a clear sky.
+            t.app.light.pin_sun = Some((90.0, 60.0));
+            let air = defs.terrain.iter().position(|d| d.air).unwrap() as rim_sim::defs::DefId;
+            // Every cell dug, with what it was, to put back after.
+            let mut dug: Vec<(IVec, rim_sim::defs::DefId)> = Vec::new();
+            let mut pit = |t: &mut T, o: IVec, deep: i32| {
+                let mut set = |t: &mut T, q: IVec, to: rim_sim::defs::DefId| {
+                    let was = t.w().map.terrain[t.w().map.idx(q)];
+                    dug.push((q, was));
+                    let cost = t.w().defs.terrain[to as usize].path_cost;
+                    t.app.sim.world.map.set_terrain(q, to, cost);
+                };
+                for p in (0..3).flat_map(|y| (0..3).map(move |x| o.offset(x, y))) {
+                    if !t.w().map.inb(IVec::at(p.x, p.y, -deep)) {
+                        continue;
+                    }
+                    for e in
+                        [t.w().map.fixture_at(p), t.w().map.item_at(p), t.w().map.floor_at(p)].into_iter().flatten()
+                    {
+                        t.app.sim.world.despawn_thing(e);
+                    }
+                    for z in 0..deep {
+                        set(t, IVec::at(p.x, p.y, -z), air);
+                    }
+                    let floor = IVec::at(p.x, p.y, -deep);
+                    if let Some(leaves) = t.w().solid_at(floor).and_then(|r| r.leaves_r) {
+                        set(t, floor, leaves);
+                    }
+                }
+            };
+            let pits: Vec<(IVec, i32)> = (1..=3).map(|deep| (top.offset(-6 - 5 * deep, -12), deep)).collect();
+            if t.w().map.levels().start() <= &-3 {
+                for &(o, deep) in &pits {
+                    pit(&mut t, o, deep);
+                }
+                t.app.sim.world.map.ensure_rooms();
+                t.focus(pits[1].0);
+                let mut seen = Vec::new();
+                for &(o, deep) in &pits {
+                    t.app.cam.z = -deep;
+                    t.app.light.adapt_now();
+                    t.light_settles().await;
+                    let (open, sun) = t.app.light.sky_at(o.x as f32 + 1.5, o.y as f32 + 1.5).unwrap_or((1.0, 1.0));
+                    seen.push((deep, open, sun));
+                    if deep == 1 {
+                        t.shot("pit_at_noon").await;
+                    }
+                }
+                let sky = |(_, open, sun): (i32, f32, f32)| open * 0.4 + sun * 0.6;
+                let falls = seen.windows(2).all(|w| sky(w[1]) < sky(w[0]));
+                t.check(falls, format!("the sky falls with depth down a shaft: {seen:.2?}"));
+                t.check(
+                    seen[0].2 > 0.5,
+                    format!("a pit a level deep is sunlit on its floor at noon ({:.2})", seen[0].2),
+                );
+                // The stacked scene's room below, beside its pits: no sky.
+                t.app.cam.z = -1;
+                t.light_settles().await;
+                let cellar = (-6..=6i32)
+                    .flat_map(|dy| (-6..=6i32).map(move |dx| IVec::at(top.x + dx, top.y + dy, -1)))
+                    .find(|&p| {
+                        let m = &t.w().map;
+                        m.passable(p) && !crate::occluders::open_to_sky(m, p.x, p.y, -1)
+                    });
+                let dark = cellar.and_then(|p| t.app.light.sky_at(p.x as f32 + 0.5, p.y as f32 + 0.5));
+                t.check(
+                    dark.is_some_and(|(open, sun)| open == 0.0 && sun == 0.0),
+                    format!("a cellar beside it sees no sky ({dark:?})"),
+                );
+            } else {
+                t.check(false, "three levels to dig a shaft down");
+            }
+            for (q, was) in dug.into_iter().rev() {
+                let cost = t.w().defs.terrain[was as usize].path_cost;
+                t.app.sim.world.map.set_terrain(q, was, cost);
+            }
+            t.app.sim.world.map.ensure_rooms();
+            t.app.light.pin_sun = None;
+            t.app.cam.z = 0;
             t.app.sim.world.fields.set_ambient(cloud, None);
             t.app.sim.world.fields.set_ambient(light, None);
             if t.app.cam.z != 0 {
