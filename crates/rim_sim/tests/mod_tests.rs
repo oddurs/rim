@@ -71,6 +71,33 @@ fn a_slow_mod_is_a_note_not_a_warning() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// The modding guide's sky example (docs/modding/examples/two_suns) loads
+/// clean on its own and beside the weather plugin, and passes its tests
+/// there: two suns, a moon with phases, and a storm that dims them.
+#[test]
+fn the_two_suns_example_loads_and_passes_its_tests() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let dir = std::env::temp_dir().join(format!("rim-two-suns-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    for m in ["core", "weather"] {
+        copy(&root.join("mods").join(m), &dir.join(m));
+    }
+    copy(&root.join("docs/modding/examples/two_suns"), &dir.join("two_suns"));
+    let r = modtest::check_mod(&dir.join("two_suns"), 6.0).unwrap();
+    assert!(r.warnings.is_empty() && r.errors.is_empty(), "{:?} {:?}", r.warnings, r.errors);
+    // Beside the weather too, nothing conflicts; and its moon's tint joins
+    // core's.
+    let sim = rim_sim::Sim::build(&dir, 1, &|_| true, 64).unwrap();
+    assert!(sim.warnings.is_empty(), "{:?}", sim.warnings);
+    let tints: Vec<&str> = sim.world.defs.sky.tint.keys().map(|k| k.as_str()).collect();
+    assert_eq!(tints, ["dawn", "dusk", "green_moon", "overcast"]);
+    let results = modtest::run_mod(&dir.join("two_suns"), None).unwrap();
+    let failed: Vec<_> =
+        results.iter().filter_map(|r| r.failure.as_ref().map(|f| format!("{}: {f}", r.name))).collect();
+    assert!(results.len() >= 4 && failed.is_empty(), "{} tests: {failed:#?}", results.len());
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 fn copy(from: &Path, to: &Path) {
     std::fs::create_dir_all(to).unwrap();
     for e in std::fs::read_dir(from).unwrap().flatten() {

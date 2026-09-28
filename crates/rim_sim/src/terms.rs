@@ -14,8 +14,8 @@
 //! programs and evaluate in integer fixed point: no floats and no
 //! transcendental maths, so lockstep holds on every platform.
 //!
-//! Inputs are global (time of day and year, other fields' outdoor values,
-//! noise, constants), plus those read at the cell a derived or stock field
+//! Inputs are global (time of day and year, a cycle of any number of days,
+//! other fields' outdoor values, noise, constants), plus those read at the cell a derived or stock field
 //! is worked out at: `field`, another field's value there (its outdoor value
 //! where there is no cell); `terrain`, a property of the ground there;
 //! `near`, how many cells it is to the nearest terrain with a tag; and
@@ -71,9 +71,10 @@ pub enum InputDef {
 #[derive(Deserialize, Clone, Debug, Default)]
 #[serde(deny_unknown_fields)]
 pub struct SourceDef {
-    /// `"year"` (0..1), `"hour"` (0..24), `"sky"` (0 in an enclosed room, 1
-    /// elsewhere), `"depth"` (levels below the surface, 0 on it), or for a
-    /// stock field's rate `"self"`, `"base"` or `"above_base"`.
+    /// `"year"` (0..1), `"hour"` (0..24), `"cycle"` (0..1 over `days`),
+    /// `"sky"` (0 in an enclosed room, 1 elsewhere), `"depth"` (levels
+    /// below the surface, 0 on it), or for a stock field's rate `"self"`,
+    /// `"base"` or `"above_base"`.
     pub input: Option<String>,
     /// Another field's outdoor value.
     pub ambient: Option<String>,
@@ -91,6 +92,12 @@ pub struct SourceDef {
     /// Noise period in game hours.
     #[serde(default)]
     pub hours: f64,
+    /// A cycle's period in game days: a moon's phases, an eclipse's season.
+    #[serde(default)]
+    pub days: f64,
+    /// How far into its cycle the game starts, in days.
+    #[serde(default)]
+    pub offset: f64,
     #[serde(default)]
     pub curve: Vec<[f64; 2]>,
 }
@@ -104,6 +111,11 @@ pub type TermsDef = BTreeMap<String, TermDef>;
 enum Src {
     Year,
     Hour,
+    /// Ticks into a cycle at tick 0, and its period in ticks.
+    Cycle {
+        offset: u64,
+        period: u64,
+    },
     Depth,
     Sky,
     Own,
@@ -111,7 +123,10 @@ enum Src {
     AboveBase,
     Ambient(usize),
     Field(usize),
-    Noise { key: u64, period: u64 },
+    Noise {
+        key: u64,
+        period: u64,
+    },
     Terrain(usize),
     Near(usize),
     Const(i64),
@@ -295,6 +310,7 @@ impl Terms {
             let mut v = match i.src {
                 Src::Year => env.year(),
                 Src::Hour => env.hour(),
+                Src::Cycle { offset, period } => cycle(env.tick(), offset, period),
                 Src::Depth => env.depth(),
                 Src::Sky => env.sky(),
                 Src::Own => env.own(),
@@ -336,10 +352,23 @@ fn compile_source(s: &SourceDef, ctx: &str, names: &dyn Names, warnings: &mut Ve
             "{ctx}: an input needs exactly one of `input`, `ambient`, `field`, `noise`, `terrain` or `near`"
         ));
     }
+    if (s.days != 0.0 || s.offset != 0.0) && s.input.as_deref() != Some("cycle") {
+        return Err(format!("{ctx}: `days` and `offset` are for `input = \"cycle\"`"));
+    }
     let src = if let Some(i) = &s.input {
         match i.as_str() {
             "year" => Src::Year,
             "hour" => Src::Hour,
+            "cycle" => {
+                // An hour at least, and short of a million years: a moon
+                // whose cycle rounds to nothing would never wax.
+                if !((1.0 / 24.0..=3.65e8).contains(&s.days) && s.offset.is_finite()) {
+                    return Err(format!("{ctx}: a cycle needs `days` of an hour (1/24) or more"));
+                }
+                let period = (s.days * crate::TICKS_PER_DAY as f64).round() as i64;
+                let offset = ((s.offset * crate::TICKS_PER_DAY as f64).round() as i64).rem_euclid(period);
+                Src::Cycle { offset: offset as u64, period: period as u64 }
+            }
             "depth" => Src::Depth,
             "sky" => Src::Sky,
             "self" => Src::Own,
@@ -347,7 +376,7 @@ fn compile_source(s: &SourceDef, ctx: &str, names: &dyn Names, warnings: &mut Ve
             "above_base" => Src::AboveBase,
             other => {
                 return Err(format!(
-                    "{ctx}: unknown input '{other}' (have: year, hour, depth, sky, self, base, above_base)"
+                    "{ctx}: unknown input '{other}' (have: year, hour, cycle, depth, sky, self, base, above_base)"
                 ))
             }
         }
@@ -428,6 +457,14 @@ pub fn order(reads: &[Vec<usize>], names: &[&str]) -> Result<Vec<usize>, String>
         visit(i, reads, &mut state, &mut out, &mut Vec::new(), names)?;
     }
     Ok(out)
+}
+
+/// How far through its cycle `tick` is, 0..`Q`: integer maths, so every
+/// machine agrees on a moon's phase. A period is under a million years of
+/// ticks, so `into * Q` fits.
+fn cycle(tick: u64, offset: u64, period: u64) -> i64 {
+    let into = (tick % period + offset) % period;
+    (into * Q as u64 / period) as i64
 }
 
 #[cfg(test)]
@@ -627,5 +664,44 @@ mod tests {
         assert!(pos(1) < pos(0) && pos(0) < pos(2));
         let e = order(&[vec![1], vec![0]], &["a", "b"]).unwrap_err();
         assert!(e.contains("a -> b -> a"), "{e}");
+    }
+
+    #[test]
+    fn a_cycle_runs_zero_to_one_over_its_days_and_matches_floats() {
+        let def = parse(
+            r#"
+            [moon]
+            of = [{ input = "cycle", days = 29.5, offset = 3.25 }]
+            [eclipse]
+            of = [{ input = "cycle", days = 20, curve = [[0, 1], [0.02, 0], [0.98, 0], [1, 1]] },
+                  { input = "cycle", days = 1.5, offset = -0.5 }]
+            "#,
+        );
+        let t = Terms::compile(&def, "t", &resolve, &mut Vec::new()).unwrap();
+        let day = crate::TICKS_PER_DAY as f64;
+        let reference = |tick: u64, days: f64, offset: f64| (tick as f64 / day + offset).rem_euclid(days) / days;
+        let mut worst: f64 = 0.0;
+        for k in 0..20_000u64 {
+            // Across years, and far into a long game.
+            let tick = k * 7919 + if k % 2 == 0 { 0 } else { 1 << 40 };
+            let e = E { year: 0, hour: 0, amb: vec![0, 0], tick };
+            let got = t.explain(&e);
+            let moon = from_q(got.iter().find(|(l, _)| l == "moon").unwrap().1);
+            worst = worst.max((moon - reference(tick, 29.5, 3.25)).abs());
+            assert!((0.0..1.0).contains(&moon), "a phase is 0 up to 1: {moon}");
+        }
+        assert!(worst < 0.01, "within 0.01 of the float reference: {worst}");
+        // An eclipse: the product of two cycles, one through a curve.
+        let at = |tick| from_q(t.explain(&E { year: 0, hour: 0, amb: vec![0, 0], tick })[0].1);
+        assert!(at(0) > 0.0 && at((10.0 * day) as u64) == 0.0, "only near the long cycle's turn");
+        for bad in [
+            r#"of = [{ input = "cycle" }]"#,
+            r#"of = [{ input = "cycle", days = 0.001 }]"#,
+            r#"of = [{ input = "hour", days = 8 }]"#,
+            r#"of = [{ ambient = "cloud", offset = 2 }]"#,
+        ] {
+            let err = Terms::compile(&parse(&format!("[x]\n{bad}")), "t", &resolve, &mut Vec::new()).unwrap_err();
+            assert!(err.contains("days"), "{bad}: {err}");
+        }
     }
 }

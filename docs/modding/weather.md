@@ -44,6 +44,7 @@ That reads: 10°C, plus 9° times a curve over the hour of the day.
 |---|---|
 | `{ input = "hour" }` | Hour of the day, 0 to 24 |
 | `{ input = "year" }` | Fraction of the year, 0 to 1 |
+| `{ input = "cycle", days = 8, offset = 2 }` | 0 to 1 over its own period of `days`; `offset` days into it at the game's start (default 0). A moon's phases |
 | `{ ambient = "cloud" }` | Another field's outdoor value |
 | `{ field = "temperature" }` | Another field's value at the cell being read (a derived field's terms); elsewhere its outdoor value |
 | `{ noise = "gusts", hours = 2 }` | Smooth noise from -1 to 1, changing over about `hours` game hours |
@@ -414,6 +415,28 @@ target = "sky/core:core"
 color = "#7dffa0"
 of = [{ input = "hour", curve = [[21.0, 0.0], [23.0, 0.35], [24.0, 0.35]] }]
 ```
+
+A moon waxes and wanes with a `cycle` input: 0 to 1 over its own period of
+`days`, starting `offset` days into it. The game starts at 06:00, so a
+quarter-day offset puts this moon full at midnight, halfway round. An
+eclipse is two cycles multiplied, one through a curve that is 1 only near
+its turn.
+
+```toml
+[[patch]]
+target = "field/core:daylight"
+
+[patch.set.ambient.green_moon]
+scale = 12.0
+of = [
+  { input = "hour", curve = [[0, 1.0], [3, 1.0], [5, 0.0], [21, 0.0], [23, 1.0], [24, 1.0]] },
+  { input = "cycle", days = 8, offset = 0.25, curve = [[0, 0.0], [0.5, 1.0], [1, 0.0]] },
+]
+```
+
+[`examples/two_suns`](examples/two_suns) is a whole sky mod: core's sun
+replaced by two, the green moon with its phases and tint, and tests that
+load it beside the weather plugin and check a storm still dims the suns.
 
 The sun's brightness is the `daylight` field; where it is in the sky, for
 the shadows it casts, is `sun` on `[[sky]]`: the hours it rises and sets,

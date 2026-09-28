@@ -1,0 +1,46 @@
+# Sky bodies are `daylight` terms: how bright each is, over the hour and
+# any cycle of days. Weather sets `cloud`, and core's `light` is daylight
+# dimmed by cloud, so these suns dim in a storm without naming the weather.
+
+[[patch]]
+target = "field/core:daylight"
+
+# Core's sun, gone.
+[patch.set.ambient.sun]
+scale = 0.0
+
+# A red sun, up early and dim.
+[patch.set.ambient.red_sun]
+of = [{ input = "hour", curve = [[4, 0.0], [7, 40.0], [13, 40.0], [16, 0.0]] }]
+
+# A white sun, up late. Together they stay within daylight's 0 to 100.
+[patch.set.ambient.white_sun]
+of = [{ input = "hour", curve = [[9, 0.0], [12, 60.0], [20, 60.0], [23, 0.0]] }]
+
+# A green moon: up through the night, full every eight days. Its phase is
+# a cycle, 0 to 1 over `days`, full halfway; the game starts at 06:00, so a
+# quarter-day offset makes it full at midnight.
+[patch.set.ambient.green_moon]
+scale = 12.0
+of = [
+  { input = "hour", curve = [[0, 1.0], [3, 1.0], [5, 0.0], [21, 0.0], [23, 1.0], [24, 1.0]] },
+  { input = "cycle", days = 8, offset = 0.25, curve = [[0, 0.0], [0.5, 1.0], [1, 0.0]] },
+]
+
+# The renderer casts one sun's shadows: the white sun's, the brighter. The
+# red sun lights the morning without them.
+[[patch]]
+target = "sky/core:core"
+set = { sun = { rise = 9.0, set = 23.0, peak = 55.0, arc = [-10.0, 190.0] } }
+
+# The moon's light is green, as strong as the moon is full. A tint of its
+# own, so core's dawn, dusk and overcast tints stay.
+[[patch]]
+target = "sky/core:core"
+
+[patch.set.tint.green_moon]
+color = "#7dffa0"
+of = [
+  { input = "hour", curve = [[0, 0.5], [3, 0.5], [5, 0.0], [21, 0.0], [23, 0.5], [24, 0.5]] },
+  { input = "cycle", days = 8, offset = 0.25, curve = [[0, 0.0], [0.5, 1.0], [1, 0.0]] },
+]

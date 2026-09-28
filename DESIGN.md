@@ -307,7 +307,8 @@ of = [{ input = "hour", curve = [[3, -1.0], [9, 0.0], [15, 1.0], [21, 0.0], [27,
 ```
 
 - **Inputs** (v1): `input = "year"` (0–1), `input = "hour"` (0–24),
-  `ambient = "id"` (another field's outdoor value), `field = "id"` (another
+  `input = "cycle"` (0–1 over its own `days`, `offset` days into it at the
+  start: a moon's phases), `ambient = "id"` (another field's outdoor value), `field = "id"` (another
   field's value at the cell being read, for a derived field; outdoors, its
   outdoor value), `noise = "key"` (smooth deterministic noise with a period
   of `hours`), and plain numbers. A `kind = "derived"` field is only its
@@ -443,10 +444,14 @@ or the weather plugin.
 - **Day length stays fixed.** A day is `TICKS_PER_DAY` and `hour` runs 0–24,
   because day length is pacing (needs, work, sleep), not astronomy. A planet
   with long days is a curve with 20 bright hours.
-- **Later (0209):** `input = "cycle"` with its own period in days, for moon
-  phases and eclipses, and a sky tint made of labelled colour terms, one per
-  sky body, so a green moon mixes with dusk instead of replacing it. Light
-  stays a scalar in the sim; colour is the renderer's business.
+- **Cycles (ebb814ad):** `input = "cycle"` runs 0 to 1 over its own
+  period of `days` (and an `offset` into it), in the same integer fixed
+  point as `hour` and `year`, from the tick alone: a moon's phases, and an
+  eclipse as the product of two cycles through a curve. The sky tint is
+  labelled colour terms, one per sky body, so a green moon mixes with dusk
+  instead of replacing it. Light stays a scalar in the sim; colour is the
+  renderer's business. `docs/modding/examples/two_suns` is the worked
+  example, tested beside the weather plugin.
 
 ### Calendar
 

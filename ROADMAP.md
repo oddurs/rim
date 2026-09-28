@@ -428,7 +428,7 @@ The run gets a shape: eras, storyteller tiers, defensive strength in the threat 
 
 ## plugin-api — Plugin API
 
-`####······` 39% · 12 of 31 done · due 2027-02-01
+`#####·····` 42% · 13 of 31 done · due 2027-02-01
 
 The API grows up: stat pipeline, script components, custom jobs, needs and def kinds, modules and custom events, a real sandbox with hard limits, factions as data, rim test, typed API. Everything Mood needs, and everything DESIGN.md §10 says a mod from a stranger's repo must be safe to do.
 
@@ -446,7 +446,6 @@ The API grows up: stat pipeline, script components, custom jobs, needs and def k
 - [ ] `dbb92ebe` One ladder for contested slots: a compatibility mod, the player's pick, then labelled load order <sup>feature · p1 · l · engine</sup>
 - [ ] `e63fd9c3` Script hook for a stage of map generation <sup>feature · p3 · m · engine</sup>
 - [ ] `eb2c9422` Which platforms beyond desktop, and what do they cost? <sup>spike · p2 · s · engine</sup>
-- [ ] `ebb814ad` Sky bodies: a cycle input and coloured sky terms <sup>feature · p2 · m · engine</sup>
 - [ ] `ed876ad7` Monochrome icon set with mod-supplied icons <sup>feature · p2 · m · core</sup>
 - [ ] `fac45b63` rim.pawn: scripts read a pawn's place, needs, skills, traits and job <sup>feature · p0 · m · engine</sup>
 - [ ] `fdafcb10` Custom jobs and work givers from Luau <sup>feature · p0 · l · engine</sup>
@@ -462,6 +461,7 @@ The API grows up: stat pipeline, script components, custom jobs, needs and def k
 - [x] `b0da41ef` Custom def kinds: plugins declare their own data <sup>feature · p1 · m · engine</sup>
 - [x] `b25b27e0` Image node and a mod atlas <sup>feature · p1 · m · engine</sup>
 - [x] `ded7881a` Deterministic math in scripts: replace library trig and exp <sup>feature · p1 · s · engine</sup>
+- [x] `ebb814ad` Sky bodies: a cycle input and coloured sky terms <sup>feature · p2 · m · engine</sup>
 - [x] `f6e18475` Mod modules: require("@mod/path") limited to declared dependencies <sup>feature · p0 · m · engine</sup>
 
 ## houses — Houses
