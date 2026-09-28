@@ -2041,6 +2041,13 @@ What was built (3979868c):
   `drown` of their health an hour. A door with `holds_water` stops water.
   Swimming waits on movement classes (3fea3b3d): until then nobody swims,
   and a trench is air, which nobody walks anyway.
+- Drawing it (202b16c4): one texture a level, a texel a cell, clear at a
+  seventh and near opaque full, over what stands on the level and under
+  who walks it; the level below's water shows through air with the rest
+  of it, dimmed. The sim keeps a water revision per level that moves only
+  when a basin's depth or wet cells do, and a filling level is redrawn at
+  most ten times a second. The flooded level in the render bench costs
+  0.05 ms of world CPU a frame.
 
 ### Seeing it
 

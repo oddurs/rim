@@ -50,6 +50,8 @@ pub struct Basin {
     /// Its volume at the last `costs`, and whether it had risen since.
     last_volume: u64,
     rising: bool,
+    /// Depth and wet cells when the level's revision last moved for it.
+    shown: (u32, u32),
 }
 
 impl Basin {
@@ -89,6 +91,9 @@ impl Basin {
 struct Level {
     basins: Vec<Basin>,
     built: Option<(u64, u64)>,
+    /// Bumped whenever what its water looks like changes: a rebuild, or a
+    /// basin's depth or wet cells. What a renderer keys on.
+    rev: u64,
 }
 
 /// A basin's water in a save: named by its lowest cell, since basins are
@@ -374,6 +379,7 @@ impl Water {
             }
         }
         self.levels[k].basins = basins;
+        self.levels[k].rev += 1;
     }
 
     /// One tick: sources fill their basins, then water falls, a level at a
@@ -407,11 +413,25 @@ impl Water {
                     }
                 }
             }
-            for b in &mut self.levels[k].basins {
+            let level = &mut self.levels[k];
+            for b in &mut level.basins {
                 if b.volume > 0 && (b.front as usize) < b.rings.len() {
                     b.front += 1;
                 }
+                let now = (b.depth(), b.wet());
+                if now != b.shown {
+                    b.shown = now;
+                    level.rev += 1;
+                }
             }
+        }
+    }
+
+    /// What level `z`'s water looks like changed when this moved.
+    pub fn revision(&self, z: i32) -> u64 {
+        match self.levels.get((z - self.lowest) as usize) {
+            Some(l) => l.rev,
+            None => 0,
         }
     }
 

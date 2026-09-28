@@ -116,6 +116,68 @@ impl Ground {
     }
 }
 
+/// Water in the basins (DESIGN.md §6d): a texel a cell, deeper darker, one
+/// texture per level as `Ground` keeps them. A level's texture is redone
+/// when the sim's water revision for it moves, at most `WATER_HZ` a second
+/// while a basin fills.
+#[derive(Default)]
+pub struct Water {
+    /// Level, texture, the revision it shows, and when it was last redone.
+    levels: Vec<(i32, Texture2D, u64, f64)>,
+}
+
+/// How often a filling level's water is redrawn, a second.
+const WATER_HZ: f64 = 10.0;
+
+impl Water {
+    fn texels(w: &World, z: i32) -> Image {
+        let (mw, mh) = (w.map.w, w.map.h);
+        let mut bytes = vec![0u8; (mw * mh * 4) as usize];
+        let start = w.map.idx(IVec::at(0, 0, z));
+        for b in w.water.basins(z) {
+            let d = b.depth();
+            if d == 0 {
+                continue;
+            }
+            // Clear at a seventh, all but opaque full.
+            let a = (70 + d * 25).min(245) as u8;
+            for &c in &b.cells[..b.wet() as usize] {
+                let o = (c as usize - start) * 4;
+                bytes[o..o + 4].copy_from_slice(&[38, 92, 150, a]);
+            }
+        }
+        Image { bytes, width: mw as u16, height: mh as u16 }
+    }
+
+    /// Bring `view`'s water and its neighbours' up to date, and drop the
+    /// rest.
+    pub fn update(&mut self, w: &World, view: i32, now: f64) {
+        let (mw, mh) = (w.map.w, w.map.h);
+        self.levels.retain(|(z, t, _, _)| {
+            (z - view).abs() <= 1 && w.map.levels().contains(z) && t.width() as i32 == mw && t.height() as i32 == mh
+        });
+        for z in (view - 1..=view + 1).filter(|z| w.map.levels().contains(z)) {
+            let rev = w.water.revision(z);
+            match self.levels.iter_mut().find(|l| l.0 == z) {
+                None => {
+                    let t = Texture2D::from_image(&Self::texels(w, z));
+                    t.set_filter(FilterMode::Nearest);
+                    self.levels.push((z, t, rev, now));
+                }
+                Some((_, tex, seen, at)) if *seen != rev && now - *at >= 1.0 / WATER_HZ => {
+                    tex.update(&Self::texels(w, z));
+                    (*seen, *at) = (rev, now);
+                }
+                Some(_) => {}
+            }
+        }
+    }
+
+    fn of(&self, z: i32) -> Option<&Texture2D> {
+        self.levels.iter().find(|l| l.0 == z).map(|l| &l.1)
+    }
+}
+
 /// How much darker the level below is, seen through air.
 const BELOW_DIM: f32 = 0.55;
 
@@ -463,11 +525,24 @@ pub fn things(app: &mut App) -> Counts {
     // The level below, where this one is open to it (DESIGN.md §6d): its
     // ground and what stands still on it, dimmed. The dimming covers the
     // map, and this level's ground covers all but its air.
+    // Over what stands on a level, under who walks it.
+    let water = |at: i32| {
+        if let Some(tex) = app.water.of(at) {
+            draw_texture_ex(
+                tex,
+                sx,
+                sy,
+                WHITE,
+                DrawTextureParams { dest_size: Some(vec2(mw, mh)), ..Default::default() },
+            );
+        }
+    };
     if !w.map.air_cells(level).is_empty() {
         ground(level - 1);
         for layer in 0..3 {
             app.meshes.draw_layer(w, cam, layer, target, true);
         }
+        water(level - 1);
         draw_rectangle(sx, sy, mw, mh, Color::new(0.0, 0.0, 0.0, BELOW_DIM));
     }
     ground(level);
@@ -497,6 +572,7 @@ pub fn things(app: &mut App) -> Counts {
             }
         }
     }
+    water(level);
     for (cell, n) in app.meshes.counts() {
         label(cell, n);
     }
