@@ -24,6 +24,12 @@ const HOLD_SECS: f64 = 0.4;
 /// half as much again as a line's own.
 const LIT: f32 = 0.045;
 const LENS_BOOST: f32 = 1.5;
+/// Measuring: every line a little firmer than Plan's, every fifth line
+/// heavier still (`seam_major`), counted from the map's origin.
+const MEASURE_LINE: f32 = 1.25;
+pub const MAJOR_EVERY: i32 = 5;
+/// The pointer's row and column, lifted while measuring.
+const MEASURE_LIFT: f32 = 0.05;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Level {
@@ -35,8 +41,8 @@ pub enum Level {
     Plan,
 }
 
-/// The grid a frame wants. A select drag snaps to cells, so it gets the
-/// lens too.
+/// The grid a frame wants from the tool in hand. A select drag snaps to
+/// cells, so it gets the lens too. Measuring (G) lies over any level.
 pub fn level(tool: Tool, dragging: bool) -> Level {
     match (tool, dragging) {
         (Tool::Select, false) => Level::Rest,
@@ -71,18 +77,25 @@ impl Fade {
 pub struct Grid {
     lens: Fade,
     plan: Fade,
+    measure: Fade,
     last: f64,
     /// The pointer in world tiles, when it's over the map.
     pointer: Option<(f32, f32)>,
 }
 
 impl Grid {
-    pub fn update(&mut self, level: Level, pointer: Option<(f32, f32)>, now: f64) {
+    /// The pointer in world tiles, when it's over the map.
+    pub fn pointer(&self) -> Option<(f32, f32)> {
+        self.pointer
+    }
+
+    pub fn update(&mut self, level: Level, measure: bool, pointer: Option<(f32, f32)>, now: f64) {
         let dt = (now - self.last).clamp(0.0, 0.1);
         self.last = now;
         let hold = level == Level::Rest;
         self.lens.step(level == Level::Lens, hold, now, dt);
         self.plan.step(level == Level::Plan, hold, now, dt);
+        self.measure.step(measure, !measure, now, dt);
         self.pointer = pointer;
     }
 }
@@ -106,21 +119,31 @@ fn band(zoom: f32) -> f32 {
     }
 }
 
-/// How strongly the ticks and the lines draw this frame, 0 to 1: their
-/// fades, at this zoom.
-pub fn strength(app: &App) -> (f32, f32) {
-    let k = band(app.cam.zoom);
-    (app.grid.lens.shown * k, app.grid.plan.shown * k)
+/// How strongly each part of the grid draws this frame, 0 to 1: its
+/// fade, at this zoom. Measuring's heavier lines draw at any zoom.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Strength {
+    pub lens: f32,
+    pub plan: f32,
+    pub measure: f32,
+    pub majors: f32,
+}
+
+pub fn strength(app: &App) -> Strength {
+    let (g, k) = (&app.grid, band(app.cam.zoom));
+    Strength { lens: g.lens.shown * k, plan: g.plan.shown * k, measure: g.measure.shown * k, majors: g.measure.shown }
 }
 
 /// Draw the grid over the ground. Call it before the things.
 pub fn draw(app: &App) {
     let g = &app.grid;
     let (cam, p) = (&app.cam, &app.palette);
-    let (lens, plan) = strength(app);
-    if lens <= 0.0 && plan <= 0.0 {
+    let Strength { lens, plan, measure, majors } = strength(app);
+    if lens <= 0.0 && plan <= 0.0 && majors <= 0.0 {
         return;
     }
+    // Every line's strength, measuring or planning.
+    let line = plan.max(measure * MEASURE_LINE);
     let map = &app.sim.world.map;
     let (x0, y0, x1, y1) = draw::visible(app);
     let (x1, y1) = ((x1 + 1).min(map.w), (y1 + 1).min(map.h));
@@ -134,17 +157,44 @@ pub fn draw(app: &App) {
     let sy = |gy: i32| snap(cam.to_screen(0.0, gy as f32).1);
     let (left, top, right, bottom) = (sx(x0), sy(y0), sx(x1), sy(y1));
     let seam = |x: f32, y: f32, w: f32, h: f32, a: f32| draw_rectangle(x, y, w, h, fade(p.seam, a));
-    if plan > 0.0 {
-        // A seam, and its lit edge a pixel to the lower right.
-        for gx in x0..=x1 {
-            seam(sx(gx), top, px, bottom - top, plan);
-            draw_rectangle(sx(gx) + px, top, px, bottom - top, fade(p.chalk, LIT * plan));
-        }
-        for gy in y0..=y1 {
-            seam(left, sy(gy), right - left, px, plan);
-            draw_rectangle(left, sy(gy) + px, right - left, px, fade(p.chalk, LIT * plan));
+    if let (true, Some((px_, py_))) = (measure > 0.0, g.pointer) {
+        // The pointer's row and column lift, to read along.
+        let (cx, cy) = (px_.floor() as i32, py_.floor() as i32);
+        if (0..map.w).contains(&cx) && (0..map.h).contains(&cy) {
+            let lift = fade(p.chalk, MEASURE_LIFT * measure);
+            draw_rectangle(sx(cx), top, sx(cx + 1) - sx(cx), bottom - top, lift);
+            draw_rectangle(left, sy(cy), right - left, sy(cy + 1) - sy(cy), lift);
         }
     }
+    // A seam and its lit edge a pixel to the lower right. Measuring lays
+    // `seam_major` over every fifth, so it's never fainter than the rest.
+    let groove = |x: f32, y: f32, w: f32, h: f32, down: bool, c: Color, a: f32, lit: f32| {
+        draw_rectangle(x, y, w, h, fade(c, a));
+        let (dx, dy) = if down { (px, 0.0) } else { (0.0, px) };
+        draw_rectangle(x + dx, y + dy, w, h, fade(p.chalk, lit * a));
+    };
+    // With no lines at this zoom, only the fifths are visited.
+    let step = if line > 0.0 { 1 } else { MAJOR_EVERY };
+    let first = |g: i32| if step == 1 { g } else { g + (MAJOR_EVERY - g.rem_euclid(MAJOR_EVERY)) % MAJOR_EVERY };
+    if line > 0.0 || majors > 0.0 {
+        for gx in (first(x0)..=x1).step_by(step as usize) {
+            if line > 0.0 {
+                groove(sx(gx), top, px, bottom - top, true, p.seam, line, LIT);
+            }
+            if majors > 0.0 && gx % MAJOR_EVERY == 0 {
+                groove(sx(gx), top, px, bottom - top, true, p.seam_major, majors, 2.0 * LIT);
+            }
+        }
+        for gy in (first(y0)..=y1).step_by(step as usize) {
+            if line > 0.0 {
+                groove(left, sy(gy), right - left, px, false, p.seam, line, LIT);
+            }
+            if majors > 0.0 && gy % MAJOR_EVERY == 0 {
+                groove(left, sy(gy), right - left, px, false, p.seam_major, majors, 2.0 * LIT);
+            }
+        }
+    }
+    let plan = plan.max(measure);
     let Some(ptr) = g.pointer else { return };
     let reach = LENS_CELLS.ceil() as i32 + 1;
     let (cx, cy) = (ptr.0.floor() as i32, ptr.1.floor() as i32);
@@ -193,6 +243,15 @@ mod tests {
     }
 
     #[test]
+    fn measuring_keeps_a_tool_s_ticks() {
+        let mut g = Grid::default();
+        for i in 0..30 {
+            g.update(Level::Lens, true, None, i as f64 / 60.0);
+        }
+        assert_eq!((g.lens.shown, g.measure.shown), (1.0, 1.0));
+    }
+
+    #[test]
     fn the_lens_fades_out_over_its_reach() {
         assert_eq!(lens_at((5.0, 5.0), 5.0, 5.0), 1.0);
         assert_eq!(lens_at((5.0, 5.0), 5.0 + LENS_CELLS, 5.0), 0.0);
@@ -204,17 +263,17 @@ mod tests {
     fn a_tool_swap_holds_the_grid_up() {
         let mut g = Grid::default();
         for i in 0..30 {
-            g.update(Level::Lens, None, i as f64 / 60.0);
+            g.update(Level::Lens, false, None, i as f64 / 60.0);
         }
         assert_eq!(g.lens.shown, 1.0);
         // Put down for less than the hold: still up.
-        g.update(Level::Rest, None, 0.5 + 0.2);
+        g.update(Level::Rest, false, None, 0.5 + 0.2);
         assert_eq!(g.lens.shown, 1.0);
         // Long after: gone.
         let mut t = 0.7;
         while t < 2.0 {
             t += 1.0 / 60.0;
-            g.update(Level::Rest, None, t);
+            g.update(Level::Rest, false, None, t);
         }
         assert_eq!(g.lens.shown, 0.0);
     }
@@ -223,12 +282,12 @@ mod tests {
     fn starting_a_drag_hands_the_ticks_over_to_the_lines() {
         let mut g = Grid::default();
         for i in 0..30 {
-            g.update(Level::Lens, None, i as f64 / 60.0);
+            g.update(Level::Lens, false, None, i as f64 / 60.0);
         }
         let mut t = 0.5;
         for _ in 0..20 {
             t += 1.0 / 60.0;
-            g.update(Level::Plan, None, t);
+            g.update(Level::Plan, false, None, t);
         }
         assert_eq!(g.lens.shown, 0.0);
         assert_eq!(g.plan.shown, 1.0);

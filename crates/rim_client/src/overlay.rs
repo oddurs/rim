@@ -30,6 +30,8 @@ const GROUP_ALPHA: f32 = 0.7;
 const LEAVING_ALPHA: f32 = 0.3;
 /// A colonist a select drag will pick, before the button comes up.
 const PICKING_ALPHA: f32 = 0.6;
+/// Measuring's numbers are at least this far apart, in points.
+const LABEL_SPACING: f32 = 36.0;
 /// A select drag's box: its fill, over the chalk's own strength.
 const MARQUEE_FILL: f32 = 0.05;
 /// A path's dots, this many points apart.
@@ -50,10 +52,11 @@ pub struct Palette {
     /// selected or being added).
     pub zone: Color,
     pub zone_fill: Color,
-    /// A grid line (`grid`).
+    /// A grid line (`grid`), and measuring's every fifth.
     pub seam: Color,
     /// Can't: the theme's `threat`.
     pub threat: Color,
+    pub seam_major: Color,
     pub firm: f32,
     pub bracket_gap: f32,
     pub bracket_arm_min: f32,
@@ -82,6 +85,7 @@ impl Palette {
             keyline: c("keyline", "#080a0c8c"),
             seam: c("seam", "#0000001f"),
             threat: c("threat", "#ff6b5a"),
+            seam_major: c("seam_major", "#00000052"),
             stroke: shape("stroke", 1.5),
             hair: shape("hair", 1.0),
             zone: c("zone", "#a48fe0"),
@@ -135,6 +139,13 @@ pub enum Mark {
     /// What's left of a selected pawn's path, dotted.
     Path {
         points: Vec<(f32, f32)>,
+        alpha: f32,
+    },
+    /// A measuring line's cell number, where it crosses the pointer's
+    /// row or column.
+    Label {
+        at: (f32, f32),
+        text: String,
         alpha: f32,
     },
     /// A select drag's box, snapped to cells: dashed when it takes
@@ -391,6 +402,27 @@ pub fn scene(app: &App) -> Scene {
             marks.push(Mark::Chip(Chip { at: (at.0, at.1 + 4.0), text: "No one can reach this".into() }));
         }
     }
+    // Measuring: each heavier line's number where it crosses the
+    // pointer's row (above it) and column (beside it), fading with the
+    // lines. The screen's edges are under panels, and the hover readout
+    // already names the cell. Zoomed out, every other number or more
+    // goes, so they never run together.
+    let majors = crate::grid::strength(app).majors;
+    if let (true, Some(cell)) = (majors > 0.0, app.hover_cell.filter(|&c| w.map.inb(c))) {
+        let (_, row_top) = cam.to_screen(0.0, cell.y as f32);
+        let (col_right, _) = cam.to_screen(cell.x as f32 + 1.0, 0.0);
+        let (x0, y0, x1, y1) = draw::visible(app);
+        let every = crate::grid::MAJOR_EVERY;
+        let apart = every * (LABEL_SPACING / (every as f32 * cam.zoom)).ceil().max(1.0) as i32;
+        for gx in (x0..=x1 + 1).filter(|g| g % apart == 0) {
+            let (x, _) = cam.to_screen(gx as f32, 0.0);
+            marks.push(Mark::Label { at: (x + 3.0, row_top - p.caption - 5.0), text: gx.to_string(), alpha: majors });
+        }
+        for gy in (y0..=y1 + 1).filter(|g| g % apart == 0) {
+            let (_, y) = cam.to_screen(0.0, gy as f32);
+            marks.push(Mark::Label { at: (col_right + 3.0, y + 2.0), text: gy.to_string(), alpha: majors });
+        }
+    }
     // With the storage overlay on, a selected loose stack shows where it
     // will be carried.
     if app.storage_overlay {
@@ -592,13 +624,30 @@ pub fn draw(scene: &Scene, p: &Palette, zoom: f32) {
                 ring(p, *center, ring_radius(p, m).unwrap_or(0.0), p.firm, p.chalk, *alpha)
             }
             Mark::Notch { at, size } => notch(p, *at, *size),
-            Mark::Chip(_) => {}
+            Mark::Chip(_) | Mark::Label { .. } => {}
         }
     }
 }
 
+/// Text on the map with a dark shadow a point down and right, in the
+/// UI's font: `look` is (shadow, text). Stack counts, worksite readouts
+/// and measuring's numbers all draw this way.
+pub fn shadowed(
+    text: &mut rim_ui::text::Text,
+    s: &str,
+    size: f32,
+    weight: u16,
+    (x, y): (f32, f32),
+    (shadow, colour): (Rgba, Rgba),
+    dpi: f32,
+) -> [Draw; 2] {
+    let mut at = |d: f32| text.quads(s, size * dpi, weight, 0.0, None, (x + d) * dpi, (y + d) * dpi);
+    [Draw::Glyphs { quads: at(1.0), color: shadow }, Draw::Glyphs { quads: at(0.0), color: colour }]
+}
+
 /// The scene's chips as UI draws, in physical pixels: a small panel with
-/// the text in the UI's font, kept on screen.
+/// the text in the UI's font, kept on screen. Measuring's numbers go
+/// here too, as they're text.
 pub fn chips(scene: &Scene, p: &Palette, text: &mut rim_ui::text::Text, dpi: f32) -> Vec<Draw> {
     let rgba = |c: Color| [c.r, c.g, c.b, c.a];
     let (sw, sh) = (screen_width(), screen_height());
@@ -606,6 +655,11 @@ pub fn chips(scene: &Scene, p: &Palette, text: &mut rim_ui::text::Text, dpi: f32
     let h = (size * p.leading + pad).round();
     let mut out = Vec::new();
     for m in &scene.marks {
+        if let Mark::Label { at, text: t, alpha } = m {
+            let look = (rgba(fade(p.keyline, *alpha)), rgba(fade(p.chalk, 0.85 * alpha)));
+            out.extend(shadowed(text, t, size * 0.9, 500, *at, look, dpi));
+            continue;
+        }
         let Mark::Chip(c) = m else { continue };
         let mut quads = text.quads(&c.text, size * dpi, 500, 0.0, None, 0.0, 0.0);
         let tw = quads.iter().map(|q| (q.dst[0] + q.dst[2]) / dpi).fold(0.0f32, f32::max);

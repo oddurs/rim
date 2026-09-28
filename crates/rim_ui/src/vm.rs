@@ -828,6 +828,7 @@ impl UiVm {
         act!("toggle_profiler", (), |_a| UiAction::ToggleProfiler);
         act!("toggle_devtools", (), |_a| UiAction::ToggleDevtools);
         act!("toggle_outlines", (), |_a| UiAction::ToggleOutlines);
+        act!("toggle_measure", (), |_a| UiAction::ToggleMeasure);
         act!("preview", Option<String>, |key| UiAction::Preview(key));
         act!("zoom", f32, |f| match f.is_finite() && f > 0.0 {
             true => UiAction::Zoom(f.clamp(0.25, 4.0)),

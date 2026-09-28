@@ -195,6 +195,8 @@ pub enum UiAction {
     SelectZone(Option<u32>),
     CycleOverlay,
     SetOverlay(Option<usize>),
+    /// Show or hide the measuring grid (DESIGN.md §6f).
+    ToggleMeasure,
     ToggleProfiler,
     ToggleDevtools,
     /// Devtools: outline every layout box (handled by the engine).

@@ -372,7 +372,7 @@ inspector.tab({
 inspector.action({
 	id = "my_mod:rally",
 	label = "Rally",
-	key = "g",
+	key = "y",
 	applies = function(sel) return sel.kind == "pawn" and sel.player end,
 	run = function(sel) act.send("my_mod:rally", sel.id) end,
 })
@@ -826,6 +826,7 @@ same file:
 | `color.keyline` | `#080a0c8c` | The dark line under every overlay stroke |
 | `color.seam` | `#0000001f` | A grid line, darkening the ground it crosses |
 | `color.threat` | `#ff6b5a` | Can't: the notch on a job no one can reach |
+| `color.seam_major` | `#00000052` | Every fifth grid line while measuring (G) |
 | `color.zone`, `color.zone_fill` | `#a48fe0`, `#a48fe01f` | Stockpiles: their edge, and their wash at rest (deeper when selected or being added) |
 | `shape.hair` | 1 | A zone's edge, and a zone drag's box |
 | `shape.stroke` | 1.5 | Hover's line weight, a hovered or selected stockpile's edge, a store's outline |
