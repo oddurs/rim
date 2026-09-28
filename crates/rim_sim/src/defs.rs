@@ -1192,6 +1192,127 @@ pub struct SunPath {
     pub arc: [f64; 2],
 }
 
+impl SunPath {
+    /// Rise and set are hours from 0 to 24, apart, the peak is 0 to 90°,
+    /// and the arc is finite.
+    fn valid(&self) -> bool {
+        let hours = |h: f64| (0.0..24.0).contains(&h);
+        hours(self.rise)
+            && hours(self.set)
+            && self.rise != self.set
+            && (0.0..=90.0).contains(&self.peak)
+            && self.arc.iter().all(|a| a.is_finite())
+    }
+}
+
+fn dwhite() -> String {
+    "#ffffff".into()
+}
+fn dhalf_degree() -> f64 {
+    0.5
+}
+/// A body in the sky the renderer lights the world from: where it crosses
+/// the sky, its colour, and how soft its shadows are (DESIGN.md §6e). How
+/// bright it is, is terms, so phases and eclipses are the terms' business:
+/// either one labelled term of a field, when its light is the sim's too
+/// (core's sun is `daylight`'s `sun`), or terms of its own, in `light`'s
+/// units, when it only lights the picture (core's moon: plants don't grow
+/// by it).
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SkyBodyDef {
+    pub id: String,
+    /// The field whose term is its brightness, and that term's label.
+    #[serde(default)]
+    pub field: Option<String>,
+    #[serde(default)]
+    pub term: Option<String>,
+    /// Or its brightness for the renderer alone, as a tint's strength is.
+    #[serde(default = "d_one")]
+    pub scale: f64,
+    #[serde(default)]
+    pub of: Vec<InputDef>,
+    /// Up at `rise`, down at `set` (hours), highest at the middle of the
+    /// two, crossing azimuths `arc` (as `SunPath`).
+    pub rise: f64,
+    pub set: f64,
+    pub peak: f64,
+    pub arc: [f64; 2],
+    #[serde(default = "dwhite")]
+    pub color: String,
+    /// How wide it looks, degrees: a wider body casts softer shadows. The
+    /// sun is 0.5.
+    #[serde(default = "dhalf_degree")]
+    pub angular_size: f64,
+    /// Whether it casts shadows when it's among the brightest.
+    #[serde(default = "dtrue")]
+    pub shadows: bool,
+    #[serde(skip)]
+    pub rgb: [u8; 3],
+    #[serde(skip)]
+    pub light: BodyLight,
+}
+
+/// Where a sky body's brightness comes from, resolved.
+#[derive(Clone, Debug, Default)]
+pub enum BodyLight {
+    /// A labelled term of a field: the sim's light as well as the picture's.
+    Field { field: usize, term: String },
+    /// Terms of its own, for the renderer alone.
+    Own(Terms),
+    #[default]
+    Unresolved,
+}
+
+impl SkyBodyDef {
+    pub fn path(&self) -> SunPath {
+        SunPath { rise: self.rise, set: self.set, peak: self.peak, arc: self.arc }
+    }
+
+    /// Check it against the loaded fields: its colour parses, its path is
+    /// one, and its field has the term, or its own terms compile.
+    pub fn resolve(
+        &mut self,
+        fields: &[FieldDef],
+        field: impl Fn(&str) -> Option<usize>,
+        warnings: &mut Vec<String>,
+    ) -> Result<(), String> {
+        let ctx = format!("sky_body/{}", self.id);
+        if !self.path().valid() || !(0.0..=20.0).contains(&self.angular_size) {
+            return Err(format!(
+                "{ctx}: needs rise and set hours from 0 to 24, apart, a peak of 0 to 90°, and an angular_size of 0 to 20°"
+            ));
+        }
+        self.rgb = parse_color(&self.color).map_err(|e| format!("{ctx}: {e}"))?;
+        self.light = match (&self.field, &self.term, self.of.is_empty()) {
+            (Some(name), Some(term), true) => {
+                let i = field(name).ok_or_else(|| format!("{ctx}: unknown field '{name}'"))?;
+                let f = &fields[i];
+                if !f.terms.terms.iter().any(|t| &t.label == term) {
+                    let have: Vec<&str> = f.terms.terms.iter().map(|t| t.label.as_str()).collect();
+                    return Err(format!("{ctx}: field/{} has no term '{term}' (has: {})", f.id, have.join(", ")));
+                }
+                BodyLight::Field { field: i, term: term.clone() }
+            }
+            (None, None, false) => {
+                let one: TermsDef =
+                    [(self.id.clone(), TermDef { scale: self.scale, of: self.of.clone() })].into_iter().collect();
+                let terms = Terms::compile(&one, &ctx, &field, warnings)?;
+                if terms.reads_own() {
+                    return Err(format!("{ctx}: `self`, `base` and `above_base` are for a stock field's rate"));
+                }
+                BodyLight::Own(terms)
+            }
+            _ => {
+                return Err(format!(
+                    "{ctx}: its brightness is a `field` and its `term` (the sim's light too), or `of` terms of its own (the picture's alone)"
+                ))
+            }
+        };
+        Ok(())
+    }
+}
+
 impl Default for SkyDef {
     fn default() -> Self {
         SkyDef {
@@ -1861,7 +1982,7 @@ impl crate::terms::Names for TermNames<'_> {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct DefDb {
     pub terrain: Vec<TerrainDef>,
     pub things: Vec<ThingDef>,
@@ -1919,6 +2040,8 @@ pub struct DefDb {
     pub warnings: Vec<String>,
     pub calendar: CalendarDef,
     pub sky: SkyDef,
+    /// What the renderer lights the world from, in load order.
+    pub sky_bodies: Vec<SkyBodyDef>,
     pub start: Option<StartDef>,
     pub names: Vec<String>,
     /// The item category tree, in load order; `category_roots` has the top
@@ -2052,6 +2175,7 @@ pub const KINDS: &[&str] = &[
     "field",
     "calendar",
     "sky",
+    "sky_body",
     "start",
     "names",
     "item_category",
@@ -2106,6 +2230,7 @@ impl DefDb {
             "movement" => self.movements[i].id.clone(),
             "modifier" => self.modifiers[i].id.clone(),
             "vein" => self.veins[i].id.clone(),
+            "sky_body" => self.sky_bodies[i].id.clone(),
             _ => String::new(),
         }
     }
@@ -2201,6 +2326,9 @@ impl DefDb {
         }
         for (i, d) in self.veins.iter().enumerate() {
             index.insert(("vein", d.id.clone()), i as DefId);
+        }
+        for (i, d) in self.sky_bodies.iter().enumerate() {
+            index.insert(("sky_body", d.id.clone()), i as DefId);
         }
         for (i, d) in self.movements.iter().enumerate() {
             index.insert(("movement", d.id.clone()), i as DefId);
@@ -2497,10 +2625,7 @@ impl DefDb {
         sky.rgb_night = parse_color(&sky.night).map_err(|e| format!("sky/{}: {e}", sky.id))?;
         sky.rgb_fire = parse_color(&sky.firelight).map_err(|e| format!("sky/{}: {e}", sky.id))?;
         if let Some(sun) = &sky.sun {
-            let hours = |h: f64| (0.0..24.0).contains(&h);
-            if !(hours(sun.rise) && hours(sun.set) && sun.rise != sun.set && (0.0..=90.0).contains(&sun.peak))
-                || !sun.arc.iter().all(|a| a.is_finite())
-            {
+            if !sun.valid() {
                 return Err(format!(
                     "sky/{}: sun needs rise and set hours from 0 to 24, apart, and a peak of 0 to 90°",
                     sky.id
@@ -2515,6 +2640,19 @@ impl DefDb {
             if t.strength.reads_own() {
                 return Err(format!("{ctx}: `self`, `base` and `above_base` are for a stock field's rate"));
             }
+        }
+        let fields = &self.fields;
+        for b in &mut self.sky_bodies {
+            let home = home_of(&b.id).to_string();
+            b.resolve(fields, |id| field_in(&home, id), &mut warnings)?;
+        }
+        // Bodies say where the light comes from; a sky's lone `sun` is for a
+        // sky that declares none.
+        if sky.sun.is_some() && !self.sky_bodies.is_empty() {
+            warnings.push(format!(
+                "sky/{}: `sun` is ignored beside [[sky_body]]s; patch the body instead (sky_body/{})",
+                sky.id, self.sky_bodies[0].id
+            ));
         }
         self.warnings.extend(warnings);
         for d in &mut self.needs {

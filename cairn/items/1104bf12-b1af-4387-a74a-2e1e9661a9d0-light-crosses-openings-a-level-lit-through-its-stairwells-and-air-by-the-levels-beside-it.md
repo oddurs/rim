@@ -2,14 +2,14 @@
 id: 1104bf12-b1af-4387-a74a-2e1e9661a9d0
 title: 'Light crosses openings: a level lit through its stairwells and air by the levels beside it'
 type: feature
-status: doing
+status: done
 milestone: lighting
 assignee: Oddur Sigurdsson
-claimed: 2026-09-28
 depends_on:
 - 3124bd7b-9f9a-4d92-84e6-2df736b6e2fe
 created: 2026-09-28
 updated: 2026-09-28
+closed_at: 2026-09-28
 priority: p2
 api: none
 effort: m

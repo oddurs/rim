@@ -438,22 +438,42 @@ of = [
 replaced by two, the green moon with its phases and tint, and tests that
 load it beside the weather plugin and check a storm still dims the suns.
 
-The sun's brightness is the `daylight` field; where it is in the sky, for
-the shadows it casts, is `sun` on `[[sky]]`: the hours it rises and sets,
-how high it climbs, and the arc of azimuths it crosses (0° is east, 90°
-south, the way the map's y grows). A sky without `sun` casts no sun shadows.
+Where a body is in the sky, its colour and its shadows are a
+`[[sky_body]]`. How bright it is, is one of two things. A `field` and its
+`term` make its light the sim's too: core's sun is `daylight`'s `sun`, so
+plants grow by it. Terms of its own (`scale` and `of`, in `light`'s units,
+as a tint's strength is written) light only the picture: core's moon is
+one, so the sim's night stays dark and nothing grows by moonlight. A body
+gives the hours it rises and sets, how high it climbs, the arc of azimuths it
+crosses (0° is east, 90° south, the way the map's y grows), its `color`,
+its `angular_size` in degrees (the sun's is 0.5; a wider body casts softer
+shadows) and whether it casts `shadows` at all. Core declares its sun and
+its moon. The brightest bodies cast shadows, as many as the player's
+lighting preset allows (`sky_shadows`: one on low and medium, two on high,
+four on ultra); the rest light the world without. A body's share of the
+light is its part of the sky's, so a new moon casts nothing.
 
 ```toml
 # A slower, lower winter sun.
 [[patch]]
-target = "sky/core:core"
+target = "sky_body/core:sun"
+set = { rise = 8.0, set = 17.0, peak = 25.0, arc = [20.0, 160.0] }
 
-[patch.set.sun]
-rise = 8.0
-set = 17.0
-peak = 25.0
-arc = [20.0, 160.0]
+# A green moon of its own, on its own term.
+[[sky_body]]
+id = "green_moon"
+field = "core:daylight"
+term = "green_moon"
+rise = 21.0
+set = 5.0
+peak = 50.0
+arc = [0.0, 180.0]
+color = "#7dffa0"
+angular_size = 2.0
 ```
+
+A sky with no bodies may give `[[sky]]` a lone `sun` path instead, lit by
+all of its light; beside bodies it's ignored, with a warning.
 
 ## What stops light
 

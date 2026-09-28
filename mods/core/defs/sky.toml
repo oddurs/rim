@@ -14,10 +14,6 @@ firelight = "#ffb060"
 # Daylight a roofed room gets through its walls and door; each window adds
 # its boundary pass (the light field's), so a room with windows is brighter.
 indoor_share = 0.2
-# Where the sun is, for shadows: up with the daylight field at 05:00, down at
-# 21:00, 60° at its highest, rising in the east (0°) and setting a little
-# north of west (190°, the map's y grows south).
-sun = { rise = 5.0, set = 21.0, peak = 60.0, arc = [-10.0, 190.0] }
 
 [sky.tint.dawn]
 color = "#ffa066"
@@ -31,3 +27,42 @@ of = [{ input = "hour", curve = [[17.5, 0.0], [19.5, 0.45], [21.0, 0.0]] }]
 [sky.tint.overcast]
 color = "#8a98b0"
 of = [{ ambient = "cloud", curve = [[40, 0.0], [100, 0.4]] }]
+
+# The bodies the renderer lights the world from: where each crosses the
+# sky, its colour, and how soft its shadows are. How bright the sun is, is
+# a term of the daylight field, the sim's light. The brightest cast
+# shadows, as many as the lighting preset allows.
+
+# Up with its term at 05:00, down at 21:00, 60° at its highest, rising in
+# the east (0°) and setting a little north of west (190°, the map's y grows
+# south).
+[[sky_body]]
+id = "sun"
+field = "daylight"
+term = "sun"
+rise = 5.0
+set = 21.0
+peak = 60.0
+arc = [-10.0, 190.0]
+color = "#fff6e8"
+angular_size = 0.5
+
+# Across the night from the east as the sun does, lower, cold, and wider
+# for its halo. Its light is the picture's alone: the sim's stays dark at
+# night, so nothing grows by it. Full every 15 days, four times a year, and
+# on the first night; faint beside the sun, in the light field's units, and
+# dimmed by cloud as the sun is.
+[[sky_body]]
+id = "moon"
+scale = 1.5
+of = [
+  { input = "hour", curve = [[0, 1.0], [4, 1.0], [5.5, 0.0], [19.5, 0.0], [21, 1.0], [24, 1.0]] },
+  { input = "cycle", days = 15, offset = 6.75, curve = [[0, 0.0], [0.5, 1.0], [1, 0.0]] },
+  { ambient = "cloud", curve = [[0, 1.0], [100, 0.55]] },
+]
+rise = 19.5
+set = 5.5
+peak = 45.0
+arc = [20.0, 160.0]
+color = "#aebfff"
+angular_size = 1.5

@@ -67,6 +67,7 @@ pub struct Flash {
 }
 
 /// What the renderer needs from the world's outdoor values.
+#[derive(Default)]
 pub struct Air {
     pub light: f32,
     pub precipitation: f32,

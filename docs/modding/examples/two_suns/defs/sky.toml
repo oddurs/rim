@@ -17,9 +17,11 @@ of = [{ input = "hour", curve = [[4, 0.0], [7, 40.0], [13, 40.0], [16, 0.0]] }]
 [patch.set.ambient.white_sun]
 of = [{ input = "hour", curve = [[9, 0.0], [12, 60.0], [20, 60.0], [23, 0.0]] }]
 
-# A green moon: up through the night, full every eight days. Its phase is
-# a cycle, 0 to 1 over `days`, full halfway; the game starts at 06:00, so a
-# quarter-day offset makes it full at midnight.
+# A green moon: up through the night, full every eight days. Unlike core's
+# moon, whose light is the picture's alone, this one lights the sim too: a
+# daylight term, so plants grow by it. Its phase is a cycle, 0 to 1 over
+# `days`, full halfway; the game starts at 06:00, so a quarter-day offset
+# makes it full at midnight.
 [patch.set.ambient.green_moon]
 scale = 12.0
 of = [
@@ -27,11 +29,39 @@ of = [
   { input = "cycle", days = 8, offset = 0.25, curve = [[0, 0.0], [0.5, 1.0], [1, 0.0]] },
 ]
 
-# The renderer casts one sun's shadows: the white sun's, the brighter. The
-# red sun lights the morning without them.
+# Where each crosses the sky, for the renderer: core's sun body follows the
+# white sun, and the red sun and green moon are bodies of their own. The
+# brightest cast shadows, as many as the lighting preset allows.
 [[patch]]
-target = "sky/core:core"
-set = { sun = { rise = 9.0, set = 23.0, peak = 55.0, arc = [-10.0, 190.0] } }
+target = "sky_body/core:sun"
+set = { term = "white_sun", rise = 9.0, set = 23.0, peak = 55.0 }
+
+# One moon, the green one: core's goes.
+[[patch]]
+target = "sky_body/core:moon"
+remove = true
+
+[[sky_body]]
+id = "red_sun"
+field = "core:daylight"
+term = "red_sun"
+rise = 4.0
+set = 16.0
+peak = 30.0
+arc = [30.0, 150.0]
+color = "#ff9a70"
+angular_size = 1.2
+
+[[sky_body]]
+id = "green_moon"
+field = "core:daylight"
+term = "green_moon"
+rise = 21.0
+set = 5.0
+peak = 50.0
+arc = [0.0, 180.0]
+color = "#7dffa0"
+angular_size = 2.0
 
 # The moon's light is green, as strong as the moon is full. A tint of its
 # own, so core's dawn, dusk and overcast tints stay.
