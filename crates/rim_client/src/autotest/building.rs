@@ -381,10 +381,11 @@ pub(super) async fn room_labels(t: &mut T, carry: &mut Carry) {
     let label = format!("core:rooms.{}", room.id);
     t.app.cam.zoom = 40.0;
     t.focus(inside);
-    t.grab().await;
+    // A zoom isn't input: the labels rebuild on the UI's own cadence.
+    t.settle().await;
     t.check(t.ui_rect(&label).is_some(), "the hut's room is labelled, zoomed in");
     t.app.cam.zoom = 8.0;
-    t.grab().await;
+    t.settle().await;
     t.check(t.ui_rect(&label).is_none(), "no room labels zoomed out");
     t.app.cam.zoom = 40.0;
     t.app.cam.zoom = zoom;
@@ -411,11 +412,23 @@ pub(super) async fn the_plan_style(t: &mut T, carry: &mut Carry) {
         ["core:floor", "core:floor", "", "core:pillar", "", "crafting:spot", "", "crafting:workbench", ""],
         ["core:stairs", "", "core:ladder", "", "", "", "", "", ""],
     ];
-    let free = |w: &World, p: IVec| w.map.passable(p) && w.map.fixture_at(p).is_none() && w.map.item_at(p).is_none();
+    // Open ground, or ground with only plants on it, which are cleared: a
+    // block that size with nothing growing is rare on a wooded map.
+    let plant = |w: &World, p: IVec| {
+        w.map.fixture_at(p).and_then(|e| w.thing(e)).is_some_and(|th| w.defs.thing(th.def).natural)
+    };
+    let free = |w: &World, p: IVec| {
+        dry(w, p) && w.map.passable(p) && w.map.item_at(p).is_none() && (w.map.fixture_at(p).is_none() || plant(w, p))
+    };
     t.clear_dock().await;
     let corner = (2..40i32)
         .flat_map(|r| (-r..=r).flat_map(move |dy| (-r..=r).map(move |dx| home.offset(dx, dy))))
         .find(|&o| (-1..7).all(|y| (-1..10).all(|x| free(t.w(), o.offset(x, y)))));
+    for p in corner.iter().flat_map(|&o| (-1..7).flat_map(move |y| (-1..10).map(move |x| o.offset(x, y)))) {
+        if let Some(e) = t.w().map.fixture_at(p).filter(|_| plant(t.w(), p)) {
+            t.app.sim.world.despawn_thing(e);
+        }
+    }
     let mut placed = 0;
     let mut portals = Vec::new();
     if let Some(o) = corner {

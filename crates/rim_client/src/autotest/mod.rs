@@ -370,6 +370,12 @@ async fn grid_shots(t: &mut T, o: IVec, wall: rim_sim::defs::DefId) -> [Image; 3
     [rest, lens, plan]
 }
 
+/// Ground with no open water on it: shallow water is passable, but it
+/// draws over marks and shadows, and a room on it isn't lit as one.
+fn dry(w: &World, p: IVec) -> bool {
+    w.map.inb(p) && w.defs.terrain[w.map.terrain[w.map.idx(p)] as usize].pours == 0
+}
+
 fn open_square(w: &World, c: IVec, size: i32) -> Option<IVec> {
     let free = |p: IVec| w.map.passable(p) && w.map.fixture_at(p).is_none() && w.map.item_at(p).is_none();
     (2..30i32)

@@ -11,15 +11,15 @@ pub(super) async fn designate_build_cancel(t: &mut T, carry: &mut Carry) {
     let chop = defs.lookup("designation", "chop").unwrap();
     t.click_tool("designate:core:chop").await;
     t.check(t.app.tool == Tool::Designate(chop), "clicking Chop selects the chop tool");
-    // Drag over the trees nearest home, wherever this map put them.
+    // Drag over the trees nearest home, wherever this map put them: an oak
+    // with another in the drag's box, so the drag has one to newly mark
+    // after the first is marked beforehand.
     let oak = defs.thing_id("tree_oak").unwrap();
-    let near_tree = t
-        .w()
-        .ecs
-        .query::<&Thing>()
+    let oaks: Vec<IVec> = t.w().ecs.query::<&Thing>().iter().filter(|th| th.def == oak).map(|th| th.pos).collect();
+    let near_tree = oaks
         .iter()
-        .filter(|th| th.def == oak)
-        .map(|th| th.pos)
+        .copied()
+        .filter(|p| oaks.iter().any(|q| q != p && q.chebyshev(*p) <= 4))
         .min_by_key(|p| (p.octile(home), p.x, p.y));
     let (a, b) = match near_tree {
         Some(p) => (p.offset(-4, -4), p.offset(4, 4)),
@@ -166,8 +166,9 @@ pub(super) async fn designate_build_cancel(t: &mut T, carry: &mut Carry) {
         let w = t.w();
         let plans: Vec<IVec> = w.ecs.query::<(&Thing, &Blueprint)>().iter().map(|(th, _)| th.pos).collect();
         plans.iter().find_map(|&b| {
+            // Along its row or its column, whichever this map has a tree on.
             (2..12)
-                .flat_map(|d| [b.offset(-d, 0), b.offset(d, 0)])
+                .flat_map(|d| [b.offset(-d, 0), b.offset(d, 0), b.offset(0, -d), b.offset(0, d)])
                 .find(|&q| w.map.fixture_at(q).and_then(|f| w.thing(f)).is_some_and(|th| th.def == oak))
                 .map(|q| (q, b))
         })
@@ -175,7 +176,7 @@ pub(super) async fn designate_build_cancel(t: &mut T, carry: &mut Carry) {
     match run {
         Some((tree_at, plan_at)) => {
             t.click_tool("build:core:wall").await;
-            t.focus(IVec::new((tree_at.x + plan_at.x) / 2, tree_at.y));
+            t.focus(IVec::new((tree_at.x + plan_at.x) / 2, (tree_at.y + plan_at.y) / 2));
             t.input(RawInput { mouse: t.screen(tree_at), left_pressed: true, ..Default::default() }).await;
             t.input(RawInput { mouse: t.screen(plan_at), ..Default::default() }).await;
             let marks = crate::overlay::scene(&t.app).marks;
@@ -485,7 +486,16 @@ pub(super) async fn stockpiles(t: &mut T, carry: &mut Carry) {
     );
     t.clear_dock().await;
     t.app.tool = Tool::Select;
-    t.click(t.screen(spot.offset(1, 1))).await;
+    // A cell of the zone with nothing on it: a click on what was hauled
+    // there, or who stands there, picks that instead.
+    let bare = (0..3).flat_map(|y| (0..4).map(move |x| spot.offset(x, y))).find(|&p| {
+        let w = t.w();
+        w.zones.at(&w.map, p).map(|z| z.id) == zone
+            && w.map.item_at(p).is_none()
+            && w.map.fixture_at(p).is_none()
+            && w.pawns.iter().all(|&e| w.pawn_pos(e) != Some(p))
+    });
+    t.click(t.screen(bare.unwrap_or(spot.offset(1, 1)))).await;
     t.frame().await;
     let edge = zone.map(|z| draw::zone_edge(&t.app, z));
     t.check(
