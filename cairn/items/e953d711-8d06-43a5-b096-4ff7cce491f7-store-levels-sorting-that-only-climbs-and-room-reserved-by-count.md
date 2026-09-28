@@ -10,7 +10,7 @@ depends_on:
 - 629e1fa7-7e3c-4c42-96dd-98ea8a3b762f
 - ac643c1f-3f5b-4908-884f-da4e87bfcf01
 created: 2026-09-26
-updated: 2026-09-26
+updated: 2026-09-28
 closed_at: 2026-09-26
 priority: p1
 api: additive
@@ -36,7 +36,7 @@ A stack in a zone that allows it is never moved again, so nothing ever re-sorts 
 - [x] A stack in a Normal zone moves to a Preferred one that takes it; never between two Normal zones (tests)
 - [x] Changing a zone's filter sends what it no longer takes to the best place that does (test)
 - [x] Two haulers never fill the same last cell (test)
-- [ ] Haul search at or under 0.03 ms a step on the 8d551753 setup, measured and noted here
+- [x] Haul search at or under 0.03 ms a step on the 8d551753 setup, measured and noted here
 - [x] Determinism test passes
 
 ## 2026-09-26
@@ -46,3 +46,7 @@ Claimed ahead of its dependencies' merges: the ledger (ac643c1f) and the lost-ov
 ## 2026-09-26
 
 Measured, cargo run --release -p rim_sim --example bench -- --haul --days 0.25 (the 8d551753 setup: 250x250, 30 colonists, 200 pawns, a 40x40 stockpile, 300 loose stacks), main then this branch, twice each, back to back: mean tick 0.170/0.114 ms -> 0.047/0.041 ms; pawns 0.166/0.111 -> 0.043/0.038 ms; p99 4.8/3.2 ms -> 0.27/0.26 ms. The whole pawns system is now around 0.04 ms, so the haul search is within the 0.03 ms target's reach but isn't measured on its own; the tick and pawns numbers are what's measured. Load ~40-70 from other builds during the runs.
+
+## 2026-09-28
+
+Measured 2026-09-28 on main c30d53a3 with find_haul timed in isolation (throwaway instrumentation, not committed): bench --haul --days 0.25 (250x250, 30 colonists, 200 pawns, 40x40 stockpile, 300 loose stacks), 5000 ticks, 187 searches. Four runs at load 37-42: 0.0124, 0.0028, 0.0063, 0.0059 ms a tick. Under the 0.03 target on every run. The whole pawns system read 0.11-0.16 ms a tick in the same runs; that is pathing, not the haul search.
