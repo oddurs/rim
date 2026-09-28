@@ -1,6 +1,9 @@
 //! Interaction spots: furniture a pawn uses from a cell its def lays out.
 //! A bed is the first user; a chair at a table is the second.
 
+mod common;
+
+use common::open_cells;
 use rim_sim::defs::DefId;
 use rim_sim::hecs::Entity;
 use rim_sim::world::{Faction, Job, Pawn, NEED_MAX};
@@ -38,15 +41,6 @@ fn set_need(s: &mut Sim, e: Entity, id: &str, v: i32) {
             x.1 = v;
         }
     });
-}
-
-fn open_cells(s: &Sim, n: usize) -> Vec<IVec> {
-    let c = s.world.colony_center().expect("a colony");
-    (1..30)
-        .flat_map(|r| (-r..=r).flat_map(move |dy| (-r..=r).map(move |dx| c.offset(dx, dy))))
-        .filter(|&p| s.world.map.passable(p) && s.world.map.fixture_at(p).is_none() && s.world.map.item_at(p).is_none())
-        .take(n)
-        .collect()
 }
 
 fn put(s: &mut Sim, id: &str, p: IVec) -> Entity {

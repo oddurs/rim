@@ -1,6 +1,9 @@
 //! Floors: built ground that sits under everything, changes what a step
 //! costs, and is otherwise invisible to rooms, fields and raiders.
 
+mod common;
+
+use common::open_cells;
 use rim_sim::defs::{DefId, Targets};
 use rim_sim::hecs::Entity;
 use rim_sim::order;
@@ -24,15 +27,6 @@ fn sim() -> (Sim, Entity) {
 
 fn thing(s: &Sim, id: &str) -> DefId {
     s.world.defs.thing_id(id).unwrap_or_else(|| panic!("thing {id}"))
-}
-
-fn open_cells(s: &Sim, n: usize) -> Vec<IVec> {
-    let c = s.world.colony_center().expect("a colony");
-    (1..30)
-        .flat_map(|r| (-r..=r).flat_map(move |dy| (-r..=r).map(move |dx| c.offset(dx, dy))))
-        .filter(|&p| s.world.map.passable(p) && s.world.map.fixture_at(p).is_none() && s.world.map.item_at(p).is_none())
-        .take(n)
-        .collect()
 }
 
 /// Build it the way the colony would: owned, made of `stuff`.
