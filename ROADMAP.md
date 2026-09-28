@@ -193,11 +193,11 @@ Who does what, without a spreadsheet. New colonists start on Auto and the colony
 
 ## pointer — Pointer and Orders
 
-`#########·` 83% · 5 of 6 done
+`##########` 100% · 6 of 6 done
 
 The map should answer a mouse and a trackpad the way each platform taught its users, and a right-click should never destroy anything. Design: the Pointer and Orders artifact (https://claude.ai/artifact/ShFMN72nbVYERCY4L9nwyN).
 
-- [ ] `2f756dfc` Pinch to zoom on macOS <sup>feature · p2 · s · client</sup>
+- [x] `2f756dfc` Pinch to zoom on macOS <sup>feature · p2 · s · client</sup>
 - [x] `3b1726ff` Context menus: one component, subjects and providers <sup>feature · p0 · m · engine</sup>
 - [x] `64a0648e` Context menus across the interface: colonists, zones, tray tiles, news <sup>feature · p1 · m · core</sup>
 - [x] `7638bdbb` Undo the last order <sup>feature · p2 · m · engine</sup>
