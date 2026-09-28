@@ -1,0 +1,16 @@
+[[creature]]
+id = "settler"
+label = "settler"
+color = "#d8b890"
+size = 0.36
+speed = 13
+max_hp = 100
+melee_damage = 5
+melee_cooldown = 90
+intelligent = true
+needs = []
+
+[[start]]
+id = "landing"
+creature = "settler"
+title = "the settler"

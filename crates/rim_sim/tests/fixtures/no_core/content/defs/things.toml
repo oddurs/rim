@@ -1,0 +1,6 @@
+[[thing]]
+id = "pebble"
+label = "pebble"
+color = "#8a8a8a"
+category = "item"
+stack = 50
