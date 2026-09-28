@@ -61,6 +61,42 @@ fn cap_shadows(lights: &[Lamp], centre: Vec2, cap: usize) -> Vec<Lamp> {
     lights
 }
 
+/// How much of the open sky each cell of level `z` sees, by plane index:
+/// all of it on the surface and above. Below it, a cell with air over it to
+/// the surface sees `width / (width + 2 · depth)` of it, the solid angle a
+/// shaft leaves open from its bottom, its width the narrower of its runs
+/// across; a cell under rock sees none.
+fn open_sky(m: &Map, z: i32) -> Vec<f32> {
+    let n = (m.w * m.h) as usize;
+    if z >= 0 {
+        return vec![1.0; n];
+    }
+    let open: Vec<bool> = (0..n).map(|i| crate::occluders::open_to_sky(m, i as i32 % m.w, i as i32 / m.w, z)).collect();
+    let run = |i: usize, (dx, dy): (i32, i32)| {
+        let (x, y) = (i as i32 % m.w, i as i32 / m.w);
+        let mut k = 1;
+        while {
+            let (a, b) = (x + dx * k, y + dy * k);
+            a >= 0 && b >= 0 && a < m.w && b < m.h && open[(b * m.w + a) as usize]
+        } {
+            k += 1;
+        }
+        k - 1
+    };
+    let depth = -z as f32;
+    (0..n)
+        .map(|i| {
+            if !open[i] {
+                return 0.0;
+            }
+            let across = 1 + run(i, (1, 0)) + run(i, (-1, 0));
+            let down = 1 + run(i, (0, 1)) + run(i, (0, -1));
+            let width = across.min(down) as f32;
+            width / (width + 2.0 * depth)
+        })
+        .collect()
+}
+
 /// How much of night's light a level below the surface keeps: enough to make
 /// out the rock, no more.
 const UNDERGROUND: f32 = 0.25;
@@ -135,6 +171,11 @@ void main() {
     // and lintel. The roof rests on what bounds the room, so a ray that
     // leaves any other way (a wall, a door, or water that closes a room
     // without a wall) stops there, however high it has climbed.
+    // Rock below the surface with more over it: its top is not the sky's.
+    if (kind(here) == 3.0) {
+        gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+        return;
+    }
     bool inside = here.g > 0.5;
     float h0 = (!inside && here.b > 0.0) ? height(here) : 0.0;
     float vis = 1.0;
@@ -329,9 +370,10 @@ void main() {
     // alone, so the linear filter doesn't carry the sun on the wall's
     // outer face onto the floor inside.
     float share = texture2D(rooms, uv).r;
+    float open = texture2D(rooms, uv).g;
     float sun_in = texture2D(sunlit, (floor(uv * lres) + 0.5) / lres).r;
     // A lightning flash, while it lasts, is what `sunlit` holds.
-    vec3 outside = ambient + (direct + bolt) * sun;
+    vec3 outside = ambient * open + (direct + bolt) * sun;
     vec3 inside = (ambient + direct) * share + (direct + bolt) * sun_in;
     // The baked firelight, and what the bake hasn't caught up with yet.
     vec4 f = (texture2D(Texture, uv) + texture2D(moving, uv)) / scale;
@@ -820,10 +862,15 @@ struct Level {
     fill: Vec<(usize, [u8; 4])>,
     fill_meshes: Vec<Mesh>,
     /// Each roofed cell's share of the sky, R: what gets in through its
-    /// room's walls and windows.
+    /// room's walls and windows. And G, how much of the open sky each cell
+    /// sees: all of it on the surface, less down a shaft, none under rock.
     rooms: Option<Texture2D>,
-    /// The room rebuild and each room's share, 0 to 255, `rooms` is for.
-    rooms_key: Option<(u64, Vec<u8>)>,
+    /// The room rebuild, each room's share, 0 to 255, and the levels
+    /// above's revisions, that `rooms` is for.
+    rooms_key: Option<(u64, Vec<u8>, u64)>,
+    /// Whether any cell of the level sees the open sky: below the surface,
+    /// without a shaft the sun pass has nothing to do.
+    any_sky: bool,
     /// Where the sun reaches, R, `texels` per cell.
     sunlit: Option<RenderTarget>,
     sun_key: Option<SunKey>,
@@ -952,6 +999,16 @@ impl Light {
     /// depend on how long the light before lasted.
     pub fn adapt_now(&mut self) {
         self.exposure = 0.0;
+    }
+
+    /// The sky over a point on the level in view, in cells: how much of
+    /// the open sky it sees, and the sun's visibility there, read back from
+    /// the GPU. Slow, for tests.
+    pub fn sky_at(&self, x: f32, y: f32) -> Option<(f32, f32)> {
+        let rooms = self.lv.rooms.as_ref()?.get_texture_data();
+        let (cx, cy) = (x.floor() as u32, y.floor() as u32);
+        let open = (cx < rooms.width as u32 && cy < rooms.height as u32).then(|| rooms.get_pixel(cx, cy).g)?;
+        Some((open, self.sun_visibility(x, y)?))
     }
 
     /// Whether the sun target holds a lightning flash's shadows now.
@@ -1287,6 +1344,9 @@ impl Light {
     /// so it's cheap. Whether it changed.
     fn update_rooms(&mut self, w: &World) -> bool {
         let (m, z) = (&w.map, self.z);
+        // What happens above changes what's open below: the levels above's
+        // revisions key the open sky.
+        let above: u64 = (z + 1..=0).map(|up| m.level_revision(up)).sum();
         let light = w.defs.lookup("field", "light").map(|f| f as usize);
         let base = w.defs.sky.indoor_share;
         let shares = (1..=m.room_count() as u32)
@@ -1299,10 +1359,12 @@ impl Light {
                 ((base + pass).clamp(0.0, 1.0) * 255.0).round() as u8
             })
             .collect();
-        let key = (m.room_rebuilds, shares);
+        let key = (m.room_rebuilds, shares, above);
         if self.lv.rooms.is_some() && self.lv.rooms_key.as_ref() == Some(&key) {
             return false;
         }
+        let sky = open_sky(m, z);
+        self.lv.any_sky = sky.iter().any(|&s| s > 0.0);
         let mut bytes = vec![0u8; (m.w * m.h * 4) as usize];
         for i in 0..(m.w * m.h) as usize {
             let p = m.pos(i);
@@ -1310,6 +1372,7 @@ impl Light {
             if id > 0 {
                 bytes[i * 4] = key.1[id as usize - 1];
             }
+            bytes[i * 4 + 1] = (sky[i] * 255.0).round() as u8;
         }
         self.lv.rooms_key = Some(key);
         let img = Image { bytes, width: m.w as u16, height: m.h as u16 };
@@ -1334,8 +1397,9 @@ impl Light {
         // lasts, hard-edged, from where the bolt is.
         // Below the surface no flash reaches either.
         let bolt = flash.strength > FLASH_ON && self.z >= 0;
-        let key = if self.z < 0 {
-            // Below the surface the sky reaches nowhere (a shaft's is 7161f369).
+        // Below the surface the occluders stand as tall as the levels above:
+        // the sun reaches only down a shaft, inside its cone.
+        let key = if !self.lv.any_sky {
             SunKey::Down
         } else if bolt {
             let from = Some((flash.azimuth as f64, FLASH_ELEVATION));
@@ -1445,10 +1509,10 @@ impl Light {
         // A flash whose shadows are worked out lights the cloud a little and
         // the rest from where it is; one struck since, not yet, lights all.
         let (lit, bolt) = self.flash_light(flash);
-        // Below the surface there is no sky, only the level's own lights,
-        // and night there is darker than night outside.
+        // Below the surface the sky reaches only down a shaft (the rooms'
+        // open sky), and night there is darker than night outside.
         let under = self.z < 0;
-        let (sky, bolt) = if under { (Vec3::ZERO, Vec3::ZERO) } else { (Self::sky_color(w, air, lit), bolt) };
+        let (sky, bolt) = (Self::sky_color(w, air, lit), if under { Vec3::ZERO } else { bolt });
         let elev = self.sun(w).map_or(-1.0, |s| s.1);
         // While `sunlit` holds the bolt's shadows the sun has none: its
         // light is the sky's for those few frames, not the bolt's pattern.
@@ -1459,7 +1523,9 @@ impl Light {
         m.set_texture("sunlit", sun);
         m.set_texture("rooms", rooms);
         m.set_texture("moving", moving);
-        let target = exposure_for(sky);
+        // Below the surface the eye adapts to the dark: a shaft's sky is
+        // little of the view (the level-change blend is 220a059e).
+        let target = exposure_for(if under { Vec3::ZERO } else { sky });
         // A frame's worth of adapting, about a second to settle.
         self.exposure = if self.exposure > 0.0 {
             self.exposure + (target - self.exposure) * (get_frame_time() * 1.6).min(1.0)
