@@ -26,6 +26,7 @@ use crate::Cam;
 use macroquad::miniquad::{BlendFactor, BlendState, BlendValue, Equation};
 use macroquad::prelude::*;
 use rim_sim::defs::{Flicker, SunPath};
+use rim_sim::map::Map;
 use rim_sim::world::{Thing, World};
 
 /// Light texels per cell.
@@ -44,7 +45,7 @@ const STEADY: usize = 3;
 const FIRE_SCALE: f32 = 0.6;
 /// The farthest a light's shadows are traced, in cells: the bake's march
 /// takes at most 95 steps. Longer reaches are cut to it.
-const MAX_REACH: f32 = 23.0;
+pub const MAX_REACH: f32 = 23.0;
 
 const VERTEX: &str = "#version 100
 precision lowp float;
@@ -85,28 +86,59 @@ float hash(vec2 p) {
 vec4 cell(vec2 c) {
     return texture2D(occluders, (floor(c) + 0.5) / map);
 }
-// R's high six bits (occluders.rs); the low two are a window or a door.
+// R's high six bits (occluders.rs); the low two are a window (1) or a door (2).
 float height(vec4 o) {
     return floor(floor(o.r * 255.0 + 0.5) / 4.0) / 63.0 * MAX_HEIGHT;
 }
+float kind(vec4 o) {
+    return mod(floor(o.r * 255.0 + 0.5), 4.0);
+}
+// A roof sits a storey up, on its walls; a window's pane runs from sill to
+// lintel, and lets most of the sun through.
+const float ROOF = 1.0;
+const float SILL = 0.28;
+const float LINTEL = 0.92;
+const float GLASS = 0.85;
 void main() {
     vec2 p = gl_FragCoord.xy / res * map;
     vec4 here = cell(p);
-    if (here.g > 0.5 || sun.z <= 0.0) {
+    if (sun.z <= 0.0) {
         gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
         return;
     }
-    float h0 = here.b > 0.0 ? height(here) : 0.0;
+    // Under a roof, the sun gets in only through a window, between its sill
+    // and lintel. The roof rests on what bounds the room, so a ray that
+    // leaves any other way (a wall, a door, or water that closes a room
+    // without a wall) stops there, however high it has climbed.
+    bool inside = here.g > 0.5;
+    float h0 = (!inside && here.b > 0.0) ? height(here) : 0.0;
     float vis = 1.0;
     float reach = steps * STEP;
+    vec2 pane = vec2(-1.0);
     for (int i = 1; i <= 64; i++) {
         if (float(i) > steps) break;
         float t = float(i) * STEP;
         vec2 q = p + sun.xy * t;
         if (q.x < 0.0 || q.y < 0.0 || q.x >= map.x || q.y >= map.y) break;
         float h = h0 + t * sun.z;
-        if (h > MAX_HEIGHT) break;
         vec4 o = cell(q);
+        if (inside) {
+            if (o.g > 0.5) {
+                if (h >= ROOF) { vis = 0.0; break; }
+                continue;
+            }
+            if (o.b > 0.99 && kind(o) == 1.0 && h > SILL && h < LINTEL) {
+                vis *= GLASS;
+                inside = false;
+                pane = floor(q);
+                continue;
+            }
+            vis = 0.0;
+            break;
+        }
+        if (h > MAX_HEIGHT) break;
+        // Out through the pane: the rest of its own cell doesn't shade it.
+        if (floor(q) == pane) continue;
         // Nothing lower than where the ray set out can shade it: a wall top
         // isn't shaded by the wall beside it, at any sun.
         if (o.b > 0.0 && height(o) > h0) {
@@ -117,6 +149,8 @@ void main() {
             if (vis < 0.004) break;
         }
     }
+    // Still under the roof when the steps ran out: it never saw the sky.
+    if (inside) vis = 0.0;
     gl_FragColor = vec4(vis, 0.0, 0.0, 1.0);
 }";
 
@@ -179,6 +213,11 @@ float trace(vec2 a, vec2 b) {
     return through;
 }
 void main() {
+    // A room's fill: flat, its value already in its colour.
+    if (lamp.z <= 0.0) {
+        gl_FragColor = channel;
+        return;
+    }
     vec2 p = gl_FragCoord.xy / res * map;
     vec2 dv = lamp.xy - p;
     float d = length(dv);
@@ -219,6 +258,8 @@ varying vec2 uv;
 uniform sampler2D Texture;
 uniform sampler2D occluders;
 uniform sampler2D sunlit;
+uniform sampler2D rooms;
+uniform float exposure;
 uniform vec3 ambient;
 uniform vec3 direct;
 uniform vec3 night;
@@ -227,8 +268,8 @@ uniform vec3 ch1;
 uniform vec3 ch2;
 uniform vec3 ch3;
 uniform float scale;
-uniform float indoor_share;
 uniform vec2 cell;
+uniform vec2 lres;
 uniform float day;
 // Whether the cell that point `p` falls in is a mass (a wall, rock, a
 // window or door), decided at the cell's centre so it is all or nothing.
@@ -251,16 +292,22 @@ void main() {
     vec2 centre = (floor(uv / cell) + 0.5) * cell;
     float solid = mass_at(uv);
     float sun = mix(texture2D(sunlit, uv).r, texture2D(sunlit, centre).r, solid);
+    // Indoors, a room's share of the sky through its walls and windows,
+    // and the sun itself where it comes through a pane: from this texel
+    // alone, so the linear filter doesn't carry the sun on the wall's
+    // outer face onto the floor inside.
+    float share = texture2D(rooms, uv).r;
+    float sun_in = texture2D(sunlit, (floor(uv * lres) + 0.5) / lres).r;
     vec3 outside = ambient + direct * sun;
-    vec3 inside = (ambient + direct) * indoor_share;
+    vec3 inside = (ambient + direct) * share + direct * sun_in;
     vec4 f = texture2D(Texture, uv) / scale;
     vec3 fire = f.r * ch0 + f.g * ch1 + f.b * ch2 + f.a * ch3;
-    vec3 c = max(max(night, mix(outside, inside, indoors)), fire);
-    // A band a third of a cell wide below and right of every mass, crisp
-    // like the plan's lines, its outer half lighter.
+    // Firelight adds to the sky, and the eye's exposure scales both: a fire
+    // reads strong at night and weak at noon because the eye adapts.
+    vec3 c = max(night, (mix(outside, inside, indoors) + fire) * exposure);
     float under = 0.5 * (casts(uv - cell * 0.18) + casts(uv - cell * 0.36)) * (1.0 - solid);
     c *= 1.0 - 0.3 * under * (1.0 - max(sun, day));
-    gl_FragColor = vec4(min(c, vec3(1.0)), 1.0);
+    gl_FragColor = vec4(c, 1.0);
 }";
 
 /// One lighting pass's cost in the last frame.
@@ -423,8 +470,6 @@ struct Lamp {
     reach: f32,
     strength: f32,
     channel: usize,
-    /// It stands in a closed room, whose fill it feeds.
-    indoors: bool,
 }
 
 impl Lamp {
@@ -452,18 +497,11 @@ enum Redo {
 /// What changed since `baked`, as areas to redo: around each light that
 /// came, went or changed, and around each light near a wall that moved.
 /// `walls` is the occluders' changed rectangles, `Some(&[])` when they all
-/// changed, `None` when none did. A light indoors feeds its whole room's
-/// fill, so a change to one redoes everything.
+/// changed, `None` when none did.
 fn redo(baked: &[Lamp], lamps: &[Lamp], walls: Option<&[(i32, i32, i32, i32)]>) -> Redo {
-    let mut areas = Vec::new();
     let came = lamps.iter().filter(|l| !baked.contains(l));
     let went = baked.iter().filter(|l| !lamps.contains(l));
-    for l in came.chain(went) {
-        if l.indoors {
-            return Redo::Whole;
-        }
-        areas.push(l.area());
-    }
+    let mut areas: Vec<[f32; 4]> = came.chain(went).map(Lamp::area).collect();
     match walls {
         Some([]) => return Redo::Whole,
         Some(rects) => {
@@ -507,7 +545,6 @@ fn lamps(w: &World) -> Vec<Lamp> {
                 reach: (radius as f32).clamp(0.75, MAX_REACH),
                 strength: (amount as f32 / 100.0).clamp(0.0, 1.0 / FIRE_SCALE),
                 channel: channel_of(flicker, p.x, p.y),
-                indoors: w.map.indoors(p),
             }
         })
         .collect()
@@ -574,6 +611,77 @@ fn channel_colour(fire: Vec3, channel: usize, t: f64) -> Vec3 {
     vec3(fire.x * f, fire.y * f * (0.86 + 0.14 * f), fire.z * f * (0.72 + 0.28 * f))
 }
 
+/// The light texel a point in cells falls in, from a target read back.
+fn texel(img: &Image, x: f32, y: f32) -> Option<Color> {
+    let (px, py) = ((x * TEXELS as f32).floor(), (y * TEXELS as f32).floor());
+    (px >= 0.0 && py >= 0.0 && px < img.width as f32 && py < img.height as f32)
+        .then(|| img.get_pixel(px as u32, py as u32))
+}
+
+/// The sun's visibility at a point in cells, from `Light::sun_image`.
+pub fn sun_in(img: &Image, x: f32, y: f32) -> Option<f32> {
+    texel(img, x, y).map(|c| c.r)
+}
+
+/// How far the eye opens up for a sky this bright: not at all by day, up to
+/// 2.6 times on a moonless night. Firelight is scaled with it, which is why a
+/// fire reads strong at night and weak at noon.
+fn exposure_for(sky: Vec3) -> f32 {
+    let lum = 0.2126 * sky.x + 0.7152 * sky.y + 0.0722 * sky.z;
+    (0.75 / lum.max(0.02)).powf(0.45).clamp(1.0, 2.6)
+}
+
+/// How much light a closed room sends back from its walls, as a share of
+/// what its lights put out: flat over the room, in each light's channel.
+const BOUNCE: f32 = 0.3;
+/// The most a room's fill adds, so a fire in a cupboard isn't a floodlight.
+const MAX_FILL: f32 = 0.4;
+
+/// Each room's fill (DESIGN.md §6e): a closed room returns its lights' flux
+/// from its walls, `BOUNCE · Σ(strength · reach²) / area`, flat over its
+/// floor. Per cell it covers: the cell's index and its value in each
+/// channel, stored as the bake stores light, at `FIRE_SCALE`.
+fn fill(w: &World, lamps: &[Lamp]) -> Vec<(usize, [u8; 4])> {
+    let m = &w.map;
+    let mut rooms: std::collections::BTreeMap<u32, [f32; 4]> = Default::default();
+    for l in lamps {
+        let p = rim_sim::IVec::new(l.x.floor() as i32, l.y.floor() as i32);
+        let Some(room) = m.room_at(p).filter(|r| r.enclosed()) else { continue };
+        rooms.entry(room.id).or_default()[l.channel] +=
+            BOUNCE * l.strength * l.reach * l.reach / room.cells.max(1) as f32;
+    }
+    if rooms.is_empty() {
+        return Vec::new();
+    }
+    (0..(m.w * m.h) as usize)
+        .filter_map(|i| {
+            let f = rooms.get(&m.room_ids(i).0)?;
+            Some((i, f.map(|v| (v.min(MAX_FILL) * FIRE_SCALE * 255.0).round() as u8)))
+        })
+        .collect()
+}
+
+/// The fill's quads, `texels` a cell: one a cell, its value in its colour
+/// and no centre (reach 0), so the bake shader adds it as it is.
+fn fill_meshes(m: &Map, fill: &[(usize, [u8; 4])], texels: f32) -> Vec<Mesh> {
+    fill.chunks(LAMPS_PER_MESH)
+        .map(|chunk| {
+            let mut vertices = Vec::with_capacity(chunk.len() * 4);
+            let mut indices = Vec::with_capacity(chunk.len() * 6);
+            for &(i, color) in chunk {
+                let p = m.pos(i);
+                let base = vertices.len() as u16;
+                for (dx, dy) in [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)] {
+                    let position = vec3((p.x as f32 + dx) * texels, (p.y as f32 + dy) * texels, 0.0);
+                    vertices.push(Vertex { position, uv: Vec2::ZERO, color, normal: Vec4::ZERO });
+                }
+                indices.extend([base, base + 1, base + 2, base, base + 2, base + 3]);
+            }
+            Mesh { vertices, indices, texture: None }
+        })
+        .collect()
+}
+
 /// What the sun pass last worked out, so a still sky isn't worked out again.
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum SunKey {
@@ -635,6 +743,18 @@ pub struct Light {
     /// Lights in the last bake, and the draws it took.
     lamps: usize,
     draws: u32,
+    /// The room fill in `fires`, as data and as the quads that draw it.
+    fill: Vec<(usize, [u8; 4])>,
+    fill_meshes: Vec<Mesh>,
+    /// Each roofed cell's share of the sky, R: what gets in through its
+    /// room's walls and windows.
+    rooms: Option<Texture2D>,
+    /// The room rebuild and each room's share, 0 to 255, `rooms` is for.
+    rooms_key: Option<(u64, Vec<u8>)>,
+    /// How far the eye has adapted, 1 by day; eased toward what the sky asks.
+    exposure: f32,
+    /// Times firelight has been baked, whole or in part.
+    pub bakes: u64,
     /// Where the sun reaches, R, `TEXELS` per cell.
     sunlit: Option<RenderTarget>,
     sun_key: Option<SunKey>,
@@ -663,8 +783,9 @@ impl Light {
         self.passes.clear();
         let t = self.pass_begin();
         let changed = self.occluders.update(w);
+        let rooms = self.update_rooms(w);
         // Uploads, not draws.
-        self.pass_end("occluders", t, changed, 0);
+        self.pass_end("occluders", t, changed || rooms, 0);
         let t = self.pass_begin();
         let baked = self.bake_fires(w);
         let draws = if baked { self.draws } else { 0 };
@@ -685,29 +806,35 @@ impl Light {
     /// the render bench times as the cost of a change.
     pub fn invalidate(&mut self) {
         self.fires_seen = None;
+        self.rooms_key = None;
         self.sun_key = None;
         self.occluders.invalidate();
+    }
+
+    /// Let the eye adapt at once, on the next frame, instead of over a
+    /// second: for tests that jump the light, whose checks would otherwise
+    /// depend on how long the light before lasted.
+    pub fn adapt_now(&mut self) {
+        self.exposure = 0.0;
     }
 
     /// The sun's visibility at a point, in cells: the light texel it falls
     /// in, 0 to 1, read back from the GPU. Slow, for tests.
     pub fn sun_visibility(&self, x: f32, y: f32) -> Option<f32> {
-        let rt = self.sunlit.as_ref()?;
-        let img = rt.texture.get_texture_data();
-        let (px, py) = ((x * TEXELS as f32).floor(), (y * TEXELS as f32).floor());
-        (px >= 0.0 && py >= 0.0 && px < img.width as f32 && py < img.height as f32)
-            .then(|| img.get_pixel(px as u32, py as u32).r)
+        sun_in(&self.sun_image()?, x, y)
+    }
+
+    /// Where the sun reaches, read back from the GPU, for `sun_in`. Slow,
+    /// for tests that look at many points.
+    pub fn sun_image(&self) -> Option<Image> {
+        Some(self.sunlit.as_ref()?.texture.get_texture_data())
     }
 
     /// The baked firelight at a point, in cells: each channel's brightness,
     /// read back from the GPU. Slow, for tests.
     pub fn fire_at(&self, x: f32, y: f32) -> Option<[f32; 4]> {
-        let img = self.fires.as_ref()?.texture.get_texture_data();
-        let (px, py) = ((x * TEXELS as f32).floor(), (y * TEXELS as f32).floor());
-        (px >= 0.0 && py >= 0.0 && px < img.width as f32 && py < img.height as f32).then(|| {
-            let c = img.get_pixel(px as u32, py as u32);
-            [c.r, c.g, c.b, c.a].map(|v| v / FIRE_SCALE)
-        })
+        let c = texel(&self.fires.as_ref()?.texture.get_texture_data(), x, y)?;
+        Some([c.r, c.g, c.b, c.a].map(|v| v / FIRE_SCALE))
     }
 
     /// Where the sun is now: pinned, or on the sky's path.
@@ -768,11 +895,12 @@ impl Light {
                         UniformDesc::new("ch2", UniformType::Float3),
                         UniformDesc::new("ch3", UniformType::Float3),
                         UniformDesc::new("scale", UniformType::Float1),
-                        UniformDesc::new("indoor_share", UniformType::Float1),
                         UniformDesc::new("cell", UniformType::Float2),
+                        UniformDesc::new("lres", UniformType::Float2),
                         UniformDesc::new("day", UniformType::Float1),
+                        UniformDesc::new("exposure", UniformType::Float1),
                     ],
-                    vec!["occluders".to_string(), "sunlit".to_string()],
+                    vec!["occluders".to_string(), "sunlit".to_string(), "rooms".to_string()],
                     PipelineParams {
                         // Multiply: result = source × destination.
                         color_blend: Some(BlendState::new(
@@ -821,8 +949,12 @@ impl Light {
         let lamps = lamps(w);
         let walls = walls_moved.then(|| if self.occluders.whole { &[][..] } else { &self.occluders.changed[..] });
         // A heater re-stamped, or a wall went up where no light reaches: the
-        // glow is the same, and nothing is redone.
-        let work = if fits { redo(&self.baked, &lamps, walls) } else { Redo::Whole };
+        // glow is the same, and nothing is redone. A room's fill spreads a
+        // light over its whole floor, so a change to any fill redoes
+        // everything; a room rebuild that leaves every fill as it was
+        // doesn't.
+        let fill = fill(w, &lamps);
+        let work = if fits && fill == self.fill { redo(&self.baked, &lamps, walls) } else { Redo::Whole };
         if work == Redo::Nothing {
             return false;
         }
@@ -848,17 +980,19 @@ impl Light {
         match work {
             Redo::Nothing => {}
             Redo::Whole => {
+                self.fill_meshes = fill_meshes(&w.map, &fill, t);
+                self.fill = fill;
                 clear_background(Color::new(0.0, 0.0, 0.0, 0.0));
                 gl_use_material(&m);
-                for mesh in lamp_meshes(&lamps, t) {
-                    draw_mesh(&mesh);
+                for mesh in lamp_meshes(&lamps, t).iter().chain(&self.fill_meshes) {
+                    draw_mesh(mesh);
                     self.draws += 1;
                 }
             }
             Redo::Areas(areas) => {
                 // Each area cleared and redrawn from every light that reaches
-                // it, under a scissor so lights reaching past it aren't
-                // added twice outside it.
+                // it, and the room fill it holds, under a scissor so lights
+                // reaching past it aren't added twice outside it.
                 for a in areas {
                     let (x0, y0) = ((a[0] * t).floor().max(0.0), (a[1] * t).floor().max(0.0));
                     let (x1, y1) = ((a[2] * t).ceil().min(tw), (a[3] * t).ceil().min(th));
@@ -874,8 +1008,8 @@ impl Light {
                     gl_use_material(&clear);
                     draw_rectangle(x0, y0, x1 - x0, y1 - y0, WHITE);
                     gl_use_material(&m);
-                    for mesh in lamp_meshes(&inside, t) {
-                        draw_mesh(&mesh);
+                    for mesh in lamp_meshes(&inside, t).iter().chain(&self.fill_meshes) {
+                        draw_mesh(mesh);
                     }
                     self.draws += 2;
                 }
@@ -887,6 +1021,49 @@ impl Light {
         set_default_camera();
         self.lamps = lamps.len();
         self.baked = lamps;
+        self.bakes += 1;
+        true
+    }
+
+    /// Each roofed cell's share of the sky: `[[sky]]`'s `indoor_share`, what
+    /// gets through walls and doors, plus the pass its room's windows give
+    /// the light field (DESIGN.md §6c). Checked every frame, since the field
+    /// sums a room's windows after the map rebuilds it; a room at a time,
+    /// so it's cheap. Whether it changed.
+    fn update_rooms(&mut self, w: &World) -> bool {
+        let m = &w.map;
+        let light = w.defs.lookup("field", "light").map(|f| f as usize);
+        let base = w.defs.sky.indoor_share;
+        let shares = (1..=m.room_count() as u32)
+            .map(|id| {
+                if !m.room_by_id(id).enclosed() {
+                    return 0;
+                }
+                let pass = light.map_or(0.0, |f| w.fields.boundary(f, id).1);
+                ((base + pass).clamp(0.0, 1.0) * 255.0).round() as u8
+            })
+            .collect();
+        let key = (m.room_rebuilds, shares);
+        if self.rooms.is_some() && self.rooms_key.as_ref() == Some(&key) {
+            return false;
+        }
+        let mut bytes = vec![0u8; (m.w * m.h * 4) as usize];
+        for i in 0..(m.w * m.h) as usize {
+            let id = m.room_ids(i).0;
+            if id > 0 {
+                bytes[i * 4] = key.1[id as usize - 1];
+            }
+        }
+        self.rooms_key = Some(key);
+        let img = Image { bytes, width: m.w as u16, height: m.h as u16 };
+        match &self.rooms {
+            Some(t) if t.width() as i32 == m.w && t.height() as i32 == m.h => t.update(&img),
+            _ => {
+                let t = Texture2D::from_image(&img);
+                t.set_filter(FilterMode::Linear);
+                self.rooms = Some(t);
+            }
+        }
         true
     }
 
@@ -965,7 +1142,8 @@ impl Light {
         // no fire does.
         let blank = self.blank.get_or_insert_with(|| Texture2D::from_rgba8(1, 1, &[0, 0, 0, 0])).clone();
         let fires = self.fires.as_ref().map_or(blank.clone(), |t| t.texture.clone());
-        let sun = self.sunlit.as_ref().map_or(blank, |t| t.texture.clone());
+        let sun = self.sunlit.as_ref().map_or(blank.clone(), |t| t.texture.clone());
+        let rooms = self.rooms.clone().unwrap_or(blank);
         let Some(m) = self.material(Pass::Multiply) else { return false };
         let sky = Self::sky_color(w, air, flash);
         let elev = self.sun(w).map_or(-1.0, |s| s.1);
@@ -974,6 +1152,15 @@ impl Light {
         let (mw, mh) = (w.map.w as f32, w.map.h as f32);
         m.set_texture("occluders", occ);
         m.set_texture("sunlit", sun);
+        m.set_texture("rooms", rooms);
+        let target = exposure_for(sky);
+        // A frame's worth of adapting, about a second to settle.
+        self.exposure = if self.exposure > 0.0 {
+            self.exposure + (target - self.exposure) * (get_frame_time() * 1.6).min(1.0)
+        } else {
+            target
+        };
+        m.set_uniform("exposure", self.exposure);
         m.set_uniform("ambient", sky * (1.0 - share));
         m.set_uniform("direct", sky * share);
         m.set_uniform("night", rgb3(def.rgb_night));
@@ -981,8 +1168,8 @@ impl Light {
         for (k, name) in ["ch0", "ch1", "ch2", "ch3"].into_iter().enumerate() {
             m.set_uniform(name, channel_colour(fire, k, get_time()));
         }
-        m.set_uniform("indoor_share", def.indoor_share as f32);
         m.set_uniform("cell", vec2(1.0 / mw, 1.0 / mh));
+        m.set_uniform("lres", vec2(mw, mh) * TEXELS as f32);
         // With no sun path the contact shadow fades with daylight instead.
         let day = if def.sun.is_none() { (air.light / 100.0).clamp(0.0, 1.0) } else { 0.0 };
         m.set_uniform("day", day);
@@ -1103,7 +1290,7 @@ mod tests {
 
     #[test]
     fn a_bake_redoes_only_what_changed_near_the_lights() {
-        let torch = |x: f32, y: f32| Lamp { x, y, reach: 3.0, strength: 1.0, channel: 0, indoors: false };
+        let torch = |x: f32, y: f32| Lamp { x, y, reach: 3.0, strength: 1.0, channel: 0 };
         let (a, b) = (torch(10.5, 10.5), torch(40.5, 10.5));
         assert_eq!(redo(&[a, b], &[a, b], None), Redo::Nothing, "a heater re-stamped");
         let far = [(70, 70, 32, 32)];
@@ -1113,8 +1300,6 @@ mod tests {
         let c = torch(60.5, 60.5);
         assert_eq!(redo(&[a, b], &[a, b, c], None), Redo::Areas(vec![c.area()]), "a new light, only its own area");
         assert_eq!(redo(&[a, b], &[a], None), Redo::Areas(vec![b.area()]), "a light gone");
-        let inside = Lamp { indoors: true, ..c };
-        assert_eq!(redo(&[a], &[a, inside], None), Redo::Whole, "a light indoors changes its room's fill");
         assert_eq!(redo(&[a], &[a], Some(&[])), Redo::Whole, "every wall repacked");
     }
 
@@ -1135,7 +1320,7 @@ mod tests {
 
     #[test]
     fn each_light_is_one_quad_carrying_its_centre_reach_and_channel() {
-        let lamp = Lamp { x: 10.5, y: 4.5, reach: 7.0, strength: 0.8, channel: 2, indoors: false };
+        let lamp = Lamp { x: 10.5, y: 4.5, reach: 7.0, strength: 0.8, channel: 2 };
         let meshes = lamp_meshes(&[lamp, Lamp { channel: STEADY, ..lamp }], 2.0);
         assert_eq!(meshes.len(), 1);
         let m = &meshes[0];
@@ -1144,6 +1329,14 @@ mod tests {
         assert_eq!(m.vertices[0].color, [0, 0, 255, 0]);
         assert_eq!(m.vertices[4].color, [0, 0, 0, 255], "the steady channel is alpha");
         assert_eq!(m.vertices[0].position, vec3(3.0 * 2.0, -3.0 * 2.0, 0.0), "reach plus half a cell, in texels");
+    }
+
+    #[test]
+    fn the_eye_opens_up_at_night_and_not_by_day() {
+        assert_eq!(exposure_for(Vec3::ONE), 1.0, "a bright day");
+        let night = exposure_for(vec3(0.05, 0.06, 0.1));
+        assert!((2.0..=2.6).contains(&night), "{night}");
+        assert!(exposure_for(vec3(0.3, 0.3, 0.3)) < night, "dusk is between");
     }
 
     #[test]

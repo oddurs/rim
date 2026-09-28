@@ -903,7 +903,7 @@ fn dfire() -> String {
     "#ffb060".into()
 }
 fn dshare() -> f64 {
-    0.45
+    0.2
 }
 
 /// How the renderer colours light. The sim ignores it: light is a scalar in
@@ -922,8 +922,9 @@ pub struct SkyDef {
     /// Colour of stamped light (fires).
     #[serde(default = "dfire")]
     pub firelight: String,
-    /// Share of daylight that reaches inside enclosed rooms, as if through
-    /// windows (the `light` field itself is 0 indoors).
+    /// Share of daylight a roofed room gets through its walls and door. Its
+    /// windows add the pass their boundary gives the light field, so the
+    /// renderer's indoor share is this plus that, at most 1.
     #[serde(default = "dshare")]
     pub indoor_share: f64,
     /// Where the sun crosses the sky, for the shadows the renderer casts

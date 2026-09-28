@@ -2,14 +2,14 @@
 id: 6fd6b13b-1186-46f4-876e-743d173e03d7
 title: Firelight baked with soft shadows into four flicker channels
 type: feature
-status: doing
+status: done
 milestone: lighting
 assignee: Oddur Sigurdsson
-claimed: 2026-09-26
 depends_on:
 - e5d8b445-42ed-4e87-8390-ad54d525757b
 created: 2026-09-26
 updated: 2026-09-27
+closed_at: 2026-09-27
 priority: p0
 api: additive
 effort: m

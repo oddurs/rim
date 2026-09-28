@@ -299,7 +299,8 @@ of = [{ input = "hour", curve = [[9, 0.0], [12, 90.0], [20, 90.0], [23, 0.0]] }]
 
 Light is a number in the simulation; colour is the renderer's business.
 `[[sky]]` in core's defs sets the colours: `night` (the darkest the world
-gets), `firelight`, `indoor_share` (daylight through windows) and `tint`s, each
+gets), `firelight`, `indoor_share` (daylight a roofed room gets through its
+walls and door; each window adds its light `pass`) and `tint`s, each
 a colour and a strength written as terms. Tints are keyed by label, so a mod
 adds one without reshaping the others:
 

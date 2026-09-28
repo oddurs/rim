@@ -1746,6 +1746,9 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
         t.app.sim.world.fields.set_ambient(cloud, Some(0.0));
         t.app.sim.world.fields.set_ambient(light, Some(100.0));
         t.ticks(20);
+        // The eye adapted to the night above would push this bright day past
+        // white, where no shadow shows.
+        t.app.light.adapt_now();
         t.app.light.pin_sun = Some((90.0, 12.0));
         t.focus(p.offset(0, -3));
         t.frame().await;
@@ -1868,6 +1871,174 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     } else {
         t.check(false, "free ground for two campfires");
     }
+    // ---------------------------------------------------------- 2f13e01d indoors
+    println!("\n# indoors: sunbeams through windows, and a room lit to its corners (2f13e01d)");
+    t.app.paused = true;
+    let field = |t: &T, id: &str| t.w().defs.lookup("field", id).unwrap() as usize;
+    let (cloud, light) = (field(&t, "cloud"), field(&t, "light"));
+    t.app.sim.world.fields.set_ambient(cloud, Some(0.0));
+    t.app.sim.world.fields.set_ambient(light, Some(100.0));
+    let (window, stove) = (defs.thing_id("window").unwrap(), defs.thing_id("stove").unwrap());
+    let deep = defs.lookup("terrain", "deep_water").unwrap();
+    let mut placed = Vec::new();
+    let mut flooded = Vec::new();
+    // A free square `side` across, the nearest to `near`, with a cell of
+    // free ground round it so one room doesn't wall in another.
+    let square = |w: &World, near: IVec, side: i32| {
+        let free =
+            |p: IVec| w.map.inb(p) && w.map.passable(p) && w.map.fixture_at(p).is_none() && w.map.item_at(p).is_none();
+        (0..80i32)
+            .flat_map(|r| (-r..=r).flat_map(move |dy| (-r..=r).map(move |dx| near.offset(dx, dy))))
+            .find(|o| (-1..=side).all(|y| (-1..=side).all(|x| free(o.offset(x, y)))))
+    };
+    // A ring of walls `side` across, the middle of its west wall a window,
+    // deep water or wall as asked, and a stove in the middle if asked.
+    let mut build = |t: &mut T, near: IVec, side: i32, west: &str, lit: bool| {
+        let o = square(t.w(), near, side)?;
+        for dy in 0..side {
+            for dx in 0..side {
+                let edge = dx == 0 || dy == 0 || dx == side - 1 || dy == side - 1;
+                let p = o.offset(dx, dy);
+                let west = if dx == 0 && dy == side / 2 { west } else { "wall" };
+                if !edge {
+                    continue;
+                }
+                if west == "water" {
+                    let m = &mut t.app.sim.world.map;
+                    flooded.push((p, m.terrain[m.idx(p)]));
+                    m.set_terrain(p, deep, defs.terrain[deep as usize].path_cost);
+                } else {
+                    let what = if west == "window" { window } else { wall };
+                    placed.push(t.app.sim.world.spawn_fixture(what, p, false)?);
+                }
+            }
+        }
+        if lit {
+            placed.push(t.app.sim.world.spawn_fixture(stove, o.offset(side / 2, side / 2), false)?);
+        }
+        Some(o)
+    };
+    let beamed = build(&mut t, site.offset(-24, 12), 5, "window", false);
+    let dark = build(&mut t, site.offset(-24, 20), 5, "wall", true);
+    let hall = build(&mut t, site.offset(-34, 12), 7, "wall", true);
+    let moat = build(&mut t, site.offset(-34, 22), 5, "water", false);
+    t.ticks(2);
+    let inside = |o: IVec, side: i32| (1..side - 1).flat_map(move |dy| (1..side - 1).map(move |dx| o.offset(dx, dy)));
+    let texels = |q: IVec| {
+        [0.25, 0.75].into_iter().flat_map(move |fy| [0.25, 0.75].map(|fx| (q.x as f32 + fx, q.y as f32 + fy)))
+    };
+    if let (Some(beamed), Some(dark), Some(hall), Some(moat)) = (beamed, dark, hall, moat) {
+        let rooms = [(beamed, 5), (dark, 5), (hall, 7), (moat, 5)];
+        let all_in = rooms.iter().all(|&(o, s)| t.w().map.indoors(o.offset(s / 2, s / 2)));
+        t.check(all_in, "the huts, the hall and a hut closed by water are rooms");
+        // Low in the west, the sun comes through the west window in a bar
+        // across the floor; high in the south, it can't get in at all.
+        let lit_inside = |img: &Image, o: IVec| {
+            inside(o, 5).flat_map(texels).filter_map(|(x, y)| crate::light::sun_in(img, x, y)).fold(0.0f32, f32::max)
+        };
+        t.app.light.pin_sun = Some((180.0, 12.0));
+        t.frame().await;
+        let beam = t.app.light.sun_image().map_or(0.0, |img| lit_inside(&img, beamed));
+        t.check(beam > 0.5, format!("a low western sun throws a beam through the west window ({beam:.2})"));
+        t.app.light.pin_sun = Some((90.0, 60.0));
+        t.frame().await;
+        let noon = t.app.light.sun_image().map_or(1.0, |img| lit_inside(&img, beamed));
+        t.check(noon < 0.05, format!("and none at noon from the south, where there is no window ({noon:.2})"));
+        // A room with no window never sees the sun, from anywhere in the sky,
+        // even where water rather than a wall closes it.
+        let (mut leak, mut wet) = (0.0f32, 0.0f32);
+        for az in (0..360).step_by(30) {
+            for elev in [4.0, 12.0, 35.0] {
+                t.app.light.pin_sun = Some((az as f64, elev));
+                t.frame().await;
+                if let Some(img) = t.app.light.sun_image() {
+                    leak = leak.max(lit_inside(&img, dark));
+                    wet = wet.max(lit_inside(&img, moat));
+                } else {
+                    (leak, wet) = (1.0, 1.0);
+                }
+            }
+        }
+        t.check(leak < 0.01, format!("a windowless room sees no sun from any angle ({leak:.2})"));
+        t.check(wet < 0.01, format!("nor does one closed by water, not a wall ({wet:.2})"));
+        t.app.light.pin_sun = None;
+        // A stove lights a small hut to its corners; in a hall its corners
+        // stay dim. Room fill is the difference.
+        let glow = |t: &T, q: IVec| {
+            t.app.light.fire_at(q.x as f32 + 0.5, q.y as f32 + 0.5).map_or(0.0, |c| c.iter().sum::<f32>())
+        };
+        let corner =
+            |t: &T, o: IVec, side: i32| glow(t, o.offset(1, 1)) / glow(t, o.offset(side / 2, side / 2)).max(1e-3);
+        let (small, big) = (corner(&t, dark, 5), corner(&t, hall, 7));
+        t.check(small > 0.6, format!("a stove lights a 3×3 hut to its corners ({small:.2} of its middle)"));
+        t.check(big < small * 0.5, format!("and a 5×5 hall's corners half as well at most ({big:.2})"));
+        let bakes = t.app.light.bakes;
+        for _ in 0..5 {
+            t.frame().await;
+        }
+        t.check(t.app.light.bakes == bakes, "firelight and room fill are baked once, not every frame");
+        t.shot("indoors").await;
+        // A wall where no light reaches rebuilds the rooms but leaves every
+        // fill as it was: nothing is baked. Opening the lit hut empties its
+        // fill, and it is.
+        let lamps: Vec<IVec> = t.w().fields.emitters_of(light).map(|(_, p, _, _)| p).collect();
+        // Far means from the wall's whole chunk: the occluders say which
+        // chunks changed, not which cells.
+        let clear = |p: IVec| {
+            let c = rim_sim::map::CHUNK;
+            let (x0, y0) = (p.x.div_euclid(c) * c, p.y.div_euclid(c) * c);
+            let gap = |l: &IVec| (x0 - l.x).max(l.x - (x0 + c - 1)).max((y0 - l.y).max(l.y - (y0 + c - 1)));
+            lamps.iter().all(|l| gap(l) > crate::light::MAX_REACH as i32 + 1)
+        };
+        let free = |w: &World, p: IVec| w.map.inb(p) && w.map.passable(p) && w.map.fixture_at(p).is_none();
+        let near = site.offset(40, -40);
+        let far = (0..160i32)
+            .flat_map(|r| (-r..=r).flat_map(move |dy| (-r..=r).map(move |dx| near.offset(dx, dy))))
+            .find(|&p| free(t.w(), p) && clear(p));
+        if let Some(far) = far {
+            // Rooms rebuilt by hand, not by ticking: a tick can finish
+            // building a fire somewhere, and that would rightly rebake.
+            t.frame().await;
+            let rebuilds = t.w().map.room_rebuilds;
+            let bakes = t.app.light.bakes;
+            placed.extend(t.app.sim.world.spawn_fixture(wall, far, false));
+            t.app.sim.world.map.ensure_rooms();
+            t.frame().await;
+            t.check(
+                t.w().map.room_rebuilds > rebuilds && t.app.light.bakes == bakes,
+                format!(
+                    "a wall far from any light rebuilds rooms, not firelight ({} bakes)",
+                    t.app.light.bakes - bakes
+                ),
+            );
+        } else {
+            t.check(false, "free ground far from every light");
+        }
+        let before = glow(&t, dark.offset(1, 1));
+        let door = t.w().map.fixture_at(dark.offset(0, 2));
+        if let Some(e) = door {
+            placed.retain(|&p| p != e);
+            t.app.sim.world.despawn_thing(e);
+        }
+        let bakes = t.app.light.bakes;
+        t.ticks(2);
+        t.frame().await;
+        let after = glow(&t, dark.offset(1, 1));
+        t.check(
+            !t.w().map.indoors(dark.offset(2, 2)) && t.app.light.bakes > bakes && after < before - 0.05,
+            format!("opening the lit hut rebakes it without its fill (corner {before:.2} to {after:.2})"),
+        );
+    } else {
+        t.check(false, "clear ground for two huts and a hall");
+    }
+    for e in placed {
+        t.app.sim.world.despawn_thing(e);
+    }
+    for (p, was) in flooded {
+        t.app.sim.world.map.set_terrain(p, was, defs.terrain[was as usize].path_cost);
+    }
+    t.app.sim.world.fields.set_ambient(cloud, None);
+    t.app.sim.world.fields.set_ambient(light, None);
     t.app.paused = false;
 
     // ---------------------------------------------------------- fda56c8e camera by device
