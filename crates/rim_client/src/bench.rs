@@ -4,10 +4,11 @@
 //! in around the start: rooms of walls, doors, floors, furniture and
 //! stacks, some walls still planned, and every designation over the rest
 //! of the map. It is drawn through the game's own `frame` and `render` in
-//! six views: the whole map at the lowest zoom, mid, close, the whole map
-//! in a storm, a zoom gesture from the whole map to close and back, and the
-//! storm again at half render scale, and the whole map at dusk, when the
-//! colony's fires matter. Per view: each pass's CPU time, the time macroquad
+//! nine views: the whole map at the lowest zoom, mid, close, the whole map
+//! in a storm, a zoom gesture from the whole map to close and back, the
+//! storm again at half render scale, a level dug out below the colony seen
+//! from the surface through pits and then from the level itself, and the
+//! whole map at dusk, when the colony's fires matter. Per view: each pass's CPU time, the time macroquad
 //! takes to hand the frame to GL ("submit"), the time the GPU takes to
 //! finish it (Linux only, where macroquad calls glFinish under telemetry),
 //! one frame's draw calls and indices, and how many things it draws live
@@ -43,6 +44,8 @@ const PAWNS: usize = 200;
 const ROOM: i32 = 8;
 /// Side of the stamped colony, in cells.
 const COLONY: i32 = 96;
+/// Side of the room the stacked views dig below it.
+const STACKED: i32 = 40;
 
 /// A copy of `mods` plus `n` generated mods, each a piece of furniture
 /// drawn from a sprite of its own: the colony gets built of them, so the
@@ -195,6 +198,59 @@ pub fn world(mods: &Path, seed: u64, sprite_mods: usize) -> Result<Sim, String> 
     Ok(s)
 }
 
+/// The stacked scene (DESIGN.md §6d): a room `size` cells square dug out
+/// of the level below `top_left`, a way down to it, three pits over it
+/// and three colonists in it. Chosen by what defs are, not by name: the
+/// first portal that isn't a hole, the first air terrain. Returns the
+/// top of the way down, or None when the mods have neither.
+pub fn stacked(s: &mut Sim, top_left: IVec, size: i32) -> Option<IVec> {
+    let defs = s.world.defs.clone();
+    let way = (0..defs.things.len()).find(|&d| {
+        let t = &defs.things[d];
+        t.portal.is_some() && t.build.as_ref().and_then(|b| b.dig.as_ref()).is_some_and(|g| g.hole.is_none())
+    })? as rim_sim::defs::DefId;
+    let air = defs.terrain.iter().position(|t| t.air)? as rim_sim::defs::DefId;
+    let start = defs.start.as_ref()?.creature_r;
+    let below = |p: IVec| IVec::at(p.x, p.y, p.z - 1);
+    for y in 0..size {
+        for x in 0..size {
+            let p = below(top_left.offset(x, y));
+            if let Some(leaves) = s.world.solid_at(p).and_then(|r| r.leaves_r) {
+                s.world.map.set_terrain(p, leaves, defs.terrain[leaves as usize].path_cost);
+            }
+        }
+    }
+    let clear = |s: &Sim, p: IVec| s.world.map.passable(p) && s.world.map.fixture_at(p).is_none();
+    let top = (1..size - 1)
+        .flat_map(|y| (1..size - 1).map(move |x| top_left.offset(x, y)))
+        .find(|&p| clear(s, p) && s.world.map.passable(below(p)))?;
+    let e = s.world.spawn_fixture_of(way, top, false, None)?;
+    let _ = s.world.ecs.insert_one(e, Owner(Faction::Player));
+    s.world.open_portal(e);
+    // Pits: open ground over the room goes to air, whatever stood on it
+    // with it.
+    for k in 1..=3 {
+        let o = top_left.offset(size * k / 4 - 1, size * k / 4 - 1);
+        for p in (0..3).flat_map(|y| (0..3).map(move |x| o.offset(x, y))) {
+            if p == top || !s.world.map.passable(p) || !s.world.map.passable(below(p)) {
+                continue;
+            }
+            for e in [s.world.map.fixture_at(p), s.world.map.item_at(p), s.world.map.floor_at(p)].into_iter().flatten()
+            {
+                s.world.despawn_thing(e);
+            }
+            s.world.map.set_terrain(p, air, 0);
+        }
+    }
+    for k in 0..3 {
+        let p = below(top_left.offset(size / 2 + k, size / 2));
+        if s.world.map.passable(p) {
+            s.world.spawn_pawn(start, Faction::Player, p, None);
+        }
+    }
+    Some(top)
+}
+
 /// A light in one room in four of the stamped colony, about forty: the
 /// fires a dusk colony is lit by. Only the dusk view has them, so the
 /// other views stay comparable with every earlier run.
@@ -238,18 +294,96 @@ struct View {
     hour: Option<f64>,
     /// Light the colony's rooms first (`light_the_colony`).
     lit: bool,
+    /// Dig the stacked scene first (`stacked`), and show this level.
+    level: Option<i32>,
 }
 
-const VIEWS: [View; 7] = [
-    View { name: "whole map", zoom: None, storm: false, zooming: false, scale: 1.0, hour: None, lit: false },
-    View { name: "mid", zoom: Some(12.0), storm: false, zooming: false, scale: 1.0, hour: None, lit: false },
-    View { name: "close", zoom: Some(28.0), storm: false, zooming: false, scale: 1.0, hour: None, lit: false },
-    View { name: "storm", zoom: None, storm: true, zooming: false, scale: 1.0, hour: None, lit: false },
-    View { name: "zooming", zoom: Some(12.0), storm: false, zooming: true, scale: 1.0, hour: None, lit: false },
+const VIEWS: [View; 9] = [
+    View {
+        name: "whole map",
+        zoom: None,
+        storm: false,
+        zooming: false,
+        scale: 1.0,
+        hour: None,
+        lit: false,
+        level: None,
+    },
+    View {
+        name: "mid",
+        zoom: Some(12.0),
+        storm: false,
+        zooming: false,
+        scale: 1.0,
+        hour: None,
+        lit: false,
+        level: None,
+    },
+    View {
+        name: "close",
+        zoom: Some(28.0),
+        storm: false,
+        zooming: false,
+        scale: 1.0,
+        hour: None,
+        lit: false,
+        level: None,
+    },
+    View { name: "storm", zoom: None, storm: true, zooming: false, scale: 1.0, hour: None, lit: false, level: None },
+    View {
+        name: "zooming",
+        zoom: Some(12.0),
+        storm: false,
+        zooming: true,
+        scale: 1.0,
+        hour: None,
+        lit: false,
+        level: None,
+    },
     // The storm at half the pixels: what render scale saves the GPU.
-    View { name: "storm 50%", zoom: None, storm: true, zooming: false, scale: 0.5, hour: None, lit: false },
+    View {
+        name: "storm 50%",
+        zoom: None,
+        storm: true,
+        zooming: false,
+        scale: 0.5,
+        hour: None,
+        lit: false,
+        level: None,
+    },
+    // A level dug out below the colony (DESIGN.md §6d): the surface with
+    // it showing through pits, then the level itself, nearly all rock.
+    View {
+        name: "stacked",
+        zoom: None,
+        storm: false,
+        zooming: false,
+        scale: 1.0,
+        hour: None,
+        lit: false,
+        level: Some(0),
+    },
+    View {
+        name: "below",
+        zoom: None,
+        storm: false,
+        zooming: false,
+        scale: 1.0,
+        hour: None,
+        lit: false,
+        level: Some(-1),
+    },
     // Long shadows and lit fires: the most the lighting does.
-    View { name: "dusk", zoom: None, storm: false, zooming: false, scale: 1.0, hour: Some(18.67), lit: true },
+    View {
+        name: "dusk",
+        zoom: None,
+        storm: false,
+        zooming: false,
+        scale: 1.0,
+        hour: Some(18.67),
+        lit: true,
+        level: None,
+    },
 ];
 
 /// Ticks between evaluations of outdoor terms, which the sky is made of.
@@ -407,8 +541,18 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
     let mut time = 0.0;
 
     let mut results = Vec::new();
+    let mut dug = false;
     for v in &VIEWS {
         pin(&mut app, if v.storm { STORM } else { CLEAR });
+        if v.level.is_some() && !dug {
+            dug = true;
+            // Beside the stamped colony, where a player would dig first.
+            let at = centre.offset(COLONY / 2 + 4, -STACKED / 2);
+            if stacked(&mut app.sim, at, STACKED).is_none() {
+                eprintln!("render bench: the mods have no way down or no air to dig the stacked scene with");
+            }
+        }
+        app.cam.z = v.level.unwrap_or(0);
         if v.lit {
             light_the_colony(&mut app.sim);
         }

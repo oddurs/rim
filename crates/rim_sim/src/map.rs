@@ -100,6 +100,10 @@ pub struct Map {
     /// The same, per level, by plane: what changed where, so work that only
     /// reads the surface (wind) isn't redone for a dig underground.
     level_rev: Vec<u64>,
+    /// One bit per cell, set once a pawn has stood beside it (DESIGN.md
+    /// §6d): rock shows what it's made of once seen, and prospecting reads
+    /// it. The surface and what is over it start seen.
+    seen: Vec<u64>,
     /// Chunks across (see `CHUNK`).
     chunks_w: i32,
     /// Per chunk: bumped when a cell's terrain changes.
@@ -220,6 +224,14 @@ impl Map {
             reach_dirty: true,
             level_rev: vec![0; (below + above + 1) as usize],
             revision: 0,
+            seen: {
+                let mut bits = vec![0u64; n.div_ceil(64)];
+                let unseen = plane..plane * (below as usize + 1);
+                for i in (0..n).filter(|i| !unseen.contains(i)) {
+                    bits[i / 64] |= 1 << (i % 64);
+                }
+                bits
+            },
             chunks_w: (w + CHUNK - 1) / CHUNK,
             terrain_rev: vec![0; chunks],
             things_rev: vec![0; chunks],
@@ -319,6 +331,42 @@ impl Map {
                 let d = self.chunk_of(q);
                 self.things_rev[d] += 1;
             }
+        }
+    }
+
+    /// Has a pawn stood beside cell `i`?
+    #[inline]
+    pub fn seen(&self, i: usize) -> bool {
+        self.seen[i / 64] & (1 << (i % 64)) != 0
+    }
+
+    /// A pawn stands at `p`: it and the cells around it are seen. A cell
+    /// seen for the first time is touched, since rock draws differently.
+    pub fn see_around(&mut self, p: IVec) {
+        for dy in -1..=1 {
+            for dx in -1..=1 {
+                let q = p.offset(dx, dy);
+                if !self.inb(q) {
+                    continue;
+                }
+                let i = self.idx(q);
+                if !self.seen(i) {
+                    self.seen[i / 64] |= 1 << (i % 64);
+                    self.touch(q);
+                }
+            }
+        }
+    }
+
+    /// The seen bits, for a save.
+    pub fn seen_bits(&self) -> &[u64] {
+        &self.seen
+    }
+
+    /// Seen bits from a save; ignored if they don't fit this map.
+    pub fn set_seen_bits(&mut self, bits: Vec<u64>) {
+        if bits.len() == self.seen.len() {
+            self.seen = bits;
         }
     }
 

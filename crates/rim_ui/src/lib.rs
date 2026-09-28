@@ -148,6 +148,11 @@ struct Painting {
 /// What routing found to run this frame.
 enum Call {
     Click(mlua::Function),
+    /// A bound key whose action holds only when `when` says so.
+    Bind {
+        f: mlua::Function,
+        when: mlua::Function,
+    },
     /// An input's text changed, or was submitted.
     Text {
         f: mlua::Function,
@@ -1114,9 +1119,13 @@ impl Ui {
                         continue;
                     }
                 }
-                if let Some(f) = self.vm.bind_for_key(key) {
-                    handlers.push(Call::Click(f));
-                    out.captured_keys = true;
+                match self.vm.bind_for_key(key) {
+                    Some((f, Some(when))) => handlers.push(Call::Bind { f, when }),
+                    Some((f, None)) => {
+                        handlers.push(Call::Click(f));
+                        out.captured_keys = true;
+                    }
+                    None => {}
                 }
             }
         }
@@ -1181,6 +1190,12 @@ impl Ui {
         for call in calls {
             match call {
                 Call::Click(f) => self.vm.call_handler(&f, world, client, &self.shown),
+                Call::Bind { f, when } => {
+                    if self.vm.call_when(&when, world, client, &self.shown) {
+                        self.vm.call_handler(&f, world, client, &self.shown);
+                        out.captured_keys = true;
+                    }
+                }
                 Call::Text { f, text } => {
                     self.vm.call_with(&f, text, world, client, &self.shown);
                 }

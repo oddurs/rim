@@ -161,9 +161,15 @@ struct Chunk {
 
 pub struct Meshes {
     pipeline: Option<Pipeline>,
+    /// Every level's chunks, as `Map::level_chunks` numbers them. Only the
+    /// viewed level and the ones beside it hold buffers.
     chunks: Vec<Chunk>,
+    /// The level the buffers were last prepared for.
+    level: Option<i32>,
     /// Chunks on screen this frame (from `prepare`).
     visible: Vec<usize>,
+    /// Chunks of the level below that show through air on screen.
+    below: Vec<usize>,
     /// The zoom last frame, and how many frames it has held.
     zoom: (f32, u32),
     /// Last frame, for the render bench and the profiler.
@@ -179,7 +185,9 @@ impl Default for Meshes {
         Meshes {
             pipeline: None,
             chunks: Vec::new(),
+            level: None,
             visible: Vec::new(),
+            below: Vec::new(),
             zoom: (0.0, 0),
             calls: 0,
             indices: 0,
@@ -289,7 +297,7 @@ impl Meshes {
     /// Paint chunk `c` into fresh buffers.
     #[allow(clippy::too_many_arguments)]
     fn build(&mut self, ctx: &mut dyn RenderingBackend, w: &World, atlas: &WorldAtlas, c: usize, z: f32, t: f32) {
-        let IVec { x: x0, y: y0, .. } = w.map.chunk_origin(c);
+        let IVec { x: x0, y: y0, z: z0 } = w.map.chunk_origin(c);
         let chunk = &mut self.chunks[c];
         chunk.free(ctx);
         chunk.live = Default::default();
@@ -300,7 +308,7 @@ impl Meshes {
             let mut b = Builder::new(atlas);
             for y in y0..(y0 + CHUNK).min(w.map.h) {
                 for x in x0..(x0 + CHUNK).min(w.map.w) {
-                    let cell = IVec::new(x, y);
+                    let cell = IVec::at(x, y, z0);
                     let i = w.map.idx(cell);
                     let Some(e) = w.map.layers_at(i)[layer] else {
                         // Rock with nobody on it is terrain, drawn as its thing.
@@ -354,26 +362,59 @@ impl Meshes {
         self.rebuilt += 1;
     }
 
-    /// Find this frame's visible chunks and rebuild the stale ones.
-    pub fn prepare(&mut self, w: &World, atlas: &WorldAtlas, cam: &Cam, t: f32) {
+    /// Find this frame's visible chunks on `level`, and the level below's
+    /// under its air, and rebuild the stale ones.
+    pub fn prepare(&mut self, w: &World, atlas: &WorldAtlas, cam: &Cam, level: i32, t: f32) {
         // SAFETY: macroquad's context outlives the frame, and nothing else
         // holds it while the world draws.
         let gl = unsafe { get_internal_gl() };
         let ctx = gl.quad_context;
         let (cx, cy) = w.map.chunks();
-        if self.chunks.len() != (cx * cy) as usize {
+        let total = w.map.levels().map(|z| w.map.level_chunks(z).end).max().unwrap_or(0);
+        if self.chunks.len() != total {
             for ch in &mut self.chunks {
                 ch.free(ctx);
             }
-            self.chunks = (0..cx * cy).map(|_| Chunk::default()).collect();
+            self.chunks = (0..total).map(|_| Chunk::default()).collect();
+            self.level = None;
         }
+        if self.level != Some(level) {
+            // Lighting crossfades the level above as well as below
+            // (DESIGN.md §6e), so both neighbours keep their buffers.
+            for z in w.map.levels().filter(|z| (z - level).abs() > 1) {
+                for c in w.map.level_chunks(z) {
+                    if self.chunks[c].built.is_some() {
+                        self.chunks[c].free(ctx);
+                        self.chunks[c].built = None;
+                    }
+                }
+            }
+            self.level = Some(level);
+        }
+        let base = w.map.level_chunks(level).start;
         let (wx0, wy0) = cam.to_world(0.0, 0.0);
         let (wx1, wy1) = cam.to_world(screen_width(), screen_height());
         let span = |a: f32, b: f32, n: i32| {
             ((a / CHUNK as f32).floor().max(0.0) as i32, ((b / CHUNK as f32).floor() as i32).min(n - 1))
         };
         let ((c0x, c1x), (c0y, c1y)) = (span(wx0, wx1, cx), span(wy0, wy1, cy));
-        self.visible = (c0y..=c1y).flat_map(|y| (c0x..=c1x).map(move |x| (y * cx + x) as usize)).collect();
+        self.visible = (c0y..=c1y).flat_map(|y| (c0x..=c1x).map(move |x| base + (y * cx + x) as usize)).collect();
+        // Below, only chunks under an air cell on screen: a level with no
+        // pits costs nothing.
+        self.below.clear();
+        if w.map.levels().contains(&(level - 1)) {
+            let under = w.map.level_chunks(level - 1).start;
+            for &i in w.map.air_cells(level) {
+                let p = w.map.pos(i as usize);
+                let (x, y) = (p.x / CHUNK, p.y / CHUNK);
+                let c = under + (y * cx + x) as usize;
+                if (c0x..=c1x).contains(&x) && (c0y..=c1y).contains(&y) {
+                    self.below.push(c);
+                }
+            }
+            self.below.sort_unstable();
+            self.below.dedup();
+        }
 
         if self.pipeline.is_none() {
             self.pipeline = Some(Self::pipeline(ctx));
@@ -383,8 +424,8 @@ impl Meshes {
         self.zoom = if self.zoom.0 == cam.zoom { (cam.zoom, self.zoom.1 + 1) } else { (cam.zoom, 0) };
         let settled = self.zoom.1 >= SETTLE_FRAMES;
         let start = std::time::Instant::now();
-        for k in 0..self.visible.len() {
-            let c = self.visible[k];
+        for k in 0..self.visible.len() + self.below.len() {
+            let c = self.visible.get(k).copied().unwrap_or_else(|| self.below[k - self.visible.len()]);
             let stale = match self.chunks[c].built {
                 None => true,
                 Some((r, _)) if r != w.map.things_rev(c) => true,
@@ -404,8 +445,8 @@ impl Meshes {
         // just above or left of the view may hold one reaching into it. It
         // is drawn only if it does.
         if w.defs.things.iter().any(|d| d.size != [1, 1]) {
-            let left = (c0x > 0).then(|| (c0y.max(1) - 1..=c1y).map(|y| (y * cx + c0x - 1) as usize));
-            let above = (c0y > 0).then(|| (c0x..=c1x).map(|x| ((c0y - 1) * cx + x) as usize));
+            let left = (c0x > 0).then(|| (c0y.max(1) - 1..=c1y).map(|y| base + (y * cx + c0x - 1) as usize));
+            let above = (c0y > 0).then(|| (c0x..=c1x).map(|x| base + ((c0y - 1) * cx + x) as usize));
             for c in left.into_iter().flatten().chain(above.into_iter().flatten()) {
                 // Only when what's in it changed: at another zoom it is drawn
                 // scaled, like any chunk, and it's off screen anyway.
@@ -420,9 +461,10 @@ impl Meshes {
     }
 
     /// Draw one layer (floors, items, fixtures) of every visible chunk from
-    /// its buffers. Whatever macroquad has batched so far goes first, so
-    /// the layers below stay below.
-    pub fn draw_layer(&mut self, w: &World, cam: &Cam, layer: usize, target: Option<RenderPass>) {
+    /// its buffers, or with `below` of the level below's chunks under air.
+    /// Whatever macroquad has batched so far goes first, so the layers below
+    /// stay below.
+    pub fn draw_layer(&mut self, w: &World, cam: &Cam, layer: usize, target: Option<RenderPass>, below: bool) {
         let start = std::time::Instant::now();
         // SAFETY: as in `prepare`.
         let mut gl = unsafe { get_internal_gl() };
@@ -436,7 +478,7 @@ impl Meshes {
         }
         let flip = if target.is_some() { 1.0 } else { -1.0 };
         ctx.apply_pipeline(pipeline);
-        for &c in &self.visible {
+        for &c in if below { &self.below } else { &self.visible } {
             let o = w.map.chunk_origin(c);
             let origin = cam.to_screen(o.x as f32, o.y as f32);
             let scale = self.chunks[c].built.map_or(1.0, |(_, z)| cam.zoom / z);
@@ -464,7 +506,12 @@ impl Meshes {
 
     /// Is chunk `c` drawn this frame?
     pub fn drawn(&self, c: usize) -> bool {
-        self.visible.contains(&c)
+        self.visible.contains(&c) || self.below.contains(&c)
+    }
+
+    /// Chunks holding buffers, on any level.
+    pub fn cached(&self) -> impl Iterator<Item = usize> + '_ {
+        (0..self.chunks.len()).filter(|&c| self.chunks[c].built.is_some())
     }
 
     /// How many things the visible chunks leave to be drawn live.

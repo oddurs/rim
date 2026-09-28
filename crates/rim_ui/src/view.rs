@@ -142,6 +142,8 @@ pub enum UiAction {
     ToggleSelect(Entity),
     /// Centre the camera on a pawn.
     Focus(Entity),
+    /// Show level `z` (DESIGN.md §6d); the client keeps it on the map.
+    Level(i32),
     /// Pick a toolbar tool by key.
     Tool(String),
     /// Pick the material for the active build tool, by thing id.

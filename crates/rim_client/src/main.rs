@@ -75,6 +75,8 @@ pub struct Cam {
     pub y: f32,
     /// Logical points per tile.
     pub zoom: f32,
+    /// The level on screen (DESIGN.md §6d): 0 is the surface.
+    pub z: i32,
 }
 
 impl Cam {
@@ -86,7 +88,7 @@ impl Cam {
     }
     pub fn tile_at(&self, sx: f32, sy: f32) -> IVec {
         let (wx, wy) = self.to_world(sx, sy);
-        IVec::new(wx.floor() as i32, wy.floor() as i32)
+        IVec::at(wx.floor() as i32, wy.floor() as i32, self.z)
     }
 }
 
@@ -95,8 +97,6 @@ pub struct App {
     pub ui: Ui,
     pub atlas: Texture2D,
     pub cam: Cam,
-    /// The level on screen (DESIGN.md §6d): 0 is the surface.
-    pub view_z: i32,
     pub tool: Tool,
     pub tools: Vec<ToolDef>,
     /// The material last picked for each buildable, so nobody picks wood
@@ -289,8 +289,17 @@ fn typed_char(c: char) -> Option<char> {
 #[cfg(test)]
 mod tests {
     use super::{
-        classify, markable, save_setting, saved_render_scale, saved_scroll_mode, saved_ui_scale, Scroll, ScrollMode,
+        build_rects, classify, markable, save_setting, saved_render_scale, saved_scroll_mode, saved_ui_scale, Scroll,
+        ScrollMode,
     };
+    use rim_sim::IVec;
+
+    #[test]
+    fn a_ring_of_walls_is_planned_on_the_level_it_was_dragged_on() {
+        let rects = build_rects(true, IVec::at(2, 2, -1), IVec::at(6, 5, -1));
+        assert_eq!(rects.len(), 4);
+        assert!(rects.iter().all(|(a, b)| a.z == -1 && b.z == -1), "{rects:?}");
+    }
 
     #[test]
     fn a_wheel_steps_and_a_trackpad_travels() {
@@ -646,8 +655,7 @@ async fn game() {
         sim,
         ui,
         atlas,
-        cam: Cam { x: center.x as f32 + 0.5, y: center.y as f32 + 0.5, zoom: 28.0 },
-        view_z: 0,
+        cam: Cam { x: center.x as f32 + 0.5, y: center.y as f32 + 0.5, zoom: 28.0, z: 0 },
         tool: Tool::Select,
         selected: None,
         selected_zone: None,
@@ -1120,7 +1128,7 @@ pub fn client_view(app: &mut App, mouse: (f32, f32), time: f64) -> ClientView {
         screen: (screen_width() * dpi, screen_height() * dpi),
         scale: app.ui.theme.scale,
         cam: (app.cam.x, app.cam.y, app.cam.zoom * dpi),
-        level: app.view_z,
+        level: app.cam.z,
         mouse: (mouse.0 * dpi, mouse.1 * dpi),
         frac: app.tick_frac(),
         selected: app.selected,
@@ -1439,22 +1447,31 @@ pub fn render(app: &mut App) {
             ..Default::default()
         });
     }
-    app.ground.update(&app.sim.world);
+    app.ground.update(&app.sim.world, app.cam.z);
     t.ground = lap();
+    app.worksites.follow_level(app.cam.z);
     app.worksites.update(&app.sim.world, app.cam.zoom >= worksite::DETAIL_ZOOM);
     let counts = draw::things(app);
     t.gl = app.meshes.submit_us;
     t.things = lap() - t.gl;
     draw::pawns(app);
     t.pawns = lap();
-    app.sky.weather(&app.sim.world, &app.cam, &air);
+    // Underground no weather falls, and no roof shows (DESIGN.md §6d).
+    if app.cam.z >= 0 {
+        app.sky.weather(&app.sim.world, &app.cam, &air);
+    }
     t.weather = lap();
-    app.light.multiply(&app.sim.world, &app.cam, &air, app.sky.flash());
+    // The light is the surface's: under it, until lighting keeps it per
+    // level (3124bd7b), a level is drawn unlit rather than lit as the
+    // surface is.
+    if app.cam.z == 0 {
+        app.light.multiply(&app.sim.world, &app.cam, &air, app.sky.flash());
+    }
     // Roofs are outdoors whatever is under them: after the light, lit by
     // the sky. The house under the pointer lifts its roof.
     app.roofs.update(&app.sim.world);
     let alpha = roof::Roofs::alpha(app.cam.zoom);
-    if alpha > 0.0 {
+    if alpha > 0.0 && app.cam.z == 0 {
         let lifted = app.hover_cell.map_or(0, |p| app.roofs.house_at(&app.sim.world, p));
         let tint = light::Light::outdoor(&app.sim.world, &air, app.sky.flash());
         app.roofs.draw(&app.sim.world, &app.cam, draw::visible(app), alpha, lifted, tint);
@@ -1523,9 +1540,21 @@ fn upload_atlas(ui: &mut Ui, atlas: &Texture2D) {
 
 fn apply_ui(app: &mut App, a: UiAction) {
     match a {
-        UiAction::Select(e) => select(app, e.into_iter().collect()),
+        UiAction::Select(e) => {
+            select(app, e.into_iter().collect());
+            // A colonist picked from a list on another level: go to them
+            // (DESIGN.md §6d). On this level the camera stays put.
+            let there = e.and_then(|e| app.sim.world.ecs.get::<&Pawn>(e).ok().map(|p| p.pos.z));
+            if let Some(e) = e.filter(|_| there.is_some_and(|z| z != app.cam.z)) {
+                focus(app, e);
+            }
+        }
         UiAction::ToggleSelect(e) => toggle_selected(app, e),
         UiAction::Focus(e) => focus(app, e),
+        UiAction::Level(z) => {
+            let levels = app.sim.world.map.levels();
+            app.cam.z = z.clamp(*levels.start(), *levels.end());
+        }
         UiAction::Tool(key) => {
             if let Some(t) = app.tools.iter().find(|t| t.key == key) {
                 app.tool = t.tool;
@@ -1557,7 +1586,8 @@ fn apply_ui(app: &mut App, a: UiAction) {
         UiAction::Draft(e, on) => app.sim.push(Command::Draft { pawn: e, on }),
         // A pick from the orders menu: every selected colonist it's on
         // offer to gets it, by name.
-        UiAction::Order { key, cell, on } => give_orders(app, cell, on, Some(&key)),
+        // The UI names a spot by x and y: it is on the level shown.
+        UiAction::Order { key, cell, on } => give_orders(app, IVec::at(cell.x, cell.y, app.cam.z), on, Some(&key)),
         UiAction::Turn => app.build_facing = (app.build_facing + 1) & 3,
         UiAction::Undo => {
             if let Some(last) = app.last_order.take() {
@@ -1958,7 +1988,7 @@ pub fn pawn_under(app: &App, sx: f32, sy: f32) -> Option<Entity> {
     let mut best: Option<(f32, Entity)> = None;
     for &e in &w.pawns {
         let Ok(p) = w.ecs.get::<&Pawn>(e) else { continue };
-        if p.pos.z != app.view_z {
+        if p.pos.z != app.cam.z {
             continue;
         }
         let (px, py) = draw::pawn_pos(&p, app.tick_frac());
@@ -2115,6 +2145,9 @@ pub fn apply(app: &mut App, action: Action) {
                             .colonists()
                             .filter(|&e| {
                                 w.ecs.get::<&Pawn>(e).is_ok_and(|p| {
+                                    if p.pos.z != app.cam.z {
+                                        return false;
+                                    }
                                     let (px, py) = draw::pawn_pos(&p, app.tick_frac());
                                     let c = IVec::new(px.floor() as i32, py.floor() as i32);
                                     (lo.x..=hi.x).contains(&c.x) && (lo.y..=hi.y).contains(&c.y)
@@ -2223,10 +2256,10 @@ pub fn build_rects(blocks: bool, a: IVec, b: IVec) -> Vec<(IVec, IVec)> {
         return vec![(a, b)];
     }
     vec![
-        (IVec::new(x0, y0), IVec::new(x1, y0)),
-        (IVec::new(x0, y1), IVec::new(x1, y1)),
-        (IVec::new(x0, y0 + 1), IVec::new(x0, y1 - 1)),
-        (IVec::new(x1, y0 + 1), IVec::new(x1, y1 - 1)),
+        (IVec::at(x0, y0, a.z), IVec::at(x1, y0, a.z)),
+        (IVec::at(x0, y1, a.z), IVec::at(x1, y1, a.z)),
+        (IVec::at(x0, y0 + 1, a.z), IVec::at(x0, y1 - 1, a.z)),
+        (IVec::at(x1, y0 + 1, a.z), IVec::at(x1, y1 - 1, a.z)),
     ]
 }
 
@@ -2236,5 +2269,6 @@ fn focus(app: &mut App, e: Entity) {
     if let Some(p) = at {
         app.cam.x = p.x as f32 + 0.5;
         app.cam.y = p.y as f32 + 0.5;
+        app.cam.z = p.z;
     }
 }

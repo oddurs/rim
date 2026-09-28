@@ -270,7 +270,8 @@ for n = 4, NUMBERED do
 	end)
 end
 
--- [ and ]: the previous or next group in the open tray.
+-- Shift+Tab and Tab: the previous or next group in the open tray. [ and ]
+-- change level (depth.luau).
 local function step_group(by_n: number)
 	local tools = view.tools()
 	local open = open_category(tools)
@@ -290,12 +291,24 @@ local function step_group(by_n: number)
 		act.tool("select")
 	end
 end
-ui.bind("core:dock.prev_group", { key = "[", label = t("core:keys.prev_group", "Previous group in the open tray") }, function()
-	step_group(-1)
-end)
-ui.bind("core:dock.next_group", { key = "]", label = t("core:keys.next_group", "Next group in the open tray") }, function()
-	step_group(1)
-end)
+-- Only while a tray is open: otherwise Tab is the next colonist.
+local function tray_open(): boolean
+	return open_category(view.tools()) ~= nil
+end
+ui.bind(
+	"core:dock.prev_group",
+	{ key = "shift+tab", label = t("core:keys.prev_group", "Previous group in the open tray"), when = tray_open },
+	function()
+		step_group(-1)
+	end
+)
+ui.bind(
+	"core:dock.next_group",
+	{ key = "tab", label = t("core:keys.next_group", "Next group in the open tray"), when = tray_open },
+	function()
+		step_group(1)
+	end
+)
 
 -- /: find a thing by name in the open tray.
 ui.bind("core:dock.find", { key = "/", label = t("core:keys.find", "Find a thing in the open tray") }, function()
@@ -524,7 +537,7 @@ local function tray_frame(view, tools, open: string)
 			)
 		end
 		rail = col({ w = 160, padx = "l", pady = "m", gap = "xxs" }, {
-			head(caption(category_label(open)), keycap("[ ]")),
+			head(caption(category_label(open)), keycap("Tab")),
 			{ kind = "scroll", gap = "xxs", grow = 1, minh = 0, table.unpack(items) },
 		})
 	end

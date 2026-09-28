@@ -129,11 +129,13 @@ pub struct Worksites {
     pub parts: Vec<Particle>,
     pub leaving: Vec<Leaving>,
     tick: u64,
+    /// The level shown: sites elsewhere aren't followed.
+    level: i32,
 }
 
 impl Default for Worksites {
     fn default() -> Self {
-        Worksites { sites: BTreeMap::new(), parts: Vec::with_capacity(POOL), leaving: Vec::new(), tick: 0 }
+        Worksites { sites: BTreeMap::new(), parts: Vec::with_capacity(POOL), leaving: Vec::new(), tick: 0, level: 0 }
     }
 }
 
@@ -150,6 +152,13 @@ fn style_of(w: &World, e: Entity, t: &Thing) -> Option<DefId> {
 }
 
 impl Worksites {
+    /// Show level `z`'s sites: what was in motion on another is dropped.
+    pub fn follow_level(&mut self, z: i32) {
+        if z != self.level {
+            *self = Worksites { tick: self.tick, level: z, ..Worksites::default() };
+        }
+    }
+
     /// Follow the sim to its current tick: move particles, see strikes and
     /// finishes. `detail` is false when zoomed out too far to see them.
     pub fn update(&mut self, w: &World, detail: bool) {
@@ -160,6 +169,9 @@ impl Worksites {
         }
         let now = w.tick;
         for (&e, &(cell, _)) in &w.worksites {
+            if cell.z != self.level {
+                continue;
+            }
             let Some(t) = w.thing(e) else { continue };
             let work = w.ecs.get::<&Work>(e).ok().map(|k| *k);
             let plan = w.ecs.get::<&Blueprint>(e).is_ok();
