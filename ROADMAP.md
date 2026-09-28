@@ -678,7 +678,7 @@ Dig down. The map becomes a stack of 2D levels joined only at stairs, ladders an
 
 ## crafting — Crafting
 
-`##########` 100% · 32 of 32 done · due 2027-05-01
+`##########` 100% · 33 of 33 done · due 2027-05-01
 
 Production chains: workbenches and bills, cooking, farming, tailoring, research as a plugin.
 
@@ -689,6 +689,7 @@ Production chains: workbenches and bills, cooking, farming, tailoring, research 
 - [x] `282efef8` Containers: a store block with slots <sup>feature · p1 · l · engine</sup>
 - [x] `2c03427e` Cooking: raw food into meals <sup>content · p1 · s · core</sup>
 - [x] `308074c6` Getting wet: pawn wetness and clothing insulation <sup>feature · p2 · m · engine</sup>
+- [x] `346145f1` The filters test predates mining's rock blocks, and main is red <sup>bug · p0</sup>
 - [x] `4f3e5d8d` mods/timber: planks, plank walls, crates, shelves, racks and a granary <sup>content · p2 · m · plugin</sup>
 - [x] `5e323021` Store inspector: Contents and Accepts tabs <sup>feature · p1 · m · core</sup>
 - [x] `5e6024f3` Apparel names a material property in engine code, and main is red <sup>bug · p0</sup>

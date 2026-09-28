@@ -32,6 +32,8 @@ fn every_item_lands_in_the_categories_it_should() {
     assert_eq!(
         direct("core:materials"),
         [
+            "core:chalk_blocks",
+            "core:limestone_blocks",
             "core:stone",
             "core:wood",
             "primitive:branches",
