@@ -62,7 +62,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `ui.open` | `(id: string) -> ()` | Open a window (and bring it to the front). |
 | `ui.remove` | `(id: string) -> ()` | Hide a node by id. |
 | `ui.replace` | `(id: string, build: (view: any) -> Node?) -> ()` | Take over a node by id. |
-| `ui.row` | `(node: Node?) -> Node` | A row: children left to right. |
+| `ui.row` | `(node: Node?) -> Node` | A row: children left to right. With wrap = true they go on in lines within the row's width. |
 | `ui.run` | `(id: string) -> ()` | Run a bound action, as its key would. |
 | `ui.scroll` | `(node: Node?) -> Node` | A column that scrolls. |
 | `ui.set_input` | `(id: string, text: string) -> ()` | Replace what a text input holds, caret at the end (the buffer is otherwise the player's). |

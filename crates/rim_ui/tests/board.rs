@@ -576,3 +576,25 @@ fn a_players_role_is_deleted_after_asking() {
         ui.snapshot()
     );
 }
+
+/// A role of fifteen with long names shows every member inside its card:
+/// the chips wrap to the card's width, however many fit a line.
+#[test]
+fn a_big_role_shows_every_member_inside_its_card() {
+    let (sim, mut ui, mut cv) = board(15);
+    for (i, e) in sim.world.colonists().collect::<Vec<_>>().into_iter().enumerate() {
+        sim.world.ecs.get::<&mut rim_sim::world::Pawn>(e).unwrap().name = format!("Bartholomew the Tall {i}");
+    }
+    let hand = sim.world.work_roles.iter().position(|r| r.def.as_deref() == Some("core:hand")).unwrap() + 1;
+    let tab = ui.find("core:work.lens.core:work.roles").expect("a Roles tab");
+    click(&mut ui, &sim, &mut cv, centre(tab));
+    frame(&mut ui, &sim, &cv, Input { time: 5.0, ..Default::default() });
+    let card = ui.find(&format!("core:work.role.{hand}")).expect("Hand's card");
+    let chips: Vec<[f32; 4]> =
+        sim.world.colonists().filter_map(|e| ui.find(&format!("core:work.member.{}", e.to_bits().get()))).collect();
+    assert_eq!(chips.len(), 15, "a chip for each of the fifteen");
+    for c in &chips {
+        assert!(c[0] >= card[0] && c[0] + c[2] <= card[0] + card[2] + 0.5, "inside the card: {card:?} {c:?}");
+        assert!(c[1] >= card[1] && c[1] + c[3] <= card[1] + card[3] + 0.5, "inside the card: {card:?} {c:?}");
+    }
+}
