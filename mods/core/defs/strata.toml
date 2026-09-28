@@ -73,7 +73,8 @@ props = { fertility = 0.0, drainage = 0.3, water_table = 0.0 }
 id = "wet_limestone"
 label = "wet limestone"
 color = "#7f8a86"
-solid = { thing = "wet_limestone", leaves = "rock_floor" }
+# Opened, it seeps: two cells of water a day through each face.
+solid = { thing = "wet_limestone", leaves = "rock_floor", seeps = 14 }
 props = { fertility = 0.0, drainage = 0.3, water_table = 0.8 }
 
 # Nothing works it: the edge of every level below the surface.

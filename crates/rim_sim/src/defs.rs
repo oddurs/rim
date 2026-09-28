@@ -87,6 +87,11 @@ pub struct TerrainDef {
     /// it to the level below (DESIGN.md §6d).
     #[serde(default)]
     pub air: bool,
+    /// Water that never runs out, a river or a lake: the water table. It
+    /// pours into open space dug beside or below it, this many sevenths of
+    /// a cell a tick through each face (DESIGN.md §6d).
+    #[serde(default)]
+    pub pours: u32,
     #[serde(skip)]
     pub rgb: [u8; 3],
     /// `props` in fixed point, indexed like `DefDb::terrain_props`.
@@ -106,6 +111,10 @@ pub struct SolidDef {
     /// The terrain left when that thing is gone.
     #[serde(default)]
     pub leaves: Option<String>,
+    /// An aquifer: once a face is open to it, water seeps out this many
+    /// sevenths of a cell a day through each (DESIGN.md §6d).
+    #[serde(default)]
+    pub seeps: u32,
     #[serde(skip)]
     pub thing_r: Option<DefId>,
     #[serde(skip)]
@@ -2042,6 +2051,9 @@ impl DefDb {
                 s.leaves_r = s.leaves.as_deref().map(|t| get("terrain", t, &ctx)).transpose()?;
                 // Nothing walks into rock, whatever the def says.
                 d.path_cost = 0;
+            }
+            if d.pours > 0 && (d.solid.is_some() || d.air) {
+                return Err(format!("{ctx}: only open water pours; solid rock seeps (`solid.seeps`)"));
             }
             if d.air {
                 if d.solid.is_some() {

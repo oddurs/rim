@@ -14,6 +14,8 @@ id = "deep_water"
 label = "deep water"
 color = "#1f4e79"
 path_cost = 0
+# The water table: dug space beside or under it floods (DESIGN.md §6d).
+pours = 7
 props = { fertility = 0.0, drainage = 0.0, water_table = 1.0 }
 tags = ["water"]
 gen = { elevation = [0.0, 0.22], priority = 10 }
@@ -23,6 +25,7 @@ id = "shallow_water"
 label = "shallow water"
 color = "#3d7ab8"
 path_cost = 300
+pours = 4
 props = { fertility = 0.0, drainage = 0.0, water_table = 1.0 }
 tags = ["water"]
 gen = { elevation = [0.22, 0.28], priority = 9 }

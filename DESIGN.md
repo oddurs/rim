@@ -1958,6 +1958,31 @@ which is where its cost and strangeness come from.
     pumps are crafting content. Runoff and puddles from rain stay a
     stock-field plugin on the surface (§5).
 
+What was built (3979868c):
+
+- Below the surface every open cell (not solid, not walled) holds water;
+  on and above it only air does, so a trench is a basin and the ground
+  around it is not. Terrain `pours` is the water table (core's rivers and
+  lakes), and `solid.seeps` an aquifer (wet limestone).
+- A level's basins rebuild when its water revision moves (terrain, or a
+  fixture that starts or stops blocking) or a cell above it becomes or
+  stops being air or water. Furniture and mining rock to floor above
+  rebuild nothing below. Water carries over by the share of each old
+  basin's cells in each new one.
+- Holes are air and stairs down; each passes a cell of water a tick,
+  levels top first, so a breach high up fills the bottom first. The front
+  grows a ring a tick from the inlets; a basin with none starts from its
+  first cell.
+- `rim.on("breach", fn(e))` with x, y, z and the source's id, once per
+  basin that had no source before, and never for what the first build finds.
+- Measured with `examples/flood.rs`: 250 × 250, three 120 × 120 halls
+  (43,200 cells) joined by holes, breached into a river at −1. Filling all
+  three took 28,274 ticks at a mean of 0.0005 ms; at rest it costs about
+  0.1 µs a tick. The breach's rebuild was 3.1 ms, and a dig beside the
+  flooded hall rebuilds its level in 0.6 ms (median 1.6 ms of 30), measured
+  at a load average above 100, so these are upper bounds. Incremental
+  rebuilds are the next step if mining makes that show.
+
 ### Seeing it
 
 One level is drawn at a time: levels above are cut away, and the level

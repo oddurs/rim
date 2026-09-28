@@ -181,6 +181,7 @@ impl Sim {
         let w = &mut self.world;
         let prof = &mut self.profile;
         prof.time("regions", || w.map.ensure_regions());
+        prof.time("water", || w.update_water());
         prof.time("rooms", || {
             w.map.ensure_rooms();
             w.ensure_roles();
