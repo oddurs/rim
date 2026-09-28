@@ -18,6 +18,12 @@ use rim_ui::theme::{Rgba, Theme};
 /// further out than they settle.
 const SELECT_IN_SECS: f64 = 0.12;
 const SELECT_FROM: f32 = 4.0;
+/// Hover fades in quickly and out a little slower, so a sweep across
+/// things leaves a short trail rather than a flicker.
+const HOVER_IN_SECS: f64 = 0.06;
+const HOVER_OUT_SECS: f64 = 0.14;
+/// Hover's edge, over the chalk's own strength.
+const HOVER_ALPHA: f32 = 0.72;
 /// Everything in a group but the one the inspector shows.
 const GROUP_ALPHA: f32 = 0.7;
 /// A path's dots, this many points apart.
@@ -29,6 +35,8 @@ const DOT_STEP: f32 = 5.0;
 pub struct Palette {
     pub chalk: Color,
     pub keyline: Color,
+    /// Hover's line weight.
+    pub stroke: f32,
     /// A grid line (`grid`).
     pub seam: Color,
     /// Can't: the theme's `threat`.
@@ -61,6 +69,7 @@ impl Palette {
             keyline: c("keyline", "#080a0c8c"),
             seam: c("seam", "#0000001f"),
             threat: c("threat", "#ff6b5a"),
+            stroke: shape("stroke", 1.5),
             firm: shape("firm", 2.0),
             bracket_gap: shape("bracket_gap", 3.0),
             bracket_arm_min: shape("bracket_arm_min", 4.0),
@@ -94,6 +103,17 @@ pub enum Mark {
         center: (f32, f32),
         r: f32,
         gap: f32,
+        alpha: f32,
+    },
+    /// Hover on a thing: an edge on its footprint.
+    Hover {
+        rect: [f32; 4],
+        alpha: f32,
+    },
+    /// Hover on a pawn: a ring on the edge of its body.
+    HoverRing {
+        center: (f32, f32),
+        r: f32,
         alpha: f32,
     },
     /// What's left of a selected pawn's path, dotted.
@@ -131,6 +151,14 @@ pub struct Scene {
     pub marks: Vec<Mark>,
 }
 
+/// What a click with the select tool would pick.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Hovered {
+    Thing(Entity),
+    /// A stockpile, by its id.
+    Zone(u32),
+}
+
 /// What the overlays remember between frames.
 #[derive(Default)]
 pub struct State {
@@ -138,12 +166,28 @@ pub struct State {
     now: f64,
     /// When each selected thing was selected, to close its brackets in.
     since: Vec<(Entity, f64)>,
+    /// Everything hovered lately, with how strongly it shows: the one
+    /// under the pointer fading in, the rest fading out from wherever
+    /// they had got to.
+    hovers: Vec<(Hovered, f32)>,
 }
 
 impl State {
-    /// Keep `since` in step with the selection.
-    pub fn update(&mut self, selected: &[Entity], now: f64) {
+    /// Keep `since` in step with the selection, and follow the hover.
+    pub fn update(&mut self, selected: &[Entity], hovered: Option<Hovered>, now: f64) {
+        let dt = (now - self.now).clamp(0.0, 0.1);
         self.now = now;
+        if let Some(h) = hovered.filter(|h| !self.hovers.iter().any(|(s, _)| s == h)) {
+            self.hovers.push((h, 0.0));
+        }
+        for (h, a) in &mut self.hovers {
+            *a = if Some(*h) == hovered {
+                (*a + (dt / HOVER_IN_SECS) as f32).min(1.0)
+            } else {
+                (*a - (dt / HOVER_OUT_SECS) as f32).max(0.0)
+            };
+        }
+        self.hovers.retain(|&(h, a)| a > 0.0 || Some(h) == hovered);
         self.since.retain(|(e, _)| selected.contains(e));
         for &e in selected {
             if !self.since.iter().any(|(s, _)| *s == e) {
@@ -155,6 +199,16 @@ impl State {
     fn since(&self, e: Entity) -> Option<f64> {
         self.since.iter().find(|(s, _)| *s == e).map(|&(_, t)| t)
     }
+
+    /// Everything hovered lately, each with how strongly it shows.
+    pub fn hovers(&self) -> impl Iterator<Item = (Hovered, f32)> + '_ {
+        self.hovers.iter().copied().filter(|&(_, a)| a > 0.0)
+    }
+
+    /// How strongly stockpile `id` shows as hovered, 0 to 1.
+    pub fn zone_hover(&self, id: u32) -> f32 {
+        self.hovers().find(|&(h, _)| h == Hovered::Zone(id)).map_or(0.0, |(_, a)| a)
+    }
 }
 
 /// How far out a selection mark sits, `t` seconds after it was made:
@@ -163,6 +217,14 @@ fn closing(gap: f32, t: f64) -> f32 {
     let k = (t / SELECT_IN_SECS).clamp(0.0, 1.0) as f32;
     let ease = 1.0 - (1.0 - k).powi(3);
     gap + SELECT_FROM * (1.0 - ease)
+}
+
+/// A thing's footprint on screen, turned as it stands.
+fn footprint(app: &App, t: &rim_sim::world::Thing) -> [f32; 4] {
+    let [fw, fh] = app.sim.world.defs.thing(t.def).size_facing(t.facing);
+    let (sx, sy) = app.cam.to_screen(t.pos.x as f32, t.pos.y as f32);
+    let z = app.cam.zoom;
+    [sx, sy, z * fw as f32, z * fh as f32]
 }
 
 /// Does a screen rectangle touch the screen?
@@ -175,7 +237,6 @@ pub fn scene(app: &App) -> Scene {
     let p = &app.palette;
     let w = &app.sim.world;
     let cam = &app.cam;
-    let z = cam.zoom;
     let now = app.chalk.now;
     let mut marks = Vec::new();
     let picked = crate::selection(app);
@@ -204,15 +265,21 @@ pub fn scene(app: &App) -> Scene {
                 }
             }
         } else if let Some(t) = w.thing(e).filter(|t| t.pos.z == cam.z) {
-            let [fw, fh] = w.defs.thing(t.def).size_facing(t.facing);
-            let (sx, sy) = cam.to_screen(t.pos.x as f32, t.pos.y as f32);
-            let rect = [sx, sy, z * fw as f32, z * fh as f32];
+            let rect = footprint(app, &t);
             if on_screen([rect[0] - gap, rect[1] - gap, rect[2] + 2.0 * gap, rect[3] + 2.0 * gap]) {
                 marks.push(Mark::Brackets { rect, gap, alpha });
                 if alpha == 1.0 {
                     primary = Some((rect[0] + rect[2] + gap + 6.0, rect[1] - gap));
                 }
             }
+        }
+    }
+    for (h, a) in app.chalk.hovers() {
+        let Hovered::Thing(e) = h else { continue };
+        if let Some((center, r)) = draw::pawn_disc(app, e) {
+            marks.push(Mark::HoverRing { center, r, alpha: a });
+        } else if let Some(t) = w.thing(e) {
+            marks.push(Mark::Hover { rect: footprint(app, &t), alpha: a });
         }
     }
     // Beside the inspector's one: speech sits above a pawn and its name
@@ -228,13 +295,12 @@ pub fn scene(app: &App) -> Scene {
             ([c.0 - r, c.1 - r, 2.0 * r, 2.0 * r], w.pawn_pos(e).map(|p| (p, [1, 1])))
         } else if let Some(t) = w.thing(e) {
             let size = w.defs.thing(t.def).size_facing(t.facing);
-            let (sx, sy) = cam.to_screen(t.pos.x as f32, t.pos.y as f32);
-            ([sx, sy, z * size[0] as f32, z * size[1] as f32], Some((t.pos, size)))
+            (footprint(app, &t), Some((t.pos, size)))
         } else {
             continue;
         };
         let at = (rect[0], rect[1] + rect[3]);
-        marks.push(Mark::Notch { at, size: (z * NOTCH_CELL).max(4.0) });
+        marks.push(Mark::Notch { at, size: (cam.zoom * NOTCH_CELL).max(4.0) });
         let over = |(p, [fw, fh]): (IVec, [u32; 2])| {
             let (fw, fh) = (fw as i32, fh as i32);
             app.hover_cell.is_some_and(|c| (p.x..p.x + fw).contains(&c.x) && (p.y..p.y + fh).contains(&c.y))
@@ -294,6 +360,30 @@ pub fn brackets(p: &Palette, [x, y, w, h]: [f32; 4], gap: f32, c: Color, a: f32)
     }
 }
 
+/// A rectangle's outline with round corners, as triangles that never
+/// overlap, so a translucent edge is even all the way round. `r` is the
+/// corner radius of the line's centre.
+fn rounded_edge([x, y, w, h]: [f32; 4], r: f32, t: f32, c: Color) {
+    const STEPS: usize = 5;
+    let r = r.min(w / 2.0).min(h / 2.0).max(0.0);
+    let corners =
+        [(x + w - r, y + r, -0.25), (x + w - r, y + h - r, 0.0), (x + r, y + h - r, 0.25), (x + r, y + r, 0.5)];
+    let mut ring = Vec::with_capacity(4 * (STEPS + 1));
+    for (cx, cy, turn) in corners {
+        for i in 0..=STEPS {
+            let a = (turn + 0.25 * i as f32 / STEPS as f32) * std::f32::consts::TAU;
+            let (dx, dy) = (a.cos(), a.sin());
+            let (ro, ri) = (r + t / 2.0, (r - t / 2.0).max(0.0));
+            ring.push((vec2(cx + dx * ro, cy + dy * ro), vec2(cx + dx * ri, cy + dy * ri)));
+        }
+    }
+    for i in 0..ring.len() {
+        let ((o0, i0), (o1, i1)) = (ring[i], ring[(i + 1) % ring.len()]);
+        draw_triangle(o0, o1, i0, c);
+        draw_triangle(i0, o1, i1, c);
+    }
+}
+
 /// A ring with a keyline.
 pub fn ring(p: &Palette, (x, y): (f32, f32), r: f32, t: f32, c: Color, a: f32) {
     draw_circle_lines(x, y, r, t + 2.0, fade(p.keyline, a));
@@ -347,6 +437,17 @@ fn notch(p: &Palette, (x, y): (f32, f32), s: f32) {
     draw_triangle(vec2(x, y), vec2(x + s, y), vec2(x, y - s), p.threat);
 }
 
+/// Where a ring mark's line is centred. Like a thing's, a pawn's hover
+/// lies on the edge of its body, and its selection `gap` outside it; the
+/// two lines and their keylines never touch.
+pub fn ring_radius(p: &Palette, m: &Mark) -> Option<f32> {
+    match m {
+        Mark::HoverRing { r, .. } => Some(r - p.stroke / 2.0),
+        Mark::Ring { r, gap, .. } => Some(r + gap + p.firm / 2.0),
+        _ => None,
+    }
+}
+
 /// Paint the scene's world marks. Chips are text: `chips` turns them into
 /// the UI's draw list.
 pub fn draw(scene: &Scene, p: &Palette, zoom: f32) {
@@ -354,8 +455,22 @@ pub fn draw(scene: &Scene, p: &Palette, zoom: f32) {
         match m {
             Mark::Path { points, alpha } => dotted(p, points, p.chalk, 0.6 * alpha),
             Mark::Haul { from, to } => dashed(p, *from, *to, zoom),
+            Mark::Hover { rect, alpha } => {
+                let a = HOVER_ALPHA * alpha;
+                // On the footprint's edge: the line sits just inside it.
+                let inner =
+                    [rect[0] + p.stroke / 2.0, rect[1] + p.stroke / 2.0, rect[2] - p.stroke, rect[3] - p.stroke];
+                let r = (rect[2].min(rect[3]) * 0.16).min(5.0);
+                rounded_edge(inner, r, p.stroke + 2.0, fade(p.keyline, a));
+                rounded_edge(inner, r, p.stroke, fade(p.chalk, a));
+            }
+            Mark::HoverRing { center, alpha, .. } => {
+                ring(p, *center, ring_radius(p, m).unwrap_or(0.0), p.stroke, p.chalk, 0.8 * alpha)
+            }
             Mark::Brackets { rect, gap, alpha } => brackets(p, *rect, *gap, p.chalk, *alpha),
-            Mark::Ring { center, r, gap, alpha } => ring(p, *center, r + gap, p.firm, p.chalk, *alpha),
+            Mark::Ring { center, alpha, .. } => {
+                ring(p, *center, ring_radius(p, m).unwrap_or(0.0), p.firm, p.chalk, *alpha)
+            }
             Mark::Notch { at, size } => notch(p, *at, *size),
             Mark::Chip(_) => {}
         }
@@ -402,6 +517,43 @@ mod tests {
         assert_eq!(core.chalk, Color::new(0xf2 as f32 / 255.0, 0xee as f32 / 255.0, 0xe3 as f32 / 255.0, 1.0));
         t.color.insert("chalk".into(), [1.0, 0.0, 0.0, 1.0]);
         assert_eq!(Palette::from_theme(&t).chalk, Color::new(1.0, 0.0, 0.0, 1.0));
+    }
+
+    #[test]
+    fn hover_fades_in_and_out_from_where_it_got_to() {
+        let (a, b) = (Hovered::Zone(1), Hovered::Zone(2));
+        let mut s = State::default();
+        let mut t = 0.0;
+        let mut step = |s: &mut State, h: Option<Hovered>, secs: f64| {
+            t += secs;
+            s.update(&[], h, t);
+        };
+        step(&mut s, Some(a), 0.0);
+        step(&mut s, Some(a), HOVER_IN_SECS);
+        assert_eq!(s.zone_hover(1), 1.0);
+        // Across a gap to another: the first keeps fading out meanwhile.
+        step(&mut s, None, 0.02);
+        step(&mut s, Some(b), 0.02);
+        let half = s.zone_hover(1);
+        assert!(half > 0.0 && half < 1.0, "{half}");
+        // Back before it's gone: it fades in from there, not from nothing.
+        step(&mut s, Some(a), 0.01);
+        assert!(s.zone_hover(1) > half);
+        step(&mut s, Some(a), HOVER_OUT_SECS);
+        assert_eq!(s.zone_hover(1), 1.0);
+        assert_eq!(s.zone_hover(2), 0.0);
+    }
+
+    #[test]
+    fn hover_and_selection_rings_never_touch() {
+        let p = Palette::from_theme(&Theme::default());
+        let (c, r) = ((0.0, 0.0), 9.0);
+        let hover = ring_radius(&p, &Mark::HoverRing { center: c, r, alpha: 1.0 }).unwrap();
+        let select = ring_radius(&p, &Mark::Ring { center: c, r, gap: p.bracket_gap, alpha: 1.0 }).unwrap();
+        // Each line's keyline reaches a point past its half-width.
+        let (hover_out, select_in) = (hover + p.stroke / 2.0 + 1.0, select - p.firm / 2.0 - 1.0);
+        assert!(select_in - hover_out >= 0.5, "{hover_out} {select_in}");
+        assert_eq!(hover + p.stroke / 2.0, r, "hover's outside edge is the body's");
     }
 
     #[test]

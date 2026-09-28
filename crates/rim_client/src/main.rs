@@ -1310,13 +1310,14 @@ pub fn frame(app: &mut App, raw: &RawInput) {
     }
     hint(app, raw.mouse);
     let picked = selection(app);
-    app.chalk.update(&picked, raw.time);
     // A drag counts once it leaves the cell it started in.
     app.dragged = app.drag_start.is_some_and(|a| a != app.cam.tile_at(mx, my));
     let dragging = app.dragged;
     app.pointer = (mx, my);
     let pointer = (!app.mouse_over_ui).then(|| app.cam.to_world(mx, my));
     app.grid.update(grid::level(app.tool, dragging), pointer, raw.time);
+    let hovered = if app.tool == Tool::Select && !dragging && pointer.is_some() { hovered(app, mx, my) } else { None };
+    app.chalk.update(&picked, hovered, raw.time);
 }
 
 /// CPU time of each render pass last frame, in µs. This is building the
@@ -2108,6 +2109,17 @@ pub fn pawn_under(app: &App, sx: f32, sy: f32) -> Option<Entity> {
         }
     }
     best.map(|b| b.1)
+}
+
+/// What a click with the select tool at a screen point would pick: a
+/// pawn, else a thing, else a stockpile.
+fn hovered(app: &App, sx: f32, sy: f32) -> Option<overlay::Hovered> {
+    use overlay::Hovered;
+    let w = &app.sim.world;
+    pawn_under(app, sx, sy)
+        .or_else(|| thing_under(app, sx, sy))
+        .map(Hovered::Thing)
+        .or_else(|| w.zones.at(&w.map, app.cam.tile_at(sx, sy)).map(|z| Hovered::Zone(z.id)))
 }
 
 /// The thing in the cell under the cursor, topmost first: an item stack

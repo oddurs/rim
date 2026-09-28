@@ -943,13 +943,16 @@ fn zones(app: &App) {
         let p = IVec::at(x, y, cam.z);
         w.zones.cells.get(w.map.idx(p)).copied().filter(|_| w.map.inb(p))
     };
-    let (fill, line) = (alpha(crate::ZONE, 0.13), alpha(crate::ZONE, 0.7));
+    let fill = alpha(crate::ZONE, 0.13);
+    // A hovered stockpile's edge is stronger (DESIGN.md §6f).
     for y in y0..=y1 {
         for x in x0..=x1 {
             let Some(id) = zone(x, y).filter(|&id| id != 0) else { continue };
             let (sx, sy) = cam.to_screen(x as f32, y as f32);
             draw_rectangle(sx, sy, z, z, fill);
-            let t = (z * 0.06).clamp(1.0, 2.0);
+            let lift = app.chalk.zone_hover(id);
+            let line = alpha(crate::ZONE, 0.7 + 0.3 * lift);
+            let t = (z * 0.06).clamp(1.0, 2.0) + (app.palette.stroke - 1.0) * lift;
             if zone(x, y - 1) != Some(id) {
                 draw_rectangle(sx, sy, z, t, line);
             }

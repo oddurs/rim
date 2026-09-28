@@ -826,6 +826,7 @@ same file:
 | `color.keyline` | `#080a0c8c` | The dark line under every overlay stroke |
 | `color.seam` | `#0000001f` | A grid line, darkening the ground it crosses |
 | `color.threat` | `#ff6b5a` | Can't: the notch on a job no one can reach |
+| `shape.stroke` | 1.5 | Hover's line weight |
 | `shape.firm` | 2 | Selection's line weight |
 | `shape.bracket_gap` | 3 | How far selection sits outside a footprint |
 | `shape.bracket_arm_min`, `shape.bracket_arm_max` | 4, 12 | A bracket's arm, which is 28% of the footprint's short side |
