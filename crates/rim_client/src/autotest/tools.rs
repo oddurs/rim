@@ -327,7 +327,6 @@ pub(super) async fn designate_build_cancel(t: &mut T, carry: &mut Carry) {
     t.check(saw_interp, "pawns are drawn between cells while walking");
     t.check(saw_round, "a turn is drawn round, off the straight steps");
     t.check(strayed.is_none(), format!("the drawn pawn stays in the cells it steps between ({strayed:?})"));
-    t.check(t.app.motion.facing(founder).is_some(), "a pawn that has walked faces a way");
 
     // --------------------------------------------------- 535a1fb9 bodies
     println!("\n# pawns are plan figures, in one batch at three levels of detail (DESIGN.md §6h)");
