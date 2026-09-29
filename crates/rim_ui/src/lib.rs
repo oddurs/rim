@@ -1169,10 +1169,20 @@ impl Ui {
         // tabbed to), Tab cycles focusable elements and Enter activates. Tab
         // with nothing focused belongs to the game (next colonist).
         if input.tab && !popup_took && self.focused.is_some() {
+            // Only controls the player can see: not rows scrolled out of
+            // their area, which Tab would otherwise walk through unseen.
+            let shown = |h: &Hit| {
+                h.clip.is_none_or(|c| {
+                    let r = paint::intersect(c, h.rect);
+                    r[2] > 0.0 && r[3] > 0.0
+                })
+            };
             let focusables: Vec<(u64, &'static str, Vec<usize>)> = self
                 .layers
                 .iter()
-                .flat_map(|l| l.hits.iter().filter(|h| h.focusable).map(move |h| (h.key, l.name, h.path.clone())))
+                .flat_map(|l| {
+                    l.hits.iter().filter(|h| h.focusable && shown(h)).map(move |h| (h.key, l.name, h.path.clone()))
+                })
                 .collect();
             if !focusables.is_empty() {
                 let i = self.focused.and_then(|f| focusables.iter().position(|x| x.0 == f));

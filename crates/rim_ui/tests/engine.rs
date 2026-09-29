@@ -1478,6 +1478,53 @@ fn tab_goes_back_to_the_game_when_the_focused_control_is_gone() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// Tab moves focus only through controls on show: rows scrolled out of
+/// their area are passed over.
+#[test]
+fn tab_passes_over_rows_scrolled_out_of_view() {
+    let dir = scratch_mods(
+        "tabhidden",
+        &[(
+            "lister",
+            "",
+            &[(
+                "ui/list.luau",
+                r#"
+ui.define("lister:list", function(view)
+    local rows = {}
+    for i = 1, 40 do
+        table.insert(rows, ui.row({ id = "lister:row" .. i, h = 20, w = 200, on_click = function() end }))
+    end
+    return ui.col({ id = "lister:panel", pad = 0,
+        { kind = "scroll", id = "lister:scroll", h = 100, gap = 0, pad = 0, table.unpack(rows) } })
+end)
+ui.mount("windows", "lister:list")
+"#,
+            )],
+        )],
+    );
+    let sim = sim_at(&dir);
+    let mut ui = ui_for(&sim);
+    let mut cv = client(&sim);
+    frame(&mut ui, &sim, &cv, Default::default());
+    let first = centre(ui.find("lister:row1").unwrap());
+    click(&mut ui, &sim, &mut cv, first);
+    assert_eq!(ui.focused_id().as_deref(), Some("lister:row1"));
+    let mut went = Vec::new();
+    for _ in 0..8 {
+        frame(&mut ui, &sim, &cv, Input { tab: true, ..Default::default() });
+        went.push(ui.focused_id().unwrap_or_default());
+    }
+    // Rows 1 to 5 fill the 100 px area; 6 and on are below its edge.
+    let hidden: Vec<&String> = went
+        .iter()
+        .filter(|id| id.strip_prefix("lister:row").and_then(|n| n.parse::<u32>().ok()).is_some_and(|n| n > 5))
+        .collect();
+    assert!(hidden.is_empty(), "Tab went to rows out of view: {went:?}");
+    assert!(went.iter().any(|id| id == "lister:row5"), "and through the ones on show: {went:?}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn hot_reload_swaps_the_ui_and_keeps_the_last_good_one_on_error() {
     let dir = scratch_mods("reload", &[]);
