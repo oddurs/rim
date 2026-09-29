@@ -425,12 +425,26 @@ pub fn size_of(theme: &Theme, section: &str, k: &str, v: &Value) -> Result<f32, 
 /// A size from a token name or a number, in physical pixels. Reads the
 /// name straight out of Luau's string: no allocation on the common path.
 fn size(theme: &Theme, section: &str, k: &str, v: &Value) -> Result<f32, String> {
-    match v {
-        Value::Integer(i) => Ok(*i as f32 * theme.scale),
-        Value::Number(n) => Ok(*n as f32 * theme.scale),
-        Value::String(s) => theme.size_named(section, &s.to_str().map_err(|e| e.to_string())?),
-        _ => Err(format!("'{k}' must be a token name or a number")),
+    let n = match v {
+        Value::Integer(i) => *i as f32,
+        Value::Number(n) => *n as f32,
+        Value::String(s) => return theme.size_named(section, &s.to_str().map_err(|e| e.to_string())?),
+        _ => return Err(format!("'{k}' must be a token name or a number")),
+    };
+    // NaN fails the range too.
+    if !(0.0..=crate::theme::MAX_SIZE).contains(&n) {
+        return Err(format!("'{k}' = {n}: a size is from 0 to {}", crate::theme::MAX_SIZE));
     }
+    Ok(n * theme.scale)
+}
+
+/// A text size: a token, or a number above 0 and at most `MAX_TEXT`.
+fn text_size(theme: &Theme, k: &str, v: &Value) -> Result<f32, String> {
+    let s = size(theme, "text", k, v)?;
+    if !(s > 0.0 && s <= crate::theme::MAX_TEXT * theme.scale) {
+        return Err(format!("'{k}': text is above 0 and at most {} px", crate::theme::MAX_TEXT));
+    }
+    Ok(s)
 }
 
 fn weight(theme: &Theme, v: &Value) -> Result<u16, String> {
@@ -467,6 +481,9 @@ fn len(theme: &Theme, k: &str, v: &Value) -> Result<Len, String> {
         }
         if let Some(p) = s.strip_suffix('%') {
             let pct: f32 = p.parse().map_err(|_| format!("bad percentage '{}'", &*s))?;
+            if !(0.0..=1000.0).contains(&pct) {
+                return Err(format!("'{k}' = {}: a percentage is from 0 to 1000", &*s));
+            }
             return Ok(Len::Frac(pct / 100.0));
         }
     }
@@ -648,7 +665,7 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
             }
             "clip" => style.clip = matches!(v, Value::Boolean(true)),
             "text" => text = Some(string("text", &v)?),
-            "size" => text_size = Some(size(theme, "text", "size", &v)?),
+            "size" => text_size = Some(self::text_size(theme, "size", &v)?),
             "weight" => text_weight = Some(weight(theme, &v)?),
             "color" => text_color = Some(color(theme, "color", &v)?),
             "wrap" => wrap = matches!(v, Value::Boolean(true)),

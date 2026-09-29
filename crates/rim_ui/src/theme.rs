@@ -13,6 +13,13 @@ pub type Rgba = [f32; 4];
 /// Token sections and whether their values are sizes (scaled) or colours.
 const SIZE_SECTIONS: &[&str] = &["space", "text", "shape"];
 
+/// The largest size a token or a node may give, in logical pixels: far
+/// past any screen, short of where glyph positions overflow.
+pub const MAX_SIZE: f32 = 100_000.0;
+/// The largest text, in logical pixels. Text shapes and rasterises per
+/// size, so past this a glyph is bigger than the atlas.
+pub const MAX_TEXT: f32 = 256.0;
+
 #[derive(Clone, Debug, Default)]
 pub struct Theme {
     /// Logical pixels; multiply by `scale` for physical.
@@ -78,7 +85,12 @@ impl Theme {
                     let key = format!("{key_base}.{name}");
                     let ok = match section.as_str() {
                         s if SIZE_SECTIONS.contains(&s) => match v.as_float().or(v.as_integer().map(|i| i as f64)) {
-                            Some(n) => {
+                            // Text above 0; any size finite and in range (NaN
+                            // fails both). cosmic-text hangs below 0.
+                            Some(n)
+                                if (0.0..=MAX_SIZE as f64).contains(&n)
+                                    && (s != "text" || (n > 0.0 && n <= MAX_TEXT as f64)) =>
+                            {
                                 let map = match s {
                                     "space" => &mut theme.space,
                                     "text" => &mut theme.text,
@@ -87,7 +99,7 @@ impl Theme {
                                 map.insert(name.clone(), n as f32);
                                 true
                             }
-                            None => false,
+                            _ => false,
                         },
                         "leading" => match v.as_float().or(v.as_integer().map(|i| i as f64)) {
                             Some(n) if n > 0.5 && n < 4.0 => {
