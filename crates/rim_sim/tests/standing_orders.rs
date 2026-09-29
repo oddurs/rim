@@ -222,3 +222,37 @@ fn a_switched_off_order_is_quiet_but_keeps_count() {
     assert_eq!(harvest(&s), base - 1, "on again, and the reading was low all along");
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// A load on the very tick an order's hours begin: the game that kept
+/// running announces it on its next step, and so does the loaded one.
+#[test]
+fn an_order_whose_hours_begin_at_the_load_is_announced() {
+    let defs = r#"
+[[priority_rule]]
+id = "night_food"
+when = { reading = "stores:food_days", below = 5, until = 8, hours = [18, 6] }
+shift = { "core:harvest" = -1 }
+"#;
+    let script = r#"
+rim.on("rule_started", function(e)
+    if e.rule == "stores:night_food" then
+        rim.set_data("started", (rim.get_data("started") or 0) + 1)
+    end
+end)
+"#;
+    let files = [("defs/orders.toml", defs), ("scripts/main.luau", script)];
+    let dir = common::test_mods("orders-load-hour", &["core"], &[("stores", &files)]);
+    let mut s = Sim::new(&dir, 1).unwrap();
+    s.world.set_reading("stores:food_days", 2.0);
+    while s.world.hour() as u32 != 18 {
+        s.step();
+    }
+    let started = |s: &Sim| s.world.data.get("stores:started").cloned();
+    assert_eq!(started(&s), None, "its hours begin on the next step");
+    let mut back = Snapshot::capture(&s).restore(&dir, &|_| true).unwrap();
+    s.step();
+    back.step();
+    assert!(started(&s).is_some(), "the live game announces it");
+    assert_eq!(started(&back), started(&s), "and so does the loaded one");
+    let _ = std::fs::remove_dir_all(dir);
+}
