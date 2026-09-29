@@ -271,7 +271,9 @@ pub fn designate_preview(w: &World, designation: DefId, a: IVec, b: IVec) -> Vec
             out.push(t);
         }
     };
-    match defs.designations[designation as usize].targets {
+    // A command is untrusted: a peer or an edited log can name any id.
+    let Some(dd) = defs.designations.get(designation as usize) else { return out };
+    match dd.targets {
         Targets::Thing => {
             for p in cells(w, a, b) {
                 let Some(f) = w.map.fixture_at(p) else {
@@ -386,9 +388,12 @@ pub fn build_preview(
     facing: u8,
 ) -> Vec<(IVec, Place)> {
     let defs = &w.defs;
-    let td = defs.thing(thing);
     let all = |why: Blocker| cells(w, a, b).map(|p| (p, Place::Blocked(why))).collect();
-    let Some(bd) = td.build.as_ref() else { return all(Blocker::NotBuildable) };
+    // A command is untrusted: a peer or an edited log can name any id.
+    let Some(bd) = defs.things.get(thing as usize).and_then(|td| td.build.as_ref()) else {
+        return all(Blocker::NotBuildable);
+    };
+    let td = defs.thing(thing);
     if w.build_lock(thing).is_some() {
         return all(Blocker::Locked);
     }
@@ -594,6 +599,7 @@ pub fn apply(w: &mut World, c: Command) {
                 }
             }
         }
+        Command::Build { thing, .. } if thing as usize >= defs.things.len() => {}
         Command::Build { thing, stuff, a, b, facing } => {
             for (p, place) in build_preview(w, thing, stuff, a, b, facing) {
                 realize(w, thing, stuff, p, facing, place);

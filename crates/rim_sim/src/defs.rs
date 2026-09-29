@@ -2188,7 +2188,8 @@ impl DefDb {
 
     /// Does `item` satisfy a buildable asking for `category`?
     pub fn is_material_for(&self, item: DefId, category: &str) -> bool {
-        self.thing(item).stuff.as_ref().is_some_and(|s| s.categories.iter().any(|c| c == category))
+        let stuff = self.things.get(item as usize).and_then(|t| t.stuff.as_ref());
+        stuff.is_some_and(|s| s.categories.iter().any(|c| c == category))
     }
 }
 
