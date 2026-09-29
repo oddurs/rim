@@ -409,6 +409,36 @@ fn a_window_layout_survives_a_restart_and_a_mod_update() {
 }
 
 #[test]
+fn a_restart_keeps_the_windows_stacked_as_they_were() {
+    let three = format!(
+        "{TWO_WINDOWS}{}",
+        r#"ui.window("probe:c", { title = "Gamma", w = 300, h = 200, open = true }, function(view)
+    return ui.text({ "gamma body", id = "probe:c.body" })
+end)
+"#
+    );
+    let dir = scratch_mods("winstack", &[("probe", "", &[("ui/win.luau", &three)])]);
+    let sim = sim_at(&dir);
+    let mut ui = ui_for(&sim);
+    let mut cv = client(&sim);
+    frame(&mut ui, &sim, &cv, Default::default());
+    // Alpha is at the bottom, under beta and gamma; a click on the strip of
+    // its title that nothing covers raises it.
+    let title = ui.find("probe:a.title").unwrap();
+    click(&mut ui, &sim, &mut cv, (title[0] + 4.0, title[1] + 4.0));
+    frame(&mut ui, &sim, &cv, Input { time: 9.0, ..Default::default() });
+    assert_eq!(ui.window_order(), ["probe:b", "probe:c", "probe:a"], "raised");
+    let saved = ui.layout_toml();
+
+    // Mods declare their windows in their own order; the saved one wins.
+    let mut ui = ui_for(&sim);
+    ui.restore_layout(&saved).expect("the layout parses");
+    frame(&mut ui, &sim, &cv, Default::default());
+    assert_eq!(ui.window_order(), ["probe:b", "probe:c", "probe:a"], "{saved}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn two_mods_declaring_one_window_is_reported() {
     let dir = scratch_mods(
         "winconflict",
