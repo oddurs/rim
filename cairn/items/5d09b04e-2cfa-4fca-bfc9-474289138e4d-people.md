@@ -13,8 +13,7 @@ api: additive
 People seen from above: a pawn drawn as a plan figure in the plan's own ink,
 walking with feet and hands that trade places, rounding corners, carrying,
 working and lying down, in three levels of detail and one draw call. What a
-person looks like is data a mod can change. Design: DESIGN.md §6h. Plan and a
-live mock of every figure: https://claude.ai/artifact/8DZuqGrqTQ6Dx7ry85JwXf
+person looks like is data a mod can change. Design: DESIGN.md §6h.
 
 ## Goal
 

@@ -11,7 +11,7 @@ priority: p1
 api: additive
 ---
 
-The map should answer a mouse and a trackpad the way each platform taught its users, and a right-click should never destroy anything. Design: the Pointer and Orders artifact (https://claude.ai/artifact/ShFMN72nbVYERCY4L9nwyN).
+The map should answer a mouse and a trackpad the way each platform taught its users, and a right-click should never destroy anything.
 
 ## Goal
 

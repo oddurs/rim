@@ -1422,10 +1422,6 @@ stat pipeline (wealth, threat)       ←  modifiers from every mod
   pacer.
   - A claim was considered and rejected: core's own storyteller would
     always claim too, so every replacement would become a question.
-- The argument in full, with a mock of starting a game from a set of mods:
-  <https://claude.ai/artifact/FoavEVM94kqHnQmiXBkhDn>. Every modding
-  detail argued against Factorio, RimWorld, Content Patcher, Luanti,
-  Minecraft and Paradox: <https://claude.ai/artifact/NXiPKN7pnSTWFDRCJPgtFg>.
 
 ### Costs we accept
 
@@ -2170,9 +2166,7 @@ seen the cell waits on the view's seen bit (5689930d).
 Today the renderer multiplies the world by one lightmap: firelight stamps,
 an indoors bit, and the sky as a uniform (§4c, "Seeing the weather"). It
 costs 3 µs, and it has no shadows, no flicker, and no difference between a
-torch in a hut and a torch in a field. A concept with a live WebGL demo of
-everything below is at
-<https://claude.ai/artifact/SC5Coj3UKKjxVCSxLKEq1t>.
+torch in a hut and a torch in a field.
 
 ### Tension: whose light is it?
 
@@ -2417,9 +2411,7 @@ is under the pointer, what have I picked, and what will this order do.
 Today each answer has its own look. Selection is a yellow box. A drag fills
 its whole rectangle in the tool's colour. A tool's cursor is a 2-point
 square. Stockpiles and blueprints are both sky blue. And there is no grid,
-although every order is a promise about cells. The concept, with a live map
-and every state drawn, is at
-<https://claude.ai/artifact/N2buE4YpoduQdxpE1zZTHv>. Its working name is
+although every order is a promise about cells. Its working name is
 Chalkline.
 
 ### Tension: always show the grid, or never?
@@ -2524,8 +2516,7 @@ plate with a per-cell tint, so it reads as tiles. It has no height, so the
 one light of §6c never reaches it. `crag` puts two random squiggles in every
 cell. The mine designation is `#b0a89e`, grey on grey. Strata adds six rock
 kinds that differ only in tint, and nothing shows a vein, a tool gate or the
-face a miner can reach. The concept, with a live mining scene and every state
-drawn, is at <https://claude.ai/artifact/Je86GRjsT2dTPN6ZS1bqMt>. Its working
+face a miner can reach. Its working
 name is Rock face.
 
 ### Tension: a mass like a wall, or a picture of rock?
@@ -2621,8 +2612,7 @@ view to hold that.
 
 A pawn is a disc in its creature's colour. A colonist, a raider and a wolf
 differ only in colour and size, nothing shows which way anyone faces, and a
-pawn snaps 90° at every corner of its path. The plan, with a live mock of
-every figure below: <https://claude.ai/artifact/8DZuqGrqTQ6Dx7ry85JwXf>.
+pawn snaps 90° at every corner of its path.
 
 ### Tension: a picture of a person, or a plan of one?
 
@@ -2925,9 +2915,7 @@ systems, scripts, AI, world, mapgen and the map. A new draw anywhere
 reshuffled every roll after it, so an unrelated change moved where wolves
 spawned, which colonist a raid picked, and what `rim.random()` returned to
 every mod. Tests written against what seed 1 did broke for no reason (#207,
-#211), and a balance number measured on one seed meant little. The plan, with the
-testing and CI around it, is at
-<https://claude.ai/artifact/KUQcdtWkNG4u63T4S8uPpt>.
+#211), and a balance number measured on one seed meant little.
 
 ### Tension: one stream, or one per purpose?
 
