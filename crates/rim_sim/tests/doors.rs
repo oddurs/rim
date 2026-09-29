@@ -241,3 +241,23 @@ fn the_colony_comes_out_through_its_own_door() {
     assert!(fought, "the defenders should be able to get at a raider on their doorstep");
     assert!(s.world.thing(door).is_some(), "and without knocking their own door down");
 }
+
+/// A raider shut inside the colony's hut when it's time to go: the way out
+/// the colony would take goes through a door that is a wall to them, so
+/// they break out rather than stand at it for ever.
+#[test]
+fn a_shut_in_raider_breaks_out_to_leave() {
+    let mut s = sim(21);
+    let at = s.world.colony_center().expect("a colony");
+    // Nobody home: this is about the way out, not a fight.
+    for e in std::mem::take(&mut s.world.pawns) {
+        let _ = s.world.ecs.despawn(e);
+    }
+    let door = hut(&mut s, at);
+    let raider = spawn(&mut s, "human", Faction::Hostile, at);
+    s.world.ecs.get::<&mut Pawn>(raider).expect("spawned").leave_at = Some(0);
+
+    run(&mut s, 120);
+    let job = s.world.ecs.get::<&Pawn>(raider).expect("alive").job.clone();
+    assert!(matches!(job, Job::Breach { target } if target == door), "a shut-in raider breaks the door: {job:?}");
+}
