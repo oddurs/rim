@@ -2,10 +2,12 @@
 id: 6bf967c9-cea7-4ac2-b8a0-70f6b6a8d132
 title: Commands index defs without bounds checks
 type: bug
-status: backlog
+status: done
 milestone: bare-metal
+assignee: Oddur Sigurdsson
 created: 2026-09-28
 updated: 2026-09-28
+closed_at: 2026-09-28
 priority: p3
 api: none
 layer: engine
@@ -34,5 +36,9 @@ Check every def id a command carries, as `SetPriority` does, and ignore the comm
 
 ## Acceptance
 
-- [ ] No command can panic the sim
-- [ ] A test that fails before the fix and passes after
+- [x] No command can panic the sim
+- [x] A test that fails before the fix and passes after
+
+## 2026-09-28
+
+Scope: tests/bad_commands.rs sends every command that carries a def id with an out-of-range one (Designate, Build's thing and stuff, PlacePlan's plan and stuff, GrowZone, ZonePlant, ZoneAllow, StoreFilter's thing/category/material edits, SetRuleEnabled, SetStance, SetRolePriority); four panicked before. Entity and cell fields were not fuzzed here: cells are clamped by command::cells, and entity lookups go through ecs.get.
