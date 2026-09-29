@@ -30,10 +30,15 @@ impl Rng {
     /// Uniform in `lo..=hi`.
     pub fn range(&mut self, lo: i32, hi: i32) -> i32 {
         if hi <= lo {
-            lo
-        } else {
-            lo + self.below((hi - lo + 1) as u32) as i32
+            return lo;
         }
+        // Worked in i64: a span past i32::MAX overflowed. The whole of
+        // i32 is 2^32 values, one past u32, and takes all 32 high bits.
+        let off = match u32::try_from(hi as i64 - lo as i64 + 1) {
+            Ok(n) => self.below(n) as i64,
+            Err(_) => (self.next_u64() >> 32) as i64,
+        };
+        (lo as i64 + off) as i32
     }
 
     /// Uniform in `[0, 1)`.
