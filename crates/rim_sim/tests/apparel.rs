@@ -96,6 +96,9 @@ fn what_is_worn_keeps_the_cold_off_and_is_saved_and_hashed() {
     let back = Snapshot::capture(&s).restore(&dir, &|_| true).expect("loads");
     assert_eq!(worn(&back, me), vec![g]);
     assert_eq!(back.world.state_hash(), s.world.state_hash());
+    // Worn, it lies nowhere: not back on the cell it was picked up from.
+    assert_eq!(back.world.map.item_at(home), None);
+    assert_eq!(back.world.stock, s.world.stock);
 
     // At 7°, three below comfort: bare, the warmth need drains; in a scarf
     // (5° of warmth), it doesn't.
