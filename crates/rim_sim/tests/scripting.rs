@@ -441,3 +441,52 @@ fn hooks_handlers_and_planners_register_only_at_load_time() {
         );
     }
 }
+
+/// A script reads rooms as they were built at the start of the step, as the
+/// engine does: a wall it takes down mid-tick doesn't renumber the rooms
+/// under the fields' room values, so a room's temperature is its own.
+#[test]
+fn a_script_reads_a_room_as_the_step_began() {
+    let script = r#"
+rim.every(1, function()
+    local wall = rim.get_data("wall")
+    if wall and not rim.get_data("read") then
+        rim.remove(wall)
+        rim.set_data("read", rim.field("core:temperature", rim.get_data("x"), rim.get_data("y")))
+    end
+end)
+"#;
+    let dir = test_mods("script-rooms", &["core"], &[("probe", &[("scripts/probe.luau", script)])]);
+    let mut s = Sim::new(&dir, 2).unwrap_or_else(|e| panic!("loads: {e}"));
+    let wall = s.world.defs.thing_id("wall").unwrap();
+    let w = &s.world;
+    let open = |p: rim_sim::IVec| w.map.passable(p) && w.map.fixture_at(p).is_none() && w.map.item_at(p).is_none();
+    let c = w.colony_center().unwrap();
+    let origin = (10..60)
+        .flat_map(|r| (-r..=r).flat_map(move |dy| (-r..=r).map(move |dx| c.offset(dx, dy))))
+        .find(|&o| (-1..10).all(|x| (-1..6).all(|y| open(o.offset(x, y)))))
+        .expect("open ground");
+    // Two 3x3 rooms side by side, sharing the wall between them.
+    for y in 0..5 {
+        for x in 0..9 {
+            if x == 0 || y == 0 || x == 4 || x == 8 || y == 4 {
+                s.world.spawn_fixture(wall, origin.offset(x, y), false).expect("placed");
+            }
+        }
+    }
+    s.step();
+    let f = s.world.defs.lookup("field", "core:temperature").unwrap() as usize;
+    let (a, b) = (origin.offset(2, 2), origin.offset(6, 2));
+    for (p, v) in [(a, -500), (b, 2_500)] {
+        let id = s.world.map.room_at(p).expect("a room").id;
+        s.world.fields.layers[f].rooms[id as usize - 1] = v;
+    }
+    let between = s.world.map.fixture_at(origin.offset(4, 2)).unwrap();
+    for (k, v) in [("wall", between.to_bits().get() as i64), ("x", b.x as i64), ("y", b.y as i64)] {
+        s.world.data.insert(format!("probe:{k}"), Data::Int(v));
+    }
+    s.step();
+    let read = s.world.data.get("probe:read").and_then(|d| d.num()).unwrap_or_else(|| panic!("{:?}", errors(&s)));
+    assert!((read - 25.0).abs() < 3.0, "the second room's own temperature: {read}");
+    let _ = fs::remove_dir_all(dir);
+}
