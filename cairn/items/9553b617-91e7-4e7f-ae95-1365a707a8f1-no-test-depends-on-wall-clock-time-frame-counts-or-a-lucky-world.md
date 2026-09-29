@@ -6,7 +6,7 @@ status: doing
 milestone: bare-metal
 assignee: lucky-harbor
 created: 2026-09-28
-updated: 2026-09-28
+updated: 2026-09-29
 priority: p0
 api: none
 effort: m
@@ -74,3 +74,7 @@ Seeds (this PR): the autotest failed on 6 of seeds 1–8 on main; 21 failures, 1
 - the chevrons were read a tick after the move order, the group two cells apart (walked there first);
 - the urgent hunt's day of ticks let the colony die (keep_well).
 Sweep after, on the frame clock: seeds 1–16 all pass, 392 checks each.
+
+## 2026-09-29
+
+PAUSED 2026-09-29: done: the audit (notes above), the frame clock (#351), the autotest on any map (#356: seeds 1-16 pass), all merged. Left: criterion 2, the nightly running the autotest on more seeds; criterion 3, 20 queue-lane runs with no failure the change didn't cause, which only time shows. Next step: after #342 lands, add two autotest runs to ci.yml's Client job, nightly lane only, on seeds 3 and 11, each with its own screenshot dir (agreed with the merger), then watch the nightlies. Branch: none yet; start from main.
