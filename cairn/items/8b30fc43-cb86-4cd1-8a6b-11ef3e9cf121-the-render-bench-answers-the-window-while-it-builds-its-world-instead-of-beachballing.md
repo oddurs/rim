@@ -5,7 +5,7 @@ type: bug
 status: backlog
 milestone: bare-metal
 created: 2026-09-28
-updated: 2026-09-28
+updated: 2026-09-29
 priority: p3
 api: none
 effort: s
@@ -25,3 +25,7 @@ Draw a frame (a "building the bench world" line is enough) between the setup's s
 
 - [ ] A bench run on the Mac shows no beachball during setup (by eye, window in front)
 - [ ] The game's own new-game load pumps events too, or is measured and shown not to stall
+
+## 2026-09-29
+
+PAUSED: not started. Next step: make bench::world async with a drawn frame between its steps (mods loaded, mapgen, the colony stamped), and the same inside run() around the stacked dig's 2,000 sim steps; main.rs's call gains .await (calm-forest's file: tell them). Wait for a1fe6816-B to merge first: both edit bench.rs. Owner: rapid-cloud.
