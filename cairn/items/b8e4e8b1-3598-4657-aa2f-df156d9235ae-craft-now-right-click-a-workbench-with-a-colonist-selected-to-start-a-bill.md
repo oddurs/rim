@@ -3,7 +3,7 @@ id: b8e4e8b1-3598-4657-aa2f-df156d9235ae
 title: 'Craft now: right-click a workbench with a colonist selected to start a bill'
 type: feature
 status: backlog
-milestone: people
+milestone: carrying
 created: 2026-09-29
 updated: 2026-09-29
 priority: p1

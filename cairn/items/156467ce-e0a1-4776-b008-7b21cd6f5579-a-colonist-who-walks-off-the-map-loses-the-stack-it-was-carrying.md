@@ -3,7 +3,7 @@ id: 156467ce-e0a1-4776-b008-7b21cd6f5579
 title: A colonist who walks off the map loses the stack it was carrying
 type: bug
 status: backlog
-milestone: bare-metal
+milestone: carrying
 created: 2026-09-29
 updated: 2026-09-29
 priority: p2
