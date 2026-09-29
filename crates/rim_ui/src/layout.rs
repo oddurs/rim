@@ -152,7 +152,7 @@ fn sync(taffy: &mut TaffyTree<Option<Measure>>, m: &mut Mirror, n: &Node) {
         m.text = text;
     }
     let before: Vec<NodeId> = m.children.iter().map(|c| c.id).collect();
-    for (mc, nc) in m.children.iter_mut().zip(&n.children) {
+    for (mc, nc) in m.children.iter_mut().zip(n.children.iter()) {
         sync(taffy, mc, nc);
     }
     let kept = n.children.len().min(m.children.len());

@@ -310,7 +310,7 @@ pub fn content_height(rects: &[Rect], start: usize, n: &Node) -> f32 {
     fn count(n: &Node) -> usize {
         1 + n.children.iter().map(count).sum::<usize>()
     }
-    for c in &n.children {
+    for c in n.children.iter() {
         let r = rects[i];
         bottom = bottom.max(r[1] + r[3]);
         i += count(c);

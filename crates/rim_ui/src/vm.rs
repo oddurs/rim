@@ -2353,12 +2353,12 @@ impl Builder<'_> {
             style: crate::node::Style { h: crate::node::Len::Px(h), min_h: Some(h), ..Default::default() },
             ..crate::node::blank(key, owner.clone())
         };
-        node.children.push(spacer(key_for(key, 0, None), first as f32 * row_h));
+        Rc::make_mut(&mut node.children).push(spacer(key_for(key, 0, None), first as f32 * row_h));
         for i in first..last {
             let v = match self.call(owner, &row_fn, i as i64 + 1) {
                 Ok(v) => v,
                 Err(e) => {
-                    node.children.push(self.fail(owner, key_for(key, i + 1, None), what, e));
+                    Rc::make_mut(&mut node.children).push(self.fail(owner, key_for(key, i + 1, None), what, e));
                     continue;
                 }
             };
@@ -2366,10 +2366,10 @@ impl Builder<'_> {
             let ck = key_for(key, i + 1, None);
             if let Some(mut n) = self.convert(&rt, ck, owner, None) {
                 n.style.h = crate::node::Len::Px(row_h);
-                node.children.push(n);
+                Rc::make_mut(&mut node.children).push(n);
             }
         }
-        node.children.push(spacer(key_for(key, count + 2, None), (count - last) as f32 * row_h));
+        Rc::make_mut(&mut node.children).push(spacer(key_for(key, count + 2, None), (count - last) as f32 * row_h));
         node
     }
 
@@ -2449,7 +2449,7 @@ impl Builder<'_> {
             let ck = key_for(key, index, cid.as_deref());
             index += 1;
             if let Some(n) = self.convert(&c, ck, owner, None) {
-                node.children.push(n);
+                Rc::make_mut(&mut node.children).push(n);
             }
         }
         // Children other mods added to this node.
@@ -2460,7 +2460,12 @@ impl Builder<'_> {
                     Value::Function(f) => match self.call(&eo, &f, self.view.clone()) {
                         Ok(v) => v,
                         Err(e) => {
-                            node.children.push(self.fail(&eo, key_for(key, index, None), &format!("extend {id}"), e));
+                            Rc::make_mut(&mut node.children).push(self.fail(
+                                &eo,
+                                key_for(key, index, None),
+                                &format!("extend {id}"),
+                                e,
+                            ));
                             index += 1;
                             continue;
                         }
@@ -2472,7 +2477,7 @@ impl Builder<'_> {
                     let ck = key_for(key, index, cid.as_deref());
                     index += 1;
                     if let Some(n) = self.convert(&c, ck, &eo, None) {
-                        node.children.push(n);
+                        Rc::make_mut(&mut node.children).push(n);
                     }
                 }
             }

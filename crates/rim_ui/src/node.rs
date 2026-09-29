@@ -251,7 +251,9 @@ pub struct Node {
     pub input: Option<InputData>,
     /// Called while the pointer is held on this node: (fx, fy) across it.
     pub on_drag: Option<Function>,
-    pub children: Vec<Node>,
+    /// Shared: cloning a node copies the node, not its subtree, so the
+    /// shell and the layers can hold a mounted tree without copying it.
+    pub children: Rc<Vec<Node>>,
 }
 
 impl Node {
@@ -315,7 +317,7 @@ impl Node {
             }
         }
         self.children.len().hash(h);
-        for c in &self.children {
+        for c in self.children.iter() {
             c.layout_hash(h, text);
         }
     }
@@ -364,7 +366,7 @@ impl Node {
             out.push_str(" [disabled]");
         }
         out.push('\n');
-        for c in &self.children {
+        for c in self.children.iter() {
             c.snapshot_into(out, depth + 1);
         }
     }
@@ -413,7 +415,7 @@ pub fn blank(key: u64, owner: Rc<str>) -> Node {
         token: None,
         input: None,
         on_drag: None,
-        children: Vec::new(),
+        children: Rc::default(),
     }
 }
 
@@ -602,7 +604,7 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
         token: None,
         input: None,
         on_drag: None,
-        children: Vec::new(),
+        children: Rc::default(),
     };
     for pair in t.pairs::<Value, Value>() {
         let (k, v) = pair.map_err(|e| e.to_string())?;
@@ -1073,7 +1075,7 @@ pub fn error_node(theme: &Theme, owner: Rc<str>, key: u64, what: &str, err: &str
         token: None,
         input: None,
         on_drag: None,
-        children: vec![],
+        children: Rc::default(),
     };
     let pad = 4.0 * theme.scale;
     Node {
@@ -1111,6 +1113,25 @@ pub fn error_node(theme: &Theme, owner: Rc<str>, key: u64, what: &str, err: &str
         token: None,
         input: None,
         on_drag: None,
-        children: vec![text],
+        children: Rc::new(vec![text]),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The shell and the layers hold mounted trees by cloning their roots
+    /// every frame; that must copy the root, never the subtree.
+    #[test]
+    fn cloning_a_node_shares_its_subtree() {
+        let owner: Rc<str> = Rc::from("core");
+        let mut root = blank(1, owner.clone());
+        let mut panel = blank(2, owner.clone());
+        Rc::make_mut(&mut panel.children).extend((0..100).map(|k| blank(10 + k, owner.clone())));
+        Rc::make_mut(&mut root.children).push(panel);
+        let copy = root.clone();
+        assert!(Rc::ptr_eq(&root.children, &copy.children), "the root's children are shared, not copied");
+        assert!(Rc::ptr_eq(&root.children[0].children, &copy.children[0].children));
     }
 }
