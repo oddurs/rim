@@ -144,6 +144,9 @@ pub struct Map {
     /// designations or looks, so what cares only about what stands in a
     /// cell (the renderer's shadows) isn't woken by hauling.
     fixture_rev: Vec<u64>,
+    /// Bumped when a cell's `land` changes, or a portal comes or goes:
+    /// everything a path's landmark bound reads.
+    land_rev: u64,
 }
 
 /// Side of a chunk, in cells: the one unit caches and incremental updates
@@ -250,6 +253,7 @@ impl Map {
             regions: std::array::from_fn(|_| vec![0; n]),
             regions_dirty: (1u64 << (below + above + 1)) - 1,
             portals: Vec::new(),
+            land_rev: 0,
             link: vec![0; n],
             terrain_air: Vec::new(),
             terrain_pours: Vec::new(),
@@ -474,6 +478,7 @@ impl Map {
 
     pub fn set_terrain(&mut self, p: IVec, def: DefId, cost: u32) {
         let i = self.idx(p);
+        let land = self.land(i);
         let was = self.span_at(i);
         self.near.changed(i, self.terrain[i], def);
         let was_air = self.is_air(i);
@@ -510,10 +515,12 @@ impl Map {
         self.bump(i);
         let c = self.chunk_of(p);
         self.terrain_rev[c] += 1;
+        self.reland(i, land);
     }
 
     pub fn set_fixture(&mut self, p: IVec, e: Option<Entity>, blocks: bool, cost: u32, door: bool) {
         let i = self.idx(p);
+        let land = self.land(i);
         self.fixture[i] = e;
         // Only what changes passage matters: a thing standing up in rock,
         // which nothing could walk into anyway, rebuilds nothing. An owned
@@ -543,6 +550,7 @@ impl Map {
         let c = self.chunk_of(p);
         self.fixture_rev[c] += 1;
         self.touch(p);
+        self.reland(i, land);
     }
 
     pub fn fixture_at(&self, p: IVec) -> Option<Entity> {
@@ -572,20 +580,24 @@ impl Map {
     /// lifting one there changes who can reach what.
     pub fn set_floor(&mut self, p: IVec, e: Option<Entity>, cost: u32) {
         let i = self.idx(p);
+        let land = self.land(i);
         self.floor[i] = e;
         self.floor_cost[i] = if e.is_some() { cost.min(u16::MAX as u32) as u16 } else { 0 };
         self.refoot(i);
         self.bump(i);
         self.touch(p);
+        self.reland(i, land);
     }
 
     /// The fixture at `p` spans air (a drawbridge), or no longer does.
     /// Removing the fixture clears it.
     pub fn set_span(&mut self, p: IVec, spans: bool) {
         let i = self.idx(p);
+        let land = self.land(i);
         self.fix_span[i] = spans;
         self.refoot(i);
         self.bump(i);
+        self.reland(i, land);
     }
 
     /// The fixture at `p` holds water back (a sealed door), or doesn't.
@@ -1024,6 +1036,41 @@ impl Map {
     /// Which terrains are water that never runs out.
     pub fn set_terrain_pours(&mut self, pours: Vec<bool>) {
         self.terrain_pours = pours;
+        self.land_rev += 1;
+    }
+
+    /// What the land asks of a step into cell `i`, for a path's landmark
+    /// bound (`path`): `None` for lake, water no one can stand in (terrain
+    /// that pours and has no footing of its own, with no floor or span over
+    /// it); otherwise its terrain's move cost in percent, as `cost` reads
+    /// it, less what stands, lies or grows on it, which come and go. A
+    /// floor cheaper than the terrain brings it down, but no further than
+    /// open ground's 100, which the octile distance already takes as the
+    /// least a step costs (core's floor is 70): so a floor on grass changes
+    /// nothing here, and the bound is never further off than the octile
+    /// distance is.
+    #[inline]
+    pub fn land(&self, i: usize) -> Option<u32> {
+        let t = self.terrain_cost[i] as u32;
+        let f = self.floor_cost[i] as u32;
+        let pours = self.terrain_pours.get(self.terrain[i] as usize).copied().unwrap_or(false);
+        if t == 0 && pours && f == 0 && !self.fix_span[i] {
+            return None;
+        }
+        let t = if t == 0 { 100 } else { t };
+        let ground = if f > 0 { f } else { t };
+        Some(t.min(ground.max(100)))
+    }
+
+    /// Bumped whenever a cell's `land` changes, or a portal comes or goes.
+    pub fn land_rev(&self) -> u64 {
+        self.land_rev
+    }
+
+    fn reland(&mut self, i: usize, was: Option<u32>) {
+        if self.land(i) != was {
+            self.land_rev += 1;
+        }
     }
 
     pub fn set_terrain_air(&mut self, air: Vec<bool>) {
@@ -1102,6 +1149,13 @@ impl Map {
         Some(&self.portals[k])
     }
 
+    /// The other end of a portal at cell `i` and its cost, whoever may use
+    /// it.
+    pub fn linked(&self, i: usize) -> Option<(usize, u16)> {
+        let other = self.link[i].checked_sub(1)? as usize;
+        Some((other, self.portal_at(i)?.cost))
+    }
+
     /// The other end of a portal at cell `i`, if `who` may use it.
     #[inline]
     pub fn through(&self, i: usize, who: Faction) -> Option<(usize, u16)> {
@@ -1122,6 +1176,7 @@ impl Map {
         self.link[t] = b as u32 + 1;
         self.link[b] = t as u32 + 1;
         self.reach_dirty = true;
+        self.land_rev += 1;
         self.bump(t);
         self.bump(b);
         // Water goes down stairs as it does through air.
@@ -1138,6 +1193,7 @@ impl Map {
         self.link[t] = 0;
         self.link[b] = 0;
         self.reach_dirty = true;
+        self.land_rev += 1;
         self.bump(t);
         self.bump(b);
         // Water goes down stairs as it does through air.

@@ -120,7 +120,11 @@ impl Sim {
         Ok(Mods { manifests: loaded.mods, scripts, warnings, defs: Arc::new(loaded.defs) })
     }
 
-    pub(crate) fn assemble(m: Mods, world: World) -> Sim {
+    pub(crate) fn assemble(m: Mods, mut world: World) -> Sim {
+        // The landmarks for the land as it is, built here rather than in a
+        // tick; a loaded game waits for the switch the saved one waited for.
+        let pending = world.land_changed.is_some();
+        world.pf.settle(&world.map, pending);
         Sim {
             world,
             scripts: m.scripts,
@@ -230,6 +234,7 @@ impl Sim {
             assert_eq!(w.stock, w.counted_stock(), "the stock ledger drifted from the stacks on the map");
         }
         w.tick += 1;
+        w.follow_land();
         prof.add("tick", t0.elapsed().as_secs_f64() * 1e6);
         if w.tick.is_multiple_of(600) {
             self.check_mod_budgets();

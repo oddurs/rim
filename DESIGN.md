@@ -2981,6 +2981,22 @@ dense colony, per pass, with draw calls; CI fails over budget.
 - A* uses generation-stamped scratch buffers with no allocation per search.
   Hierarchical pathing and flow fields for raids come later, behind the same
   interface.
+- A*'s heuristic is the larger of the octile distance and a **landmark
+  bound** (ALT, a708c037): distances from eight cells at the map's edge,
+  and to them, over the land alone (deep water blocks, each step at its
+  terrain's cost, everything that comes and goes left out, levels joined by
+  their portals). Around a lake the octile distance points through the
+  water and A* floods the near shore: on the bench's hauling map 0.6% of
+  searches did two thirds of all expanding, up to 34,000 cells. The bound
+  is a lower bound as true as the octile distance: a floor cheaper than
+  open ground counts as open ground in both (3cb3dd5f), so paths are as
+  short as before. The tables are
+  u16, four bytes a cell per landmark (8 MB at 250×250 with the levels
+  below). A change to the land (a bridge over deep water, stairs) drops
+  them, and new ones build on another thread from that tick's land, used
+  from exactly `LAND_DELAY` (120) ticks on; the tick is saved, so a loaded
+  game switches when the one that never saved does, and no tick waits on a
+  build.
 - Wealth and other aggregates are cached and recomputed on an interval.
 - Rendering culls to the viewport. What doesn't move is drawn from
   per-chunk meshes, rebuilt when the chunk changes; every mod's sprites
