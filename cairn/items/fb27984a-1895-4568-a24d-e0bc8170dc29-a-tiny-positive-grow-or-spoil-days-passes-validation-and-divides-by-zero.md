@@ -2,10 +2,12 @@
 id: fb27984a-1895-4568-a24d-e0bc8170dc29
 title: A tiny positive grow or spoil `days` passes validation and divides by zero
 type: bug
-status: backlog
+status: done
 milestone: bare-metal
+assignee: Oddur Sigurdsson
 created: 2026-09-28
-updated: 2026-09-28
+updated: 2026-09-29
+closed_at: 2026-09-28
 priority: p3
 api: none
 layer: engine
@@ -34,5 +36,9 @@ Require `to_q(days) >= 1` at load, and say so in the error.
 
 ## Acceptance
 
-- [ ] Such a def fails the load with a message
-- [ ] A test that fails before the fix and passes after
+- [x] Such a def fails the load with a message
+- [x] A test that fails before the fix and passes after
+
+## 2026-09-29
+
+PAUSED at the merge freeze: the fix and its test are done, and the test was checked to fail before the fix and pass after. The full gate hasn't run yet. Next: rebase on main, run scripts/task check, and mark the PR ready. Branch fix/fb27984a-tiny-days.
