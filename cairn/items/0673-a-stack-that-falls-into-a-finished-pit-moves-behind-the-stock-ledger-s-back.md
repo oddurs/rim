@@ -3,11 +3,12 @@ id: 673
 uid: ba0e7226-755d-4837-bf79-ff8b59d5ce9e
 title: A stack that falls into a finished pit moves behind the stock ledger's back
 type: bug
-status: doing
+status: done
 milestone: bare-metal
 assignee: Oddur Sigurdsson
 created: 2026-09-28
 updated: 2026-09-28
+closed_at: 2026-09-28
 priority: p1
 api: none
 layer: engine
@@ -34,5 +35,5 @@ Put a stack on open ground, place core's pit there, and `complete_building`. The
 
 ## Acceptance
 
-- [ ] What lies on a dig site lands below through the ledger, nothing lost
-- [ ] A test that fails before the fix and passes after
+- [x] What lies on a dig site lands below through the ledger, nothing lost
+- [x] A test that fails before the fix and passes after
