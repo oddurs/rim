@@ -574,8 +574,9 @@ ui.extend("core:dock.palette.zones", function(view)
 end)
 ```
 
-Escape is the binding `core:escape`: it stops placing (back to the tray),
-else closes the tray, else closes the open sheet, else clears the selection.
+Escape is the binding `core:escape`: it closes the command palette, else
+stops placing (back to the tray), else closes the tray, else closes the open
+sheet, else clears the selection.
 
 If two mods replace or remove the same id, that's reported as a conflict
 naming both, and load order decides which wins. Operating on an id nobody

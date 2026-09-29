@@ -325,11 +325,15 @@ ui.bind("core:dock.find", { key = "/", label = t("core:keys.find", "Find a thing
 	ui.focus("core:dock.find")
 end)
 
--- Escape backs out one step at a time: placing to its tray, a tray to
--- closed, then an open sheet, then the selection. A mod that binds
--- `core:escape` itself replaces these steps whole, and the conflict is
--- reported.
-ui.bind("core:escape", { key = "escape", label = t("core:keys.escape", "Back out: stop placing, close the tray, close the sheet, deselect") }, function()
+-- Escape backs out one step at a time: the command palette first, since it
+-- sits over everything, then placing to its tray, a tray to closed, then an
+-- open sheet, then the selection. A mod that binds `core:escape` itself
+-- replaces these steps whole, and the conflict is reported.
+ui.bind("core:escape", { key = "escape", label = t("core:keys.escape", "Back out: close the palette, stop placing, close the tray, close the sheet, deselect") }, function()
+	if ui.is_open("core:palette") then
+		ui.close("core:palette")
+		return
+	end
 	local tools = view.tools()
 	if in_hand(tools) then
 		act.tool("select")
