@@ -2,11 +2,12 @@
 id: bebbf2d7-f619-459c-b999-19f2d9ae4568
 title: A load puts worn garments back on the map's item layer
 type: bug
-status: doing
+status: done
 milestone: bare-metal
 assignee: Oddur Sigurdsson
 created: 2026-09-28
 updated: 2026-09-28
+closed_at: 2026-09-28
 priority: p1
 api: none
 layer: engine
@@ -30,6 +31,6 @@ In `tests/apparel.rs`, after a colonist puts a garment on and the game is saved 
 
 ## Acceptance
 
-- [ ] A worn garment is on no map layer after a load
-- [ ] The loaded stock ledger equals the live one
-- [ ] A test that fails before the fix and passes after
+- [x] A worn garment is on no map layer after a load
+- [x] The loaded stock ledger equals the live one
+- [x] A test that fails before the fix and passes after

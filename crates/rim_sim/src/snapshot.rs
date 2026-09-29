@@ -851,6 +851,7 @@ impl Snapshot {
             .ecs
             .query::<(Entity, &Thing, Option<&Blueprint>, Option<&Owner>)>()
             .without::<&Held>()
+            .without::<&Worn>()
             .without::<&Contained>()
             .without::<&crate::world::Replaces>()
             .iter()
