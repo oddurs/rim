@@ -3,10 +3,11 @@ id: 507
 uid: 9a743404-27ad-4e80-ba29-2e8c0d10e1c2
 title: Migrate rim to cairn format 5, bumping CI's pin in the same commit
 type: chore
-status: doing
+status: done
 milestone: proving-ground
 created: 2026-09-27
 updated: 2026-09-29
+closed_at: 2026-09-29
 priority: p1
 api: none
 effort: s
@@ -25,9 +26,13 @@ When the merge queue is empty: `cairn migrate` on a fresh main, bump the rev in 
 ## Acceptance criteria
 
 - [x] One PR: the migrated items, the new pin in CI and in scripts/task, and ROADMAP.md rendered by the new version
-- [ ] `cairn check --render --strict` passes locally and in CI on the new version
-- [ ] Every open PR's owner is told to rebase and reinstall, and the queue owner confirms
+- [x] `cairn check --render --strict` passes locally and in CI on the new version
+- [x] Every open PR's owner is told to rebase and reinstall, and the queue owner confirms
 
 ## 2026-09-29
 
 Migrated with 1.0.0-alpha.1 (68ac154) on a frozen main: 722 items, 221 numbers restored, 553 references renumbered. ROADMAP.md is untracked now, so criterion 1's render is the local one and CI's artifact. cairn migrate's preflight reads its own cairn/items/.lock as an uncommitted change, so it needed --allow-dirty; .gitignore now ignores the lock. Branches cut before this carry their item edits over with scripts/cairn-port.
+
+## Result
+
+Migrated in #442 on a frozen main and pinned to 1.0.0-alpha.1 (68ac154). CI passed on the new pin (run 36581516357). Every paused session has the rebase steps; scripts/cairn-port carries a pre-migration branch's item edits, and was tried on all 38 parked branches.
