@@ -48,7 +48,7 @@ impl Rng {
     /// Round a fractional amount stochastically (keeps rates exact on average).
     pub fn round(&mut self, v: f64) -> i32 {
         let f = v.floor();
-        f as i32 + self.chance(v - f) as i32
+        (f as i32).saturating_add(self.chance(v - f) as i32)
     }
 
     /// Resume from a saved `state()`.

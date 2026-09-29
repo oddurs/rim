@@ -1542,7 +1542,7 @@ fn run_harvest(
                         w.map.touch(t.pos);
                     }
                     (false, _, _) => {
-                        let ready_at = w.tick + (hd.regrow_days * crate::TICKS_PER_DAY as f64) as u64;
+                        let ready_at = w.tick.saturating_add((hd.regrow_days * crate::TICKS_PER_DAY as f64) as u64);
                         w.regrow(target, harvest, ready_at);
                         w.finish_work(target);
                         w.map.touch(t.pos);
@@ -2011,7 +2011,7 @@ fn run_eat(w: &mut World, p: &mut Pawn, src: Entity, t: u32, seat: Option<(Entit
         let mut full = true;
         for n in &mut p.needs {
             if defs.need(n.0).satisfier == Satisfier::Food {
-                n.1 = (n.1 + nutrition).min(NEED_MAX);
+                n.1 = n.1.saturating_add(nutrition).min(NEED_MAX);
                 full = n.1 >= NEED_MAX * 9 / 10;
             }
         }
