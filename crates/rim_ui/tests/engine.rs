@@ -1107,6 +1107,64 @@ ui.mount("windows", "lister:list")
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// Rows a scroll area hides, below its edge or scrolled up past its top,
+/// don't stop the pointer: the map under them takes clicks.
+#[test]
+fn rows_a_scroll_area_hides_leave_the_map_clickable() {
+    let dir = scratch_mods(
+        "scrollsolid",
+        &[(
+            "lister",
+            "",
+            &[(
+                "ui/list.luau",
+                r#"
+ui.define("lister:list", function(view)
+    local rows = {}
+    for i = 1, 40 do
+        table.insert(rows, ui.row({ id = "lister:row" .. i, h = 20, w = 200, bg = "surface",
+            on_click = function() end }))
+    end
+    return ui.col({ id = "lister:panel", pad = 0,
+        { kind = "scroll", id = "lister:scroll", h = 100, gap = 0, pad = 0, table.unpack(rows) } })
+end)
+ui.mount("windows", "lister:list")
+"#,
+            )],
+        )],
+    );
+    let sim = sim_at(&dir);
+    let mut ui = ui_for(&sim);
+    let cv = client(&sim);
+    frame(&mut ui, &sim, &cv, Default::default());
+    let area = ui.find("lister:scroll").expect("the scroll area is laid out");
+    let hidden = ui.find("lister:row20").expect("a row below the edge is laid out");
+    assert!(hidden[1] > area[1] + area[3] + 100.0, "the test needs a row well below the area: {hidden:?} {area:?}");
+    let below = centre(hidden);
+    let press = |ui: &mut rim_ui::Ui, at: (f32, f32)| {
+        let out = frame(ui, &sim, &cv, Input { mouse: at, left_pressed: true, ..Default::default() });
+        frame(ui, &sim, &cv, Input { mouse: at, left_released: true, ..Default::default() });
+        out
+    };
+    let out = press(&mut ui, below);
+    assert!(!out.mouse_over_ui && !out.captured_left, "a hidden row covers the map at {below:?}");
+    assert!(!ui.covers(below.0, below.1));
+    // A visible row still takes the pointer.
+    let first = centre(ui.find("lister:row1").unwrap());
+    let out = press(&mut ui, first);
+    assert!(out.mouse_over_ui && out.captured_left, "a row on show is the UI's");
+    // Scrolled to the end: the rows now drawn in the area are the UI's, and
+    // the first rows, scrolled up out of it, cover nothing above it.
+    for _ in 0..50 {
+        frame(&mut ui, &sim, &cv, Input { mouse: centre(area), wheel: -5.0, ..Default::default() });
+    }
+    frame(&mut ui, &sim, &cv, Input { mouse: centre(area), ..Default::default() });
+    assert!(ui.scroll_offset("lister:scroll").unwrap() > 100.0, "scrolled");
+    assert!(ui.covers(area[0] + 10.0, area[1] + area[3] - 5.0), "the last rows are drawn in the area");
+    assert!(!ui.covers(below.0, below.1));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn theme_tokens_can_be_overridden_and_conflicts_are_reported() {
     let dir = scratch_mods(
