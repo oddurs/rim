@@ -231,6 +231,48 @@ ui.mount("top", "oops:typo", { order = 6 })
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A handler that throws is printed, as a build error is, so a modder who
+/// runs the game from a terminal sees it. The click runs in a child copy of
+/// this test binary, whose stderr the test reads.
+#[test]
+fn a_failing_handler_is_printed() {
+    if std::env::var_os("RIM_UI_CHILD").is_some() {
+        let dir = scratch_mods(
+            "handlererr",
+            &[(
+                "oops",
+                "",
+                &[(
+                    "ui/oops.luau",
+                    r#"
+ui.define("oops:button", function(view)
+    return ui.row({ id = "oops:button", pad = "item", bg = "surface", on_click = function() error("the handler broke") end })
+end)
+ui.mount("top", "oops:button", { order = 5 })
+"#,
+                )],
+            )],
+        );
+        let sim = sim_at(&dir);
+        let mut ui = ui_for(&sim);
+        let mut cv = client(&sim);
+        frame(&mut ui, &sim, &cv, Default::default());
+        let at = centre(ui.find("oops:button").expect("the button"));
+        click(&mut ui, &sim, &mut cv, at);
+        assert!(ui.warnings().iter().any(|w| w.contains("the handler broke")), "{:?}", ui.warnings());
+        let _ = std::fs::remove_dir_all(&dir);
+        return;
+    }
+    let out = std::process::Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", "a_failing_handler_is_printed", "--nocapture", "--test-threads=1"])
+        .env("RIM_UI_CHILD", "1")
+        .output()
+        .expect("the test binary runs");
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(out.status.success(), "the child failed:\n{err}");
+    assert!(err.contains("rim_ui: handler:") && err.contains("the handler broke"), "not printed:\n{err}");
+}
+
 #[test]
 fn an_endless_loop_in_a_component_is_stopped() {
     let dir = scratch_mods(

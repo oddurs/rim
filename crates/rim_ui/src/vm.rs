@@ -2042,10 +2042,7 @@ impl UiVm {
             *e = *e * 0.9 + us * 0.1;
         }
         for e in errors {
-            if !self.errors.contains(&e) {
-                eprintln!("rim_ui: {e}");
-                self.errors.push(e);
-            }
+            self.keep_error(e);
         }
         out
     }
@@ -2115,6 +2112,15 @@ impl UiVm {
         out
     }
 
+    /// A script's error, kept once for the profiler and printed once, whether
+    /// a build or a handler raised it.
+    fn keep_error(&mut self, e: String) {
+        if !self.errors.contains(&e) {
+            eprintln!("rim_ui: {e}");
+            self.errors.push(e);
+        }
+    }
+
     /// Run a handler with arguments and hand back what it returned.
     pub fn call_with(
         &mut self,
@@ -2130,10 +2136,7 @@ impl UiVm {
         match r {
             Ok(v) => Some(v),
             Err(e) => {
-                let e = format!("handler: {}", first_line(&e.to_string()));
-                if !self.errors.contains(&e) {
-                    self.errors.push(e);
-                }
+                self.keep_error(format!("handler: {}", first_line(&e.to_string())));
                 None
             }
         }
@@ -2145,10 +2148,7 @@ impl UiVm {
         let r = self.lend(world, client, engine, || f.call::<()>(()));
         self.deadline.set(None);
         if let Err(e) = r {
-            let e = format!("handler: {}", first_line(&e.to_string()));
-            if !self.errors.contains(&e) {
-                self.errors.push(e);
-            }
+            self.keep_error(format!("handler: {}", first_line(&e.to_string())));
         }
     }
 
@@ -2160,10 +2160,7 @@ impl UiVm {
         match r {
             Ok(on) => on,
             Err(e) => {
-                let e = format!("when: {}", first_line(&e.to_string()));
-                if !self.errors.contains(&e) {
-                    self.errors.push(e);
-                }
+                self.keep_error(format!("when: {}", first_line(&e.to_string())));
                 false
             }
         }
