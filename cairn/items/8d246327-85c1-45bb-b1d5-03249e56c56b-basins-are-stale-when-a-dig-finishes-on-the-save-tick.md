@@ -2,10 +2,12 @@
 id: 8d246327-85c1-45bb-b1d5-03249e56c56b
 title: Basins are stale when a dig finishes on the save tick
 type: bug
-status: backlog
+status: done
 milestone: bare-metal
+assignee: Oddur Sigurdsson
 created: 2026-09-28
-updated: 2026-09-28
+updated: 2026-09-29
+closed_at: 2026-09-28
 priority: p2
 api: none
 layer: engine
@@ -32,5 +34,13 @@ Save each basin's cells (or its build revision), so the load rebuilds from the s
 
 ## Acceptance
 
-- [ ] A save on the tick a dig finishes loads into the same water and news
-- [ ] A test that fails before the fix and passes after
+- [x] A save on the tick a dig finishes loads into the same water and news
+- [x] A test that fails before the fix and passes after
+
+## 2026-09-28
+
+Fixed by rebuilding basins at the end of each step as well as the start (World::rebuild_water), so a save between steps holds the basins the next step would find. A Breach from that rebuild is pushed after the step's dispatch and dispatched next step, as before. The start-of-step rebuild stays for anything that changes the ground before it (commands). Cost: one revision compare per level per tick. The test compares the water and world sections, not the whole snapshot: engine:fields differs after a load for another reason (the ground-on-load item, c0042c1f).
+
+## 2026-09-29
+
+PAUSED at the merge freeze (main d633f7b5): fix and test done (test fails before, passes after), committed on fix/8d246327-water-at-step-end and rebased on origin/main before the freeze; the full gate has not run on this commit. Next: rebase onto main, run scripts/task check, mark the PR ready.

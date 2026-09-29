@@ -1983,15 +1983,23 @@ impl World {
     /// Rebuild the basins the map has changed under, and move the water a
     /// tick: sources pour and seep, water falls, fronts spread.
     pub fn update_water(&mut self) {
-        let defs = self.defs.clone();
-        for b in self.water.update(&self.map, &defs, false) {
-            self.events.push(GameEvent::Breach { at: b.at, source: b.source });
-        }
+        self.rebuild_water();
         self.water.step(crate::TICKS_PER_DAY);
         if self.tick.is_multiple_of(WATER_EVERY) {
             self.apply_water();
         }
         self.escape_water();
+    }
+
+    /// Rebuild the basins of levels whose ground changed, carrying their
+    /// water over and telling of breaches. The step's end does it too: a
+    /// dig finishes mid-step, and a save between steps must hold the basins
+    /// the next step would, or its load rebuilds them without the carry.
+    pub fn rebuild_water(&mut self) {
+        let defs = self.defs.clone();
+        for b in self.water.update(&self.map, &defs, false) {
+            self.events.push(GameEvent::Breach { at: b.at, source: b.source });
+        }
     }
 
     /// What the water now does (DESIGN.md §6d): its cost on the map, so
