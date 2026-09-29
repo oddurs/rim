@@ -965,6 +965,10 @@ impl Ui {
                 self.layout_dirty = true;
             }
         }
+        // A press the interface doesn't take (the map) leaves any control.
+        if input.left_pressed && !out.mouse_over_ui {
+            self.focused = None;
+        }
         if input.left_pressed && out.mouse_over_ui {
             out.captured_left = true;
             self.pressed = hovered;
@@ -1671,6 +1675,11 @@ impl Ui {
         self.layers = layers;
         self.ids = ids;
         self.id_keys = id_keys;
+        // Focus goes with its node: a closed palette's query mustn't keep
+        // Tab from the game.
+        if self.focused.is_some_and(|f| !self.layers.iter().any(|l| l.hits.iter().any(|h| h.key == f))) {
+            self.focused = None;
+        }
         // A requested focus lands once the node exists in a layout.
         if let Some(id) = self.focus_pending.take() {
             match self.id_keys.get(&id) {
