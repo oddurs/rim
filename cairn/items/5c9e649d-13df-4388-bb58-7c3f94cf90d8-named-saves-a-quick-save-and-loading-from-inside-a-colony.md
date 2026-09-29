@@ -5,7 +5,7 @@ type: feature
 status: backlog
 milestone: rimos
 created: 2026-09-28
-updated: 2026-09-28
+updated: 2026-09-29
 priority: p1
 api: additive
 effort: m
@@ -27,3 +27,7 @@ Saving is automatic only; loading happens only from the title or the command lin
 
 - [ ] A named save loads back to the same state (the save tests' hash)
 - [ ] Loading from a colony saves it first, and the title lists both
+
+## 2026-09-29
+
+PAUSED: not started; calm-forest's when work resumes. Seam agreed with green-forest (DESIGN §11b, docs/modding/ui.md): kind="screen" windows; title-layer acts new_colony/load/continue/delete_save/open/quit and views saves/starts/settings/loading. The engine delivery is green-forest's; the client side (main.rs, title.rs, play.rs) is calm-forest's. Waits on green-forest's title-layer delivery and leave-to-title (play.rs). Rule from the user: no per-frame cost when idle, a fast first frame, settings only in rare cases (#388 trimmed afc3e3b0).
