@@ -3522,3 +3522,173 @@ can't ask a running game a question at all.
 - `mods/devtools` ships in release builds and loads only with `--dev` or a
   setting, since a modder needs it (§10) and a player shouldn't stumble into
   it.
+
+---
+
+## 11b. RimOS: the interface as an operating system
+
+A colony sim is dozens of tools over one living picture, and players
+already know how to live with many tools at once. RimOS borrows an
+operating system's vocabulary so nothing needs teaching. The map is the
+desktop. Windows are **apps** with one chrome contract. The dock is the
+**taskbar**, the command palette is the **launcher**, News is the
+**notification centre**, and Settings is **system preferences**. Mods ship
+apps with exactly the calls core uses. Milestone `rimos` builds it.
+
+### Tension: sheets or apps?
+
+- **For sheets (today's Work, Stores, Stockpiles, News):** one big screen at
+  a time, placed by the engine, never in the wrong place.
+- **Against:** a player can't compare Work with Stores, a sheet can't make
+  room for the map, and every screen behaves a little differently.
+- **Ruling:** every screen is an **app**. The first time, a big one opens
+  maximised into the free area between the docked columns, which keeps
+  today's look. After that it moves, snaps, minimises and remembers where
+  it was. Docked **panels** (top bar, dock, colonists, inspector, hover,
+  alerts, the news strip, the depth ruler) stay panels: the HUD holds still
+  (§11), and no app moves one.
+
+### One window contract
+
+- **Kinds:**
+  - an **app** floats, moves, minimises and maximises;
+  - a **panel** docks to an edge;
+  - a **dialog** is centred, modal, and blocks what's behind it;
+  - an **overlay** (the launcher, menus, tooltips) floats above all;
+  - a **screen** (the title, New colony) fills the window with no chrome.
+    One shows at a time, and Esc goes back a step instead of closing it.
+- **Every app declares:** a title and key, a default and minimum size,
+  whether it resizes, whether Esc closes it, and whether the dock and the
+  launcher list it.
+- **The system keeps:**
+  - position, size and stacking, per player and per machine, beside the
+    settings, never in a save;
+  - the stacking order, saved as an ordered list.
+
+### The window manager's rules
+
+- **Focus.** One app has focus: the last one pressed or opened. It draws
+  above the others and its border takes the accent. Panels never take focus;
+  dialogs take it and give it back.
+- **Opening.** The first time, centred in the free area, stepped 24 px for
+  each app already open. After that, where it was left, kept on screen when
+  the window or the UI scale changes. An app that is already open is raised,
+  never opened twice.
+- **Snapping.** Dragging a title into the free area's side edge fills that
+  half, the top edge maximises, and a corner takes a quarter; a ghost shows
+  which before release. Double-clicking the title maximises or restores.
+  Dragging a snapped app away restores its size under the pointer.
+- **Minimise and limits.** A minimised app sits in the dock, keeps its
+  state, and isn't built. At most six apps are open; a seventh minimises the
+  least recently used, and a toast says so.
+- **Esc steps back, in one order:**
+  1. a menu or popup;
+  2. the launcher;
+  3. a dialog, with its safe answer;
+  4. the tool in hand, then the dock's tray;
+  5. the focused app, if it closes on Esc;
+  6. the selection;
+  7. the **system menu**: Resume, Save, Colonies, Settings, Leave to title,
+     Quit. Leaving and quitting save first, so they never confirm.
+
+### Tension: confirm or undo?
+
+- **For confirming:** nothing happens by accident.
+- **Against:** a question on every action trains the player to click
+  through it.
+- **Ruling:** **confirm only what can't be undone**: deleting a save,
+  overwriting a named one, removing a role with members. Everything else
+  acts at once and offers undo, the way deconstruct already does. A confirm
+  names the verb on its buttons, and its safe answer has focus.
+
+### Getting in
+
+The window opens straight onto a loading line, then the **title**:
+- Continue (the newest save);
+- New colony;
+- Colonies (load, delete, open the folder);
+- Settings, Mods, Credits, Quit.
+
+The window system runs on the title too, so Settings and Mods are the same
+apps as in a colony. **New colony** is one stepped screen:
+1. premise;
+2. storyteller;
+3. world: seed, latitude, map size, season;
+4. colonists: the cast card;
+5. the set of mods.
+
+Every step has a default, so Start is one click away. A mod that fails to
+load opens the title with a notification naming it, not a raw error.
+
+### Motion
+
+Motion reports a change, then gets out of the way.
+
+| What | Duration | Easing |
+|---|---|---|
+| Open | 0.14 s | out: fade, and rise 10 px |
+| Close | 0.10 s | in |
+| Minimise, restore | 0.18 s | in, and out |
+| Snap, maximise | 0.12 s | out |
+| Menu | 0.09 s | out |
+| Toast | 0.16 s | out |
+
+- Easing curves:
+  - out: `cubic-bezier(0.2, 0, 0, 1)`;
+  - in: `cubic-bezier(0.4, 0, 1, 1)`.
+- Dragging, resizing and scrolling follow the pointer one to one, with no
+  easing.
+- All of it is an offset and an alpha applied at paint to a window's built
+  mesh. Nothing rebuilds and nothing lays out.
+- The durations are theme tokens (`[motion]`). Reduce motion sets them all
+  to zero.
+
+### Input
+
+- **Keyboard first:**
+  - `Ctrl K` opens the launcher;
+  - `Ctrl \`` cycles apps;
+  - `Ctrl W` closes an app, `Ctrl M` minimises it;
+  - `Ctrl ←`, `Ctrl →` and `Ctrl ↑` snap left, snap right and maximise;
+  - `Ctrl S` quick-saves, and `Ctrl ,` opens Settings.
+- **Focus:**
+  - Tab moves through the focused app only, in reading order;
+  - Enter presses its primary button;
+  - a visible focus ring marks every focusable.
+- **Mouse:**
+  - drag by the title, resize from the corner;
+  - double-click to maximise, right-click for the window menu;
+  - every hit target is at least 22 px.
+- **Gamepad (later):** the focus model is the gamepad model:
+  - the d-pad moves focus;
+  - A presses, and B runs Esc's whole chain;
+  - the bumpers cycle apps.
+
+  Nothing may be built that a d-pad can't reach.
+
+### Looks: the same tokens, a little more
+
+The theme stays plain (§11). RimOS adds:
+- **Button roles:** primary (accent fill, at most one per window), secondary
+  (today's), quiet, and danger (only behind a confirm).
+- **Button sizes:** small 22 px, medium 28 px, large 36 px.
+- **Two display text steps:** 22 and 28.
+- **A focus ring:** 2 px of accent, 1 px outside the control.
+- **Windows:** a 6 px radius and a shadow token, so they read as above the
+  panels.
+
+### Tension: more windows, slower UI?
+
+- **For accepting the cost:** a few apps open is the point.
+- **Against:** the UI's budget is 1 ms of a 16.7 ms frame (§8). Today:
+  - every open window rebuilds at the fast rate;
+  - the shell clones every panel's tree each frame;
+  - each clipped window flushes the UI's draw batch.
+- **Ruling:** the cost lands first, and a test holds it.
+  1. **Shared trees:** the shell shares trees instead of cloning them.
+  2. **Clipping in the shader,** so every window shares one batch and the
+     UI stays at its draw calls however many apps are open.
+  3. **Focus sets the rate:** only the focused app rebuilds fast, and a
+     minimised one doesn't rebuild.
+  4. **A budget test:** with six apps open, the UI must stay under 1 ms and
+     at one app's draw calls.
