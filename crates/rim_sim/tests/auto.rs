@@ -215,3 +215,29 @@ end)
     assert_eq!(level(&s, "core:haul"), 3, "the original didn't");
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// A planner switched off for running away stays off after a load: the
+/// live game never ran it again, so the loaded one mustn't (de02d451).
+#[test]
+fn a_runaway_planner_stays_off_after_a_load() {
+    let defs = "[[work_role]]\nid = \"auto\"\nlabel = \"Auto\"\norder = -20\nplanner = \"planning:test\"\n";
+    let script = r#"
+rim.planner("test", function(board)
+    rim.set_data("planning:calls", (rim.get_data("planning:calls") or 0) + 1)
+    while true do end
+end)
+"#;
+    let dir = common::test_mods(
+        "auto-runaway",
+        &["core"],
+        &[("planning", &[("defs/roles.toml", defs), ("scripts/main.luau", script)])],
+    );
+    let mut s = Sim::new(&dir, 1).unwrap();
+    hours(&mut s, 2);
+    let calls = |s: &Sim| s.world.data.get("planning:calls").and_then(|d| d.num());
+    assert_eq!(calls(&s), Some(1.0), "switched off after its first runaway call");
+    let mut s = Snapshot::capture(&s).restore(&dir, &|_| true).unwrap();
+    hours(&mut s, 2);
+    assert_eq!(calls(&s), Some(1.0), "and still off after a load");
+    let _ = std::fs::remove_dir_all(dir);
+}
