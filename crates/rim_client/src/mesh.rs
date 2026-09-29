@@ -1,12 +1,13 @@
 //! What doesn't move, drawn from the GPU (DESIGN.md §8).
 //!
-//! Floors, items and fixtures are painted once per chunk into vertex
-//! buffers that live on the GPU, and redrawn from there every frame: one
-//! draw call per chunk and layer, and no vertices built or uploaded. A
-//! chunk's buffers are rebuilt when its things revision moves (the map
-//! bumps it for anything drawn there). Line widths and minimum sizes are in
-//! screen points, so the zoom matters too: while it moves, chunks are drawn
-//! scaled from the zoom they were built at, and rebuilt, a few a frame,
+//! Floors, items and fixtures are painted once per chunk, in map cells, and
+//! a region of chunks' paint is joined into vertex buffers that live on the
+//! GPU and are redrawn from there every frame: a draw call per region and
+//! layer, and no vertices built or uploaded. A chunk is painted again when
+//! its things revision moves (the map bumps it for anything drawn there),
+//! and its region joined again. Line widths and minimum sizes are in screen
+//! points, so the zoom matters too: while it moves, chunks are drawn scaled
+//! from the zoom they were painted at, and painted again, a few a frame,
 //! once it settles or has drifted too far to pass for the same picture.
 //!
 //! Worksites (things being worked right now, DESIGN.md §6b) and animated
@@ -35,16 +36,25 @@ struct Vert {
 /// u16 indices: a buffer holds at most this many vertices.
 const MAX_VERTS: usize = u16::MAX as usize;
 
-/// Geometry in screen points relative to the chunk's top-left corner, by
-/// atlas page. Primitives sample page 0's white block.
+/// Geometry painted in screen points relative to a chunk's top-left
+/// corner at zoom `z`, kept in map cells, by atlas page. Primitives sample
+/// page 0's white block.
 pub struct Builder<'a> {
     atlas: &'a WorldAtlas,
     parts: Vec<(usize, Vec<Vert>, Vec<u16>)>,
+    /// The chunk's corner, in cells, and the points a cell it is painted at.
+    corner: (f32, f32),
+    z: f32,
 }
 
 impl<'a> Builder<'a> {
-    fn new(atlas: &'a WorldAtlas) -> Self {
-        Builder { atlas, parts: Vec::new() }
+    fn new(atlas: &'a WorldAtlas, corner: (f32, f32), z: f32) -> Self {
+        Builder { atlas, parts: Vec::new(), corner, z }
+    }
+
+    /// A painted point, in map cells.
+    fn cell(&self, [x, y]: [f32; 2]) -> [f32; 2] {
+        [self.corner.0 + x / self.z, self.corner.1 + y / self.z]
     }
 
     /// The part to append to: the last one, if it is on `page` and has
@@ -59,6 +69,7 @@ impl<'a> Builder<'a> {
 
     fn quad(&mut self, page: usize, p: [[f32; 2]; 4], uv: [[f32; 2]; 4], c: Color) {
         let color: [u8; 4] = c.into();
+        let p = p.map(|q| self.cell(q));
         let (v, i) = self.room(page, 4);
         let n = v.len() as u16;
         v.extend((0..4).map(|k| Vert { pos: p[k], uv: uv[k], color }));
@@ -80,12 +91,14 @@ impl Sink for Builder<'_> {
     fn poly(&mut self, x: f32, y: f32, sides: u8, r: f32, c: Color) {
         let color: [u8; 4] = c.into();
         let uv = self.atlas.white(0);
+        let ((cx, cy), z) = (self.corner, self.z);
+        let cell = |px: f32, py: f32| [cx + px / z, cy + py / z];
         let (v, i) = self.room(0, sides as usize + 2);
         let n = v.len() as u16;
-        v.push(Vert { pos: [x, y], uv, color });
+        v.push(Vert { pos: cell(x, y), uv, color });
         for k in 0..=sides {
             let a = k as f32 / sides as f32 * std::f32::consts::TAU;
-            v.push(Vert { pos: [x + r * a.cos(), y + r * a.sin()], uv, color });
+            v.push(Vert { pos: cell(x + r * a.cos(), y + r * a.sin()), uv, color });
             if k != sides {
                 i.extend([n, n + k as u16 + 1, n + k as u16 + 2]);
             }
@@ -106,6 +119,7 @@ impl Sink for Builder<'_> {
     fn tri(&mut self, p: [[f32; 2]; 3], c: Color) {
         let color: [u8; 4] = c.into();
         let uv = self.atlas.white(0);
+        let p = p.map(|q| self.cell(q));
         let (v, i) = self.room(0, 3);
         let n = v.len() as u16;
         v.extend(p.map(|pos| Vert { pos, uv, color }));
@@ -127,12 +141,37 @@ impl Sink for Builder<'_> {
     }
 }
 
-struct Part {
-    bindings: Bindings,
-    indices: i32,
+/// One atlas page's run of a chunk's paint, in map cells.
+struct Paint {
+    page: usize,
+    verts: Vec<Vert>,
+    indices: Vec<u16>,
 }
 
-impl Chunk {
+/// Chunks joined into one buffer per layer and page run: `REGION` by
+/// `REGION` of them.
+const REGION: i32 = 2;
+
+/// A region's buffers on the GPU, by layer.
+#[derive(Default)]
+struct Region {
+    parts: [Vec<Part>; 3],
+    /// A chunk in it was painted since it was last joined.
+    stale: bool,
+}
+
+/// A chunk's indices in a joined buffer: chunk, first index, count.
+type Run = (usize, i32, i32);
+
+/// One buffer: a run of paint on one page, from one or more chunks in turn.
+struct Part {
+    bindings: Bindings,
+    /// Each chunk's indices in it. A region partly on screen draws only its
+    /// chunks that are.
+    runs: Vec<Run>,
+}
+
+impl Region {
     fn free(&mut self, ctx: &mut dyn RenderingBackend) {
         for p in self.parts.iter_mut().flat_map(std::mem::take) {
             ctx.delete_buffer(p.bindings.vertex_buffers[0]);
@@ -143,10 +182,10 @@ impl Chunk {
 
 #[derive(Default)]
 struct Chunk {
-    /// The things revision and zoom the buffers were built at.
+    /// The things revision and zoom it was painted at.
     built: Option<(u64, f32)>,
     /// Per layer: floors, items, fixtures.
-    parts: [Vec<Part>; 3],
+    paint: [Vec<Paint>; 3],
     /// Cells drawn each frame instead (worksites, animated looks), by layer.
     live: [Vec<IVec>; 3],
     /// Stack counts to label: cell and count.
@@ -162,8 +201,12 @@ struct Chunk {
 pub struct Meshes {
     pipeline: Option<Pipeline>,
     /// Every level's chunks, as `Map::level_chunks` numbers them. Only the
-    /// viewed level and the ones beside it hold buffers.
+    /// viewed level and the ones beside it hold paint.
     chunks: Vec<Chunk>,
+    /// Every level's regions, level by level, row by row.
+    regions: Vec<Region>,
+    /// Which chunks the layer being drawn shows, by chunk.
+    shown: Vec<bool>,
     /// The level the buffers were last prepared for.
     level: Option<i32>,
     /// Chunks on screen this frame (from `prepare`).
@@ -176,6 +219,12 @@ pub struct Meshes {
     pub calls: usize,
     pub indices: usize,
     pub rebuilt: usize,
+    /// Regions joined again last frame, and the time it took (µs): what a
+    /// change costs on top of painting its chunk.
+    pub joined: usize,
+    pub join_us: f64,
+    /// Time painting chunks last frame (µs).
+    pub paint_us: f64,
     /// Time in `draw_layer` handing buffers to GL (µs).
     pub submit_us: f64,
 }
@@ -185,6 +234,8 @@ impl Default for Meshes {
         Meshes {
             pipeline: None,
             chunks: Vec::new(),
+            regions: Vec::new(),
+            shown: Vec::new(),
             level: None,
             visible: Vec::new(),
             below: Vec::new(),
@@ -192,6 +243,9 @@ impl Default for Meshes {
             calls: 0,
             indices: 0,
             rebuilt: 0,
+            joined: 0,
+            join_us: 0.0,
+            paint_us: 0.0,
             submit_us: 0.0,
         }
     }
@@ -210,10 +264,10 @@ varying mediump vec2 uv;
 #endif
 uniform vec2 origin;
 uniform vec2 screen;
-uniform float scale;
+uniform float zoom;
 uniform float flip;
 void main() {
-    vec2 p = (pos * scale + origin) / screen * 2.0 - 1.0;
+    vec2 p = (pos * zoom + origin) / screen * 2.0 - 1.0;
     gl_Position = vec4(p.x, p.y * flip, 0.0, 1.0);
     color = color0 / 255.0;
     uv = uv0;
@@ -233,10 +287,11 @@ void main() {
 
 #[repr(C)]
 struct Uniforms {
+    /// Where the map's corner is on screen.
     origin: [f32; 2],
     screen: [f32; 2],
-    /// The zoom now over the zoom the chunk was built at.
-    scale: f32,
+    /// Points a cell.
+    zoom: f32,
     /// -1 to the screen, 1 into a render target (GL's rows run upward).
     flip: f32,
 }
@@ -250,6 +305,25 @@ const MAX_SCALE: f32 = 2.0;
 /// wait, drawn scaled. Content changes always rebuild, and so does a chunk
 /// scaled past `MAX_SCALE` once the budget allows.
 const ZOOM_BUDGET_US: f64 = 1500.0;
+
+/// The index spans to draw of a joined buffer: its runs of chunks on
+/// screen, runs that follow on in the buffer drawn as one.
+fn spans(runs: &[Run], shown: &[bool], mut draw: impl FnMut(i32, i32)) {
+    let mut span: Option<(i32, i32)> = None;
+    for &(_, first, n) in runs.iter().filter(|r| shown[r.0]) {
+        span = match span {
+            Some((s, k)) if s + k == first => Some((s, k + n)),
+            Some((s, k)) => {
+                draw(s, k);
+                Some((first, n))
+            }
+            None => Some((first, n)),
+        };
+    }
+    if let Some((s, k)) = span {
+        draw(s, k);
+    }
+}
 
 /// Should this thing be drawn each frame rather than cached?
 fn live(w: &World, e: rim_sim::hecs::Entity) -> bool {
@@ -267,7 +341,7 @@ impl Meshes {
                         uniforms: vec![
                             UniformDesc::new("origin", UniformType::Float2),
                             UniformDesc::new("screen", UniformType::Float2),
-                            UniformDesc::new("scale", UniformType::Float1),
+                            UniformDesc::new("zoom", UniformType::Float1),
                             UniformDesc::new("flip", UniformType::Float1),
                         ],
                     },
@@ -294,18 +368,36 @@ impl Meshes {
         )
     }
 
-    /// Paint chunk `c` into fresh buffers.
-    #[allow(clippy::too_many_arguments)]
-    fn build(&mut self, ctx: &mut dyn RenderingBackend, w: &World, atlas: &WorldAtlas, c: usize, z: f32, t: f32) {
+    /// The region chunk `c` is joined into, on a map `chunks` wide and high.
+    fn region_of((cx, cy): (i32, i32), c: usize) -> usize {
+        let per = (cx * cy) as usize;
+        let (rx, ry) = ((cx + REGION - 1) / REGION, (cy + REGION - 1) / REGION);
+        let (slot, i) = (c / per, (c % per) as i32);
+        slot * (rx * ry) as usize + ((i / cx / REGION) * rx + i % cx / REGION) as usize
+    }
+
+    /// The chunks of region `r`, in the order they are joined.
+    fn chunks_of((cx, cy): (i32, i32), r: usize) -> impl Iterator<Item = usize> {
+        let (rx, ry) = ((cx + REGION - 1) / REGION, (cy + REGION - 1) / REGION);
+        let (slot, i) = (r / (rx * ry) as usize, r as i32 % (rx * ry));
+        let base = slot * (cx * cy) as usize;
+        let (x0, y0) = (i % rx * REGION, i / rx * REGION);
+        (y0..(y0 + REGION).min(cy))
+            .flat_map(move |y| (x0..(x0 + REGION).min(cx)).map(move |x| base + (y * cx + x) as usize))
+    }
+
+    /// Paint chunk `c` again, and mark its region to be joined.
+    fn build(&mut self, w: &World, atlas: &WorldAtlas, c: usize, z: f32, t: f32) {
+        let start = std::time::Instant::now();
         let IVec { x: x0, y: y0, z: z0 } = w.map.chunk_origin(c);
+        self.regions[Self::region_of(w.map.chunks(), c)].stale = true;
         let chunk = &mut self.chunks[c];
-        chunk.free(ctx);
         chunk.live = Default::default();
         chunk.counts.clear();
         chunk.spills = false;
         chunk.rooms_seen = None;
         for layer in 0..3 {
-            let mut b = Builder::new(atlas);
+            let mut b = Builder::new(atlas, (x0 as f32, y0 as f32), z);
             for y in y0..(y0 + CHUNK).min(w.map.h) {
                 for x in x0..(x0 + CHUNK).min(w.map.w) {
                     let cell = IVec::at(x, y, z0);
@@ -336,30 +428,75 @@ impl Meshes {
                     }
                 }
             }
-            chunk.parts[layer] = b
+            chunk.paint[layer] = b
                 .parts
                 .into_iter()
                 .filter(|(_, _, i)| !i.is_empty())
-                .map(|(page, v, i)| Part {
-                    indices: i.len() as i32,
-                    bindings: Bindings {
-                        vertex_buffers: vec![ctx.new_buffer(
-                            BufferType::VertexBuffer,
-                            BufferUsage::Immutable,
-                            BufferSource::slice(&v),
-                        )],
-                        index_buffer: ctx.new_buffer(
-                            BufferType::IndexBuffer,
-                            BufferUsage::Immutable,
-                            BufferSource::slice(&i),
-                        ),
-                        images: vec![atlas.pages[page].raw_miniquad_id()],
-                    },
-                })
+                .map(|(page, verts, indices)| Paint { page, verts, indices })
                 .collect();
         }
         chunk.built = Some((w.map.things_rev(c), z));
         self.rebuilt += 1;
+        self.paint_us += start.elapsed().as_secs_f64() * 1e6;
+    }
+
+    /// Paint chunk `c` again next frame, as a change there would: for the
+    /// render bench.
+    pub fn repaint(&mut self, c: usize) {
+        if let Some(ch) = self.chunks.get_mut(c) {
+            ch.built = None;
+        }
+    }
+
+    /// Join the paint of region `r`'s chunks into fresh buffers: per layer,
+    /// each chunk's runs in turn, a run on the page the last one ended on
+    /// carrying on in the same buffer while it has room.
+    fn join(&mut self, ctx: &mut dyn RenderingBackend, w: &World, atlas: &WorldAtlas, r: usize) {
+        let start = std::time::Instant::now();
+        self.regions[r].free(ctx);
+        for layer in 0..3 {
+            let mut joined: Vec<(Paint, Vec<Run>)> = Vec::new();
+            for c in Self::chunks_of(w.map.chunks(), r) {
+                for p in &self.chunks[c].paint[layer] {
+                    let fits = joined
+                        .last()
+                        .is_some_and(|j| j.0.page == p.page && j.0.verts.len() + p.verts.len() <= MAX_VERTS);
+                    if !fits {
+                        joined.push((Paint { page: p.page, verts: Vec::new(), indices: Vec::new() }, Vec::new()));
+                    }
+                    let (Paint { verts, indices, .. }, runs) = joined.last_mut().expect("just pushed");
+                    let (base, first) = (verts.len() as u16, indices.len() as i32);
+                    verts.extend_from_slice(&p.verts);
+                    indices.extend(p.indices.iter().map(|i| i + base));
+                    match runs.last_mut() {
+                        Some(run) if run.0 == c => run.2 += p.indices.len() as i32,
+                        _ => runs.push((c, first, p.indices.len() as i32)),
+                    }
+                }
+            }
+            self.regions[r].parts[layer] = joined
+                .into_iter()
+                .map(|(Paint { page, verts, indices }, runs)| Part {
+                    bindings: Bindings {
+                        vertex_buffers: vec![ctx.new_buffer(
+                            BufferType::VertexBuffer,
+                            BufferUsage::Immutable,
+                            BufferSource::slice(&verts),
+                        )],
+                        index_buffer: ctx.new_buffer(
+                            BufferType::IndexBuffer,
+                            BufferUsage::Immutable,
+                            BufferSource::slice(&indices),
+                        ),
+                        images: vec![atlas.pages[page].raw_miniquad_id()],
+                    },
+                    runs,
+                })
+                .collect();
+        }
+        self.regions[r].stale = false;
+        self.joined += 1;
+        self.join_us += start.elapsed().as_secs_f64() * 1e6;
     }
 
     /// Find this frame's visible chunks on `level`, and the level below's
@@ -372,10 +509,13 @@ impl Meshes {
         let (cx, cy) = w.map.chunks();
         let total = w.map.levels().map(|z| w.map.level_chunks(z).end).max().unwrap_or(0);
         if self.chunks.len() != total {
-            for ch in &mut self.chunks {
-                ch.free(ctx);
+            for r in &mut self.regions {
+                r.free(ctx);
             }
             self.chunks = (0..total).map(|_| Chunk::default()).collect();
+            let regions = if total == 0 { 0 } else { Self::region_of(w.map.chunks(), total - 1) + 1 };
+            self.regions = (0..regions).map(|_| Region::default()).collect();
+            self.shown = vec![false; total];
             self.level = None;
         }
         if self.level != Some(level) {
@@ -383,10 +523,9 @@ impl Meshes {
             // (DESIGN.md §6e), so both neighbours keep their buffers.
             for z in w.map.levels().filter(|z| (z - level).abs() > 1) {
                 for c in w.map.level_chunks(z) {
-                    if self.chunks[c].built.is_some() {
-                        self.chunks[c].free(ctx);
-                        self.chunks[c].built = None;
-                    }
+                    self.chunks[c].paint = Default::default();
+                    self.chunks[c].built = None;
+                    self.regions[Self::region_of(w.map.chunks(), c)].free(ctx);
                 }
             }
             self.level = Some(level);
@@ -421,23 +560,35 @@ impl Meshes {
         }
         self.rebuilt = 0;
         (self.calls, self.indices, self.submit_us) = (0, 0, 0.0);
+        (self.joined, self.join_us, self.paint_us) = (0, 0.0, 0.0);
         self.zoom = if self.zoom.0 == cam.zoom { (cam.zoom, self.zoom.1 + 1) } else { (cam.zoom, 0) };
         let settled = self.zoom.1 >= SETTLE_FRAMES;
         let start = std::time::Instant::now();
         for k in 0..self.visible.len() + self.below.len() {
             let c = self.visible.get(k).copied().unwrap_or_else(|| self.below[k - self.visible.len()]);
-            let stale = match self.chunks[c].built {
+            let changed = match self.chunks[c].built {
                 None => true,
                 Some((r, _)) if r != w.map.things_rev(c) => true,
-                _ if self.chunks[c].rooms_seen.is_some_and(|r| r != w.map.room_rebuilds) => true,
-                Some((_, z)) if z == cam.zoom => false,
-                Some((_, z)) => {
-                    let far = (cam.zoom / z).max(z / cam.zoom) > MAX_SCALE;
-                    (settled || far) && start.elapsed().as_secs_f64() * 1e6 < ZOOM_BUDGET_US
-                }
+                _ => self.chunks[c].rooms_seen.is_some_and(|r| r != w.map.room_rebuilds),
             };
-            if stale {
-                self.build(ctx, w, atlas, c, cam.zoom, t);
+            let rezoom = self.chunks[c].built.is_some_and(|(_, z)| {
+                let far = (cam.zoom / z).max(z / cam.zoom) > MAX_SCALE;
+                z != cam.zoom && (settled || far) && start.elapsed().as_secs_f64() * 1e6 < ZOOM_BUDGET_US
+            });
+            if changed {
+                self.build(w, atlas, c, cam.zoom, t);
+            } else if rezoom {
+                // A region's chunks on screen at once, joined once and inside
+                // the budget: a chunk at a time would join it up to four
+                // times. Its chunks off screen keep their zoom until seen.
+                let r = Self::region_of(w.map.chunks(), c);
+                for cc in Self::chunks_of(w.map.chunks(), r) {
+                    let seen = self.visible.contains(&cc) || self.below.contains(&cc);
+                    if seen && self.chunks[cc].built.is_some_and(|(_, z)| z != cam.zoom) {
+                        self.build(w, atlas, cc, cam.zoom, t);
+                    }
+                }
+                self.join(ctx, w, atlas, r);
             }
         }
         // A thing is drawn from its anchor, and its footprint reaches right
@@ -451,19 +602,25 @@ impl Meshes {
                 // Only when what's in it changed: at another zoom it is drawn
                 // scaled, like any chunk, and it's off screen anyway.
                 if self.chunks[c].built.is_none_or(|(r, _)| r != w.map.things_rev(c)) {
-                    self.build(ctx, w, atlas, c, cam.zoom, t);
+                    self.build(w, atlas, c, cam.zoom, t);
                 }
                 if self.chunks[c].spills {
                     self.visible.push(c);
                 }
             }
         }
+        for r in 0..self.regions.len() {
+            if self.regions[r].stale {
+                self.join(ctx, w, atlas, r);
+            }
+        }
     }
 
     /// Draw one layer (floors, items, fixtures) of every visible chunk from
-    /// its buffers, or with `below` of the level below's chunks under air.
-    /// Whatever macroquad has batched so far goes first, so the layers below
-    /// stay below.
+    /// its region's buffers, or with `below` of the level below's chunks
+    /// under air: a call per region and page run, or per run of chunks on
+    /// screen where a region is only partly. Whatever macroquad has batched
+    /// so far goes first, so the layers below stay below.
     pub fn draw_layer(&mut self, w: &World, cam: &Cam, layer: usize, target: Option<RenderPass>, below: bool) {
         let start = std::time::Instant::now();
         // SAFETY: as in `prepare`.
@@ -478,22 +635,34 @@ impl Meshes {
         }
         let flip = if target.is_some() { 1.0 } else { -1.0 };
         ctx.apply_pipeline(pipeline);
-        for &c in if below { &self.below } else { &self.visible } {
-            let o = w.map.chunk_origin(c);
-            let origin = cam.to_screen(o.x as f32, o.y as f32);
-            let scale = self.chunks[c].built.map_or(1.0, |(_, z)| cam.zoom / z);
-            for p in &self.chunks[c].parts[layer] {
+        let origin = cam.to_screen(0.0, 0.0);
+        ctx.apply_uniforms(UniformsSource::table(&Uniforms {
+            origin: [origin.0, origin.1],
+            screen,
+            zoom: cam.zoom,
+            flip,
+        }));
+        let list = if below { &self.below } else { &self.visible };
+        let mut regions: Vec<usize> = list.iter().map(|&c| Self::region_of(w.map.chunks(), c)).collect();
+        regions.sort_unstable();
+        regions.dedup();
+        for &c in list {
+            self.shown[c] = true;
+        }
+        for r in regions {
+            for p in &self.regions[r].parts[layer] {
                 ctx.apply_bindings(&p.bindings);
-                ctx.apply_uniforms(UniformsSource::table(&Uniforms {
-                    origin: [origin.0, origin.1],
-                    screen,
-                    scale,
-                    flip,
-                }));
-                ctx.draw(0, p.indices, 1);
-                self.calls += 1;
-                self.indices += p.indices as usize;
+                // A span may start mid-buffer: fine on GL, which rim forces
+                // on macOS; miniquad's Metal backend asserts it starts at 0.
+                spans(&p.runs, &self.shown, |first, n| {
+                    ctx.draw(first, n, 1);
+                    self.calls += 1;
+                    self.indices += n as usize;
+                });
             }
+        }
+        for &c in list {
+            self.shown[c] = false;
         }
         ctx.end_render_pass();
         self.submit_us += start.elapsed().as_secs_f64() * 1e6;
@@ -509,11 +678,6 @@ impl Meshes {
         self.visible.contains(&c) || self.below.contains(&c)
     }
 
-    /// Chunks holding buffers, on any level.
-    pub fn cached(&self) -> impl Iterator<Item = usize> + '_ {
-        (0..self.chunks.len()).filter(|&c| self.chunks[c].built.is_some())
-    }
-
     /// How many things the visible chunks leave to be drawn live.
     pub fn live_count(&self) -> usize {
         self.visible.iter().map(|&c| self.chunks[c].live.iter().map(Vec::len).sum::<usize>()).sum()
@@ -522,5 +686,48 @@ impl Meshes {
     /// Stacks to label in the visible chunks: cell and count.
     pub fn counts(&self) -> impl Iterator<Item = (IVec, u32)> + '_ {
         self.visible.iter().flat_map(|&c| self.chunks[c].counts.iter().copied())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn regions_share_out_every_chunk_once_on_every_level() {
+        // Odd sizes leave regions part empty at the right and bottom.
+        for chunks @ (cx, cy) in [(8, 8), (3, 5), (1, 1)] {
+            let total = (cx * cy) as usize * 3;
+            let regions = Meshes::region_of(chunks, total - 1) + 1;
+            let mut seen = vec![0; total];
+            for r in 0..regions {
+                for c in Meshes::chunks_of(chunks, r) {
+                    assert_eq!(Meshes::region_of(chunks, c), r, "{chunks:?}: chunk {c} is in region {r}");
+                    seen[c] += 1;
+                }
+            }
+            assert!(seen.iter().all(|&n| n == 1), "{chunks:?}: {seen:?}");
+        }
+        // A region is 2 by 2 chunks: the whole 8 by 8 map is 16 of them.
+        assert_eq!(Meshes::region_of((8, 8), 63), 15);
+        assert_eq!(Meshes::chunks_of((8, 8), 0).collect::<Vec<_>>(), [0, 1, 8, 9]);
+    }
+
+    #[test]
+    fn chunks_on_screen_that_follow_on_are_one_draw() {
+        let runs = [(0, 0, 6), (1, 6, 12), (8, 18, 3), (9, 21, 9)];
+        let draws = |shown: &[usize]| {
+            let mut on = vec![false; 10];
+            for &c in shown {
+                on[c] = true;
+            }
+            let mut out = Vec::new();
+            spans(&runs, &on, |first, n| out.push((first, n)));
+            out
+        };
+        assert_eq!(draws(&[0, 1, 8, 9]), [(0, 30)], "a region wholly on screen is one call");
+        assert_eq!(draws(&[1, 9]), [(6, 12), (21, 9)], "a gap splits it");
+        assert_eq!(draws(&[8, 9]), [(18, 12)]);
+        assert_eq!(draws(&[]), []);
     }
 }
