@@ -4,6 +4,7 @@
 //! incidents, events). All *content* comes from mods, including `core`.
 
 pub mod ai;
+pub mod budgets;
 pub mod command;
 pub mod data;
 pub mod defs;

@@ -8,14 +8,19 @@
 //! chopping and mining, walls and beds planned). After a warm-up it measures
 //! every tick and reports mean, p50, p99 and max, each system's mean cost
 //! per tick, what pathfinding cost, and the worst ticks with what they did.
-//! Wall-clock ticks on a busy machine are noisy; the path counts are not. `--check` exits non-zero if the mean tick is over budget (2 ms,
-//! the time a tick has at 6x speed), with 3x slack on shared CI runners.
+//! Wall-clock ticks on a busy machine are noisy; the path counts are not.
 //!
 //! Flags: --seed N, --size N, --colonists N, --pawns N, --days F,
 //! --designate-all (every cell of the map designated), --haul (a stockpile
 //! and 300 loose stacks instead of other work), --snow CM (a hard, dry
 //! frost with CM of snow over the whole surface: `--snow 0` is the same
-//! frost with none, to see what snow does to paths), --check.
+//! frost with none, to see what snow does to paths), --winter (a thaw:
+//! 20 cm of snow over ground wet enough for mud, just above freezing, and
+//! the hauling case: what made a708c037's 50-127 ms ticks), --check.
+//!
+//! `--check` holds the run to `budgets.toml`: the `sim.base` scenario, or
+//! `sim.winter` with `--winter`, each cap times the runner class's slack on
+//! CI (rim_sim::budgets).
 
 use rim_sim::world::Faction;
 use rim_sim::{Command, IVec, Sim, TICKS_PER_DAY};
@@ -58,9 +63,6 @@ fn dig_levels(s: &mut Sim, c: IVec) {
         top = centre.offset(5, 5);
     }
 }
-
-/// Budget per tick at 6x speed and 60 fps (DESIGN.md §8), in ms.
-const BUDGET_MS: f64 = 2.0;
 
 fn main() {
     let seed: u64 = arg("--seed", 1);
@@ -110,9 +112,10 @@ fn main() {
         }
     }
 
+    let winter = flag("--winter");
     // --haul is the hauling case (cairn 8d551753): a 40x40 stockpile, 300
     // loose stacks of wood and stone, and no other work.
-    if flag("--haul") {
+    if flag("--haul") || winter {
         let items: Vec<_> = ["wood", "stone"].iter().filter_map(|id| defs.thing_id(id)).collect();
         let z = c.offset(10, -20);
         s.push(Command::Stockpile { a: z, b: z.offset(39, 39), zone: None });
@@ -131,6 +134,23 @@ fn main() {
     }
     if flag("--levels") {
         dig_levels(&mut s, c);
+    }
+
+    // --winter: a thaw, 1 °C and dry above, 20 cm of snow over ground wet
+    // enough for mud (95%, where mud starts costing): both slow a path.
+    if winter {
+        for (id, v) in [("temperature", 1.0), ("precipitation", 0.0)] {
+            if let Some(f) = defs.lookup("field", id) {
+                s.world.fields.set_ambient(f as usize, Some(v));
+            }
+        }
+        let snow = defs.lookup("field", "weather:snow").expect("--winter needs the weather plugin") as usize;
+        let wet = defs.lookup("field", "weather:wetness").expect("--winter needs the weather plugin") as usize;
+        for i in 0..s.world.map.plane() {
+            let p = s.world.map.pos(i);
+            s.world.fields.set_stock(&defs, &s.world.map, snow, p, 20.0, false);
+            s.world.fields.set_stock(&defs, &s.world.map, wet, p, 95.0, false);
+        }
     }
 
     // --snow: frozen and dry, so the snow lies as put and nothing else
@@ -160,12 +180,16 @@ fn main() {
     // nodes, path ms, the system that took longest and its ms).
     let mut worst: Vec<(u64, f64, u64, u64, f64, String, f64)> = Vec::new();
     let pf0 = (s.world.pf.searches, s.world.pf.expanded, s.world.pf.failed, s.world.pf.micros);
+    // The most path nodes one tick expanded: work, not time, so the same on
+    // every machine.
+    let mut max_nodes = 0u64;
     for _ in 0..ticks {
         let before = (s.world.pf.searches, s.world.pf.expanded, s.world.pf.micros, s.profile.totals.clone());
         let t = Instant::now();
         s.step();
         let ms = t.elapsed().as_secs_f64() * 1e3;
         times.push(ms);
+        max_nodes = max_nodes.max(s.world.pf.expanded - before.1);
         if worst.len() < 8 || ms > worst[worst.len() - 1].1 {
             let spent = |name: &str| before.3.iter().find(|b| b.0 == name).map_or(0.0, |b| b.1);
             let (sys, us) = s
@@ -208,11 +232,13 @@ fn main() {
         count(Faction::Hostile)
     );
     println!(
-        "tick: mean {mean:.3} ms · p50 {:.3} · p99 {:.3} · max {:.3}   (budget {BUDGET_MS} ms at 6x)",
+        "tick: mean {mean:.3} ms · p50 {:.3} · p99 {:.3} · max {:.3}",
         pct(0.5),
         pct(0.99),
         sorted[sorted.len() - 1]
     );
+    let machine = rim_sim::budgets::machine();
+    println!("machine: {machine}");
     let mut systems: Vec<_> = s.profile.totals.iter().filter(|t| t.0 != "tick").cloned().collect();
     systems.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
     println!("per system, mean ms per tick:");
@@ -229,6 +255,7 @@ fn main() {
         (pf.failed - pf0.2) as f64 * 100.0 / searches.max(1) as f64,
         (pf.micros - pf0.3) / 1e3 / ticks as f64
     );
+    println!("most path nodes in a tick: {max_nodes}");
     println!("worst ticks:");
     for (tick, ms, n, nodes, path_ms, sys, sys_ms) in &worst {
         println!(
@@ -237,13 +264,27 @@ fn main() {
     }
 
     if flag("--check") {
-        let slack = if std::env::var_os("CI").is_some() { 3.0 } else { 1.0 };
-        let limit = BUDGET_MS * slack;
-        if mean > limit {
-            eprintln!("bench: mean tick {mean:.3} ms is over the budget of {limit:.1} ms");
+        let budgets = rim_sim::budgets::Budgets::repo().unwrap_or_else(|e| panic!("{e}"));
+        let slack = budgets.slack(&machine, std::env::var_os("CI").is_some());
+        let scenario = if winter { "winter" } else { "base" };
+        let pf = &s.world.pf;
+        let per_search = (pf.expanded - pf0.1) as f64 / (pf.searches - pf0.0).max(1) as f64;
+        let measured = [
+            ("mean_ms", mean),
+            ("p99_ms", pct(0.99)),
+            ("max_ms", sorted[sorted.len() - 1]),
+            ("max_nodes", max_nodes as f64),
+            ("nodes_per_search", per_search),
+        ];
+        let over =
+            rim_sim::budgets::Budgets::over(&budgets.sim, scenario, &measured, slack).unwrap_or_else(|e| panic!("{e}"));
+        if !over.is_empty() {
+            for o in &over {
+                eprintln!("bench: sim.{o}");
+            }
             std::process::exit(1);
         }
-        println!("bench: within budget ({mean:.3} <= {limit:.1} ms)");
+        println!("bench: sim.{scenario} within budgets.toml (slack {slack})");
     }
 }
 
