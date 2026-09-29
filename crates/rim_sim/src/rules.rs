@@ -154,6 +154,28 @@ impl World {
         let defs = self.defs.clone();
         let hour = if defs.rules_read_hour { self.hour() as u32 } else { 0 };
         let season = if defs.rules_read_season { self.season_index() } else { 0 };
+        self.update_rules_at(hour, season);
+    }
+
+    /// The hour and season the rules were last worked out for (0 for what
+    /// no rule reads): what a save keeps, so a load works them out as the
+    /// game it came from last did.
+    pub fn rules_clock(&self) -> Option<(u32, u32)> {
+        self.rules.key.map(|k| (k.0, k.1))
+    }
+
+    /// After a load: work the rules out for the hour and season the saved
+    /// game last did, silently, so its next step announces what the saved
+    /// game's would. A save from before this is worked out for now.
+    pub fn restore_rules(&mut self, clock: Option<(u32, u32)>) {
+        match clock {
+            Some((hour, season)) => self.update_rules_at(hour, season),
+            None => self.update_rules(),
+        }
+    }
+
+    fn update_rules_at(&mut self, hour: u32, season: u32) {
+        let defs = self.defs.clone();
         let key = (hour, season, self.stance, self.standing.generation);
         if self.rules.key == Some(key) {
             return;
