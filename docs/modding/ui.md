@@ -161,6 +161,25 @@ end)
 
 Press **F12** and then **Kit gallery** to see every component in every state.
 
+A button says what it does with its `kind`: `primary` for the one main
+action in a window, `secondary` (the default) for any other, `quiet` for one
+of many in a list or toolbar, and `danger` for what can't be undone. `size`
+is `s`, `m` (the default) or `l`. An unknown kind or size is an error.
+
+```lua
+local kit = require("@core/ui/kit")
+ui.define("my_mod:leave", function(view)
+	return kit.row({ gap = "s" }, {
+		kit.button({ label = "Stay", kind = "quiet" }),
+		kit.button({ label = "Abandon the colony", kind = "danger" }),
+		kit.button({ label = "Keep playing", kind = "primary", size = "l" }),
+	})
+end)
+```
+
+Focus from the keyboard (Tab) is drawn as a ring just outside the focused
+control; a click focuses too, without a ring.
+
 `kit.table` shows records in columns over a virtual list: give it `rows`
 (an array of records) and `columns` with a `key` or `value` each, and a
 click on a header sorts by that column; give it `count` and `row(i)` to
@@ -644,8 +663,6 @@ ui.window("my_mod:ledger", {
 - `ui.settings_page(id, label, build)` adds a page to the Settings app.
 - `kit.confirm{title, body, verb, danger, on_confirm}` asks before
   something that can't be undone.
-- `kit.button` gains `kind = "primary" | "quiet" | "danger"` and
-  `size = "s" | "l"`. The default stays today's button.
 - `kind = "screen"` fills the window with no chrome, one at a time, for the
   title and New colony; Esc calls the screen's `on_back` instead of closing
   it.
@@ -857,7 +874,11 @@ family = "My Serif"   # empty uses the system UI font
 ```
 
 Sections are `space`, `text`, `weight`, `shape`, `color`, `font`,
-`leading` and `tracking`. `leading` is line height over text size: `line`
+`leading` and `tracking`. Text runs `caption`, `small`, `body`, `heading`,
+`title`, `display` and `hero` (11 to 28). The engine draws the keyboard's
+focus ring from `color.focus`, `shape.focus_ring` (its width) and
+`shape.focus_gap` (how far outside); a theme without `color.focus` draws
+none. `leading` is line height over text size: `line`
 for a single line and `wrap` for text that wraps (core: 1.3 and 1.4).
 `tracking` is letter spacing in em, by name (core's `caption` is 0.06). Core
 names Inter, which it ships. A mod can ship fonts too: TrueType, OpenType

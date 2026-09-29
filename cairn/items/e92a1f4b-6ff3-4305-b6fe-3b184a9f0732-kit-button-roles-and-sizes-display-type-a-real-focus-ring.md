@@ -2,10 +2,12 @@
 id: e92a1f4b-6ff3-4305-b6fe-3b184a9f0732
 title: 'Kit: button roles and sizes, display type, a real focus ring'
 type: feature
-status: backlog
+status: doing
 milestone: rimos
+assignee: Oddur Sigurdsson
+claimed: 2026-09-28
 created: 2026-09-28
-updated: 2026-09-28
+updated: 2026-09-29
 priority: p1
 api: additive
 effort: s
@@ -27,4 +29,12 @@ area: ui
 
 - [ ] The kit gallery shows every role and size in every state
 - [ ] ui-shots before and after, in the PR; nothing existing changes look except the focus ring
-- [ ] rim_ui tests cover the four roles' tokens
+- [x] rim_ui tests cover the four roles' tokens
+
+## 2026-09-28
+
+The focus ring is the engine's, not the kit's: it has to reach every focusable (inputs, menus, any mod's control), and it shows only for keyboard focus (Tab sets it, any press clears it), so a click never leaves a ring behind. The old per-button focus border is gone with it. Hover on an active button keeps its line_strong edge, as before.
+
+## 2026-09-29
+
+PAUSED (merge freeze): done: roles, sizes, display and hero type, the engine focus ring, tests/buttons.rs, docs; every rim_ui test passes; clippy is clean. Left: rebase, scripts/task check, and the autotest, whose gallery shots (hover, press, focus ring), set beside main's, settle criteria 1 and 2. Next: that, then ready. 8cfce3bb (#397) is stacked on this branch. Branch feat/e92a1f4b-button-roles, draft PR.
