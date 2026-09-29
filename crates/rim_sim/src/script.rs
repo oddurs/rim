@@ -1158,6 +1158,11 @@ impl ScriptHost {
             (i32, i32, i32, Option<i32>),
             |w, from, (x, y, r, z)| {
                 let at = cell(w, x, y, z)?;
+                if r < 0 {
+                    return Err(mlua::Error::runtime(format!("near_cell: r is {r}; it's a distance, 0 or more")));
+                }
+                // Past any map, and short of overflowing the cell's x and y.
+                let r = r.min(1 << 20);
                 let stream = crate::rng::mod_stream(&from);
                 for _ in 0..100 {
                     let p = at.offset(w.streams.stream(&stream).range(-r, r), w.streams.stream(&stream).range(-r, r));
@@ -1718,7 +1723,7 @@ impl ScriptHost {
             (u64, u64),
             |w, (id, ticks)| {
                 let e = rim_sim_entity(id)?;
-                let t = w.tick + ticks;
+                let t = w.tick.saturating_add(ticks);
                 if let Ok(mut p) = w.ecs.get::<&mut Pawn>(e) {
                     p.leave_at = Some(t);
                 }

@@ -3,10 +3,12 @@ id: 619
 uid: 512b9f1a-55cc-4082-b945-7d7c86f2f942
 title: Script numbers overflow engine arithmetic in several bindings
 type: bug
-status: backlog
+status: done
 milestone: bare-metal
+assignee: Oddur Sigurdsson
 created: 2026-09-28
-updated: 2026-09-28
+updated: 2026-09-29
+closed_at: 2026-09-28
 priority: p3
 api: none
 layer: engine
@@ -32,5 +34,9 @@ Saturating arithmetic, or a script error for arguments out of range.
 
 ## Acceptance
 
-- [ ] None of these panics or wraps; each clamps or is a script error
-- [ ] A test that fails before the fix and passes after
+- [x] None of these panics or wraps; each clamps or is a script error
+- [x] A test that fails before the fix and passes after
+
+## 2026-09-29
+
+PAUSED at the merge freeze (main d633f7b5): fix and test done (test fails before, passes after), committed on fix/512b9f1a-script-number-overflow and rebased on origin/main before the freeze; the full gate has not run on this commit. Next: rebase onto main, run scripts/task check, mark the PR ready.
