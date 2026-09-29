@@ -2,11 +2,12 @@
 id: 38d73976-db07-4b62-8f04-6353eb661031
 title: A load at an hour or season boundary loses a standing order's start or stop news
 type: bug
-status: doing
+status: done
 milestone: bare-metal
 assignee: Oddur Sigurdsson
 created: 2026-09-28
-updated: 2026-09-28
+updated: 2026-09-29
+closed_at: 2026-09-28
 priority: p2
 api: none
 layer: engine
@@ -31,6 +32,10 @@ In tests/standing_orders.rs: hold the reading in wood_for_winter's band until th
 
 ## Acceptance
 
-- [ ] A loaded game works its rules out as the live one last did, and announces what the live one announces on the next step
-- [ ] Older saves still load
-- [ ] A test that fails before the fix and passes after
+- [x] A loaded game works its rules out as the live one last did, and announces what the live one announces on the next step
+- [x] Older saves still load
+- [x] A test that fails before the fix and passes after
+
+## 2026-09-29
+
+PAUSED at the merge freeze: the fix and its test are done, and the test was checked to fail before the fix and pass after. The full gate hasn't run yet. Next: rebase on main, run scripts/task check, and mark the PR ready. Branch fix/38d73976-rules-on-load.

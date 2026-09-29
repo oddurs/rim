@@ -125,6 +125,10 @@ pub(crate) struct WorldSection {
     /// it has none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     land_changed: Option<u64>,
+    /// The hour and season the priority rules were last worked out for
+    /// (`World::rules_clock`); a save from before this has none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    rules_clock: Option<(u32, u32)>,
 }
 
 /// Each def kind's qualified ids, in `DefId` order: the table the raw ids in
@@ -289,6 +293,7 @@ impl Snapshot {
             work_roles: w.work_roles.clone(),
             modifiers_switched: w.modifiers_switched.clone(),
             land_changed: w.land_changed,
+            rules_clock: w.rules_clock(),
         };
         let (disabled_hooks, disabled_handlers) = sim.scripts.disabled();
         let mut sections = BTreeMap::from([
@@ -1049,7 +1054,7 @@ impl Snapshot {
             })
             .collect();
         w.seed_work_roles();
-        w.update_rules();
+        w.restore_rules(ws.rules_clock);
         let sc: ScriptsSection = dec(self, "engine:scripts")?;
         w.update_shelter();
         // Hook indices only mean the same hooks under the same scripts.
