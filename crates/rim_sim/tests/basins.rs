@@ -148,3 +148,55 @@ fn water_is_saved_by_volume() {
     assert_eq!(before, after);
     assert!(Snapshot::capture(&back) == Snapshot::capture(&s), "save, load, save is the same");
 }
+
+/// Water reaches the map only every `WATER_EVERY` ticks: a game loaded
+/// between two passes has what the last one laid, and knows what was
+/// rising, as the game that kept running does.
+#[test]
+fn a_load_between_water_passes_keeps_what_the_water_did() {
+    let mut s = core();
+    s.step();
+    // A pit on the river bank, and a room dug out beside it one level down,
+    // filling from the river.
+    let pours = |s: &Sim, p: IVec| {
+        s.world.map.inb(p) && s.world.defs.terrain[s.world.map.terrain[s.world.map.idx(p)] as usize].pours > 0
+    };
+    let (bank, away) = (0..64 * 64)
+        .map(|i| IVec::new(i % 64, i / 64))
+        .filter(|&p| s.world.map.passable(p) && p.x > 8 && p.y > 8 && p.x < 55 && p.y < 55)
+        .find_map(|p| {
+            let dirs = [(1, 0), (-1, 0), (0, 1), (0, -1)];
+            let (dx, dy) = dirs.into_iter().find(|&(dx, dy)| pours(&s, p.offset(dx, dy)))?;
+            Some((p, (-dx, -dy)))
+        })
+        .expect("a river bank");
+    let air = terrain(&s, "air");
+    s.world.map.set_terrain(bank, air, 0);
+    let mut cells = vec![bank];
+    for k in 0..6 {
+        for side in -1..=1 {
+            let q = IVec::at(bank.x + away.0 * k + away.1 * side, bank.y + away.1 * k + away.0 * side, -1);
+            dig(&mut s, q);
+            cells.push(q);
+        }
+    }
+    let every = rim_sim::world::WATER_EVERY;
+    let q = cells[1];
+    // Past swimming depth, and saved between the pass that laid it on the
+    // map and the next.
+    let swimming = |s: &Sim| s.world.water_depth(q) >= 4 && s.world.tick > every && s.world.tick % every == every / 2;
+    assert!(run(&mut s, 5_000, swimming), "water past swimming, between passes");
+    let mut back = Snapshot::capture(&s).restore(&common::mods(), &|m| m == "core").unwrap();
+    for pass in 0..2 {
+        for &p in &cells {
+            let (live, loaded) = (&s.world, &back.world);
+            assert_eq!(loaded.map.cost(p), live.map.cost(p), "pass {pass}: cost at {p:?}");
+            assert_eq!(loaded.map.passable(p), live.map.passable(p), "pass {pass}: footing at {p:?}");
+            assert_eq!(loaded.water.rising(&loaded.map, p), live.water.rising(&live.map, p), "pass {pass}: rising");
+        }
+        for _ in 0..every {
+            s.step();
+            back.step();
+        }
+    }
+}

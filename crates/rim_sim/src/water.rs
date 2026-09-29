@@ -104,6 +104,22 @@ pub struct SavedBasin {
     pub volume: u64,
     pub owed: u64,
     pub wet: u32,
+    /// Its volume at the last `Water::costs`, and whether it had risen:
+    /// what the next pass and the escape from rising water read. None in
+    /// older saves.
+    #[serde(default)]
+    pub last_volume: u64,
+    #[serde(default)]
+    pub rising: bool,
+}
+
+/// What the water last put on the map (`Water::costs`), which moves only
+/// every `WATER_EVERY` ticks: each cell's step cost where it has one, and
+/// the cells of rebuilt basins still to be cleared.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct SavedCosts {
+    pub cells: Vec<(u32, u16)>,
+    pub stale: Vec<u32>,
 }
 
 /// Water broke into a basin that had none coming: where, and from what.
@@ -469,8 +485,30 @@ impl Water {
                 volume: b.volume,
                 owed: b.owed,
                 wet: b.wet(),
+                last_volume: b.last_volume,
+                rising: b.rising,
             })
             .collect()
+    }
+
+    /// What the water has on the map now, to save.
+    pub fn saved_costs(&self, map: &Map) -> SavedCosts {
+        SavedCosts { cells: map.water_costs().collect(), stale: self.stale.clone() }
+    }
+
+    /// Put back what the water had on the map, once the map has its terrain
+    /// and things: the costs before rooms and regions are worked out, and
+    /// the cells still to clear once the basins are rebuilt.
+    pub fn restore_costs(map: &mut Map, saved: &SavedCosts) {
+        let n = map.cells();
+        for &(c, cost) in saved.cells.iter().filter(|c| (c.0 as usize) < n) {
+            map.set_water(c as usize, cost);
+        }
+    }
+
+    /// The cells of basins rebuilt since the last pass, from a save.
+    pub fn restore_stale(&mut self, map: &Map, saved: &SavedCosts) {
+        self.stale = saved.stale.iter().copied().filter(|&c| (c as usize) < map.cells()).collect();
     }
 
     /// Put saved water back, into basins built from the loaded map.
@@ -486,6 +524,8 @@ impl Water {
             let b = &mut self.levels[k].basins[b as usize];
             b.volume = s.volume.min(b.capacity());
             b.owed = s.owed;
+            b.last_volume = s.last_volume;
+            b.rising = s.rising;
             b.front = b.rings.partition_point(|&r| r < s.wet) as u32 + (s.wet > 0) as u32;
             b.front = b.front.min(b.rings.len() as u32);
         }

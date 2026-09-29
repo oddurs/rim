@@ -2,11 +2,12 @@
 id: 459ce1eb-7261-4e32-b4af-55fcd9a3f9a5
 title: A load lays no water on the map until the next water pass, then every basin reads as rising
 type: bug
-status: doing
+status: done
 milestone: bare-metal
 assignee: Oddur Sigurdsson
 created: 2026-09-28
 updated: 2026-09-28
+closed_at: 2026-09-28
 priority: p1
 api: none
 layer: engine
@@ -34,6 +35,6 @@ In tests/basins.rs, from `water_is_saved_by_volume`: save at a tick with `tick %
 
 ## Acceptance
 
-- [ ] A loaded game has the live game's water cost, footing, rising and pending stale cells, at any save tick
-- [ ] Older saves without the new data still load
-- [ ] A test that fails before the fix and passes after
+- [x] A loaded game has the live game's water cost, footing, rising and pending stale cells, at any save tick
+- [x] Older saves without the new data still load
+- [x] A test that fails before the fix and passes after
