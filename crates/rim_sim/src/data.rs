@@ -183,12 +183,23 @@ impl Data {
     }
 }
 
+/// The most values one conversion makes. A table that holds the same
+/// subtable twice, thirty levels deep, is a few Luau values and a billion
+/// in data, outside the scripts' step and memory budgets.
+pub const MAX_VALUES: usize = 1 << 20;
+
 /// Convert a Luau value into data. Errors name the offending path.
 pub fn from_lua(v: &mlua::Value, path: &str, depth: u32) -> Result<Option<Data>, String> {
+    let mut left = MAX_VALUES;
+    from_lua_within(v, path, depth, &mut left)
+}
+
+fn from_lua_within(v: &mlua::Value, path: &str, depth: u32, left: &mut usize) -> Result<Option<Data>, String> {
     use mlua::Value;
     if depth > 32 {
         return Err(format!("{path}: nested too deeply (a cycle?)"));
     }
+    *left = left.checked_sub(1).ok_or_else(|| format!("{path}: more than {MAX_VALUES} values in one piece of data"))?;
     Ok(Some(match v {
         Value::Nil => return Ok(None),
         Value::Boolean(b) => Data::Bool(*b),
@@ -220,7 +231,7 @@ pub fn from_lua(v: &mlua::Value, path: &str, depth: u32) -> Result<Option<Data>,
                     Key::Int(i) => format!("{path}[{i}]"),
                     Key::Str(s) => format!("{path}.{s}"),
                 };
-                if let Some(d) = from_lua(&v, &sub, depth + 1)? {
+                if let Some(d) = from_lua_within(&v, &sub, depth + 1, left)? {
                     out.insert(key, d);
                 }
             }
