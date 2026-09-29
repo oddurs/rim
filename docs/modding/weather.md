@@ -456,9 +456,9 @@ keeps no path of its own. Its term should read its own `up` (`input =
 "my_mod:moon"`), so its light follows where it is rather than the clock. A
 body also gives its `color`, its `angular_size` in degrees (the sun's is
 0.5; a wider body casts softer shadows) and whether it casts `shadows` at
-all. The brightest bodies cast shadows, as many as the player's lighting
-preset allows (`sky_shadows`: one on low and medium, two on high, four on
-ultra); the rest light the world without. A body's share of the light is
+all. Under the `shadows` lighting the brightest body casts shadows, the
+sun by day and the moon by night; the rest light the world without, and
+under `flat`, the default, no body casts any. A body's share of the light is
 its part of the sky's, so a new moon casts nothing.
 
 ```toml

@@ -21,7 +21,7 @@
 //! the sun takes over.
 
 use crate::occluders::Occluders;
-use crate::quality::{texels_for, Setting, Watch};
+use crate::quality::{texels_for, Setting, MOVING_SHADOWS, SUN_REBUILD, SUN_STEPS, TEXELS};
 use crate::sky::{Air, Flash};
 use crate::Cam;
 use macroquad::miniquad::{BlendFactor, BlendState, BlendValue, Equation};
@@ -136,11 +136,7 @@ varying vec2 uv;
 uniform sampler2D occluders;
 uniform vec2 map;
 uniform vec2 res;
-uniform vec4 sun0;
-uniform vec4 sun1;
-uniform vec4 sun2;
-uniform vec4 sun3;
-uniform float count;
+uniform vec4 sun;
 uniform float steps;
 const float STEP = 0.4;
 const float MAX_HEIGHT = 4.0;
@@ -216,7 +212,7 @@ float march(vec2 p, vec4 here, vec4 sun) {
     if (inside) vis = 0.0;
     return vis;
 }
-// Each shadowed sky body in a channel of its own, brightest in red.
+// The brightest sky body's reach, in red.
 void main() {
     vec2 p = gl_FragCoord.xy / res * map;
     vec4 here = cell(p);
@@ -225,12 +221,7 @@ void main() {
         gl_FragColor = vec4(0.0);
         return;
     }
-    vec4 vis = vec4(0.0);
-    if (count > 0.5) vis.r = march(p, here, sun0);
-    if (count > 1.5) vis.g = march(p, here, sun1);
-    if (count > 2.5) vis.b = march(p, here, sun2);
-    if (count > 3.5) vis.a = march(p, here, sun3);
-    gl_FragColor = vis;
+    gl_FragColor = vec4(march(p, here, sun), 0.0, 0.0, 1.0);
 }";
 
 // One light-giving thing per quad, all in one draw: its centre, reach and
@@ -332,6 +323,49 @@ void main() {
 // which the linear filter softens where a floor meets its wall. Then the
 // plan's contact shadow, down and to the right of every mass, fading as the
 // sun reaches the ground there.
+/// The `flat` preset's whole lighting (3c65738f): the sim's light field as
+/// it is, the sky's share of each cell (the rooms texture) and its
+/// firelight stamps (this draw's texture, `STAMP_RANGE` light at most),
+/// bilinear between cell centres. The plan's contact shadow, which fades
+/// with daylight, is the only direction.
+const FLAT_FRAGMENT: &str = "#version 100
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
+precision mediump float;
+#endif
+varying vec2 uv;
+uniform sampler2D Texture;
+uniform sampler2D occluders;
+uniform sampler2D rooms;
+uniform vec3 sky;
+uniform vec3 night;
+uniform vec3 fire;
+uniform vec2 cell;
+uniform float day;
+uniform float exposure;
+float mass_at(vec2 p) {
+    vec4 o = texture2D(occluders, (floor(p / cell) + 0.5) * cell);
+    return step(0.99, o.b) * (1.0 - step(0.5, o.g));
+}
+float casts(vec2 p) {
+    vec4 o = texture2D(occluders, (floor(p / cell) + 0.5) * cell);
+    return (step(0.99, o.b) + 0.5 * step(0.5, o.b) * (1.0 - step(0.99, o.b))) * (1.0 - step(0.5, o.g));
+}
+void main() {
+    vec4 o = texture2D(occluders, uv);
+    vec4 r = texture2D(rooms, uv);
+    vec3 lit = sky * mix(r.g, r.r, o.g);
+    // Perceived, as the sky's is: a stamp at half strength reads brighter
+    // than half.
+    float f = texture2D(Texture, uv).r * 1.5; // STAMP_RANGE
+    vec3 c = max(night, (lit + fire * sqrt(f)) * exposure);
+    float solid = mass_at(uv);
+    float under = 0.5 * (casts(uv - cell * 0.18) + casts(uv - cell * 0.36)) * (1.0 - solid);
+    c *= 1.0 - 0.3 * under * (1.0 - day);
+    gl_FragColor = vec4(c, 1.0);
+}";
+
 const MULTIPLY_FRAGMENT: &str = "#version 100
 #ifdef GL_FRAGMENT_PRECISION_HIGH
 precision highp float;
@@ -346,11 +380,8 @@ uniform sampler2D sunlit;
 uniform sampler2D rooms;
 uniform float exposure;
 uniform vec3 ambient;
-uniform vec3 direct0;
-uniform vec3 direct1;
-uniform vec3 direct2;
-uniform vec3 direct3;
-uniform vec4 weights;
+uniform vec3 direct;
+uniform float weight;
 uniform vec3 bolt;
 uniform vec3 night;
 uniform vec3 ch0;
@@ -391,12 +422,12 @@ void main() {
     vec4 vis_in = texture2D(sunlit, (floor(uv * lres) + 0.5) / lres);
     // Each shadowed sky body in its channel, in its colour. A lightning
     // flash, while it lasts, is what red holds.
-    vec3 lit = direct0 * vis.r + direct1 * vis.g + direct2 * vis.b + direct3 * vis.a + bolt * vis.r;
-    vec3 lit_in = direct0 * vis_in.r + direct1 * vis_in.g + direct2 * vis_in.b + direct3 * vis_in.a + bolt * vis_in.r;
+    vec3 lit = (direct + bolt) * vis.r;
+    vec3 lit_in = (direct + bolt) * vis_in.r;
     vec3 outside = ambient * open + lit;
-    vec3 inside = (ambient + direct0 + direct1 + direct2 + direct3) * share + lit_in;
+    vec3 inside = (ambient + direct) * share + lit_in;
     // How much of the direct light reaches here, for the contact shadow.
-    float sun = dot(vis, weights);
+    float sun = vis.r * weight;
     // The baked firelight, and what the bake hasn't caught up with yet.
     vec4 f = (texture2D(Texture, uv) + texture2D(moving, uv)) / scale;
     vec3 fire = f.r * ch0 + f.g * ch1 + f.b * ch2 + f.a * ch3;
@@ -496,93 +527,6 @@ impl Drop for GpuTimer {
     }
 }
 
-/// Frames a lighting time is read back after: by then the GPU has long run
-/// them, so reading never waits.
-const COST_FRAMES: usize = 4;
-
-/// What `auto` reads: the lighting's GPU time a frame, from timer queries
-/// read back `COST_FRAMES` later. A frame has two: the passes before the
-/// world is drawn, and the multiply after it.
-struct CostTimer {
-    ids: [[u32; 2]; COST_FRAMES],
-    /// Per frame in flight: which of its queries ran, and what it was timed
-    /// under (`Light::cost_tag`).
-    ran: [([bool; 2], (usize, u32)); COST_FRAMES],
-    /// The frame being timed, whether this one is, and the query open in it.
-    at: usize,
-    timing: bool,
-    open: bool,
-}
-
-impl CostTimer {
-    fn new() -> Option<CostTimer> {
-        if !gl_times_a_pass() {
-            return None;
-        }
-        let mut ids = [[0; 2]; COST_FRAMES];
-        // SAFETY: desktop GL 3.3 has query objects; on the render thread.
-        unsafe { miniquad::gl::glGenQueries((2 * COST_FRAMES) as i32, ids.as_mut_ptr().cast()) };
-        let ran = [([false; 2], (0, 0)); COST_FRAMES];
-        let t = CostTimer { ids, ran, at: 0, timing: false, open: false };
-        ids.iter().flatten().all(|&id| id != 0).then_some(t)
-    }
-
-    /// Start a frame, timed under `tag`, in the oldest frame's queries: what
-    /// that frame was timed under and its GPU time, µs, if both its queries
-    /// ran. A GPU still running it holds its queries, and this frame goes
-    /// untimed rather than restart one the GPU hasn't finished.
-    fn frame(&mut self, tag: (usize, u32)) -> Option<((usize, u32), f64)> {
-        use miniquad::gl::*;
-        let next = (self.at + 1) % COST_FRAMES;
-        let (ran, was) = self.ran[next];
-        let mut ns = [0 as GLuint64; 2];
-        for ((&id, ns), _) in self.ids[next].iter().zip(&mut ns).zip(ran).filter(|(_, r)| *r) {
-            let mut ready: GLint = 0;
-            // SAFETY: a query that has ended; asking whether it's ready, and
-            // reading it once it is, doesn't wait.
-            unsafe {
-                glGetQueryObjectiv(id, GL_QUERY_RESULT_AVAILABLE, &mut ready);
-                if ready == 0 {
-                    self.timing = false;
-                    return None;
-                }
-                glGetQueryObjectui64v(id, GL_QUERY_RESULT, ns);
-            }
-        }
-        (self.at, self.timing) = (next, true);
-        self.ran[next] = ([false; 2], tag);
-        (ran == [true; 2]).then(|| (was, (ns[0] + ns[1]) as f64 / 1e3))
-    }
-
-    /// Time query `k` of this frame, until `end`.
-    fn begin(&mut self, k: usize) {
-        if !self.timing {
-            return;
-        }
-        flush_batches();
-        // SAFETY: a query `new` made whose last result has been read, and
-        // none other running: `end` closes each.
-        unsafe { miniquad::gl::glBeginQuery(miniquad::gl::GL_TIME_ELAPSED, self.ids[self.at][k]) };
-        self.ran[self.at].0[k] = true;
-        self.open = true;
-    }
-
-    fn end(&mut self) {
-        if std::mem::take(&mut self.open) {
-            flush_batches();
-            // SAFETY: ends the query `begin` started, without waiting for it.
-            unsafe { miniquad::gl::glEndQuery(miniquad::gl::GL_TIME_ELAPSED) };
-        }
-    }
-}
-
-impl Drop for CostTimer {
-    fn drop(&mut self) {
-        // SAFETY: the queries `new` made, deleted once.
-        unsafe { miniquad::gl::glDeleteQueries((2 * COST_FRAMES) as i32, self.ids.as_ptr().cast()) };
-    }
-}
-
 /// Whether this context's GL can time one pass.
 fn gl_times_a_pass() -> bool {
     times_a_pass(&gl_string(miniquad::gl::GL_VERSION), &gl_renderer())
@@ -643,16 +587,20 @@ pub const PINNED: usize = usize::MAX;
 /// plan's contact shadow wholly: daylight does, moonlight barely.
 const CONTACT_LIGHT: f32 = 10.0;
 
+/// The most firelight the `flat` stamps hold, in the light field's units
+/// over 100: brighter stamps clip.
+const STAMP_RANGE: f32 = 1.5;
+
 /// Under this, in its field's units, a sky body gives no light.
 const DARK_BODY: f64 = 0.01;
 
-/// Which bodies cast shadows: those that may, above the horizon, brightest
-/// straight light first, `cap` at most. The rest light without.
-fn shadow_slots(bodies: &[Body], cloud: f32, cap: usize) -> Vec<usize> {
+/// Which body casts shadows: of those that may, above the horizon, the one
+/// with the brightest straight light. The sun by day, the moon by night;
+/// the rest light without.
+fn shadow_body(bodies: &[Body], cloud: f32) -> Option<usize> {
     // Clear of the horizon, or its shadows round to none.
-    let mut up: Vec<&Body> = bodies.iter().filter(|b| b.shadows && b.at.1 > 0.5 && b.direct(cloud) > 1e-3).collect();
-    up.sort_by(|a, b| b.direct(cloud).total_cmp(&a.direct(cloud)).then(a.id.cmp(&b.id)));
-    up.into_iter().take(cap.min(4)).map(|b| b.id).collect()
+    let up = bodies.iter().filter(|b| b.shadows && b.at.1 > 0.5 && b.direct(cloud) > 1e-3);
+    up.min_by(|a, b| b.direct(cloud).total_cmp(&a.direct(cloud)).then(a.id.cmp(&b.id))).map(|b| b.id)
 }
 
 /// How much of the sky's light comes straight from the sun: none below the
@@ -704,6 +652,7 @@ enum Pass {
     Bake = 1,
     Multiply = 2,
     Clear = 3,
+    Flat = 4,
 }
 
 /// A light-giving thing, as the bake draws it.
@@ -1074,6 +1023,10 @@ struct Level {
     /// The field revision, occluders and size last looked at, so a frame
     /// in which nothing changed doesn't even list the lights.
     fires_seen: Option<(u64, u64, u64)>,
+    /// Under `flat`: the sim's firelight stamps, one texel a cell, and the
+    /// fields' revision they are of.
+    stamps: Option<Texture2D>,
+    stamps_seen: Option<u64>,
     /// The lights `fires` was baked from.
     baked: Vec<Lamp>,
     /// The lights the field has now. The bake catches up with them at most
@@ -1113,14 +1066,13 @@ struct Level {
     any_sky: bool,
     /// The open sky each cell sees (`open_sky`), for the eye to adapt to.
     sky: Vec<f32>,
-    /// Where each shadowed sky body reaches, a channel each, brightest in
-    /// R, `texels` per cell.
+    /// Where the shadowed sky body reaches, in R, `texels` per cell.
     sunlit: Option<RenderTarget>,
     /// Whether it was a flash, each channel's body as it was marched, and
     /// which bodies they are.
-    sun_key: Option<(bool, Vec<SunKey>, Vec<usize>)>,
-    /// The bodies in `sunlit`'s channels, by `Body::id`.
-    slots: Vec<usize>,
+    sun_key: Option<(bool, Option<SunKey>, Option<usize>)>,
+    /// The body `sunlit` holds the reach of, by `Body::id`.
+    slot: Option<usize>,
     /// `sunlit` holds a lightning flash's shadows, not the sun's.
     bolt: bool,
 }
@@ -1139,11 +1091,11 @@ pub struct Light {
     dt: f32,
     /// Times firelight has been baked, whole or in part.
     pub bakes: u64,
-    materials: [Option<Material>; 4],
+    materials: [Option<Material>; 5],
     /// Which shaders failed to build, by pass: without the sun's, the world
     /// is lit without sun shadows; without the bake, without firelight;
     /// without the multiply, unlit.
-    failed: [bool; 4],
+    failed: [bool; 5],
     /// Nothing, for a pass that couldn't run: no sun, no fire.
     blank: Option<Texture2D>,
     /// The player's lighting setting.
@@ -1163,13 +1115,6 @@ pub struct Light {
     /// Time each pass on the GPU with a timer query (`time_gpu`).
     gpu_timing: bool,
     query: Timer<GpuTimer>,
-    /// What `auto` times the lighting with, and what it has seen: the
-    /// frames it has read, and which setting (a count of `set`s) they are
-    /// for.
-    cost: Timer<CostTimer>,
-    watch: Watch,
-    pub cost_frames: u64,
-    chosen: u32,
     /// The level in view, and what the light keeps for it.
     z: i32,
     lv: Level,
@@ -1209,12 +1154,10 @@ impl Light {
     ) {
         self.passes.clear();
         (self.lit, self.sky_light) = self.bodies(w, air.light);
-        self.cost_frame();
-        self.cost_begin(0);
         self.view(z);
         // Zooming out drops texels, so the light never costs more than the
         // pixels it covers; a new size rebuilds every target.
-        self.texels = texels_for(self.setting.quality.texels, px_per_cell, self.texels.max(1));
+        self.texels = texels_for(TEXELS, px_per_cell, self.texels.max(1));
         let t = self.pass_begin();
         // Roofs are the surface's; below and above it, a roof is its level's.
         let roofs = if z == 0 { roofs } else { &[] };
@@ -1222,6 +1165,13 @@ impl Light {
         let rooms = self.update_rooms(w);
         // Uploads, not draws.
         self.pass_end("occluders", t, changed || rooms, 0);
+        if self.setting.flat() {
+            // The sim's light as it is: no bake, no marches, no sun.
+            let t = self.pass_begin();
+            let ran = self.update_stamps(w);
+            self.pass_end("stamps", t, ran, 0);
+            return;
+        }
         let t = self.pass_begin();
         let baked = self.bake_fires(w, self.now);
         let draws = if baked { self.lv.draws } else { 0 };
@@ -1232,7 +1182,6 @@ impl Light {
         let t = self.pass_begin();
         let ran = self.update_sun(w, air, flash);
         self.pass_end("sun", t, ran, ran as u32);
-        self.cost_end();
     }
 
     /// The open sky over the cells in view, on average: how much of the
@@ -1274,11 +1223,10 @@ impl Light {
 
     /// Multiply the world by the light. Call after everything lit is drawn.
     pub fn multiply(&mut self, w: &World, cam: &Cam, air: &Air, flash: Flash) {
-        self.cost_begin(1);
         let t = self.pass_begin();
-        let drew = self.draw_multiply(w, cam, air, flash);
+        let drew =
+            if self.setting.flat() { self.draw_flat(w, cam, flash) } else { self.draw_multiply(w, cam, air, flash) };
         self.pass_end("multiply", t, drew, drew as u32);
-        self.cost_end();
     }
 
     /// Forget every cached result, so the next frame rebuilds them all: what
@@ -1308,10 +1256,10 @@ impl Light {
         Some((open, self.sun_visibility(x, y)?))
     }
 
-    /// The sky bodies casting shadows now, brightest first, by `Body::id`:
-    /// an index into the sky's bodies, or `PINNED`.
+    /// The sky body casting shadows now, if one is, by `Body::id`: an index
+    /// into the sky's bodies, or `PINNED`.
     pub fn shadow_bodies(&self) -> &[usize] {
-        &self.lv.slots
+        self.lv.slot.as_slice()
     }
 
     /// Whether the sun target holds a lightning flash's shadows now.
@@ -1446,11 +1394,7 @@ impl Light {
                     vec![
                         UniformDesc::new("map", UniformType::Float2),
                         UniformDesc::new("res", UniformType::Float2),
-                        UniformDesc::new("sun0", UniformType::Float4),
-                        UniformDesc::new("sun1", UniformType::Float4),
-                        UniformDesc::new("sun2", UniformType::Float4),
-                        UniformDesc::new("sun3", UniformType::Float4),
-                        UniformDesc::new("count", UniformType::Float1),
+                        UniformDesc::new("sun", UniformType::Float4),
                         UniformDesc::new("steps", UniformType::Float1),
                     ],
                     vec!["occluders".to_string()],
@@ -1483,11 +1427,8 @@ impl Light {
                     MULTIPLY_FRAGMENT,
                     vec![
                         UniformDesc::new("ambient", UniformType::Float3),
-                        UniformDesc::new("direct0", UniformType::Float3),
-                        UniformDesc::new("direct1", UniformType::Float3),
-                        UniformDesc::new("direct2", UniformType::Float3),
-                        UniformDesc::new("direct3", UniformType::Float3),
-                        UniformDesc::new("weights", UniformType::Float4),
+                        UniformDesc::new("direct", UniformType::Float3),
+                        UniformDesc::new("weight", UniformType::Float1),
                         UniformDesc::new("bolt", UniformType::Float3),
                         UniformDesc::new("night", UniformType::Float3),
                         UniformDesc::new("ch0", UniformType::Float3),
@@ -1511,6 +1452,27 @@ impl Light {
                         ..Default::default()
                     },
                 ),
+                Pass::Flat => (
+                    VERTEX,
+                    FLAT_FRAGMENT,
+                    vec![
+                        UniformDesc::new("sky", UniformType::Float3),
+                        UniformDesc::new("night", UniformType::Float3),
+                        UniformDesc::new("fire", UniformType::Float3),
+                        UniformDesc::new("cell", UniformType::Float2),
+                        UniformDesc::new("day", UniformType::Float1),
+                        UniformDesc::new("exposure", UniformType::Float1),
+                    ],
+                    vec!["occluders".to_string(), "rooms".to_string()],
+                    PipelineParams {
+                        color_blend: Some(BlendState::new(
+                            Equation::Add,
+                            BlendFactor::Value(BlendValue::DestinationColor),
+                            BlendFactor::Zero,
+                        )),
+                        ..Default::default()
+                    },
+                ),
             };
             let m = load_material(
                 ShaderSource::Glsl { vertex, fragment },
@@ -1524,6 +1486,7 @@ impl Light {
                         Pass::Bake => "without firelight",
                         Pass::Multiply => "unlit",
                         Pass::Clear => "with firelight rebaked whole",
+                        Pass::Flat => "unlit",
                     };
                     eprintln!("lighting shader failed, drawing {without}: {e}");
                     self.failed[pass as usize] = true;
@@ -1677,7 +1640,7 @@ impl Light {
         // Lights waiting for the bake are still: they cast shadows, as the
         // bake will give them, for the second at most they wait. Moving ones
         // share the preset's cap.
-        let cap = self.setting.quality.moving_shadows as usize;
+        let cap = MOVING_SHADOWS;
         let moving = cap_shadows(&self.carried, centre, cap);
         let lights: Vec<Lamp> = waiting.iter().chain(&moving).copied().collect();
         let (tw, th) = size;
@@ -1789,7 +1752,6 @@ impl Light {
     fn update_sun(&mut self, w: &World, air: &Air, flash: Flash) -> bool {
         let Some(occ) = self.lv.occluders.texture.clone() else { return false };
         let size = (w.map.w as u32 * self.texels, w.map.h as u32 * self.texels);
-        let q = self.setting.quality;
         // A flash is a light of its own for its few frames: one key while it
         // lasts, hard-edged, from where the bolt is.
         // Below the surface no flash reaches either.
@@ -1797,19 +1759,22 @@ impl Light {
         // Below the surface the occluders stand as tall as the levels above:
         // the sun reaches only down a shaft, inside its cone.
         let (version, cloud) = (self.lv.occluders.version, air.cloud);
-        let key_of = |at, soft| SunKey::new(Some(at), soft, version, q.sun_rebuild, q.sun_steps);
-        let (keys, slots) = if !self.lv.any_sky {
-            (Vec::new(), Vec::new())
+        let key_of = |at, soft| SunKey::new(Some(at), soft, version, SUN_REBUILD, SUN_STEPS);
+        let key = if !self.lv.any_sky {
+            (bolt, None, None)
         } else if bolt {
-            (vec![key_of((flash.azimuth as f64, FLASH_ELEVATION), 0.0)], Vec::new())
+            (bolt, Some(key_of((flash.azimuth as f64, FLASH_ELEVATION), 0.0)), None)
         } else {
             // Cloud softens the shadows; a wider body, more (below).
-            let slots = shadow_slots(&self.lit, cloud, q.sky_shadows as usize);
-            let soft = if q.soft { penumbra(cloud) } else { 0.0 };
-            let at = |id| self.lit.iter().find(|b| b.id == id).map_or((0.0, -1.0), |b| b.at);
-            (slots.iter().map(|&id| key_of(at(id), soft)).collect(), slots)
+            let slot = shadow_body(&self.lit, cloud);
+            (
+                bolt,
+                slot.and_then(|id| self.lit.iter().find(|b| b.id == id)).map(|b| key_of(b.at, penumbra(cloud))),
+                slot,
+            )
         };
-        let key = (bolt, keys, slots);
+        // How much wider than the sun the shadowed body looks.
+        let wide = key.2.and_then(|id| self.lit.iter().find(|b| b.id == id)).map_or(1.0, |b| b.size);
         let fits =
             self.lv.sunlit.as_ref().is_some_and(|t| (t.texture.width() as u32, t.texture.height() as u32) == size);
         if fits && self.lv.sun_key.as_ref() == Some(&key) {
@@ -1821,19 +1786,15 @@ impl Light {
             rt.texture.set_filter(FilterMode::Linear);
             self.lv.sunlit = Some(rt);
         }
-        // The keys' quantised bodies, so the result is exactly the key's.
-        let wide = |k: usize| key.2.get(k).and_then(|&id| self.lit.iter().find(|b| b.id == id)).map_or(1.0, |b| b.size);
-        for (k, name) in ["sun0", "sun1", "sun2", "sun3"].into_iter().enumerate() {
-            m.set_uniform(name, key.1.get(k).map_or(Vec4::ZERO, |s| s.toward().extend(s.soft() * wide(k))));
-        }
-        m.set_uniform("count", key.1.len() as f32);
-        (self.lv.slots, self.lv.bolt) = (key.2.clone(), bolt);
+        // The key's quantised body, so the result is exactly the key's.
+        m.set_uniform("sun", key.1.map_or(Vec4::ZERO, |s| s.toward().extend(s.soft() * wide)));
+        (self.lv.slot, self.lv.bolt) = (key.2, bolt);
         self.lv.sun_key = Some(key);
         let (tw, th) = (size.0 as f32, size.1 as f32);
         m.set_texture("occluders", occ);
         m.set_uniform("map", vec2(w.map.w as f32, w.map.h as f32));
         m.set_uniform("res", vec2(tw, th));
-        m.set_uniform("steps", q.sun_steps as f32);
+        m.set_uniform("steps", SUN_STEPS as f32);
         set_camera(&Camera2D {
             zoom: vec2(2.0 / tw, 2.0 / th),
             target: vec2(tw / 2.0, th / 2.0),
@@ -1854,35 +1815,31 @@ impl Light {
     pub fn outdoor(&self, w: &World, air: &Air, flash: Flash) -> Vec3 {
         let (lit, bolt) = self.flash_light(flash);
         let (ambient, direct, _) = self.split(self.sky_color(w, lit), air);
-        let sky = ambient + direct.iter().sum::<Vec3>();
+        let sky = ambient + direct;
         ((sky + bolt) * self.exposure.max(1.0)).max(rgb3(w.defs.sky.rgb_night))
     }
 
-    /// The sky's light `sky` by where it lands. Each shadowed body's
-    /// straight light goes through its channel, in its colour; a body
-    /// without one lights where the sky does, in its colour; the rest is
-    /// the sky's own. While `sunlit` holds a flash's shadows no body has
-    /// any: their light is the sky's for those few frames. Below the
-    /// surface, with no shaft, straight light lands nowhere. Last, how much
-    /// each channel's reach clears the plan's contact shadow: as much as its
-    /// light is the day's, so a moon leaves the night's convention be.
-    fn split(&self, sky: Vec3, air: &Air) -> (Vec3, [Vec3; 4], [f32; 4]) {
-        let (mut ambient, mut direct, mut weights) = (sky, [Vec3::ZERO; 4], [0.0f32; 4]);
+    /// The sky's light `sky` by where it lands. The shadowed body's
+    /// straight light goes through `sunlit`, in its colour; a body without
+    /// shadows lights where the sky does, in its colour; the rest is the
+    /// sky's own. While `sunlit` holds a flash's shadows no body has any:
+    /// their light is the sky's for those few frames. Below the surface,
+    /// with no shaft, straight light lands nowhere. Last, how much the
+    /// shadowed body's reach clears the plan's contact shadow: as much as
+    /// its light is the day's, so a moon leaves the night's convention be.
+    fn split(&self, sky: Vec3, air: &Air) -> (Vec3, Vec3, f32) {
+        let (mut ambient, mut direct, mut weight) = (sky, Vec3::ZERO, 0.0f32);
         let daylike = (self.sky_light / CONTACT_LIGHT).clamp(0.0, 1.0);
         for b in &self.lit {
             let d = if self.lv.bolt { 0.0 } else { b.direct(air.cloud) };
             ambient -= sky * d;
-            match self.lv.slots.iter().position(|&i| i == b.id) {
-                Some(k) => (direct[k], weights[k]) = (sky * d * b.rgb, d / DIRECT * daylike),
-                None if self.lv.any_sky => ambient += sky * d * b.rgb,
-                None => {}
+            match self.lv.slot == Some(b.id) {
+                true => (direct, weight) = (sky * d * b.rgb, (d / DIRECT * daylike).min(1.0)),
+                false if self.lv.any_sky => ambient += sky * d * b.rgb,
+                false => {}
             }
         }
-        if self.lv.bolt {
-            weights[0] = 1.0;
-        }
-        let sum: f32 = weights.iter().sum();
-        (ambient.max(Vec3::ZERO), direct, if sum > 1.0 { weights.map(|x| x / sum) } else { weights })
+        (ambient.max(Vec3::ZERO), direct, if self.lv.bolt { 1.0 } else { weight })
     }
 
     /// A flash's light: how much it brightens the sky everywhere, and the
@@ -1928,6 +1885,87 @@ impl Light {
 
     /// Draw the light over the world with multiply blending. Whether it
     /// drew: without the shader the world stays unlit.
+    /// The eye adapts to the sky the view holds: on the surface all of it,
+    /// below it what comes down the shafts in view. About a second to
+    /// settle, by the clock, and no more than a 30th of a second's worth in
+    /// one frame, so a stalled frame doesn't jump.
+    fn adapt(&mut self, w: &World, cam: &Cam, sky: Vec3) {
+        let seen = if self.z < 0 { self.view_sky(w, cam) } else { 1.0 };
+        let target = exposure_for(sky * seen);
+        self.exposure = if self.exposure > 0.0 {
+            self.exposure + (target - self.exposure) * (1.0 - (-1.6 * self.dt.min(1.0 / 30.0)).exp())
+        } else {
+            target
+        };
+    }
+
+    /// Under `flat`, the sim's firelight stamps for the level in view, one
+    /// texel a cell, if they changed. Whether they did.
+    fn update_stamps(&mut self, w: &World) -> bool {
+        let m = &w.map;
+        let seen = w.fields.revision ^ (m.room_rebuilds << 32);
+        let fits = self.lv.stamps.as_ref().is_some_and(|t| t.width() as i32 == m.w && t.height() as i32 == m.h);
+        if fits && self.lv.stamps_seen == Some(seen) {
+            return false;
+        }
+        let Some(light) = w.defs.lookup("field", "light").map(|f| f as usize) else { return false };
+        let stamped = &w.fields.layers[light].stamped;
+        let mut bytes = vec![0u8; (m.w * m.h * 4) as usize];
+        for i in 0..(m.w * m.h) as usize {
+            let p = m.pos(i);
+            // Hundredths of the light field's units, to STAMP_RANGE at most.
+            let v = stamped.get(m.idx(rim_sim::IVec::at(p.x, p.y, self.z))).copied().unwrap_or(0);
+            bytes[i * 4] = ((v as f32 / (100.0 * STAMP_RANGE)).clamp(0.0, 1.0) * 255.0).round() as u8;
+            bytes[i * 4 + 3] = 255;
+        }
+        let img = Image { bytes, width: m.w as u16, height: m.h as u16 };
+        match &self.lv.stamps {
+            Some(t) if fits => t.update(&img),
+            _ => {
+                let t = Texture2D::from_image(&img);
+                t.set_filter(FilterMode::Linear);
+                self.lv.stamps = Some(t);
+            }
+        }
+        self.lv.stamps_seen = Some(seen);
+        true
+    }
+
+    /// Under `flat`, light the world by the sim's light field alone. Whether
+    /// it drew.
+    fn draw_flat(&mut self, w: &World, cam: &Cam, flash: Flash) -> bool {
+        let (Some(occ), Some(stamps)) = (self.lv.occluders.texture.clone(), self.lv.stamps.clone()) else {
+            return false;
+        };
+        let blank = self.blank.get_or_insert_with(|| Texture2D::from_rgba8(1, 1, &[0, 0, 0, 0])).clone();
+        let rooms = self.lv.rooms.clone().unwrap_or(blank);
+        let Some(m) = self.material(Pass::Flat) else { return false };
+        // A flash lights everything evenly: there is no pass to shadow it.
+        let sky = self.sky_color(w, flash.strength);
+        self.adapt(w, cam, sky);
+        let def = &w.defs.sky;
+        let (mw, mh) = (w.map.w as f32, w.map.h as f32);
+        m.set_texture("occluders", occ);
+        m.set_texture("rooms", rooms);
+        m.set_uniform("sky", sky);
+        m.set_uniform("night", rgb3(def.rgb_night) * if self.z < 0 { UNDERGROUND } else { 1.0 });
+        m.set_uniform("fire", channel_colour(rgb3(def.rgb_fire) * 1.2, 0, self.now));
+        m.set_uniform("cell", vec2(1.0 / mw, 1.0 / mh));
+        m.set_uniform("day", (self.sky_light / 100.0).clamp(0.0, 1.0));
+        m.set_uniform("exposure", self.exposure);
+        gl_use_material(&m);
+        let (sx, sy) = cam.to_screen(0.0, 0.0);
+        draw_texture_ex(
+            &stamps,
+            sx,
+            sy,
+            WHITE,
+            DrawTextureParams { dest_size: Some(vec2(mw * cam.zoom, mh * cam.zoom)), ..Default::default() },
+        );
+        gl_use_default_material();
+        true
+    }
+
     fn draw_multiply(&mut self, w: &World, cam: &Cam, air: &Air, flash: Flash) -> bool {
         let Some(occ) = self.lv.occluders.texture.clone() else { return false };
         // Without the sun pass the sun reaches nowhere; without the bake,
@@ -1948,7 +1986,7 @@ impl Light {
         // open sky), and night there is darker than night outside.
         let under = self.z < 0;
         let (sky, bolt) = (self.sky_color(w, lit), if under { Vec3::ZERO } else { bolt });
-        let (ambient, direct, weights) = self.split(sky, air);
+        let (ambient, direct, weight) = self.split(sky, air);
         let def = &w.defs.sky;
         let (mw, mh) = (w.map.w as f32, w.map.h as f32);
         m.set_texture("occluders", occ);
@@ -1957,21 +1995,11 @@ impl Light {
         m.set_texture("moving", moving);
         // The eye adapts to the sky the view holds: on the surface all of
         // it, below it what comes down the shafts in view.
-        let seen = if under { self.view_sky(w, cam) } else { 1.0 };
-        let target = exposure_for(sky * seen);
-        // About a second to settle, by the clock, and no more than a 30th of
-        // a second's worth in one frame, so a stalled frame doesn't jump.
-        self.exposure = if self.exposure > 0.0 {
-            self.exposure + (target - self.exposure) * (1.0 - (-1.6 * self.dt.min(1.0 / 30.0)).exp())
-        } else {
-            target
-        };
+        self.adapt(w, cam, sky);
         m.set_uniform("exposure", self.exposure);
         m.set_uniform("ambient", ambient);
-        for (k, name) in ["direct0", "direct1", "direct2", "direct3"].into_iter().enumerate() {
-            m.set_uniform(name, direct[k]);
-        }
-        m.set_uniform("weights", Vec4::from_array(weights));
+        m.set_uniform("direct", direct);
+        m.set_uniform("weight", weight);
         m.set_uniform("bolt", bolt);
         m.set_uniform("night", rgb3(def.rgb_night) * if under { UNDERGROUND } else { 1.0 });
         let fire = rgb3(def.rgb_fire) * 1.2;
@@ -2002,21 +2030,9 @@ impl Light {
         &self.setting
     }
 
-    /// The player chose a setting: under `auto`, it watches afresh, and
-    /// frames timed before are let go.
+    /// The player chose a setting.
     pub fn set(&mut self, setting: Setting) {
         self.setting = setting;
-        self.watch = Watch::default();
-        self.chosen = self.chosen.wrapping_add(1);
-    }
-
-    /// Whether `auto` can time the lighting here: None until GL has said.
-    pub fn can_time_cost(&self) -> Option<bool> {
-        match self.cost {
-            Timer::Untried => None,
-            Timer::Unavailable => Some(false),
-            Timer::Ready(_) => Some(true),
-        }
     }
 
     /// Time each pass on the GPU. Only the render bench does: reading a
@@ -2036,64 +2052,6 @@ impl Light {
         match &mut self.query {
             Timer::Ready(t) => Some(t),
             _ => None,
-        }
-    }
-
-    /// The timer `auto` reads, while it has a preset to step down to. Not
-    /// while the bench times each pass: queries don't nest.
-    fn cost(&mut self) -> Option<&mut CostTimer> {
-        if !self.setting.auto || self.setting.preset == 0 || self.gpu_timing {
-            return None;
-        }
-        // GL names itself once it has a context; until then, ask again later.
-        if matches!(self.cost, Timer::Untried) && !gl_renderer().is_empty() {
-            self.cost = CostTimer::new().map_or_else(
-                || {
-                    // Apple's GPU draws a frame in tiles, all passes at once,
-                    // so there is nothing to read the lighting's share from.
-                    eprintln!(
-                        "rim: lighting auto: {} can't time the lighting on its own, so it stays at {}",
-                        gl_renderer(),
-                        self.setting.name()
-                    );
-                    Timer::Unavailable
-                },
-                Timer::Ready,
-            );
-        }
-        match &mut self.cost {
-            Timer::Ready(c) => Some(c),
-            _ => None,
-        }
-    }
-
-    /// Under `auto`, a new frame: judge the one timed `COST_FRAMES` ago.
-    fn cost_frame(&mut self) {
-        let tag = (self.setting.preset, self.chosen);
-        let Some(timed) = self.cost().map(|c| c.frame(tag)) else { return };
-        // A frame from before the player last chose is no longer theirs.
-        let Some(((preset, _), us)) = timed.filter(|((_, c), _)| *c == tag.1) else { return };
-        self.cost_frames += 1;
-        if let Some(mean) = self.setting.watch(&mut self.watch, self.now, preset, us) {
-            eprintln!(
-                "rim: lighting auto: {:.1} ms a frame on the GPU, over {:.1}; down to {}",
-                mean / 1e3,
-                crate::quality::AUTO_BUDGET_US / 1e3,
-                self.setting.name()
-            );
-        }
-    }
-
-    fn cost_begin(&mut self, k: usize) {
-        if let Some(c) = self.cost() {
-            c.begin(k);
-        }
-    }
-
-    /// Close the query `cost_begin` opened, whatever changed since.
-    fn cost_end(&mut self) {
-        if let Timer::Ready(c) = &mut self.cost {
-            c.end();
         }
     }
 
@@ -2133,10 +2091,10 @@ mod tests {
         (sim, bodies, light, picture)
     }
 
-    /// Which of core's bodies cast shadows at `hours`, with `cap` slots.
-    fn shadows_at(hours: f64, cap: usize) -> Vec<String> {
+    /// Which of core's bodies casts shadows at `hours`.
+    fn shadows_at(hours: f64) -> Option<String> {
         let (sim, bodies, ..) = core_at(hours);
-        shadow_slots(&bodies, 0.0, cap).iter().map(|&i| sim.world.defs.sky_bodies[i].id.clone()).collect()
+        shadow_body(&bodies, 0.0).map(|i| sim.world.defs.sky_bodies[i].id.clone())
     }
 
     #[test]
@@ -2151,10 +2109,9 @@ mod tests {
     }
 
     #[test]
-    fn with_one_shadow_slot_the_sun_casts_by_day_and_the_moon_by_night() {
-        assert_eq!(shadows_at(6.0, 1), ["core:sun"], "noon");
-        assert_eq!(shadows_at(18.0, 1), ["core:moon"], "midnight, under a full moon");
-        assert_eq!(shadows_at(18.0, 4), ["core:moon"], "the sun is down, however many slots");
+    fn the_sun_casts_by_day_and_the_moon_by_night() {
+        assert_eq!(shadows_at(6.0).as_deref(), Some("core:sun"), "noon");
+        assert_eq!(shadows_at(18.0).as_deref(), Some("core:moon"), "midnight, under a full moon");
     }
 
     #[test]
@@ -2163,20 +2120,19 @@ mod tests {
         let (sim, ..) = core_at(198.0);
         let up: Vec<bool> = sim.world.sky_body_states().iter().map(|s| s.up > 0.5).collect();
         assert!(up.iter().all(|&u| u), "both are up: {up:?}");
-        assert_eq!(shadows_at(198.0, 4), ["core:sun"]);
+        assert_eq!(shadows_at(198.0).as_deref(), Some("core:sun"));
     }
 
     #[test]
-    fn the_brightest_straight_light_gets_the_slots_and_only_bodies_that_may() {
+    fn the_brightest_straight_light_casts_and_only_a_body_that_may() {
         let body =
             |id, elev: f64, share, shadows| Body { id, at: (90.0, elev), share, rgb: Vec3::ONE, size: 1.0, shadows };
         let sky =
             [body(0, 50.0, 0.2, true), body(1, 50.0, 0.7, true), body(2, 50.0, 0.9, false), body(3, -5.0, 1.0, true)];
-        assert_eq!(shadow_slots(&sky, 0.0, 4), [1, 0], "brightest first; none that may not, nor below the horizon");
-        assert_eq!(shadow_slots(&sky, 0.0, 1), [1]);
-        assert!(shadow_slots(&sky, 0.0, 0).is_empty());
+        assert_eq!(shadow_body(&sky, 0.0), Some(1), "the brightest that may, above the horizon");
+        assert_eq!(shadow_body(&sky[2..], 0.0), None, "none that may not, nor below the horizon");
         let low = [body(0, 2.0, 0.9, true), body(1, 60.0, 0.5, true)];
-        assert_eq!(shadow_slots(&low, 0.0, 1), [1], "a body near the horizon gives less straight light");
+        assert_eq!(shadow_body(&low, 0.0), Some(1), "a body near the horizon gives less straight light");
     }
 
     #[test]

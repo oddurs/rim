@@ -123,22 +123,6 @@ pub(crate) fn save_setting(path: &std::path::Path, key: &str, value: toml::Value
     .map(|_| ())
 }
 
-/// Save the lighting preset as `[lighting] quality`, keeping whatever else
-/// the player set by hand there. The file's new text.
-pub(crate) fn save_lighting(path: &std::path::Path, preset: &str) -> Result<String, String> {
-    edit_settings(path, |t| {
-        let quality = toml::Value::String(preset.to_string());
-        match t.get_mut("lighting").and_then(|l| l.as_table_mut()) {
-            Some(l) => {
-                l.insert("quality".to_string(), quality);
-            }
-            None => {
-                t.insert("lighting".to_string(), toml::Table::from_iter([("quality".to_string(), quality)]).into());
-            }
-        }
-    })
-}
-
 /// Change the player's settings file with `edit`, keeping everything else
 /// in it, and write it whole or not at all. The file's new text.
 pub(crate) fn edit_settings(path: &std::path::Path, edit: impl FnOnce(&mut toml::Table)) -> Result<String, String> {
@@ -213,22 +197,6 @@ mod tests {
         let text = std::fs::read_to_string(&p).unwrap();
         assert!(text.contains("vsync = true") && text.contains("render_scale = 0.5"), "{text}");
         assert_eq!(saved_render_scale(&text), Ok(Some(0.5)));
-        let _ = std::fs::remove_file(&p);
-    }
-
-    #[test]
-    fn a_lighting_preset_is_saved_and_the_players_own_settings_stay() {
-        let p = std::env::temp_dir().join(format!("rim-lighting-{}.toml", std::process::id()));
-        std::fs::write(&p, "vsync = true\n\n[lighting]\nquality = \"low\"\nsun_steps = 40\n").unwrap();
-        let text = save_lighting(&p, "ultra").unwrap();
-        assert_eq!(text, std::fs::read_to_string(&p).unwrap(), "what it returns is what it wrote");
-        let s = crate::quality::Setting::from_settings(&text).unwrap().unwrap();
-        assert_eq!((s.name(), s.quality.sun_steps, s.quality.texels), ("ultra", 40, 4), "the override stays");
-        assert!(text.contains("vsync = true"), "{text}");
-        let _ = std::fs::remove_file(&p);
-        // No file yet, or no [lighting] in it: made.
-        let text = save_lighting(&p, "high").unwrap();
-        assert_eq!(crate::quality::Setting::from_settings(&text).unwrap().map(|s| s.name()), Some("high"));
         let _ = std::fs::remove_file(&p);
     }
 }
