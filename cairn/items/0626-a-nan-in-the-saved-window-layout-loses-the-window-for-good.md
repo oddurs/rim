@@ -3,12 +3,12 @@ id: 626
 uid: 63129c59-5eba-4fec-8f14-557e6d34047c
 title: A NaN in the saved window layout loses the window for good
 type: bug
-status: doing
+status: done
 milestone: bare-metal
 assignee: Oddur Sigurdsson
-claimed: 2026-09-28
 created: 2026-09-28
 updated: 2026-09-28
+closed_at: 2026-09-28
 priority: p3
 api: none
 layer: client

@@ -572,9 +572,16 @@ impl Ui {
     pub fn restore_layout(&mut self, text: &str) -> Result<(), String> {
         let doc: toml::Table = text.parse().map_err(|e: toml::de::Error| e.message().to_string())?;
         let Some(toml::Value::Table(wins)) = doc.get("window") else { return Ok(()) };
+        // A window whose record isn't all numbers keeps its default place;
+        // a NaN would lay it out nowhere, for good, since it's saved back.
+        let mut lost = Vec::new();
         for (id, v) in wins {
             let mut w: WindowState =
                 v.clone().try_into().map_err(|e: toml::de::Error| format!("{id}: {}", e.message()))?;
+            if ![w.x, w.y, w.w, w.h].iter().all(|v| v.is_finite()) {
+                lost.push(id.as_str());
+                continue;
+            }
             w.id = id.clone();
             w.w = w.w.max(WIN_MIN.0);
             w.h = w.h.max(WIN_MIN.1);
@@ -583,7 +590,11 @@ impl Ui {
                 None => self.windows.push(w),
             }
         }
-        Ok(())
+        if lost.is_empty() {
+            Ok(())
+        } else {
+            Err(format!("{}: a place or size that isn't a number; left where the mod puts it", lost.join(", ")))
+        }
     }
 
     /// Whether the layout changed since this was last asked, and clears it.
