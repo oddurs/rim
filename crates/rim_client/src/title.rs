@@ -35,7 +35,6 @@ pub async fn run(
         let client = ClientView {
             screen: (screen_width() * dpi, screen_height() * dpi),
             scale: ui.theme.scale,
-            mouse: (raw.mouse.0 * dpi, raw.mouse.1 * dpi),
             time: raw.time,
             warnings: ui.warnings(),
             title: true,

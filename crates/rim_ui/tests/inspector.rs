@@ -185,7 +185,6 @@ fn a_colonist_panel_has_overview_skills_and_work_tabs() {
 /// Hover a node until its tooltip shows, and read the tooltip's text.
 fn tip(ui: &mut rim_ui::Ui, sim: &rim_sim::Sim, cv: &mut rim_ui::view::ClientView, id: &str, now: f64) -> String {
     let at = centre(ui.find(id).unwrap_or_else(|| panic!("no {id}")));
-    cv.mouse = at;
     frame(ui, sim, cv, Input { mouse: at, time: now, ..Default::default() });
     frame(ui, sim, cv, Input { mouse: at, time: now + 5.0, ..Default::default() });
     ui.tooltip_text(now + 5.0).unwrap_or_else(|| panic!("no tooltip for {id}"))

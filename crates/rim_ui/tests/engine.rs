@@ -1532,10 +1532,10 @@ fn frame_budget_with(dir: &std::path::Path, pawns: i32, builds_expected: std::op
     let mut plain = Vec::new();
     let mut rebuilds = Vec::new();
     for i in 0..n {
-        cv.mouse = (400.0 + i as f32, 300.0);
+        let mouse = (400.0 + i as f32, 300.0);
         let before = ui.builds;
         let f = std::time::Instant::now();
-        frame(&mut ui, &sim, &cv, Input { mouse: cv.mouse, time: 10.0 + i as f64 / 60.0, ..Default::default() });
+        frame(&mut ui, &sim, &cv, Input { mouse, time: 10.0 + i as f64 / 60.0, ..Default::default() });
         let ms = f.elapsed().as_secs_f64() * 1e3;
         if ui.builds > before {
             rebuilds.push(ms)

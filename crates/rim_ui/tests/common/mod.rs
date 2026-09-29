@@ -74,7 +74,6 @@ pub fn client(sim: &Sim) -> ClientView {
         screen: (1600.0, 960.0),
         scale: 1.0,
         cam: (c.x as f32 + 0.5, c.y as f32 + 0.5, 28.0),
-        mouse: (800.0, 480.0),
         selected: sim.world.colonists().next(),
         speed: 1,
         tools,
@@ -88,7 +87,6 @@ pub fn frame(ui: &mut Ui, sim: &Sim, cv: &ClientView, input: Input) -> Output {
 
 /// Move the mouse to `at` and click there (press one frame, release the next).
 pub fn click(ui: &mut Ui, sim: &Sim, cv: &mut ClientView, at: (f32, f32)) -> Vec<rim_ui::view::UiAction> {
-    cv.mouse = at;
     frame(ui, sim, cv, Input { mouse: at, ..Default::default() });
     let a = frame(ui, sim, cv, Input { mouse: at, left_pressed: true, ..Default::default() });
     let b = frame(ui, sim, cv, Input { mouse: at, left_released: true, ..Default::default() });

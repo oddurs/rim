@@ -179,7 +179,6 @@ pub enum Mark {
     Offscreen {
         at: (f32, f32),
         angle: f32,
-        of: Entity,
     },
     /// A measuring line's cell number, where it crosses the pointer's
     /// row or column.
@@ -927,7 +926,7 @@ pub fn scene(app: &App) -> Scene {
     // A selection off screen: a chevron at the edge toward it, and how far.
     for o in offscreen(app) {
         let (text, right) = offscreen_chip(app, &o);
-        marks.push(Mark::Offscreen { at: o.at, angle: o.angle, of: o.of[0] });
+        marks.push(Mark::Offscreen { at: o.at, angle: o.angle });
         marks.push(Mark::Chip(Chip { at: chip_anchor(&o), text, right }));
     }
     // Beside the inspector's one: speech sits above a pawn and its name

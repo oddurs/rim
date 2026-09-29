@@ -149,21 +149,16 @@ fn two_hundred_tokens_fit_the_frame_budget() {
     let dir = scratch_mods("tokenbudget", &[("probe", "", &[("ui/probe.luau", GRID)])]);
     let sim = sim_at(&dir);
     let mut ui = ui_for(&sim);
-    let mut cv = client(&sim);
+    let cv = client(&sim);
     for _ in 0..30 {
         frame(&mut ui, &sim, &cv, Default::default());
     }
     let (mut all, mut builds) = (Vec::new(), Vec::new());
     for i in 0..120 {
-        cv.mouse = (400.0 + i as f32, 300.0);
+        let mouse = (400.0 + i as f32, 300.0);
         let before = ui.builds;
         let t = std::time::Instant::now();
-        frame(
-            &mut ui,
-            &sim,
-            &cv,
-            rim_ui::Input { mouse: cv.mouse, time: 10.0 + i as f64 / 60.0, ..Default::default() },
-        );
+        frame(&mut ui, &sim, &cv, rim_ui::Input { mouse, time: 10.0 + i as f64 / 60.0, ..Default::default() });
         let ms = t.elapsed().as_secs_f64() * 1e3;
         all.push(ms);
         if ui.builds > before {
