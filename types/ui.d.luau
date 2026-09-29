@@ -12,7 +12,10 @@ type Node = {
     size: string?, weight: string?, wrap: boolean?, tracking: Size?,
     hover: Colors?, press: Colors?, focus: Colors?, focusable: boolean?,
     on_click: (() -> ())?, on_right_click: (() -> ())?, tooltip: string?, disabled: boolean?,
+    on_hover: (() -> ())?, menu: { kind: string, id: any }?,
+    at: { x: number, y: number }?, on_outside: (() -> ())?,
     entity: number?, cell: { number }?, priority: number?, offset: number?,
+    look: number?, count: (string | number)?, full: boolean?, hp: number?, state: ("incoming" | "leaving" | "empty" | "plain")?,
     handle: ("move" | "resize" | "close")?,
     src: string?, tint: boolean?,
     value: string?, placeholder: string?, on_change: ((text: string) -> ())?, on_submit: ((text: string) -> ())?,
@@ -20,7 +23,7 @@ type Node = {
     on_drag: ((fx: number, fy: number) -> ())?,
     [number]: any,
 }
-type Cell = string | number | { text: string?, bg: string?, color: string?, bar: number?, bar_color: string?, tip: string?, weight: string?, dot: string?, ring: string? } | nil
+type Cell = string | number | { text: string?, bg: string?, color: string?, bar: number?, bar_color: string?, tip: string?, weight: string?, dot: string?, ring: string?, token: Node? } | nil
 type GridProps = {
     rows: number, cols: number, cell: (r: number, c: number) -> Cell,
     cell_w: Size?, cell_h: Size?, gap: Size?, size: string?, weight: string?,
