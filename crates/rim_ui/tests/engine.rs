@@ -1304,6 +1304,45 @@ fn tab_moves_focus_and_enter_clicks() {
     assert!(!out.captured_keys, "after blur, tab goes back to the game");
 }
 
+/// Focus goes when its control goes, or when the player clicks the map:
+/// Tab is the next colonist again.
+#[test]
+fn tab_goes_back_to_the_game_when_the_focused_control_is_gone() {
+    let dir = scratch_mods("stalefocus", &[("probe", "", &[("ui/bind.luau", BIND_MOD)])]);
+    let sim = sim_at(&dir);
+    let mut ui = ui_for(&sim);
+    let mut cv = client(&sim);
+    frame(&mut ui, &sim, &cv, Default::default());
+    let mut t = 1.0;
+    // Run a command from the palette: Enter runs it and closes the palette.
+    press(&mut ui, &sim, &cv, &mut t, "ctrl+k");
+    assert_eq!(ui.focused_id().as_deref(), Some("core:palette.query"));
+    for c in "hello".chars() {
+        t += 0.1;
+        frame(&mut ui, &sim, &cv, Input { keys: vec![rim_ui::Key::Char(c)], time: t, ..Default::default() });
+    }
+    t += 0.1;
+    frame(&mut ui, &sim, &cv, Input { enter: true, time: t, ..Default::default() });
+    t += 0.1;
+    frame(&mut ui, &sim, &cv, Input { time: t, ..Default::default() });
+    assert!(ui.snapshot().contains("fired=1") && !ui.is_open("core:palette"), "{}", ui.snapshot());
+    t += 0.1;
+    let out = frame(&mut ui, &sim, &cv, Input { tab: true, time: t, ..Default::default() });
+    assert!(!out.captured_keys, "the palette is closed: Tab is the game's");
+
+    // A button clicked, then the map: the button lets go of the keyboard.
+    let select = ui.find("core:toolbar.select").unwrap();
+    click(&mut ui, &sim, &mut cv, centre(select));
+    assert_eq!(ui.focused_id().as_deref(), Some("core:toolbar.select"), "a clicked button takes focus");
+    let map = (800.0, 480.0);
+    let out = frame(&mut ui, &sim, &cv, Input { mouse: map, left_pressed: true, ..Default::default() });
+    assert!(!out.captured_left, "the map takes this press");
+    frame(&mut ui, &sim, &cv, Input { mouse: map, left_released: true, ..Default::default() });
+    let out = frame(&mut ui, &sim, &cv, Input { mouse: map, tab: true, ..Default::default() });
+    assert!(!out.captured_keys, "after a click on the map, Tab is the game's");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn hot_reload_swaps_the_ui_and_keeps_the_last_good_one_on_error() {
     let dir = scratch_mods("reload", &[]);
