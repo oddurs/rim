@@ -2297,6 +2297,9 @@ impl Builder<'_> {
     /// Overscan: rows built beyond the visible span on each side, so a
     /// scroll of a few pixels needs no rebuild to show what enters.
     const OVERSCAN: usize = 4;
+    /// The most rows a list may have: far past any colony's news log, and
+    /// short of where its row keys and spacer heights would overflow.
+    const MAX_ROWS: usize = 1 << 24;
 
     fn expand_list(&mut self, t: &Table, key: u64, owner: &Rc<str>, id: Option<&str>) -> Node {
         let what = id.unwrap_or("list");
@@ -2304,7 +2307,10 @@ impl Builder<'_> {
             return self.fail(owner, key, what, "a list needs an id (its scroll position is kept by it)".into());
         };
         let count: usize = match t.get::<Option<f64>>("count") {
-            Ok(Some(n)) if n >= 0.0 => n as usize,
+            Ok(Some(n)) if n >= 0.0 && n <= Self::MAX_ROWS as f64 => n as usize,
+            Ok(Some(n)) if n > Self::MAX_ROWS as f64 => {
+                return self.fail(owner, key, what, format!("a list has at most {} rows, not {n}", Self::MAX_ROWS))
+            }
             _ => return self.fail(owner, key, what, "a list needs count".into()),
         };
         let row_fn: Function = match t.get::<Option<Function>>("row") {
