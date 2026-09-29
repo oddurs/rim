@@ -1448,8 +1448,14 @@ void main() {
 }
 
 pub fn render(app: &mut App) {
+    // The bench timing the GPU where GL has no timer: each section waits
+    // for its GPU work, so its time is both.
+    let finish = app.light.finishing();
     let mut clock = std::time::Instant::now();
     let mut lap = || {
+        if finish {
+            light::finish_gpu();
+        }
         let us = clock.elapsed().as_secs_f64() * 1e6;
         clock = std::time::Instant::now();
         us

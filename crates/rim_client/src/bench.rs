@@ -515,6 +515,9 @@ struct Run {
     /// Per frame, the wall time from one frame's start to the next's, in
     /// ms: every pass, submit, the GPU and the present, and any wait.
     walls: Vec<f64>,
+    /// The frame's sections on the GPU-timed frames: where GL has no timer
+    /// they wait for the GPU, so each is its CPU and GPU time together.
+    waited: Vec<RenderTimes>,
     /// The same view's frames again under the `flat` lighting preset, for
     /// the side-by-side (3c65738f); empty when the bench runs flat.
     flat: Vec<(RenderTimes, f64, Option<f64>)>,
@@ -752,6 +755,7 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
         for _ in 0..GPU_FRAMES {
             draw_one(&mut app, &mut time, None).await;
             waited.push(app.light.passes.clone());
+            r.waited.push(app.render_us);
         }
         app.light.time_gpu(false);
         r.passes = pass_means(&passes, &waited);
@@ -889,6 +893,24 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
     println!("gl: {renderer}{soft}");
     println!("machine: {}", machine());
     println!("lighting: {}", app.light.setting().name());
+    if app.light.can_time_cost() == Some(false) || crate::light::gl_renderer().contains("Apple") {
+        println!("\nthe frame's sections waiting for the GPU (no timer: glFinish after each), ms, over {GPU_FRAMES} frames");
+        println!("{:<10} {:>8} {:>8} {:>8} {:>8} {:>8} {:>8}", "view", "ground", "things", "pawns", "weather", "light", "ui");
+        for r in &results {
+            let n = r.waited.len().max(1) as f64 * 1e3;
+            let m = |f: fn(&RenderTimes) -> f64| r.waited.iter().map(f).sum::<f64>() / n;
+            println!(
+                "{:<10} {:>8.3} {:>8.3} {:>8.3} {:>8.3} {:>8.3} {:>8.3}",
+                r.name,
+                m(|t| t.ground),
+                m(|t| t.things + t.gl),
+                m(|t| t.pawns),
+                m(|t| t.weather),
+                m(|t| t.light),
+                m(|t| t.ui)
+            );
+        }
+    }
     if results.iter().any(|r| !r.flat.is_empty()) {
         println!("\nlighting side-by-side, ms per frame: {} against flat, the same frames", app.light.setting().name());
         println!(

@@ -648,6 +648,14 @@ pub fn software_gl(renderer: &str) -> bool {
     ["llvmpipe", "softpipe", "SwiftShader", "Software"].iter().any(|s| renderer.contains(s))
 }
 
+/// Wait until the GPU has run everything handed to it: where GL has no
+/// timer, what a pass costs is the wall time between two of these.
+pub(crate) fn finish_gpu() {
+    flush_batches();
+    // SAFETY: on the render thread with the context current.
+    unsafe { miniquad::gl::glFinish() };
+}
+
 /// Hand macroquad's batched draws to GL, so a timer query brackets only
 /// the draws made between two flushes.
 fn flush_batches() {
@@ -2257,17 +2265,41 @@ impl Light {
         if let Some(q) = self.timer() {
             flush_batches();
             q.begin();
+        } else if self.finish_timing() {
+            finish_gpu();
         }
         std::time::Instant::now()
     }
 
     fn pass_end(&mut self, name: &'static str, start: std::time::Instant, ran: bool, draws: u32) {
         let cpu_us = start.elapsed().as_secs_f64() * 1e6;
-        let gpu_us = self.timer().map(|q| {
-            flush_batches();
-            q.end()
-        });
+        let finish = self.finish_timing();
+        let gpu_us = match self.timer() {
+            Some(q) => {
+                flush_batches();
+                Some(q.end())
+            }
+            // No timer (Apple's GL): the GPU emptied before the pass and
+            // again after it, so the wall time between is the pass's own,
+            // submitting included: an upper bound, for the bench alone.
+            None if finish => {
+                finish_gpu();
+                Some(start.elapsed().as_secs_f64() * 1e6)
+            }
+            None => None,
+        };
         self.passes.push(PassTime { name, cpu_us, gpu_us, ran, draws });
+    }
+
+    /// The bench is timing the GPU and GL has no timer: the frame's own
+    /// sections wait for the GPU too (`render`), for the bench alone.
+    pub fn finishing(&self) -> bool {
+        self.finish_timing()
+    }
+
+    /// The bench asked for GPU times and GL has no timer to give them.
+    fn finish_timing(&self) -> bool {
+        self.gpu_timing && matches!(self.query, Timer::Unavailable)
     }
 }
 
