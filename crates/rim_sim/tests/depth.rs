@@ -111,6 +111,24 @@ fn a_world_with_levels_round_trips() {
     assert!(Snapshot::capture(&loaded) == first, "save, load, save gives the same snapshot");
 }
 
+/// The ground's value below the surface is worked out every
+/// `AMBIENT_INTERVAL` ticks; a game loaded between two has it as the one
+/// that kept running does, not 0 until the next.
+#[test]
+fn a_load_between_ambient_updates_keeps_the_ground_below() {
+    let mods = common::mods();
+    let mut sim = Sim::build_with(&mods, 3, &|m| m == "core", 64, 1, 0).unwrap();
+    for _ in 0..25 {
+        sim.step();
+    }
+    assert_ne!(sim.world.tick % rim_sim::field::AMBIENT_INTERVAL, 0, "saved between updates");
+    let temp = sim.world.defs.lookup("field", "core:temperature").unwrap() as usize;
+    let live = sim.world.fields.outdoor(temp, -1);
+    assert_ne!(live, 0, "core's ground has a temperature");
+    let loaded = Snapshot::capture(&sim).restore(&mods, &|m| m == "core").unwrap();
+    assert_eq!(loaded.world.fields.outdoor(temp, -1), live);
+}
+
 /// A room dug into rock below the surface is roofed by the rock around it,
 /// as one on the surface is by its walls: cover spreads on every level.
 #[test]
