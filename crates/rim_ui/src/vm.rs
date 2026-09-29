@@ -1683,6 +1683,8 @@ impl UiVm {
             Ok(t)
         });
         view!("warnings", (), |lua, l, _a| lua.create_sequence_from(l.client.warnings.iter().cloned()));
+        view!("save_failing", (), |_lua, l, _a| Ok(l.client.save_failing.clone()));
+        view!("load_notes", (), |lua, l, _a| lua.create_sequence_from(l.client.load_notes.iter().cloned()));
         view!("saves", (), |lua, l, _a| {
             let t = lua.create_table()?;
             for s in &l.client.saves {

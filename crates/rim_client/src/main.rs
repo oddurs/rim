@@ -221,6 +221,8 @@ pub struct App {
     wheel_sub: usize,
     /// The save this game appends to, if it's being saved.
     pub saver: Option<rim_sim::savefile::Writer>,
+    /// What changed when this game was loaded, for core's alert.
+    pub load_notes: std::sync::Arc<Vec<String>>,
     /// Overlay colours and sizes, from the theme each frame (DESIGN.md §6f).
     pub palette: overlay::Palette,
     pub chalk: overlay::State,
@@ -665,7 +667,7 @@ async fn game() {
         Ok(x) => x,
         Err(e) => return fail(e).await,
     };
-    sim.warnings.extend(notes);
+    sim.warnings.extend(notes.iter().cloned());
     if saver.is_some() && args.iter().any(|a| a == "--seed") && args.iter().any(|a| a == "--load" || a == "--continue")
     {
         sim.warnings.push("--seed is ignored when loading a save".into());
@@ -747,6 +749,7 @@ async fn game() {
         settings_file,
         wheel_sub,
         saver,
+        load_notes: std::sync::Arc::new(notes),
         palette,
         chalk: overlay::State::default(),
         grid: grid::Grid::default(),
@@ -1243,6 +1246,8 @@ pub fn client_view(app: &mut App, mouse: (f32, f32), time: f64) -> ClientView {
         frame: app.frames.line().to_string(),
         mods: s.mods.iter().map(|m| (m.id.clone(), m.version.clone(), m.name.clone())).collect(),
         warnings: s.warnings.iter().cloned().chain(app.ui.warnings()).collect(),
+        save_failing: app.saver.as_ref().and_then(|w| w.failing()),
+        load_notes: app.load_notes.clone(),
         title: false,
         saves: Vec::new(),
     }

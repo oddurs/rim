@@ -561,7 +561,8 @@ enum Job {
 pub struct Writer {
     tx: Option<std::sync::mpsc::Sender<Job>>,
     thread: Option<std::thread::JoinHandle<Result<(), String>>>,
-    /// The last write that failed, for the player to hear about.
+    /// Why the last write failed, until a later one works: what the
+    /// player is told while the colony isn't being saved.
     failed: std::sync::Arc<std::sync::Mutex<Option<String>>>,
 }
 
@@ -591,12 +592,16 @@ impl Writer {
                 }
                 // Keep going: a later write may succeed, and `put` refuses to
                 // append once the file can't be kept whole.
-                if let Err(e) = r {
-                    let e = format!("saving to {} failed: {e}", save.path().display());
-                    eprintln!("rim: {e}");
-                    *report.lock().unwrap_or_else(|p| p.into_inner()) = Some(e.clone());
-                    last_err = Some(e);
-                }
+                let now = match r {
+                    Err(e) => {
+                        let e = format!("saving to {} failed: {e}", save.path().display());
+                        eprintln!("rim: {e}");
+                        last_err = Some(e.clone());
+                        Some(e)
+                    }
+                    Ok(()) => None,
+                };
+                *report.lock().unwrap_or_else(|p| p.into_inner()) = now;
             }
             save.sync().map_err(|e| e.to_string())?;
             last_err.map_or(Ok(()), Err)
@@ -604,9 +609,10 @@ impl Writer {
         Writer { tx: Some(tx), thread: Some(thread), failed }
     }
 
-    /// The latest save failure since the last call, if any.
-    pub fn take_error(&self) -> Option<String> {
-        self.failed.lock().unwrap_or_else(|p| p.into_inner()).take()
+    /// Why saving is failing, while it is: the last write's error, until
+    /// a write works again.
+    pub fn failing(&self) -> Option<String> {
+        self.failed.lock().unwrap_or_else(|p| p.into_inner()).clone()
     }
 
     /// Log the commands applied since the last log.

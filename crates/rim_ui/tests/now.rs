@@ -133,3 +133,34 @@ fn a_long_message_wraps_inside_the_news() {
     });
     assert!(inside, "a glyph in the news runs past its right edge: {panel:?}");
 }
+
+/// A colony whose saves fail says so, where the player looks, until a save
+/// works again (e805a478). It was only in the F3 list.
+#[test]
+fn a_colony_that_stops_saving_says_so_until_it_saves_again() {
+    let sim = sim_at(&mods());
+    let mut ui = ui_for(&sim);
+    let mut cv = client(&sim);
+    cv.save_failing = Some("saving to colony-1.rim failed: No space left on device".into());
+    frame(&mut ui, &sim, &cv, Default::default());
+    let snap = ui.snapshot();
+    assert!(ui.find("core:alerts.core:not_saving").is_some(), "the alert is up:\n{snap}");
+    assert!(snap.contains("No space left on device"), "and says why:\n{snap}");
+    cv.save_failing = None;
+    cv.time = 1.0;
+    frame(&mut ui, &sim, &cv, Input { time: cv.time, ..Default::default() });
+    assert!(ui.find("core:alerts.core:not_saving").is_none(), "gone once a save works:\n{}", ui.snapshot());
+}
+
+/// What a load changed is news on its first day, not a line in F3 alone.
+#[test]
+fn a_loads_notes_are_an_alert() {
+    let sim = sim_at(&mods());
+    let mut ui = ui_for(&sim);
+    let mut cv = client(&sim);
+    cv.load_notes = std::sync::Arc::new(vec!["mod 'weather' was 1.0, now 1.1".into(), "dropped 3 things".into()]);
+    frame(&mut ui, &sim, &cv, Default::default());
+    let snap = ui.snapshot();
+    assert!(ui.find("core:alerts.core:load_notes").is_some(), "the alert is up:\n{snap}");
+    assert!(snap.contains("was 1.0, now 1.1") && snap.contains("1 more"), "with the first note and a count:\n{snap}");
+}

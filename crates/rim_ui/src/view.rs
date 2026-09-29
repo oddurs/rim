@@ -106,6 +106,11 @@ pub struct ClientView {
     /// (id, version, name) in load order.
     pub mods: Vec<(String, String, String)>,
     pub warnings: Vec<String>,
+    /// Why the colony isn't being saved, while its saves fail.
+    pub save_failing: Option<String>,
+    /// What changed when this game was loaded: mods, things dropped, ticks
+    /// lost. Shared, so the view doesn't copy them every frame.
+    pub load_notes: std::sync::Arc<Vec<String>>,
     /// No colony yet: only the `title` layer is built, over an empty world.
     pub title: bool,
     /// The player's saves, newest first, for the title screen.
