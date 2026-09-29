@@ -2429,9 +2429,36 @@ impl ScriptHost {
                     .map(|h| (h.func.clone(), h.mod_id.clone()))
                     .collect()
             };
-            for (f, m) in targets {
-                self.call(w, prof, &m, &f, t.clone());
+            // One handler takes the table as built. With more, each gets its
+            // own copy: cloning a table handle shares the table, so one
+            // mod's edits would be the next one's news.
+            if targets.len() < 2 {
+                for (f, m) in targets {
+                    self.call(w, prof, &m, &f, t.clone());
+                }
+                continue;
             }
+            let payload = match crate::data::from_lua(&Value::Table(t), &name, 0) {
+                Ok(d) => d,
+                Err(e) => {
+                    eprintln!("event conversion failed: {e}");
+                    continue;
+                }
+            };
+            for (f, m) in targets {
+                match self.event_copy(&payload) {
+                    Ok(t) => self.call(w, prof, &m, &f, t),
+                    Err(e) => eprintln!("event conversion failed: {e}"),
+                }
+            }
+        }
+    }
+
+    /// A fresh table holding an event's payload, for one handler.
+    fn event_copy(&self, payload: &Option<crate::data::Data>) -> mlua::Result<Table> {
+        match payload.as_ref().map(|d| crate::data::to_lua(&self.lua, d)).transpose()? {
+            Some(Value::Table(t)) => Ok(t),
+            _ => self.lua.create_table(),
         }
     }
 
