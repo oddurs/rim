@@ -2,12 +2,14 @@
 id: da4d3496-05b0-432e-a221-25139644f91f
 title: Hooks and handlers registered inside a hook are lost on load
 type: bug
-status: backlog
+status: done
 milestone: bare-metal
+assignee: Oddur Sigurdsson
 created: 2026-09-28
 updated: 2026-09-28
+closed_at: 2026-09-28
 priority: p2
-api: none
+api: breaking
 layer: engine
 area: scripting
 ---
@@ -30,5 +32,9 @@ Refuse registration outside load (a script error that names the function), as `o
 
 ## Acceptance
 
-- [ ] Registering a hook, handler or planner after load is an error the mod sees
-- [ ] A test that fails before the fix and passes after
+- [x] Registering a hook, handler or planner after load is an error the mod sees
+- [x] A test that fails before the fix and passes after
+
+## 2026-09-28
+
+Breaking: a mod could call rim.on (and, against their docs, rim.every and rim.planner) from a hook before, and now gets an error, so the plugin API moves to 0.8 and every shipped mod.toml, fixture and example with it. No shipped mod or doc example registered at runtime. DESIGN.md's deprecation window (a warning for one minor) was not used: a late registration already corrupted loads, which is the bug.

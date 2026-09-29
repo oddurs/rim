@@ -1,7 +1,7 @@
 id = "research"
 name = "Research"
 version = "0.1.0"
-api = "0.7"
+api = "0.8"
 ui_api = "0.6"
 description = "Research at a desk unlocks later buildings: shelving and granaries, and the forge. Built on the stat pipeline: each project holds its unlocks back with modifiers, and switches them off when it's done."
 depends = ["core"]

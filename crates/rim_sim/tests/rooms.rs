@@ -241,7 +241,7 @@ fn scripts_see_rooms() {
     std::fs::create_dir_all(probe.join("scripts")).unwrap();
     std::fs::write(
         probe.join("mod.toml"),
-        "id = \"probe\"\nname = \"Probe\"\nversion = \"0.0.0\"\napi = \"0.7\"\ndepends = [\"core\"]\n",
+        "id = \"probe\"\nname = \"Probe\"\nversion = \"0.0.0\"\napi = \"0.8\"\ndepends = [\"core\"]\n",
     )
     .unwrap();
     std::fs::write(

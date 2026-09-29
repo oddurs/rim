@@ -2145,7 +2145,7 @@ mod tests {
         std::fs::create_dir_all(probe.join("defs")).unwrap();
         std::fs::write(
             probe.join("mod.toml"),
-            "id = \"probe\"\nname = \"probe\"\nversion = \"0.0.0\"\napi = \"0.7\"\ndepends = [\"core\"]\n",
+            "id = \"probe\"\nname = \"probe\"\nversion = \"0.0.0\"\napi = \"0.8\"\ndepends = [\"core\"]\n",
         )
         .unwrap();
         std::fs::write(

@@ -154,7 +154,7 @@ fn a_factor_nobody_in_the_engine_knows_reaches_a_script() {
     std::fs::create_dir_all(m.join("scripts")).unwrap();
     std::fs::write(
         m.join("mod.toml"),
-        "id = \"glitter\"\nname = \"Glitter\"\nversion = \"0.0.0\"\napi = \"0.7\"\ndepends = [\"core\"]\n",
+        "id = \"glitter\"\nname = \"Glitter\"\nversion = \"0.0.0\"\napi = \"0.8\"\ndepends = [\"core\"]\n",
     )
     .unwrap();
     std::fs::write(
