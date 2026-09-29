@@ -136,7 +136,9 @@ pub fn member_refs(src: &str) -> Vec<(usize, String)> {
                         depth -= usize::from(b[i] == b'}');
                         i += 1;
                     }
-                    for (l, n) in member_refs(&src[start..i.saturating_sub(1)]) {
+                    // Before the closing brace; an unclosed one runs to the end.
+                    let end = if depth == 0 { i - 1 } else { i };
+                    for (l, n) in member_refs(&src[start..end]) {
                         out.push((line + l - 1, n));
                     }
                 } else {
@@ -208,6 +210,15 @@ fn skip_long(b: &[u8], i: usize, n: usize) -> (usize, usize) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A file cut off inside `{...}` of an interpolated string: scanned to
+    /// its end, not panicking on a reversed or mid-character slice.
+    #[test]
+    fn an_unclosed_interpolation_scans_to_the_end() {
+        assert!(member_refs("local s = `{").is_empty());
+        assert!(member_refs("local s = `{é").is_empty());
+        assert_eq!(member_refs("local s = `{view.tick()"), vec![(1, "view.tick".to_string())]);
+    }
 
     #[test]
     fn members_are_found_in_code_only() {
