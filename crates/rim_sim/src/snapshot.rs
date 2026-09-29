@@ -120,6 +120,11 @@ pub(crate) struct WorldSection {
     /// save without them reads as before.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     modifiers_switched: BTreeMap<String, bool>,
+    /// The tick the land changed, while the pathfinder waits to catch up
+    /// (`World::follow_land`); unwritten otherwise, and a save from before
+    /// it has none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    land_changed: Option<u64>,
 }
 
 /// Each def kind's qualified ids, in `DefId` order: the table the raw ids in
@@ -283,6 +288,7 @@ impl Snapshot {
             standing: w.standing.clone(),
             work_roles: w.work_roles.clone(),
             modifiers_switched: w.modifiers_switched.clone(),
+            land_changed: w.land_changed,
         };
         let (disabled_hooks, disabled_handlers) = sim.scripts.disabled();
         let mut sections = BTreeMap::from([
@@ -1005,6 +1011,7 @@ impl Snapshot {
             None => defs.default_stance,
         };
         // Switched modifiers are named by id; one a removed mod declared is gone.
+        w.land_changed = ws.land_changed;
         w.modifiers_switched = ws.modifiers_switched;
         w.modifiers_switched.retain(|id, _| defs.lookup("modifier", id).is_some());
         // Rules are named by id; one a removed mod added holds nothing.

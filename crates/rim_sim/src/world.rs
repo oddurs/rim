@@ -915,6 +915,10 @@ pub struct World {
     pub messages: Vec<Message>,
     pub events: Vec<GameEvent>,
     pub pf: Pathfinder,
+    /// The tick the land last changed, while the pathfinder's landmarks
+    /// wait to catch up (`follow_land`); saved, so a loaded game switches
+    /// on the same tick as the one that never saved.
+    pub land_changed: Option<u64>,
     /// Cached; recomputed every few hundred ticks.
     pub wealth: f64,
     /// Recent melee hits (pos, tick) for renderers.
@@ -1050,6 +1054,7 @@ impl World {
             work_roles: Vec::new(),
             modifiers_switched: BTreeMap::new(),
             data_versions: BTreeMap::new(),
+            land_changed: None,
         };
         world.seed_work_roles();
         world
@@ -1144,6 +1149,20 @@ impl World {
         let start = (self.season_index() * c.year_days).div_ceil(n);
         self.day_of_year() - start + 1
     }
+    /// At the end of each tick: when the land changed (a bridge over deep
+    /// water, stairs), the pathfinder's landmarks stop and new ones build
+    /// on another thread, used from exactly `LAND_DELAY` ticks on. A second
+    /// change starts the wait again.
+    pub fn follow_land(&mut self) {
+        if self.pf.land_moved(&self.map) {
+            self.land_changed = Some(self.tick);
+        }
+        if self.land_changed.is_some_and(|t| self.tick >= t + crate::path::LAND_DELAY) {
+            self.pf.switch();
+            self.land_changed = None;
+        }
+    }
+
     /// The clock as terms see it: fraction of the year and hour of day in
     /// fixed point.
     pub fn clock(&self) -> Clock {
