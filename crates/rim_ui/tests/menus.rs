@@ -175,6 +175,25 @@ fn a_key_held_in_the_menu_stays_the_menus() {
     assert!(!out.captured_keys, "closed, the keyboard is the game's again");
 }
 
+/// Enter in a menu picks its row and nothing else: the button clicked
+/// before the menu opened keeps its focus but isn't clicked again.
+#[test]
+fn enter_in_the_menu_leaves_the_focused_button_alone() {
+    let mut t = T::new("menus-enter");
+    let select = centre(t.ui.find("core:toolbar.select").expect("the select button"));
+    t.input(Input { mouse: select, ..Default::default() });
+    t.input(Input { mouse: select, left_pressed: true, ..Default::default() });
+    t.input(Input { mouse: select, left_released: true, ..Default::default() });
+    assert_eq!(t.ui.focused_id().as_deref(), Some("core:toolbar.select"), "the click focused it");
+    let at = centre(t.ui.find("probe:subject").unwrap());
+    t.right_click(at);
+    assert!(t.ui.find("core:menu").is_some());
+    let out = t.input(Input { mouse: at, enter: true, pressed: vec!["enter".into()], ..Default::default() });
+    t.idle();
+    assert!(t.snap().contains("did=open"), "Enter picked the first row: {}", t.snap());
+    assert!(out.actions.is_empty(), "and clicked nothing behind the menu: {:?}", out.actions);
+}
+
 #[test]
 fn a_click_outside_closes_and_a_drag_release_picks() {
     let mut t = T::new("menus-mouse");
