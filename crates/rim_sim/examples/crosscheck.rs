@@ -11,7 +11,9 @@
 //! growth, and fails if it doesn't. The storyteller rolls its dice all year,
 //! with threats off: an undefended colony falls to a stampede or a pack
 //! within weeks (224a5488), and a dead colony leaves only wildlife and
-//! weather to hash. One raid on day RAID_DAY keeps combat in it. Prints the
+//! weather to hash. One raid on day RAID_DAY and one boar stampede on day
+//! STAMPEDE_DAY keep combat in it: the stampede once killed this colony, all
+//! nine, in two hours (6ca1ea2e), and must leave it standing. Prints the
 //! state hash at the end of each day, so when two platforms disagree the
 //! output shows the first day they diverged.
 //!
@@ -27,6 +29,9 @@ const STORYTELLER: &str = "@core/scripts/storyteller";
 /// The day the one raid comes, at dawn: past the stone-age opening, with the
 /// hut up and a few colonists to meet it.
 const RAID_DAY: u64 = 10;
+/// The day wildlife_plus's boars stampede, at dawn: when, with threats on,
+/// they once wiped the colony out.
+const STAMPEDE_DAY: u64 = 18;
 
 /// Call core's storyteller, as the harness's hand on the dice.
 fn storyteller(s: &mut Sim, export: &str, args: &[Option<Data>]) {
@@ -149,9 +154,14 @@ fn main() {
             billed |= bills.is_some();
             chopping |= armed;
         }
-        if day == RAID_DAY {
+        let threat = match day {
+            RAID_DAY => Some("raid"),
+            STAMPEDE_DAY => Some("boar_stampede"),
+            _ => None,
+        };
+        if let Some(id) = threat {
             for g in [&mut s, &mut twin] {
-                storyteller(g, "fire", &[Some(Data::Str("raid".into()))]);
+                storyteller(g, "fire", &[Some(Data::Str(id.into()))]);
             }
         }
         let ticks = if day == 1 { TICKS_PER_DAY - 1 } else { TICKS_PER_DAY };
