@@ -428,7 +428,8 @@ jobs:
     needs: plan
     if: contains(fromJSON('["pr","queue","nightly"]'), needs.plan.outputs.lane) && needs.plan.outputs.code == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # The nightly runs the autotest on three maps.
+    timeout-minutes: ${{ needs.plan.outputs.lane == 'nightly' && 35 || 20 }}
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@master
@@ -445,12 +446,25 @@ jobs:
         run: cargo build --release -p rim_client
       - name: Client autotest (drives every control, takes screenshots)
         run: xvfb-run -a -s "-screen 0 1600x960x24" target/release/rim --seed 7 --autotest target/autotest
+      # A check that holds on seed 7's map alone is a lucky one (9553b617).
+      # Both maps run whatever the first does, so one night shows every
+      # check that fails on either.
+      - name: Client autotest on two more maps
+        if: needs.plan.outputs.lane == 'nightly'
+        run: |
+          failed=0
+          for seed in 3 11; do
+            xvfb-run -a -s "-screen 0 1600x960x24" target/release/rim --seed "$seed" --autotest "target/autotest-$seed" || failed=1
+          done
+          exit "$failed"
       - name: Upload autotest screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: autotest-screenshots
-          path: target/autotest/*.png
+          path: |
+            target/autotest/*.png
+            target/autotest-*/*.png
           if-no-files-found: ignore
       # DESIGN.md §8: the world renderer's CPU time on the whole bench map, with
       # twenty mods' sprites in it, against its budget (1.5x slack on shared
