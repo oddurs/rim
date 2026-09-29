@@ -2,10 +2,12 @@
 id: a6304f70-ee45-48fd-8282-cdb59aa00f70
 title: Noise `hours` of inf or huge passes validation and overflows terms
 type: bug
-status: backlog
+status: done
 milestone: bare-metal
+assignee: Oddur Sigurdsson
 created: 2026-09-28
-updated: 2026-09-28
+updated: 2026-09-29
+closed_at: 2026-09-28
 priority: p3
 api: none
 layer: engine
@@ -30,5 +32,9 @@ Bound noise `hours` as the cycle input's range is bounded (`1/24..=3.65e8`), and
 
 ## Acceptance
 
-- [ ] Out-of-range or non-finite noise hours fail the load
-- [ ] A test that fails before the fix and passes after
+- [x] Out-of-range or non-finite noise hours fail the load
+- [x] A test that fails before the fix and passes after
+
+## 2026-09-29
+
+PAUSED at the merge freeze (main d633f7b5): fix and test done (test fails before, passes after), committed on fix/a6304f70-noise-hours and rebased on origin/main before the freeze; the full gate has not run on this commit. Next: rebase onto main, run scripts/task check, mark the PR ready.
