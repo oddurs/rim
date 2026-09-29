@@ -2349,8 +2349,8 @@ option B after the side-by-side in 3c65738f):
 - **`flat`, the default.** The sim's `light` field as it is: the sky's share
   of each cell (the rooms texture) and its firelight stamps, one texel a
   cell, bilinear, tinted by the sky and the firelight colours, in one
-  multiply. No marches, bakes or fill; the plan's contact shadow is the only
-  direction. On the Mac (M4 Pro, window in front) it holds 120 fps in every
+  multiply. No marches, bakes or fill. The sky body's shadows are drawn as
+  shapes (below); the plan's contact shadow is the only other direction. On the Mac (M4 Pro, window in front) it holds 120 fps in every
   bench view. Its cost is looks: light comes in cell- and room-aligned
   blocks at close zoom.
 - **`shadows`, the one opt-in.** Everything below: the brightest sky body's
@@ -2366,6 +2366,27 @@ choice in the game: `act.lighting` and its palette bindings went too (UI API
 0.7). `shadows` is reached only through the settings file, a bridge until
 shadows drawn as shapes (f05c5fa1) light every game and the rest of it goes
 (3a2b2c0d): one lighting for everyone.
+
+**Shadows as shapes (f05c5fa1).** The user's call: marched shadows came out
+as blurred cell stairs. Outside a mass, its shadow is its boundary swept
+away from the sky body, so a mass is drawn as its boundary's edges, each a
+quad: marching squares over the grid of cell centres, so straight runs lie
+on cell edges and a two-wide staircase becomes one diagonal (a lone cell on
+a diagonal keeps a 45° chamfer). A roof's step up casts too, at the taller
+height. A small cap at the foot fills the corners the outline cuts, and a
+block surrounded by mass no lower than itself draws nothing. A tree is one
+quad, stretched along its shadow, with a short trunk and a round crown cut
+out in the fragment shader. The shapes are built a 32-cell block at a time,
+near an occluder change only, and the level is packed into as few u16
+buffers as fit; a draw covers the blocks within reach of the view. A vertex
+shader pushes each edge away from the brightest body by its height times
+cot(altitude), up to 8 cells, so a moving sun changes one uniform; an edge
+facing the body stays a line. They draw into a mask, half the screen's
+pixels or a quarter once a cell spans 28, the darkest shadow winning each
+pixel by depth (GLES2 has no MAX blend, and adding would darken overlaps),
+dark at the foot and fading to 0.3 at the tip. Flat samples the mask once,
+outdoors and off masses. Zoomed out past 9 points a cell they fade, and
+under 5 the pass isn't drawn at all, so the whole map costs what it did.
 
 Light is upsampled bilinearly; bicubic was tried and
 changed nothing visible at 2 texels a cell. Static lights bake at 8 rays, because the bake runs only on

@@ -234,7 +234,8 @@ pub fn render(app: &mut App) {
         let faces = app.light.roof_faces(&air);
         app.roofs.draw(&app.sim.world, &app.cam, draw::visible(app), alpha, lifted, tint, faces);
     }
-    t.light += lap();
+    t.light += lap() - app.light.shade_gl_us;
+    t.gl += app.light.shade_gl_us;
     if let Some(rt) = &app.world_target {
         set_default_camera();
         if app.blit.is_none() {
@@ -298,7 +299,7 @@ pub fn render(app: &mut App) {
     draw::ui(&app.last_draw, &app.atlas, white, dpi);
     t.ui = lap();
     app.render_us = t;
-    app.frames.record(app.meshes.calls + app.figures.calls, &app.render_us.rows());
+    app.frames.record(app.meshes.calls + app.figures.calls + app.light.shade_calls, &app.render_us.rows());
 }
 
 /// Glyphs shaped since the last frame go to the GPU.

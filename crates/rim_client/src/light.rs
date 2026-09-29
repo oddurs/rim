@@ -24,7 +24,7 @@ use crate::occluders::Occluders;
 use crate::quality::{texels_for, Setting, MOVING_SHADOWS, SUN_REBUILD, SUN_STEPS, TEXELS};
 use crate::sky::{Air, Flash};
 use crate::Cam;
-use macroquad::miniquad::{BlendFactor, BlendState, BlendValue, Equation};
+use macroquad::miniquad::{BlendFactor, BlendState, BlendValue, Equation, PassAction};
 use macroquad::prelude::*;
 use rim_sim::defs::Flicker;
 use rim_sim::map::Map;
@@ -344,6 +344,9 @@ uniform vec3 fire;
 uniform vec2 cell;
 uniform float day;
 uniform float exposure;
+uniform sampler2D shade;
+uniform float strength;
+uniform vec2 screen;
 float mass_at(vec2 p) {
     vec4 o = texture2D(occluders, (floor(p / cell) + 0.5) * cell);
     return step(0.99, o.b) * (1.0 - step(0.5, o.g));
@@ -356,11 +359,18 @@ void main() {
     vec4 o = texture2D(occluders, uv);
     vec4 r = texture2D(rooms, uv);
     vec3 lit = sky * mix(r.g, r.r, o.g);
+    float solid = mass_at(uv);
+    // The sky body's shadows, drawn as shapes (f05c5fa1), one bilinear look
+    // at their mask: they take only the body's share of the sky,
+    // and only outdoors, off masses, and not at all when zoomed out.
+    if (strength > 0.0) {
+        float shadow = texture2D(shade, gl_FragCoord.xy / screen).r;
+        lit *= 1.0 - strength * shadow * (1.0 - o.g) * (1.0 - solid);
+    }
     // Perceived, as the sky's is: a stamp at half strength reads brighter
     // than half.
     float f = texture2D(Texture, uv).r * 1.5; // STAMP_RANGE
     vec3 c = max(night, (lit + fire * sqrt(f)) * exposure);
-    float solid = mass_at(uv);
     float under = 0.5 * (casts(uv - cell * 0.18) + casts(uv - cell * 0.36)) * (1.0 - solid);
     c *= 1.0 - 0.3 * under * (1.0 - day);
     gl_FragColor = vec4(c, 1.0);
@@ -590,6 +600,15 @@ const CONTACT_LIGHT: f32 = 10.0;
 /// The most firelight the `flat` stamps hold, in the light field's units
 /// over 100: brighter stamps clip.
 const STAMP_RANGE: f32 = 1.5;
+
+/// The longest a shadow reaches, in cells, however low the body.
+const LONGEST_SHADOW: f32 = 8.0;
+
+/// Shadows are whole from this many points a cell, fade as the view zooms
+/// out, and are gone at `SHADE_FROM`: there a shadow is a few pixels, and
+/// the pass isn't drawn at all.
+const SHADE_FULL: f32 = 9.0;
+const SHADE_FROM: f32 = 5.0;
 
 /// Under this, in its field's units, a sky body gives no light.
 const DARK_BODY: f64 = 0.01;
@@ -1014,6 +1033,8 @@ impl SunKey {
 /// sun and its rooms.
 #[derive(Default)]
 struct Level {
+    /// The sky body's shadow shapes, built from the occluders.
+    shades: crate::shade::Shapes,
     /// What stops light, per cell.
     occluders: Occluders,
     /// Firelight, baked: one flicker channel per colour channel, `texels`
@@ -1106,6 +1127,21 @@ pub struct Light {
     pub pin_sun: Option<(f64, f64)>,
     /// Times the sun pass has run.
     pub sun_runs: u64,
+    /// The mask the sky body's shadow shapes are drawn into, and their
+    /// pipeline: `Err` when it didn't build, and the world goes without.
+    shade: Option<RenderTarget>,
+    shade_pipeline: Option<Result<miniquad::Pipeline, ()>>,
+    /// The screen's pixels a mask texel spans, a side: 2 or 4.
+    shade_div: f32,
+    /// Last frame's shadow shapes, drawn past macroquad's batches, so
+    /// they count themselves: draw calls, indices, and the time handing
+    /// them to GL (µs).
+    pub shade_calls: usize,
+    pub shade_indices: usize,
+    pub shade_gl_us: f64,
+    /// Last frame's time bringing the shapes up to the occluders (µs):
+    /// building the blocks a change reached, and packing their buffers.
+    pub shade_build_us: f64,
     /// The sky's bodies this frame, and the picture's light from the sky
     /// (`bodies`), worked out once in `prepare`.
     lit: Vec<Body>,
@@ -1218,12 +1254,19 @@ impl Light {
             self.lv = self.cache.remove(&z).unwrap_or_default();
             self.z = z;
         }
-        self.cache.retain(|&k, _| (k - z).abs() <= 1);
+        let gone: Vec<i32> = self.cache.keys().copied().filter(|&k| (k - z).abs() > 1).collect();
+        for k in gone {
+            if let Some(mut lv) = self.cache.remove(&k) {
+                // SAFETY: as in `draw_shade`.
+                lv.shades.free(unsafe { get_internal_gl() }.quad_context);
+            }
+        }
     }
 
     /// Multiply the world by the light. Call after everything lit is drawn.
     pub fn multiply(&mut self, w: &World, cam: &Cam, air: &Air, flash: Flash) {
         let t = self.pass_begin();
+        (self.shade_calls, self.shade_indices, self.shade_gl_us, self.shade_build_us) = (0, 0, 0.0, 0.0);
         let drew =
             if self.setting.flat() { self.draw_flat(w, cam, flash) } else { self.draw_multiply(w, cam, air, flash) };
         self.pass_end("multiply", t, drew, drew as u32);
@@ -1462,8 +1505,10 @@ impl Light {
                         UniformDesc::new("cell", UniformType::Float2),
                         UniformDesc::new("day", UniformType::Float1),
                         UniformDesc::new("exposure", UniformType::Float1),
+                        UniformDesc::new("strength", UniformType::Float1),
+                        UniformDesc::new("screen", UniformType::Float2),
                     ],
-                    vec!["occluders".to_string(), "rooms".to_string()],
+                    vec!["occluders".to_string(), "rooms".to_string(), "shade".to_string()],
                     PipelineParams {
                         color_blend: Some(BlendState::new(
                             Equation::Add,
@@ -1931,6 +1976,77 @@ impl Light {
         true
     }
 
+    /// The sky body's shadows, drawn as shapes into a mask a half or a
+    /// quarter the screen's size. The body's share of the light, 0 with none
+    /// up or zoomed out.
+    fn draw_shade(&mut self, w: &World, cam: &Cam, cloud: f32) -> f32 {
+        let t = ((cam.zoom - SHADE_FROM) / (SHADE_FULL - SHADE_FROM)).clamp(0.0, 1.0);
+        let near = t * t * (3.0 - 2.0 * t);
+        if near == 0.0 {
+            return 0.0;
+        }
+        let (sw, sh, dpi) = (screen_width(), screen_height(), screen_dpi_scale());
+        // Six texels a cell keep a shadow's edge clean; more is fill for
+        // nothing. A quarter of the screen's pixels once a cell spans 28,
+        // back to half under 20, so a zoom doesn't resize it back and forth.
+        let px = cam.zoom * dpi;
+        self.shade_div = if px >= 28.0 || (self.shade_div == 4.0 && px >= 20.0) { 4.0 } else { 2.0 };
+        let size = ((sw * dpi / self.shade_div) as u32, (sh * dpi / self.shade_div) as u32);
+        if self.shade.as_ref().is_none_or(|t| (t.texture.width() as u32, t.texture.height() as u32) != size) {
+            let rt = render_target_ex(size.0, size.1, RenderTargetParams { sample_count: 1, depth: true });
+            rt.texture.set_filter(FilterMode::Linear);
+            self.shade = Some(rt);
+        }
+        let Some(rt) = self.shade.clone() else { return 0.0 };
+        let start = std::time::Instant::now();
+        // SAFETY: macroquad's context outlives the frame, and nothing else
+        // holds it while the light draws.
+        let mut gl = unsafe { get_internal_gl() };
+        gl.flush();
+        let ctx = gl.quad_context;
+        let pipeline = self.shade_pipeline.get_or_insert_with(|| {
+            crate::shade::pipeline(ctx).map_err(|e| eprintln!("lighting shader failed, drawing without shadows: {e}"))
+        });
+        let occ = &self.lv.occluders;
+        let map = (w.map.w, w.map.h);
+        let at = |x: i32, y: i32| crate::shade::caster(occ.cell(x, y));
+        let built = std::time::Instant::now();
+        self.lv.shades.update(ctx, map, occ.version, occ.whole, &occ.changed, at);
+        self.shade_build_us = built.elapsed().as_secs_f64() * 1e6;
+        ctx.begin_pass(
+            Some(rt.render_pass.raw_miniquad_id()),
+            PassAction::Clear { color: Some((0.0, 0.0, 0.0, 0.0)), depth: Some(1.0), stencil: None },
+        );
+        let body = shadow_body(&self.lit, cloud).and_then(|id| self.lit.iter().find(|b| b.id == id)).copied();
+        let strength = match (body, &*pipeline) {
+            (Some(b), Ok(pipeline)) => {
+                let (az, alt) = (b.at.0.to_radians() as f32, b.at.1.max(3.0).to_radians() as f32);
+                let push = -vec2(az.cos(), az.sin()) / alt.tan();
+                let (a, z) = (cam.to_world(0.0, 0.0), cam.to_world(sw, sh));
+                // Cells to the mask's clip space, as `Cam::to_screen` puts them.
+                let scale = [2.0 * cam.zoom / sw, 2.0 * cam.zoom / sh];
+                (self.shade_calls, self.shade_indices) = self.lv.shades.draw(
+                    ctx,
+                    pipeline,
+                    (a.0, a.1, z.0, z.1),
+                    [cam.x, cam.y],
+                    scale,
+                    push.into(),
+                    LONGEST_SHADOW,
+                );
+                // At most this dark at a caster's foot: shade, not ink.
+                b.direct(cloud) * 0.7 * near
+            }
+            _ => {
+                (self.shade_calls, self.shade_indices) = (0, 0);
+                0.0
+            }
+        };
+        ctx.end_render_pass();
+        self.shade_gl_us = start.elapsed().as_secs_f64() * 1e6;
+        strength
+    }
+
     /// Under `flat`, light the world by the sim's light field alone. Whether
     /// it drew.
     fn draw_flat(&mut self, w: &World, cam: &Cam, flash: Flash) -> bool {
@@ -1939,7 +2055,15 @@ impl Light {
         };
         let blank = self.blank.get_or_insert_with(|| Texture2D::from_rgba8(1, 1, &[0, 0, 0, 0])).clone();
         let rooms = self.lv.rooms.clone().unwrap_or(blank);
+        let cloud = crate::sky::Air::read(w).cloud;
+        let strength = self.draw_shade(w, cam, cloud);
+        let shade = self.shade.as_ref().map(|t| t.texture.clone());
         let Some(m) = self.material(Pass::Flat) else { return false };
+        if let Some(t) = shade {
+            m.set_texture("shade", t.clone());
+            m.set_uniform("screen", vec2(t.width(), t.height()) * self.shade_div);
+        }
+        m.set_uniform("strength", strength);
         // A flash lights everything evenly: there is no pass to shadow it.
         let sky = self.sky_color(w, flash.strength);
         self.adapt(w, cam, sky);

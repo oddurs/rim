@@ -482,6 +482,7 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     indoors::roofs_take_the_sun(&mut t, &mut carry).await;
     light::moving_lights(&mut t, &mut carry).await;
     light::flat_is_the_default(&mut t).await;
+    light::shadows_are_shapes(&mut t, &mut carry).await;
     input::camera_by_device(&mut t, &mut carry).await;
     input::safe_right_click(&mut t, &mut carry).await;
     chalk::the_grid(&mut t, &mut carry).await;

@@ -421,3 +421,113 @@ pub(super) async fn flat_is_the_default(t: &mut T) {
     t.app.light.set(crate::quality::Setting::Shadows);
     t.frame().await;
 }
+
+/// f05c5fa1: the sky body's shadows are shapes. A staircase of walls casts
+/// one straight diagonal edge, at every zoom, where a shadow marched over
+/// the cells would step a cell at a time.
+pub(super) async fn shadows_are_shapes(t: &mut T, carry: &mut Carry) {
+    let site = carry.site.expect("set before shadows_are_shapes");
+    let wall = carry.wall.expect("set before shadows_are_shapes");
+    println!("\n# a staircase of walls casts one straight shadow edge at every zoom (f05c5fa1)");
+    t.app.light.set(crate::quality::Setting::Flat);
+    t.app.paused = true;
+    // Dry, outdoor ground with nothing on it that casts, away from any
+    // fire: 10 cells across, and 6 more to the south, where anything
+    // standing would throw its own shadow north into the measure.
+    let lights: Vec<IVec> = t
+        .w()
+        .defs
+        .lookup("field", "light")
+        .map(|f| t.w().fields.emitters_of(f as usize).map(|(_, q, _, _)| q).collect())
+        .unwrap_or_default();
+    let open = |w: &World, c: IVec| {
+        dry(w, c)
+            && w.map.passable(c)
+            && !w.map.indoors(c)
+            && crate::occluders::occluder_at(w, w.map.idx(c), None) == crate::occluders::Occluder::Open
+    };
+    let clear = |w: &World, o: IVec| {
+        (0..16).all(|y| (0..10).all(|x| open(w, o.offset(x, y))))
+            && lights.iter().all(|q| q.chebyshev(o.offset(5, 5)) > 12)
+    };
+    let (mw, mh) = (t.w().map.w, t.w().map.h);
+    // The nearest such ground to the colony, anywhere on the map.
+    let found = (0..mh - 16)
+        .flat_map(|y| (0..mw - 10).map(move |x| IVec { x, y, z: site.z }))
+        .filter(|&o| clear(t.w(), o))
+        .min_by_key(|o| o.chebyshev(site));
+    let Some(o) = found else {
+        t.check(false, "open ground for the staircase");
+        t.app.paused = false;
+        return;
+    };
+    // Two cells wide, rising to the north-east from the square's bottom left.
+    let cells: Vec<IVec> = (0..5).flat_map(|i| [o.offset(1 + i, 8 - i), o.offset(2 + i, 8 - i)]).collect();
+    let walls: Vec<Entity> = cells.iter().filter_map(|&c| t.app.sim.world.spawn_fixture(wall, c, false)).collect();
+    t.check(walls.len() == cells.len(), format!("the staircase stands ({} of {} walls)", walls.len(), cells.len()));
+    let (cloud, light) = (field(t, "cloud"), field(t, "light"));
+    t.app.sim.world.fields.set_ambient(cloud, Some(0.0));
+    t.app.sim.world.fields.set_ambient(light, Some(100.0));
+    t.ticks(20);
+    t.app.light.adapt_now();
+    t.light_settles().await;
+    let zoom = t.app.cam.zoom;
+    let lum = |img: &Image, at: (f32, f32)| px(img, at).iter().sum::<f32>();
+    for (name, z) in [("close", 48.0), ("mid", 20.0), ("far", 8.0)] {
+        t.app.cam.zoom = z;
+        t.focus(o.offset(4, 5));
+        // Due south and low, so the shadow falls north; and overhead, where
+        // it has no length, to divide the ground's own colour out.
+        t.app.light.pin_sun = Some((90.0, 89.0));
+        let flat = t.grab().await;
+        t.app.light.pin_sun = Some((90.0, 20.0));
+        let low = t.grab().await;
+        let cam = &t.app.cam;
+        let ratio = |x: f32, y: f32| {
+            let at = cam.to_screen(x, y);
+            lum(&low, at) / lum(&flat, at).max(1e-3)
+        };
+        // South of the staircase the sun reaches in both: what a lit ratio is.
+        let open = (0..8).map(|k| ratio(o.x as f32 + 1.5 + k as f32 * 0.5, o.y as f32 + 9.6)).sum::<f32>() / 8.0;
+        // Up each column across the staircase's diagonal (its north-west
+        // edge runs centre to centre from x 1.5 to 5.5; past that, the top
+        // wall's tip is flat), from the top of its highest wall to where the
+        // shadow ends: past its tip, it is lit.
+        let mut ends = Vec::new();
+        for k in 0..13 {
+            let x = o.x as f32 + 2.0 + k as f32 * 0.25;
+            let top = (o.y + 8 - (x.floor() as i32 - o.x - 1)) as f32;
+            let r = |d: f32| ratio(x, top - d) / open;
+            let foot = (1..20).map(|j| r(j as f32 * 0.1)).fold(1.0f32, f32::min);
+            let lit = 1.0 - 0.15 * (1.0 - foot);
+            let end = (1..160).map(|j| j as f32 / 16.0).find(|&d| r(d) > lit && r(d + 0.25) > lit);
+            ends.push(end.map(|d| top - d));
+        }
+        let ys: Vec<f32> = ends.iter().flatten().copied().collect();
+        let steps: Vec<f32> = ys.windows(2).map(|p| p[1] - p[0]).collect();
+        let slope = steps.iter().sum::<f32>() / (steps.len().max(1) as f32 * 0.25);
+        let worst = steps.iter().map(|d| (d + 0.25).abs()).fold(0.0f32, f32::max);
+        // A pixel of the screen, in cells, is all a step may miss by past
+        // the blur: a stair would miss by a whole cell.
+        let slack = 0.3 + 2.0 / z;
+        t.check(
+            ys.len() == ends.len() && (-1.15..-0.85).contains(&slope) && worst < slack,
+            format!(
+                "{name} ({z} px a cell): the shadow's edge runs straight up the staircase, slope {slope:.2} (-1), steps off by at most {worst:.2} cells (under {slack:.2}), {} of {} columns found",
+                ys.len(),
+                ends.len()
+            ),
+        );
+        t.shot(&format!("shadow_shapes_{name}")).await;
+    }
+    t.app.cam.zoom = zoom;
+    t.app.light.pin_sun = None;
+    t.app.sim.world.fields.set_ambient(cloud, None);
+    t.app.sim.world.fields.set_ambient(light, None);
+    for e in walls {
+        t.app.sim.world.despawn_thing(e);
+    }
+    t.ticks(2);
+    t.app.light.set(crate::quality::Setting::Shadows);
+    t.app.paused = false;
+}
