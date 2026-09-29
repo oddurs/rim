@@ -58,9 +58,10 @@ pub struct Map {
     /// Roof reach left at each cell plus one; 0 is beyond every support.
     /// Worked out with the rooms.
     cover: Vec<u8>,
-    /// Supports changed since cover was last worked out; `None` until the
-    /// first full pass, or after too many to patch.
-    support_changed: Option<Vec<u32>>,
+    /// Supports changed since cover was last worked out, each with the
+    /// span it had before: a support taken away reached that far. `None`
+    /// until the first full pass, or after too many to patch.
+    support_changed: Option<Vec<(u32, u8)>>,
     /// Who owns the fixture here, as `faction as u8 + 1`; 0 is nobody.
     /// Only doors read it: a door opens for its owner and blocks everyone
     /// else, which is what makes a wall with a door in it still a wall.
@@ -490,7 +491,7 @@ impl Map {
         }
         if self.span_at(i) != was && !self.under_rock(i) {
             if let Some(c) = &mut self.support_changed {
-                c.push(i as u32);
+                c.push((i as u32, was));
             }
         }
         self.terrain_cost[i] = cost.min(u16::MAX as u32) as u16;
@@ -944,9 +945,10 @@ impl Map {
         match self.support_changed.take() {
             Some(changed) if changed.len() <= 32 => {
                 let top = self.roofed_cells().map(|i| self.span_at(i)).max().unwrap_or(0).max(1) as i32;
-                for i in changed {
-                    // Every cell a support here could have reached, or can.
-                    self.cover_window(self.pos(i as usize), top);
+                for (i, was) in changed {
+                    // Every cell a support here could have reached, or can:
+                    // what it held before may be wider than anything left.
+                    self.cover_window(self.pos(i as usize), top.max(was as i32));
                 }
             }
             _ => {
@@ -1184,11 +1186,12 @@ impl Map {
     pub fn set_support(&mut self, p: IVec, span: u8) {
         let i = self.idx(p);
         if self.support[i] != span {
+            let was = self.span_at(i);
             self.support[i] = span;
             self.rooms_dirty = true;
             let rock = self.under_rock(i);
             if let Some(c) = self.support_changed.as_mut().filter(|_| !rock) {
-                c.push(i as u32);
+                c.push((i as u32, was));
             }
         }
     }
@@ -1336,6 +1339,21 @@ mod tests {
             }
             m.ensure_rooms();
             assert_eq!(m.cover, brute(&m), "round {round}");
+        }
+    }
+
+    /// Taking away, or narrowing, the widest support: what it reached is
+    /// wider than any span left standing, and all of it is worked out again.
+    #[test]
+    fn patched_cover_forgets_the_widest_support() {
+        for after in [0, 2] {
+            let mut m = Map::new(40, 30);
+            m.set_support(IVec::new(10, 10), 5);
+            m.set_support(IVec::new(30, 20), 3);
+            m.ensure_rooms();
+            m.set_support(IVec::new(10, 10), after);
+            m.ensure_rooms();
+            assert_eq!(m.cover, brute(&m), "narrowed to {after}");
         }
     }
 }

@@ -2,11 +2,12 @@
 id: ee70db4e-1cab-4508-b056-615a5d9b2843
 title: Removing the widest support leaves stale roof cover past the patch window
 type: bug
-status: doing
+status: done
 milestone: bare-metal
 assignee: Oddur Sigurdsson
 created: 2026-09-28
 updated: 2026-09-28
+closed_at: 2026-09-28
 priority: p2
 api: none
 layer: engine
@@ -30,8 +31,8 @@ Map test: two supports, spans 5 and 3, far apart; `ensure_rooms`; set the span-5
 
 ## Acceptance
 
-- [ ] Patched cover equals cover from scratch after the widest support is removed or narrowed
-- [ ] A test that fails before the fix and passes after
+- [x] Patched cover equals cover from scratch after the widest support is removed or narrowed
+- [x] A test that fails before the fix and passes after
 
 ## 2026-09-28
 
