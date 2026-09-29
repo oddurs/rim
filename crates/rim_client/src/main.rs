@@ -340,10 +340,12 @@ const KEY_NAMES: &[(KeyCode, &str)] = &[
 /// A character from the text path that a text input should keep. Control
 /// characters are the keys the input already handles; the private-use
 /// range is how macOS spells its arrow, home, end and function keys in
-/// the same stream.
-fn typed_char(c: char) -> Option<char> {
+/// the same stream. macOS also sends Cmd+K as a plain 'k', so nothing is
+/// typed while Cmd or Ctrl is held, unless Alt is too: Windows reports
+/// AltGr, which types '@' and '€' on many layouts, as Ctrl+Alt.
+fn typed_char(c: char, command: bool, alt: bool) -> Option<char> {
     let private = ('\u{e000}'..='\u{f8ff}').contains(&c);
-    (!c.is_control() && !private).then_some(c)
+    (!c.is_control() && !private && (!command || alt)).then_some(c)
 }
 
 #[cfg(test)]
@@ -427,12 +429,20 @@ mod tests {
 
     #[test]
     fn function_keys_are_not_text() {
-        assert_eq!(super::typed_char('a'), Some('a'));
-        assert_eq!(super::typed_char('é'), Some('é'));
-        assert_eq!(super::typed_char(' '), Some(' '));
-        assert_eq!(super::typed_char('\u{f701}'), None, "macOS down arrow");
-        assert_eq!(super::typed_char('\u{8}'), None, "backspace");
-        assert_eq!(super::typed_char('\u{1b}'), None, "escape");
+        let plain = |c| super::typed_char(c, false, false);
+        assert_eq!(plain('a'), Some('a'));
+        assert_eq!(plain('é'), Some('é'));
+        assert_eq!(plain(' '), Some(' '));
+        assert_eq!(plain('\u{f701}'), None, "macOS down arrow");
+        assert_eq!(plain('\u{8}'), None, "backspace");
+        assert_eq!(plain('\u{1b}'), None, "escape");
+    }
+
+    #[test]
+    fn a_command_key_types_nothing() {
+        assert_eq!(super::typed_char('k', true, false), None, "Cmd+K on macOS arrives as 'k'");
+        assert_eq!(super::typed_char('@', true, true), Some('@'), "AltGr is Ctrl+Alt on Windows");
+        assert_eq!(super::typed_char('ø', false, true), Some('ø'), "Option types on macOS");
     }
 }
 
@@ -1098,17 +1108,17 @@ impl RawInput {
         let (scroll, wheel, repeats) = Events::gather(wheel_sub);
         let mut keys: Vec<KeyCode> = Self::gathered_keys().filter(|k| is_key_pressed(*k)).collect();
         keys.extend(repeats);
-        let mut chars = Vec::new();
-        while let Some(c) = get_char_pressed() {
-            if let Some(c) = typed_char(c) {
-                chars.push(c);
-            }
-        }
         let ctrl = is_key_down(KeyCode::LeftControl)
             || is_key_down(KeyCode::RightControl)
             || is_key_down(KeyCode::LeftSuper)
             || is_key_down(KeyCode::RightSuper);
         let alt = is_key_down(KeyCode::LeftAlt) || is_key_down(KeyCode::RightAlt);
+        let mut chars = Vec::new();
+        while let Some(c) = get_char_pressed() {
+            if let Some(c) = typed_char(c, ctrl, alt) {
+                chars.push(c);
+            }
+        }
         let shift_down = is_key_down(KeyCode::LeftShift) || is_key_down(KeyCode::RightShift);
         let mut pressed = Vec::new();
         for (code, name) in KEY_NAMES {

@@ -2,10 +2,12 @@
 id: a2e82495-9ffb-4c7e-94a3-674e41cc206c
 title: Cmd with a letter types the letter into a text box on macOS
 type: bug
-status: backlog
+status: done
 milestone: bare-metal
+assignee: Oddur Sigurdsson
 created: 2026-09-28
 updated: 2026-09-28
+closed_at: 2026-09-28
 priority: p3
 api: none
 layer: client
