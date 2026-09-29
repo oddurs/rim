@@ -335,3 +335,38 @@ pub(super) async fn ui_budget_live(t: &mut T) {
         t.app.ui.info.nodes, t.app.ui.builds
     );
 }
+
+/// eea57f29 leaving a colony. The last section: the game is closed after it.
+pub(super) async fn leave_to_title(t: &mut T) {
+    println!("\n# leaving a colony brings the title back (eea57f29)");
+    let dock = t.app.ui.find("core:dock.orders").is_some();
+    // The binding has no key of its own; lend it one, as a player could.
+    t.app.ui.rebind("core:leave", Some("f9"));
+    t.key(KeyCode::F9).await;
+    t.check(t.app.leaving, "Leave to title asks to leave");
+    // What play does on leaving, then what main does next: the title, on
+    // the same UI, over a world of the loaded defs.
+    crate::play::close(&mut t.app);
+    t.check(t.app.saver.is_none(), "and the game is closed");
+    let world = World::new(t.w().defs.clone(), 1, 1, 7);
+    for _ in 0..4 {
+        t.clock += 1.0 / 60.0;
+        crate::title::frame(
+            &mut t.app.ui,
+            &t.app.atlas,
+            &world,
+            &[],
+            &RawInput { time: t.clock, ..Default::default() },
+        );
+        next_frame().await;
+    }
+    t.clock += 1.0 / 60.0;
+    crate::title::frame(&mut t.app.ui, &t.app.atlas, &world, &[], &RawInput { time: t.clock, ..Default::default() });
+    let img = get_screen_data();
+    next_frame().await;
+    t.save_shot("title_after_leaving", img);
+    t.check(
+        dock && t.app.ui.find("core:title.new").is_some() && t.app.ui.find("core:dock.orders").is_none(),
+        "the title is up, offering a new colony, and nothing of the game is",
+    );
+}

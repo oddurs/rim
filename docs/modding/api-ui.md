@@ -14,6 +14,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `act.delete_role` | `(role: number) -> ()` | Delete one of the player's own work roles (a role from a mod can't be deleted), by its index in view.board().roles. Its members go to the default role and keep their pins; the roles after it move down one. |
 | `act.draft` | `(id: number, on: boolean) -> ()` | Draft or undraft a colonist. |
 | `act.focus` | `(id: number) -> ()` | Move the camera to a pawn or thing, and to its level. |
+| `act.leave` | `() -> ()` | Save the colony and go back to the title screen. A last snapshot is taken first, as quitting does. |
 | `act.level` | `(z: number) -> ()` | Show level z: 0 is the surface, below it is negative. Past the top or bottom level it stays at the last. |
 | `act.lighting` | `(preset: string) -> ()` | The lighting preset: 'low', 'medium', 'high', 'ultra', or 'auto', which starts at medium and steps down while the lighting runs slow. Settings the player set by hand under [lighting] stay. Saved for the player. |
 | `act.load` | `(path: string) -> ()` | Play a save from view.saves() (the title screen). |

@@ -90,6 +90,10 @@ impl T {
 
     async fn shot(&mut self, name: &str) {
         let img = self.grab().await;
+        self.save_shot(name, img);
+    }
+
+    fn save_shot(&mut self, name: &str, img: Image) {
         self.shots += 1;
         // Def ids have a colon ("core:light"), which Windows and CI artifacts refuse.
         let path = self.dir.join(format!("{:02}_{}.png", self.shots, name.replace(':', "_")));
@@ -486,6 +490,8 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     chalk::several_selected(&mut t, &mut carry).await;
     chalk::an_urgent_hunt_shows(&mut t, &mut carry).await;
     chalk::unreachable(&mut t, &mut carry).await;
+    // Last: the colony is closed after it.
+    ui::leave_to_title(&mut t).await;
     println!("\n{} passed, {} failed; screenshots in {}", t.passed, t.failed.len(), t.dir.display());
     for f in &t.failed {
         println!("  FAIL {f}");

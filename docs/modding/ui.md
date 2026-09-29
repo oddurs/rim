@@ -177,6 +177,9 @@ replace it. It reads `view.saves()`, the player's saves newest first:
 was played) and `error`, which says why the save can't be read or why
 loading it failed. `act.load(path)` plays one and `act.new_colony()` starts
 a new one. The world views see an empty world here: no colonists, tick 0.
+In a colony, `act.leave()` saves it (a last snapshot, as quitting takes)
+and comes back here; core offers it as **Leave to title** in the command
+palette, with no key, so a stray press can't end a game.
 
 ## Reading the game: `view`
 
@@ -210,8 +213,8 @@ Every function in `ui`, `act` and `view`, with its types, is in the
 `act.select(id)`, `act.focus(id)`, `act.tool(key)`, `act.speed(n)`,
 `act.toggle_pause()`, `act.draft(id, on)`, `act.cycle_overlay()`,
 `act.set_overlay(index)`, `act.toggle_profiler()`, `act.toggle_devtools()`,
-`act.send(name, table)`, `act.advance(hours)`, and on the title screen
-`act.load(path)` and `act.new_colony()`.
+`act.send(name, table)`, `act.advance(hours)`, `act.leave()`, and on the
+title screen `act.load(path)` and `act.new_colony()`.
 
 `act.send(name, table)` sends an event to your mod's own sim scripts
 (`"my_mod:do_thing"`, heard with `rim.on` there). It travels as a player

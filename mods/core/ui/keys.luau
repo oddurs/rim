@@ -89,6 +89,11 @@ end)
 ui.bind("core:lighting_auto", { label = t("core:keys.lighting_auto", "Lighting: auto") }, function()
 	act.lighting("auto")
 end)
+-- Out of the colony, saved, to the title. No key: a stray press shouldn't
+-- end a game; the palette and the system menu reach it.
+ui.bind("core:leave", { label = t("core:keys.leave", "Leave to title") }, function()
+	act.leave()
+end)
 ui.bind("core:overlay", { key = "o", label = t("core:keys.overlay", "Next overlay") }, function()
 	act.cycle_overlay()
 end)

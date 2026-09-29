@@ -233,6 +233,8 @@ pub enum UiAction {
     Load(String),
     /// The title screen: start a new colony.
     NewColony,
+    /// In a colony: save it and go back to the title screen.
+    Leave,
 }
 
 /// The cell each pawn last stepped out of, kept by the renderer: what

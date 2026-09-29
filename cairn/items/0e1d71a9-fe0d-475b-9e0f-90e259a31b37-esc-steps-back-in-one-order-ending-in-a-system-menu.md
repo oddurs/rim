@@ -6,6 +6,7 @@ status: backlog
 milestone: rimos
 depends_on:
 - 2adfa3ac-b19d-41b3-bbfb-eeb18b7f3191
+- eea57f29-34f1-4530-af43-22b3749dde3a
 created: 2026-09-28
 updated: 2026-09-28
 priority: p0

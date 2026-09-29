@@ -178,4 +178,26 @@ mod tests {
         assert!(!saves[1].colonists.is_empty() && saves[1].error.is_none());
         std::fs::remove_dir_all(dir).unwrap();
     }
+
+    /// Leaving for the title closes the game as quitting does (play::close):
+    /// the ticks since the last log are in the save, not lost.
+    #[test]
+    fn a_game_closed_between_logs_loads_back_at_the_tick_it_left() {
+        let dir = std::env::temp_dir().join(format!("rim-leave-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let mods = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mods");
+        let path = dir.join("colony-1.rim");
+        let mut sim = Sim::new(&mods, 1).unwrap();
+        let w = Writer::spawn(SaveFile::create(&path, &mut sim).unwrap());
+        // Past a log, short of the next, so only the close can keep the rest.
+        let left = LOG_EVERY + LOG_EVERY / 2;
+        while sim.world.tick < left {
+            sim.step();
+            after_step(&w, &mut sim);
+        }
+        close(w, &mut sim);
+        let (back, _, r) = SaveFile::load(&path, &mods, &|_| true).unwrap();
+        assert_eq!((r.tick, back.world.tick), (left, left));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 }

@@ -856,6 +856,7 @@ impl UiVm {
         act!("advance", f64, |h| UiAction::Advance(h.clamp(0.0, 24.0 * 60.0)));
         act!("load", String, |path| UiAction::Load(path));
         act!("new_colony", (), |_a| UiAction::NewColony);
+        act!("leave", (), |_a| UiAction::Leave);
         // Send an event to this mod's own sim scripts: "<mod>:<name>". The mod
         // is the one whose UI code calls it (from its chunk name), so a mod
         // can't speak for another.

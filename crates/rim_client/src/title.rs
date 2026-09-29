@@ -20,29 +20,21 @@ pub async fn run(
     atlas: &Texture2D,
     wheel_sub: usize,
     mods: &Path,
-    defs: DefDb,
+    defs: Arc<DefDb>,
     seed: u64,
 ) -> Result<(Sim, Option<Writer>, Vec<String>), String> {
     // What the UI's world views read before there is a game.
-    let world = World::new(Arc::new(defs), 1, 1, seed);
+    let world = World::new(defs, 1, 1, seed);
     let mut failed: Vec<(String, String)> = Vec::new();
     let mut saves = with_failures(save::list(), &failed);
     loop {
-        let dpi = screen_dpi_scale();
-        ui.set_dpi(dpi);
+        // A game left for the title asked to hear of a close; there's
+        // nothing here to save.
+        if is_quit_requested() {
+            std::process::exit(0);
+        }
         let raw = RawInput::gather_ui(wheel_sub);
-        ui.check_reload(raw.time);
-        let client = ClientView {
-            screen: (screen_width() * dpi, screen_height() * dpi),
-            scale: ui.theme.scale,
-            time: raw.time,
-            warnings: ui.warnings(),
-            title: true,
-            saves: saves.clone(),
-            ..ClientView::default()
-        };
-        let out = ui.frame(&world, &client, &ui_input(&raw, dpi));
-        for action in out.actions {
+        for action in frame(ui, atlas, &world, &saves, &raw) {
             let (start, path) = match action {
                 UiAction::Load(path) => (save::Start::Load(PathBuf::from(&path)), Some(path)),
                 UiAction::NewColony => (save::Start::New, None),
@@ -59,11 +51,30 @@ pub async fn run(
                 (Err(e), None) => return Err(e),
             }
         }
-        clear_background(Color::from_rgba(18, 20, 23, 255));
-        upload_atlas(ui, atlas);
-        draw::ui(&out.draw, atlas, ui.text.atlas.white_texel(), dpi);
         next_frame().await;
     }
+}
+
+/// One frame of the title screen: input through the UI, then drawn. What
+/// the player picked comes back.
+pub fn frame(ui: &mut Ui, atlas: &Texture2D, world: &World, saves: &[SaveView], raw: &RawInput) -> Vec<UiAction> {
+    let dpi = screen_dpi_scale();
+    ui.set_dpi(dpi);
+    ui.check_reload(raw.time);
+    let client = ClientView {
+        screen: (screen_width() * dpi, screen_height() * dpi),
+        scale: ui.theme.scale,
+        time: raw.time,
+        warnings: ui.warnings(),
+        title: true,
+        saves: saves.to_vec(),
+        ..ClientView::default()
+    };
+    let out = ui.frame(world, &client, &ui_input(raw, dpi));
+    clear_background(Color::from_rgba(18, 20, 23, 255));
+    upload_atlas(ui, atlas);
+    draw::ui(&out.draw, atlas, ui.text.atlas.white_texel(), dpi);
+    out.actions
 }
 
 /// The saves, each with why it last failed to load, if it did.

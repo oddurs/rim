@@ -4,6 +4,8 @@ title: A lost colony has no way out
 type: bug
 status: backlog
 milestone: rimos
+depends_on:
+- eea57f29-34f1-4530-af43-22b3749dde3a
 created: 2026-09-28
 updated: 2026-09-28
 priority: p1
