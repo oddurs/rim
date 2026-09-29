@@ -272,6 +272,15 @@ pub(super) async fn camera_by_device(t: &mut T, carry: &mut Carry) {
             && (after_under.1 - under.1).abs() < 1e-3,
         "a pinch zooms about the pointer",
     );
+    // Over a panel the same pinch leaves the map be.
+    match t.ui_rect("core:dock") {
+        Some(r) => {
+            let before = cam(t);
+            t.input(RawInput { mouse: (r[0] + r[2] / 2.0, r[1] + r[3] / 2.0), pinch: 0.1, ..Default::default() }).await;
+            t.check(cam(t) == before, "a pinch over a panel doesn't zoom the map");
+        }
+        None => t.check(false, "the dock is there to pinch over"),
+    }
     let before = cam(t);
     t.key(KeyCode::Equal).await;
     t.check(cam(t).2 > before.2, "= zooms in");

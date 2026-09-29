@@ -1291,6 +1291,12 @@ pub fn frame(app: &mut App, raw: &RawInput) {
         apply(app, Action::Pan(raw.pan.0, raw.pan.1));
     }
     let (mx, my) = raw.mouse;
+    // A pinch zooms around the pointer, which is where the fingers are, as
+    // far as the fingers spread: continuous, so a slow pinch is slow. The UI
+    // captures only the wheel, so a pinch over a panel is stopped here.
+    if raw.pinch != 0.0 && !out.mouse_over_ui {
+        apply(app, Action::Zoom((1.0 + raw.pinch).clamp(0.5, 2.0), mx, my));
+    }
     if !out.captured_wheel {
         scroll_camera(app, raw);
     }
@@ -1666,11 +1672,6 @@ pub fn toggle_selected(app: &mut App, e: Entity) {
 /// step; Cmd or Ctrl with either zooms. The scroll setting can pin one.
 fn scroll_camera(app: &mut App, raw: &RawInput) {
     let (mx, my) = raw.mouse;
-    // A pinch zooms around the pointer, which is where the fingers are, as
-    // far as the fingers spread: continuous, so a slow pinch is slow.
-    if raw.pinch != 0.0 {
-        apply(app, Action::Zoom((1.0 + raw.pinch).clamp(0.5, 2.0), mx, my));
-    }
     let mut s = raw.scroll;
     if s.travel != (0.0, 0.0) {
         app.last_precise = raw.time;
