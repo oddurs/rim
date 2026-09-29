@@ -453,6 +453,12 @@ fn replay_logs(
             }
             sim.step();
         }
+        // Orders a paused game took at this very tick (`apply_pending`), with
+        // no step after them before the log was written.
+        while let Some((_, c)) = cmds.next_if(|c| c.0 == sim.world.tick) {
+            sim.push(c.clone());
+        }
+        sim.apply_pending();
         let diff = differing(&section_hashes(sim), &log.hashes);
         if !diff.is_empty() {
             return Err((log.tick, diff));

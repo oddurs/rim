@@ -3,11 +3,12 @@ id: 637
 uid: 768b6e39-1e85-4da3-aae1-3b821a496ca2
 title: Replay drops commands applied at a log's own tick
 type: bug
-status: doing
+status: done
 milestone: bare-metal
 assignee: Oddur Sigurdsson
 created: 2026-09-28
 updated: 2026-09-28
+closed_at: 2026-09-28
 priority: p2
 api: none
 layer: engine
@@ -40,5 +41,5 @@ In tests/savefile.rs: record, push a command, `apply_pending`, `save.log`, then 
 
 ## Acceptance
 
-- [ ] Commands applied at a log's own tick are replayed before its hash is checked
-- [ ] A test that fails before the fix and passes after
+- [x] Commands applied at a log's own tick are replayed before its hash is checked
+- [x] A test that fails before the fix and passes after

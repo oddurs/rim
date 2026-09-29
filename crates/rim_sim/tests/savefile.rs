@@ -425,6 +425,29 @@ fn a_replay_that_diverges_names_the_tick_and_the_sections() {
     let _ = std::fs::remove_file(path);
 }
 
+/// A paused game takes orders at the tick boundary (`Sim::apply_pending`),
+/// and quitting then logs them at that same tick: a replay applies them
+/// before it checks that log.
+#[test]
+fn a_replay_applies_orders_given_at_its_log_s_own_tick() {
+    let path = save_path("replay-paused");
+    let mods = common::mods();
+    let (mut sim, mut save) = new_game(&mods, &path);
+    let mut hashes = BTreeMap::new();
+    play(&mut sim, &mut save, 600, &mut hashes);
+    let c = sim.world.colony_center().unwrap();
+    let (wall, wood) = (sim.world.defs.thing_id("wall").unwrap(), sim.world.defs.thing_id("wood"));
+    sim.push(Command::Build { thing: wall, stuff: wood, a: c.offset(-6, 8), b: c.offset(-2, 8), facing: 0 });
+    sim.apply_pending();
+    save.snapshot(&mut sim).unwrap();
+    play(&mut sim, &mut save, 600, &mut hashes);
+    drop(save);
+    let r = savefile::replay(&path, &mods, None).unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(r.diverged, None);
+    assert_eq!(r.checked.last(), Some(&1_200));
+    let _ = std::fs::remove_file(path);
+}
+
 #[test]
 fn a_save_begun_mid_game_is_rooted_at_its_snapshot() {
     let path = save_path("replay-late");
