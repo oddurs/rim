@@ -2,10 +2,12 @@
 id: 4d4c81e4-36b0-47b8-97ad-b341e246714f
 title: Holding Backspace or an arrow in a text box acts once
 type: bug
-status: backlog
+status: done
 milestone: bare-metal
+assignee: Oddur Sigurdsson
 created: 2026-09-28
 updated: 2026-09-28
+closed_at: 2026-09-28
 priority: p2
 api: none
 layer: client

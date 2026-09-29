@@ -217,7 +217,7 @@ pub struct App {
     fade_blit: Option<Material>,
     /// Where the player's settings are saved; none in the autotest.
     settings_file: Option<PathBuf>,
-    /// Input subscriber for wheel events (see `Wheel`).
+    /// Input subscriber for wheel and key-repeat events (see `Events`).
     wheel_sub: usize,
     /// The save this game appends to, if it's being saved.
     pub saver: Option<rim_sim::savefile::Writer>,
@@ -410,6 +410,19 @@ mod tests {
         };
         let keys = super::ui_input(&raw, 1.0).keys;
         assert!(keys.contains(&rim_ui::Key::Up) && keys.contains(&rim_ui::Key::Down), "{keys:?}");
+    }
+
+    /// A held Backspace or arrow acts again, as a held letter types again;
+    /// Escape and keys the UI doesn't map don't.
+    #[test]
+    fn a_held_editing_key_repeats() {
+        use macroquad::miniquad::{EventHandler, KeyMods};
+        use macroquad::prelude::KeyCode::*;
+        let mut e = super::Events::default();
+        for (code, repeat) in [(Backspace, true), (Left, true), (Down, false), (Escape, true), (A, true), (Tab, true)] {
+            e.key_down_event(code, KeyMods::default(), repeat);
+        }
+        assert_eq!(e.repeats, [Backspace, Left]);
     }
 
     #[test]
@@ -907,17 +920,36 @@ fn to_u8(c: Color) -> [u8; 3] {
 
 /// One frame's raw input, in logical points. The real loop gathers it from
 /// macroquad; `--autotest` builds it by hand, so both drive the same path.
-/// Every scroll event in a frame, as the backend reported them.
-/// `mouse_wheel()` keeps only the last one, and a trackpad sends several
-/// per frame.
-struct Wheel(Vec<(f32, f32)>);
+/// The raw events a frame needs that macroquad's polled state loses.
+#[derive(Default)]
+struct Events {
+    /// Every scroll event, as the backend reported them. `mouse_wheel()`
+    /// keeps only the last one, and a trackpad sends several per frame.
+    wheel: Vec<(f32, f32)>,
+    /// A held key's repeats. `is_key_pressed` sees only the first press, so
+    /// a held Backspace would take one character while a held letter
+    /// types on.
+    repeats: Vec<KeyCode>,
+}
 
-impl macroquad::miniquad::EventHandler for Wheel {
+impl macroquad::miniquad::EventHandler for Events {
     fn update(&mut self) {}
     fn draw(&mut self) {}
     fn mouse_wheel_event(&mut self, x: f32, y: f32) {
-        self.0.push((x, y));
+        self.wheel.push((x, y));
     }
+    fn key_down_event(&mut self, code: KeyCode, _: macroquad::miniquad::KeyMods, repeat: bool) {
+        if repeat && repeats(code) {
+            self.repeats.push(code);
+        }
+    }
+}
+
+/// Does holding this key act again: the UI's editing and list keys do,
+/// Escape doesn't (a held Escape would close window after window), and
+/// bindings never see repeats at all.
+fn repeats(code: KeyCode) -> bool {
+    code != KeyCode::Escape && UI_KEYS.iter().any(|&(c, _)| c == code)
 }
 
 /// One wheel notch in the backend's units. miniquad passes macOS's
@@ -966,20 +998,21 @@ pub fn classify(events: &[(f32, f32)], notch: f32, points: f32, shift: bool) -> 
     s
 }
 
-impl Wheel {
-    /// This frame's scrolling: sorted for the camera, and summed in notches
-    /// for the interface's scroll areas (fractional on a trackpad).
-    fn gather(sub: usize) -> (Scroll, f32) {
-        let mut w = Wheel(Vec::new());
-        macroquad::input::utils::repeat_all_miniquad_input(&mut w, sub);
+impl Events {
+    /// This frame's scrolling, sorted for the camera and summed in notches
+    /// for the interface's scroll areas (fractional on a trackpad), and its
+    /// key repeats.
+    fn gather(sub: usize) -> (Scroll, f32, Vec<KeyCode>) {
+        let mut e = Events::default();
+        macroquad::input::utils::repeat_all_miniquad_input(&mut e, sub);
         let shift =
             macroquad::input::is_key_down(KeyCode::LeftShift) || macroquad::input::is_key_down(KeyCode::RightShift);
-        let scroll = classify(&w.0, NOTCH, POINTS_PER_UNIT, shift);
-        let mut y: f32 = w.0.iter().map(|e| e.1).sum();
+        let scroll = classify(&e.wheel, NOTCH, POINTS_PER_UNIT, shift);
+        let mut y: f32 = e.wheel.iter().map(|e| e.1).sum();
         if shift && y == 0.0 {
-            y = w.0.iter().map(|e| e.0).sum();
+            y = e.wheel.iter().map(|e| e.0).sum();
         }
-        (scroll, (y / NOTCH).clamp(-4.0, 4.0))
+        (scroll, (y / NOTCH).clamp(-4.0, 4.0), e.repeats)
     }
 }
 
@@ -1062,7 +1095,9 @@ impl RawInput {
     /// The mouse, keys and text: everything but the camera.
     fn gather_ui(wheel_sub: usize) -> RawInput {
         let (mx, my) = mouse_position();
-        let keys = Self::gathered_keys().filter(|k| is_key_pressed(*k)).collect();
+        let (scroll, wheel, repeats) = Events::gather(wheel_sub);
+        let mut keys: Vec<KeyCode> = Self::gathered_keys().filter(|k| is_key_pressed(*k)).collect();
+        keys.extend(repeats);
         let mut chars = Vec::new();
         while let Some(c) = get_char_pressed() {
             if let Some(c) = typed_char(c) {
@@ -1089,7 +1124,6 @@ impl RawInput {
             }
         }
 
-        let (scroll, wheel) = Wheel::gather(wheel_sub);
         RawInput {
             mouse: (mx, my),
             left_pressed: is_mouse_button_pressed(MouseButton::Left),
