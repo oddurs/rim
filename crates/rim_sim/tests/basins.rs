@@ -200,3 +200,54 @@ fn a_load_between_water_passes_keeps_what_the_water_did() {
         }
     }
 }
+
+/// Opens a cell from inside a step, as a finished dig does: the save made
+/// right after that step must load into the water the live game has
+/// (8d246327). Before, the save held the basins from before the dig, and
+/// the load rebuilt them quietly, dropping one basin's water where two
+/// became one.
+#[test]
+fn a_save_on_the_tick_two_basins_join_loads_the_same_water() {
+    let opener = r#"
+rim.on("probe:open", function(e)
+    rim.set_terrain(e.x, e.y, e.terrain, e.z)
+end)
+"#;
+    let dir = common::test_mods("basins-join", &["core"], &[("probe", &[("scripts/open.luau", opener)])]);
+    let mut s = Sim::build(&dir, 3, &|_| true, 64).unwrap();
+    let c = s.world.colony_center().unwrap();
+    let mid = IVec::at(c.x, c.y, -2);
+    // Two rooms with one rock cell between them, both seeping.
+    let (a, b, gap) = (room(&mut s, mid), room(&mut s, mid.offset(4, 0)), mid.offset(2, 0));
+    set(&mut s, mid.offset(-2, 0), "wet_limestone");
+    set(&mut s, mid.offset(6, 0), "wet_limestone");
+    let depth = |s: &Sim, cells: &[IVec]| cells.iter().map(|&p| s.world.water_depth(p)).max().unwrap_or(0);
+    assert!(run(&mut s, 60_000, |s| depth(s, &a) >= 2 && depth(s, &b) >= 2), "water seeps into both");
+    let leaves = s.world.solid_at(gap).and_then(|r| r.leaves_r).expect("rock between them");
+    let leaves = s.world.defs.terrain[leaves as usize].id.clone();
+    let at = |k: &str, v: rim_sim::data::Data| (rim_sim::data::Key::Str(k.into()), v);
+    let data = [
+        at("x", rim_sim::data::Data::Int(gap.x as i64)),
+        at("y", rim_sim::data::Data::Int(gap.y as i64)),
+        at("z", rim_sim::data::Data::Int(gap.z as i64)),
+        at("terrain", rim_sim::data::Data::Str(leaves)),
+    ];
+    let data = Some(rim_sim::data::Data::Table(data.into_iter().collect()));
+    s.push(rim_sim::Command::ModEvent { name: "probe:open".into(), data });
+    s.step();
+    assert!(s.world.solid_at(gap).is_none(), "the gap is open");
+    let mut back = Snapshot::capture(&s).restore(&dir, &|_| true).unwrap();
+    for _ in 0..3 * rim_sim::world::WATER_EVERY {
+        s.step();
+        back.step();
+    }
+    let cells: Vec<IVec> = a.iter().chain(&b).copied().chain([gap]).collect();
+    let water = |s: &Sim| cells.iter().map(|&p| s.world.water_depth(p)).collect::<Vec<_>>();
+    assert_eq!(water(&back), water(&s), "the loaded game's water is the live game's");
+    // The water, and the world with its news and pending events.
+    let (x, y) = (Snapshot::capture(&back), Snapshot::capture(&s));
+    for section in ["engine:water", "engine:world"] {
+        assert!(x.sections.get(section) == y.sections.get(section), "{section} matches");
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}
