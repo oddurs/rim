@@ -2695,6 +2695,19 @@ impl DefDb {
         self.warnings.extend(warnings);
         for d in &mut self.needs {
             d.rgb = parse_color(&d.color).map_err(|e| format!("need/{}: {e}", d.id))?;
+            // Rates divide by these, and what they give is added to a level.
+            let days = |v: f64| v > 0.0 && v.is_finite();
+            if !days(d.days_to_empty)
+                || !days(d.recover_days)
+                || !(0.0..=1.0).contains(&d.seek_below)
+                || !(d.empty_damage_per_day >= 0.0 && d.empty_damage_per_day.is_finite())
+            {
+                return Err(format!(
+                    "need/{}: `days_to_empty` and `recover_days` are days above 0, `seek_below` is from 0 to 1, and \
+                     `empty_damage_per_day` is 0 or more",
+                    d.id
+                ));
+            }
             if let Some(say) = &d.say {
                 if !(0.0..=1.0).contains(&say.below) || say.lines.is_empty() || say.ticks == 0 {
                     return Err(format!(
@@ -3086,6 +3099,15 @@ impl DefDb {
             if let Some(f) = fed.filter_map(|f| computed[f as usize]).next() {
                 return Err(format!(
                     "{ctx}: field {f} is worked out from others, so nothing can emit into it or bound it"
+                ));
+            }
+            let amount = |v: f64| v >= 0.0 && v.is_finite();
+            if d.food.as_ref().is_some_and(|f| !amount(f.nutrition))
+                || d.bed.as_ref().is_some_and(|b| !amount(b.rest_rate))
+                || d.harvest.iter().any(|h| !h.regrow_days.is_finite())
+            {
+                return Err(format!(
+                    "{ctx}: `nutrition` and `rest_rate` are 0 or more, and `regrow_days` is a number of days"
                 ));
             }
             d.stack_limit = d.stack_limit.max(1);

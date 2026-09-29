@@ -134,7 +134,7 @@ pub fn needs(w: &mut World) {
                 }
                 _ => -(NEED_MAX as f64) * frac / nd.days_to_empty,
             };
-            n.1 = (n.1 + w.streams.draw(SIM, who, w.tick, k as u64).round(delta)).clamp(0, NEED_MAX);
+            n.1 = n.1.saturating_add(w.streams.draw(SIM, who, w.tick, k as u64).round(delta)).clamp(0, NEED_MAX);
             if let Some(say) = nd.say.as_ref().filter(|_| talks) {
                 let level = (say.below * NEED_MAX as f64) as i32;
                 if was >= level && n.1 < level {
@@ -148,7 +148,7 @@ pub fn needs(w: &mut World) {
         }
         let max = defs.creature(p.def).max_hp;
         if starving {
-            p.hp -= w.streams.draw(SIM, who, w.tick, u64::MAX).round(dmg);
+            p.hp = p.hp.saturating_sub(w.streams.draw(SIM, who, w.tick, u64::MAX).round(dmg));
             if p.hp <= 0 {
                 p.dead = true;
             }
