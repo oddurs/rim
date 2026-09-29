@@ -394,6 +394,22 @@ mod tests {
         assert!(markable(&s.world.defs, gather));
     }
 
+    /// Every key the UI maps is one the frame collects: the arrows once
+    /// weren't, and the command palette never heard them.
+    #[test]
+    fn the_ui_hears_every_key_it_maps() {
+        let gathered: Vec<_> = super::RawInput::gathered_keys().collect();
+        for (code, key) in super::UI_KEYS {
+            assert!(gathered.contains(&code), "{key:?} is mapped but {code:?} is never collected");
+        }
+        let raw = super::RawInput {
+            keys: vec![macroquad::prelude::KeyCode::Up, macroquad::prelude::KeyCode::Down],
+            ..Default::default()
+        };
+        let keys = super::ui_input(&raw, 1.0).keys;
+        assert!(keys.contains(&rim_ui::Key::Up) && keys.contains(&rim_ui::Key::Down), "{keys:?}");
+    }
+
     #[test]
     fn function_keys_are_not_text() {
         assert_eq!(super::typed_char('a'), Some('a'));
@@ -1035,23 +1051,16 @@ impl RawInput {
         raw
     }
 
+    /// The keys gathered as keys, not text: every key the UI maps
+    /// (`UI_KEYS`), and Tab and Enter, which it reads as flags.
+    fn gathered_keys() -> impl Iterator<Item = KeyCode> {
+        UI_KEYS.iter().map(|&(code, _)| code).chain([KeyCode::Tab, KeyCode::Enter])
+    }
+
     /// The mouse, keys and text: everything but the camera.
     fn gather_ui(wheel_sub: usize) -> RawInput {
         let (mx, my) = mouse_position();
-        let keys = [
-            KeyCode::Escape,
-            KeyCode::Tab,
-            KeyCode::Enter,
-            KeyCode::Backspace,
-            KeyCode::Delete,
-            KeyCode::Left,
-            KeyCode::Right,
-            KeyCode::Home,
-            KeyCode::End,
-        ]
-        .into_iter()
-        .filter(|k| is_key_pressed(*k))
-        .collect();
+        let keys = Self::gathered_keys().filter(|k| is_key_pressed(*k)).collect();
         let mut chars = Vec::new();
         while let Some(c) = get_char_pressed() {
             if let Some(c) = typed_char(c) {
@@ -1211,17 +1220,7 @@ fn ui_input(raw: &RawInput, dpi: f32) -> rim_ui::Input {
         keys: {
             use rim_ui::Key;
             let mut keys: Vec<Key> = raw.chars.iter().map(|&c| Key::Char(c)).collect();
-            for (code, key) in [
-                (KeyCode::Backspace, Key::Backspace),
-                (KeyCode::Delete, Key::Delete),
-                (KeyCode::Left, Key::Left),
-                (KeyCode::Right, Key::Right),
-                (KeyCode::Up, Key::Up),
-                (KeyCode::Down, Key::Down),
-                (KeyCode::Home, Key::Home),
-                (KeyCode::End, Key::End),
-                (KeyCode::Escape, Key::Escape),
-            ] {
+            for &(code, key) in &UI_KEYS {
                 if has(code) {
                     keys.push(key);
                 }
@@ -1231,6 +1230,22 @@ fn ui_input(raw: &RawInput, dpi: f32) -> rim_ui::Input {
         time: raw.time,
     }
 }
+
+/// The keys the UI takes as keys: editing a focused input, and moving
+/// through a list or a menu. `RawInput::gather_ui` collects these and
+/// `ui_input` maps them, from this one list, so an arrow can't be mapped
+/// and never collected again.
+const UI_KEYS: [(KeyCode, rim_ui::Key); 9] = [
+    (KeyCode::Backspace, rim_ui::Key::Backspace),
+    (KeyCode::Delete, rim_ui::Key::Delete),
+    (KeyCode::Left, rim_ui::Key::Left),
+    (KeyCode::Right, rim_ui::Key::Right),
+    (KeyCode::Up, rim_ui::Key::Up),
+    (KeyCode::Down, rim_ui::Key::Down),
+    (KeyCode::Home, rim_ui::Key::Home),
+    (KeyCode::End, rim_ui::Key::End),
+    (KeyCode::Escape, rim_ui::Key::Escape),
+];
 
 /// One frame of input: UI first, then the world gets what the UI didn't take.
 pub fn frame(app: &mut App, raw: &RawInput) {
