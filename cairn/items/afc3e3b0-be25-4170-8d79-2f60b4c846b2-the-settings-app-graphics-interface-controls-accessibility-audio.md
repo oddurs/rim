@@ -21,16 +21,26 @@ Every setting is a palette command or a file key (settings.rs). There is no sett
 
 ## Proposal
 
+Few options, on purpose. The user's direction: performance is the number one feature, and anything in its way goes; "in rare cases we give people options in settings". The fastest look is everyone's look, so a setting earns its place only when players' machines or bodies genuinely differ.
+
 One app with a page per area and per mod (`ui.settings_page`), the same on the title and in a colony:
-- Graphics: lighting presets, render scale, window mode, vsync.
-- Interface: UI scale, reset window positions, toasts.
-- Controls: scroll, edge pan.
-- Accessibility: reduce motion, text size, colour sets.
+- Graphics: render scale, window mode.
+- Interface: UI scale, reset window positions.
+- Controls: scroll, and the keybind editor (48f96f56).
+- Accessibility: reduce motion, text size, colour sets. These are the rare cases: low vision and colour blindness differ between players, and neither costs anything at runtime.
 - Audio: its slots reserved until rim has sound.
 
-Changes apply at once and write settings.toml as today. The Flat lighting preset has a slot, pending its decision. Overlaps 05033e73 (Settings in 1.0); the user decides whether that item moves here.
+Left out:
+- Lighting: one lighting for everyone, the user's call (08a5d182).
+- vsync, a toasts toggle, edge pan, camera speed: each has one right answer.
+
+Changes apply at once and write settings.toml as today. Overlaps 05033e73 (Settings in 1.0); the user decides whether that item moves here.
 
 ## Acceptance criteria
 
 - [ ] Every key in settings.toml is reachable from the app (autotest walks the pages)
 - [ ] Changing a setting on the title takes effect (title.rs no longer drops them)
+
+## 2026-09-28
+
+Trimmed to the user's 'rarely options' direction (relayed by rim-c2): lighting, vsync, toasts, edge pan and camera speed are out; text size and colour sets stay as accessibility; see the proposal for why.
