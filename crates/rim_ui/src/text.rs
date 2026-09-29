@@ -211,6 +211,9 @@ pub struct Text {
     /// when it did not fit.
     image_slots: HashMap<(String, u32), Option<[u16; 4]>>,
     pub atlas: Atlas,
+    /// The atlas filled up this frame. It is cleared when the next frame
+    /// begins, not now: quads already handed out this frame point into it.
+    full: bool,
     /// Shaping cache misses, for tests and the profiler.
     pub shapes: u64,
     /// Snap glyph advances to whole pixels. Crisper small text on 1x
@@ -301,6 +304,7 @@ impl Text {
             slots: HashMap::new(),
             image_slots: HashMap::new(),
             atlas: Atlas::new(1024),
+            full: false,
             shapes: 0,
             hinting: false,
             leading: (1.3, 1.3),
@@ -311,6 +315,12 @@ impl Text {
     /// as it was, old profiler numbers) are dropped so the cache stays small.
     pub fn begin_frame(&mut self) {
         self.frame += 1;
+        // Full last frame: start over. Everything re-rasterises on demand.
+        if std::mem::take(&mut self.full) {
+            self.atlas.clear();
+            self.slots.clear();
+            self.image_slots.clear();
+        }
         // cosmic-text's own shaping cache (text + attributes, any wrap
         // width): keep runs used in the last few seconds.
         self.fonts.shape_run_cache.trim(300);
@@ -470,7 +480,10 @@ impl Text {
             Some(s) => *s,
             None => {
                 let placed = self.place_image(img);
-                self.image_slots.insert(key, placed);
+                // Not remembered when the atlas was only full for now.
+                if !self.full {
+                    self.image_slots.insert(key, placed);
+                }
                 placed
             }
         }?;
@@ -484,14 +497,9 @@ impl Text {
 
     fn place_image(&mut self, img: &crate::image::ImageData) -> Option<[u16; 4]> {
         let (w, h) = (img.w, img.h);
-        let (ax, ay) = match self.atlas.alloc(w, h) {
-            Some(a) => a,
-            None => {
-                self.atlas.clear();
-                self.slots.clear();
-                self.image_slots.clear();
-                self.atlas.alloc(w, h)?
-            }
+        let Some((ax, ay)) = self.atlas.alloc(w, h) else {
+            self.full = true;
+            return None;
         };
         let size = self.atlas.size;
         for row in 0..h {
@@ -509,20 +517,17 @@ impl Text {
             return *s;
         }
         let img = self.swash.get_image_uncached(&mut self.fonts, key);
+        let mut full = false;
         let slot = img.and_then(|img| {
             let (w, h) = (img.placement.width, img.placement.height);
             if w == 0 || h == 0 {
                 return None;
             }
-            let (ax, ay) = match self.atlas.alloc(w, h) {
-                Some(a) => a,
-                None => {
-                    // Full: start over. Everything re-rasterises on demand.
-                    self.atlas.clear();
-                    self.slots.clear();
-                    self.image_slots.clear();
-                    self.atlas.alloc(w, h)?
-                }
+            // Full: this glyph waits a frame. Clearing now would pull the
+            // pixels from under quads this frame already drew.
+            let Some((ax, ay)) = self.atlas.alloc(w, h) else {
+                full = true;
+                return None;
             };
             let size = self.atlas.size;
             for row in 0..h {
@@ -554,7 +559,40 @@ impl Text {
                 color: matches!(img.content, SwashContent::Color),
             })
         });
+        if full {
+            self.full = true;
+            return None;
+        }
         self.slots.insert(key, slot);
         slot
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A glyph that doesn't fit waits for the next frame, rather than the
+    /// atlas being cleared under quads the frame already drew (3b6bf7dc).
+    #[test]
+    fn a_full_atlas_mid_frame_leaves_the_frame_s_glyphs_in_place() {
+        let mut t = Text::new(None, &[]).expect("a font");
+        t.begin_frame();
+        let first = t.quads("Ag", 32.0, 400, 0.0, None, 0.0, 0.0);
+        let [x, y, w, h] = first[0].uv.map(|v| v as usize);
+        let size = t.atlas.size as usize;
+        let ink = |t: &Text| -> Vec<u8> {
+            (y..y + h).flat_map(|r| t.atlas.pixels[(r * size + x) * 4..(r * size + x + w) * 4].to_vec()).collect()
+        };
+        let drawn = ink(&t);
+        // Far more ink than the atlas holds, in the same frame.
+        for px in (40..400).step_by(3) {
+            t.quads("WM@#", px as f32, 400, 0.0, None, 0.0, 0.0);
+        }
+        assert!(ink(&t) == drawn, "the first quad still points at its glyph");
+        let cleared = t.atlas.generation;
+        t.begin_frame();
+        assert_eq!(t.atlas.generation, cleared + 1, "the next frame starts the atlas over");
+        assert!(!t.quads("Ag", 32.0, 400, 0.0, None, 0.0, 0.0).is_empty(), "and places its glyphs again");
     }
 }
