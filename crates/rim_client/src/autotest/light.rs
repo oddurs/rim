@@ -26,12 +26,20 @@ pub(super) async fn sun_shadows(t: &mut T, carry: &mut Carry) {
     let clear = |w: &World, p: IVec| {
         (-8..=11).all(|dy| {
             let c = p.offset(0, dy);
-            w.map.inb(c) && w.map.passable(c) && w.map.fixture_at(c).is_none() && w.solid_at(c).is_none()
+            dry(w, c) && w.map.passable(c) && w.map.fixture_at(c).is_none() && w.solid_at(c).is_none()
         })
     };
+    // Away from any fire: at night its light on the ground under the wall
+    // would cancel the contact shadow read there.
+    let lights: Vec<IVec> = t
+        .w()
+        .defs
+        .lookup("field", "light")
+        .map(|f| t.w().fields.emitters_of(f as usize).map(|(_, q, _, _)| q).collect())
+        .unwrap_or_default();
     let column = (0..60i32)
         .flat_map(|r| (-r..=r).flat_map(move |dy| (-r..=r).map(move |dx| site.offset(dx, dy))))
-        .find(|&p| clear(t.w(), p));
+        .find(|&p| clear(t.w(), p) && lights.iter().all(|q| q.chebyshev(p) > 10));
     if let Some(p) = column {
         let standing = t.app.sim.world.spawn_fixture(wall, p, false);
         t.check(standing.is_some(), "the test wall stands");

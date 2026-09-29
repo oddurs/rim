@@ -54,3 +54,23 @@ Nightly: runs the autotest once, on seed 7 (ci.yml:374). Criterion 2 needs seeds
 ## 2026-09-28
 
 The frame clock (this PR): two autotest runs on the same machine drew 69 of 92 screenshots differently on main b90b069e, and 8 of 92 with the frame clock. Of those 8, five show measured timings (the profiler, and one devtools line in four shots), which differ by design. Three are chunks rebuilt under mesh.rs's ZOOM_BUDGET_US, a wall-clock budget, at a new zoom (figures at 7 and 15, roofs at 8): silver-field's file, told. 396 of 396 checks passed in all four runs. On main the auto preset's wait was wall time, so the frames drawn there and everything after them varied from run to run. The auto wait and the moving-lights bake count now run on the autotest's clock, and the guard covers the autotest too.
+
+## 2026-09-28
+
+Seeds (this PR): the autotest failed on 6 of seeds 1–8 on main; 21 failures, 11 checks. Every one assumed seed 7's map, and each is fixed where it assumed:
+- the measuring grid's open() missed rock, now terrain (§6d): a max over rows let one swaying tree decide, and the pointer's lifted column could fall on the line read (median of rows, the line read chosen off the pointer);
+- the chop drag's first oak had no other in its box;
+- the replace hatch was read under the wall tool's ghost;
+- the walled-in tree's way in opened onto something (a free 5x5, the island in its middle);
+- the deer stood in a hut, the urgent mark was lit by a cloudy midday (pinned clear, read as the nearest-to-amber in a few pixels);
+- the water basin was dug under seeping rock or a lake (dry rock searched for);
+- the lit hut stood in shallow water, the window hut in the hall's shadow (dry ground, the window hut last with its west side clear);
+- the contact shadow sat on water, then beside the overlay section's campfire (dry, and away from lights);
+- the stairwell's light is read in 153rds, so foot and two cells on can tie;
+- the stacked scene and the gallery had fixed offsets onto rock and forest (searched for, plants cleared);
+- room labels were read two frames after a zoom, inside the UI's 50 ms cadence (settle);
+- the stockpile click landed on a hauled item;
+- the tree run needed a tree on a plan's row (row or column);
+- the chevrons were read a tick after the move order, the group two cells apart (walked there first);
+- the urgent hunt's day of ticks let the colony die (keep_well).
+Sweep after, on the frame clock: seeds 1–16 all pass, 392 checks each.

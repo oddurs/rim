@@ -70,17 +70,34 @@ pub(super) async fn the_grid(t: &mut T, carry: &mut Carry) {
         let w = t.w();
         [x - 1, x].iter().all(|&cx| {
             let p = IVec::new(cx, y);
-            w.map.inb(p) && w.map.fixture_at(p).is_none() && w.map.item_at(p).is_none() && w.map.floor_at(p).is_none()
+            w.map.inb(p)
+                && w.solid_at(p).is_none()
+                && w.map.fixture_at(p).is_none()
+                && w.map.item_at(p).is_none()
+                && w.map.floor_at(p).is_none()
         })
     };
-    let along = |x: i32, t: &T| {
-        let (lx, _) = t.app.cam.to_screen(x as f32, 0.0);
-        (y0 + 2..y1 - 2)
-            .filter(|&y| y % every != 0 && open(t, major, y) && open(t, major + 2, y))
-            .map(|y| patch_diff(&before, &measured, (lx, t.app.cam.to_screen(0.0, y as f32 + 0.5).1), 1.5))
-            .fold(0.0f32, f32::max)
+    // Measuring lifts the pointer's own row and column the screen across:
+    // the line read against is two cells from a fifth line, and off it.
+    let at = t.app.cam.tile_at(t.mouse.0, t.mouse.1);
+    let minor = [major + 2, major - 2].into_iter().find(|x| (x - at.x).abs() > 1).unwrap_or(major + 2);
+    // Panels change on their own (alerts, the clock): only rows where both
+    // lines are on the map count, off the pointer's row.
+    let dpi = screen_dpi_scale();
+    let sx = |x: i32| t.app.cam.to_screen(x as f32, 0.0).0;
+    let sy = |y: i32| t.app.cam.to_screen(0.0, y as f32 + 0.5).1;
+    let shown = |y: i32| [major, minor].iter().all(|&x| !t.app.ui.covers(sx(x) * dpi, sy(y) * dpi));
+    let rows: Vec<i32> = (y0 + 2..y1 - 2)
+        .filter(|&y| y % every != 0 && (y - at.y).abs() > 1 && open(t, major, y) && open(t, minor, y) && shown(y))
+        .collect();
+    // The median row: a tree's canopy swaying over a line in a row or two,
+    // between the two shots, doesn't decide it.
+    let along = |x: i32| {
+        let mut d: Vec<f32> = rows.iter().map(|&y| patch_diff(&before, &measured, (sx(x), sy(y)), 1.5)).collect();
+        d.sort_by(f32::total_cmp);
+        d.get(d.len() / 2).copied().unwrap_or(0.0)
     };
-    let (dm, dn) = (along(major, t), along(major + 2, t));
+    let (dm, dn) = (along(major), along(minor));
     t.check(dm > 0.5 && dn < 0.2, format!("at 6 points a cell only the fifth lines show ({dm:.2} against {dn:.2})"));
     t.app.cam.zoom = 28.0;
     t.focus(o.offset(3, 3));
@@ -385,6 +402,14 @@ pub(super) async fn several_selected(t: &mut T, carry: &mut Carry) {
     // panels; a group that went together is one chevron; a click on it
     // brings the inspector's colonist back (b6d0a4cc).
     let picked = crate::selection(&t.app);
+    // Where they were sent, together: a cell apart at most, where they stood
+    // is two, and chevrons merge within a cell's width.
+    for _ in 0..600 {
+        if left.iter().all(|&e| !matches!(t.pawn(e).job, Job::MoveTo { .. })) {
+            break;
+        }
+        t.ticks(1);
+    }
     crate::apply(&mut t.app, Action::Pan(40.0, 0.0));
     for _ in 0..4 {
         t.frame().await;
@@ -425,15 +450,30 @@ pub(super) async fn an_urgent_hunt_shows(t: &mut T, carry: &mut Carry) {
     // firelight flickers across them from frame to frame.
     while !(11.0..14.0).contains(&t.w().hour()) {
         t.ticks(100);
+        t.keep_well();
     }
     t.app.paused = true;
+    // Full daylight under a clear sky, whatever this map's midday brings:
+    // the mark is lit with the world, and cloud takes the amber down.
+    let lit: Vec<(usize, f64)> = [("cloud", 0.0), ("light", 100.0), ("fog", 0.0), ("precipitation", 0.0)]
+        .iter()
+        .filter_map(|&(id, v)| defs.lookup("field", id).map(|f| (f as usize, v)))
+        .collect();
+    for &(f, v) in &lit {
+        t.app.sim.world.fields.set_ambient(f, Some(v));
+    }
+    t.ticks(2);
+    t.app.light.adapt_now();
     let deer_def = defs.creature_id("deer").expect("core's deer");
     let spot = (4..20)
         .flat_map(|d| [home.offset(d, d), home.offset(-d, d), home.offset(d, -d), home.offset(-d, -d)])
         .find(|&p| {
-            t.w().map.passable(p) && t.w().pawns.iter().filter_map(|&e| t.w().pawn_pos(e)).all(|q| q.chebyshev(p) > 3)
+            // Outdoors: a hut's shade would take the amber down with the deer.
+            t.w().map.passable(p)
+                && !t.w().map.indoors(p)
+                && t.w().pawns.iter().filter_map(|&e| t.w().pawn_pos(e)).all(|q| q.chebyshev(p) > 3)
         })
-        .expect("open ground for a deer");
+        .expect("open ground outdoors for a deer");
     let deer = t.app.sim.world.spawn_pawn(deer_def, Faction::Wild, spot, None);
     let hunt = defs.lookup("designation", "core:hunt").expect("core's hunt");
     t.app.sim.push(rim_sim::Command::Designate { designation: hunt, a: spot, b: spot });
@@ -444,11 +484,18 @@ pub(super) async fn an_urgent_hunt_shows(t: &mut T, carry: &mut Carry) {
         let r = defs.creature(deer_def).size * t.app.cam.zoom;
         let (ux, uy) = draw::urgent_spot(sx, sy, r);
         let dpi = screen_dpi_scale();
-        let (w, h) = (img.width() as u32, img.height() as u32);
-        let (xi, yi) = (((ux * dpi) as u32).min(w - 1), ((uy * dpi) as u32).min(h - 1));
-        let c = img.get_pixel(xi, h - 1 - yi);
+        let (w, h) = (img.width() as i32, img.height() as i32);
+        let (cx, cy) = ((ux * dpi) as i32, (uy * dpi) as i32);
         let m = draw::URGENT_MARK;
-        (c.r - m.r).abs() + (c.g - m.g).abs() + (c.b - m.b).abs()
+        // The nearest to amber in a few pixels round the spot: one pixel can
+        // land on the disc's rim.
+        (-2..=2)
+            .flat_map(|dy| (-2..=2).map(move |dx| ((cx + dx).clamp(0, w - 1), (cy + dy).clamp(0, h - 1))))
+            .map(|(x, y)| {
+                let c = img.get_pixel(x as u32, (h - 1 - y) as u32);
+                (c.r - m.r).abs() + (c.g - m.g).abs() + (c.b - m.b).abs()
+            })
+            .fold(f32::MAX, f32::min)
     };
     let img = t.grab().await;
     let calm = urgent_px(t, &img);
@@ -470,6 +517,9 @@ pub(super) async fn an_urgent_hunt_shows(t: &mut T, carry: &mut Carry) {
     let img = t.grab().await;
     let after = urgent_px(t, &img);
     t.check(after > marked + 0.3, format!("and the amber goes from the map ({after:.2} from amber)"));
+    for &(f, _) in &lit {
+        t.app.sim.world.fields.set_ambient(f, None);
+    }
     t.app.paused = false;
 }
 
@@ -483,7 +533,8 @@ pub(super) async fn unreachable(t: &mut T, carry: &mut Carry) {
     let oak = defs.thing_id("tree_oak").expect("oaks");
     let (wall, wood) = (defs.thing_id("wall").expect("walls"), defs.thing_id("wood").unwrap());
     let chop = defs.lookup("designation", "chop").unwrap();
-    let o = open_square(t.w(), home, 3).expect("open ground for an island");
+    // Free ground round the island too, so the way in opens onto it.
+    let o = open_square(t.w(), home, 5).expect("open ground for an island").offset(1, 1);
     let middle = o.offset(1, 1);
     let tree = t.app.sim.world.spawn_fixture(oak, middle, false).expect("a tree");
     let ring: Vec<IVec> = (0..3).flat_map(|y| (0..3).map(move |x| o.offset(x, y))).filter(|&c| c != middle).collect();
@@ -532,7 +583,22 @@ pub(super) async fn unreachable(t: &mut T, carry: &mut Carry) {
         let paused = t.app.paused;
         t.app.paused = true;
         let defs = t.w().defs.clone();
-        let o = IVec::at(home.x + 20, home.y - 20, -1);
+        // Dry rock all round, under ground with no open water on it: rock
+        // that seeps, or a lake above, would fill the room before the river.
+        let dry = |w: &World, o: IVec| {
+            (-1..=10).all(|y| {
+                (-2..=14).all(|x| {
+                    let p = o.offset(x, y);
+                    let above = IVec::at(p.x, p.y, 0);
+                    w.solid_at(p).is_some_and(|r| r.seeps == 0) && dry(w, above)
+                })
+            })
+        };
+        let near = IVec::at(home.x + 20, home.y - 20, -1);
+        let o = (0..40i32)
+            .flat_map(|r| (-r..=r).flat_map(move |dy| (-r..=r).map(move |dx| near.offset(dx, dy))))
+            .find(|&o| dry(t.w(), o))
+            .expect("dry rock below for a basin");
         let mut room = Vec::new();
         for y in 0..10 {
             for x in 0..14 {
