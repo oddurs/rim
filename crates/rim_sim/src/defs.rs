@@ -1828,6 +1828,8 @@ pub struct StartDef {
     pub items: Vec<ItemCount>,
     #[serde(skip)]
     pub creature_r: DefId,
+    #[serde(skip)]
+    pub items_r: Vec<(DefId, u32)>,
 }
 
 #[derive(Deserialize, Clone, Debug)]
@@ -3152,7 +3154,9 @@ impl DefDb {
             d.melee_cooldown = d.melee_cooldown.max(1);
         }
         if let Some(s) = &mut self.start {
-            s.creature_r = get("creature", &s.creature, &format!("start/{}", s.id))?;
+            let ctx = format!("start/{}", s.id);
+            s.creature_r = get("creature", &s.creature, &ctx)?;
+            s.items_r = counts(&s.items, &ctx)?;
         }
         // House plans: each character resolves to a buildable, and each
         // piece is found in the grid once.

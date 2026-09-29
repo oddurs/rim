@@ -55,3 +55,23 @@ fn core_names_gather_and_uses_it_nowhere() {
         s.world.defs.things.iter().filter(|t| t.harvest_for(gather).is_some()).map(|t| t.id.as_str()).collect();
     assert!(gathered.is_empty(), "core things with a gather harvest: {gathered:?}");
 }
+
+/// A start's items resolve with the rest of the defs, so a tool that only
+/// loads mods sees a bad one, not just a new game (470f2bd5).
+#[test]
+fn a_start_item_nobody_defines_is_a_load_error() {
+    let patch = "[[patch]]\ntarget = \"start/core:warrior\"\nset = { items = [{ thing = \"nope\", count = 1 }] }\n";
+    let dir = test_mods("start-items", &["core"], &[("bad", &[("defs/p.toml", patch)])]);
+    let loaded = rim_sim::modloader::load(&dir);
+    let _ = fs::remove_dir_all(dir);
+    let err = loaded.err().expect("a start item that isn't defined fails the load");
+    assert!(err.contains("start/core:warrior") && err.contains("nope"), "{err}");
+}
+
+/// A second `[[start]]` replaced the first by load order, without a word.
+#[test]
+fn a_second_start_is_a_load_error() {
+    let start = "[[start]]\nid = \"landing\"\ncreature = \"core:human\"\n";
+    let err = load_error("two-starts", &[("defs/start.toml", start)]);
+    assert!(err.contains("only one [[start]] may exist; patch start/core:warrior instead"), "{err}");
+}
