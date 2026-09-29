@@ -86,7 +86,7 @@ on.
 ## Sockets
 
 Where held and worn things attach: a part's id (its centre) or a point
-`[x, y]`. Core's human names `hold`, `shoulder`, `tool`, `worn` and `hair`,
+`[x, y]`, within a cell of the centre as a part is. Core's human names `hold`, `shoulder`, `tool`, `worn` and `hair`,
 which carried items, tools and clothing will use.
 
 ## Conflicts

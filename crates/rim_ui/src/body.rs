@@ -219,7 +219,12 @@ fn body(mod_id: &str, v: &toml::Value) -> Result<Body, String> {
                 toml::Value::Array(a) if a.len() == 2 => {
                     let n = |i: usize| a[i].as_float().or(a[i].as_integer().map(|n| n as f64));
                     match (n(0), n(1)) {
-                        (Some(x), Some(y)) => Socket::At(x as f32, y as f32),
+                        // Within a cell of the centre, as a part is: never NaN
+                        // or off in the next county.
+                        (Some(x), Some(y)) if x.abs() <= 1.0 && y.abs() <= 1.0 => Socket::At(x as f32, y as f32),
+                        (Some(x), Some(y)) => {
+                            return Err(at(format!("socket {name}: [{x}, {y}] sits within a cell of the centre")))
+                        }
                         _ => return Err(at(format!("socket {name}: give a part id or [x, y]"))),
                     }
                 }
@@ -372,6 +377,10 @@ mod tests {
         assert!(err("[[body]]\nid = \"crab\"\nparts = [{ id = \"a\" }]").contains("body crab: `creatures`"));
         let (ok, _) = parse("m", &format!("{base}{{ id = \"shell\" }}]\nsockets = {{ hold = \"claw\" }}"));
         assert!(ok.is_empty(), "a socket on a part that isn't there leaves the body out");
+        for bad in ["[nan, 0.1]", "[0.0, inf]", "[2.0, 0.0]"] {
+            let text = format!("{base}{{ id = \"shell\" }}]\nsockets = {{ hold = {bad} }}");
+            assert!(err(&text).contains("socket hold:"), "{bad}: {}", err(&text));
+        }
         assert!(err(&format!("{base}{{ id = \"shell\", color = 5 }}]")).contains("part shell: `color` is text"));
         assert!(err(&format!("{base}{{ id = \"shell\", x = nan }}]")).contains("part shell: `x` is a number"));
         assert!(err(&format!("{base}{{ id = \"shell\", y = 3.0 }}]")).contains("within a cell of the centre"));
