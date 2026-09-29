@@ -2,11 +2,12 @@
 id: 78be2beb-5334-4f20-a1de-6ce190f1a996
 title: rim check panics on a UI script ending inside an interpolated string
 type: bug
-status: doing
+status: done
 milestone: bare-metal
 assignee: Oddur Sigurdsson
 created: 2026-09-28
 updated: 2026-09-28
+closed_at: 2026-09-28
 priority: p3
 api: none
 layer: tooling
