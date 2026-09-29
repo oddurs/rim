@@ -44,3 +44,11 @@ Findings so far:
 ## 2026-09-28
 
 Correction: medium's 3.73 ms light CPU in the moving view is the moving pass (3.653 ms, one draw of 64 lamp quads, 8 shadowed). On the Mac the same pass is 0.04 to 0.10 ms of CPU. On CI, llvmpipe rasterises the bake shader on the calling thread when the render target changes, so GPU work reads as CPU. The moving lights' real cost is GPU fragment work, not CPU. The lever, if it matters on real GPUs, is moving_shadows or ray steps. So flat's CPU saving is under 0.5 ms a frame in every view, the moving view included.
+
+## 2026-09-28
+
+glFinish per-pass probe on the Mac (background, medium, seed 1; absolute ms inflated by throttling):
+- Only the multiply runs every frame, at 1.4–2.9 ms of GPU. The moving pass adds 1.5 ms with 64 moving lights. No bake, sun march, occluder or per-level rebuild reruns in any view, so none causes the hitches.
+- Frame sections with the GPU waited for: things (meshes, water, sprites) 5–12 ms, light 2.6–13.6 ms (an upper bound, since it absorbs the previous frame's tail), ui 1.6–7 ms.
+- The background run doesn't reproduce the slow-last-four views. A likely reading: medium's multiply pushes views near the 8.3 ms 120 Hz budget over vblank, so 60 fps. The 62–67 ms spikes are unexplained by lighting passes and need a foreground run or rapid-cloud's per-frame walls.
+- Lever for option A: compose the light at light resolution once, and multiply by a single bilinear read, instead of about 11 texture reads per screen pixel.
