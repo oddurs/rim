@@ -10,7 +10,7 @@ priority: p0
 api: none
 ---
 
-Seeds, tests, CI and the merge queue, so that every change is checked the same way on a laptop and in CI, every failure can be brought back with one line, and a PR lands without anyone rebasing it by hand. Design: DESIGN.md §7b, §8a. Plan: https://claude.ai/artifact/KUQcdtWkNG4u63T4S8uPpt
+Seeds, tests, CI and the merge queue, so that every change is checked the same way on a laptop and in CI, every failure can be brought back with one line, and a PR lands without anyone rebasing it by hand. Design: DESIGN.md §7b, §8a.
 
 ## Goal
 

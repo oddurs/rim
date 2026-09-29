@@ -22,8 +22,7 @@ bottom region is as tall as its contents, and three transient things live in
 it: the undo toast (5 s after every order), the Build tray and the placing
 pill. The inspector and the hover card sit on the band's floor, so each one
 rides up and down with them, and the inspector also grows upward when its
-content changes. Design: the Steady HUD artifact
-(https://claude.ai/artifact/E4SyhBFP7gZFgWt762ZLw6).
+content changes.
 
 ## What
 
