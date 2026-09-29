@@ -3,11 +3,12 @@ id: 635
 uid: 70a9cc25-691d-46a6-a4a1-580addf90d73
 title: rim.damage changes a stack's condition behind the stock ledger's back
 type: bug
-status: doing
+status: done
 milestone: bare-metal
 assignee: Oddur Sigurdsson
 created: 2026-09-28
-updated: 2026-09-28
+updated: 2026-09-29
+closed_at: 2026-09-28
 priority: p2
 api: none
 layer: engine
@@ -37,5 +38,9 @@ A zone with a condition filter keeping a stack. A probe script calls `rim.damage
 
 ## Acceptance
 
-- [ ] `rim.damage` on a surviving stack keeps the stock ledger and store index right
-- [ ] A test that fails before the fix and passes after
+- [x] `rim.damage` on a surviving stack keeps the stock ledger and store index right
+- [x] A test that fails before the fix and passes after
+
+## 2026-09-29
+
+Paused at the merge freeze with the fix and its test done; the test was checked to fail before the fix and pass after. Rebased onto format 5 and run through the full gate on 2026-09-29.
