@@ -441,3 +441,25 @@ fn hooks_handlers_and_planners_register_only_at_load_time() {
         );
     }
 }
+
+/// A table that holds one subtable twice at each level is a few Luau
+/// values that expand to 2^levels in data: thirty levels was a billion.
+/// Twenty (two million, twice the limit) are refused, not built (ad90967f).
+#[test]
+fn data_that_expands_past_the_limit_is_a_script_error() {
+    let s = run(
+        "expand",
+        r#"
+        rim.every(1, function()
+            local t = {}
+            for i = 1, 20 do t = { t, t } end
+            local ok, err = pcall(rim.set_data, "probe:big", t)
+            rim.set_data("probe:err", if ok then "stored" else tostring(err))
+        end)
+    "#,
+        1,
+    );
+    let got = format!("{:?}", s.world.data.get("probe:err"));
+    assert!(got.contains("values in one piece of data"), "{got}");
+    assert!(s.world.data.get("probe:big").is_none());
+}
