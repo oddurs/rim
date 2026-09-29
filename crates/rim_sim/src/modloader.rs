@@ -306,7 +306,12 @@ pub fn load_only(mods_dir: &Path, enabled: &dyn Fn(&str) -> bool) -> Result<Load
                 skies += 1;
                 defs.sky = de!(v)?;
             }
-            "start" => defs.start = Some(de!(v)?),
+            // A second start would replace the first by load order, and
+            // quietly: one mod's changes to it go through a patch.
+            "start" => match &defs.start {
+                Some(s) => return Err(format!("{ctx}: only one [[start]] may exist; patch start/{} instead", s.id)),
+                None => defs.start = Some(de!(v)?),
+            },
             "names" => {
                 let n: NamesDef = de!(v)?;
                 defs.names.extend(n.names);

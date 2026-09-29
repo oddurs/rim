@@ -2,10 +2,12 @@
 id: 470f2bd5-3f25-4ef4-b127-19e16e0e214f
 title: '`[[start]]` items resolve only at new game, and a second start silently wins'
 type: bug
-status: backlog
+status: done
 milestone: bare-metal
+assignee: Oddur Sigurdsson
 created: 2026-09-28
-updated: 2026-09-28
+updated: 2026-09-29
+closed_at: 2026-09-28
 priority: p3
 api: none
 layer: engine
@@ -27,5 +29,9 @@ Resolve start items in `finalize`. Make a second start an error that says to pat
 
 ## Acceptance
 
-- [ ] Both are load errors
-- [ ] A test that fails before the fix and passes after
+- [x] Both are load errors
+- [x] A test that fails before the fix and passes after
+
+## 2026-09-29
+
+PAUSED at the merge freeze (main d633f7b5): fix and test done (test fails before, passes after), committed on fix/470f2bd5-start-at-load and rebased on origin/main before the freeze; the full gate has not run on this commit. Next: rebase onto main, run scripts/task check, mark the PR ready.
