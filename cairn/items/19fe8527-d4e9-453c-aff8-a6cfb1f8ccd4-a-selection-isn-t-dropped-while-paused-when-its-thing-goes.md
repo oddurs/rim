@@ -2,10 +2,12 @@
 id: 19fe8527-d4e9-453c-aff8-a6cfb1f8ccd4
 title: A selection isn't dropped while paused when its thing goes
 type: bug
-status: backlog
+status: done
 milestone: bare-metal
+assignee: Oddur Sigurdsson
 created: 2026-09-28
 updated: 2026-09-28
+closed_at: 2026-09-28
 priority: p3
 api: none
 layer: client
