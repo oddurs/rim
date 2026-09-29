@@ -808,6 +808,12 @@ impl Ui {
         self.layers.iter().filter(|l| l.name == "popup").flat_map(|l| l.roots.iter())
     }
 
+    /// Roots that hold the player until answered: popups, then modals (a
+    /// confirm). They take every named key and hear a press elsewhere.
+    fn holding_roots(&self) -> impl Iterator<Item = &Node> {
+        self.layers.iter().filter(|l| l.name == "popup" || l.name == "modal").flat_map(|l| l.roots.iter())
+    }
+
     /// The nearest menu subject on the path to a hit: the node itself, or
     /// the closest ancestor that declares one.
     fn subject_at(&self, layer: &str, path: &[usize]) -> Option<(Rc<str>, Rc<str>)> {
@@ -1056,9 +1062,9 @@ impl Ui {
         // A press anywhere but an open popup tells the popup, first, so a
         // right-click elsewhere closes one menu before it opens the next.
         if input.left_pressed || input.right_pressed {
-            let in_popup = top.as_ref().is_some_and(|(l, _)| *l == "popup");
-            if !in_popup {
-                handlers.extend(self.popup_roots().filter_map(|n| n.on_outside.clone()).map(Call::Click));
+            let inside = top.as_ref().is_some_and(|(l, _)| *l == "popup" || *l == "modal");
+            if !inside {
+                handlers.extend(self.holding_roots().filter_map(|n| n.on_outside.clone()).map(Call::Click));
             }
         }
         if input.right_pressed && out.mouse_over_ui {
@@ -1126,9 +1132,9 @@ impl Ui {
                 enter = false;
             }
         }
-        // An open popup takes the keyboard: every named key goes to it, and
-        // no binding fires while it's up.
-        let popup_keys = self.popup_roots().find_map(|n| n.on_key.clone());
+        // An open popup or modal takes the keyboard: every named key goes
+        // to it, and no binding fires while it's up.
+        let popup_keys = self.holding_roots().find_map(|n| n.on_key.clone());
         if let (Some(f), false) = (&popup_keys, input.pressed.is_empty()) {
             if self.focused_input().is_none() {
                 for key in &input.pressed {

@@ -658,44 +658,24 @@ local function person_lens(_view, b)
 	return col({ gap = "s" }, items)
 end
 
--- Deleting a role asks first, in place: "Delete" in the card's head, then
--- the question on its own line under it (rows don't wrap). The ask holds
--- the label too, since indices shift when a role goes. Returns the head's
--- button, or nil and the question.
-local function delete_role(b, role)
-	local asking = ui.state("core:work.deleting", nil)
-	if not (asking and asking.index == role.index and asking.label == role.label) then
-		return button({
-			id = "core:work.role.delete." .. role.index,
-			label = t("core:work.role_delete", "Delete"),
-			on_click = function()
-				ui.set_state("core:work.deleting", { index = role.index, label = role.label })
-			end,
-		}), nil
-	end
+-- Deleting a role asks first (kit.confirm): its members move, which the
+-- player may not mean. Asked from the card's Delete and the colonist menu.
+local function ask_delete_role(b, role)
 	local home = t("core:work.role_default_name", "the default role")
 	for _, r in b.roles do
 		if r.default then
 			home = r.label
 		end
 	end
-	return nil, row({ gap = "xs", align = "center" }, {
-		label(string.format(t("core:work.role_delete_ask", "Delete %s? Its members go to %s and keep their pins."), role.label, home), { size = "small" }),
-		button({
-			id = "core:work.role.delete_yes." .. role.index,
-			label = t("core:work.role_delete_yes", "Delete"),
-			on_click = function()
-				act.delete_role(role.index)
-				ui.set_state("core:work.deleting", nil)
-			end,
-		}),
-		button({
-			id = "core:work.role.delete_no." .. role.index,
-			label = t("core:work.role_delete_no", "Keep"),
-			on_click = function()
-				ui.set_state("core:work.deleting", nil)
-			end,
-		}),
+	kit.confirm({
+		title = string.format(t("core:work.role_delete_title", "Delete %s?"), role.label),
+		body = string.format(t("core:work.role_delete_body", "Its members go to %s and keep their pins."), home),
+		verb = t("core:work.role_delete_yes", "Delete"),
+		cancel = t("core:work.role_delete_no", "Keep"),
+		danger = true,
+		on_confirm = function()
+			act.delete_role(role.index)
+		end,
 	})
 end
 
@@ -752,15 +732,19 @@ local function roles_lens(_view, b)
 			)
 		end
 		-- The player's own roles can go; a mod's would only come back.
-		local ask = nil
 		if role.id == nil and not carried then
-			local del
-			del, ask = delete_role(b, role)
-			if del then
-				table.insert(head, del)
-			end
+			table.insert(
+				head,
+				button({
+					id = "core:work.role.delete." .. role.index,
+					label = t("core:work.role_delete", "Delete"),
+					on_click = function()
+						ask_delete_role(b, role)
+					end,
+				})
+			)
 		end
-		local body = { row({ gap = "s", align = "center" }, head), ask }
+		local body = { row({ gap = "s", align = "center" }, head) }
 		if role.planned then
 			for _, m in members do
 				local firsts = {}
@@ -920,9 +904,7 @@ menus.add("colonist", {
 				table.insert(rows, {
 					label = string.format(t("core:colonist.delete_role", "Delete role: %s…"), role.label),
 					run = function()
-						ui.set_state("core:work.lens", "core:work.roles")
-						ui.set_state("core:work.deleting", { index = role.index, label = role.label })
-						ui.open("core:work")
+						ask_delete_role(b, role)
 					end,
 				})
 			end
