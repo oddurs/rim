@@ -33,6 +33,8 @@ struct T {
     ui: rim_ui::Ui,
     sim: rim_sim::Sim,
     cv: rim_ui::view::ClientView,
+    /// Where the pointer was last put.
+    mouse: (f32, f32),
     t: f64,
     dir: std::path::PathBuf,
 }
@@ -43,18 +45,18 @@ impl T {
         let sim = sim_at(&dir);
         let ui = ui_for(&sim);
         let cv = client(&sim);
-        let mut t = T { ui, sim, cv, t: 0.0, dir };
+        let mut t = T { ui, sim, cv, mouse: (800.0, 480.0), t: 0.0, dir };
         t.idle();
         assert!(t.ui.warnings().is_empty(), "{:?}", t.ui.warnings());
         t
     }
     fn input(&mut self, input: Input) -> rim_ui::Output {
         self.t += 0.05;
-        self.cv.mouse = input.mouse;
+        self.mouse = input.mouse;
         rim_ui::Ui::frame(&mut self.ui, &self.sim.world, &self.cv, &Input { time: self.t, ..input })
     }
     fn idle(&mut self) {
-        let m = self.cv.mouse;
+        let m = self.mouse;
         for _ in 0..2 {
             self.input(Input { mouse: m, ..Default::default() });
         }
@@ -66,7 +68,7 @@ impl T {
         self.idle();
     }
     fn key(&mut self, k: &str) -> rim_ui::Output {
-        let m = self.cv.mouse;
+        let m = self.mouse;
         let out = self.input(Input { mouse: m, pressed: vec![k.into()], ..Default::default() });
         self.idle();
         out
@@ -199,6 +201,7 @@ mod surfaces {
         ui: rim_ui::Ui,
         sim: rim_sim::Sim,
         cv: rim_ui::view::ClientView,
+        mouse: (f32, f32),
         t: f64,
     }
 
@@ -207,17 +210,17 @@ mod surfaces {
             let sim = sim_at(&mods());
             let ui = ui_for(&sim);
             let cv = client(&sim);
-            let mut s = S { ui, sim, cv, t: 0.0 };
+            let mut s = S { ui, sim, cv, mouse: (800.0, 480.0), t: 0.0 };
             s.idle();
             s
         }
         fn frame(&mut self, input: Input) -> rim_ui::Output {
             self.t += 0.05;
-            self.cv.mouse = input.mouse;
+            self.mouse = input.mouse;
             rim_ui::Ui::frame(&mut self.ui, &self.sim.world, &self.cv, &Input { time: self.t, ..input })
         }
         fn idle(&mut self) {
-            let m = self.cv.mouse;
+            let m = self.mouse;
             for _ in 0..3 {
                 self.frame(Input { mouse: m, ..Default::default() });
             }
@@ -230,7 +233,7 @@ mod surfaces {
             self.idle();
         }
         fn key(&mut self, k: &str) -> Vec<UiAction> {
-            let m = self.cv.mouse;
+            let m = self.mouse;
             let out = self.frame(Input { mouse: m, pressed: vec![k.into()], ..Default::default() });
             self.idle();
             out.actions

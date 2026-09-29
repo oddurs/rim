@@ -1152,7 +1152,6 @@ pub fn client_view(app: &mut App, mouse: (f32, f32), time: f64) -> ClientView {
         scale: app.ui.theme.scale,
         cam: (app.cam.x, app.cam.y, app.cam.zoom * dpi),
         level: app.cam.z,
-        mouse: (mouse.0 * dpi, mouse.1 * dpi),
         frac: app.tick_frac(),
         came_from: app.motion.came_from(),
         selected: app.selected,
