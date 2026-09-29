@@ -135,6 +135,9 @@ pub(crate) type DefsSection = BTreeMap<String, Vec<String>>;
 pub(crate) struct ScriptsSection {
     disabled_hooks: Vec<usize>,
     disabled_handlers: Vec<usize>,
+    /// Planners switched off, by name. A save without them reads as before.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    disabled_planners: Vec<String>,
 }
 
 fn is_zero(v: &i32) -> bool {
@@ -290,7 +293,7 @@ impl Snapshot {
             modifiers_switched: w.modifiers_switched.clone(),
             land_changed: w.land_changed,
         };
-        let (disabled_hooks, disabled_handlers) = sim.scripts.disabled();
+        let (disabled_hooks, disabled_handlers, disabled_planners) = sim.scripts.disabled();
         let mut sections = BTreeMap::from([
             ("engine:defs".to_string(), enc(&def_table(&w.defs))),
             ("engine:world".to_string(), enc(&world)),
@@ -300,7 +303,10 @@ impl Snapshot {
             ("engine:water_map".to_string(), enc(&w.water.saved_costs(&w.map))),
             ("engine:zones".to_string(), enc(&w.zones)),
             ("engine:fields".to_string(), enc(&w.fields.saved(&w.map))),
-            ("engine:scripts".to_string(), enc(&ScriptsSection { disabled_hooks, disabled_handlers })),
+            (
+                "engine:scripts".to_string(),
+                enc(&ScriptsSection { disabled_hooks, disabled_handlers, disabled_planners }),
+            ),
             ("engine:pawn".to_string(), component::<Pawn>(w)),
             ("engine:thing".to_string(), component::<Thing>(w)),
             ("engine:blueprint".to_string(), component::<Blueprint>(w)),
@@ -1054,7 +1060,7 @@ impl Snapshot {
         w.update_shelter();
         // Hook indices only mean the same hooks under the same scripts.
         if remap.to.is_none() && lock_matches(&self.header.mods, &mods.manifests) {
-            mods.scripts.set_disabled(&sc.disabled_hooks, &sc.disabled_handlers);
+            mods.scripts.set_disabled(&sc.disabled_hooks, &sc.disabled_handlers, &sc.disabled_planners);
         }
         Ok((Sim::assemble(mods, w), notes))
     }
