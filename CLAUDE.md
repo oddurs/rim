@@ -5,6 +5,15 @@ structural: the engine (`crates/rim_sim`) provides mechanisms only; all
 content lives in mods (`mods/core` is the base game). If a feature needs
 content ids in engine code, it belongs in a mod instead.
 
+**Speed is the number one feature.** rim runs at bare-metal speed and
+scales with the colony, and that comes before any feature or effect. Every
+change states its cost in numbers: the same bench, and the same CI runner class
+or the Mac with its window in front. The budgets in `budgets.toml` gate CI.
+Anything that gets in the way of speed goes: delete it rather than hide it
+behind an option. A setting that trades speed for looks is the rare
+exception, not the fix. Measure how cost grows with pawns and map size, not
+only one scene.
+
 - `cargo run --release -p rim_client` — play
 - `scripts/task check` — the gate: what CI's checks and test jobs run. It must
   pass before a push; `scripts/task hooks` makes the pre-push hook run it.
