@@ -2,10 +2,12 @@
 id: 35fa26b9-558a-49d7-bced-3d173587480b
 title: need `recover_days` and `days_to_empty` are never validated and overflow the need's i32
 type: bug
-status: backlog
+status: done
 milestone: bare-metal
+assignee: Oddur Sigurdsson
 created: 2026-09-28
-updated: 2026-09-28
+updated: 2026-09-29
+closed_at: 2026-09-28
 priority: p2
 api: none
 layer: engine
@@ -33,5 +35,9 @@ Validate at load: `days_to_empty` and `recover_days` finite and above 0, `seek_b
 
 ## Acceptance
 
-- [ ] Each of these fails the load with a message
-- [ ] A test that fails before the fix and passes after
+- [x] Each of these fails the load with a message
+- [x] A test that fails before the fix and passes after
+
+## 2026-09-29
+
+PAUSED at the merge freeze: the fix and its test are done, and the test was checked to fail before the fix and pass after. The full gate hasn't run yet. Next: rebase on main, run scripts/task check, and mark the PR ready. Branch fix/35fa26b9-need-rates.
