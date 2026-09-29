@@ -1311,6 +1311,7 @@ pub fn frame(app: &mut App, raw: &RawInput) {
     if raw.advance {
         step(app);
     }
+    prune_selection(app);
     hint(app, raw.mouse);
     let picked = selection(app);
     // A drag counts once it leaves the cell it started in.
@@ -1565,6 +1566,12 @@ fn step(app: &mut App) {
     }
     let frac = app.tick_frac();
     app.motion.face(&app.sim.world, &app.worksites, frac);
+}
+
+/// Drop from the selection what is no longer there. Orders land while
+/// paused too (a cancelled plan, a cleared zone), so this runs every frame,
+/// not only when time passed.
+fn prune_selection(app: &mut App) {
     let w = &app.sim.world;
     // A thing someone picked up is in their hand, not on the map.
     let gone = |e| !w.pawn_alive(e) && (w.thing(e).is_none() || w.ecs.get::<&rim_sim::world::Held>(e).is_ok());

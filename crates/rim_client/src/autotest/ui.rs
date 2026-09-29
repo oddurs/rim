@@ -150,6 +150,24 @@ pub(super) async fn hud(t: &mut T, carry: &mut Carry) {
     t.check(tree.is_none() || t.count::<(&Thing, &Designated)>() > marked, "paused, a designation shows at once");
     t.check(t.count::<&Blueprint>() > planned, "paused, a plan shows at once");
     t.shot("paused_orders").await;
+    // Taking a selected plan back while paused drops it from the selection
+    // at once, not when time next runs.
+    let plan = t
+        .w()
+        .ecs
+        .query::<(Entity, &Thing)>()
+        .with::<&Blueprint>()
+        .iter()
+        .find(|(_, th)| th.pos == spot)
+        .map(|(e, _)| e);
+    if let Some(plan) = plan {
+        crate::select(&mut t.app, vec![plan]);
+        t.app.sim.push(Command::Cancel { a: spot, b: spot });
+        t.frame().await;
+        t.check(t.app.selected.is_none(), "paused, a cancelled plan leaves the selection");
+    } else {
+        t.check(false, "paused, the wall plan is on its cell");
+    }
     t.key(KeyCode::Escape).await;
     t.key(KeyCode::Space).await;
     t.check(!t.app.paused, "space resumes");
