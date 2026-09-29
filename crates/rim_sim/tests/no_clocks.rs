@@ -15,6 +15,8 @@ const PRINTS_ONLY: &[&str] = &[
     // Print the stock pass's cost a tick; they assert the cells it works.
     "crates/rim_sim/tests/ground.rs",
     "crates/rim_sim/tests/stock_fields.rs",
+    // Takes Instant::now() as an origin for made-up frame times; measures none.
+    "crates/rim_client/src/frames.rs",
     // This file names the clock calls it looks for.
     "crates/rim_sim/tests/no_clocks.rs",
 ];

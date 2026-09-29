@@ -2,7 +2,7 @@
 id: 8d8bad33-511f-441e-b8ec-f9b0b03732db
 title: 'A whole-frame bench: CPU, GPU, present, draw calls and hitches, on the Mac with the window in front'
 type: perf
-status: backlog
+status: doing
 milestone: bare-metal
 assignee: rapid-cloud
 created: 2026-09-28
@@ -28,5 +28,9 @@ CI gates only world CPU, 0.4 to 2.6 ms, while submit costs 47 to 77 ms and GPU t
 ## Acceptance criteria
 
 - [ ] The bench prints whole-frame p50/p99, submit, GPU and hitches per view
-- [ ] The HUD shows the live frame budget in the running game
+- [x] The HUD shows the live frame budget in the running game
 - [ ] Today's Mac baseline is recorded (every bench view, lighting medium), and CI's two runner classes are named in the bench output
+
+## 2026-09-28
+
+First PR. rim --bench-render adds a whole-frame table per view: the wall time from one frame's start to the next (median, p99, worst), hitches (frames over 2x the median) and rest (the mean frame less every pass, submit and gpu: the present and waits); the JSON gets the same per view and a machine field. It names the machine (CPU and threads) so CI's two Linux runner classes are told apart. Vsync is off for the bench (swap_interval 0 under --bench-render; one line in conf(), agreed with calm-forest, main.rs's owner); macOS paces frames anyway, so there rest holds the wait. The HUD: a frames.rs ring of the last second (median, worst, the client's own mesh and figure calls, the biggest pass), written four times a second, shown first in the F3 profiler through a new view.frame(); main.rs gets a field, its default, one call at the end of render() and one field in client_view(). Shown in the autotest's profiler shot: 'frame 13.8 ms, worst 193.1 · 11 calls · biggest ui 1.68 ms' (relabelled 'mesh and figure calls' since, as macroquad's own batches aren't counted without the bench's capture). scripts/bench-front runs the bench in front; docs/engineering/benchmarks.md says why a background run measures nothing.

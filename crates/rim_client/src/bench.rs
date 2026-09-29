@@ -21,6 +21,11 @@
 //! GPU numbers from an immediate-mode GPU. Last, what a change costs: every
 //! cached lighting result rebuilt, frame after frame.
 //!
+//! Then the whole frame per view: its wall time from one frame's start to
+//! the next (median, p99 and worst), hitches (frames over twice the
+//! median), and the rest no pass accounts for (the present, and waits). The
+//! header names the machine, since CI's runner classes differ up to 3x.
+//!
 //! `--check` exits 1 when the world's CPU time on the whole map (clear, in
 //! a storm, or zooming through it) is over budget. `--sprite-mods N` adds N
 //! generated mods whose furniture is drawn from sprites. `--json FILE`
@@ -471,6 +476,9 @@ struct Run {
     gated: bool,
     /// Per lighting pass, over the measured frames.
     passes: Vec<PassMean>,
+    /// Per frame, the wall time from one frame's start to the next's, in
+    /// ms: every pass, submit, the GPU and the present, and any wait.
+    walls: Vec<f64>,
 }
 
 /// One lighting pass over a view's frames.
@@ -519,6 +527,22 @@ impl Run {
 
     fn mean(&self, f: impl Fn(&(RenderTimes, f64, Option<f64>)) -> f64) -> f64 {
         self.frames.iter().map(f).sum::<f64>() / self.frames.len().max(1) as f64 / 1e3
+    }
+
+    /// The whole frame: (p50, p99, max) of the wall time, and the hitches,
+    /// frames over twice the median.
+    fn whole(&self) -> (f64, f64, f64, usize) {
+        let mut v = self.walls.clone();
+        v.sort_by(f64::total_cmp);
+        let p50 = pct(&v, 0.5);
+        (p50, pct(&v, 0.99), v.last().copied().unwrap_or(0.0), v.iter().filter(|&&w| w > 2.0 * p50).count())
+    }
+
+    /// The part of the mean frame no pass accounts for: the present, and
+    /// waiting on the GPU where GL gave no timing for it.
+    fn rest_ms(&self) -> f64 {
+        let busy = self.mean(|f| f.0.world() + f.0.ui + f.1) + self.gpu_ms().unwrap_or(0.0);
+        (self.walls.iter().sum::<f64>() / self.walls.len().max(1) as f64 - busy).max(0.0)
     }
 
     fn gpu_ms(&self) -> Option<f64> {
@@ -654,7 +678,9 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
                 app.cam.zoom = gesture_zoom(k);
             }
             app.light.set_moving(circling(k));
+            let t0 = std::time::Instant::now();
             draw_one(&mut app, &mut time, None).await;
+            r.walls.push(t0.elapsed().as_secs_f64() * 1e3);
             r.rebuilt += app.meshes.rebuilt;
             let zones = telemetry::frame().zones;
             // Submit: macroquad's end of frame, and the meshes' mid-frame.
@@ -756,6 +782,16 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
     }
     println!("ms per frame, CPU unless named; world = every pass but the UI; budget {BUDGET_MS} ms on the whole map");
     println!();
+    println!("{:<10} {:>7} {:>7} {:>7} {:>7} {:>7}", "view", "frame", "p99", "max", "hitches", "rest");
+    for r in &results {
+        let (p50, p99, max, hitches) = r.whole();
+        println!("{:<10} {:>7.3} {:>7.3} {:>7.3} {:>7} {:>7.3}", r.name, p50, p99, max, hitches, r.rest_ms());
+    }
+    println!(
+        "whole frame, wall ms from one frame's start to the next: median, p99, worst; hitches = frames over 2x the median; \
+         rest = the mean frame less every pass, submit and gpu (the present, and waits)"
+    );
+    println!();
     println!("{:<10} {:<10} {:>7} {:>7} {:>5} {:>6}", "view", "light pass", "cpu", "gpu", "ran", "calls");
     for r in &results {
         for p in &r.passes {
@@ -782,6 +818,7 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
     println!("light rebuild on {last}, ms: {}", costs.join("; "));
     let soft = if crate::light::software_gl(&renderer) { " (software: gpu times are the CPU rasterising)" } else { "" };
     println!("gl: {renderer}{soft}");
+    println!("machine: {}", machine());
     println!("lighting: {}", app.light.setting().name());
 
     if let Some(path) = opt("--json") {
@@ -803,8 +840,13 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
                         )
                     })
                     .collect();
+                let (p50, p99, max, hitches) = r.whole();
+                let whole = format!(
+                    "\"frame_p50_ms\": {p50:.4}, \"frame_p99_ms\": {p99:.4}, \"frame_max_ms\": {max:.4}, \"hitches\": {hitches}, \"rest_ms\": {:.4}, ",
+                    r.rest_ms()
+                );
                 format!(
-                    "    {{\"view\": \"{}\", \"zoom\": {}, \"world_ms\": {:.4}, \"world_p50_ms\": {:.4}, \"world_p99_ms\": {:.4}, \"ground_ms\": {:.4}, \"things_ms\": {:.4}, \"pawns_ms\": {:.4}, \"weather_ms\": {:.4}, \"light_ms\": {:.4}, \"ui_ms\": {:.4}, \"submit_ms\": {:.4}, \"gpu_ms\": {}, \"draw_calls\": {}, \"indices\": {}, \"particles\": {}, \"rebuilt\": {}, \"live\": {}, \"light_passes\": [{}]}}",
+                    "    {{\"view\": \"{}\", \"zoom\": {}, {whole}\"world_ms\": {:.4}, \"world_p50_ms\": {:.4}, \"world_p99_ms\": {:.4}, \"ground_ms\": {:.4}, \"things_ms\": {:.4}, \"pawns_ms\": {:.4}, \"weather_ms\": {:.4}, \"light_ms\": {:.4}, \"ui_ms\": {:.4}, \"submit_ms\": {:.4}, \"gpu_ms\": {}, \"draw_calls\": {}, \"indices\": {}, \"particles\": {}, \"rebuilt\": {}, \"live\": {}, \"light_passes\": [{}]}}",
                     r.name,
                     r.zoom,
                     r.mean(|f| f.0.world()),
@@ -835,7 +877,8 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
             })
             .collect();
         let json = format!(
-            "{{\n  \"screen\": [{}, {}],\n  \"dpi\": {dpi},\n  \"frames\": {frames},\n  \"budget_ms\": {BUDGET_MS},\n  \"gl_renderer\": \"{}\",\n  \"lighting\": \"{}\",\n  \"light_rebuild_view\": \"{last}\",\n  \"light_rebuild\": {{{}}},\n  \"views\": [\n{}\n  ]\n}}\n",
+            "{{\n  \"machine\": \"{}\",\n  \"screen\": [{}, {}],\n  \"dpi\": {dpi},\n  \"frames\": {frames},\n  \"budget_ms\": {BUDGET_MS},\n  \"gl_renderer\": \"{}\",\n  \"lighting\": \"{}\",\n  \"light_rebuild_view\": \"{last}\",\n  \"light_rebuild\": {{{}}},\n  \"views\": [\n{}\n  ]\n}}\n",
+            machine().replace('"', "'"),
             screen_width(),
             screen_height(),
             renderer.replace('"', "'"),
@@ -867,6 +910,29 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
         println!("render bench: within budget ({name}: {mean:.3} <= {limit:.1} ms)");
     }
     std::process::exit(0)
+}
+
+/// The CPU the bench ran on, and how many threads it had. GitHub's Linux
+/// runners come in classes whose numbers differ up to 3x (the moving light
+/// pass costs 3.8 ms on one and 1.35 ms on the other): two runs compare only
+/// when this line matches.
+fn machine() -> String {
+    let brand = if cfg!(target_os = "macos") {
+        std::process::Command::new("sysctl")
+            .args(["-n", "machdep.cpu.brand_string"])
+            .output()
+            .ok()
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+    } else if cfg!(target_os = "linux") {
+        std::fs::read_to_string("/proc/cpuinfo").ok().and_then(|t| {
+            t.lines()
+                .find_map(|l| l.strip_prefix("model name").map(|r| r.trim_start_matches([' ', '\t', ':']).to_string()))
+        })
+    } else {
+        std::env::var("PROCESSOR_IDENTIFIER").ok()
+    };
+    let threads = std::thread::available_parallelism().map_or(0, |n| n.get());
+    format!("{}, {threads} threads", brand.filter(|b| !b.is_empty()).unwrap_or_else(|| "unknown CPU".into()))
 }
 
 #[cfg(test)]

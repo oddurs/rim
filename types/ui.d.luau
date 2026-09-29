@@ -304,6 +304,8 @@ declare view: {
     explain_work: (id: number) -> { WorkWhy }?,
     -- The field layers.
     fields: () -> { FieldInfo },
+    -- The live frame budget: the last second's median and worst frame, draw calls and the biggest render pass, refreshed a few times a second.
+    frame: () -> string,
     -- What a right-click would do.
     hint: () -> string?,
     -- Hour of the day, 0 to 24.

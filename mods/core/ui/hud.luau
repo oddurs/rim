@@ -114,6 +114,8 @@ ui.define("core:profiler", function(view)
 		return nil
 	end
 	local rows = { kit.heading(t("core:profiler.title", "Profiler"), t("core:profiler.note", "µs per call, smoothed")) }
+	-- The live frame budget first: what the frame costs, before what it's made of.
+	table.insert(rows, label(view.frame(), { size = "small", weight = "strong" }))
 	local entries = view.profile()
 	table.sort(entries, function(a, b)
 		if a.mod ~= b.mod then
