@@ -1,13 +1,14 @@
 ---
-id: be5845a1-bb0d-4c13-afa7-ac5d87f62d5d
+id: 149
+uid: be5845a1-bb0d-4c13-afa7-ac5d87f62d5d
 title: 'rim: one binary to play, check, test and pack mods'
 type: feature
 status: backlog
 milestone: sdk
 depends_on:
-- acaa16f4-f165-4ddf-a5aa-da860100abcb
-- 48f92e6e-2187-461a-a98b-f20e36ae1325
-- eb2c9422-7ed6-4060-806c-6d1cee5a0ba1
+- 146
+- 156
+- 159
 created: 2026-09-23
 updated: 2026-09-24
 priority: p0

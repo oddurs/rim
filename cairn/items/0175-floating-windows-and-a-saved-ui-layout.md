@@ -1,12 +1,13 @@
 ---
-id: 1e977052-1ce0-4280-a9ea-a6ff0c8f4cc8
+id: 175
+uid: 1e977052-1ce0-4280-a9ea-a6ff0c8f4cc8
 title: Floating windows and a saved UI layout
 type: feature
 status: done
 milestone: colony
 assignee: Oddur Sigurdsson
 depends_on:
-- 5514aac6-0300-4ff6-be19-fd44a5e50089
+- 171
 created: 2026-09-23
 updated: 2026-09-24
 closed_at: 2026-09-24

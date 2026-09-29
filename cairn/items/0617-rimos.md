@@ -1,0 +1,24 @@
+---
+id: 617
+uid: 4b908c62-d5df-4811-a47c-65c321b9b135
+key: rimos
+title: RimOS
+type: milestone
+status: backlog
+created: 2026-09-28
+updated: 2026-09-28
+priority: p1
+api: additive
+---
+
+The player's interface as an operating system for the colony. Windows are apps with one chrome contract, the dock is the taskbar, the command palette is the launcher, News is the notification centre, Settings is system preferences, and mods ship apps through the same Luau calls core uses. The plan and a live prototype are on the RimOS design page, shared with the team.
+
+Approved by the user on 2026-09-28, in full, and exempt from Bare Metal's feature freeze. The spec is DESIGN.md §11b; the planned mod-facing API is in docs/modding/ui.md, under Apps (planned). The existing Settings item 05033e73 (in 1.0) overlaps the Settings app; the user decides whether it moves here.
+
+## Goal
+
+From launch to play, every screen exists and behaves alike. Apps move, snap, minimise and remember where they were. Esc always steps back, then opens the system menu. Settings are one app on the title and in a colony. The UI stays under 1 ms and at 3 draw calls with six apps open.
+
+## Order
+
+Performance first (the shell and clipping), then the window contract, then tokens and the kit, then the screens.

@@ -1,12 +1,13 @@
 ---
-id: 308074c6-261d-4dbc-9ed9-5761053703e7
+id: 201
+uid: 308074c6-261d-4dbc-9ed9-5761053703e7
 title: 'Getting wet: pawn wetness and clothing insulation'
 type: feature
 status: done
 milestone: crafting
 assignee: Oddur Sigurdsson
 depends_on:
-- 03b9b791-082e-48f1-b51e-af6f42627685
+- 189
 created: 2026-09-23
 updated: 2026-09-27
 closed_at: 2026-09-27

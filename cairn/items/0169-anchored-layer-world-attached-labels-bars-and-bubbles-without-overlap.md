@@ -1,11 +1,12 @@
 ---
-id: 16eecb22-0f2b-4532-bc5d-3795083879a8
+id: 169
+uid: 16eecb22-0f2b-4532-bc5d-3795083879a8
 title: 'Anchored layer: world-attached labels, bars and bubbles without overlap'
 type: feature
 status: done
 milestone: interface
 depends_on:
-- b144ca3c-2985-47be-b3ce-d07d4f17ceaa
+- 168
 created: 2026-09-23
 updated: 2026-09-23
 closed_at: 2026-09-23

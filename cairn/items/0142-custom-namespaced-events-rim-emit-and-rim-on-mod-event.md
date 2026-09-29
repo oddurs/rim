@@ -1,5 +1,6 @@
 ---
-id: 1c626720-942b-43da-ac89-618a170d2623
+id: 142
+uid: 1c626720-942b-43da-ac89-618a170d2623
 title: 'Custom namespaced events: rim.emit and rim.on("mod:event")'
 type: feature
 status: done

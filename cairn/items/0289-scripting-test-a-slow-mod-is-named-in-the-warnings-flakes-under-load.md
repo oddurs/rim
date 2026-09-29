@@ -1,0 +1,35 @@
+---
+id: 289
+uid: e8673d3f-d5fb-4922-86ea-d71c521b2a3a
+title: scripting test a_slow_mod_is_named_in_the_warnings flakes under load
+type: bug
+status: done
+milestone: proving-ground
+assignee: Oddur Sigurdsson
+created: 2026-09-25
+updated: 2026-09-27
+closed_at: 2026-09-27
+priority: p0
+api: none
+effort: s
+layer: engine
+area: tests
+---
+
+## Why
+
+`crates/rim_sim/tests/scripting.rs` `a_slow_mod_is_named_in_the_warnings` asserts on wall-clock profiler warnings. It failed once in a full `cargo test --release --workspace` run on a loaded machine, then passed three times alone. A wall-clock threshold makes CI red for reasons unrelated to the change (#92 fixed the same kind of flake in `rim check`).
+
+## What
+
+- Assert on the probe mod's share of script time, or its step count, not an absolute time.
+- Or run it with a threshold scaled by a measured baseline in the same process.
+
+## Acceptance criteria
+
+- [x] The test passes under a parallel full-suite run on a busy machine
+- [x] It still fails when the probe mod is not slow
+
+## 2026-09-27
+
+Fixed without timing: the test runs the probe to check its hook calls are profiled, then hands check_mod_budgets a profile (probe 1.8x budget, core 0.4x, a system 10x) and asserts which are named, once. check_mod_budgets is now pub for that. Deliberately treating every mod as over budget fails it ('a mod under budget isn't named'). With no clock in the test, a busy machine can't fail it. rim-c2 closed its overlapping #232 in favour of this.

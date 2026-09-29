@@ -1,15 +1,16 @@
 ---
-id: b1444a26-a018-4b94-9bca-84bb47534094
+id: 110
+uid: b1444a26-a018-4b94-9bca-84bb47534094
 title: 'Farming: growing zones and crops'
 type: feature
 status: done
 milestone: crafting
 assignee: Oddur Sigurdsson
 depends_on:
-- eb3b0ac7-9922-4ab2-b9c1-8171e0b7f05f
-- 9b569a33-c488-42df-84c2-9bfa83a14b3e
-- 6dd4891c-f65e-4707-96f9-e6d46c6cd446
-- e1be8ebd-d90f-40a7-bf33-c579ad1f7410
+- 182
+- 185
+- 187
+- 191
 created: 2026-09-22
 updated: 2026-09-28
 closed_at: 2026-09-27

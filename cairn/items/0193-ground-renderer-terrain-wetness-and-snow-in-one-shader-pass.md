@@ -1,12 +1,13 @@
 ---
-id: da558444-243f-43a5-b840-15e46328adfb
+id: 193
+uid: da558444-243f-43a5-b840-15e46328adfb
 title: 'Ground renderer: terrain, wetness and snow in one shader pass'
 type: perf
 status: backlog
 milestone: scale
 depends_on:
-- 2e0b9d43-90e5-4051-bda6-81544e9caf0f
-- 6dd4891c-f65e-4707-96f9-e6d46c6cd446
+- 56
+- 187
 created: 2026-09-23
 updated: 2026-09-23
 priority: p2

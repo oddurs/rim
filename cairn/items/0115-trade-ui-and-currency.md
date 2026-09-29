@@ -1,5 +1,6 @@
 ---
-id: 40eed01c-9666-4603-8fb2-97a4d9711487
+id: 115
+uid: 40eed01c-9666-4603-8fb2-97a4d9711487
 title: Trade UI and currency
 type: feature
 status: backlog

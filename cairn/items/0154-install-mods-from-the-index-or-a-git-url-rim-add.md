@@ -1,12 +1,13 @@
 ---
-id: 76a0bc45-13c1-4725-b5ce-47957109ac41
+id: 154
+uid: 76a0bc45-13c1-4725-b5ce-47957109ac41
 title: 'Install mods from the index or a git URL: rim add'
 type: feature
 status: backlog
 milestone: platform
 depends_on:
-- 9e979a26-5dc0-4122-b62d-fc48f14d8488
-- b7f5cde1-a8c4-4d7d-b93d-bdf0ba0d523b
+- 152
+- 153
 created: 2026-09-23
 updated: 2026-09-27
 priority: p0

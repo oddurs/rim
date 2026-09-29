@@ -1,5 +1,6 @@
 ---
-id: 6d15500e-bed1-4bf8-aed9-2d6be7654cf6
+id: 106
+uid: 6d15500e-bed1-4bf8-aed9-2d6be7654cf6
 title: Turrets and traps
 type: content
 status: backlog

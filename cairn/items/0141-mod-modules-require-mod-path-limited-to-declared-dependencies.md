@@ -1,12 +1,13 @@
 ---
-id: f6e18475-c7b8-407f-b31c-61f7d8769406
+id: 141
+uid: f6e18475-c7b8-407f-b31c-61f7d8769406
 title: 'Mod modules: require("@mod/path") limited to declared dependencies'
 type: feature
 status: done
 milestone: plugin-api
 assignee: Oddur Sigurdsson
 depends_on:
-- 3eb7e697-6bb4-4318-90f4-7f4d727b98c7
+- 140
 created: 2026-09-23
 updated: 2026-09-24
 closed_at: 2026-09-24

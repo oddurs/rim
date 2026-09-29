@@ -1,12 +1,13 @@
 ---
-id: 6f1e7410-8075-431d-818f-21e3326a05a2
+id: 192
+uid: 6f1e7410-8075-431d-818f-21e3326a05a2
 title: Snow and mud slow movement
 type: feature
 status: done
 milestone: crafting
 assignee: Oddur Sigurdsson
 depends_on:
-- 6dd4891c-f65e-4707-96f9-e6d46c6cd446
+- 187
 created: 2026-09-23
 updated: 2026-09-27
 closed_at: 2026-09-27

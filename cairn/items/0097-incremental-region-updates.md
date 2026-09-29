@@ -1,12 +1,13 @@
 ---
-id: 66906291-d86d-48d1-ba7b-877828ac5344
+id: 97
+uid: 66906291-d86d-48d1-ba7b-877828ac5344
 title: Incremental region updates
 type: perf
 status: backlog
 milestone: scale
 depends_on:
-- 96d2dac9-cf4e-409a-a028-f49902c8d7d9
-- ee7fe7fd-4cb1-4f65-b23c-2e325c641fdc
+- 241
+- 93
 created: 2026-09-22
 updated: 2026-09-28
 priority: p2

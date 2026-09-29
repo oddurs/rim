@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+# Carries a branch cut before the cairn format 5 migration (2026-09-29) onto
+# main. The migration numbered every item and renamed its file, so a branch
+# that edits items conflicts on them when it rebases. Run this where the
+# rebase stopped:
+#
+#   git rebase origin/main      # stops on cairn/items
+#   scripts/cairn-port          # the branch's item edits, on the numbered items
+#   git rebase --continue
+#
+# Each conflicted item's base and branch sides are put in format 5 with main's
+# numbers, then merged with main's side again (`git merge-file`), so only a
+# real clash is left marked. A new item the branch added keeps its UUID until
+# `cairn renumber` numbers it. Delete this once no branch predates format 5.
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+dir=cairn/items
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+
+# uid, number and file of every item on the migrated side.
+git grep -e '^id: ' -e '^uid: ' HEAD -- "$dir" |
+  awk -F: '{ file = $2; sub(/^ /, "", $4) }
+           $3 == "id" { id[file] = $4 } $3 == "uid" { uid[file] = $4 }
+           END { for (f in uid) print uid[f], id[f], f }' >"$tmp/map"
+
+# A format 4 item, on stdin, in format 5: `id: UUID` becomes the number plus a
+# `uid`, and every UUID main knows in the front matter becomes its number.
+to_v5() {
+  awk -v map="$tmp/map" '
+    BEGIN { while ((getline line < map) > 0) { split(line, a, " "); num[a[1]] = a[2] } }
+    NR == 1 && $0 == "---" { fm = 1; print; next }
+    fm && $0 == "---" { fm = 0; print; next }
+    fm && /^id: / && ($2 in num) { print "id: " num[$2]; print "uid: " $2; next }
+    fm && !/^id: / { for (u in num) if (index($0, u)) gsub(u, num[u]) }
+    { print }'
+}
+
+side() { git show ":$1:$2" 2>/dev/null || true; }
+
+clashes=0
+for path in $(git diff --name-only --diff-filter=U -- "$dir"); do
+  theirs=$(side 3 "$path")
+  if [ -z "$theirs" ]; then # the branch deleted it; main's side stands
+    git rm -q --cached "$path" 2>/dev/null || true
+    continue
+  fi
+  uid=$(sed -n 's/^uid: //p; s/^id: \([0-9a-f-]\{36\}\)$/\1/p' <<<"$theirs" | head -1)
+  target=$(awk -v u="$uid" '$1 == u { print $3 }' "$tmp/map")
+  target=${target:-$path}
+  git show "HEAD:$target" >"$tmp/ours" 2>/dev/null || : >"$tmp/ours"
+  side 1 "$path" | to_v5 >"$tmp/base"
+  to_v5 <<<"$theirs" >"$tmp/theirs"
+  if git merge-file -p -L main -L base -L branch "$tmp/ours" "$tmp/base" "$tmp/theirs" >"$tmp/merged"; then
+    ok=1
+  else
+    ok=0 clashes=$((clashes + 1))
+  fi
+  if [ "$path" != "$target" ]; then
+    git rm -q --cached "$path" 2>/dev/null || true
+    rm -f "$path"
+  fi
+  cp "$tmp/merged" "$target"
+  if [ "$ok" = 1 ]; then git add "$target"; else echo "cairn-port: $target clashes; resolve the marked lines"; fi
+done
+
+[ "$clashes" = 0 ] || exit 1
+
+# An item the branch added that main has since taken too (the sweep copies a
+# branch's items to main): the branch's copy is the newer one, so it replaces
+# main's, under main's number.
+for path in "$dir"/[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]-*.md; do
+  [ -e "$path" ] || continue
+  uid=$(sed -n 's/^id: \([0-9a-f-]\{36\}\)$/\1/p' "$path" | head -1)
+  target=$(awk -v u="$uid" '$1 == u { print $3 }' "$tmp/map")
+  [ -n "$uid" ] && [ -n "$target" ] || continue
+  to_v5 <"$path" >"$target"
+  git rm -q -f "$path"
+  git add "$target"
+done
+
+scripts/task cairn -- renumber --quiet
+git add -A "$dir"
+scripts/task cairn -- check --strict >/dev/null
+echo "cairn-port: items carried onto format 5; continue the rebase"

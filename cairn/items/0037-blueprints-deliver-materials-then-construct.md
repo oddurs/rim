@@ -1,11 +1,12 @@
 ---
-id: 5dd4c240-6b67-4bd3-a50e-8e9f6668123a
+id: 37
+uid: 5dd4c240-6b67-4bd3-a50e-8e9f6668123a
 title: 'Blueprints: deliver materials, then construct'
 type: feature
 status: done
 milestone: castaway
 depends_on:
-- 297469a6-dae6-4334-a41f-6f0d5c80f7e5
+- 35
 created: 2026-09-22
 updated: 2026-09-22
 priority: p0

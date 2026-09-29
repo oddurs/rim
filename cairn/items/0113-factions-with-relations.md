@@ -1,11 +1,12 @@
 ---
-id: a27e294c-d28d-40dd-b059-5917dc40e1cc
+id: 113
+uid: a27e294c-d28d-40dd-b059-5917dc40e1cc
 title: Factions with relations
 type: feature
 status: backlog
 milestone: world
 depends_on:
-- 978be4f3-0b80-4b7f-a036-126009306617
+- 145
 created: 2026-09-22
 updated: 2026-09-23
 priority: p0

@@ -1,13 +1,14 @@
 ---
-id: cecf0ba9-3f87-41fa-9c90-bb01a520e72e
+id: 214
+uid: cecf0ba9-3f87-41fa-9c90-bb01a520e72e
 title: Core collapses to one wall, one door, one bed
 type: content
 status: done
 milestone: building
 assignee: Oddur Sigurdsson
 depends_on:
-- 763d8d64-9bee-459a-87c4-1ec543644f38
-- 82bc6c98-e5fb-42a5-9534-5f647d714654
+- 212
+- 213
 created: 2026-09-23
 updated: 2026-09-23
 priority: p1

@@ -1,5 +1,6 @@
 ---
-id: 763d8d64-9bee-459a-87c4-1ec543644f38
+id: 212
+uid: 763d8d64-9bee-459a-87c4-1ec543644f38
 title: 'Stuff: one buildable, many materials'
 type: feature
 status: done

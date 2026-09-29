@@ -1,11 +1,12 @@
 ---
-id: c9b1406d-fa9a-4d48-88c4-5b66d8d2076c
+id: 82
+uid: c9b1406d-fa9a-4d48-88c4-5b66d8d2076c
 title: 'UI mod operations: extend, replace, wrap and remove by id'
 type: feature
 status: done
 milestone: interface
 depends_on:
-- 5514aac6-0300-4ff6-be19-fd44a5e50089
+- 171
 created: 2026-09-22
 updated: 2026-09-23
 closed_at: 2026-09-23

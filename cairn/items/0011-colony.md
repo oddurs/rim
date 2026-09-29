@@ -1,11 +1,12 @@
 ---
-id: cee008cb-c183-4f7f-826b-3d7593f90611
+id: 11
+uid: cee008cb-c183-4f7f-826b-3d7593f90611
 key: colony
 title: Colony
 type: milestone
 status: done
 depends_on:
-- c76c29d7-996e-488f-9fe0-ffd1e5a32a1c
+- 10
 created: 2026-09-22
 updated: 2026-09-26
 closed_at: 2026-09-26

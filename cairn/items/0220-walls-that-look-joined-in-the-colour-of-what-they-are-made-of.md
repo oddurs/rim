@@ -1,12 +1,13 @@
 ---
-id: 49e5e583-3a4d-45de-8d65-a8202af9f9ec
+id: 220
+uid: 49e5e583-3a4d-45de-8d65-a8202af9f9ec
 title: Walls that look joined, in the colour of what they are made of
 type: feature
 status: done
 milestone: building
 assignee: Oddur Sigurdsson
 depends_on:
-- cecf0ba9-3f87-41fa-9c90-bb01a520e72e
+- 214
 created: 2026-09-23
 updated: 2026-09-24
 priority: p1

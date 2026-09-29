@@ -1,11 +1,12 @@
 ---
-id: 9a4e2f10-c084-44a4-9f43-5a66c5f39b33
+id: 123
+uid: 9a4e2f10-c084-44a4-9f43-5a66c5f39b33
 title: 'Compatibility report: what a mod changes'
 type: feature
 status: backlog
 milestone: sdk
 depends_on:
-- be5845a1-bb0d-4c13-afa7-ac5d87f62d5d
+- 149
 created: 2026-09-22
 updated: 2026-09-24
 priority: p1
