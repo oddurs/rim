@@ -1088,6 +1088,50 @@ ui.mount("windows", "probe:table")
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A column of yes-or-no values sorts, false first, rather than breaking
+/// the table's build.
+#[test]
+fn a_table_sorts_a_column_of_booleans() {
+    let dir = scratch_mods(
+        "tablebool",
+        &[(
+            "probe",
+            "",
+            &[(
+                "ui/table.luau",
+                r#"
+local kit = require("@core/ui/kit")
+local rows = {}
+for i = 1, 6 do
+    rows[i] = { name = "pawn" .. i, drafted = i % 2 == 0 }
+end
+ui.define("probe:table", function(view)
+    return kit.table({ id = "probe:t", h = 200, row_h = 20, rows = rows, columns = {
+        { label = "Name", w = 120, key = "name" },
+        { label = "Drafted", w = 60, key = "drafted" },
+    } })
+end)
+ui.mount("windows", "probe:table")
+"#,
+            )],
+        )],
+    );
+    let sim = sim_at(&dir);
+    let mut ui = ui_for(&sim);
+    let mut cv = client(&sim);
+    frame(&mut ui, &sim, &cv, Default::default());
+    let head = ui.find("probe:t.head.2").expect("the header is laid out");
+    click(&mut ui, &sim, &mut cv, centre(head));
+    frame(&mut ui, &sim, &cv, Input { time: 2.0, ..Default::default() });
+    assert!(ui.warnings().is_empty(), "{:?}", ui.warnings());
+    let snap = ui.snapshot();
+    let sec = snap.split("== probe:table").nth(1).unwrap_or("");
+    let flags: Vec<&str> =
+        sec.lines().filter_map(|l| ["\"false\"", "\"true\""].into_iter().find(|f| l.contains(f))).collect();
+    assert_eq!(flags, ["\"false\""; 3].into_iter().chain(["\"true\""; 3]).collect::<Vec<_>>(), "{sec}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn a_scroll_area_stops_exactly_at_its_last_row() {
     let dir = scratch_mods(
