@@ -2,10 +2,12 @@
 id: 6ca1ea2e-42d7-4de5-bffa-2d8733c85669
 title: A boar stampede of 7 kills a colony of 9 in two hours
 type: bug
-status: backlog
+status: doing
 milestone: defense
+assignee: Oddur Sigurdsson
+claimed: 2026-09-28
 created: 2026-09-28
-updated: 2026-09-28
+updated: 2026-09-29
 priority: p1
 api: none
 effort: m
@@ -34,3 +36,7 @@ Tick: the stampede at 350,000 (day 18); the last colonist dies at 355,766
 
 - [ ] A stampede's size reads the colony's strength as well as its points
 - [ ] Seed 4's day-18 stampede, fired at the same tick, leaves the colony standing (test)
+
+## 2026-09-29
+
+PAUSED: done: stampede.luau sizes the herd by min(points/60, strength*0.5/6) (a boar's melee on colony_strength's scale), clamped 2..8; wildlife_plus test 'a stampede is no bigger than half what the colony can hit back with' fails on main (7 boars at points 431, strength 31.7) and passes (2; 5 at strength 63.4); crosscheck.rs fires boar_stampede at dawn on day 18 like the day-10 raid. Left: criterion 2. A release crosscheck --days 22 on main's history with the OLD sizing keeps its colony (13 colonists on day 18), so the crosscheck no longer reproduces the wipe; decide whether the day-18 fire stays (it keeps combat in the hash) and whether HERD_SHARE 0.5 is right (no balance run yet), then gate. Branch fix/6ca1ea2e-stampede-strength.
