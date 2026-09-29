@@ -2,10 +2,12 @@
 id: ff97096d-cecd-43a7-86ed-b64f82985fb0
 title: A wall planned over loose items buries them
 type: bug
-status: backlog
+status: done
 milestone: building
+assignee: Oddur Sigurdsson
 created: 2026-09-25
-updated: 2026-09-25
+updated: 2026-09-28
+closed_at: 2026-09-28
 priority: p2
 api: none
 effort: s
@@ -32,4 +34,4 @@ Mods: core
 
 ## Acceptance criteria
 
-- [ ] No completed building stands over an item stack
+- [x] No completed building stands over an item stack

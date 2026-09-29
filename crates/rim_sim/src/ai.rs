@@ -1956,6 +1956,15 @@ pub fn complete_building(w: &mut World, bp: Entity) {
     for (d, n) in refund.into_iter().filter(|&(_, n)| n > 0) {
         w.place_item(d, t.pos, n);
     }
+    // A stack it went up over moves to the nearest open cell. Under it, the
+    // stack would be out of reach, and lost to whatever waits on it.
+    for c in td.footprint(t.pos, t.facing) {
+        let Some(item) = w.map.item_at(c).filter(|_| !w.map.passable(c)) else { continue };
+        let n = w.thing(item).map_or(0, |i| i.count);
+        if let Some(lot) = w.pick_up(item, n) {
+            w.place_lot(lot, c);
+        }
+    }
     if td.holds_water {
         w.map.set_holds_water(t.pos, true);
     }
