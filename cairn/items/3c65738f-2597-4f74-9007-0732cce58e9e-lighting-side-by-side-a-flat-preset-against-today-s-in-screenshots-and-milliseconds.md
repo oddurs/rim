@@ -40,3 +40,7 @@ Findings so far:
   - The lighting's CPU at medium is under 0.12 ms a frame in every view but moving. There, 64 moving lights cost 3.73 ms against flat's 0.07.
   - llvmpipe's rasterising (submit) falls 0 to 25% under flat: mid 110.8 to 84.3, whole map 72.2 to 70.4.
 - Read: flat buys little CPU except on moving lights, which can be fixed inside medium, and it costs the most look. Real-GPU cost awaits the Mac window run, which needs the user's go-ahead.
+
+## 2026-09-28
+
+Correction: medium's 3.73 ms light CPU in the moving view is the moving pass (3.653 ms, one draw of 64 lamp quads, 8 shadowed). On the Mac the same pass is 0.04 to 0.10 ms of CPU. On CI, llvmpipe rasterises the bake shader on the calling thread when the render target changes, so GPU work reads as CPU. The moving lights' real cost is GPU fragment work, not CPU. The lever, if it matters on real GPUs, is moving_shadows or ray steps. So flat's CPU saving is under 0.5 ms a frame in every view, the moving view included.
