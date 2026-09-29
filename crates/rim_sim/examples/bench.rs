@@ -18,6 +18,14 @@
 //! 20 cm of snow over ground wet enough for mud, just above freezing, and
 //! the hauling case: what made a708c037's 50-127 ms ticks), --check.
 //!
+//! `--scale pawns` or `--scale map` plays a ladder instead: pawns 50, 200,
+//! 800 and 3,200 on a 500x500 map, or maps of 128, 250, 500 and 1,000 cells
+//! a side with 200 pawns, each rung in a process of its own. It prints each
+//! system's mean cost per tick at every rung and its growth exponent, the
+//! slope of cost against size on a log-log fit; one above 1.15 grows faster
+//! than linear and is flagged by name. `--report FILE` writes one run's
+//! numbers as JSON, which is how the ladder reads its rungs.
+//!
 //! `--check` holds the run to `budgets.toml`: the `sim.base` scenario, or
 //! `sim.winter` with `--winter`, each cap times the runner class's slack on
 //! CI (rim_sim::budgets).
@@ -65,6 +73,9 @@ fn dig_levels(s: &mut Sim, c: IVec) {
 }
 
 fn main() {
+    if let Some(axis) = std::env::args().skip_while(|a| a != "--scale").nth(1) {
+        return scale(&axis);
+    }
     let seed: u64 = arg("--seed", 1);
     let size: i32 = arg("--size", 250);
     let colonists: usize = arg("--colonists", 30);
@@ -256,6 +267,24 @@ fn main() {
         (pf.micros - pf0.3) / 1e3 / ticks as f64
     );
     println!("most path nodes in a tick: {max_nodes}");
+    if let Some(path) = std::env::args().skip_while(|a| a != "--report").nth(1) {
+        let per_tick = |us: f64| us / 1000.0 / ticks as f64;
+        let mut costs: serde_json::Map<String, serde_json::Value> =
+            s.profile.totals.iter().filter(|t| t.0 != "tick").map(|t| (t.0.clone(), per_tick(t.1).into())).collect();
+        costs.insert("paths".into(), per_tick(pf.micros - pf0.3).into());
+        let report = serde_json::json!({
+            "size": size,
+            "pawns": w.pawns.len(),
+            "ticks": ticks,
+            "mean_ms": mean,
+            "p99_ms": pct(0.99),
+            "max_ms": sorted[sorted.len() - 1],
+            "max_nodes": max_nodes,
+            "systems": costs,
+            "machine": machine,
+        });
+        std::fs::write(&path, serde_json::to_string_pretty(&report).unwrap()).unwrap_or_else(|e| panic!("{path}: {e}"));
+    }
     println!("worst ticks:");
     for (tick, ms, n, nodes, path_ms, sys, sys_ms) in &worst {
         println!(
@@ -308,4 +337,91 @@ fn plan_work(s: &mut Sim, defs: &rim_sim::defs::DefDb, c: IVec, size: i32) {
             s.push(Command::Build { thing: bed, stuff: wood, a: o.offset(2, 2), b: o.offset(2, 2), facing: 0 });
         }
     }
+}
+
+/// The ladder: each rung is this bench in a process of its own, reporting to
+/// a file; then each system's cost against size, and its growth exponent.
+fn scale(axis: &str) {
+    let days: f64 = arg("--days", 0.1);
+    let seed: u64 = arg("--seed", 1);
+    let rungs: Vec<(i32, usize)> = match axis {
+        "pawns" => [50, 200, 800, 3200].map(|p| (500, p)).to_vec(),
+        "map" => [128, 250, 500, 1000].map(|m| (m, 200)).to_vec(),
+        _ => {
+            eprintln!("bench: --scale takes pawns or map");
+            std::process::exit(2);
+        }
+    };
+    let exe = std::env::current_exe().expect("the bench's own path");
+    let dir = std::env::temp_dir().join(format!("rim-scale-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut reports: Vec<serde_json::Value> = Vec::new();
+    for &(size, pawns) in &rungs {
+        let out = dir.join(format!("{size}-{pawns}.json"));
+        eprintln!("bench: rung {size}x{size}, {pawns} pawns");
+        let status = std::process::Command::new(&exe)
+            .args(["--seed", &seed.to_string(), "--size", &size.to_string(), "--pawns", &pawns.to_string()])
+            .args(["--days", &days.to_string(), "--report", &out.to_string_lossy()])
+            .stdout(std::process::Stdio::null())
+            .status()
+            .expect("run a rung");
+        if !status.success() {
+            eprintln!("bench: the rung {size}x{size} with {pawns} pawns failed");
+            std::process::exit(1);
+        }
+        reports.push(serde_json::from_str(&std::fs::read_to_string(&out).unwrap()).unwrap());
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+    // The size a rung is measured by: pawns on the pawn ladder, cells on the
+    // map ladder.
+    let x: Vec<f64> =
+        rungs.iter().map(|&(size, pawns)| if axis == "pawns" { pawns as f64 } else { (size as f64).powi(2) }).collect();
+    let mut names: Vec<String> =
+        reports.iter().flat_map(|r| r["systems"].as_object().unwrap().keys().cloned().collect::<Vec<_>>()).collect();
+    names.sort();
+    names.dedup();
+    let cost = |r: &serde_json::Value, name: &str| r["systems"][name].as_f64().unwrap_or(0.0);
+    let mut rows: Vec<(String, Vec<f64>, Option<f64>)> = names
+        .iter()
+        .map(|n| {
+            let ys: Vec<f64> = reports.iter().map(|r| cost(r, n)).collect();
+            (n.clone(), ys.clone(), exponent(&x, &ys))
+        })
+        .collect();
+    let ticks: Vec<f64> = reports.iter().map(|r| r["mean_ms"].as_f64().unwrap()).collect();
+    rows.push(("(tick)".into(), ticks.clone(), exponent(&x, &ticks)));
+    rows.sort_by(|a, b| b.2.unwrap_or(0.0).total_cmp(&a.2.unwrap_or(0.0)));
+    let unit = if axis == "pawns" { "pawns" } else { "cells" };
+    println!("scale: {axis}, {days} days a rung, seed {seed}, {}", reports[0]["machine"].as_str().unwrap_or(""));
+    let head: Vec<String> = x.iter().map(|v| format!("{v:>10.0}")).collect();
+    println!("{:<18} {} {:>9}", format!("ms/tick at {unit}"), head.join(" "), "exponent");
+    for (name, ys, e) in &rows {
+        let cells: Vec<String> = ys.iter().map(|v| format!("{v:>10.4}")).collect();
+        let (exp, flag) = match e {
+            Some(e) => (format!("{e:>9.2}"), if *e > SUPERLINEAR { "  faster than linear" } else { "" }),
+            None => (format!("{:>9}", "-"), ""),
+        };
+        println!("{name:<18} {} {exp}{flag}", cells.join(" "));
+    }
+    println!(
+        "exponent: the slope of ms/tick against {unit} on a log-log fit over the rungs; 1 is linear, above {SUPERLINEAR} is flagged"
+    );
+}
+
+/// Where a growth exponent counts as faster than linear: some slack over 1
+/// for noise in times this small.
+const SUPERLINEAR: f64 = 1.15;
+
+/// The least-squares slope of ln(y) against ln(x), over the points where y
+/// is measurable; None when fewer than three are.
+fn exponent(x: &[f64], y: &[f64]) -> Option<f64> {
+    let pts: Vec<(f64, f64)> = x.iter().zip(y).filter(|(_, &y)| y > 1e-6).map(|(&x, &y)| (x.ln(), y.ln())).collect();
+    if pts.len() < 3 {
+        return None;
+    }
+    let n = pts.len() as f64;
+    let (mx, my) = (pts.iter().map(|p| p.0).sum::<f64>() / n, pts.iter().map(|p| p.1).sum::<f64>() / n);
+    let num: f64 = pts.iter().map(|p| (p.0 - mx) * (p.1 - my)).sum();
+    let den: f64 = pts.iter().map(|p| (p.0 - mx).powi(2)).sum();
+    Some(num / den)
 }
