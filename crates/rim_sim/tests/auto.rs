@@ -215,3 +215,20 @@ end)
     assert_eq!(level(&s, "core:haul"), 3, "the original didn't");
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// A mod's own work type has two names, bare and qualified, and a plan
+/// that uses both would get whichever the table happened to give last.
+#[test]
+fn a_plan_that_names_one_work_type_twice_is_an_error() {
+    let dir = planned("auto-twice");
+    let work = "[[work_type]]\nid = \"dig\"\nlabel = \"Dig\"\nicon = \"D\"\npriority = 3\norder = 90\n";
+    std::fs::write(dir.join("planning/defs/work.toml"), work).unwrap();
+    let mut s = Sim::new(&dir, 1).unwrap();
+    want(&mut s, &[("dig", 2), ("planning:dig", 3)]);
+    s.world.messages.clear();
+    hours(&mut s, 1);
+    let said: Vec<String> = s.world.messages.iter().map(|m| m.text.clone()).collect();
+    let twice = said.iter().any(|m| m.contains("planning:test") && m.contains("planning:dig twice"));
+    assert!(twice, "a plan with dig and planning:dig is refused: {said:?}");
+    let _ = std::fs::remove_dir_all(dir);
+}
