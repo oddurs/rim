@@ -1133,6 +1133,9 @@ impl Ui {
                 out.captured_keys = true;
             }
         }
+        // Enter and Tab are the popup's too: the focused control behind it
+        // neither clicks nor moves.
+        let popup_took = popup_keys.is_some() && self.focused_input().is_none();
         // A grid under the pointer takes the keys it names, before any
         // binding: a number over a Work Board cell sets it.
         let grid_keys = match (&top, input.pressed.is_empty()) {
@@ -1165,7 +1168,7 @@ impl Ui {
         // Keyboard focus: once a UI control has focus (it was clicked or
         // tabbed to), Tab cycles focusable elements and Enter activates. Tab
         // with nothing focused belongs to the game (next colonist).
-        if input.tab && self.focused.is_some() {
+        if input.tab && !popup_took && self.focused.is_some() {
             let focusables: Vec<(u64, &'static str, Vec<usize>)> = self
                 .layers
                 .iter()
@@ -1184,7 +1187,7 @@ impl Ui {
                 out.captured_keys = true;
             }
         }
-        if enter {
+        if enter && !popup_took {
             if let Some(f) = self.focused {
                 let found = self
                     .layers

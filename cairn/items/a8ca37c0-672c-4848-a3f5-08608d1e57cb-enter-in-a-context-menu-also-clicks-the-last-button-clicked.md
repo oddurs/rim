@@ -2,10 +2,11 @@
 id: a8ca37c0-672c-4848-a3f5-08608d1e57cb
 title: Enter in a context menu also clicks the last button clicked
 type: bug
-status: doing
+status: done
 milestone: bare-metal
 created: 2026-09-28
 updated: 2026-09-28
+closed_at: 2026-09-28
 priority: p2
 api: none
 layer: client
