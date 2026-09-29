@@ -91,9 +91,13 @@ fn predator_hunts_nearby_people() {
     let (mut s, founder) = isolated(14, true);
     let fp = pos(&s, founder);
     let wolf = spawn_near(&mut s, "wolf", fp, 5);
-    run(&mut s, 600);
-    let p = s.world.ecs.get::<&Pawn>(founder).unwrap();
-    assert_eq!(p.last_attacker, Some(wolf), "wolf within 8 cells should attack");
+    // Whom the wolf bit is the founder's to act on, so ask the wolf: the
+    // drafted founder takes `last_attacker` as soon as they turn on it.
+    let hunted = (0..600).any(|_| {
+        s.step();
+        attacking(&s, wolf, founder)
+    });
+    assert!(hunted, "wolf within 8 cells should attack");
 }
 
 #[test]
@@ -132,4 +136,56 @@ fn a_hunt_drawn_on_one_level_leaves_the_levels_under_it_alone() {
     s.push(Command::Designate { designation: hunt, a: fp.offset(-3, -3), b: fp.offset(3, 3) });
     s.step();
     assert!(s.world.ecs.get::<&rim_sim::world::Designated>(below).is_err(), "a hare a level down is marked");
+}
+
+/// Whether `who` is attacking `target` right now.
+fn attacking(s: &Sim, who: Entity, target: Entity) -> bool {
+    matches!(s.world.ecs.get::<&Pawn>(who).unwrap().job, Job::Attack { target: t, .. } if t == target)
+}
+
+#[test]
+fn a_drafted_colonist_hits_back_at_a_wolf_without_leaving_their_cell() {
+    let (mut s, founder) = isolated(14, true);
+    let fp = pos(&s, founder);
+    let wolf = spawn_near(&mut s, "wolf", fp, 1);
+    let bitten = (0..600).find(|_| {
+        s.step();
+        s.world.ecs.get::<&Pawn>(founder).unwrap().last_attacker.is_some()
+    });
+    let bitten = bitten.expect("the wolf attacks");
+    let answered = (0..90).find(|_| {
+        s.step();
+        attacking(&s, founder, wolf)
+    });
+    assert!(answered.is_some(), "bitten at {bitten}, the drafted colonist never turned on the wolf");
+    for _ in 0..3000 {
+        s.step();
+        if !s.world.pawn_alive(founder) {
+            break;
+        }
+        assert_eq!(pos(&s, founder), fp, "drafted, they hold their cell");
+    }
+}
+
+#[test]
+fn an_undrafted_colonist_still_fights_a_wolf_that_bites() {
+    let (mut s, founder) = isolated(14, false);
+    let fp = pos(&s, founder);
+    let wolf = spawn_near(&mut s, "wolf", fp, 1);
+    let fought = (0..1200).any(|_| {
+        s.step();
+        attacking(&s, founder, wolf)
+    });
+    assert!(fought, "undrafted, they turn on the wolf as they always have");
+}
+
+#[test]
+fn a_drafted_colonist_drives_off_a_hunting_wolf() {
+    let (mut s, founder) = isolated(14, true);
+    let fp = pos(&s, founder);
+    let wolf = spawn_near(&mut s, "wolf", fp, 5);
+    run(&mut s, 5000);
+    assert!(s.world.pawn_alive(founder), "the wolf killed a drafted colonist who could have fought");
+    let beaten = !s.world.pawn_alive(wolf) || pos(&s, wolf).chebyshev(pos(&s, founder)) > 1;
+    assert!(beaten, "the wolf is still at them");
 }

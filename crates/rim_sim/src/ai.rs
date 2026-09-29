@@ -168,8 +168,14 @@ const DEFEND_RADIUS: i32 = 20;
 fn think_colonist(w: &mut World, e: Entity, p: &mut Pawn) -> Option<Job> {
     let defs = w.defs.clone();
     if p.drafted {
-        // Drafted pawns hold position but defend themselves.
-        let (t, _) = nearest_pawn(w, e, p.pos, 1, |o| o.faction == Faction::Hostile)?;
+        // Drafted pawns hold position but defend themselves: against
+        // whatever just hit them, raider or animal, or a raider beside them.
+        let here = p.pos;
+        let attacker = p.last_attacker.take().filter(|&a| w.pawn_pos(a).is_some_and(|ap| ap.chebyshev(here) <= 1));
+        let t = match attacker {
+            Some(a) => a,
+            None => nearest_pawn(w, e, here, 1, |o| o.faction == Faction::Hostile)?.0,
+        };
         return Some(Job::Attack { target: t, until: w.tick + 600 });
     }
     if wounded(&defs, p) {
@@ -2171,6 +2177,11 @@ fn run_attack(w: &mut World, e: Entity, p: &mut Pawn, target: Entity, until: u64
     let target_retreating = w.ecs.get::<&Pawn>(target).is_ok_and(|t| retreating(&t));
     if target_retreating && p.pos.chebyshev(tpos) > 1 && !p.drafted {
         return None; // let them go
+    }
+    // A drafted pawn defending itself stays where the player put it: only
+    // an ordered attack, which has no deadline, chases.
+    if p.drafted && until != u64::MAX && p.pos.chebyshev(tpos) > 1 {
+        return None;
     }
     if p.pos.chebyshev(tpos) <= 1 && p.next.is_none() {
         p.path.clear();
