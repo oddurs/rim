@@ -441,3 +441,42 @@ fn hooks_handlers_and_planners_register_only_at_load_time() {
         );
     }
 }
+
+/// Each handler gets the event as its own table: a mod that edits it
+/// changes nothing another mod's handler reads (0777872e).
+#[test]
+fn a_handler_that_edits_its_event_leaves_the_next_handler_s_alone() {
+    let handler = |me: &str| {
+        format!(
+            r#"
+rim.on("aa:ping", function(e)
+    rim.set_data("{me}:saw", e.x or "cleared")
+    rim.set_data("{me}:inner", e.inner.y or "cleared")
+    e.x = nil
+    e.inner.y = nil
+end)
+"#
+        )
+    };
+    let emit = r#"
+local sent = false
+rim.every(1, function()
+    if not sent then
+        sent = true
+        rim.emit("aa:ping", { x = 5, inner = { y = 7 } })
+    end
+end)
+"#;
+    let (a, b) = (format!("{emit}{}", handler("aa")), handler("bb"));
+    let dir =
+        test_mods("event-copies", &["core"], &[("aa", &[("scripts/a.luau", &a)]), ("bb", &[("scripts/b.luau", &b)])]);
+    let mut s = Sim::new(&dir, 1).unwrap_or_else(|e| panic!("loads: {e}"));
+    for _ in 0..3 {
+        s.step();
+    }
+    let _ = fs::remove_dir_all(dir);
+    for m in ["aa", "bb"] {
+        assert_eq!(s.world.data.get(&format!("{m}:saw")).and_then(|d| d.num()), Some(5.0), "{m} saw x");
+        assert_eq!(s.world.data.get(&format!("{m}:inner")).and_then(|d| d.num()), Some(7.0), "{m} saw inner.y");
+    }
+}
