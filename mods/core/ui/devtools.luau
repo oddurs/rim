@@ -67,6 +67,34 @@ ui.window("core:gallery", { title = t("core:gallery.title", "Kit gallery"), w = 
 			button({ label = t("core:gallery.swatch", "Swatch"), swatch = "good" }),
 			button({ label = t("core:gallery.tooltip", "Tooltip"), tooltip = t("core:gallery.tooltip_text", "Tooltips appear after a short pause.") }),
 		}),
+		-- Button roles at rest, then disabled; then the sizes. Hover, press
+		-- and the keyboard's focus ring are in the autotest's shots.
+		row({ gap = "xs" }, {
+			button({ id = "core:gallery.primary", label = t("core:gallery.primary", "Primary"), kind = "primary" }),
+			button({ id = "core:gallery.secondary", label = t("core:gallery.secondary", "Secondary") }),
+			button({ id = "core:gallery.quiet", label = t("core:gallery.quiet", "Quiet"), kind = "quiet" }),
+			button({ id = "core:gallery.danger", label = t("core:gallery.danger", "Danger"), kind = "danger" }),
+		}),
+		row({ gap = "xs" }, {
+			button({ label = t("core:gallery.primary", "Primary"), kind = "primary", disabled = true }),
+			button({ label = t("core:gallery.secondary", "Secondary"), disabled = true }),
+			button({ label = t("core:gallery.quiet", "Quiet"), kind = "quiet", disabled = true }),
+			button({ label = t("core:gallery.danger", "Danger"), kind = "danger", disabled = true }),
+		}),
+		row({ gap = "xs", align = "center" }, {
+			button({ label = t("core:gallery.small", "Small"), size = "s" }),
+			button({ label = t("core:gallery.medium", "Medium") }),
+			button({ label = t("core:gallery.large", "Large"), size = "l" }),
+			button({ label = t("core:gallery.large", "Large"), kind = "primary", size = "l" }),
+		}),
+		row({ gap = "m", align = "end" }, {
+			label(t("core:gallery.hero", "Hero"), { size = "hero", weight = "strong" }),
+			label(t("core:gallery.display", "Display"), { size = "display", weight = "strong" }),
+			label(t("core:gallery.title_size", "Title"), { size = "title", weight = "strong" }),
+			label(t("core:gallery.heading", "Heading"), { size = "heading" }),
+			label(t("core:gallery.body", "Body")),
+			label(t("core:gallery.small_text", "Small"), { size = "small" }),
+		}),
 		row({ gap = "s", align = "center" }, {
 			kit.icon("core:check", "m"),
 			kit.icon("core:check", "l", { color = "good" }),

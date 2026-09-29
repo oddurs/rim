@@ -291,6 +291,25 @@ pub(super) async fn devtools(t: &mut T) {
     t.frame().await;
     t.check(t.app.ui.find("core:gallery.panel").is_some(), "the kit gallery opens");
     t.shot("gallery").await;
+    // The states a still gallery can't show: under the pointer, pressed,
+    // and the focus ring, which only the keyboard draws.
+    for (id, name) in
+        [("core:gallery.primary", "gallery_hover_primary"), ("core:gallery.danger", "gallery_hover_danger")]
+    {
+        if let Some(r) = t.ui_rect(id) {
+            t.mouse = (r[0] + r[2] / 2.0, r[1] + r[3] / 2.0);
+            t.settle().await;
+            t.shot(name).await;
+        }
+    }
+    t.input(RawInput { mouse: t.mouse, left_pressed: true, ..Default::default() }).await;
+    t.frame().await;
+    t.shot("gallery_press_danger").await;
+    t.input(RawInput { mouse: t.mouse, left_released: true, ..Default::default() }).await;
+    t.click_ui("core:gallery.secondary").await;
+    t.mouse = (4.0, 4.0);
+    t.key(KeyCode::Tab).await;
+    t.shot("gallery_focus_ring").await;
     t.click_ui("core:devtools.gallery").await;
     t.key(KeyCode::F12).await;
     t.frame().await;
