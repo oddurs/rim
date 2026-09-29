@@ -403,50 +403,21 @@ pub(super) async fn moving_lights(t: &mut T, carry: &mut Carry) {
     t.app.paused = false;
 }
 
-/// 508ad373 lighting from the palette
-pub(super) async fn lighting_from_the_palette(t: &mut T) {
-    println!("\n# a lighting preset from the palette takes at once (508ad373)");
-    // The binding has no key of its own; lend it one, as a player could.
-    t.app.ui.rebind("core:lighting_low", Some("f9"));
-    t.key(KeyCode::F9).await;
-    t.frame().await;
-    let q = t.app.light.setting().quality;
-    t.check(
-        t.app.light.setting().name() == "low" && q.sun_steps == 16 && !q.soft,
-        format!("Lighting: low takes at once ({}, {} sun steps)", t.app.light.setting().name(), q.sun_steps),
-    );
-    t.app.ui.rebind("core:lighting_low", None);
-    crate::apply_ui(&mut t.app, rim_ui::view::UiAction::Lighting("medium".into()));
-    t.frame().await;
-    t.check(t.app.light.setting().name() == "medium", "and back to medium");
-
-    println!("\n# lighting auto starts at medium and steps down only on the lighting's own time (24bad102)");
-    t.app.ui.rebind("core:lighting_auto", Some("f9"));
-    t.key(KeyCode::F9).await;
-    t.frame().await;
-    t.app.ui.rebind("core:lighting_auto", None);
-    let s = t.app.light.setting();
-    t.check(s.auto && s.name() == "medium", format!("Lighting: auto starts at medium ({})", s.name()));
-    // Where GL times the lighting it reads the queries back as it goes, and
-    // may step down (CI's software GL is slow); on Apple's it stays put.
-    // A window of the frame clock, however long its frames take to draw.
-    let start = t.clock;
-    while t.clock - start < crate::quality::AUTO_WINDOW + 0.5 {
+/// 08a5d182: flat is the default, and draws the sim's light in one pass.
+pub(super) async fn flat_is_the_default(t: &mut T) {
+    println!("\n# flat is the default lighting: the sim's light field, one multiply (08a5d182)");
+    t.check(crate::quality::Setting::default().flat(), "a new game lights flat");
+    t.app.light.set(crate::quality::Setting::Flat);
+    t.app.light.adapt_now();
+    for _ in 0..3 {
         t.frame().await;
     }
-    // Where GL can time a pass, auto has read frames back; where it can't
-    // (Apple's), it has said so and stays at medium.
-    let (s, read) = (t.app.light.setting(), t.app.light.cost_frames);
-    let timed = t.app.light.can_time_cost();
-    t.check(
-        s.auto && if timed == Some(true) { read > 30 } else { timed == Some(false) && s.name() == "medium" },
-        format!(
-            "after a window of frames: {read} read back, at {}, on {} (timer: {timed:?})",
-            s.name(),
-            crate::light::gl_renderer()
-        ),
-    );
-    crate::apply_ui(&mut t.app, rim_ui::view::UiAction::Lighting("medium".into()));
+    let passes: Vec<(&str, bool)> = t.app.light.passes.iter().map(|p| (p.name, p.ran)).collect();
+    let marched = passes.iter().any(|&(n, ran)| ran && matches!(n, "firelight" | "moving" | "sun"));
+    let drew = passes.iter().any(|&(n, ran)| ran && n == "multiply");
+    t.check(drew && !marched, format!("it draws one multiply and no bake, march or sun pass ({passes:?})"));
+    t.shot("flat_lighting").await;
+    // Today's look for the sections after this one.
+    t.app.light.set(crate::quality::Setting::Shadows);
     t.frame().await;
-    t.check(!t.app.light.setting().auto && t.app.light.setting().name() == "medium", "and a chosen preset ends it");
 }

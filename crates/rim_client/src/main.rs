@@ -605,7 +605,7 @@ async fn game() {
     // `--lighting <preset>` for the bench and tests; else the settings file.
     let lighting = match args.windows(2).find(|w| w[0] == "--lighting") {
         Some(w) => quality::Setting::named(&w[1]).unwrap_or_else(|| {
-            eprintln!("  warning: --lighting wants low, medium, high, ultra or auto, not {}", w[1]);
+            eprintln!("  warning: --lighting wants flat or shadows, not {}", w[1]);
             quality::Setting::default()
         }),
         None => settings
@@ -1534,25 +1534,6 @@ fn apply_ui(app: &mut App, a: UiAction) {
         UiAction::Zoom(f) => {
             let (w, h) = (screen_width(), screen_height());
             apply(app, Action::Zoom(f, w / 2.0, h / 2.0));
-        }
-        UiAction::Lighting(name) => {
-            // The preset alone changes: what the player set by hand under
-            // [lighting] stays, so the game runs as it will after a restart.
-            let saved = app.settings_file.as_ref().map(|p| save_lighting(p, &name));
-            let setting = match saved {
-                Some(Ok(text)) => quality::Setting::from_settings(&text).unwrap_or_else(|e| {
-                    eprintln!("rim: settings file: {e}");
-                    None
-                }),
-                Some(Err(e)) => {
-                    eprintln!("rim: could not save settings: {e}");
-                    None
-                }
-                None => None,
-            };
-            if let Some(s) = setting.or_else(|| quality::Setting::named(&name)) {
-                app.light.set(s);
-            }
         }
         UiAction::ScrollMode(m) => {
             let Some(mode) = ScrollMode::parse(&m) else { return };

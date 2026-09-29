@@ -215,8 +215,6 @@ pub enum UiAction {
     /// Draw the world at this fraction of the screen's pixels (0.25 to 1);
     /// the UI stays at full resolution.
     RenderScale(f32),
-    /// A lighting preset by name: low, medium, high, ultra or auto.
-    Lighting(String),
     /// Make the map's overlays still: fades instant, rings unmoving.
     ReduceMotion(bool),
     /// Draw the UI this much bigger (0.75 to 2), on top of the display's

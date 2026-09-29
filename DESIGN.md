@@ -2206,11 +2206,10 @@ where they were built, and the sun moves a fraction of a degree a second.
     moon are both `daylight` terms, worked out from where they are (below):
     a full moon gives the sim a little light at night, so plants grow a
     little by it (the user's decision, 2026-09-28), and a new moon none.
-    The picture's sky is the sim's light and those bodies'. The pass marches up to four, one
-    per channel of its target: the brightest straight light first, as many
-    as the preset's `sky_shadows`, chosen each rebuild, so with one slot the
-    sun casts by day and the moon by night. Each lands in its own colour; a
-    body without a slot lights where the sky does. Where a body reaches it
+    The picture's sky is the sim's light and those bodies'. Under `shadows` the pass marches
+    one body, the brightest straight light, chosen each rebuild: the sun by
+    day, the moon by night. It lands in its own colour; a body without
+    shadows lights where the sky does. Where a body reaches it
     clears the plan's contact shadow as much as its light is the day's
     (wholly from 10% light), so a moonlit night keeps the convention. A
     pinned sun (tests) takes all the sky's light, white. A lightning flash takes the pass
@@ -2341,35 +2340,35 @@ next begins, and no pop when the view changes level.
   new one for 200 ms, never in fewer than twelve frames, so the change is a
   blend of two settled frames (220a059e, 1104bf12).
 
-### Presets
+### Settings: flat, or shadows
 
-`low`, `medium` (the default), `high`, `ultra` and `auto`, from `[lighting]` in the
-player's settings file:
+Performance is rim's first feature, so the lighting has two settings, from
+`[lighting] quality` in the player's settings file (08a5d182, the user's
+option B after the side-by-side in 3c65738f):
 
-| | low | medium | high | ultra |
-|---|---|---|---|---|
-| Light texels per cell, at most | 1 | 2 | 2 | 4 |
-| Sun steps (0.4 cells each) | 16 | 28 | 40 | 56 |
-| Soft sun shadows | no | yes | yes | yes |
-| Sun worked out again after | 1° | 0.25° | 0.1° | 0.02° |
-| Moving lights with shadows | 4 | 8 | 16 | 32 |
-| Sky bodies with shadows | 1 | 1 | 2 | 4 |
+- **`flat`, the default.** The sim's `light` field as it is: the sky's share
+  of each cell (the rooms texture) and its firelight stamps, one texel a
+  cell, bilinear, tinted by the sky and the firelight colours, in one
+  multiply. No marches, bakes or fill; the plan's contact shadow is the only
+  direction. On the Mac (M4 Pro, window in front) it holds 120 fps in every
+  bench view. Its cost is looks: light comes in cell- and room-aligned
+  blocks at close zoom.
+- **`shadows`, the one opt-in.** Everything below: the brightest sky body's
+  shadows (the sun by day, the moon by night), firelight baked with soft
+  shadows, 8 moving lights with shadows, room fill, 2 texels a cell, 28 sun
+  steps, the sun worked out again every 0.25°. On the Mac its lit and level
+  views run at about 60 fps, GPU-bound near 20 ms a frame.
 
-Any setting overrides its preset (`texels_per_cell`, `sun_steps`,
-`soft_shadows`, `sun_rebuild_degrees`, `moving_shadows`, `sky_shadows`),
-and `auto` keeps them as it steps.
+There are no other tiers and no per-setting tuning: `low`, `high`, `ultra`
+and `auto` (which couldn't time the GPU on a Mac) went with 08a5d182, and an
+older settings file that names them warns and runs flat. Nor is there a
+choice in the game: `act.lighting` and its palette bindings went too (UI API
+0.7). `shadows` is reached only through the settings file, a bridge until
+shadows drawn as shapes (f05c5fa1) light every game and the rest of it goes
+(3a2b2c0d): one lighting for everyone.
 
-`auto` (24bad102) starts at `medium`. It steps down a preset after each 3 s
-window in which the lighting's own GPU time averaged over 2 ms a frame, an
-eighth of a 60 Hz frame. It stops at `low`, never steps back up mid-game,
-and logs each step. It reads that time from timer queries around the
-lighting passes, read back four frames later, so no frame waits for the GPU.
-It never reads the frame's time, which mixes the sim and the UI with the
-light. Where GL can't time a pass (Apple's tile-based GPU, GL ES), `auto`
-stays at `medium` and says so in the log: on a Mac, `auto` is `medium`.
-
-Light is upsampled bilinearly in every preset; bicubic was tried and
-changed nothing visible at 2 texels a cell. Static lights bake at 8 rays in every preset, because the bake runs only on
+Light is upsampled bilinearly; bicubic was tried and
+changed nothing visible at 2 texels a cell. Static lights bake at 8 rays, because the bake runs only on
 edits. A light texel never gets smaller than 4 screen pixels: at the minimum
 zoom (4 points a cell on a 1x screen) the buffer drops to 1 texel per cell,
 so zooming out doesn't raise the cost, and it grows back only with a fifth

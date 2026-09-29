@@ -441,6 +441,8 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     for _ in 0..3 {
         t.frame().await;
     }
+    // Shadows are opt-in since 08a5d182, and the lighting sections test them.
+    t.app.light.set(crate::quality::Setting::Shadows);
     let defs = t.w().defs.clone();
     let founder = t.w().colonists().next().expect("a founder");
     let home = t.pawn(founder).pos;
@@ -479,7 +481,7 @@ pub async fn run(app: App, dir: PathBuf) -> ! {
     indoors::indoors(&mut t, &mut carry).await;
     indoors::roofs_take_the_sun(&mut t, &mut carry).await;
     light::moving_lights(&mut t, &mut carry).await;
-    light::lighting_from_the_palette(&mut t).await;
+    light::flat_is_the_default(&mut t).await;
     input::camera_by_device(&mut t, &mut carry).await;
     input::safe_right_click(&mut t, &mut carry).await;
     chalk::the_grid(&mut t, &mut carry).await;

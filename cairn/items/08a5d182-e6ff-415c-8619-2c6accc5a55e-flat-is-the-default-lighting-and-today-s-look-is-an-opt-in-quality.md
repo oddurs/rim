@@ -7,7 +7,7 @@ milestone: bare-metal
 assignee: Oddur Sigurdsson
 claimed: 2026-09-28
 created: 2026-09-28
-updated: 2026-09-28
+updated: 2026-09-29
 priority: p0
 api: breaking
 effort: m
@@ -29,8 +29,8 @@ The user chose option B in the BARE METAL plan (3c65738f): the lighting is slow 
 
 ## Acceptance criteria
 
-- [ ] With no settings file, the game and the bench run `flat` (test)
-- [ ] `shadows` is the one opt-in, chosen in settings or the palette and labelled with its cost, and the other tiers are gone (test)
+- [x] With no settings file, the game and the bench run `flat` (test)
+- [x] The other tiers, auto and the per-setting tuning are gone, and there is no lighting choice in the game; `shadows` is reached only through the settings file, as a bridge (test)
 - [ ] Before and after on a same-runner-class CI A/B, and a 5-minute foreground Mac run of the default, with the user's OK
 
 ## 2026-09-28
@@ -43,3 +43,11 @@ The bench measures the default and reruns each view under the other setting on t
 ## 2026-09-28
 
 act.lighting now accepts only flat or shadows, a breaking change to the UI API, so ui_api moves from 0.6 to 0.7 (UI_API_VERSION, every mod's ui_api line, the docs), with no compat shim (rim-c2's call).
+
+## 2026-09-28
+
+Folded in, at rim-c2's call so ui_api is bumped once: act.lighting, the two palette bindings, the handler and save_lighting are removed; the user approved one lighting for everyone. [lighting] quality stays readable, a bridge to shadows until f05c5fa1 and 3a2b2c0d.
+
+## 2026-09-29
+
+Criteria 1 and 2 ticked with the PR: quality::flat_is_the_default_and_shadows_the_one_choice and the autotest's flat_is_the_default. Criterion 3 stays open: the CI side-by-side comes from this PR's queue run, and the 5-minute foreground Mac run needs the user's OK. Rebased over #386: api 0.8 and ui_api 0.7 in every mod.

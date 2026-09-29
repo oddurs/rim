@@ -15,7 +15,6 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `act.draft` | `(id: number, on: boolean) -> ()` | Draft or undraft a colonist. |
 | `act.focus` | `(id: number) -> ()` | Move the camera to a pawn or thing, and to its level. |
 | `act.level` | `(z: number) -> ()` | Show level z: 0 is the surface, below it is negative. Past the top or bottom level it stays at the last. |
-| `act.lighting` | `(preset: string) -> ()` | The lighting preset: 'low', 'medium', 'high', 'ultra', or 'auto', which starts at medium and steps down while the lighting runs slow. Settings the player set by hand under [lighting] stay. Saved for the player. |
 | `act.load` | `(path: string) -> ()` | Play a save from view.saves() (the title screen). |
 | `act.mark_urgent` | `(id: number, on: boolean) -> ()` | Mark a job urgent (a blueprint, a thing or creature marked for work, an order's site), or clear it: everyone takes it a level sooner than its work type. |
 | `act.new_colony` | `() -> ()` | Start a new colony (the title screen). |

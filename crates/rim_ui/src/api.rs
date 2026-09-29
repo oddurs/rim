@@ -10,7 +10,7 @@
 /// The version of this surface, as a mod names it in `mod.toml` as
 /// `ui_api`. Before 1.0 every minor is breaking: a mod written against a
 /// newer surface names calls this engine lacks, and is refused.
-pub const UI_API_VERSION: (u32, u32) = (0, 6);
+pub const UI_API_VERSION: (u32, u32) = (0, 7);
 
 /// One member of `ui`, `act` or `view`.
 pub struct UiDoc {
@@ -150,7 +150,6 @@ pub const UI_API: &[UiDoc] = &[
     d!("act.draft", "(id: number, on: boolean) -> ()", "Draft or undraft a colonist."),
     d!("act.focus", "(id: number) -> ()", "Move the camera to a pawn or thing, and to its level."),
     d!("act.level", "(z: number) -> ()", "Show level z: 0 is the surface, below it is negative. Past the top or bottom level it stays at the last."),
-    d!("act.lighting", "(preset: string) -> ()", "The lighting preset: 'low', 'medium', 'high', 'ultra', or 'auto', which starts at medium and steps down while the lighting runs slow. Settings the player set by hand under [lighting] stay. Saved for the player."),
     d!("act.load", "(path: string) -> ()", "Play a save from view.saves() (the title screen)."),
     d!("act.mark_urgent", "(id: number, on: boolean) -> ()", "Mark a job urgent (a blueprint, a thing or creature marked for work, an order's site), or clear it: everyone takes it a level sooner than its work type."),
     d!("act.new_colony", "() -> ()", "Start a new colony (the title screen)."),
