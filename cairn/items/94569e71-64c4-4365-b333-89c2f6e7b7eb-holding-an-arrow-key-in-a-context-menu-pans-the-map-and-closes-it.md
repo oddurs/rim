@@ -2,11 +2,12 @@
 id: 94569e71-64c4-4365-b333-89c2f6e7b7eb
 title: Holding an arrow key in a context menu pans the map and closes it
 type: bug
-status: doing
+status: done
 milestone: bare-metal
 assignee: Oddur Sigurdsson
 created: 2026-09-28
 updated: 2026-09-28
+closed_at: 2026-09-28
 priority: p2
 api: none
 layer: client

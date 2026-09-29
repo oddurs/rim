@@ -157,6 +157,24 @@ fn keys_pick_and_close_and_bindings_wait() {
     );
 }
 
+/// A key stays down for several frames. While the menu is up none of them
+/// reach the game, or an arrow held past its first frame would pan the map,
+/// and moving the map closes the menu.
+#[test]
+fn a_key_held_in_the_menu_stays_the_menus() {
+    let mut t = T::new("menus-held");
+    let at = centre(t.ui.find("probe:subject").unwrap());
+    t.right_click(at);
+    let out = t.input(Input { mouse: at, pressed: vec!["down".into()], ..Default::default() });
+    assert!(out.captured_keys, "the press is the menu's");
+    let held = t.input(Input { mouse: at, ..Default::default() });
+    assert!(held.captured_keys, "and so is the keyboard on the frames it's held");
+    assert!(t.ui.find("core:menu").is_some());
+    t.key("escape");
+    let out = t.input(Input { mouse: at, ..Default::default() });
+    assert!(!out.captured_keys, "closed, the keyboard is the game's again");
+}
+
 #[test]
 fn a_click_outside_closes_and_a_drag_release_picks() {
     let mut t = T::new("menus-mouse");

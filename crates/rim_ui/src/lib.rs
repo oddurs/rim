@@ -1121,8 +1121,11 @@ impl Ui {
         }
         // An open popup takes the keyboard: every named key goes to it, and
         // no binding fires while it's up.
+        // Every frame it's up, not only when a key goes down: a key held
+        // past its first frame must not reach the game (an arrow held
+        // would pan the map, and moving the map closes the popup).
         let popup_keys = self.popup_roots().find_map(|n| n.on_key.clone());
-        if let (Some(f), false) = (&popup_keys, input.pressed.is_empty()) {
+        if let Some(f) = &popup_keys {
             if self.focused_input().is_none() {
                 for key in &input.pressed {
                     handlers.push(Call::Text { f: f.clone(), text: key.clone() });
