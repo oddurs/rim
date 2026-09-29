@@ -726,7 +726,9 @@ impl Ui {
     pub fn covers(&self, x: f32, y: f32) -> bool {
         self.layers.iter().any(|l| {
             l.solids.iter().any(|r| contains(*r, x, y))
-                || l.hits.iter().any(|h| h.interactive && contains(h.rect, x, y))
+                || l.hits
+                    .iter()
+                    .any(|h| h.interactive && contains(h.rect, x, y) && h.clip.is_none_or(|c| contains(c, x, y)))
         })
     }
 
@@ -1606,11 +1608,11 @@ impl Ui {
                 let solid_layer = matches!(layer, "docked" | "float" | "title" | "windows" | "popup" | "modal");
                 let mut i = 0;
                 let mut path = vec![ri];
+                if solid_layer {
+                    visible_solids(&root, &rects, &mut 0, 0.0, None, &state_scroll, &mut lo.solids);
+                }
                 collect_nodes(&root, &rects, &mut i, &mut path, &mut |n, r, p| {
                     nodes += 1;
-                    if solid_layer && (n.style.bg.is_some() || n.is_interactive()) {
-                        lo.solids.push(r);
-                    }
                     if let Some(id) = &n.id {
                         ids.insert(id.to_string(), r);
                         id_keys.insert(id.to_string(), n.key);
@@ -2050,6 +2052,38 @@ fn collect_nodes(
         path.push(ci);
         collect_nodes(c, rects, i, path, f);
         path.pop();
+    }
+}
+
+/// The parts of a tree that stop the pointer: each node with a background
+/// or a handler, where it is drawn. A scroll area moves its content and
+/// clips it, as `paint::walk` does, so rows scrolled out of an area don't
+/// cover what lies beyond its edge.
+fn visible_solids(
+    n: &Node,
+    rects: &[Rect],
+    i: &mut usize,
+    dy: f32,
+    clip: Option<Rect>,
+    scroll: &HashMap<u64, f32>,
+    out: &mut Vec<Rect>,
+) {
+    let r = rects[*i];
+    *i += 1;
+    let shown = [r[0], r[1] + dy, r[2], r[3]];
+    let seen = clip.map_or(shown, |c| paint::intersect(c, shown));
+    if (n.style.bg.is_some() || n.is_interactive()) && seen[2] > 0.0 && seen[3] > 0.0 {
+        out.push(seen);
+    }
+    let (mut dy, mut clip) = (dy, clip);
+    if n.style.clip {
+        clip = Some(seen);
+        if n.kind == Kind::Scroll {
+            dy -= scroll.get(&n.key).copied().unwrap_or(0.0);
+        }
+    }
+    for c in &n.children {
+        visible_solids(c, rects, i, dy, clip, scroll, out);
     }
 }
 
