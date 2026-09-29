@@ -324,6 +324,8 @@ declare view: {
     level_of: (id: number) -> number?,
     -- Every level, the highest first: the colonists and other creatures on it, and whether it is reached (the surface and above, or a level a portal goes down to or a pit looks into).
     levels: () -> { { z: number, colonists: number, others: number, reached: boolean } },
+    -- What changed when this game was loaded: mods that changed, things dropped, ticks lost. Empty for a new game.
+    load_notes: () -> { string },
     -- A thing's world look, tinted by what it's made of, as an index a token node's `look` takes (kind = "token"; `kit.item` builds one). Made once per thing and material.
     look: (thing: string, made_of: string?) -> number,
     -- The job on a tile an urgent mark could go on, with whether it has one.
@@ -354,6 +356,8 @@ declare view: {
     priority_levels: () -> number,
     -- Smoothed time per system and mod, in µs.
     profile: () -> { ProfileRow },
+    -- Why the colony isn't being saved, while its saves fail (a full disk, a folder gone); nil while they work.
+    save_failing: () -> string?,
     -- The player's saves, newest first, on the title screen; empty in a game.
     saves: () -> { Save },
     -- Screen width and height in logical pixels.

@@ -109,6 +109,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `view.level` | `() -> number` | The level on screen: 0 is the surface, below it is negative. |
 | `view.level_of` | `(id: number) -> number?` | The level a pawn or thing is on. |
 | `view.levels` | `() -> { { z: number, colonists: number, others: number, reached: boolean } }` | Every level, the highest first: the colonists and other creatures on it, and whether it is reached (the surface and above, or a level a portal goes down to or a pit looks into). |
+| `view.load_notes` | `() -> { string }` | What changed when this game was loaded: mods that changed, things dropped, ticks lost. Empty for a new game. |
 | `view.look` | `(thing: string, made_of: string?) -> number` | A thing's world look, tinted by what it's made of, as an index a token node's `look` takes (kind = "token"; `kit.item` builds one). Made once per thing and material. |
 | `view.markable` | `(x: number, y: number) -> Markable?` | The job on a tile an urgent mark could go on, with whether it has one. |
 | `view.marked` | `() -> { [string]: number }` | How many things each designation has marked, by designation id; ones with none are left out. |
@@ -124,6 +125,7 @@ editors are in [`types/ui.d.luau`](../../types/ui.d.luau); the guide is
 | `view.priorities` | `(id: number) -> { [string]: number }?` | A colonist's priority per work type, by work type id: 1 first, 0 never. Nil if it isn't a pawn. |
 | `view.priority_levels` | `() -> number` | How many priority levels there are; 0 means never. |
 | `view.profile` | `() -> { ProfileRow }` | Smoothed time per system and mod, in µs. |
+| `view.save_failing` | `() -> string?` | Why the colony isn't being saved, while its saves fail (a full disk, a folder gone); nil while they work. |
 | `view.saves` | `() -> { Save }` | The player's saves, newest first, on the title screen; empty in a game. |
 | `view.screen` | `() -> (number, number)` | Screen width and height in logical pixels. |
 | `view.selected` | `() -> number?` | The selected pawn or thing's id: view.pawn or view.thing says which. With several colonists selected, the first of them. |

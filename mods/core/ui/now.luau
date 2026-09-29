@@ -177,6 +177,43 @@ alerts.add({
 	end,
 })
 
+-- The colony isn't being saved (a full disk, the folder gone). It says so
+-- until a save works again: a player trusts the game to keep the colony.
+alerts.add({
+	id = "core:not_saving",
+	severity = "bad",
+	check = function(view)
+		local why = view.save_failing()
+		if why then
+			return string.format(t("core:alerts.not_saving", "Not being saved: %s"), why)
+		end
+		return nil
+	end,
+})
+
+-- What a load changed (a mod updated, things dropped), through the first
+-- day of play or until hidden. The F3 list keeps it after that.
+local notes_until: number? = nil
+alerts.add({
+	id = "core:load_notes",
+	severity = "info",
+	check = function(view)
+		local notes = view.load_notes()
+		if #notes == 0 then
+			return nil
+		end
+		notes_until = notes_until or view.tick() + view.ticks_per_day()
+		if view.tick() > notes_until then
+			return nil
+		end
+		local text = notes[1]
+		if #notes > 1 then
+			text = string.format(t("core:alerts.load_more", "%s, and %d more in F3"), text, #notes - 1)
+		end
+		return string.format(t("core:alerts.load_notes", "Loaded: %s"), text)
+	end,
+})
+
 -- ─── The column ─────────────────────────────────────────────────────────────
 
 local SWATCH = { bad = "bad", warn = "threat", info = "accent" }

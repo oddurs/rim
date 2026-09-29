@@ -127,18 +127,14 @@ fn name(seed: u64, n: u32) -> String {
 }
 
 /// After every sim step: log, or snapshot, when it's time. A write that
-/// failed is told to the player with the load warnings.
+/// fails is the player's to hear about from core's alert, while it does
+/// (`Writer::failing`, `view.save_failing`).
 pub fn after_step(w: &Writer, sim: &mut Sim) {
     let t = sim.world.tick;
     if t.is_multiple_of(SNAPSHOT_EVERY) {
         w.snapshot(sim);
     } else if t.is_multiple_of(LOG_EVERY) {
         w.log(sim);
-    } else {
-        return;
-    }
-    if let Some(e) = w.take_error() {
-        sim.warnings.push(format!("this colony isn't being saved: {e}"));
     }
 }
 
