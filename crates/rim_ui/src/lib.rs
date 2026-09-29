@@ -1864,7 +1864,7 @@ impl Ui {
             if n.kind == Kind::Anchored {
                 out.push(n);
             } else {
-                for c in &n.children {
+                for c in n.children.iter() {
                     gather(c, out);
                 }
             }
@@ -2040,7 +2040,7 @@ fn plain(key: u64, style: Style, children: Vec<Node>) -> Node {
         token: None,
         input: None,
         on_drag: None,
-        children,
+        children: Rc::new(children),
     }
 }
 
@@ -2088,7 +2088,7 @@ fn visible_solids(
             dy -= scroll.get(&n.key).copied().unwrap_or(0.0);
         }
     }
-    for c in &n.children {
+    for c in n.children.iter() {
         visible_solids(c, rects, i, dy, clip, scroll, out);
     }
 }
@@ -2107,7 +2107,7 @@ fn flatten(n: &Node, depth: usize, out: &mut Vec<(usize, String, String, String)
         (Kind::Token, _) => "token",
     };
     out.push((depth, kind.to_string(), n.id.as_deref().unwrap_or("").to_string(), n.owner.to_string()));
-    for c in &n.children {
+    for c in n.children.iter() {
         flatten(c, depth + 1, out);
     }
 }
