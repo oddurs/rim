@@ -1909,14 +1909,17 @@ impl World {
         match dig.hole_r {
             Some(air) => {
                 self.remove_thing(e, false);
-                // What lay on the ground falls in.
+                // What lay on the ground falls in: taken up and set down
+                // below, through the stock ledger, onto whatever lies there.
                 if let Some(i) = self.map.item_at(t.pos) {
-                    if let Ok(mut th) = self.ecs.get::<&mut Thing>(i) {
-                        th.pos = q;
-                    }
-                    self.map.set_item(t.pos, None);
-                    if self.map.item_at(q).is_none() {
-                        self.map.set_item(q, Some(i));
+                    let lot = self.thing(i).map(|th| Lot {
+                        made_of: self.made_of(i),
+                        hp: Some(th.hp),
+                        ..Lot::new(th.def, th.count)
+                    });
+                    self.despawn_thing(i);
+                    if let Some(lot) = lot {
+                        self.place_lot(lot, q);
                     }
                 }
                 self.map.set_terrain(t.pos, air, defs.terrain[air as usize].path_cost);

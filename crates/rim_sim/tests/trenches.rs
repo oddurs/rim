@@ -6,7 +6,7 @@ mod common;
 
 use rim_sim::command::{build_preview, Blocker, Place};
 use rim_sim::path::Goal;
-use rim_sim::world::{Faction, Owner, Pawn, Thing};
+use rim_sim::world::{Faction, Lot, Owner, Pawn, Thing};
 use rim_sim::{Command, IVec, Sim};
 
 fn core() -> Sim {
@@ -174,4 +174,22 @@ fn colonists_build_a_bridge_over_a_pit_and_walk_it() {
     }
     assert!(done, "the bridge was built");
     assert!(s.world.map.passable(p), "and is walked on");
+}
+
+/// A pit dug where a stack lies: the stack falls in, and the stock ledger
+/// has it where it landed, so the colony's searches find it there.
+#[test]
+fn a_stack_on_a_dig_site_falls_in_through_the_ledger() {
+    let mut s = core();
+    let c = s.world.colony_center().unwrap();
+    let (wood, pit) = (thing(&s, "wood"), thing(&s, "pit"));
+    let open = |s: &Sim, p: IVec| s.world.map.item_at(p).is_none() && s.world.map.fixture_at(p).is_none();
+    let p = (3..20).map(|r| c.offset(r, -r)).find(|&p| s.world.can_dig(p) && open(&s, p)).expect("ground to dig");
+    s.world.put_lot(Lot::new(wood, 20), p);
+    let site = s.world.spawn_fixture_of(pit, p, false, None).expect("a pit");
+    rim_sim::ai::complete_building(&mut s.world, site);
+    let below = IVec::at(p.x, p.y, p.z - 1);
+    let fell = s.world.map.item_at(below).expect("it fell in");
+    assert_eq!(s.world.thing(fell).map(|t| (t.def, t.pos, t.count)), Some((wood, below, 20)));
+    assert_eq!(s.world.stock, s.world.counted_stock());
 }
