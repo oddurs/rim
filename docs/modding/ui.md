@@ -614,6 +614,56 @@ Core draws the chrome (`kit.window`): a title bar that drags, a close button,
 the body in a scroll area, and a resize grip when `resizable`. A theme mod
 can register its own with `ui.window_chrome`; nodes marked `handle = "move"`,
 `"resize"` or `"close"` are what the engine routes.
+
+### Apps (planned: RimOS)
+
+> **Planned.** Nothing in this subsection exists yet. It is the contract the
+> `rimos` milestone builds (DESIGN.md §11b). Names may change before it
+> lands; this note goes when it does.
+
+Every window becomes an **app**, a **panel**, a **dialog** or an
+**overlay**. A mod declares an app with the same call as today, plus a few
+fields:
+
+```lua
+ui.window("my_mod:ledger", {
+	title = "Ledger", key = "l",       -- shown in the title bar, dock and launcher
+	kind = "app",                     -- "app" | "dialog" | "overlay" | "screen"
+	w = 560, h = 420, resizable = true,
+	min = { w = 360, h = 240 },
+	esc = true,                       -- Esc closes it when it has focus
+	dock = true, launcher = true,     -- listed in the dock and the launcher
+}, function(view) … end)
+```
+
+- The player minimises, maximises and snaps apps; a mod still never moves
+  one. `ui.focused()` returns the focused app's id.
+- `screens.add` keeps working and declares an app.
+- `ui.toast(text, kind)` shows a toast: at most three, four seconds each.
+- `ui.settings_page(id, label, build)` adds a page to the Settings app.
+- `kit.confirm{title, body, verb, danger, on_confirm}` asks before
+  something that can't be undone.
+- `kit.button` gains `kind = "primary" | "quiet" | "danger"` and
+  `size = "s" | "l"`. The default stays today's button.
+- `kind = "screen"` fills the window with no chrome, one at a time, for the
+  title and New colony; Esc calls the screen's `on_back` instead of closing
+  it.
+- `ui.bindings()` returns `{ {id, label, group, key, default} }`.
+  `ui.rebind(id, key)` returns `nil` when it took the key, or the id of the
+  binding that holds it; it never steals a key. `ui.rebind(id, nil)` resets
+  to the default.
+- `ui.settings_page(id, label, build, { order = n })` pages sort by `order`.
+  A page stores its values with `ui.setting("my_mod:key", default)` and
+  `ui.set_setting("my_mod:key", value)`, saved in the player's
+  `settings.toml` under `[mods]`, the same way core's settings are.
+
+On the title, before a colony exists, these work too:
+- actions: `act.new_colony{seed, start, name}` (`start` is a `[[start]]`
+  def id), `act.load(save)`, `act.continue()`, `act.delete_save(save)`
+  (always behind `kit.confirm`), `act.open(app_id)` and `act.quit()`;
+- views: `view.saves()` (newest first, a broken save with its reason),
+  `view.starts()`, `view.settings()`, and `view.loading()`, which is
+  `{stage, fraction}` while a world loads and `nil` otherwise.
 ## Images
 
 PNGs under a mod's `ui/img/` are images named `mod:stem`. An image node
