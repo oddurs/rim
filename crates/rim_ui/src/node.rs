@@ -547,6 +547,11 @@ pub fn key_for(parent: u64, index: usize, id: Option<&str>) -> u64 {
 
 /// Convert one node table (not its children: the caller walks those so it
 /// can apply mod operations to each). One pass over the table's fields.
+/// The most cells one grid may have: far more than a Work Board's colonists
+/// by work types, and few enough that a mod's mistake is an error box, not
+/// an allocation that takes the client down.
+pub const MAX_GRID_CELLS: usize = 1 << 16;
+
 pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
     let theme = ctx.theme;
     let mut kind = Kind::Box;
@@ -821,7 +826,10 @@ pub fn node_from_table(ctx: &Ctx, t: &Table, key: u64) -> Result<Node, String> {
             Some(w) => w,
             None => theme.weight_named("regular")?,
         };
-        let mut cells = Vec::with_capacity(rows * cols);
+        let Some(count) = rows.checked_mul(cols).filter(|&c| c <= MAX_GRID_CELLS) else {
+            return Err(format!("a grid has at most {MAX_GRID_CELLS} cells, not {rows} by {cols}"));
+        };
+        let mut cells = Vec::with_capacity(count);
         for r in 0..rows {
             for c in 0..cols {
                 let v: Value = cell_fn.call((r as i64 + 1, c as i64 + 1)).map_err(|e| e.to_string())?;

@@ -2,11 +2,12 @@
 id: 8eb8a76b-3f28-4c98-b284-a49a3f04fb65
 title: A mod's grid with huge rows or cols aborts the client
 type: bug
-status: doing
+status: done
 milestone: bare-metal
 assignee: Oddur Sigurdsson
 created: 2026-09-28
 updated: 2026-09-28
+closed_at: 2026-09-28
 priority: p3
 api: none
 layer: client

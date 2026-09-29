@@ -1789,6 +1789,36 @@ fn a_grid_is_one_node_however_many_cells() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A grid too big to hold is the mod's error box, not an allocation that
+/// aborts the client.
+#[test]
+fn a_grid_too_big_is_an_error_box() {
+    let dir = scratch_mods(
+        "gridhuge",
+        &[(
+            "huge",
+            "",
+            &[(
+                "ui/huge.luau",
+                r#"
+ui.define("huge:grid", function(view)
+    return ui.grid({ id = "huge:grid", rows = 1e6, cols = 1e6, cell_w = 4, cell_h = 4, cell = function() return nil end })
+end)
+ui.mount("top", "huge:grid", { order = 90 })
+"#,
+            )],
+        )],
+    );
+    let sim = sim_at(&dir);
+    let mut ui = ui_for(&sim);
+    let cv = client(&sim);
+    frame(&mut ui, &sim, &cv, Default::default());
+    let snap = ui.snapshot();
+    assert!(snap.contains("a grid has at most"), "the limit is named in place:\n{snap}");
+    assert!(ui.find("core:dock").is_some(), "the rest of the UI builds");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn dragging_across_a_grid_paints_each_cell_once_in_order() {
     let dir = scratch_mods(
