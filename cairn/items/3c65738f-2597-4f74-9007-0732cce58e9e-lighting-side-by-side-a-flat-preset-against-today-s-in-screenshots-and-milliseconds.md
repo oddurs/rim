@@ -52,3 +52,7 @@ glFinish per-pass probe on the Mac (background, medium, seed 1; absolute ms infl
 - Frame sections with the GPU waited for: things (meshes, water, sprites) 5–12 ms, light 2.6–13.6 ms (an upper bound, since it absorbs the previous frame's tail), ui 1.6–7 ms.
 - The background run doesn't reproduce the slow-last-four views. A likely reading: medium's multiply pushes views near the 8.3 ms 120 Hz budget over vblank, so 60 fps. The 62–67 ms spikes are unexplained by lighting passes and need a foreground run or rapid-cloud's per-frame walls.
 - Lever for option A: compose the light at light resolution once, and multiply by a single bilinear read, instead of about 11 texture reads per screen pixel.
+
+## 2026-09-28
+
+The user picked option B (via rim-c2, 2026-09-28): flat is the default lighting, and today's look (medium, high, ultra) is opt-in, labelled with its cost. Follow-ups filed: flat as the default, flat smoothed at close zoom, opt-in tiers composing at light resolution, and the 65 ms spikes as a bug of their own.
