@@ -1782,9 +1782,9 @@ fn edges(
 /// logical points, so divide by the DPI factor. Glyphs are rasterised at
 /// physical size, so text lands 1:1 on the screen's pixels.
 /// The UI as meshes textured by the glyph atlas. Shapes sample the atlas's
-/// white texel and glyphs their slots, so a whole clip region is one draw
-/// call; drawing shapes untextured broke the batch at every switch between
-/// a panel and its text.
+/// white texel and glyphs their slots, so the whole UI is one draw call;
+/// drawing shapes untextured broke the batch at every switch between a
+/// panel and its text.
 struct UiBatch<'a> {
     atlas: &'a Texture2D,
     /// 1 / atlas size, to turn pixel coordinates into UVs.
@@ -1792,6 +1792,86 @@ struct UiBatch<'a> {
     white: (f32, f32),
     verts: Vec<Vertex>,
     idx: Vec<u16>,
+    /// The clip in force, as (x0, y0, x1, y1) in logical points. Geometry
+    /// is cut to it here rather than by the GL scissor, which would end
+    /// the draw call at every window and scroll area.
+    clip: Option<[f32; 4]>,
+    /// Draw calls made, and how many of them because the mesh was full.
+    calls: usize,
+    full: usize,
+}
+
+thread_local! {
+    static UI_CALLS: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
+}
+
+/// The last `ui` call's draw calls, and how many of those were only because
+/// its mesh outgrew one: whatever else splits the batch shows as the rest.
+/// The last call each frame is the interface's (the map's labels go first).
+pub fn ui_calls() -> (usize, usize) {
+    UI_CALLS.with(|c| c.get())
+}
+
+/// Cut an axis-aligned quad to `clip`, moving its source rectangle in
+/// step, so a glyph cut at a window's edge shows exactly the part inside
+/// and doesn't stretch. None when nothing is left.
+fn clip_quad(
+    [mut x0, mut y0, mut x1, mut y1]: [f32; 4],
+    [mut u0, mut v0, mut u1, mut v1]: [f32; 4],
+    [cx0, cy0, cx1, cy1]: [f32; 4],
+) -> Option<([f32; 4], [f32; 4])> {
+    if x1 <= cx0 || x0 >= cx1 || y1 <= cy0 || y0 >= cy1 {
+        return None;
+    }
+    let (du, dv) = ((u1 - u0) / (x1 - x0), (v1 - v0) / (y1 - y0));
+    if x0 < cx0 {
+        u0 += (cx0 - x0) * du;
+        x0 = cx0;
+    }
+    if x1 > cx1 {
+        u1 -= (x1 - cx1) * du;
+        x1 = cx1;
+    }
+    if y0 < cy0 {
+        v0 += (cy0 - y0) * dv;
+        y0 = cy0;
+    }
+    if y1 > cy1 {
+        v1 -= (y1 - cy1) * dv;
+        y1 = cy1;
+    }
+    Some(([x0, y0, x1, y1], [u0, v0, u1, v1]))
+}
+
+/// Cut a triangle to `clip` (Sutherland-Hodgman against its four edges),
+/// keeping the vertices' order so the fan keeps the triangle's winding.
+/// Fewer than three points means nothing is left.
+fn clip_tri(tri: [Vec2; 3], [cx0, cy0, cx1, cy1]: [f32; 4]) -> Vec<Vec2> {
+    let mut poly: Vec<Vec2> = tri.to_vec();
+    // Each edge in turn: a point is inside when `side` is at least 0.
+    for edge in 0..4 {
+        let side = |p: Vec2| match edge {
+            0 => p.x - cx0,
+            1 => cx1 - p.x,
+            2 => p.y - cy0,
+            _ => cy1 - p.y,
+        };
+        let input = std::mem::take(&mut poly);
+        for (i, &p) in input.iter().enumerate() {
+            let q = input[(i + 1) % input.len()];
+            let (sp, sq) = (side(p), side(q));
+            if sp >= 0.0 {
+                poly.push(p);
+            }
+            if (sp >= 0.0) != (sq >= 0.0) {
+                poly.push(p + (q - p) * (sp / (sp - sq)));
+            }
+        }
+        if poly.len() < 3 {
+            return Vec::new();
+        }
+    }
+    poly
 }
 
 /// Flush before a mesh outgrows a draw call (see `conf()` in main.rs).
@@ -1800,6 +1880,7 @@ const UI_MAX_VERTS: usize = 15_000;
 impl UiBatch<'_> {
     fn room(&mut self, verts: usize) {
         if self.verts.len() + verts > UI_MAX_VERTS {
+            self.full += 1;
             self.flush();
         }
     }
@@ -1808,6 +1889,7 @@ impl UiBatch<'_> {
         if self.idx.is_empty() {
             return;
         }
+        self.calls += 1;
         draw_mesh(&Mesh {
             vertices: std::mem::take(&mut self.verts),
             indices: std::mem::take(&mut self.idx),
@@ -1820,15 +1902,20 @@ impl UiBatch<'_> {
         if w <= 0.0 || h <= 0.0 {
             return;
         }
+        let (mut r, mut src) = ([x, y, x + w, y + h], [uv[0], uv[1], uv[0] + uv[2], uv[1] + uv[3]]);
+        if let Some(clip) = self.clip {
+            let Some(cut) = clip_quad(r, src, clip) else { return };
+            (r, src) = cut;
+        }
         self.room(4);
         let n = self.verts.len() as u16;
-        let (u0, v0, u1, v1) =
-            (uv[0] * self.inv, uv[1] * self.inv, (uv[0] + uv[2]) * self.inv, (uv[1] + uv[3]) * self.inv);
+        let [x0, y0, x1, y1] = r;
+        let [u0, v0, u1, v1] = src.map(|v| v * self.inv);
         self.verts.extend([
-            Vertex::new(x, y, 0.0, u0, v0, c),
-            Vertex::new(x + w, y, 0.0, u1, v0, c),
-            Vertex::new(x + w, y + h, 0.0, u1, v1, c),
-            Vertex::new(x, y + h, 0.0, u0, v1, c),
+            Vertex::new(x0, y0, 0.0, u0, v0, c),
+            Vertex::new(x1, y0, 0.0, u1, v0, c),
+            Vertex::new(x1, y1, 0.0, u1, v1, c),
+            Vertex::new(x0, y1, 0.0, u0, v1, c),
         ]);
         self.idx.extend([n, n + 1, n + 2, n, n + 2, n + 3]);
     }
@@ -1839,15 +1926,25 @@ impl UiBatch<'_> {
     }
 
     fn tri(&mut self, a: Vec2, b: Vec2, d: Vec2, c: Color) {
-        self.room(3);
-        let n = self.verts.len() as u16;
         let (u, v) = (self.white.0 * self.inv, self.white.1 * self.inv);
-        self.verts.extend([
-            Vertex::new(a.x, a.y, 0.0, u, v, c),
-            Vertex::new(b.x, b.y, 0.0, u, v, c),
-            Vertex::new(d.x, d.y, 0.0, u, v, c),
-        ]);
-        self.idx.extend([n, n + 1, n + 2]);
+        let Some(clip) = self.clip else {
+            self.room(3);
+            let n = self.verts.len() as u16;
+            self.verts.extend([a, b, d].map(|p| Vertex::new(p.x, p.y, 0.0, u, v, c)));
+            self.idx.extend([n, n + 1, n + 2]);
+            return;
+        };
+        // Only rounded corners are triangles: most sit wholly in or out.
+        let poly = clip_tri([a, b, d], clip);
+        if poly.len() < 3 {
+            return;
+        }
+        self.room(poly.len());
+        let n = self.verts.len() as u16;
+        self.verts.extend(poly.iter().map(|p| Vertex::new(p.x, p.y, 0.0, u, v, c)));
+        for i in 1..poly.len() as u16 - 1 {
+            self.idx.extend([n, n + i, n + i + 1]);
+        }
     }
 
     /// A filled rectangle with rounded corners, from pieces that never
@@ -1920,6 +2017,9 @@ pub fn ui(list: &[Draw], atlas: &Texture2D, white: (f32, f32), dpi: f32) {
         white,
         verts: Vec::with_capacity(4096),
         idx: Vec::with_capacity(6144),
+        clip: None,
+        calls: 0,
+        full: 0,
     };
     for d in list {
         match d {
@@ -1935,32 +2035,49 @@ pub fn ui(list: &[Draw], atlas: &Texture2D, white: (f32, f32), dpi: f32) {
                     b.quad(q.dst[0] * s, q.dst[1] * s, q.dst[2] * s, q.dst[3] * s, q.uv, tint);
                 }
             }
-            Draw::Clip(r) => unsafe {
-                b.flush();
-                // The scissor works in framebuffer pixels: the UI's own units.
-                get_internal_gl().quad_gl.scissor(Some((
-                    r[0] as i32,
-                    r[1] as i32,
-                    r[2].ceil() as i32,
-                    r[3].ceil() as i32,
-                )));
-            },
-            Draw::Unclip => unsafe {
-                b.flush();
-                get_internal_gl().quad_gl.scissor(None);
-            },
+            // The clip is in physical pixels, whole ones as the scissor
+            // had them; clips don't nest (Unclip ends the one in force).
+            Draw::Clip(r) => {
+                let (x0, y0) = (r[0].floor(), r[1].floor());
+                b.clip = Some([x0 * s, y0 * s, (x0 + r[2].ceil()) * s, (y0 + r[3].ceil()) * s]);
+            }
+            Draw::Unclip => b.clip = None,
         }
     }
     b.flush();
-    unsafe {
-        get_internal_gl().quad_gl.scissor(None);
-    }
+    UI_CALLS.with(|c| c.set((b.calls, b.full)));
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use rim_sim::Sim;
+
+    #[test]
+    fn a_glyph_cut_at_a_clip_keeps_its_uvs_in_proportion() {
+        // A glyph drawn at twice its atlas size, half past the clip's right
+        // edge and a quarter over its top.
+        let (r, uv) = ([10.0, 0.0, 30.0, 40.0], [100.0, 50.0, 110.0, 70.0]);
+        let (got, src) = clip_quad(r, uv, [0.0, 10.0, 20.0, 100.0]).expect("half of it is inside");
+        assert_eq!(got, [10.0, 10.0, 20.0, 40.0]);
+        // Half the width and three quarters of the height: the same share
+        // of the source, so the letter isn't squeezed.
+        assert_eq!(src, [100.0, 55.0, 105.0, 70.0]);
+        assert!(clip_quad(r, uv, [50.0, 0.0, 60.0, 10.0]).is_none(), "outside is dropped");
+        assert_eq!(clip_quad(r, uv, [0.0, 0.0, 100.0, 100.0]), Some((r, uv)), "inside is untouched");
+    }
+
+    #[test]
+    fn a_corner_cut_at_a_clip_keeps_its_winding() {
+        let signed = |p: &[Vec2]| (0..p.len()).map(|i| p[i].perp_dot(p[(i + 1) % p.len()])).sum::<f32>();
+        let tri = [vec2(0.0, 0.0), vec2(10.0, 0.0), vec2(0.0, 10.0)];
+        let cut = clip_tri(tri, [0.0, 0.0, 5.0, 100.0]);
+        assert_eq!(cut.len(), 4, "a triangle cut by one edge is a quad: {cut:?}");
+        assert_eq!(signed(&cut).signum(), signed(&tri).signum(), "same winding");
+        assert!(cut.iter().all(|p| p.x <= 5.0 + 1e-4));
+        assert!(clip_tri(tri, [20.0, 20.0, 30.0, 30.0]).is_empty(), "outside leaves nothing");
+        assert_eq!(clip_tri(tri, [-1.0, -1.0, 20.0, 20.0]), tri.to_vec(), "inside is untouched");
+    }
 
     /// What was painted, in order, so a test can ask what ends up on top.
     #[derive(Default)]
