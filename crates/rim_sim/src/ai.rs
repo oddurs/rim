@@ -189,7 +189,7 @@ fn think_colonist(w: &mut World, e: Entity, p: &mut Pawn) -> Option<Job> {
         if let Some((t, tp)) =
             nearest_pawn(w, e, p.pos, DEFEND_RADIUS, |o| o.faction == Faction::Hostile && !out_of_fight(&defs, o))
         {
-            if reachable(w, p.pos, Goal::Touch(tp)) {
+            if reachable(w, p, Goal::Touch(tp)) {
                 return Some(Job::Attack { target: t, until: w.tick + 900 });
             }
         }
@@ -300,7 +300,7 @@ fn think_animal(w: &mut World, e: Entity, p: &mut Pawn) -> Option<Job> {
         if let Some((t, tp)) =
             nearest_pawn(w, e, p.pos, 8, |o| defs.creature(o.def).intelligent && !out_of_fight(&defs, o))
         {
-            if reachable(w, p.pos, Goal::Touch(tp)) {
+            if reachable(w, p, Goal::Touch(tp)) {
                 return Some(Job::Attack { target: t, until: w.tick + 600 });
             }
         }
@@ -326,30 +326,40 @@ fn wounded(defs: &DefDb, p: &Pawn) -> bool {
     cd.retreat_below > 0.0 && (p.hp as f64) < cd.max_hp as f64 * cd.retreat_below
 }
 
-/// Head for the nearest reachable map edge.
+/// Head for the nearest reachable map edge; shut in by someone else's
+/// doors, break out toward the nearest edge.
 fn leave(w: &mut World, p: &mut Pawn) -> Option<Job> {
     w.map.ensure_regions();
     let (mw, mh) = (w.map.w, w.map.h);
     let mut edges =
         [IVec::new(0, p.pos.y), IVec::new(mw - 1, p.pos.y), IVec::new(p.pos.x, 0), IVec::new(p.pos.x, mh - 1)];
     edges.sort_by_key(|q| q.octile(p.pos));
+    let climbs = w.climbs(p);
+    let mut open = None;
     for q in edges {
         // Slide along the edge until we find somewhere we can actually reach.
         for k in 0..mw.max(mh) {
             for s in [k, -k] {
                 let c = if q.x == 0 || q.x == mw - 1 { q.offset(0, s) } else { q.offset(s, 0) };
-                if w.map.passable(c) && w.map.can_reach(p.pos, Goal::Cell(c)) {
+                if !w.map.passable(c) {
+                    continue;
+                }
+                if w.map.can_reach_as(p.pos, Goal::Cell(c), p.faction, climbs) {
                     return Some(Job::Leave { to: c });
                 }
+                open.get_or_insert(c);
             }
         }
     }
-    None
+    let target = nearest_breach(w, p.pos, p.faction, open?)?;
+    Some(Job::Breach { target })
 }
 
-fn reachable(w: &mut World, from: IVec, goal: Goal) -> bool {
+/// Can `p` get to `goal` from where it stands, from its own side of the
+/// doors, as `go_to` will ask?
+fn reachable(w: &mut World, p: &Pawn, goal: Goal) -> bool {
     w.map.ensure_regions();
-    w.map.can_reach(from, goal)
+    w.map.can_reach_as(p.pos, goal, p.faction, w.climbs(p))
 }
 
 fn nearest_pawn(
@@ -386,7 +396,7 @@ fn roll(w: &World, e: Entity, k: u64) -> Rng {
 fn wander(w: &mut World, e: Entity, p: &mut Pawn, r: i32) -> Option<Job> {
     for i in 0..8 {
         let to = p.pos.offset(roll(w, e, 2 * i).range(-r, r), roll(w, e, 2 * i + 1).range(-r, r));
-        if w.map.passable(to) && reachable(w, p.pos, Goal::Cell(to)) {
+        if w.map.passable(to) && reachable(w, p, Goal::Cell(to)) {
             return Some(Job::Wander { to, until: w.tick + 600 });
         }
     }
@@ -400,7 +410,7 @@ fn flee(w: &mut World, e: Entity, p: &mut Pawn, from: IVec) -> Option<Job> {
         let to = p
             .pos
             .offset(dx * 10 + roll(w, e, 100 + 2 * i).range(-4, 4), dy * 10 + roll(w, e, 101 + 2 * i).range(-4, 4));
-        if w.map.passable(to) && reachable(w, p.pos, Goal::Cell(to)) {
+        if w.map.passable(to) && reachable(w, p, Goal::Cell(to)) {
             return Some(Job::Flee { to, until: w.tick + 400 });
         }
     }

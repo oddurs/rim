@@ -2,10 +2,12 @@
 id: 991b29e5-1d03-44a4-84eb-010785220565
 title: A fleeing raider checks the way out from the player's side of the doors
 type: bug
-status: backlog
+status: done
 milestone: bare-metal
+assignee: Oddur Sigurdsson
 created: 2026-09-28
-updated: 2026-09-28
+updated: 2026-09-29
+closed_at: 2026-09-28
 priority: p3
 api: none
 layer: engine
@@ -30,5 +32,9 @@ Use `can_reach_as(.., p.faction, w.climbs(p))` in `leave`, `wander`, `flee` and 
 
 ## Acceptance
 
-- [ ] A shut-in raider that wants to leave breaches or goes, instead of retrying the same edge
-- [ ] A test that fails before the fix and passes after
+- [x] A shut-in raider that wants to leave breaches or goes, instead of retrying the same edge
+- [x] A test that fails before the fix and passes after
+
+## 2026-09-29
+
+PAUSED at the merge freeze: the fix and its test are done, and the test was checked to fail before the fix and pass after. The full gate hasn't run yet. Next: rebase on main, run scripts/task check, and mark the PR ready. Branch fix/991b29e5-shut-in-raider.
