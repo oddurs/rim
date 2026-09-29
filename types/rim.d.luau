@@ -110,7 +110,7 @@ declare rim: {
     need_defs: {NeedInfo},
     -- Smooth noise in [0, 1] from the world's seed: patches about `scale` cells across. The same on every machine, so a generated level is too. `salt` gives another pattern.
     noise: (x: number, y: number, scale: number, salt: number?) -> number,
-    -- Handle an engine event (`pawn_died`, `season_changed`, ...) or a mod event (`weather:changed`).
+    -- Handle an engine event (`pawn_died`, `season_changed`, ...) or a mod event (`weather:changed`). Register at load time.
     on: (event: string, fn: (event: {[string]: any}) -> ()) -> (),
     -- Make level z (below 0) yourself: fn runs once when a new map is made, after the level's [[stratum]] has filled it, and changes it with rim.set_terrain. One mod per level. Register at load time.
     on_generate_level: (z: number, fn: (z: number) -> ()) -> (),

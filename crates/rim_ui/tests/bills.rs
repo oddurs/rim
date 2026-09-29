@@ -44,7 +44,7 @@ fn world(name: &str) -> (Sim, rim_sim::hecs::Entity, std::path::PathBuf) {
     std::fs::create_dir_all(dir.join("kit/defs")).unwrap();
     std::fs::write(
         dir.join("kit/mod.toml"),
-        "id = \"kit\"\nname = \"kit\"\nversion = \"0.1.0\"\napi = \"0.7\"\ndepends = [\"core\", \"crafting\"]\n",
+        "id = \"kit\"\nname = \"kit\"\nversion = \"0.1.0\"\napi = \"0.8\"\ndepends = [\"core\", \"crafting\"]\n",
     )
     .unwrap();
     std::fs::write(dir.join("kit/defs/kit.toml"), KIT).unwrap();

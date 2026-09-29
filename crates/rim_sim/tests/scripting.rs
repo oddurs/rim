@@ -405,3 +405,39 @@ fn a_slow_mod_is_named_in_the_warnings() {
     s.check_mod_budgets();
     assert_eq!(named(&s.warnings, "probe"), 1, "and only once");
 }
+
+#[test]
+fn hooks_handlers_and_planners_register_only_at_load_time() {
+    // A load re-runs only the scripts' top-level code, so a registration
+    // made from a hook would be in the live game and not in a loaded one.
+    let s = run(
+        "late",
+        r#"
+        rim.every(5, function()
+            for _, what in { "every", "on", "planner" } do
+                local ok, err = pcall(function()
+                    if what == "every" then
+                        rim.every(7, function() end)
+                    elseif what == "on" then
+                        rim.on("probe:late", function() end)
+                    else
+                        rim.planner("late", function() return {} end)
+                    end
+                end)
+                rim.set_data(`probe:{what}`, if ok then "registered" else tostring(err))
+            end
+        end)
+    "#,
+        6,
+    );
+    for what in ["every", "on", "planner"] {
+        let got = match s.world.data.get(&format!("probe:{what}")) {
+            Some(Data::Str(t)) => t.clone(),
+            other => panic!("rim.{what} from a hook left {other:?}"),
+        };
+        assert!(
+            got.contains(&format!("rim.{what} from a hook: register in your mod's load")),
+            "rim.{what} from a hook: {got}"
+        );
+    }
+}

@@ -448,6 +448,19 @@ impl Modules {
     }
 }
 
+/// Hooks, handlers and planners are registered while scripts load. A load
+/// re-runs only the scripts' top-level code, so one registered later, from
+/// a hook, would be in the running game and missing from the loaded one,
+/// and would shift the indices `disabled` saves.
+fn late(r: &Registry, what: &str) -> mlua::Result<()> {
+    match r.loaded {
+        true => Err(mlua::Error::runtime(format!(
+            "{what} from a hook: register in your mod's load, at the top of a script, not at runtime"
+        ))),
+        false => Ok(()),
+    }
+}
+
 /// A module's exports can't be changed once its mod has loaded.
 fn freeze(v: &Value) {
     if let Value::Table(t) = v {
@@ -876,6 +889,7 @@ impl ScriptHost {
             "every",
             lua.create_function(move |_, (interval, func): (u64, Function)| {
                 let mut r = reg.borrow_mut();
+                late(&r, "rim.every")?;
                 let interval = interval.max(1);
                 // Stagger hooks so they don't all land on the same tick.
                 let phase = (r.hooks.len() as u64 * 37) % interval;
@@ -894,6 +908,7 @@ impl ScriptHost {
             "planner",
             lua.create_function(move |_, (name, func): (String, Function)| {
                 let mut r = reg.borrow_mut();
+                late(&r, "rim.planner")?;
                 let from = r.current_mod.clone();
                 let name = match name.split_once(':') {
                     None => format!("{from}:{name}"),
@@ -937,6 +952,7 @@ impl ScriptHost {
             "on",
             lua.create_function(move |_, (event, func): (String, Function)| {
                 let mut r = reg.borrow_mut();
+                late(&r, "rim.on")?;
                 let mod_id = r.current_mod.clone();
                 r.handlers.push(Handler { mod_id, event, func });
                 Ok(())
@@ -945,7 +961,7 @@ impl ScriptHost {
         self.declare(
             "on",
             "(event: string, fn: (event: {[string]: any}) -> ()) -> ()",
-            "Handle an engine event (`pawn_died`, `season_changed`, ...) or a mod event (`weather:changed`).",
+            "Handle an engine event (`pawn_died`, `season_changed`, ...) or a mod event (`weather:changed`). Register at load time.",
         );
         let reg = self.reg.clone();
         rim.set(

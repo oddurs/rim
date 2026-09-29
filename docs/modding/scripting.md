@@ -170,6 +170,13 @@ weather's `force`, it's the weather plugin that emits `weather:changed`.
 Handlers run in load order, then registration order, and payloads are plain
 data.
 
+`rim.on`, `rim.every` and `rim.planner` register at load time, at the top of
+a script or in a module it requires. Called from a hook or handler, they
+raise an error: a load re-runs only your scripts' top-level code, so a
+registration made later would be in the running game and missing from the
+loaded one. Register every handler up front, and let it decide whether to
+act.
+
 ## Readings and standing orders
 
 A reading is a number your script publishes about the colony, for priority

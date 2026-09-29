@@ -1,7 +1,7 @@
 id = "farming"
 name = "Farming"
 version = "0.1.0"
-api = "0.7"
+api = "0.8"
 ui_api = "0.6"
 description = "Growing zones and crops: paint a field, and colonists sow it while the season allows, and harvest what grows. Crops grow with the weather plugin's seasons, rain and ground."
 depends = ["core", "weather"]

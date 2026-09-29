@@ -47,7 +47,7 @@ are in [Scripting rules](scripting.md).
 | `rim.near_cell` | `(x: number, y: number, r: number, z: number?) -> (number?, number?)` | A random open cell within r of (x, y), on level z (the surface if nil), from your mod's stream. |
 | `rim.need_defs` | `{NeedInfo}` | Every need def: what satisfies it ("food", "rest", "field") and how many days a full one lasts. |
 | `rim.noise` | `(x: number, y: number, scale: number, salt: number?) -> number` | Smooth noise in [0, 1] from the world's seed: patches about `scale` cells across. The same on every machine, so a generated level is too. `salt` gives another pattern. |
-| `rim.on` | `(event: string, fn: (event: {[string]: any}) -> ()) -> ()` | Handle an engine event (`pawn_died`, `season_changed`, ...) or a mod event (`weather:changed`). |
+| `rim.on` | `(event: string, fn: (event: {[string]: any}) -> ()) -> ()` | Handle an engine event (`pawn_died`, `season_changed`, ...) or a mod event (`weather:changed`). Register at load time. |
 | `rim.on_generate_level` | `(z: number, fn: (z: number) -> ()) -> ()` | Make level z (below 0) yourself: fn runs once when a new map is made, after the level's [[stratum]] has filled it, and changes it with rim.set_terrain. One mod per level. Register at load time. |
 | `rim.on_migrate` | `(fn: (from_version: string, data: {[string]: any}) -> {[string]: any}) -> ()` | Upgrade your script data from a save made with a different version of your mod: fn gets that version and your data (bare keys) and returns the data to keep. It sees no world: only your data. Runs on load, before any hook. Register at load time. |
 | `rim.order` | `(site: number) -> OrderInfo?` | The work order on a thing and how far it's got, or nil. |
