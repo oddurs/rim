@@ -128,11 +128,11 @@ pub(super) async fn the_grid(t: &mut T, carry: &mut Carry) {
     t.input(RawInput { mouse: t.mouse, chars: "measure".chars().collect(), ..Default::default() }).await;
     t.settle().await;
     t.check(t.ui_text().contains("Measure grid"), "the command palette finds the measuring grid");
-    // The same keys close it.
+    // Escape closes it, and backs out of nothing behind it.
+    let selected = t.app.selected;
     t.key(KeyCode::Escape).await;
-    t.input(RawInput { mouse: t.mouse, pressed: vec!["ctrl+k".into()], ..Default::default() }).await;
-    t.settle().await;
-    t.check(!t.app.ui.is_open("core:palette"), "Ctrl+K closes the palette");
+    t.check(!t.app.ui.is_open("core:palette"), "Escape closes the palette");
+    t.check(t.app.selected == selected, "and leaves the selection as it was");
 
     // Motion (bf3079fb): an urgent mark breathes; with reduce motion on, it
     // holds still.

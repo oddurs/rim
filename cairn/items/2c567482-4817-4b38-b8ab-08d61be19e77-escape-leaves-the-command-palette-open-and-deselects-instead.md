@@ -2,11 +2,12 @@
 id: 2c567482-4817-4b38-b8ab-08d61be19e77
 title: Escape leaves the command palette open and deselects instead
 type: bug
-status: doing
+status: done
 milestone: bare-metal
 assignee: Oddur Sigurdsson
 created: 2026-09-28
 updated: 2026-09-28
+closed_at: 2026-09-28
 priority: p2
 api: none
 layer: core

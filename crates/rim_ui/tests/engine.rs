@@ -837,6 +837,33 @@ fn a_mods_bound_action_fires_from_its_key_and_from_the_palette() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// Escape closes the palette, as the client sends it (the key for a text
+/// input and its name for the bindings), and goes no further: the colonist
+/// stays selected.
+#[test]
+fn escape_closes_the_palette_and_nothing_behind_it() {
+    let sim = sim_at(&mods());
+    let mut ui = ui_for(&sim);
+    let cv = client(&sim);
+    assert!(cv.selected.is_some(), "the test needs a selection to keep");
+    frame(&mut ui, &sim, &cv, Default::default());
+    let mut t = 1.0;
+    press(&mut ui, &sim, &cv, &mut t, "ctrl+k");
+    assert!(ui.is_open("core:palette"));
+    t += 0.1;
+    let escape =
+        Input { keys: vec![rim_ui::Key::Escape], pressed: vec!["escape".into()], time: t, ..Default::default() };
+    let out = frame(&mut ui, &sim, &cv, escape);
+    t += 0.1;
+    frame(&mut ui, &sim, &cv, Input { time: t, ..Default::default() });
+    assert!(!ui.is_open("core:palette"), "Escape closes the palette");
+    assert!(!out.actions.contains(&UiAction::Select(None)), "and deselects nothing: {:?}", out.actions);
+    // With the palette gone, Escape backs out as before.
+    t += 0.1;
+    let out = frame(&mut ui, &sim, &cv, Input { pressed: vec!["escape".into()], time: t, ..Default::default() });
+    assert!(out.actions.contains(&UiAction::Select(None)), "{:?}", out.actions);
+}
+
 #[test]
 fn the_palette_moves_its_selection_with_the_arrows_and_starts_clean() {
     use rim_ui::Key;
