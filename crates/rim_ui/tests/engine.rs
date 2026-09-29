@@ -1165,6 +1165,56 @@ ui.mount("windows", "lister:list")
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A size text can't be drawn at is the mod's error, not the client's end:
+/// cosmic-text loops forever below 0 and panics at 0, and a huge one
+/// overflows. Each is refused where it's given, and the rest of the UI
+/// builds.
+#[test]
+fn a_size_out_of_range_is_refused() {
+    let dir = scratch_mods(
+        "badsizes",
+        &[(
+            "probe",
+            "",
+            &[
+                (
+                    "ui/theme.toml",
+                    "[text]\nprobe_neg = -12\nprobe_zero = 0\nprobe_huge = 1e9\n[space]\nprobe_far = 1e30\n",
+                ),
+                (
+                    "ui/sizes.luau",
+                    r#"
+for i, bad in { { size = -12 }, { size = 0 }, { size = 1e9 }, { gap = -4 }, { w = "1e30%" }, { pad = 0/0 } } do
+    ui.define("probe:bad" .. i, function(view)
+        local n = ui.text({ "x" })
+        for k, v in bad do n[k] = v end
+        return n
+    end)
+    ui.mount("top", "probe:bad" .. i, { order = 90 + i })
+end
+"#,
+                ),
+            ],
+        )],
+    );
+    let sim = sim_at(&dir);
+    let mut ui = ui_for(&sim);
+    let warnings = ui.warnings().join("\n");
+    for token in ["text.probe_neg", "text.probe_zero", "text.probe_huge", "space.probe_far"] {
+        assert!(warnings.contains(&format!("bad value for {token}")), "{token} refused:\n{warnings}");
+    }
+    let cv = client(&sim);
+    frame(&mut ui, &sim, &cv, Default::default());
+    let snap = ui.snapshot();
+    for i in 1..=6 {
+        let box_ = snap.split(&format!("== probe:bad{i}")).nth(1).unwrap_or("").split("== ").next().unwrap();
+        let said = ["a size is from 0", "text is above 0", "a percentage is from 0"].iter().any(|m| box_.contains(m));
+        assert!(said, "bad{i} is an error box saying why:\n{box_}");
+    }
+    assert!(ui.find("core:dock").is_some(), "the rest of the UI builds");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn theme_tokens_can_be_overridden_and_conflicts_are_reported() {
     let dir = scratch_mods(

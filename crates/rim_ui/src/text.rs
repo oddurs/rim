@@ -221,6 +221,10 @@ pub struct Text {
     leading: (f32, f32),
 }
 
+/// The largest text shaped, in physical pixels: past this a glyph is
+/// bigger than the atlas, and cosmic-text's glyph cache overflows.
+const MAX_SHAPED: f32 = 2048.0;
+
 impl Text {
     /// Load the system UI font (or `family`, if the theme names one) and
     /// every installed font as a fallback.
@@ -341,6 +345,9 @@ impl Text {
     /// Shape `text` at `size` pixels and `weight` (400 regular, 600 semibold),
     /// spaced by `tracking` em, wrapping at `width` if given. Cached.
     pub fn shape(&mut self, text: &str, size: f32, weight: u16, tracking: f32, width: Option<f32>) -> &Shaped {
+        // cosmic-text loops forever on a size below 0 and panics on 0; the
+        // theme and nodes refuse those, and this holds for every caller.
+        let size = if size.is_finite() { size.clamp(1.0, MAX_SHAPED) } else { 1.0 };
         let key = ShapeKey {
             text: text.to_string(),
             size_q: (size * 4.0).round() as u32,
@@ -400,9 +407,11 @@ impl Text {
         for (key, gx, gy) in glyphs {
             let Some(slot) = self.slot(key) else { continue };
             out.push(GlyphQuad {
+                // Whole pixels, added in f32: a node laid out far off can't
+                // overflow an i32.
                 dst: [
-                    (x.round() as i32 + gx + slot.left as i32) as f32,
-                    (y.round() as i32 + gy - slot.top as i32) as f32,
+                    x.round() + (gx + slot.left as i32) as f32,
+                    y.round() + (gy - slot.top as i32) as f32,
                     slot.w as f32,
                     slot.h as f32,
                 ],
