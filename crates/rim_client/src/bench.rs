@@ -32,9 +32,16 @@
 //! silhouette and in full, with the pawns pass's CPU time, the figures and
 //! parts drawn, and the batch's draw calls.
 //!
-//! `--check` exits 1 when the world's CPU time on the whole map (clear, in
-//! a storm, or zooming through it) is over budget, when 200 figures in full
-//! take over their budget, or when the figures take more than one call. `--sprite-mods N` adds N
+//! `--sync` finishes the GPU's work before each present, so a frame's wall
+//! time is its own cost, not a queue draining (where GL has no timer, as on
+//! a Mac, that is the only way to see a GPU-bound frame for what it is).
+//!
+//! `--check` exits 1 when a view breaks budgets.toml's `render.gpu` caps,
+//! or `render.software` under software GL: world CPU on the whole map
+//! (clear, in a storm, or zooming through it), the whole frame's p99 and
+//! worst, hitches, draw calls, and what a new wall's mesh costs; or when
+//! 200 figures in full take over their budget, or the figures take more
+//! than one call. `--sprite-mods N` adds N
 //! generated mods whose furniture is drawn from sprites. `--json FILE`
 //! writes the numbers, `--shots DIR` saves a screenshot of each view, and
 //! `--frames N` sets the frames per view.
@@ -47,10 +54,8 @@ use rim_sim::world::{Faction, Owner, Pawn};
 use rim_sim::{Command, IVec, Sim, TICKS_PER_DAY};
 use std::path::{Path, PathBuf};
 
-/// The world renderer's CPU budget per frame on the reference machine, in
-/// ms (DESIGN.md §8).
-const BUDGET_MS: f64 = 4.0;
-/// The pawns pass's share of it: 200 figures in full (DESIGN.md §6h).
+/// The pawns pass's CPU budget per frame, in ms: 200 figures in full
+/// (DESIGN.md §6h).
 const FIGURES_MS: f64 = 0.4;
 /// Points a cell the crowd is drawn at: a dot, a silhouette, in full.
 const CROWD_ZOOMS: [f32; 3] = [7.0, 15.0, 40.0];
@@ -669,10 +674,21 @@ fn pin(app: &mut App, values: [f64; 6]) {
 
 /// Draw a frame. With `shot`, read it back first: after `next_frame` the
 /// buffer has been swapped away and reads black.
+/// `--sync`: finish the GPU's work before each present, so a frame's wall
+/// time is its CPU and GPU time with no frames queued behind it. A frame
+/// the GPU can't finish in time then reads as its cost, not as a hitch
+/// every few frames when the queue drains.
+static SYNC: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 async fn draw_one(app: &mut App, time: &mut f64, shot: Option<&Path>) {
     *time += 1.0 / 60.0;
     frame(app, &RawInput { time: *time, ..Default::default() });
     render(app);
+    if SYNC.load(std::sync::atomic::Ordering::Relaxed) {
+        // SAFETY: waits for GL to finish what's been submitted; no state
+        // changes.
+        unsafe { miniquad::gl::glFinish() };
+    }
     if let Some(p) = shot {
         get_screen_data().export_png(&p.to_string_lossy());
     }
@@ -683,6 +699,7 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
     let opt = |name: &str| args.windows(2).find(|w| w[0] == name).map(|w| w[1].clone());
     let frames: usize = opt("--frames").and_then(|v| v.parse().ok()).unwrap_or(300);
     let check = args.iter().any(|a| a == "--check");
+    SYNC.store(args.iter().any(|a| a == "--sync"), std::sync::atomic::Ordering::Relaxed);
     let shots = opt("--shots").map(std::path::PathBuf::from);
     if let Some(d) = &shots {
         if let Err(e) = std::fs::create_dir_all(d) {
@@ -950,7 +967,7 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
             r.live
         );
     }
-    println!("ms per frame, CPU unless named; world = every pass but the UI; mesh = the chunk meshes' calls; budget {BUDGET_MS} ms on the whole map");
+    println!("ms per frame, CPU unless named; world = every pass but the UI; mesh = the chunk meshes' calls; budgets in budgets.toml (render.gpu, or render.software under software GL)");
     println!();
     println!("{:<10} {:>7} {:>7} {:>7} {:>7} {:>7}", "view", "frame", "p99", "max", "hitches", "rest");
     for r in &results {
@@ -1008,6 +1025,9 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
     let soft = if crate::light::software_gl(&renderer) { " (software: gpu times are the CPU rasterising)" } else { "" };
     println!("gl: {renderer}{soft}");
     println!("machine: {}", machine());
+    if SYNC.load(std::sync::atomic::Ordering::Relaxed) {
+        println!("sync: glFinish before each present, so a frame is its CPU and GPU time with nothing queued");
+    }
     println!("lighting: {}", app.light.setting().name());
     if results.iter().any(|r| !r.other.is_empty()) {
         let (this, other) = (app.light.setting().name(), if app.light.setting().flat() { "shadows" } else { "flat" });
@@ -1119,7 +1139,7 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
             })
             .collect();
         let json = format!(
-            "{{\n  \"machine\": \"{}\",\n  \"screen\": [{}, {}],\n  \"dpi\": {dpi},\n  \"frames\": {frames},\n  \"budget_ms\": {BUDGET_MS},\n  \"figures_budget_ms\": {FIGURES_MS},\n  \"crowd\": [\n{}\n  ],\n  \"gl_renderer\": \"{}\",\n  \"lighting\": \"{}\",\n  \"light_rebuild_view\": \"{last}\",\n  \"light_rebuild\": {{{}}},\n  \"mesh_change\": {{\"paint_ms\": {paint:.4}, \"join_ms\": {join:.4}}},\n  \"views\": [\n{}\n  ]\n}}\n",
+            "{{\n  \"machine\": \"{}\",\n  \"screen\": [{}, {}],\n  \"dpi\": {dpi},\n  \"frames\": {frames},\n  \"figures_budget_ms\": {FIGURES_MS},\n  \"crowd\": [\n{}\n  ],\n  \"gl_renderer\": \"{}\",\n  \"lighting\": \"{}\",\n  \"light_rebuild_view\": \"{last}\",\n  \"light_rebuild\": {{{}}},\n  \"mesh_change\": {{\"paint_ms\": {paint:.4}, \"join_ms\": {join:.4}}},\n  \"views\": [\n{}\n  ]\n}}\n",
             machine().replace('"', "'"),
             screen_width(),
             screen_height(),
@@ -1136,21 +1156,39 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
     }
 
     if check {
-        // Shared CI runners are noisy and draw in software; the slack is
-        // for that, not for the renderer.
-        let slack = if std::env::var_os("CI").is_some() { 1.5 } else { 1.0 };
-        let limit = BUDGET_MS * slack;
-        // The worst of the gated views.
-        let (name, mean) = results
-            .iter()
-            .filter(|r| r.gated)
-            .map(|r| (r.name, r.mean(|f| f.0.world())))
-            .fold(("", 0.0), |a, b| if b.1 > a.1 { b } else { a });
-        if mean > limit {
-            eprintln!("render bench: {name} takes {mean:.3} ms of CPU, over the budget of {limit:.1} ms");
+        // budgets.toml's render.gpu or render.software, each measure the
+        // worst view's; world CPU over the gated views only. Only the
+        // default lighting is held: the other setting's reruns are reported,
+        // and counting them too would double the draw calls.
+        let budgets = rim_sim::budgets::Budgets::repo().unwrap_or_else(|e| {
+            eprintln!("render bench: {e}");
+            std::process::exit(2);
+        });
+        let slack = budgets.slack(&machine(), std::env::var_os("CI").is_some());
+        let section = if crate::light::software_gl(&renderer) { "software" } else { "gpu" };
+        let worst = |f: &dyn Fn(&Run) -> f64, gated: bool| {
+            results.iter().filter(|r| !gated || r.gated).map(f).fold(0.0, f64::max)
+        };
+        let measured = [
+            ("world_ms", worst(&|r| r.mean(|f| f.0.world()), true)),
+            ("frame_p99_ms", worst(&|r| r.whole().1, false)),
+            ("frame_max_ms", worst(&|r| r.whole().2, false)),
+            ("hitches", worst(&|r| r.whole().3 as f64, false)),
+            ("draw_calls", worst(&|r| r.calls as f64, false)),
+            // What a new wall costs the frame it goes up in.
+            ("mesh_change_ms", paint + join),
+        ];
+        let over = rim_sim::budgets::Budgets::over(&budgets.render, section, &measured, slack).unwrap_or_else(|e| {
+            eprintln!("render bench: {e}");
+            std::process::exit(2);
+        });
+        if !over.is_empty() {
+            for o in &over {
+                eprintln!("render bench: render.{o}");
+            }
             std::process::exit(1);
         }
-        println!("render bench: within budget ({name}: {mean:.3} <= {limit:.1} ms)");
+        println!("render bench: render.{section} within budgets.toml (slack {slack})");
         let figures = FIGURES_MS * slack;
         for c in &crowds {
             if c.calls > 1 {
@@ -1177,27 +1215,8 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
     std::process::exit(0)
 }
 
-/// The CPU the bench ran on, and how many threads it had. GitHub's Linux
-/// runners come in classes whose numbers differ up to 3x (the moving light
-/// pass costs 3.8 ms on one and 1.35 ms on the other): two runs compare only
-/// when this line matches.
 fn machine() -> String {
-    let brand = if cfg!(target_os = "macos") {
-        std::process::Command::new("sysctl")
-            .args(["-n", "machdep.cpu.brand_string"])
-            .output()
-            .ok()
-            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
-    } else if cfg!(target_os = "linux") {
-        std::fs::read_to_string("/proc/cpuinfo").ok().and_then(|t| {
-            t.lines()
-                .find_map(|l| l.strip_prefix("model name").map(|r| r.trim_start_matches([' ', '\t', ':']).to_string()))
-        })
-    } else {
-        std::env::var("PROCESSOR_IDENTIFIER").ok()
-    };
-    let threads = std::thread::available_parallelism().map_or(0, |n| n.get());
-    format!("{}, {threads} threads", brand.filter(|b| !b.is_empty()).unwrap_or_else(|| "unknown CPU".into()))
+    rim_sim::budgets::machine()
 }
 
 #[cfg(test)]
