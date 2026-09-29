@@ -550,6 +550,11 @@ fn apply_patch(
     }
     if let Some(v) = p.get("set") {
         let toml::Value::Table(set) = v else { return Err(format!("{origin}: 'set' must be a table")) };
+        // The loader found the def by its old id and would keep it, while
+        // everything read after found it by the new one.
+        if set.contains_key("id") {
+            return Err(format!("{origin}: a patch can't change the id of {target}; define a new one instead"));
+        }
         merge(&mut e.value, set, target, mod_id, log);
     }
     match p.get("edit") {
