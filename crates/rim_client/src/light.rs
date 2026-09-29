@@ -1133,6 +1133,10 @@ pub struct Light {
     pub moving_lit: (usize, usize),
     /// How far the eye has adapted, 1 by day; eased toward what the sky asks.
     exposure: f32,
+    /// The frame's clock (`App::now`, `App::dt`): the bake's pace, the
+    /// eye's easing and the flicker run on it, never on macroquad's.
+    now: f64,
+    dt: f32,
     /// Times firelight has been baked, whole or in part.
     pub bakes: u64,
     materials: [Option<Material>; 4],
@@ -1180,6 +1184,11 @@ impl Light {
         Light { setting, ..Default::default() }
     }
 
+    /// The frame's time and its length, before `prepare`.
+    pub fn clock(&mut self, now: f64, dt: f32) {
+        (self.now, self.dt) = (now, dt);
+    }
+
     /// Bring every cached result up to date. Call before the world is drawn,
     /// with the default camera: it draws into targets of its own.
     /// `roofs` is each cell's roof, in steps in from its eaves
@@ -1214,7 +1223,7 @@ impl Light {
         // Uploads, not draws.
         self.pass_end("occluders", t, changed || rooms, 0);
         let t = self.pass_begin();
-        let baked = self.bake_fires(w, get_time());
+        let baked = self.bake_fires(w, self.now);
         let draws = if baked { self.lv.draws } else { 0 };
         self.pass_end("firelight", t, baked, draws);
         let t = self.pass_begin();
@@ -1953,7 +1962,7 @@ impl Light {
         // About a second to settle, by the clock, and no more than a 30th of
         // a second's worth in one frame, so a stalled frame doesn't jump.
         self.exposure = if self.exposure > 0.0 {
-            self.exposure + (target - self.exposure) * (1.0 - (-1.6 * get_frame_time().min(1.0 / 30.0)).exp())
+            self.exposure + (target - self.exposure) * (1.0 - (-1.6 * self.dt.min(1.0 / 30.0)).exp())
         } else {
             target
         };
@@ -1967,7 +1976,7 @@ impl Light {
         m.set_uniform("night", rgb3(def.rgb_night) * if under { UNDERGROUND } else { 1.0 });
         let fire = rgb3(def.rgb_fire) * 1.2;
         for (k, name) in ["ch0", "ch1", "ch2", "ch3"].into_iter().enumerate() {
-            m.set_uniform(name, channel_colour(fire, k, get_time()));
+            m.set_uniform(name, channel_colour(fire, k, self.now));
         }
         m.set_uniform("cell", vec2(1.0 / mw, 1.0 / mh));
         m.set_uniform("lres", vec2(mw, mh) * self.texels as f32);
@@ -2065,7 +2074,7 @@ impl Light {
         // A frame from before the player last chose is no longer theirs.
         let Some(((preset, _), us)) = timed.filter(|((_, c), _)| *c == tag.1) else { return };
         self.cost_frames += 1;
-        if let Some(mean) = self.setting.watch(&mut self.watch, get_time(), preset, us) {
+        if let Some(mean) = self.setting.watch(&mut self.watch, self.now, preset, us) {
             eprintln!(
                 "rim: lighting auto: {:.1} ms a frame on the GPU, over {:.1}; down to {}",
                 mean / 1e3,

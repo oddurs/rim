@@ -114,8 +114,7 @@ impl Sky {
     /// the weather is lit (and darkened) like the world.
     /// Move the sky on: a flash fades, or strikes. Call before the light is
     /// prepared, so the flash it works shadows out for is this frame's.
-    pub fn update(&mut self, air: &Air) {
-        let now = get_time();
+    pub fn update(&mut self, air: &Air, now: f64) {
         self.dt = ((now - self.last) as f32).clamp(0.0, 0.1);
         self.last = now;
         // Lightning: storms (heavy precipitation and a strong wind).
@@ -137,7 +136,7 @@ impl Sky {
 
     /// Precipitation and fog, drawn. Call `update` first in the frame.
     pub fn weather(&mut self, w: &World, cam: &Cam, air: &Air) {
-        let (now, dt) = (get_time(), self.dt);
+        let (now, dt) = (self.last, self.dt);
         let (sw, sh) = (screen_width(), screen_height());
 
         // Fog: a flat veil plus a few slow, soft banks drifting with the wind.
@@ -226,7 +225,7 @@ impl Sky {
     /// (tools and the autotest; storms flash on their own).
     pub fn strike(&mut self) {
         self.strike = true;
-        self.next_flash = get_time() + 3.0;
+        self.next_flash = self.last + 3.0;
     }
 
     pub fn particles(&self) -> usize {

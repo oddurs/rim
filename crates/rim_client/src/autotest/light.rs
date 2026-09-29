@@ -348,7 +348,7 @@ pub(super) async fn moving_lights(t: &mut T, carry: &mut Carry) {
     let mut burning = Vec::new();
     if let Some(o) = run {
         t.focus(o.offset(RUN / 2, 0));
-        let (bakes, since) = (t.app.light.bakes, get_time());
+        let (bakes, since) = (t.app.light.bakes, t.clock);
         let mut dim = f32::MAX;
         for dx in 0..RUN {
             burning.extend(t.app.sim.world.spawn_fixture(flames, o.offset(dx, 0), false));
@@ -359,7 +359,7 @@ pub(super) async fn moving_lights(t: &mut T, carry: &mut Carry) {
             let sum = |c: Option<[f32; 4]>| c.map_or(0.0, |c| c.iter().sum::<f32>());
             dim = dim.min(sum(t.app.light.fire_at(x, y)) + sum(t.app.light.moving_at(x, y)));
         }
-        let (baked, took) = (t.app.light.bakes - bakes, get_time() - since);
+        let (baked, took) = (t.app.light.bakes - bakes, t.clock - since);
         t.check(dim > 0.2, format!("every new flame glows the frame it appears (dimmest {dim:.2})"));
         t.check(
             (baked as f64) <= took.ceil() + 1.0,
@@ -421,8 +421,9 @@ pub(super) async fn lighting_from_the_palette(t: &mut T) {
     t.check(s.auto && s.name() == "medium", format!("Lighting: auto starts at medium ({})", s.name()));
     // Where GL times the lighting it reads the queries back as it goes, and
     // may step down (CI's software GL is slow); on Apple's it stays put.
-    let start = get_time();
-    while get_time() - start < crate::quality::AUTO_WINDOW + 0.5 {
+    // A window of the frame clock, however long its frames take to draw.
+    let start = t.clock;
+    while t.clock - start < crate::quality::AUTO_WINDOW + 0.5 {
         t.frame().await;
     }
     // Where GL can time a pass, auto has read frames back; where it can't

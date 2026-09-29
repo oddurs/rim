@@ -242,6 +242,12 @@ pub struct App {
     /// follow it rather than the OS cursor, so replayed input (the
     /// autotest) draws what it did.
     pub pointer: (f32, f32),
+    /// The frame's clock, from its input: everything drawn over time reads
+    /// these, never macroquad's clock, so replayed input (the autotest)
+    /// draws the same frames on any machine.
+    pub now: f64,
+    /// Seconds since the last frame, clamped as `frame_time` is.
+    pub dt: f32,
 }
 
 /// Seconds since the last frame, clamped: macroquad's value is raw, so the
@@ -711,6 +717,8 @@ async fn game() {
         order_preview: None,
         build_preview: None,
         refused: None,
+        now: 0.0,
+        dt: 0.0,
     };
     app.selected = app.sim.world.colonists().next();
 
@@ -1172,7 +1180,7 @@ pub fn client_view(app: &mut App, mouse: (f32, f32), time: f64) -> ClientView {
             .collect(),
         stuff: stuff_view(app),
         hint: drag.or_else(|| app.hint.clone()),
-        last_order: app.last_order.as_ref().map(|o| (o.label.clone(), get_time() - o.at, !o.undo.is_empty())),
+        last_order: app.last_order.as_ref().map(|o| (o.label.clone(), app.now - o.at, !o.undo.is_empty())),
         hover_cell,
         hover_pawn,
         time,
@@ -1226,6 +1234,8 @@ fn ui_input(raw: &RawInput, dpi: f32) -> rim_ui::Input {
 
 /// One frame of input: UI first, then the world gets what the UI didn't take.
 pub fn frame(app: &mut App, raw: &RawInput) {
+    app.dt = ((raw.time - app.now) as f32).clamp(0.0, 0.1);
+    app.now = raw.time;
     let dpi = screen_dpi_scale();
     app.shift = raw.shift;
     app.subtract = raw.alt || raw.zoom_mod;
@@ -1455,8 +1465,9 @@ pub fn render(app: &mut App) {
     app.roofs.update(&app.sim.world);
     // The sky first: a flash that strikes this frame is lit from its bolt
     // this frame.
-    app.sky.update(&air);
+    app.sky.update(&air, app.now);
     let centre = vec2(app.cam.x, app.cam.y);
+    app.light.clock(app.now, app.dt);
     app.light.prepare(&app.sim.world, &air, px_per_cell, &app.roofs.height, app.sky.flash(), centre, app.cam.z);
     t.light = lap();
     // Changing level: the frame the level left drew stays, and fades out
@@ -1504,7 +1515,7 @@ pub fn render(app: &mut App) {
         });
     }
     app.ground.update(&app.sim.world, app.cam.z);
-    app.water.update(&app.sim.world, app.cam.z, get_time());
+    app.water.update(&app.sim.world, app.cam.z, app.now);
     t.ground = lap();
     app.worksites.follow_level(app.cam.z);
     app.worksites.update(&app.sim.world, app.cam.zoom >= worksite::DETAIL_ZOOM);
@@ -1545,7 +1556,7 @@ pub fn render(app: &mut App) {
         if let Some((from, k)) = &mut app.fade {
             // At most a 60th of a second a frame: never over in fewer than
             // twelve frames, however slow they come.
-            *k += get_frame_time().min(1.0 / 60.0) / LEVEL_FADE;
+            *k += app.dt.min(1.0 / 60.0) / LEVEL_FADE;
             if app.fade_blit.is_none() {
                 app.fade_blit = fade_material();
             }
@@ -2072,7 +2083,7 @@ fn save_plan(app: &mut App, a: IVec, b: IVec) {
             }
         }
     };
-    app.last_order = Some(LastOrder { label, at: get_time(), undo: Vec::new() });
+    app.last_order = Some(LastOrder { label, at: app.now, undo: Vec::new() });
 }
 
 pub struct LastOrder {
@@ -2116,7 +2127,7 @@ fn give_orders(app: &mut App, cell: IVec, on: Option<Entity>, pick: Option<&str>
         1 => app.sim.world.ecs.get::<&Pawn>(first).map(|p| p.name.clone()).unwrap_or_default(),
         n => format!("{n} colonists"),
     };
-    app.last_order = Some(LastOrder { label: format!("{who} will {what}"), at: get_time(), undo });
+    app.last_order = Some(LastOrder { label: format!("{who} will {what}"), at: app.now, undo });
 }
 
 /// Label the cursor with what a right-click would do. Resolving an order

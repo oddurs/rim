@@ -521,7 +521,7 @@ pub fn things(app: &mut App) -> Counts {
         }
     };
 
-    let t = get_time() as f32;
+    let t = app.now as f32;
     let target = app.world_target.as_ref().map(|t| t.render_pass.raw_miniquad_id());
     app.meshes.prepare(w, &app.world_atlas, cam, level, t);
     // The level below, where this one is open to it (DESIGN.md §6d): its
