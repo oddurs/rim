@@ -612,6 +612,11 @@ impl Map {
 
     /// Water here adds `cost` percent to a step, or with `DEEP` takes the
     /// footing away. Returns whether that changed who can walk it.
+    /// The cells water has a step cost on, and the cost, in cell order.
+    pub fn water_costs(&self) -> impl Iterator<Item = (u32, u16)> + '_ {
+        self.water_cost.iter().enumerate().filter(|(_, &c)| c > 0).map(|(i, &c)| (i as u32, c))
+    }
+
     pub fn set_water(&mut self, i: usize, cost: u16) -> bool {
         if self.water_cost[i] == cost {
             return false;

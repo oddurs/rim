@@ -110,6 +110,7 @@ fn codec_of(section: &str) -> Result<Codec, String> {
         // Seen bits, 64 cells a word in the map's cell order.
         "engine:seen" => codec::<Vec<u64>>(),
         "engine:water" => codec::<Vec<crate::water::SavedBasin>>(),
+        "engine:water_map" => codec::<crate::water::SavedCosts>(),
         "engine:zones" => codec::<crate::zone::Zones>(),
         "engine:fields" => codec::<SavedFields>(),
         "engine:scripts" => codec::<ScriptsSection>(),

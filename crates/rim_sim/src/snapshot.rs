@@ -297,6 +297,7 @@ impl Snapshot {
             ("engine:map".to_string(), enc(&w.map.terrain)),
             ("engine:seen".to_string(), enc(&w.map.seen_bits())),
             ("engine:water".to_string(), enc(&w.water.saved())),
+            ("engine:water_map".to_string(), enc(&w.water.saved_costs(&w.map))),
             ("engine:zones".to_string(), enc(&w.zones)),
             ("engine:fields".to_string(), enc(&w.fields.saved(&w.map))),
             ("engine:scripts".to_string(), enc(&ScriptsSection { disabled_hooks, disabled_handlers })),
@@ -893,6 +894,15 @@ impl Snapshot {
                 }
             }
         }
+        // What the water put on the map, as of its last pass. A save from
+        // before this was kept lays it again at the next pass.
+        let water_map: Option<crate::water::SavedCosts> = match self.sections.contains_key("engine:water_map") {
+            true => Some(dec(self, "engine:water_map")?),
+            false => None,
+        };
+        if let Some(saved) = &water_map {
+            crate::water::Water::restore_costs(&mut w.map, saved);
+        }
         w.map.ensure_regions();
         w.map.ensure_rooms();
         // Basins come from the map; the save has only their water. A save
@@ -903,6 +913,9 @@ impl Snapshot {
         };
         let defs = w.defs.clone();
         w.water.restore(&w.map, &defs, &water);
+        if let Some(saved) = &water_map {
+            w.water.restore_stale(&w.map, saved);
+        }
         for (e, t, blueprint, _) in &things {
             if !blueprint {
                 w.fields.add_emitters(&defs, &w.map, *e, t.def, t.pos);
