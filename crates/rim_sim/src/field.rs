@@ -59,11 +59,16 @@ pub struct Push {
 impl Push {
     /// Current value in `Q` units.
     pub fn value(&self, tick: u64) -> i64 {
-        if self.ease == 0 || tick >= self.start + self.ease {
+        if self.ease == 0 || tick >= self.start.saturating_add(self.ease) {
             return self.to;
         }
         let t = tick.saturating_sub(self.start) as i64;
-        self.from + (self.to - self.from) * t / self.ease as i64
+        match (self.to.checked_sub(self.from).and_then(|d| d.checked_mul(t)), i64::try_from(self.ease)) {
+            (Some(moved), Ok(ease)) => self.from + moved / ease,
+            // A script's value or ease past what i64 multiplies: the same
+            // line, worked in i128, off the common path.
+            _ => (self.from as i128 + (self.to as i128 - self.from as i128) * t as i128 / self.ease as i128) as i64,
+        }
     }
 }
 
@@ -579,7 +584,7 @@ impl Fields {
             to: terms::to_q(value),
             start: tick,
             ease: ticks(ease_hours),
-            until: hours.map(|h| tick + ticks(h)),
+            until: hours.map(|h| tick.saturating_add(ticks(h))),
             fading: false,
         };
         match a.pushes.iter_mut().find(|p| p.key == key) {
@@ -801,7 +806,7 @@ impl Fields {
         let fd = &defs.fields[field];
         let i = map.idx(p);
         let cell = self.layers[field].stock.get_mut(i)?;
-        let now = if add { *cell as i64 + terms::to_q(v) } else { terms::to_q(v) };
+        let now = if add { (*cell as i64).saturating_add(terms::to_q(v)) } else { terms::to_q(v) };
         *cell = now.clamp(terms::to_q(fd.range[0]), terms::to_q(fd.range[1])) as i32;
         let v = terms::from_q(*cell as i64);
         self.stock_touched.push((field as u32, i as u32));

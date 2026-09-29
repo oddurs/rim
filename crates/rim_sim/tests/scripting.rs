@@ -441,3 +441,43 @@ fn hooks_handlers_and_planners_register_only_at_load_time() {
         );
     }
 }
+
+/// Script numbers at the ends of their range: each call panicked a debug
+/// build, and in release wrapped (512b9f1a).
+#[test]
+fn extreme_script_numbers_clamp_or_fail_rather_than_overflow() {
+    let script = r#"
+local done = false
+rim.every(1, function()
+    if done then return end
+    done = true
+    local seen = {}
+    for i = 1, 8 do seen[rim.random_int(-2147483648, 2147483647)] = true end
+    local n = 0
+    for _ in seen do n += 1 end
+    rim.set_data("probe:full_range", n)
+    rim.set_data("probe:half_range", rim.random_int(0, 2147483647) >= 0)
+    local cx, cy = rim.colony_center()
+    rim.set_data("probe:near", tostring(pcall(rim.near_cell, cx, cy, -2147483648)))
+    rim.near_cell(cx, cy, 2147483647)
+    rim.push_ambient("core:temperature", "forever", 1, math.huge, math.huge)
+    rim.field_add("weather:wetness", cx, cy, math.huge)
+    rim.field_add("weather:wetness", cx, cy, -math.huge)
+    local deer = rim.spawn_pawn("core:deer", "wild", rim.near_cell(cx, cy, 5))
+    if deer then
+        rim.leave_after(deer, 2^64 - 4096)
+    end
+    rim.set_data("probe:done", true)
+end)
+"#;
+    let dir = test_mods("extremes", &["core", "weather"], &[("probe", &[("scripts/probe.luau", script)])]);
+    let mut s = Sim::new(&dir, 1).unwrap_or_else(|e| panic!("loads: {e}"));
+    for _ in 0..3 {
+        s.step();
+    }
+    let _ = fs::remove_dir_all(dir);
+    assert_eq!(s.world.data.get("probe:done"), Some(&Data::Bool(true)), "{:?}", errors(&s));
+    assert!(s.world.data.get("probe:full_range").and_then(|d| d.num()) > Some(1.0), "the full range isn't always lo");
+    assert_eq!(s.world.data.get("probe:half_range"), Some(&Data::Bool(true)));
+    assert_eq!(s.world.data.get("probe:near"), Some(&Data::Str("false".into())), "a negative r is an error");
+}
