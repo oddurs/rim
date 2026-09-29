@@ -3,7 +3,7 @@ id: 23209443-9dd3-4921-8903-083209eebe1a
 title: The inspector shows a colonist's Hands, Carrying and Worn
 type: feature
 status: backlog
-milestone: people
+milestone: carrying
 depends_on:
 - 3c8833c4-214c-4da2-ae5e-b02769b71039
 created: 2026-09-29

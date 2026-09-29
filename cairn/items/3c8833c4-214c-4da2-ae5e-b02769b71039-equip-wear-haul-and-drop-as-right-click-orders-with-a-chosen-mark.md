@@ -3,7 +3,9 @@ id: 3c8833c4-214c-4da2-ae5e-b02769b71039
 title: Equip, wear, haul and drop as right-click orders, with a chosen mark
 type: feature
 status: backlog
-milestone: people
+milestone: carrying
+depends_on:
+- 7691ffc6-817f-4209-a958-eff4e4e3aa3f
 created: 2026-09-29
 updated: 2026-09-29
 priority: p1
@@ -33,3 +35,7 @@ It waits on the user's answers to the doc's open questions.
 - [ ] A test: with a colonist selected, right-click a hammerstone, then Equip; the colonist holds it, chosen, and work doesn't swap it out against the user's rule
 - [ ] Wear, haul to storage, drop and take off each have a test
 - [ ] Tick time at 250² with 50 colonists is unchanged on the scaling bench, and the menu builds in under 0.1 ms
+
+## 2026-09-29
+
+The user settled the doc's questions on 2026-09-29. A chosen tool and work that needs another: swap and return. Drafting still drops the carried stack. No pack in this item; packs are 571dca56-98bc-4eed-a067-ed2dab075441, later, in crafting. Weight is 7691ffc6-817f-4209-a958-eff4e4e3aa3f, which comes first.

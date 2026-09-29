@@ -3,7 +3,7 @@ id: 2cdc7e9d-ca2d-4bbc-98f0-c4c389d83dbd
 title: A load checks worn garments as it checks the held tool
 type: bug
 status: backlog
-milestone: bare-metal
+milestone: carrying
 created: 2026-09-29
 updated: 2026-09-29
 priority: p2
