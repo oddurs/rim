@@ -623,9 +623,10 @@ can register its own with `ui.window_chrome`; nodes marked `handle = "move"`,
 
 Every window becomes an **app**, a **panel**, a **dialog** or an
 **overlay**. A mod declares an app with the same call as today, plus a few
-fields:
+fields. (Fenced as `luau`, not `lua`, so the guide's sample runner, which
+runs every `lua` block, skips it until it works.)
 
-```lua
+```luau
 ui.window("my_mod:ledger", {
 	title = "Ledger", key = "l",       -- shown in the title bar, dock and launcher
 	kind = "app",                     -- "app" | "dialog" | "overlay" | "screen"
