@@ -182,16 +182,23 @@ pub fn check(args: &[String]) -> i32 {
 }
 
 const REPLAY_USAGE: &str = "usage: rim replay SAVE [--epoch N] [--mods DIR]
+       rim replay --bisect SAVE_A SAVE_B [--epoch N] [--mods DIR]
 
 Replays one epoch of a save from its root (the seed, or the snapshot it
 began with), applying every command at its tick and checking the state at
 each log. Uses the last epoch unless --epoch says otherwise, and ./mods
 unless --mods does. Exits 1 at the first tick that disagrees, naming the
-sections that differ.";
+sections that differ.
+
+--bisect compares two saves of the same game, say from two machines, log
+by log: the last tick they agree at, the first they don't, and the
+sections that differ. Then it replays each here, to say which one this
+machine agrees with. Exits 1 when they part.";
 
 /// `rim replay`: returns the process exit code.
 pub fn replay(args: &[String]) -> i32 {
     let (mut save, mut epoch, mut mods) = (None, None, PathBuf::from("mods"));
+    let (mut bisect, mut other) = (false, None);
     let mut it = args.iter();
     let usage = |e: &str| {
         eprintln!("rim replay: {e}\n\n{REPLAY_USAGE}");
@@ -211,12 +218,18 @@ pub fn replay(args: &[String]) -> i32 {
                 println!("{REPLAY_USAGE}");
                 return 0;
             }
+            "--bisect" => bisect = true,
             s if s.starts_with('-') => return usage(&format!("unknown option {s}")),
+            s if save.is_some() && bisect && other.is_none() => other = Some(PathBuf::from(s)),
             s if save.is_some() => return usage(&format!("one save at a time ({s}?)")),
             s => save = Some(PathBuf::from(s)),
         }
     }
     let Some(save) = save else { return usage("which save?") };
+    if bisect {
+        let Some(other) = other else { return usage("--bisect takes two saves") };
+        return bisect_saves(&save, &other, epoch, &mods);
+    }
     match rim_sim::savefile::replay(&save, &mods, epoch) {
         Err(e) => {
             eprintln!("rim replay: {e}");
@@ -301,6 +314,48 @@ pub fn save(args: &[String]) -> i32 {
             2
         }
     }
+}
+
+/// `rim replay --bisect A B`.
+fn bisect_saves(a: &std::path::Path, b: &std::path::Path, epoch: Option<usize>, mods: &std::path::Path) -> i32 {
+    let read = |p: &std::path::Path| rim_sim::savefile::read(p).map(|(epochs, _)| epochs);
+    let (ea, eb) = match (read(a), read(b)) {
+        (Ok(x), Ok(y)) => (x, y),
+        (Err(e), _) | (_, Err(e)) => {
+            eprintln!("rim replay: {e}");
+            return 2;
+        }
+    };
+    let n = epoch.unwrap_or(ea.len().min(eb.len()).saturating_sub(1));
+    let (Some(x), Some(y)) = (ea.get(n), eb.get(n)) else {
+        eprintln!("rim replay: the saves have {} and {} epochs; there's no epoch {n} in both", ea.len(), eb.len());
+        return 2;
+    };
+    let Some((agreed, part)) = rim_sim::bisect::logs(x, y) else {
+        println!("epoch {n}: the saves agree at every log both have");
+        return 0;
+    };
+    println!(
+        "epoch {n}: the saves agree through tick {agreed} and part by tick {}: {}",
+        part.tick,
+        part.sections.join(", ")
+    );
+    for (name, path) in [("A", a), ("B", b)] {
+        match rim_sim::savefile::replay(path, mods, Some(n)) {
+            Ok(r) => match r.diverged {
+                None => println!("  {name} ({}): this machine replays it exactly", path.display()),
+                Some((tick, sections)) => {
+                    println!(
+                        "  {name} ({}): this machine parts from it at tick {tick}: {}",
+                        path.display(),
+                        sections.join(", ")
+                    )
+                }
+            },
+            Err(e) => println!("  {name} ({}): can't replay here: {e}", path.display()),
+        }
+    }
+    1
 }
 
 #[cfg(test)]
