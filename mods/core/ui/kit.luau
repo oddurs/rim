@@ -602,4 +602,13 @@ function kit.tray(props, columns)
 	return node("row", props, children)
 end
 
+-- Ask before something that can't be undone. props: title (the question),
+-- body, verb (the button that does it), danger (the verb is red), cancel
+-- (the safe button's label), on_confirm, on_cancel. One question at a time;
+-- the safe answer has focus. See confirm.luau.
+function kit.confirm(props)
+	-- Required here, not at the top: confirm.luau builds with the kit.
+	require("@core/ui/confirm").ask(props)
+end
+
 return kit

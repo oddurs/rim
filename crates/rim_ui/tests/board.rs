@@ -536,7 +536,7 @@ fn menu_rows(ui: &Ui) -> Vec<String> {
     out
 }
 
-/// A role of the player's can be deleted from its card, after a question;
+/// A role of the player's can be deleted from its card, after a confirm;
 /// a mod's role can't. The colonist menu asks the same question.
 #[test]
 fn a_players_role_is_deleted_after_asking() {
@@ -557,12 +557,13 @@ fn a_players_role_is_deleted_after_asking() {
     let actions = click(&mut ui, &sim, &mut cv, centre(delete));
     assert!(actions.is_empty(), "it asks first: {actions:?}");
     frame(&mut ui, &sim, &cv, Input { time: 6.0, ..Default::default() });
-    assert!(ui.snapshot().contains("Delete Crew? Its members go to Auto and keep their pins."), "{}", ui.snapshot());
-    let yes = ui.find(&format!("core:work.role.delete_yes.{}", crew + 1)).expect("the question's Delete");
+    let snap = ui.snapshot();
+    assert!(snap.contains("Delete Crew?") && snap.contains("Its members go to Auto and keep their pins."), "{snap}");
+    let yes = ui.find("core:confirm.ok").expect("the confirm's Delete");
     let actions = click(&mut ui, &sim, &mut cv, centre(yes));
     assert_eq!(actions, vec![UiAction::DeleteRole(crew)]);
 
-    // From the colonist's menu: the Work screen opens on the question.
+    // From the colonist's menu: the same question.
     ui.close_window("core:work");
     frame(&mut ui, &sim, &cv, Input { time: 7.0, ..Default::default() });
     let id = pawn.to_bits().get().to_string();
@@ -574,10 +575,9 @@ fn a_players_role_is_deleted_after_asking() {
     click(&mut ui, &sim, &mut cv, centre(row));
     frame(&mut ui, &sim, &cv, Input { time: 8.0, ..Default::default() });
     frame(&mut ui, &sim, &cv, Input { time: 8.1, ..Default::default() });
-    assert!(ui.is_open("core:work"), "the Work screen opens");
     assert!(
-        ui.find(&format!("core:work.role.delete_yes.{}", crew + 1)).is_some(),
-        "on the question: {}",
+        ui.find("core:confirm.ok").is_some() && ui.snapshot().contains("Delete Crew?"),
+        "the question: {}",
         ui.snapshot()
     );
 }
