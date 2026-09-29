@@ -1,0 +1,38 @@
+---
+id: 463
+uid: 3b39ada4-f9f9-41fc-b221-47d4a5969213
+key: workbench
+title: Workbench
+type: milestone
+status: planned
+created: 2026-09-27
+updated: 2026-09-27
+priority: p1
+api: additive
+---
+
+Developer tools inside the game: a console, single-tick stepping and a session timeline, an entity inspector with watches, a profiler that catches slow ticks, structured logs, bug capture, and the same tools over a local port and MCP for agents. Every change they make is a logged command. The tools are a first-party plugin, `mods/devtools`, loaded only with `--dev`, on a dev API the engine provides. Design: DESIGN.md §11a.
+
+## Goal
+
+With `--dev`, a developer can pause at a tick, step one tick, inspect any entity's raw state and path, spawn or change things from a Luau console, and scrub back through the session, and the save still replays exactly and says it was touched. An agent can do all of it headless through `rim --dev-port` or `rim mcp`. F8 writes a bug bundle that `rim repro` opens at its tick.
+
+## Order
+
+1. **Dev commands** and **the dev API** in the engine, then `mods/devtools` with **the console** and **stepping and the timeline**: everything else is built on them.
+2. **Inspector**, **structured logging**, **the dev port and MCP**.
+3. **Profiler history**, **bug capture**, **debug overlays**, **seed codes**, **CLI hygiene**.
+
+## What this waits on elsewhere
+
+- Proving ground: random streams (for seed codes and bug capture), and `scripts/task` for its gate.
+- The story console (1da662ac) becomes the console's first extension. Replay-based hot reload of defs and scripts stays with the SDK's 9f30ab9d.
+
+## Not in this milestone
+
+- Hot reload of defs and scripts (9f30ab9d, sdk).
+- A mod-facing profiler budget (c65db254, plugin-api).
+
+## Where it sits
+
+After Proving ground's gate and CI lanes, then alongside the rest of it. Due date: not set.

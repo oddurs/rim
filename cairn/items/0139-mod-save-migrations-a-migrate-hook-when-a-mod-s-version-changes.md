@@ -1,13 +1,14 @@
 ---
-id: ca786a8e-09cf-49ef-8003-1b49468a16a4
+id: 139
+uid: ca786a8e-09cf-49ef-8003-1b49468a16a4
 title: 'Mod save migrations: a migrate hook when a mod''s version changes'
 type: feature
 status: done
 milestone: persistence
 assignee: Oddur Sigurdsson
 depends_on:
-- d0524477-919e-4bd6-952e-95ff0d6bb58d
-- 65f0b723-5310-4dc6-a0f6-ba1223edb25b
+- 250
+- 62
 created: 2026-09-23
 updated: 2026-09-24
 closed_at: 2026-09-24

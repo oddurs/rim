@@ -3,3 +3,7 @@
 # Rendered from cairn/items by `cairn render`; CI uploads it from main as
 # the `roadmap` artifact. Untracked so no branch carries it (DESIGN.md §8a).
 /ROADMAP.md
+
+# cairn's lock while a command writes items. Ignored so `cairn migrate` and a
+# mid-command `git status` never read it as an uncommitted change.
+/cairn/items/.lock

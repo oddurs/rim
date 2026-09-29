@@ -1,5 +1,6 @@
 ---
-id: b2745267-46fe-4a15-8b39-5c69f7828429
+id: 1
+uid: b2745267-46fe-4a15-8b39-5c69f7828429
 key: wealth-gravity
 title: Wealth is gravity
 type: pillar

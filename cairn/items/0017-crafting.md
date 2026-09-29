@@ -1,11 +1,12 @@
 ---
-id: 2149b412-bfab-4151-8e7a-c9ee3d6067a5
+id: 17
+uid: 2149b412-bfab-4151-8e7a-c9ee3d6067a5
 key: crafting
 title: Crafting
 type: milestone
 status: done
 depends_on:
-- 5a1e03f2-e839-410d-b626-318be3f58aaf
+- 16
 created: 2026-09-22
 updated: 2026-09-28
 closed_at: 2026-09-28

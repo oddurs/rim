@@ -1,11 +1,12 @@
 ---
-id: 70edf863-73a1-4a4d-b284-84e9803d2252
+id: 60
+uid: 70edf863-73a1-4a4d-b284-84e9803d2252
 title: 'Save format: component-keyed, versioned, mod-aware'
 type: spike
 status: done
 milestone: persistence
 depends_on:
-- be8174f0-ff41-44fe-b788-2ffff60e0d19
+- 138
 created: 2026-09-22
 updated: 2026-09-24
 closed_at: 2026-09-24

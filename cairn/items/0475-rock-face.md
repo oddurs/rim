@@ -1,0 +1,45 @@
+---
+id: 475
+uid: 49422ed6-f8a8-439f-aefd-54205158e8df
+key: rock-face
+title: Rock face
+type: milestone
+status: planned
+created: 2026-09-27
+updated: 2026-09-27
+priority: p1
+api: additive
+---
+
+What mining looks like: a hill with height, rock kinds you can tell apart, ore set into the stone and found by looking, an order to dig that reads at a glance, the blow and what it leaves, and the pit. Design: DESIGN.md §6g.
+
+## Goal
+
+At close zoom, a player can tell granite, limestone, chalk and clay apart without hovering. They can see which marked cells a miner can reach now, which wait behind the face and which wait on a tool. They find a vein by walking a miner along a face, and follow it in. A dug adit reads as dug. At noon a hill casts a longer shadow than a wall, and its adit is dark. `rim --bench-render` has a quarry view, and the whole-map view costs what it cost before.
+
+## Order
+
+1. **The quarry view** in the render bench and the autotest, so every later item has a budget and a screenshot.
+2. **Rock is drawn as rock:** broken outline, bevelled corners, scree, smooth tone. **Relief:** depth into rock as a smooth fill and contours. Both need only what main has.
+3. **The mining worksite**, which also needs nothing new, and **the mine order as a cut line** once Chalkline's previews and keyline land.
+4. **Rock patterns along the bed**, once material patterns (7c53ec62) and strata (3f90e043) land.
+5. **Unseen rock is plain** and **ore set into the stone**, once the view (5689930d) owns the seen bit and stock fields (d77d9e1f) carry ore.
+6. **Rock height in the occluder texture**, **pits and stairs**, and **light in the mine**, each with the Lighting or Depth item it rides on.
+
+## What this waits on elsewhere
+
+- Houses (2f7e95c6): material patterns (7c53ec62) give the pattern layer and fade band; lit edges (ae5c3807) give the highlight rock inherits.
+- Lighting (15a4e81b): occluders (e5d8b445, PR #201), sun shadows (8f4f1de8), firelight (6fd6b13b), light on every level (3124bd7b).
+- Depth (e58c8ff7): strata (3f90e043), the view and its seen bit (5689930d), portals (acd85584).
+- Crafting (2149b412): rock kinds and veins as content (db7f1e06), stock fields (d77d9e1f).
+- Chalkline (3a4c3565): the designation corner and keyline (d83192ed), the preview answer (cd59b515) and the designate highlight (bb769d00) that the cut line and dots use.
+
+## Not in this milestone
+
+- Cave-ins and structural support: a mechanism, not a look (db7f1e06 leaves them out too).
+- Sprites for rock or ore. Core stays plain (§6a); a mod can still ship a tileset.
+- Water in a mine (basins, 3979868c) beyond the damp band of the `seep` pattern.
+
+## Where it sits
+
+After the first steps of Depth and alongside Lighting. The quarry view, the outline, relief and the worksite touch only the client and can start now. The rest ride on items in Houses, Lighting, Depth and Crafting, and each lands in whichever order those do. Due date: not set, since agents only read `due`.

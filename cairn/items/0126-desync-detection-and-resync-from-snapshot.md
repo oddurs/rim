@@ -1,11 +1,12 @@
 ---
-id: fa6f0afb-4220-4ee5-89c2-7fe675e0d99a
+id: 126
+uid: fa6f0afb-4220-4ee5-89c2-7fe675e0d99a
 title: Desync detection and resync from snapshot
 type: feature
 status: backlog
 milestone: co-op
 depends_on:
-- c5d185be-9bb8-491d-b73d-94f75e4018f0
+- 61
 created: 2026-09-22
 updated: 2026-09-24
 priority: p0

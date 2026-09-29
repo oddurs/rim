@@ -1,5 +1,6 @@
 ---
-id: 93f291d5-d1c7-4f24-b67d-e3738176e57c
+id: 5
+uid: 93f291d5-d1c7-4f24-b67d-e3738176e57c
 key: survival
 title: From nothing
 type: pillar

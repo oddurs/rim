@@ -1,12 +1,13 @@
 ---
-id: 05dbb688-66e3-47b0-b105-32651a8ebec0
+id: 157
+uid: 05dbb688-66e3-47b0-b105-32651a8ebec0
 title: 'CI: determinism must hold across machines, not just within one run'
 type: chore
 status: done
 milestone: shelter
 assignee: Oddur Sigurdsson
 depends_on:
-- 48f92e6e-2187-461a-a98b-f20e36ae1325
+- 156
 created: 2026-09-23
 updated: 2026-09-24
 closed_at: 2026-09-24

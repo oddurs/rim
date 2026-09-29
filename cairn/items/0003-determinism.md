@@ -1,5 +1,6 @@
 ---
-id: daa21f31-6a6a-4da1-8b8a-00771349b6c0
+id: 3
+uid: daa21f31-6a6a-4da1-8b8a-00771349b6c0
 key: determinism
 title: Determinism
 type: pillar

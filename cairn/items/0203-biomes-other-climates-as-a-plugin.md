@@ -1,12 +1,13 @@
 ---
-id: e2cae1b2-c72f-4b54-8305-2bfa9b63530e
+id: 203
+uid: e2cae1b2-c72f-4b54-8305-2bfa9b63530e
 title: 'Biomes: other climates as a plugin'
 type: content
 status: backlog
 milestone: world
 depends_on:
-- 7c50b502-5e27-4807-a36c-0654fe9aec97
-- 6dd4891c-f65e-4707-96f9-e6d46c6cd446
+- 184
+- 187
 created: 2026-09-23
 updated: 2026-09-23
 priority: p2

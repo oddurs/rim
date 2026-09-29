@@ -1,5 +1,6 @@
 ---
-id: 2aaf3c65-ac8e-46d0-9d49-8708dc0f10e5
+id: 6
+uid: 2aaf3c65-ac8e-46d0-9d49-8708dc0f10e5
 key: growth
 title: The colony arc
 type: pillar

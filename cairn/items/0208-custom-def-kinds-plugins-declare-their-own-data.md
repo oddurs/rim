@@ -1,5 +1,6 @@
 ---
-id: b0da41ef-9eda-479e-b080-0d0b9dc0129d
+id: 208
+uid: b0da41ef-9eda-479e-b080-0d0b9dc0129d
 title: 'Custom def kinds: plugins declare their own data'
 type: feature
 status: done

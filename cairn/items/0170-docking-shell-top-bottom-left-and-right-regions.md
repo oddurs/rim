@@ -1,11 +1,12 @@
 ---
-id: aaca3f7a-9228-48ec-b73d-dab28cc66b68
+id: 170
+uid: aaca3f7a-9228-48ec-b73d-dab28cc66b68
 title: 'Docking shell: top, bottom, left and right regions'
 type: feature
 status: done
 milestone: interface
 depends_on:
-- b144ca3c-2985-47be-b3ce-d07d4f17ceaa
+- 168
 created: 2026-09-23
 updated: 2026-09-23
 closed_at: 2026-09-23

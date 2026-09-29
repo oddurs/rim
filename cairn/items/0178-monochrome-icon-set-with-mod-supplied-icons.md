@@ -1,11 +1,12 @@
 ---
-id: ed876ad7-96ec-4736-ba3d-e001daf5af98
+id: 178
+uid: ed876ad7-96ec-4736-ba3d-e001daf5af98
 title: Monochrome icon set with mod-supplied icons
 type: feature
 status: backlog
 milestone: plugin-api
 depends_on:
-- b25b27e0-b43b-478f-b50b-825fedbf62e3
+- 246
 created: 2026-09-23
 updated: 2026-09-24
 priority: p2

@@ -1,0 +1,43 @@
+---
+id: 462
+uid: 3a4c3565-7719-4338-bd2b-f8c65201b87e
+key: chalkline
+title: Chalkline
+type: milestone
+status: done
+created: 2026-09-27
+updated: 2026-09-28
+closed_at: 2026-09-28
+priority: p1
+api: additive
+---
+
+The grid, hover, selection, drag previews, placement ghosts and marks, drawn in one visual language. Design: DESIGN.md §6f.
+
+## Goal
+
+With a wall tool in hand, the player sees the cells around the pointer. A drag shows exactly which cells get walls, which must be cleared first and which can't be built, with a count before release. A chop drag lights only the trees it will newly mark. Selection is chalk brackets or a ring that never covers the thing. Stockpiles are violet and plans are blue. Every colour and size comes from core's `ui/theme.toml`. `rim --bench-render --check` passes, and the whole-map views cost what they cost before.
+
+## Order
+
+1. **Palette and selection** (the overlay module every later item draws with), and **ask the sim what an order would do**. These two can start now.
+2. **The grid** (Rest, Lens, Plan), and **hover**.
+3. **Designate previews** and **build ghosts**: the reason for the milestone.
+4. **Box select**, **zones in violet**, **Measure**.
+5. **Off-screen chevron**, **motion and reduce-motion**, and the **unreachable** spike and its notch.
+
+## What this touches elsewhere
+
+- `draw.rs` is busy. Room state (4791e24b, PR #191), occluders (e5d8b445, PR #201) and the stores overlay (f22f1a62, PR #196) all edit it. Keep each item's change to `world_ui`, `zones` and a new `overlay.rs`, and rebase often.
+- Work Board spotlight (9ebfa104, mood) draws with this milestone's veil and hue edge. It depends on the palette item.
+- Plan over footprint (26ba97aa) and replace in place (b3ffbae1) in Houses extend what a build preview can answer. They add outcomes to `Place`; they don't change how it is drawn.
+
+## Not in this milestone
+
+- A keyboard or gamepad cell cursor. rim has no keyboard cursor to frame yet; the concept's frame style is ready for when it does.
+- Rulers and the grid in the UI's Luau surface. The grid is a world overlay; a plugin can restyle it through theme tokens, not script it.
+- Changing what box select picks. It still picks colonists; only Alt-remove is new.
+
+## 2026-09-28
+
+Shipped in full on main at b5949ede. The sim's previews: #215. The layers, in order: palette and chalk selection #240, grid #264, hover #275, zones #286, box select #288, measure #291, off-screen chevron #297, motion #303, designate #314, build ghosts #319. The unreachable notch #266, built on the a207eded spike's unreachable_jobs (#243). Test fixes found on the way: #295 and #302 (box select's autotest). #312 (the dock's scrolled tray, by quiet-field) unblocked the last two layers.

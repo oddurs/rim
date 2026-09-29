@@ -1,13 +1,14 @@
 ---
-id: 8376a04f-f93e-4daf-9685-183c3dc9cf00
+id: 190
+uid: 8376a04f-f93e-4daf-9685-183c3dc9cf00
 title: 'Drafty rooms: room leak from terms'
 type: feature
 status: done
 milestone: colony
 assignee: Oddur Sigurdsson
 depends_on:
-- 3114946b-5434-4171-9cdb-86ae4e7bb38d
-- 3bb54ba3-21f9-42a4-9f7c-8299b5db1db5
+- 181
+- 183
 created: 2026-09-23
 updated: 2026-09-25
 closed_at: 2026-09-25

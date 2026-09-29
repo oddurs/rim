@@ -7,6 +7,8 @@
 #
 #   cairn roadmap            milestone roadmap with progress
 #   cairn next               what is ready to work on
+#   cairn prompt ID          one item as a brief to start work from
+#   cairn worktrees          who holds what, across every worktree
 #   cairn list --view api    everything that changes the modding contract
 #   cairn config             show the resolved schema
 #   cairn proposals          what agents have asked a person to decide
@@ -15,7 +17,7 @@
 # ORDER IS BEHAVIOUR: status order is board/list order; enum value order is
 # sort order. Do not alphabetise this file.
 
-format = 4
+format = 5
 
 [project]
 name = "rim"
@@ -23,6 +25,10 @@ description = "A plugin-first 2D colony sim: one naked warrior, a world that not
 dir = "cairn/items"
 default_type = "feature"
 default_status = "backlog"
+url = "https://github.com/oddurs/rim/blob/main"
+# Many sessions work in parallel worktrees; a claim nobody has touched for a
+# week is shown as stale. It is never released automatically.
+claim_stale_after = 7
 
 # ─── Item types ──────────────────────────────────────────────────────────────
 
@@ -32,9 +38,9 @@ icon = "+"
 color = "cyan"
 description = "Something a player or a modder can do that they could not before."
 template = """
-## Why
+## Problem
 
-## What
+## Proposal
 
 ## Acceptance criteria
 
@@ -210,55 +216,77 @@ description = "When a milestone is meant to land"
 agent = "read-only"
 
 # ─── Saved views ─────────────────────────────────────────────────────────────
+# `next` is what agents take from: approved work (planned) and work already
+# under way, with no unfinished dependency. New items start in backlog, where
+# a person reads them and plans them; `triage` is that queue.
 
 [[view]]
 name = "now"
 description = "What is actually being worked on"
-filter = "category=active"
+filter = "category=active,type!=milestone"
 sort = "priority,id"
 
 [[view]]
 name = "next"
-description = "Planned work, most urgent first"
-filter = "status=planned"
+description = "Approved or started work with no unfinished dependency, most urgent first"
+filter = "status=planned|doing,blocked=false,type!=milestone"
 sort = "priority,milestone"
+columns = ["id", "status", "priority", "milestone", "title"]
+
+[[view]]
+name = "waiting"
+description = "Held on a person or an outside action; the item's notes say which"
+filter = "status=blocked,type!=milestone"
+sort = "priority,id"
+
+[[view]]
+name = "dependencies"
+description = "Work held by an unfinished dependency"
+filter = "blocked=true,category=open|active,type!=milestone"
+sort = "priority,id"
 
 [[view]]
 name = "api"
 description = "Everything that changes the modding contract"
-filter = "api!=none,category!=done"
+filter = "api!=none,category=open|active"
 sort = "api,priority"
 columns = ["id", "type", "title", "api", "milestone"]
 
 [[view]]
 name = "engine"
 description = "Open engine work"
-filter = "layer=engine,category!=done"
+filter = "layer=engine,category=open|active"
 sort = "priority,id"
 
 [[view]]
 name = "plugins"
 description = "Work that should be built as a plugin, not in the engine"
-filter = "layer=plugin,category!=done"
+filter = "layer=plugin,category=open|active"
 sort = "milestone,priority"
 
 [[view]]
 name = "perf"
 description = "Performance budget work"
-filter = "type=perf,category!=done"
+filter = "type=perf,category=open|active"
 sort = "priority,id"
 
 [[view]]
 name = "decisions"
 description = "Open design questions"
-filter = "type=spike,category!=done"
+filter = "type=spike,category=open|active"
 sort = "priority,id"
 
 [[view]]
 name = "triage"
-description = "Items that still need a milestone or a layer"
-filter = "milestone=,category!=done"
+description = "Filed but not yet scheduled: a person gives it a milestone or drops it"
+filter = "status=backlog,milestone=,type!=milestone|pillar"
 columns = ["id", "type", "title", "created"]
+
+[[view]]
+name = "history"
+description = "Finished and dropped work, by last edit"
+filter = "category=done|dropped,type!=milestone"
+sort = "-updated,id"
 
 # ─── Hooks ───────────────────────────────────────────────────────────────────
 

@@ -1,5 +1,6 @@
 ---
-id: aaaae5e7-462e-449e-832a-d6631b5f840b
+id: 30
+uid: aaaae5e7-462e-449e-832a-d6631b5f840b
 title: 'Luau host: sandbox, per-script environments, rim.every and rim.on'
 type: feature
 status: done

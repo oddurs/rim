@@ -1,5 +1,6 @@
 ---
-id: 5f7eb168-588c-46c3-b464-4e3a0e67170d
+id: 121
+uid: 5f7eb168-588c-46c3-b464-4e3a0e67170d
 title: Capability declarations and trust prompts
 type: feature
 status: backlog

@@ -1,13 +1,14 @@
 ---
-id: ebb814ad-369d-4ddd-99de-e755c2b14eb9
+id: 209
+uid: ebb814ad-369d-4ddd-99de-e755c2b14eb9
 title: 'Sky bodies: a cycle input and coloured sky terms'
 type: feature
 status: done
 milestone: plugin-api
 assignee: Oddur Sigurdsson
 depends_on:
-- 2e0b9d43-90e5-4051-bda6-81544e9caf0f
-- 3bb54ba3-21f9-42a4-9f7c-8299b5db1db5
+- 56
+- 183
 created: 2026-09-23
 updated: 2026-09-28
 closed_at: 2026-09-28

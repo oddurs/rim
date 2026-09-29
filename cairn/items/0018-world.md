@@ -1,11 +1,12 @@
 ---
-id: a08e50e2-9107-44d5-8e2c-35576749b75b
+id: 18
+uid: a08e50e2-9107-44d5-8e2c-35576749b75b
 key: world
 title: World
 type: milestone
 status: planned
 depends_on:
-- 2149b412-bfab-4151-8e7a-c9ee3d6067a5
+- 17
 created: 2026-09-22
 updated: 2026-09-23
 priority: p2

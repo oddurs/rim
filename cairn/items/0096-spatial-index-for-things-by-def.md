@@ -1,11 +1,12 @@
 ---
-id: fbf3ee1c-fa3a-4a7c-9c3f-ee09b4398433
+id: 96
+uid: fbf3ee1c-fa3a-4a7c-9c3f-ee09b4398433
 title: Spatial index for things by def
 type: perf
 status: done
 milestone: scale
 depends_on:
-- ee7fe7fd-4cb1-4f65-b23c-2e325c641fdc
+- 93
 created: 2026-09-22
 updated: 2026-09-26
 closed_at: 2026-09-26

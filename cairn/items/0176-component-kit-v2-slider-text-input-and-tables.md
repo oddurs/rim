@@ -1,13 +1,14 @@
 ---
-id: a7da68e2-7934-47e2-ae5d-3d438ebb61f1
+id: 176
+uid: a7da68e2-7934-47e2-ae5d-3d438ebb61f1
 title: 'Component kit v2: slider, text input and tables'
 type: feature
 status: done
 milestone: colony
 assignee: Oddur Sigurdsson
 depends_on:
-- 01e4d9fe-095a-47d9-b06b-5d2c5099f063
-- c3c4d136-0740-4702-8fd9-8293fa4d65e8
+- 222
+- 247
 created: 2026-09-23
 updated: 2026-09-24
 closed_at: 2026-09-24

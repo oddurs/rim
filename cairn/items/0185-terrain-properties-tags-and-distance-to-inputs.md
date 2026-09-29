@@ -1,12 +1,13 @@
 ---
-id: 9b569a33-c488-42df-84c2-9bfa83a14b3e
+id: 185
+uid: 9b569a33-c488-42df-84c2-9bfa83a14b3e
 title: Terrain properties, tags and distance-to inputs
 type: feature
 status: done
 milestone: crafting
 assignee: Oddur Sigurdsson
 depends_on:
-- 3114946b-5434-4171-9cdb-86ae4e7bb38d
+- 181
 created: 2026-09-23
 updated: 2026-09-27
 closed_at: 2026-09-27

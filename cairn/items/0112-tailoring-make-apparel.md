@@ -1,5 +1,6 @@
 ---
-id: 0927f0af-ae81-4e4c-91bc-d08a2ca25055
+id: 112
+uid: 0927f0af-ae81-4e4c-91bc-d08a2ca25055
 title: 'Tailoring: make apparel'
 type: content
 status: done

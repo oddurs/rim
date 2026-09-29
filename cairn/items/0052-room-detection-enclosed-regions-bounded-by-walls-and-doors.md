@@ -1,5 +1,6 @@
 ---
-id: f51af7ba-8fba-4127-bda0-07387348a786
+id: 52
+uid: f51af7ba-8fba-4127-bda0-07387348a786
 title: 'Room detection: enclosed regions bounded by walls and doors'
 type: feature
 status: done

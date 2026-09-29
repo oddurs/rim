@@ -1,11 +1,12 @@
 ---
-id: e97ef234-8c65-4d48-ac5c-2dc63308aadf
+id: 42
+uid: e97ef234-8c65-4d48-ac5c-2dc63308aadf
 title: 'Core creatures: human, deer, hare, wolf'
 type: content
 status: done
 milestone: castaway
 depends_on:
-- 68db17e7-d47d-4db9-b371-71db1e41635a
+- 41
 created: 2026-09-22
 updated: 2026-09-22
 priority: p0

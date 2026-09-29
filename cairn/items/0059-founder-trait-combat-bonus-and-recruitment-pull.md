@@ -1,5 +1,6 @@
 ---
-id: 2a2f2f48-2e45-4b75-8b29-0fb868857990
+id: 59
+uid: 2a2f2f48-2e45-4b75-8b29-0fb868857990
 title: 'Founder trait: combat bonus and recruitment pull'
 type: feature
 status: done

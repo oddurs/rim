@@ -1,11 +1,12 @@
 ---
-id: fdafcb10-6fcf-4a63-b798-fbd8a5e32ade
+id: 80
+uid: fdafcb10-6fcf-4a63-b798-fbd8a5e32ade
 title: Custom jobs and work givers from Luau
 type: feature
 status: backlog
 milestone: plugin-api
 depends_on:
-- 0e73145a-39c4-4f1d-88a4-59d803a2f535
+- 224
 created: 2026-09-22
 updated: 2026-09-25
 priority: p0

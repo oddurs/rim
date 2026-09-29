@@ -1,13 +1,14 @@
 ---
-id: 14df87a8-1789-4cb0-ab15-f105f1b13085
+id: 177
+uid: 14df87a8-1789-4cb0-ab15-f105f1b13085
 title: Keybinds file and command palette
 type: feature
 status: done
 milestone: plugin-api
 assignee: Oddur Sigurdsson
 depends_on:
-- 01e4d9fe-095a-47d9-b06b-5d2c5099f063
-- 1e977052-1ce0-4280-a9ea-a6ff0c8f4cc8
+- 222
+- 175
 created: 2026-09-23
 updated: 2026-09-24
 closed_at: 2026-09-24

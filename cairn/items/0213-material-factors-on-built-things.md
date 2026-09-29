@@ -1,12 +1,13 @@
 ---
-id: 82bc6c98-e5fb-42a5-9534-5f647d714654
+id: 213
+uid: 82bc6c98-e5fb-42a5-9534-5f647d714654
 title: Material factors on built things
 type: feature
 status: done
 milestone: building
 assignee: Oddur Sigurdsson
 depends_on:
-- 763d8d64-9bee-459a-87c4-1ec543644f38
+- 212
 created: 2026-09-23
 updated: 2026-09-23
 priority: p0

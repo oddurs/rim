@@ -1,5 +1,6 @@
 ---
-id: d5d0ea1f-1941-41b2-99ea-3d51792fbead
+id: 103
+uid: d5d0ea1f-1941-41b2-99ea-3d51792fbead
 title: 'Equipment: pick up and equip, raiders drop gear'
 type: feature
 status: backlog
