@@ -19,7 +19,8 @@
 //! would disturb the main numbers. On a tile-based GPU (Apple silicon) a
 //! query around part of a frame times the tile pass it lands in, so read
 //! GPU numbers from an immediate-mode GPU. Last, what a change costs: every
-//! cached lighting result rebuilt, frame after frame.
+//! cached lighting result rebuilt, frame after frame, and the colony's chunk
+//! painted again and its region of chunk meshes joined, as a new wall does.
 //!
 //! Then the whole frame per view: its wall time from one frame's start to
 //! the next (median, p99 and worst), hitches (frames over twice the
@@ -519,6 +520,12 @@ struct Run {
     frames: Vec<(RenderTimes, f64, Option<f64>)>,
     calls: usize,
     indices: usize,
+    /// Of them, the chunk meshes'.
+    mesh_calls: usize,
+    mesh_indices: usize,
+    /// The worst frame's painting and joining of chunk meshes (µs): what a
+    /// zoom or a change costs in one frame.
+    mesh_worst: f64,
     particles: usize,
     /// Things drawn live, outside the chunk meshes, on the last frame.
     live: usize,
@@ -734,6 +741,7 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
             draw_one(&mut app, &mut time, None).await;
             r.walls.push(t0.elapsed().as_secs_f64() * 1e3);
             r.rebuilt += app.meshes.rebuilt;
+            r.mesh_worst = r.mesh_worst.max(app.meshes.paint_us + app.meshes.join_us);
             let zones = telemetry::frame().zones;
             // Submit: macroquad's end of frame, and the meshes' mid-frame.
             let submit = zone(&zones, "Event::draw end_frame").unwrap_or(0.0) + app.render_us.gl;
@@ -752,6 +760,7 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
         let calls = telemetry::drawcalls();
         r.calls = calls.len() + app.meshes.calls + app.figures.calls;
         r.indices = calls.iter().map(|c| c.indices_count).sum::<usize>() + app.meshes.indices + app.figures.indices();
+        (r.mesh_calls, r.mesh_indices) = (app.meshes.calls, app.meshes.indices);
         r.particles = app.sky.particles();
         r.live = app.meshes.live_count();
         // The lighting passes' GPU time, on frames of their own after
@@ -782,6 +791,16 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
     }
     app.light.time_gpu(false);
     let rebuilt = pass_means(&rebuilds, &rebuilds);
+    // And a change to the map: the colony's chunk painted again, and its
+    // region joined, as building a wall there does.
+    let at = app.sim.world.map.chunk_of(centre);
+    let (mut paint, mut join) = (0.0, 0.0);
+    for _ in 0..REBUILDS {
+        app.meshes.repaint(at);
+        draw_one(&mut app, &mut time, None).await;
+        (paint, join) = (paint + app.meshes.paint_us, join + app.meshes.join_us);
+    }
+    let (paint, join) = (paint / REBUILDS as f64 / 1e3, join / REBUILDS as f64 / 1e3);
 
     // Last, as it moves every pawn: the crowd.
     crowd(&mut app.sim, centre);
@@ -823,7 +842,7 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
         screen_height()
     );
     println!(
-        "{:<10} {:>5} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7} {:>6} {:>8} {:>7} {:>6}",
+        "{:<10} {:>5} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7} {:>7} {:>6} {:>5} {:>8} {:>7} {:>6}",
         "view",
         "zoom",
         "world",
@@ -837,6 +856,7 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
         "submit",
         "gpu",
         "calls",
+        "mesh",
         "indices",
         "rebuilt",
         "live"
@@ -844,7 +864,7 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
     for r in &results {
         let sorted = r.world_ms();
         println!(
-            "{:<10} {:>5.0} {:>7.3} {:>7.3} {:>7.3} {:>7.3} {:>7.3} {:>7.3} {:>7.3} {:>7.3} {:>7.3} {:>7} {:>6} {:>8} {:>7} {:>6}",
+            "{:<10} {:>5.0} {:>7.3} {:>7.3} {:>7.3} {:>7.3} {:>7.3} {:>7.3} {:>7.3} {:>7.3} {:>7.3} {:>7} {:>6} {:>5} {:>8} {:>7} {:>6}",
             r.name,
             r.zoom,
             r.mean(|f| f.0.world()),
@@ -858,12 +878,13 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
             r.mean(|f| f.1),
             r.gpu_ms().map_or("-".into(), |g| format!("{g:.3}")),
             r.calls,
+            r.mesh_calls,
             r.indices,
             r.rebuilt,
             r.live
         );
     }
-    println!("ms per frame, CPU unless named; world = every pass but the UI; budget {BUDGET_MS} ms on the whole map");
+    println!("ms per frame, CPU unless named; world = every pass but the UI; mesh = the chunk meshes' calls; budget {BUDGET_MS} ms on the whole map");
     println!();
     println!("{:<10} {:>7} {:>7} {:>7} {:>7} {:>7}", "view", "frame", "p99", "max", "hitches", "rest");
     for r in &results {
@@ -899,6 +920,7 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
         })
         .collect();
     println!("light rebuild on {last}, ms: {}", costs.join("; "));
+    println!("mesh change on {last}, ms: paint {paint:.3}, join {join:.3}");
     println!();
     println!(
         "{:<10} {:>5} {:<10} {:>7} {:>7} {:>7} {:>6}",
@@ -947,7 +969,7 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
                     r.rest_ms()
                 );
                 format!(
-                    "    {{\"view\": \"{}\", \"zoom\": {}, {whole}\"world_ms\": {:.4}, \"world_p50_ms\": {:.4}, \"world_p99_ms\": {:.4}, \"ground_ms\": {:.4}, \"things_ms\": {:.4}, \"pawns_ms\": {:.4}, \"weather_ms\": {:.4}, \"light_ms\": {:.4}, \"ui_ms\": {:.4}, \"submit_ms\": {:.4}, \"gpu_ms\": {}, \"draw_calls\": {}, \"indices\": {}, \"particles\": {}, \"rebuilt\": {}, \"live\": {}, \"light_passes\": [{}]}}",
+                    "    {{\"view\": \"{}\", \"zoom\": {}, {whole}\"world_ms\": {:.4}, \"world_p50_ms\": {:.4}, \"world_p99_ms\": {:.4}, \"ground_ms\": {:.4}, \"things_ms\": {:.4}, \"pawns_ms\": {:.4}, \"weather_ms\": {:.4}, \"light_ms\": {:.4}, \"ui_ms\": {:.4}, \"submit_ms\": {:.4}, \"gpu_ms\": {}, \"draw_calls\": {}, \"indices\": {}, \"mesh_draw_calls\": {}, \"mesh_indices\": {}, \"mesh_worst_ms\": {:.4}, \"particles\": {}, \"rebuilt\": {}, \"live\": {}, \"light_passes\": [{}]}}",
                     r.name,
                     r.zoom,
                     r.mean(|f| f.0.world()),
@@ -963,6 +985,9 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
                     r.gpu_ms().map_or("null".into(), |g| format!("{g:.4}")),
                     r.calls,
                     r.indices,
+                    r.mesh_calls,
+                    r.mesh_indices,
+                    r.mesh_worst / 1e3,
                     r.particles,
                     r.rebuilt,
                     r.live,
@@ -992,7 +1017,7 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
             })
             .collect();
         let json = format!(
-            "{{\n  \"machine\": \"{}\",\n  \"screen\": [{}, {}],\n  \"dpi\": {dpi},\n  \"frames\": {frames},\n  \"budget_ms\": {BUDGET_MS},\n  \"figures_budget_ms\": {FIGURES_MS},\n  \"crowd\": [\n{}\n  ],\n  \"gl_renderer\": \"{}\",\n  \"lighting\": \"{}\",\n  \"light_rebuild_view\": \"{last}\",\n  \"light_rebuild\": {{{}}},\n  \"views\": [\n{}\n  ]\n}}\n",
+            "{{\n  \"machine\": \"{}\",\n  \"screen\": [{}, {}],\n  \"dpi\": {dpi},\n  \"frames\": {frames},\n  \"budget_ms\": {BUDGET_MS},\n  \"figures_budget_ms\": {FIGURES_MS},\n  \"crowd\": [\n{}\n  ],\n  \"gl_renderer\": \"{}\",\n  \"lighting\": \"{}\",\n  \"light_rebuild_view\": \"{last}\",\n  \"light_rebuild\": {{{}}},\n  \"mesh_change\": {{\"paint_ms\": {paint:.4}, \"join_ms\": {join:.4}}},\n  \"views\": [\n{}\n  ]\n}}\n",
             machine().replace('"', "'"),
             screen_width(),
             screen_height(),
