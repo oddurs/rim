@@ -322,6 +322,9 @@ pub struct Ui {
     pressed: Option<u64>,
     painting: Option<Painting>,
     focused: Option<u64>,
+    /// Focus came from the keyboard, so it is drawn as a ring. A click
+    /// focuses too, but the pointer already says where it is.
+    focus_ring: bool,
     scroll: HashMap<u64, f32>,
     /// Layout: named trees kept between frames, and one scratch tree.
     lay: layout::Engine,
@@ -438,6 +441,7 @@ impl Ui {
             pressed: None,
             painting: None,
             focused: None,
+            focus_ring: false,
             scroll: HashMap::new(),
             lay: layout::Engine::default(),
             info,
@@ -971,6 +975,9 @@ impl Ui {
         if input.left_pressed && !out.mouse_over_ui {
             self.focused = None;
         }
+        if input.left_pressed {
+            self.focus_ring = false;
+        }
         if input.left_pressed && out.mouse_over_ui {
             out.captured_left = true;
             self.pressed = hovered;
@@ -1184,6 +1191,7 @@ impl Ui {
                     (None, true) => n - 1,
                 };
                 self.focused = Some(focusables[next].0);
+                self.focus_ring = true;
                 out.captured_keys = true;
             }
         }
@@ -1424,6 +1432,7 @@ impl Ui {
             scroll: &state_scroll,
             edits: &state_edits,
             disabled_alpha: 0.45,
+            ring: self.focus_ring.then(|| self.ring()).flatten(),
         };
 
         for &layer in LAYERS {
@@ -1705,6 +1714,13 @@ impl Ui {
         out.draw = draw;
         out.anchored = anchored_draws;
         out
+    }
+
+    /// The focus ring's colour, width and gap outside the node, physical
+    /// pixels; none when the theme doesn't set `color.focus`.
+    fn ring(&self) -> Option<(theme::Rgba, f32, f32)> {
+        let shape = |k: &str, d: f32| self.theme.shape.get(k).copied().unwrap_or(d) * self.theme.scale;
+        Some((*self.theme.color.get("focus")?, shape("focus_ring", 2.0), shape("focus_gap", 1.0)))
     }
 
     /// Give the keyboard back to the game (Escape).
