@@ -126,7 +126,9 @@ pub fn load_only(mods_dir: &Path, enabled: &dyn Fn(&str) -> bool) -> Result<Load
                     _ => return Err(format!("{origin}: '{key}' must be an array of tables ([[{key}]])")),
                 };
                 let own = format!("{}:{key}", m.id);
-                let kind = if key == "patch" || KINDS.contains(&key.as_str()) || key.contains(':') {
+                // A qualified kind (`[["magic:spell"]]`) is one some mod declared;
+                // any other is warned about below, as `[[magic.spell]]` is.
+                let kind = if key == "patch" || KINDS.contains(&key.as_str()) || kinds.contains_key(&key) {
                     key.clone()
                 } else if kinds.contains_key(&own) {
                     own

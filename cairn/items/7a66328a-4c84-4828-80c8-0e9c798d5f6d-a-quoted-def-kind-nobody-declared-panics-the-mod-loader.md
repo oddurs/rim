@@ -2,11 +2,12 @@
 id: 7a66328a-4c84-4828-80c8-0e9c798d5f6d
 title: A quoted def kind nobody declared panics the mod loader
 type: bug
-status: doing
+status: done
 milestone: bare-metal
 assignee: Oddur Sigurdsson
 created: 2026-09-28
-updated: 2026-09-28
+updated: 2026-09-29
+closed_at: 2026-09-28
 priority: p2
 api: none
 layer: engine
@@ -32,5 +33,9 @@ In `tests/kinds.rs`: `load("kind-quoted", KIND, "[[\"magic:nope\"]]\nid = \"x\"\
 
 ## Acceptance
 
-- [ ] A quoted kind nobody declared is warned about and ignored, as the dotted form is
-- [ ] A test that fails before the fix and passes after
+- [x] A quoted kind nobody declared is warned about and ignored, as the dotted form is
+- [x] A test that fails before the fix and passes after
+
+## 2026-09-29
+
+PAUSED at the merge freeze: the fix and its test are done, and the test was checked to fail before the fix and pass after. The full gate hasn't run yet. Next: rebase on main, run scripts/task check, and mark the PR ready. Branch fix/7a66328a-quoted-kind.

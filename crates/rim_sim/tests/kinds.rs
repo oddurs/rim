@@ -108,6 +108,10 @@ fn mod_kind_conflicts_and_schema_errors() {
     // A bare kind name only means the mod's own kind.
     let s = load("kind-bare", KIND, "[[spell]]\nid = \"x\"\nlabel = \"x\"\nmana = 1\n", "").expect("loads");
     assert!(s.warnings.iter().any(|w| w.contains("unknown def kind 'spell' ignored (did you mean [[magic.spell]]?)")));
+
+    // Quoted, a kind nobody declared is ignored as the dotted form is.
+    let s = load("kind-quoted", KIND, "[[\"magic:nope\"]]\nid = \"x\"\n", "").expect("loads");
+    assert!(s.warnings.iter().any(|w| w.contains("unknown def kind 'magic:nope' ignored")), "{:?}", s.warnings);
 }
 
 #[test]
