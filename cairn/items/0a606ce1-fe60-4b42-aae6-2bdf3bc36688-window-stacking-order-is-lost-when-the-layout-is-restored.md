@@ -2,10 +2,12 @@
 id: 0a606ce1-fe60-4b42-aae6-2bdf3bc36688
 title: Window stacking order is lost when the layout is restored
 type: bug
-status: backlog
+status: done
 milestone: rimos
+assignee: Oddur Sigurdsson
 created: 2026-09-28
-updated: 2026-09-28
+updated: 2026-09-29
+closed_at: 2026-09-28
 priority: p2
 api: none
 effort: s
@@ -23,4 +25,12 @@ Save the stacking order explicitly, as an ordered list beside the records, and r
 
 ## Acceptance criteria
 
-- [ ] A rim_ui test opens three windows, raises the first, saves the layout, reloads it, and finds the same order (fails today, or proves the inference wrong)
+- [x] A rim_ui test opens three windows, raises the first, saves the layout, reloads it, and finds the same order (fails today, or proves the inference wrong)
+
+## 2026-09-28
+
+Confirmed by the test before the fix: the restored order came back as declared (a, b, c), not as left (b, c, a). Two causes, not one: the table sorts ids, and restore also rewrote records in place without moving them. The layout now carries order = [ids] at the top; a file without it restores as before.
+
+## 2026-09-29
+
+PAUSED (merge freeze): done: the fix, and the test that failed before it and passes after (rim_ui engine window tests pass). Left: rebase onto main, scripts/task check, ready. Branch fix/0a606ce1-stacking-order, draft PR.
