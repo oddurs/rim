@@ -102,3 +102,26 @@ fn nothing_is_hauled_onto_a_planned_wall() {
     }
     assert!(sim.world.map.item_at(site).is_none(), "no stack under the wall");
 }
+
+/// A wall planned over a stack doesn't bury it: the stack moves off before
+/// the wall goes up, and the rest of the row still gets its wood (ff97096d).
+#[test]
+fn a_wall_planned_over_a_stack_moves_it_rather_than_burying_it() {
+    let (mut sim, pawn, site) = colony();
+    let defs = sim.world.defs.clone();
+    let (wood, wall) = (defs.thing_id("wood").unwrap(), defs.thing_id("wall").unwrap());
+    let build = defs.lookup("work_type", "core:build").unwrap();
+    sim.push(Command::SetPriority { pawn, work: build, level: 1 });
+    // All the row's wood lies on its middle cell.
+    let row: Vec<IVec> = (0..3).map(|x| site.offset(x, 1)).collect();
+    assert_eq!(sim.world.put_lot(rim_sim::world::Lot::new(wood, 40), row[1]), 0);
+    sim.push(Command::Build { thing: wall, stuff: Some(wood), a: row[0], b: row[2], facing: 0 });
+    for _ in 0..12_000 {
+        sim.step();
+        for &p in &row {
+            let walled = sim.world.map.fixture_at(p).is_some_and(|f| sim.world.ecs.get::<&Blueprint>(f).is_err());
+            assert!(!(walled && sim.world.map.item_at(p).is_some()), "a wall stands over a stack at {p:?}");
+        }
+    }
+    assert_eq!(sim.world.ecs.query::<&Blueprint>().iter().count(), 0, "the whole row is built");
+}
