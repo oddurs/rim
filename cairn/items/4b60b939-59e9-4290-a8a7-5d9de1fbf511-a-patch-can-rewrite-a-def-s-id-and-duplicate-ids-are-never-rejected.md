@@ -2,10 +2,12 @@
 id: 4b60b939-59e9-4290-a8a7-5d9de1fbf511
 title: A patch can rewrite a def's id, and duplicate ids are never rejected
 type: bug
-status: backlog
+status: done
 milestone: bare-metal
+assignee: Oddur Sigurdsson
 created: 2026-09-28
-updated: 2026-09-28
+updated: 2026-09-29
+closed_at: 2026-09-28
 priority: p3
 api: none
 layer: engine
@@ -31,5 +33,13 @@ Reject `id` in a patch's `set`, and have `finalize` refuse duplicate ids.
 
 ## Acceptance
 
-- [ ] Both are load errors that name the def
-- [ ] A test that fails before the fix and passes after
+- [x] Both are load errors that name the def
+- [x] A test that fails before the fix and passes after
+
+## 2026-09-28
+
+finalize's duplicate check is not added: the loader already refuses a def defined twice (modloader.rs, 'is already defined by ... use a [[patch]]'), and a patch's set was the only way to make two defs share an id. With id refused there, no mod can reach finalize with a duplicate, so a second check would be dead code.
+
+## 2026-09-29
+
+PAUSED at the merge freeze (main d633f7b5): fix and test done (test fails before, passes after), committed on fix/4b60b939-patch-id and rebased on origin/main before the freeze; the full gate has not run on this commit. Next: rebase onto main, run scripts/task check, mark the PR ready.

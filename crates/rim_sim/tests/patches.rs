@@ -186,3 +186,14 @@ fn guide_samples_load() {
     let bush = d.thing(d.thing_id("berry_bush").unwrap());
     assert_eq!(bush.harvest[0].regrow_days, 1.5);
 }
+
+/// A def's id is what everything else finds it by: a patch that renamed a
+/// wall to `core:floor` made two things with one id (4b60b939).
+#[test]
+fn a_patch_cannot_change_a_def_s_id() {
+    for id in ["core:floor", "wall2"] {
+        let patch = format!("[[patch]]\ntarget = \"thing/core:wall\"\nset = {{ id = \"{id}\" }}\n");
+        let err = load("patch-id", &patch, "").err().expect("a patch that sets id fails to load");
+        assert!(err.contains("aa/defs/p.toml: a patch can't change the id of thing/core:wall"), "{err}");
+    }
+}
