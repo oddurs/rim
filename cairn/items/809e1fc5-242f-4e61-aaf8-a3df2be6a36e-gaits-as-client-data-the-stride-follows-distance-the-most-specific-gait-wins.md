@@ -8,7 +8,7 @@ depends_on:
 - 535a1fb9-2cd8-4798-b31c-04f89fb1aee0
 - bf3079fb-0d7d-4db7-8f46-f19f97e110dd
 created: 2026-09-27
-updated: 2026-09-27
+updated: 2026-09-29
 priority: p0
 api: additive
 pillar:
@@ -74,3 +74,7 @@ hold = "shoulder"
 - [ ] Reduce motion rests every channel (test)
 - [ ] The autotest shows walk, carry_bulky and limp at the detail zoom
 - [ ] docs/modding/bodies.md documents gaits and the facts
+
+## 2026-09-29
+
+PAUSED (Bare Metal freeze, 2026-09-29). Done: rim_ui::gait (ui/gaits.toml loader, Facts, chooser with specificity and tie report, need ids qualified by the gait's mod), core's seven gaits, Strides (phase by distance drawn, jumps ignored) and breath by sim tick in motion.rs, Pose in figures.rs moving stride/swing/sway/lean parts, reduce_motion rests every channel, rim check validates gaits.toml, the guide section in docs/modding/bodies.md, tests (gait: 4, figures: stride and still, motion: speed-independence and paused), and an autotest section shooting walk, carry_bulky and limp. Left: rebase onto main (the autotest is now a module per section, #345; draw.rs uses app.now, #351), the gate and the autotest, then the PR. Next step: rebase and move the gaits autotest section into its own module. Branch: feat/809e1fc5-gaits, one commit 7f9d269c on the old bodies commit 9c9a93f7; draft PR once a gate slot allows the push.
