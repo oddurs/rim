@@ -261,6 +261,11 @@ pub struct SavedFields {
     /// other fields, and for one not worked out yet.
     #[serde(default)]
     pub stock: Vec<Vec<i32>>,
+    /// Per field, the outdoor value on each level below the surface, as
+    /// last worked out: the next ambient update is up to
+    /// `AMBIENT_INTERVAL` ticks away. Empty in older saves.
+    #[serde(default)]
+    pub below: Vec<Vec<i32>>,
 }
 
 pub struct Layer {
@@ -890,6 +895,7 @@ impl Fields {
             pending_carry: map.room_rebuilds != self.seen_rebuilds || map.rooms_dirty(),
             room_ids: map.carry_from(self.seen_rebuilds).to_vec(),
             stock: self.layers.iter().map(|l| l.stock.clone()).collect(),
+            below: self.layers.iter().map(|l| l.below.clone()).collect(),
         }
     }
 
@@ -906,6 +912,9 @@ impl Fields {
         // out afresh from its init terms (`ensure_stock`).
         for (l, stock) in self.layers.iter_mut().zip(s.stock) {
             l.stock = stock;
+        }
+        for (l, below) in self.layers.iter_mut().zip(s.below) {
+            l.below = below;
         }
         self.last_clock = s.last_clock;
         // Bodies aren't saved: they follow from the tick they were last

@@ -927,6 +927,8 @@ impl Snapshot {
             fields.rooms = (0..n).map(|j| pick(j).map_or(fresh.rooms[j].clone(), |i| old.rooms[i].clone())).collect();
             fields.stock =
                 (0..n).map(|j| pick(j).and_then(|i| old.stock.get(i).cloned()).unwrap_or_default()).collect();
+            fields.below =
+                (0..n).map(|j| pick(j).and_then(|i| old.below.get(i).cloned()).unwrap_or_default()).collect();
         }
         // Under other defs the map itself may differ (a removed mod's walls
         // are gone), so room values are carried over cell by cell.

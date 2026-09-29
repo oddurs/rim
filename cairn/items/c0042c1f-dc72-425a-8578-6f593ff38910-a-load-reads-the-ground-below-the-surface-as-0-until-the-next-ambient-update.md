@@ -2,11 +2,12 @@
 id: c0042c1f-dc72-425a-8578-6f593ff38910
 title: A load reads the ground below the surface as 0 until the next ambient update
 type: bug
-status: doing
+status: done
 milestone: bare-metal
 assignee: Oddur Sigurdsson
 created: 2026-09-28
 updated: 2026-09-28
+closed_at: 2026-09-28
 priority: p1
 api: none
 layer: engine
@@ -33,5 +34,5 @@ A world with levels (tests/depth.rs): step to a tick with `tick % 20 != 0`, capt
 
 ## Acceptance
 
-- [ ] The loaded game's below-surface outdoor values equal the live game's at any save tick
-- [ ] A test that fails before the fix and passes after
+- [x] The loaded game's below-surface outdoor values equal the live game's at any save tick
+- [x] A test that fails before the fix and passes after
