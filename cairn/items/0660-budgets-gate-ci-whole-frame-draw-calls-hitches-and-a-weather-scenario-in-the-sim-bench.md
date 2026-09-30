@@ -29,7 +29,7 @@ The budgets in the Bare Metal milestone mean nothing unless CI fails when they'r
 
 - [ ] The queue lane fails when a planted regression breaks a frame, draw-call or hitch budget
 - [ ] The sim bench's weather scenario runs in CI and fails a planted slow path search
-- [ ] The budgets live in one data file that the bench and the docs both read
+- [x] The budgets live in one data file that the bench and the docs both read
 
 ## 2026-09-28
 
@@ -38,3 +38,11 @@ Part A (the sim). budgets.toml at the repo root holds each budget's target (the 
 ## 2026-09-28
 
 Correction to the note above: the 45-56 ms 'most in pawns' ticks with no search were load, not code. A second run's worst winter tick was 4.6 ms, and quiet-field saw the same vanish at lower load. What the thaw does show is even-cost floods: snow and mud make nearly every step about 1.8x what A*'s heuristic assumes, a different mechanism from a708c037's lake floods (quiet-field, 2026-09-28).
+
+## 2026-09-28
+
+Part B. budgets.toml gains render.gpu and render.software: world CPU on the gated views, the whole frame's p99 and worst, hitches and draw calls, each the worst view's; the bench picks the section by its GL renderer. gpu caps hold today's Mac (M4 Pro, medium: lit views 14-17 ms with 65 ms hitches) and carry the plan's targets; software caps hold today's CI llvmpipe on AMD EPYC 9V74 (frame 70-142 ms, 130-140 calls, no hitches). That class's slack is 1.0: the software caps are set on it and it plays the sim as fast as the M4 Pro; others keep 3. rim --bench-render --check reads it and exits 1 over any cap; the old 4 ms constant is gone. docs/engineering/benchmarks.md's Budgets table is written from budgets.toml by tests/budgets_doc.rs (RIM_UPDATE_DOCS=1 rewrites it), which fails when they differ (criterion 3).
+
+## 2026-09-28
+
+Also --sync (asked for by rim-c2): glFinish before each present, so a frame's wall time is its CPU and GPU cost with nothing queued. On the Mac, where GL has no timer, it tells a GPU-bound view (the lit views' 14-17 ms median with 65 ms frames every two or three) from a real hitch.
