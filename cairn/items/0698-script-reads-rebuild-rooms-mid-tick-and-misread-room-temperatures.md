@@ -3,10 +3,12 @@ id: 698
 uid: f0e576e3-318f-4062-877f-5debfc268819
 title: Script reads rebuild rooms mid-tick and misread room temperatures
 type: bug
-status: backlog
+status: done
 milestone: bare-metal
+assignee: Oddur Sigurdsson
 created: 2026-09-28
 updated: 2026-09-28
+closed_at: 2026-09-28
 priority: p2
 api: none
 layer: engine
@@ -33,5 +35,5 @@ Script reads see rooms as built at the start of the step, as `has_shelter` does:
 
 ## Acceptance
 
-- [ ] A script read never rebuilds rooms mid-tick
-- [ ] A test that fails before the fix and passes after
+- [x] A script read never rebuilds rooms mid-tick
+- [x] A test that fails before the fix and passes after

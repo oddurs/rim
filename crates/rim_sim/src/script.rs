@@ -1195,7 +1195,9 @@ impl ScriptHost {
             |w, from, (id, x, y, z)| {
                 let f = field_id(w, &id, &from)?;
                 let p = cell(w, x, y, z)?;
-                w.map.ensure_rooms();
+                // Rooms as built at the start of the step, as the engine reads
+                // them (`World::has_shelter`): rebuilding them now would
+                // renumber rooms under the fields' room values.
                 w.map.ensure_near();
                 let defs = w.defs.clone();
                 Ok(w.fields.value(&defs, &w.map, f, p))
@@ -1472,7 +1474,6 @@ impl ScriptHost {
             (i32, i32, Option<i32>),
             |w, (x, y, z)| {
                 let p = cell(w, x, y, z)?;
-                w.map.ensure_rooms();
                 Ok(w.map.indoors(p))
             }
         );
@@ -1482,7 +1483,6 @@ impl ScriptHost {
             let f = lua.create_function(move |lua, (x, y, z): (i32, i32, Option<i32>)| {
                 let room = with_world(&ptr, |w| {
                     let p = cell(w, x, y, z)?;
-                    w.map.ensure_rooms();
                     w.ensure_roles();
                     Ok(w.map.room_at(p).map(|r| (r, w.room_role(p).map(|d| w.defs.room_roles[d as usize].clone()))))
                 })?;
