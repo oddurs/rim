@@ -142,3 +142,40 @@ fn scripts_read_the_stock_by_thing_tag_and_category() {
     assert!(wood_now >= before_wood + 30 && s.world.stock.on_map(stone) == before_stone + 12);
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// `rim.damage` wears a stack as spoiling does: a zone that keeps it only
+/// in good condition stops keeping it, and the ledger knows.
+#[test]
+fn a_script_damaging_a_stack_keeps_the_ledger() {
+    let script = r#"
+        rim.every(5, function()
+            local id = rim.get_data("target")
+            if id and not rim.get_data("done") then
+                rim.damage(id, rim.get_data("hp"))
+                rim.set_data("done", true)
+            end
+        end)
+    "#;
+    let dir = test_mods("stock-damage", &["core"], &[("probe", &[("scripts/probe.luau", script)])]);
+    let mut s = Sim::new(&dir, 1).unwrap();
+    let c = s.world.colony_center().unwrap();
+    let wood = s.world.defs.thing_id("wood").unwrap();
+    let open = (1..30).map(|r| c.offset(r, r)).find(|&p| s.world.room_for(wood, None, p) >= 75).unwrap();
+    s.world.put_lot(Lot::new(wood, 30), open);
+    s.push(Command::Stockpile { a: open, b: open, zone: None });
+    s.push(Command::StoreFilter { store: StoreRef::Zone(1), edit: FilterEdit::Condition { min: 50, max: 100 } });
+    s.step();
+    let stack = s.world.map.item_at(open).unwrap();
+    assert!(s.world.stock.stored(wood) >= 30, "kept while whole");
+    let hp = s.world.defs.full_hp(wood, None) * 3 / 4;
+    let id = rim_sim::data::Data::Int(stack.to_bits().get() as i64);
+    s.world.data.insert("probe:target".into(), id);
+    s.world.data.insert("probe:hp".into(), rim_sim::data::Data::Int(hp as i64));
+    for _ in 0..10 {
+        s.step();
+    }
+    assert!(s.world.data.contains_key("probe:done"), "{:?}", s.world.messages);
+    assert!(s.world.thing(stack).is_some_and(|t| t.hp > 0), "worn, not destroyed");
+    assert_eq!(s.world.stock, s.world.counted_stock());
+    let _ = std::fs::remove_dir_all(dir);
+}

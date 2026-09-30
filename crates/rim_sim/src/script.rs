@@ -1809,9 +1809,9 @@ impl ScriptHost {
                 let e = rim_sim_entity(id)?;
                 let Some(t) = w.thing(e) else { return Ok(false) };
                 if t.hp - hp.max(0) > 0 {
-                    if let Ok(mut t) = w.ecs.get::<&mut crate::world::Thing>(e) {
-                        t.hp -= hp.max(0);
-                    }
+                    // Through the ledger: a store may keep a stack at one
+                    // condition and not another.
+                    w.set_stack_hp(e, t.hp - hp.max(0));
                     w.map.touch(t.pos);
                     return Ok(false);
                 }
