@@ -79,3 +79,7 @@ Sweep after, on the frame clock: seeds 1–16 all pass, 392 checks each.
 ## 2026-09-29
 
 PAUSED 2026-09-29: done: the audit (notes above), the frame clock (#351), the autotest on any map (#356: seeds 1-16 pass), all merged. Left: criterion 2, the nightly running the autotest on more seeds; criterion 3, 20 queue-lane runs with no failure the change didn't cause, which only time shows. Next step: after #342 lands, add two autotest runs to ci.yml's Client job, nightly lane only, on seeds 3 and 11, each with its own screenshot dir (agreed with the merger), then watch the nightlies. Branch: none yet; start from main.
+
+## 2026-09-29
+
+Nightly seeds (this PR): the Client job's nightly lane runs the autotest on seeds 3 and 11 after seed 7, both whatever the first does, screenshots in target/autotest-3 and -11 in the same artifact. The job's timeout is 35 minutes on the nightly, 20 elsewhere: the autotest takes about 4.5 minutes on CI. Criterion 2 is ticked when a nightly passes all three.
