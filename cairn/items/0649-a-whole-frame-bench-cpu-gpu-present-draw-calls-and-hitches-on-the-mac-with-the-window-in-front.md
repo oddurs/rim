@@ -3,11 +3,12 @@ id: 649
 uid: 8d8bad33-511f-441e-b8ec-f9b0b03732db
 title: 'A whole-frame bench: CPU, GPU, present, draw calls and hitches, on the Mac with the window in front'
 type: perf
-status: doing
+status: done
 milestone: bare-metal
 assignee: rapid-cloud
 created: 2026-09-28
-updated: 2026-09-29
+updated: 2026-10-02
+closed_at: 2026-10-02
 priority: p0
 api: none
 effort: m
@@ -28,9 +29,9 @@ CI gates only world CPU, 0.4 to 2.6 ms, while submit costs 47 to 77 ms and GPU t
 
 ## Acceptance criteria
 
-- [ ] The bench prints whole-frame p50/p99, submit, GPU and hitches per view
+- [x] The bench prints whole-frame p50/p99, submit, GPU and hitches per view
 - [x] The HUD shows the live frame budget in the running game
-- [ ] Today's Mac baseline is recorded (every bench view, lighting medium), and CI's two runner classes are named in the bench output
+- [x] Today's Mac baseline is recorded (every bench view, lighting medium), and CI's two runner classes are named in the bench output
 
 ## 2026-09-28
 
@@ -39,3 +40,7 @@ First PR. rim --bench-render adds a whole-frame table per view: the wall time fr
 ## 2026-09-29
 
 PAUSED: done: the whole-frame bench, F3's frame line and scripts/bench-front are merged (#350); criterion 1 met by #350's CI run 36490998751 (whole frame 69-130 ms per view, 0 hitches, machine: AMD EPYC 9V74); criterion 2 met (the autotest's profiler shot); the Mac baseline taken 2026-09-28 (M4 Pro, window in front, medium: the six plain views 8.33 ms at 120 Hz with no hitches; stacked/below/moving/dusk 13.8-17.0 ms median, 62-67 ms p99, 119-125 hitches in 300 frames, rest 21.7-24.2 ms; flat held every view at 8.33 ms, 0 hitches), sent to rim-c2 for the user's doc. Left: criterion 3 also asks CI's two runner classes to be named; every run so far landed on AMD EPYC 9V74. Next step: from the first CI bench output on another class, note both classes here, tick 1-3 and close (cairn only). Branch: none; this note rides docs/8d8bad33-mac-baseline.
+
+## 2026-10-02
+
+CI's runner classes, named from the machine line in bench output: AMD EPYC 9V74 (the class the software caps were set on), AMD EPYC 7763 (render and sim within a few percent of the 9V74: sim base mean 0.072 against 0.071 ms, CI runs 36979778819 and 36831929999; flat frame p99 120-130 against 103-131 ms), INTEL XEON PLATINUM 8573C (36654840214) and AMD EPYC 9V45 (36654012178, the fastest). The 7763 gets slack 1.25 in budgets.toml (this PR); the others keep 3 until measured. Criterion 1 met by #350's CI run 36490998751 (earlier note); criterion 3's Mac baseline is in the 2026-09-29 note.

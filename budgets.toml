@@ -55,9 +55,9 @@ mesh_change_ms = { target = 1.0, cap = 3.0 }
 # meshes (#390) took the worst view from 140 draw calls to 65, and a wall's
 # repaint and join to 1.96 ms, on EPYC 7763 (2026-09-29).
 [render.software]
-# The moving view's world time is bimodal on CI, about 0.9 or 4-5 ms for one
-# commit (its light pass), so the cap sits above the slow mode.
-world_ms = { target = 2.0, cap = 6.0 }
+# World time: the moving view's light pass ran 0.9 or 4-5 ms under medium
+# lighting; under flat (#405) the worst gated view is 1.40 ms in 11 runs.
+world_ms = { target = 2.0, cap = 2.0 }
 frame_p99_ms = { target = 70.0, cap = 155.0 }
 frame_max_ms = { target = 80.0, cap = 165.0 }
 hitches = { target = 0.0, cap = 10.0 }
@@ -69,3 +69,6 @@ slack = 3.0
 # The software caps are set on this class, and it plays the sim about as
 # fast as the M4 Pro the sim caps come from.
 class."AMD EPYC 9V74" = { slack = 1.0, note = "measured 2026-09-28" }
+# Within a few percent of the 9V74 on both benches (sim base mean 0.072 against
+# 0.071 ms; flat frame p99 120-130 against 103-131 ms), with room for its noise.
+class."AMD EPYC 7763" = { slack = 1.25, note = "measured 2026-10-02" }
