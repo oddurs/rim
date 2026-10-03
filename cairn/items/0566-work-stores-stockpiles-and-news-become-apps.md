@@ -29,3 +29,4 @@ They become apps that open maximised in the free area the first time, then remem
 
 - [ ] Work and Stores can be open side by side, snapped left and right (autotest)
 - [ ] Their keys still toggle them; research's screen works unchanged
+- [ ] The render_cost check in autotest/ui.rs opens all six core windows at once and asserts all six are open (today it asks for three, since sheets are one at a time), still with no more draw calls than none

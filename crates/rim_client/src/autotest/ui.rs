@@ -325,6 +325,37 @@ pub(super) async fn render_cost(t: &mut T) {
     let calls = macroquad::telemetry::drawcalls().len();
     macroquad::telemetry::disable();
     println!("normal zoom, HUD open: {calls} draw calls");
+    // Windows clip without ending the UI's draw call (3442707f): with as
+    // many windows open as the core mod allows, each with its own clip and
+    // scroll areas, the UI's only extra draw calls are for size (a mesh
+    // holds 15k vertices; the kit gallery alone outgrows one), never for a
+    // clip. Sheets are one at a time, so that is the last sheet, the
+    // palette and the gallery; all six once sheets are apps (0e773a3e).
+    let (alone, _) = crate::draw::ui_calls();
+    let wins = ["core:stores", "core:work", "core:zones", "core:news", "core:palette", "core:gallery"];
+    for w in wins {
+        t.app.ui.open_window(w);
+    }
+    t.settle().await;
+    let open = wins.iter().filter(|w| t.app.ui.is_open(w)).count();
+    macroquad::telemetry::enable();
+    macroquad::telemetry::capture_frame();
+    t.frame().await;
+    t.frame().await;
+    let with = macroquad::telemetry::drawcalls().len();
+    macroquad::telemetry::disable();
+    let (ui_calls, full) = crate::draw::ui_calls();
+    t.shot("three_windows").await;
+    println!("normal zoom, HUD and {open} windows open: {with} draw calls; the UI {ui_calls} ({full} for size), {alone} with none open");
+    t.check(
+        open >= 3 && alone == 1 && ui_calls == full + 1,
+        format!("{open} windows open split the UI's draw call only for size ({ui_calls} calls, {full} for size)"),
+    );
+    for w in wins {
+        t.app.ui.close_window(w);
+    }
+    t.settle().await;
+    t.check(wins.iter().all(|w| !t.app.ui.is_open(w)), "and they all close again");
 }
 
 /// UI budget, live
