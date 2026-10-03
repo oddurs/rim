@@ -302,3 +302,25 @@ fn the_chop_on_offer_needs_an_axe_to_hand() {
     assert!(matches!(o.job, rim_sim::world::Job::Harvest { tool: Some(t), .. } if t == axe), "fetching the axe first");
     assert!(o.reserve.contains(&axe), "and claiming it");
 }
+
+#[test]
+fn a_claimed_axe_is_looked_for_once_a_choice_not_once_a_tree() {
+    use std::sync::atomic::Ordering::Relaxed;
+    let (mut s, founder) = alone(&kit("tools-asked-once"));
+    // The colony's only axe is claimed by something else, so every tree
+    // marked is refused for want of a free one.
+    let (axe, _) = place_away(&mut s, "axe", founder, 5);
+    let trees = oaks(&s, 30);
+    s.world.reservations.insert(axe, trees[0].0);
+    for &(_, at) in &trees {
+        chop(&mut s, at);
+    }
+    s.step();
+    let before = s.world.tool_scans.load(Relaxed);
+    for _ in 0..100 {
+        s.step();
+    }
+    let scans = s.world.tool_scans.load(Relaxed) - before;
+    // Once a tree, it was 30.
+    assert!(scans * 2 < trees.len() as u64, "{scans} looks for {} trees", trees.len());
+}

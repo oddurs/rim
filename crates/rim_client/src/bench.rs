@@ -744,8 +744,13 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
             if let Some(river) = defs.terrain.iter().position(|t| t.pours > 0) {
                 let wall = IVec::at(at.x - 1, at.y + STACKED / 2, -1);
                 app.sim.world.map.set_terrain(wall, river as rim_sim::defs::DefId, 0);
-                for _ in 0..2_000 {
+                for i in 0..2_000 {
                     app.sim.step();
+                    // Seconds of steps: a frame now and then answers the
+                    // window, which would beachball otherwise (0646).
+                    if i % 100 == 99 {
+                        next_frame().await;
+                    }
                 }
             }
         }
