@@ -6,8 +6,8 @@
 #   code       true unless the change touches only cairn items and top-level
 #              Markdown (tests read the guides in docs/modding/, so those count)
 #   render     whether the render benchmark runs: in every lane but a PR's, and
-#              in a PR that touches the client or the lockfile (a bench run
-#              takes ten minutes under software GL)
+#              in a PR that touches the client, the lockfile or budgets.toml
+#              (a bench run takes ten minutes under software GL)
 #   toolchain  the Rust version rust-toolchain.toml pins
 #
 # Reads the GitHub event from the environment: EVENT, DRAFT, HEAD_REF, LABELS
@@ -43,7 +43,7 @@ if [ "$lane" = pr ]; then
   if [ -n "$changed" ] && ! grep -qvE '^(cairn/|[^/]+\.md$)' <<<"$changed"; then
     code=false
   fi
-  grep -qE '^(crates/rim_client/|Cargo\.lock$)' <<<"$changed" || render=false
+  grep -qE '^(crates/rim_client/|Cargo\.lock$|budgets\.toml$)' <<<"$changed" || render=false
 fi
 
 toolchain=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' rust-toolchain.toml)
