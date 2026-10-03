@@ -858,6 +858,20 @@ fn choose_work(w: &World, e: Entity, p: &Pawn, mut why: Option<&mut Refusals>) -
     // while the colony has none, and a comfort (a fire) while it has none,
     // and clearing the ground for either.
     let (shelterless, comfortless) = (std::cell::OnceCell::new(), std::cell::OnceCell::new());
+    // Each job that needs a tool asked for one afresh: a look over every
+    // tool, with a reach test each, per job, so a colony whose only axe is
+    // claimed spent 58 ms a tick refusing trees (0646). The world doesn't
+    // change while a colonist chooses, so each need is asked once.
+    let have = w.colony_tools();
+    let asked = std::cell::RefCell::new(Vec::new());
+    let tool = |need: ToolMask| {
+        if let Some(&(_, found)) = asked.borrow().iter().find(|(n, _)| *n == need) {
+            return found;
+        }
+        let found = tool_for(w, e, p, need, have);
+        asked.borrow_mut().push((need, found));
+        found
+    };
     let urgent_build = |thing: DefId| {
         let td = defs.thing(thing);
         ((td.blocks || td.door || td.bed.is_some()) && *shelterless.get_or_init(|| !w.has_shelter()))
@@ -911,7 +925,7 @@ fn choose_work(w: &World, e: Entity, p: &Pawn, mut why: Option<&mut Refusals>) -
                     // A build that needs a tool fetches it first; the walk
                     // there counts, as a material's does.
                     let need = w.build_requires(be);
-                    match tool_for(w, e, p, need, w.colony_tools()) {
+                    match tool(need) {
                         Some((extra, tool)) => {
                             best[bw as usize] = Some((k + extra, Job::Construct { bp: be, tool }, be));
                             break;
@@ -942,7 +956,6 @@ fn choose_work(w: &World, e: Entity, p: &Pawn, mut why: Option<&mut Refusals>) -
     // Designated fixtures: harvest the natural ones, take down the built ones.
     // Gated harvests need a tool: what the colony's tools cover is worked
     // out once, so one nobody could do costs a mask test.
-    let have = w.colony_tools();
     for (te, t, des) in w.ecs.query::<(Entity, &Thing, &Designated)>().without::<&Blueprint>().iter() {
         let dd = &defs.designations[des.0 as usize];
         let wt = designated_work(w, te, dd.work_r);
@@ -962,7 +975,7 @@ fn choose_work(w: &World, e: Entity, p: &Pawn, mut why: Option<&mut Refusals>) -
         let (job, detour) = match dd.targets {
             Targets::Built => (Job::Deconstruct { target: te }, 0),
             _ => match defs.thing(t.def).harvest_for(des.0) {
-                Some(h) if w.harvest_ready(te, h.key()) => match tool_for(w, e, p, h.requires_r, have) {
+                Some(h) if w.harvest_ready(te, h.key()) => match tool(h.requires_r) {
                     Some((extra, tool)) => (Job::Harvest { target: te, forced: false, harvest: h.key(), tool }, extra),
                     None => {
                         if let Some(r) = why.as_deref_mut() {
@@ -1011,7 +1024,7 @@ fn choose_work(w: &World, e: Entity, p: &Pawn, mut why: Option<&mut Refusals>) -
             }
             None => defs
                 .tool_mask(&o.requires)
-                .and_then(|need| tool_for(w, e, p, need, have))
+                .and_then(tool)
                 .map(|(extra, tool)| (d + extra, Job::Craft { site: se, tool })),
         };
         match job.map(|(dist, job)| (key(dist, false, mark), job)) {

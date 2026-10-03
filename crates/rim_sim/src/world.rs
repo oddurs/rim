@@ -915,6 +915,9 @@ pub struct World {
     pub messages: Vec<Message>,
     pub events: Vec<GameEvent>,
     pub pf: Pathfinder,
+    /// Times `nearest_tool` looked over every tool: each is a reach test
+    /// per tool, so the benches and tests count them.
+    pub tool_scans: std::sync::atomic::AtomicU64,
     /// The tick the land last changed, while the pathfinder's landmarks
     /// wait to catch up (`follow_land`); saved, so a loaded game switches
     /// on the same tick as the one that never saved.
@@ -1029,6 +1032,7 @@ impl World {
             tick: 0,
             pawns: Vec::new(),
             reservations: HashMap::new(),
+            tool_scans: Default::default(),
             messages: Vec::new(),
             events: Vec::new(),
             pf: Pathfinder::default(),
@@ -2294,6 +2298,7 @@ impl World {
     /// The nearest tool lying about that covers `need`, reachable from
     /// `from`, that nobody but `by` has claimed.
     pub fn nearest_tool(&self, by: Entity, from: IVec, need: ToolMask) -> Option<(u32, Entity)> {
+        self.tool_scans.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let mut best: Option<(u32, Entity)> = None;
         for &t in &self.tools {
             if self.tool_tags(t) & need != need || self.ecs.get::<&Held>(t).is_ok() || self.reserved_by_other(t, by) {
