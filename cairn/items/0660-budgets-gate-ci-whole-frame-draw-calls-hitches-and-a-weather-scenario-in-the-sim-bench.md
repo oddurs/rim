@@ -3,11 +3,12 @@ id: 660
 uid: a1fe6816-88bf-41a0-bef7-ac3741032db8
 title: 'Budgets gate CI: whole frame, draw calls, hitches, and a weather scenario in the sim bench'
 type: perf
-status: doing
+status: done
 milestone: bare-metal
 assignee: rapid-cloud
 created: 2026-09-28
-updated: 2026-09-28
+updated: 2026-10-02
+closed_at: 2026-10-02
 priority: p0
 api: none
 effort: m
@@ -27,8 +28,8 @@ The budgets in the Bare Metal milestone mean nothing unless CI fails when they'r
 
 ## Acceptance criteria
 
-- [ ] The queue lane fails when a planted regression breaks a frame, draw-call or hitch budget
-- [ ] The sim bench's weather scenario runs in CI and fails a planted slow path search
+- [x] The queue lane fails when a planted regression breaks a frame, draw-call or hitch budget
+- [x] The sim bench's weather scenario runs in CI and fails a planted slow path search
 - [x] The budgets live in one data file that the bench and the docs both read
 
 ## 2026-09-28
@@ -46,3 +47,7 @@ Part B. budgets.toml gains render.gpu and render.software: world CPU on the gate
 ## 2026-09-28
 
 Also --sync (asked for by rim-c2): glFinish before each present, so a frame's wall time is its CPU and GPU cost with nothing queued. On the Mac, where GL has no timer, it tells a GPU-bound view (the lit views' 14-17 ms median with 65 ms frames every two or three) from a real hitch.
+
+## 2026-10-02
+
+Criterion 1: run 36655620808 dispatched the queue lane on a throwaway branch (44a3f576, deleted since) that planted a 300 ms stall every seventh frame and 80 unbatchable draw calls. Its render bench exited 1: render.software.draw_calls 145 over its cap of 70, hitches 15 over 10. Frame p99 (444 ms) stayed under the 7763's slack-3 caps (465/495), which is why this PR gives the 7763 slack 1.25: at 1.25 the same stall fails frame p99 and max too. Criterion 2: CI runs the winter bench with --check on every lane that runs the sim (nightly 36979778819: 'bench: sim.winter within budgets.toml'), and the planted blind search failed it locally (part A note). A blind search can't reach CI: the same plant fails landmarks::round_a_lake_searches_expand_less_and_find_paths_as_short in the gate (tried 2026-10-02), so the suite catches it first.

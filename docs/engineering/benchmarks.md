@@ -78,7 +78,7 @@ busy machine; counts of work (`max_nodes`, `nodes_per_search`, `hitches`,
 | `render.software.frame_p99_ms` | 70 | 155 |
 | `render.software.hitches` | 0 | 10 |
 | `render.software.mesh_change_ms` | 1 | 3 |
-| `render.software.world_ms` | 2 | 6 |
+| `render.software.world_ms` | 2 | 2 |
 
-On CI, a time (`_ms`) is held to its cap times the runner class's slack: 1 on AMD EPYC 9V74, 3 on any other.
+On CI, a time (`_ms`) is held to its cap times the runner class's slack: 1.25 on AMD EPYC 7763, 1 on AMD EPYC 9V74, 3 on any other.
 <!-- budgets.toml: end -->
