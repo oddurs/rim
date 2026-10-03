@@ -30,6 +30,7 @@ mod roomstate;
 mod save;
 mod seedcmd;
 mod settings;
+mod shade;
 mod sky;
 mod title;
 mod tools;

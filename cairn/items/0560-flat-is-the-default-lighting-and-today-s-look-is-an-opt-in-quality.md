@@ -52,3 +52,7 @@ Folded in, at rim-c2's call so ui_api is bumped once: act.lighting, the two pale
 ## 2026-09-29
 
 Criteria 1 and 2 ticked with the PR: quality::flat_is_the_default_and_shadows_the_one_choice and the autotest's flat_is_the_default. Criterion 3 stays open: the CI side-by-side comes from this PR's queue run, and the 5-minute foreground Mac run needs the user's OK. Rebased over #386: api 0.8 and ui_api 0.7 in every mod.
+
+## 2026-09-29
+
+PAUSED: merged as #405 (d633f7b5). Left: criterion 3, the 5-minute foreground Mac run of the default, which needs the user's OK; the CI side-by-side is in #405's queue run. Next step: ask rim-c2 for a bench slot and the user's OK, run it, tick 3, close.

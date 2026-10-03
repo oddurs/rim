@@ -501,9 +501,15 @@ async fn side_by_side(app: &mut App, time: &mut f64, dir: &Path, centre: IVec) {
     pin(app, CLEAR);
     // The first lamp stands five cells into the colony's corner room.
     let hut = centre.offset(-COLONY / 2 + 5, -COLONY / 2 + 5);
-    for (name, hour, at, zoom) in
-        [("noon", 12.0, centre, 28.0), ("dusk", 17.25, centre, 28.0), ("hut", 22.0, hut, 48.0)]
-    {
+    // Where the colony's corner meets the wild: its houses on one side,
+    // trees and rock on the other.
+    let edge = centre.offset(-COLONY / 2 - 12, -COLONY / 2 - 4);
+    for (name, hour, at, zoom) in [
+        ("noon", 12.0, edge, 28.0),
+        ("afternoon", 15.5, edge, 28.0),
+        ("dusk", 17.25, edge, 28.0),
+        ("hut", 22.0, hut, 48.0),
+    ] {
         app.sim.world.tick = tick_at_hour(app.sim.world.tick, hour);
         for _ in 0..TERMS_EVERY {
             app.sim.step();
@@ -812,11 +818,15 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
         draw_one(&mut app, &mut time, None).await;
         let shot = shots.as_ref().map(|d| d.join(format!("{}.png", v.name.replace(' ', "_").replace('%', ""))));
         draw_one(&mut app, &mut time, shot.as_deref()).await;
-        // Macroquad's capture sees its own batches; the chunk meshes and the
-        // pawns' figures are drawn past it and count themselves.
+        // Macroquad's capture sees its own batches; the chunk meshes, the
+        // pawns' figures and the shadow shapes are drawn past it and count
+        // themselves.
         let calls = telemetry::drawcalls();
-        r.calls = calls.len() + app.meshes.calls + app.figures.calls;
-        r.indices = calls.iter().map(|c| c.indices_count).sum::<usize>() + app.meshes.indices + app.figures.indices();
+        r.calls = calls.len() + app.meshes.calls + app.figures.calls + app.light.shade_calls;
+        r.indices = calls.iter().map(|c| c.indices_count).sum::<usize>()
+            + app.meshes.indices
+            + app.figures.indices()
+            + app.light.shade_indices;
         (r.mesh_calls, r.mesh_indices) = (app.meshes.calls, app.meshes.indices);
         r.particles = app.sky.particles();
         r.live = app.meshes.live_count();
@@ -884,6 +894,39 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
         (paint, join) = (paint + app.meshes.paint_us, join + app.meshes.join_us);
     }
     let (paint, join) = (paint / REBUILDS as f64 / 1e3, join / REBUILDS as f64 / 1e3);
+    // And the shadows' part of a new wall, at close zoom, where they're
+    // drawn: the occluders repacked, and the shapes of the blocks it reaches
+    // built and packed again. Up and down again, on open ground.
+    let defs = app.sim.world.defs.clone();
+    let wall = (0..defs.things.len())
+        .find(|&d| defs.things[d].build.is_some() && defs.things[d].blocks && !defs.things[d].door);
+    let open = |w: &rim_sim::world::World, p: IVec| w.map.passable(p) && w.map.fixture_at(p).is_none();
+    let spot = (COLONY / 2 + 2..COLONY)
+        .flat_map(|r| (-r..=r).map(move |d| centre.offset(d, -r)))
+        .find(|&p| open(&app.sim.world, p));
+    let (mut occluders, mut shapes) = (0.0, 0.0);
+    if let (Some(wall), Some(p)) = (wall, spot) {
+        (app.cam.zoom, app.cam.x, app.cam.y) = (28.0, p.x as f32 + 0.5, p.y as f32 + 0.5);
+        draw_one(&mut app, &mut time, None).await;
+        let cost = |app: &App| {
+            let pass = app.light.passes.iter().find(|t| t.name == "occluders").map_or(0.0, |t| t.cpu_us);
+            (pass, app.light.shade_build_us)
+        };
+        for _ in 0..REBUILDS {
+            let e = app.sim.world.spawn_fixture_of(wall as _, p, false, None);
+            draw_one(&mut app, &mut time, None).await;
+            let (o, s) = cost(&app);
+            (occluders, shapes) = (occluders + o, shapes + s);
+            if let Some(e) = e {
+                app.sim.world.despawn_thing(e);
+            }
+            draw_one(&mut app, &mut time, None).await;
+            let (o, s) = cost(&app);
+            (occluders, shapes) = (occluders + o, shapes + s);
+        }
+    }
+    let changes = (2 * REBUILDS) as f64 * 1e3;
+    let (occluders, shapes) = (occluders / changes, shapes / changes);
 
     // Last, as it moves every pawn: the crowd.
     crowd(&mut app.sim, centre);
@@ -1004,6 +1047,7 @@ pub async fn run(mut app: App, args: &[String]) -> ! {
         .collect();
     println!("light rebuild on {last}, ms: {}", costs.join("; "));
     println!("mesh change on {last}, ms: paint {paint:.3}, join {join:.3}");
+    println!("shadow change at close, ms: occluders {occluders:.3}, shapes {shapes:.3}");
     println!();
     println!(
         "{:<10} {:>5} {:<10} {:>7} {:>7} {:>7} {:>6}",

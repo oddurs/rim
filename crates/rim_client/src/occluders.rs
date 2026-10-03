@@ -220,6 +220,16 @@ impl Occluders {
     }
 
     /// Repack everything next update.
+    /// One cell's texel as packed, `[0; 4]` off the map: for passes that
+    /// read what stands where on the CPU.
+    pub fn cell(&self, x: i32, y: i32) -> [u8; 4] {
+        if x < 0 || y < 0 || x >= self.size.0 || y >= self.size.1 {
+            return [0; 4];
+        }
+        let i = ((y * self.size.0 + x) * 4) as usize;
+        self.bytes.get(i..i + 4).and_then(|b| b.try_into().ok()).unwrap_or([0; 4])
+    }
+
     pub fn invalidate(&mut self) {
         self.bytes.clear();
     }
