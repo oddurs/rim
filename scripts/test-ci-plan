@@ -41,6 +41,7 @@ case_of() { # name, expected lines (space-separated), files..., [-- env...]
 case_of "a sim change runs code but no render bench" "lane=pr code=true render=false" crates/rim_sim/src/lib.rs
 case_of "a client change runs the render bench" "lane=pr code=true render=true" crates/rim_client/src/draw.rs
 case_of "a lockfile change runs the render bench" "lane=pr code=true render=true" Cargo.lock
+case_of "a budget change runs the render bench" "lane=pr code=true render=true" budgets.toml
 case_of "a cairn-only change is docs" "lane=pr code=false render=false" cairn/items/x.md
 case_of "a guide in docs/modding is code" "code=true" docs/modding/guide.md
 case_of "a draft runs nothing" "lane=none" crates/rim_sim/src/lib.rs -- DRAFT=true
