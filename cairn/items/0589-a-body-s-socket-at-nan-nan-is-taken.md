@@ -3,12 +3,12 @@ id: 589
 uid: 2de6da2f-2380-4707-b958-9591f908a72d
 title: A body's socket at [nan, nan] is taken
 type: bug
-status: doing
+status: done
 milestone: bare-metal
 assignee: Oddur Sigurdsson
-claimed: 2026-09-28
 created: 2026-09-28
 updated: 2026-09-28
+closed_at: 2026-09-28
 priority: p3
 api: none
 layer: client
