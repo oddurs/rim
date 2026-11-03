@@ -228,6 +228,8 @@ impl Sim {
         }
         self.scripts.run_hooks(w, prof);
         self.scripts.dispatch_events(w, prof);
+        // Basins as the next step will find them, so a save made now does.
+        prof.time("water", || w.rebuild_water());
         // The ledger is kept, not counted; a debug build checks the keeping.
         #[cfg(debug_assertions)]
         if w.tick.is_multiple_of(1_000) {
