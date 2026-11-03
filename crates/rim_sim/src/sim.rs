@@ -89,11 +89,8 @@ impl Sim {
                 }
             }
         }
-        for item in &s.items {
-            let d = defs
-                .resolve("thing", &item.thing, crate::defs::home_of(&s.id))
-                .map_err(|e| format!("start/{}: {e}", s.id))?;
-            world.place_item(d, start, item.count);
+        for &(d, count) in &s.items_r {
+            world.place_item(d, start, count);
         }
         let founder = world.colonists().next().and_then(|e| world.ecs.get::<&Pawn>(e).ok().map(|p| p.name.clone()));
         if let Some(name) = founder {
