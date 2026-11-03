@@ -228,7 +228,8 @@ function kit.table(props)
 				if va == vb then
 					return a < b
 				end
-				if type(va) ~= type(vb) then
+				-- Booleans don't compare in Luau: false sorts before true.
+				if type(va) ~= type(vb) or type(va) == "boolean" then
 					va, vb = tostring(va), tostring(vb)
 				end
 				if desc then
@@ -276,7 +277,7 @@ function kit.table(props)
 				v = if c.value then c.value(rec) else rec[c.key]
 			end
 			if type(v) ~= "table" then
-				v = kit.label(tostring(v or ""), { size = "small" })
+				v = kit.label(if v == nil then "" else tostring(v), { size = "small" })
 			end
 			table.insert(out, node("row", { w = c.w, pad = "s" }, { v }))
 		end
