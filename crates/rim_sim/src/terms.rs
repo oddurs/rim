@@ -452,8 +452,10 @@ fn compile_source(s: &SourceDef, ctx: &str, names: &dyn Names, warnings: &mut Ve
         })
     } else {
         let key = s.noise.as_deref().unwrap_or_default();
-        if s.hours <= 0.0 {
-            return Err(format!("{ctx}: noise '{key}' needs `hours` > 0"));
+        // Short of a million years, as a cycle's `days` are: past that the
+        // period overflows the noise's arithmetic. NaN fails the test too.
+        if !(s.hours > 0.0 && s.hours <= 3.65e8 * 24.0) {
+            return Err(format!("{ctx}: noise '{key}' needs `hours` above 0 and short of a million years"));
         }
         let period = (s.hours * crate::TICKS_PER_DAY as f64 / 24.0).round().max(1.0) as u64;
         Src::Noise { key: mix(key.bytes().fold(0xC11A_7E00u64, |h, b| mix(h ^ b as u64))), period }
@@ -758,6 +760,12 @@ mod tests {
         ] {
             let err = Terms::compile(&parse(&format!("[x]\n{bad}")), "t", &resolve, &mut Vec::new()).unwrap_err();
             assert!(err.contains("days"), "{bad}: {err}");
+        }
+        // Noise saturated its period at u64::MAX, and overflowed later.
+        for hours in ["0", "-1", "inf", "nan", "1e20"] {
+            let bad = format!("[x]\nof = [{{ noise = \"k\", hours = {hours} }}]");
+            let err = Terms::compile(&parse(&bad), "t", &resolve, &mut Vec::new()).unwrap_err();
+            assert!(err.contains("hours"), "{bad}: {err}");
         }
     }
 }
