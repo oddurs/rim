@@ -3,12 +3,12 @@ id: 556
 uid: 02119d95-29db-46ac-8130-0a11c974f072
 title: types/ui.d.luau's Node type lacks props the engine takes
 type: docs
-status: doing
+status: done
 milestone: bare-metal
 assignee: Oddur Sigurdsson
-claimed: 2026-09-28
 created: 2026-09-28
 updated: 2026-09-28
+closed_at: 2026-09-28
 priority: p3
 api: none
 layer: client

@@ -68,3 +68,67 @@ fn every_ui_member_is_declared_and_the_generated_files_are_current() {
         );
     }
 }
+
+/// The fields a Luau type declares: `name:` at the start of each entry of
+/// `type <name> = { ... }` in the UI types.
+fn type_fields(name: &str) -> Vec<String> {
+    let start = api::UI_TYPES.find(&format!("type {name} =")).unwrap_or_else(|| panic!("no type {name}"));
+    let body = &api::UI_TYPES[start..];
+    let open = body.find('{').unwrap();
+    // The declaration's own braces, not the nested ones in its fields.
+    let (mut depth, mut end) = (0, 0);
+    for (i, c) in body[open..].char_indices() {
+        depth += i32::from(c == '{') - i32::from(c == '}');
+        if depth == 0 {
+            end = open + i;
+            break;
+        }
+    }
+    let mut out = Vec::new();
+    let mut depth = 0;
+    let mut word = String::new();
+    for c in body[open + 1..end].chars() {
+        match c {
+            '{' | '(' => depth += 1,
+            '}' | ')' => depth -= 1,
+            ':' if depth == 0 && !word.is_empty() => out.push(std::mem::take(&mut word)),
+            c if depth == 0 && (c.is_ascii_alphanumeric() || c == '_') => word.push(c),
+            _ if depth == 0 => word.clear(),
+            _ => {}
+        }
+    }
+    out
+}
+
+/// Every property a node table can carry, as `node_from_table` matches
+/// them (crates/rim_ui/src/node.rs), is declared on Node, or on GridProps
+/// or ListProps for the kinds only they take: an editor's strict check of
+/// core's own scripts mustn't flag what the engine accepts.
+#[test]
+fn every_node_property_the_engine_takes_is_typed() {
+    let src = include_str!("../src/node.rs");
+    let body = src.split("pub fn node_from_table").nth(1).expect("node_from_table");
+    let body = body.split("\n}\n").next().unwrap();
+    let mut props: Vec<String> = Vec::new();
+    for line in body.lines() {
+        // The match on the table's keys, one level in from the loop.
+        let Some(arm) = line.strip_prefix("            \"") else { continue };
+        let Some((pat, _)) = arm.split_once("=>") else { continue };
+        let pat = pat.split(" if ").next().unwrap();
+        props.extend(pat.split('|').map(|p| p.trim().trim_matches('"').to_string()));
+    }
+    assert!(props.len() > 50, "the property match wasn't found: {props:?}");
+    let mut typed = type_fields("Node");
+    typed.extend(type_fields("GridProps"));
+    typed.extend(type_fields("ListProps"));
+    let missing: Vec<&String> = props.iter().filter(|p| !typed.contains(p)).collect();
+    assert!(missing.is_empty(), "declare these in UI_TYPES (crates/rim_ui/src/api.rs): {missing:?}");
+
+    // A grid cell's fields, as the grid reads them.
+    let cells: Vec<String> =
+        src.split("ct.get::<Value>(\"").skip(1).filter_map(|s| s.split('"').next()).map(str::to_string).collect();
+    assert!(cells.len() > 5, "the cell fields weren't found");
+    let cell = type_fields("Cell");
+    let missing: Vec<&String> = cells.iter().filter(|c| !cell.contains(c)).collect();
+    assert!(missing.is_empty(), "declare these on Cell: {missing:?}");
+}
