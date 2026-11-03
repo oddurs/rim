@@ -193,6 +193,11 @@ pub fn from_lua(v: &mlua::Value, path: &str, depth: u32) -> Result<Option<Data>,
         Value::Nil => return Ok(None),
         Value::Boolean(b) => Data::Bool(*b),
         Value::Integer(i) => Data::Int(*i),
+        // A NaN's bits are the machine's (x86 and ARM make different ones),
+        // and neither it nor an infinity has a text form: data is finite.
+        Value::Number(n) if !n.is_finite() => {
+            return Err(format!("{path}: {n} can't be kept; data numbers are finite"))
+        }
         Value::Number(n) => {
             if n.fract() == 0.0 && n.abs() < 9.0e15 {
                 Data::Int(*n as i64)
@@ -250,4 +255,24 @@ pub fn to_lua(lua: &mlua::Lua, d: &Data) -> mlua::Result<mlua::Value> {
             Value::Table(out)
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// NaN and the infinities are refused where script values become data:
+    /// a NaN's bits differ by machine, so it would hash differently on each.
+    #[test]
+    fn data_numbers_are_finite() {
+        for n in [f64::NAN, -f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            let err = from_lua(&mlua::Value::Number(n), "k", 0).expect_err("refused");
+            assert!(err.contains("finite"), "{err}");
+        }
+        let lua = mlua::Lua::new();
+        let t = lua.create_table().unwrap();
+        t.set("x", f64::NAN).unwrap();
+        assert!(from_lua(&mlua::Value::Table(t), "k", 0).is_err(), "inside a table too");
+        assert_eq!(from_lua(&mlua::Value::Number(0.5), "k", 0), Ok(Some(Data::Num(0.5))));
+    }
 }
