@@ -3,12 +3,12 @@ id: 687
 uid: e488f623-1ea9-475b-9e6e-2ed09b8695c6
 title: Tab walks focus into scrolled-out rows and map labels
 type: bug
-status: doing
+status: done
 milestone: bare-metal
 assignee: Oddur Sigurdsson
-claimed: 2026-09-28
 created: 2026-09-28
 updated: 2026-09-28
+closed_at: 2026-09-28
 priority: p3
 api: none
 layer: client
