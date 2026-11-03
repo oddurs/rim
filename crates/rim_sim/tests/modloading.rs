@@ -55,3 +55,17 @@ fn core_names_gather_and_uses_it_nowhere() {
         s.world.defs.things.iter().filter(|t| t.harvest_for(gather).is_some()).map(|t| t.id.as_str()).collect();
     assert!(gathered.is_empty(), "core things with a gather harvest: {gathered:?}");
 }
+
+/// Growing and spoiling divide by their days in fixed point: days too few
+/// to be one step of it fail the load, not a plant or spoil pass later.
+#[test]
+fn grow_and_spoil_days_are_at_least_one_step() {
+    for (name, target, set) in [
+        ("spoil-tiny", "thing/core:berries", "spoil = { days = 0.00001 }"),
+        ("grow-tiny", "thing/core:berry_bush", "grow = { days = 0.00004 }"),
+    ] {
+        let patch = format!("[[patch]]\ntarget = \"{target}\"\nset = {{ {set} }}\n");
+        let err = load_error(name, &[("defs/p.toml", &patch)]);
+        assert!(err.contains("`days` of 0.0001 or more"), "{set}: {err}");
+    }
+}

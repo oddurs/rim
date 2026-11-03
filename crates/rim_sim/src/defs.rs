@@ -3049,8 +3049,11 @@ impl DefDb {
             };
             if let Some(sp) = &mut d.spoil {
                 sp.rate_terms = Terms::compile(&sp.rate, &format!("{ctx}, spoil.rate"), &names, &mut spoil_warnings)?;
-                if !(sp.days > 0.0 && sp.days.is_finite()) || sp.rate_terms.reads_own() {
-                    return Err(format!("{ctx}: spoil needs `days` above 0, and rate terms read no `self` or `base`"));
+                // Spoiling divides by the days in fixed point: at least one step of it.
+                if !(crate::terms::to_q(sp.days) >= 1 && sp.days.is_finite()) || sp.rate_terms.reads_own() {
+                    return Err(format!(
+                        "{ctx}: spoil needs `days` of 0.0001 or more, and rate terms read no `self` or `base`"
+                    ));
                 }
             }
             if let Some(st) = &mut d.store {
@@ -3066,9 +3069,11 @@ impl DefDb {
                 if g.rate_terms.reads_own() || g.harm_terms.reads_own() {
                     return Err(format!("{ctx}: `self`, `base` and `above_base` are for a stock field's rate"));
                 }
-                if !(g.days > 0.0 && g.days.is_finite()) || g.stages == 0 || !(0.0..=1.0).contains(&g.after_harvest) {
+                let days = crate::terms::to_q(g.days) >= 1 && g.days.is_finite();
+                if !days || g.stages == 0 || !(0.0..=1.0).contains(&g.after_harvest) {
                     return Err(format!(
-                        "{ctx}: grow needs `days` above 0, `stages` of 1 or more, and `after_harvest` from 0 to 1"
+                        "{ctx}: grow needs `days` of 0.0001 or more, `stages` of 1 or more, and `after_harvest` from 0 \
+                         to 1"
                     ));
                 }
             }
