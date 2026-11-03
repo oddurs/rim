@@ -1913,6 +1913,36 @@ ui.mount("windows", "lister:list")
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A list asked for more rows than can be keyed is the mod's error box,
+/// not an overflow.
+#[test]
+fn a_list_too_long_is_an_error_box() {
+    let dir = scratch_mods(
+        "listhuge",
+        &[(
+            "huge",
+            "",
+            &[(
+                "ui/huge.luau",
+                r#"
+ui.define("huge:list", function(view)
+    return ui.list({ id = "huge:list", count = 1e30, row_h = 10, h = 100, row = function(i) return ui.text({ "row" }) end })
+end)
+ui.mount("top", "huge:list", { order = 90 })
+"#,
+            )],
+        )],
+    );
+    let sim = sim_at(&dir);
+    let mut ui = ui_for(&sim);
+    let cv = client(&sim);
+    frame(&mut ui, &sim, &cv, Default::default());
+    let snap = ui.snapshot();
+    assert!(snap.contains("a list has at most"), "the limit is named in place:\n{snap}");
+    assert!(ui.find("core:dock").is_some(), "the rest of the UI builds");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// The kit gallery, with its board and long table, renders without a
 /// warning: every sample is a real use of the kit.
 #[test]

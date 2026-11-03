@@ -3,12 +3,12 @@ id: 655
 uid: 97a9ba85-c6cf-4595-a9e6-7cc85bd7b398
 title: ui.list with a huge count overflows
 type: bug
-status: doing
+status: done
 milestone: bare-metal
 assignee: Oddur Sigurdsson
-claimed: 2026-09-28
 created: 2026-09-28
 updated: 2026-09-28
+closed_at: 2026-09-28
 priority: p3
 api: none
 layer: client
