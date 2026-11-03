@@ -3,12 +3,12 @@ id: 659
 uid: a162cbcd-d3c6-4e55-a29b-b2b9e2b21f44
 title: A UI handler's error is never printed, unlike a build error
 type: bug
-status: doing
+status: done
 milestone: bare-metal
 assignee: Oddur Sigurdsson
-claimed: 2026-09-28
 created: 2026-09-28
 updated: 2026-09-28
+closed_at: 2026-09-28
 priority: p3
 api: none
 layer: client
