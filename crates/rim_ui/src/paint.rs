@@ -87,6 +87,9 @@ pub struct PaintState<'a> {
     /// Text inputs' buffers, for the caret and selection.
     pub edits: &'a std::collections::HashMap<String, crate::edit::EditState>,
     pub disabled_alpha: f32,
+    /// The focus ring (colour, width, gap outside the node), when focus
+    /// came from the keyboard.
+    pub ring: Option<(Rgba, f32, f32)>,
 }
 
 pub fn intersect(a: Rect, b: Rect) -> Rect {
@@ -170,6 +173,15 @@ fn walk(
     }
     if let Some(b) = apply(s.border, patch, |p| p.border) {
         p.draw.push(Draw::Outline { rect, color: fade(b, alpha), width: s.border_w.max(1.0), radius: s.radius });
+    }
+    if let (true, Some((color, width, gap))) = (focused, p.state.ring) {
+        let e = gap + width;
+        p.draw.push(Draw::Outline {
+            rect: [rect[0] - e, rect[1] - e, rect[2] + 2.0 * e, rect[3] + 2.0 * e],
+            color,
+            width,
+            radius: s.radius + e,
+        });
     }
     if let Some(t) = &n.text {
         let color = apply(Some(t.color), patch, |p| p.color).unwrap();

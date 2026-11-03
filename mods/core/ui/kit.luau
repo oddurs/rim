@@ -98,28 +98,58 @@ function kit.divider()
 	return { kind = "row", h = 1, w = "fill", bg = "line", radius = 0 }
 end
 
+-- What a button's role looks like: its fill and edge at rest, under the
+-- pointer and pressed, and its text. Secondary is the default: most actions.
+local ROLE = {
+	primary = { bg = "accent", border = "accent", hover = "accent_hover", press = "accent_press", color = "on_accent" },
+	secondary = { bg = "surface_raised", border = "line", hover = "surface_hover", edge = "line_strong", press = "surface_press" },
+	quiet = { hover = "surface_hover", press = "surface_press" },
+	danger = { bg = "surface_raised", border = "threat", hover = "threat_soft", press = "threat_press", color = "threat" },
+}
+
+-- A button's size: its padding and its text's size.
+local SIZE = {
+	s = { padx = "s", pady = "xs", size = "small" },
+	m = { padx = "m", pady = "s" },
+	l = { padx = "l", pady = "m", size = "heading" },
+}
+
 -- A button. props: label, on_click, active, disabled, tooltip, id, swatch
--- (a token or #colour shown as a small bar), strong, hint (a key, shown faint).
+-- (a token or #colour shown as a small bar), strong, hint (a key, shown faint),
+-- kind ("primary" for the one main action in a window, "secondary", the
+-- default, "quiet" for one among many, "danger" for what can't be undone)
+-- and size ("s", "m", the default, or "l").
 function kit.button(props)
 	local active = props.active
+	local role = ROLE[props.kind or "secondary"]
+	if not role then
+		error(string.format("kit.button: unknown kind '%s' (primary, secondary, quiet or danger)", tostring(props.kind)), 2)
+	end
+	local size = SIZE[props.size or "m"]
+	if not size then
+		error(string.format("kit.button: unknown size '%s' (s, m or l)", tostring(props.size)), 2)
+	end
 	return node("row", {
 		id = props.id,
-		padx = props.padx or "m",
-		pady = props.pady or "s",
+		padx = props.padx or size.padx,
+		pady = props.pady or size.pady,
 		gap = "s",
 		align = "center",
-		bg = if active then "accent_soft" else "surface_raised",
-		border = if active then "accent" else "line",
-		hover = { bg = if active then nil else "surface_hover", border = "line_strong" },
-		press = { bg = "surface_press" },
-		focus = { border = "accent" },
+		bg = if active then "accent_soft" else role.bg,
+		border = if active then "accent" else role.border,
+		hover = { bg = if active then nil else role.hover, border = role.edge },
+		press = { bg = role.press },
 		on_click = props.on_click,
 		disabled = props.disabled,
 		tooltip = props.tooltip,
 	}, {
 		props.swatch and { kind = "row", w = 3, h = 12, bg = props.swatch, radius = 1 },
-		kit.label(props.label, { weight = if active or props.strong then "strong" else "regular", color = props.color }),
-		props.hint and kit.label(props.hint, { size = "small", color = "faint" }),
+		kit.label(props.label, {
+			size = size.size,
+			weight = if active or props.strong or props.kind == "primary" then "strong" else "regular",
+			color = props.color or role.color,
+		}),
+		props.hint and kit.label(props.hint, { size = "small", color = if role.color then role.color else "faint" }),
 	})
 end
 
