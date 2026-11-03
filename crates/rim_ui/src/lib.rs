@@ -552,10 +552,13 @@ impl Ui {
     }
 
     /// The window layout as TOML: one table per window the player has
-    /// touched, keyed by id, in logical pixels. Saved beside client
-    /// settings, never in a save game.
+    /// touched, keyed by id, in logical pixels, and their stacking order as
+    /// a list, since a TOML table's keys come back sorted. Saved beside
+    /// client settings, never in a save game.
     pub fn layout_toml(&self) -> String {
         let mut doc = toml::Table::new();
+        let order = self.windows.iter().map(|w| toml::Value::String(w.id.clone())).collect();
+        doc.insert("order".into(), toml::Value::Array(order));
         let mut wins = toml::Table::new();
         for w in &self.windows {
             if let Ok(toml::Value::Table(t)) = toml::Value::try_from(w) {
@@ -582,6 +585,12 @@ impl Ui {
                 Some(o) => *o = w,
                 None => self.windows.push(w),
             }
+        }
+        // Windows the saved order doesn't name (a mod added since) stay
+        // below the ones it does, in the order they were declared.
+        if let Some(toml::Value::Array(order)) = doc.get("order") {
+            let at = |id: &str| order.iter().position(|o| o.as_str() == Some(id));
+            self.windows.sort_by_key(|w| at(&w.id).map_or(0, |i| i + 1));
         }
         Ok(())
     }
