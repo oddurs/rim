@@ -120,6 +120,11 @@ fn read_plan(
             props.push((wt, level.clamp(0, 255) as u8, reason));
         }
         props.sort_unstable_by_key(|p| p.0);
+        // `haul` and `core:haul` are one work type: which of the two won
+        // would be up to the table's iteration order.
+        if let Some(twice) = props.windows(2).find(|p| p[0].0 == p[1].0) {
+            return Err(format!("the plan for colonist {id} names {} twice", w.defs.id_of("work_type", twice[0].0)));
+        }
         out.push((e, props));
     }
     out.sort_unstable_by_key(|x| x.0.to_bits());
