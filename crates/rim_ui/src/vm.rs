@@ -557,12 +557,16 @@ impl UiVm {
                     _ => return Err(rt("ui.window: the component is a function or a component id")),
                 };
                 let num = |k: &str, d: f32| opts.get::<Option<f32>>(k).ok().flatten().unwrap_or(d);
+                let (w, h) = (num("w", 360.0), num("h", 240.0));
+                if !(w.is_finite() && h.is_finite() && w > 0.0 && h > 0.0) {
+                    return Err(rt(format!("ui.window('{id}'): w and h are positive numbers, not {w} by {h}")));
+                }
                 reg.windows.push(WindowDecl {
                     id,
                     owner,
                     title: opts.get::<Option<String>>("title").ok().flatten().unwrap_or_default(),
-                    w: num("w", 360.0),
-                    h: num("h", 240.0),
+                    w,
+                    h,
                     resizable: opts.get::<Option<bool>>("resizable").ok().flatten().unwrap_or(false),
                     sheet: opts.get::<Option<bool>>("sheet").ok().flatten().unwrap_or(false),
                     open: opts.get::<Option<bool>>("open").ok().flatten().unwrap_or(false),

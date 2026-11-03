@@ -408,6 +408,39 @@ fn a_window_layout_survives_a_restart_and_a_mod_update() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A saved place that isn't a number leaves that window where its mod puts
+/// it, and says so; a mod's size that isn't one is refused at load.
+#[test]
+fn a_window_place_that_isnt_a_number_is_refused() {
+    let dir = scratch_mods(
+        "winnan",
+        &[(
+            "probe",
+            "",
+            &[
+                ("ui/win.luau", TWO_WINDOWS),
+                ("ui/bad.luau", r#"ui.window("probe:c", { w = 0/0 }, function(view) return nil end)"#),
+            ],
+        )],
+    );
+    let sim = sim_at(&dir);
+    let mut ui = ui_for(&sim);
+    assert!(
+        ui.warnings().iter().any(|w| w.contains("probe:c") && w.contains("positive numbers")),
+        "{:?}",
+        ui.warnings()
+    );
+    let saved = "[window.\"probe:a\"]\nx = nan\ny = 10.0\nw = 300.0\nh = 200.0\nopen = true\n";
+    let err = ui.restore_layout(saved).expect_err("a NaN is said");
+    assert!(err.contains("probe:a"), "{err}");
+    let cv = client(&sim);
+    frame(&mut ui, &sim, &cv, Default::default());
+    let r = ui.window_rect("probe:a").expect("alpha opens");
+    assert!(r.iter().all(|v| v.is_finite()), "alpha is somewhere: {r:?}");
+    assert!(!ui.layout_toml().contains("nan"), "{}", ui.layout_toml());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn two_mods_declaring_one_window_is_reported() {
     let dir = scratch_mods(
