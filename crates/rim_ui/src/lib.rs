@@ -322,6 +322,9 @@ pub struct Ui {
     pressed: Option<u64>,
     painting: Option<Painting>,
     focused: Option<u64>,
+    /// Focus came from the keyboard, so it is drawn as a ring. A click
+    /// focuses too, but the pointer already says where it is.
+    focus_ring: bool,
     scroll: HashMap<u64, f32>,
     /// Layout: named trees kept between frames, and one scratch tree.
     lay: layout::Engine,
@@ -438,6 +441,7 @@ impl Ui {
             pressed: None,
             painting: None,
             focused: None,
+            focus_ring: false,
             scroll: HashMap::new(),
             lay: layout::Engine::default(),
             info,
@@ -804,6 +808,12 @@ impl Ui {
         self.layers.iter().filter(|l| l.name == "popup").flat_map(|l| l.roots.iter())
     }
 
+    /// Roots that hold the player until answered: popups, then modals (a
+    /// confirm). They take every named key and hear a press elsewhere.
+    fn holding_roots(&self) -> impl Iterator<Item = &Node> {
+        self.layers.iter().filter(|l| l.name == "popup" || l.name == "modal").flat_map(|l| l.roots.iter())
+    }
+
     /// The nearest menu subject on the path to a hit: the node itself, or
     /// the closest ancestor that declares one.
     fn subject_at(&self, layer: &str, path: &[usize]) -> Option<(Rc<str>, Rc<str>)> {
@@ -971,6 +981,9 @@ impl Ui {
         if input.left_pressed && !out.mouse_over_ui {
             self.focused = None;
         }
+        if input.left_pressed {
+            self.focus_ring = false;
+        }
         if input.left_pressed && out.mouse_over_ui {
             out.captured_left = true;
             self.pressed = hovered;
@@ -1049,9 +1062,9 @@ impl Ui {
         // A press anywhere but an open popup tells the popup, first, so a
         // right-click elsewhere closes one menu before it opens the next.
         if input.left_pressed || input.right_pressed {
-            let in_popup = top.as_ref().is_some_and(|(l, _)| *l == "popup");
-            if !in_popup {
-                handlers.extend(self.popup_roots().filter_map(|n| n.on_outside.clone()).map(Call::Click));
+            let inside = top.as_ref().is_some_and(|(l, _)| *l == "popup" || *l == "modal");
+            if !inside {
+                handlers.extend(self.holding_roots().filter_map(|n| n.on_outside.clone()).map(Call::Click));
             }
         }
         if input.right_pressed && out.mouse_over_ui {
@@ -1119,12 +1132,12 @@ impl Ui {
                 enter = false;
             }
         }
-        // An open popup takes the keyboard: every named key goes to it, and
-        // no binding fires while it's up.
+        // An open popup or modal takes the keyboard: every named key goes
+        // to it, and no binding fires while it's up.
         // Every frame it's up, not only when a key goes down: a key held
         // past its first frame must not reach the game (an arrow held
         // would pan the map, and moving the map closes the popup).
-        let popup_keys = self.popup_roots().find_map(|n| n.on_key.clone());
+        let popup_keys = self.holding_roots().find_map(|n| n.on_key.clone());
         if let Some(f) = &popup_keys {
             if self.focused_input().is_none() {
                 for key in &input.pressed {
@@ -1184,6 +1197,7 @@ impl Ui {
                     (None, true) => n - 1,
                 };
                 self.focused = Some(focusables[next].0);
+                self.focus_ring = true;
                 out.captured_keys = true;
             }
         }
@@ -1424,6 +1438,7 @@ impl Ui {
             scroll: &state_scroll,
             edits: &state_edits,
             disabled_alpha: 0.45,
+            ring: self.focus_ring.then(|| self.ring()).flatten(),
         };
 
         for &layer in LAYERS {
@@ -1705,6 +1720,13 @@ impl Ui {
         out.draw = draw;
         out.anchored = anchored_draws;
         out
+    }
+
+    /// The focus ring's colour, width and gap outside the node, physical
+    /// pixels; none when the theme doesn't set `color.focus`.
+    fn ring(&self) -> Option<(theme::Rgba, f32, f32)> {
+        let shape = |k: &str, d: f32| self.theme.shape.get(k).copied().unwrap_or(d) * self.theme.scale;
+        Some((*self.theme.color.get("focus")?, shape("focus_ring", 2.0), shape("focus_gap", 1.0)))
     }
 
     /// Give the keyboard back to the game (Escape).
